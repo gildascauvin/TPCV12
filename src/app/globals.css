@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..900;1,9..40,300..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f1f1f1;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.10);
+  --text: #1f2428;
+  --muted: #7b7f82;
+  --accent: #d44000;
+  --accent-strong: #e44700;
+  --accent-dim: rgba(212,64,0,0.10);
+  --danger: #c81e1e;
+  --warn: #f28a00;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #f1f1f1;
+  color: var(--text);
+  font-family: 'DM Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+}
+
+/* Range input */
+input[type='range'] {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+/* Focus ring */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(212, 64, 0, 0.10);
+}
+
+/* Bottom nav icon size */
+.bottom-nav-icon {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-[12px] border border-black/[0.08] shadow-card;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px]
+           bg-accent text-white font-bold text-sm
+           hover:bg-accent-strong transition-all duration-150
+           border border-accent/20;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[10px]
+           bg-[#f4f4f4] text-text font-semibold text-sm
+           hover:bg-[#ececec] transition-all duration-150
+           border border-black/[0.08];
+  }
+
+  .section-label {
+    @apply text-[10px] font-black tracking-[0.12em] text-muted uppercase mb-2;
+  }
+}
