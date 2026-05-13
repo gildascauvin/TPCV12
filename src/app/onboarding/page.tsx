@@ -4,19 +4,18 @@ import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 
 export default async function OnboardingPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("onboarding_done")
+    .select("onboarding_done, mode")
     .eq("user_id", user.id)
     .single();
 
-  if (profile?.onboarding_done) redirect("/today");
+  if (profile?.onboarding_done) {
+    redirect(profile.mode === "coach" ? "/coach" : "/today");
+  }
 
   return <OnboardingFlow userId={user.id} />;
 }

@@ -51,6 +51,29 @@ export interface Session {
   created_at: string;
 }
 
+export interface CoachAthlete {
+  id: string;
+  coach_id: string;
+  name: string;
+  sport: string | null;
+  wellness_score: number;
+  created_at: string;
+}
+
+export interface CoachSession {
+  id: string;
+  coach_id: string;
+  athlete_id: string;
+  date: string;
+  name: string;
+  notes: string | null;
+  done: boolean;
+  rpe: number | null;
+  duration: number | null;
+  target_difficulty: number | null;
+  created_at: string;
+}
+
 export interface FatigueLog {
   id: string;
   user_id: string;

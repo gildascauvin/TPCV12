@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 function EyeOn() {
   return (
@@ -39,7 +40,6 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
@@ -55,7 +55,6 @@ export default function LoginPage() {
     if (!email) { setError("Entre ton email d'abord."); return; }
     setLoading(true);
     setError(null);
-    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -71,7 +70,6 @@ export default function LoginPage() {
     if (!email) { setError("Entre ton email."); return; }
     setLoading(true);
     setError(null);
-    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${location.origin}/auth/callback?type=recovery`,

@@ -18,19 +18,16 @@ function daysAgoStr(n: number): string {
   return d.toISOString().split("T")[0];
 }
 
-function computeSignature(sessions: Session[], wellness: WellnessDaily[]) {
-  const done = sessions.filter(s => s.done && s.rpe);
-  const load = done.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 45), 0);
+function computeSignature(sessions: Session[], todayWellnessScore: number) {
+  const done = sessions.filter(s => s.done && s.rpe && s.duration);
+  const load = done.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 0), 0);
   const avg = done.length ? done.reduce((a, s) => a + (s.rpe || 0), 0) / done.length : 7;
   const hard = done.filter(s => (s.rpe || 0) >= 8).length;
   const long = done.filter(s => (s.duration || 0) >= 70).length;
   const signals = done.length;
   const nervous = Math.max(28, Math.min(94, Math.round(42 + hard * 10 + avg * 3)));
   const muscular = Math.max(30, Math.min(94, Math.round(38 + long * 10 + load / 120)));
-  const avgW = wellness.length
-    ? wellness.reduce((a, w) => a + (w.score ?? w.base_score ?? 0), 0) / wellness.length
-    : 75;
-  const recovery = Math.max(35, Math.min(92, Math.round(avgW - hard * 3 + signals * 2)));
+  const recovery = Math.max(35, Math.min(92, Math.round(todayWellnessScore - hard * 3 + signals * 2)));
   return { nervous, muscular, recovery, signals, load, avgRpe: avg };
 }
 
@@ -63,7 +60,7 @@ export default async function ConseilsPage() {
   const wellnessScore = todayWellness?.score ?? todayWellness?.base_score ?? null;
   const behaviors = todayWellness?.behaviors || [];
 
-  const sig = computeSignature(allSessions, allWellness);
+  const sig = computeSignature(allSessions, wellnessScore ?? 75);
 
   const totalLoad = done7.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 45), 0);
   const loadAdvice = totalLoad > 900
