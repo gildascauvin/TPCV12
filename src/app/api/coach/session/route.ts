@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
 
   // Verify coach owns this athlete
-  const { data: athlete } = await admin
+  const { data: athlete } = await supabase
     .from("coach_athletes")
     .select("id, user_id, coach_id")
     .eq("id", athleteId)

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  const { data: record } = await admin
+  const { data: record } = await supabase
     .from("coach_athletes")
     .select("id, coach_id, user_id")
     .eq("id", coachAthleteId)

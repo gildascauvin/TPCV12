@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  const { data: coach } = await admin.from("profiles").select("mode").eq("user_id", user.id).single();
+  const { data: coach } = await supabase.from("profiles").select("mode").eq("user_id", user.id).single();
   if (!coach || coach.mode !== "coach") return Response.json({ error: "Accès réservé aux coachs" }, { status: 403 });
 
   const email = athleteEmail.trim().toLowerCase();
