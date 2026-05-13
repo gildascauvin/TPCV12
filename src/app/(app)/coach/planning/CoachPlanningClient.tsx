@@ -221,15 +221,23 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     setAddingDate(null);
   }, [athletes]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, _athleteIds: string[]) => {
+  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => {
     if (!editingSession || !athlete) return;
     const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data });
     if (result.ok) {
       const updated: CoachViewSession = { ...editingSession, ...data };
       setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
     }
+    const extras = athleteIds.filter(id => id !== athlete.id);
+    if (extras.length > 0) {
+      const results = await Promise.all(extras.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
+      const newSessions: CoachViewSession[] = results
+        .filter(r => r.ok && r.session)
+        .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
+      setSessions(prev => [...prev, ...newSessions]);
+    }
     setEditingSession(null);
-  }, [editingSession, athlete]);
+  }, [editingSession, athlete, athletes]);
 
   const deleteSession = useCallback(async () => {
     if (!editingSession || !athlete) return;
@@ -428,7 +436,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
             target_difficulty: editingSession.target_difficulty,
             created_at: editingSession.created_at,
           } : null}
-          athletes={addingDate ? athletes : undefined}
+          athletes={athletes}
           initialAthleteId={athlete.id}
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}

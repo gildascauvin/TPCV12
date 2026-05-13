@@ -39,7 +39,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEdit = !!session;
-  const showRecipients = !isEdit && athletes.length > 0;
+  const showRecipients = athletes.length > 0;
 
   const diffCls = difficulty >= 8 ? "hard" : difficulty >= 5 ? "moderate" : "easy";
   const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
@@ -48,6 +48,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
 
   function toggleRecipient(id: string) {
+    if (isEdit && id === initialAthleteId) return; // original always stays
     setRecipients(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
@@ -86,7 +87,10 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
     setDeleting(false);
   }
 
-  const saveLabel = saving ? "..." : isEdit ? "Enregistrer ✓" : recipients.length > 1 ? `Partager (${recipients.length}) →` : "Ajouter →";
+  const extras = isEdit ? recipients.filter(id => id !== initialAthleteId).length : 0;
+  const saveLabel = saving ? "..." : isEdit
+    ? extras > 0 ? `Enregistrer + Dupliquer (${extras}) →` : "Enregistrer ✓"
+    : recipients.length > 1 ? `Partager (${recipients.length}) →` : "Ajouter →";
 
   return (
     <div
@@ -186,7 +190,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
         {showRecipients && (
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
-              Sportifs destinataires
+              {isEdit ? "Dupliquer aussi vers" : "Sportifs destinataires"}
               {recipients.length > 0 && (
                 <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
                   {recipients.length}
@@ -196,6 +200,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {athletes.map(a => {
                 const checked = recipients.includes(a.id);
+                const locked = isEdit && a.id === initialAthleteId;
                 return (
                   <button
                     key={a.id}
@@ -205,19 +210,22 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
                       background: checked ? "#fff5f0" : "#fff",
                       border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
                       borderRadius: 14, padding: "10px 12px",
-                      cursor: "pointer", textAlign: "left",
+                      cursor: locked ? "default" : "pointer", textAlign: "left",
                       transition: "all 0.15s ease",
                     }}
                   >
                     <div style={{
                       width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                      background: checked ? "#d44000" : "#f0efed",
+                      background: checked ? (locked ? "#a0a0a0" : "#d44000") : "#f0efed",
                       border: checked ? "none" : "1.5px solid rgba(0,0,0,.14)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
                       {checked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1, fontWeight: 900 }}>✓</span>}
                     </div>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>{a.name}</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>
+                      {a.name}
+                      {locked && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", textTransform: "uppercase" }}>original</span>}
+                    </span>
                     <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
                   </button>
                 );
