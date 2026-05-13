@@ -210,19 +210,18 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     return res.json();
   }
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
-    if (!athlete) return;
-    const result = await callSessionAPI({ action: "add", athleteId: athlete.id, data });
-    if (result.ok && result.session) {
-      const saved: CoachViewSession = result._real
-        ? realToView(result.session as Session, athletes)
-        : demoToView(result.session as CoachSession);
-      setSessions(prev => [...prev, saved]);
-    }
+  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => {
+    const results = await Promise.all(
+      athleteIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data }))
+    );
+    const newSessions: CoachViewSession[] = results
+      .filter(r => r.ok && r.session)
+      .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
+    setSessions(prev => [...prev, ...newSessions]);
     setAddingDate(null);
-  }, [athlete, athletes]);
+  }, [athletes]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
+  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, _athleteIds: string[]) => {
     if (!editingSession || !athlete) return;
     const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data });
     if (result.ok) {
@@ -429,6 +428,8 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
             target_difficulty: editingSession.target_difficulty,
             created_at: editingSession.created_at,
           } : null}
+          athletes={addingDate ? athletes : undefined}
+          initialAthleteId={athlete.id}
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}

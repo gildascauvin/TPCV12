@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CoachSession } from "@/types";
+import type { CoachSession, CoachAthlete } from "@/types";
 
 interface Exercise {
   id: string;
@@ -12,12 +12,16 @@ interface Props {
   athleteName: string;
   date: string;
   session?: CoachSession | null;
-  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }) => Promise<void>;
+  athletes?: CoachAthlete[];
+  initialAthleteId?: string;
+  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function CoachSessionModal({ athleteName, date, session, onSave, onDelete, onClose }: Props) {
+function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+
+export default function CoachSessionModal({ athleteName, date, session, athletes = [], initialAthleteId, onSave, onDelete, onClose }: Props) {
   const [name, setName] = useState(session?.name ?? "");
   const [sessionDate, setSessionDate] = useState(session?.date ?? date);
   const [difficulty, setDifficulty] = useState(session?.target_difficulty ?? 6);
@@ -27,16 +31,27 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
     }
     return [{ id: "0", text: "" }];
   });
+  const [recipients, setRecipients] = useState<string[]>(() =>
+    initialAthleteId ? [initialAthleteId] : athletes.length > 0 ? [athletes[0].id] : []
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEdit = !!session;
+  const showRecipients = !isEdit && athletes.length > 0;
+
   const diffCls = difficulty >= 8 ? "hard" : difficulty >= 5 ? "moderate" : "easy";
   const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
   const diffBg = { hard: "#fff0ed", moderate: "#fff7e6", easy: "#edf9f0" }[diffCls];
   const diffColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[diffCls];
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
+
+  function toggleRecipient(id: string) {
+    setRecipients(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  }
 
   function addExercise() {
     setExercises(p => [...p, { id: Date.now().toString(), text: "" }]);
@@ -53,11 +68,14 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
     setExercises(p => p.map(e => e.id === id ? { ...e, text } : e));
   }
 
+  const canSave = name.trim() && (isEdit || recipients.length > 0);
+
   async function handleSave() {
-    if (!name.trim()) return;
+    if (!canSave) return;
     setSaving(true);
     const notes = exercises.map(e => e.text.trim()).filter(Boolean).join("\n");
-    await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty });
+    const ids = isEdit && initialAthleteId ? [initialAthleteId] : recipients;
+    await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty }, ids);
     setSaving(false);
   }
 
@@ -68,18 +86,24 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
     setDeleting(false);
   }
 
+  const saveLabel = saving ? "..." : isEdit ? "Enregistrer ✓" : recipients.length > 1 ? `Partager (${recipients.length}) →` : "Ajouter →";
+
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 2147483100, padding: "0 0" }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ background: "#fff", borderRadius: "30px 30px 0 0", paddingTop: 28, paddingLeft: 28, paddingRight: 28, paddingBottom: 0, width: "100%", maxWidth: 640, maxHeight: "90svh", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,.22)" }}>
+
+        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>
               {isEdit ? "Modifier la séance" : "Nouvelle séance"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Pour {athleteName}</div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>
+              {isEdit ? `Pour ${athleteName}` : "Choisir les destinataires ci-dessous"}
+            </div>
           </div>
           <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
         </div>
@@ -101,7 +125,7 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
         {/* Difficulty */}
         <div style={{ background: diffBg, border: `1px solid ${diffBorder}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#202428" }}>Difficulté prévue</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#202428" }}>Difficulté cible</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
               <span style={{ fontSize: 22, fontWeight: 1000, color: diffColor, lineHeight: 1, letterSpacing: "-0.04em" }}>{difficulty}</span>
@@ -115,7 +139,7 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
         </div>
 
         {/* Exercises */}
-        <div style={{ background: "#f6f6f6", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: 14, marginBottom: 8 }}>
+        <div style={{ background: "#f6f6f6", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 1000, color: "#202428", letterSpacing: "-0.02em" }}>Exercices de la séance</div>
             <span style={{ fontSize: 11, color: "#8a8f94" }}>{exercises.filter(e => e.text.trim()).length} renseigné{exercises.filter(e => e.text.trim()).length > 1 ? "s" : ""}</span>
@@ -158,6 +182,53 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
           </button>
         </div>
 
+        {/* Recipients */}
+        {showRecipients && (
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+              Sportifs destinataires
+              {recipients.length > 0 && (
+                <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
+                  {recipients.length}
+                </span>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {athletes.map(a => {
+                const checked = recipients.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => toggleRecipient(a.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      background: checked ? "#fff5f0" : "#fff",
+                      border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
+                      borderRadius: 14, padding: "10px 12px",
+                      cursor: "pointer", textAlign: "left",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                      background: checked ? "#d44000" : "#f0efed",
+                      border: checked ? "none" : "1.5px solid rgba(0,0,0,.14)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {checked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                    </div>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>{a.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {recipients.length === 0 && (
+              <div style={{ fontSize: 12, color: "#c81e1e", marginTop: 8 }}>Sélectionne au moins un sportif.</div>
+            )}
+          </div>
+        )}
+
         {/* Sticky actions bar */}
         <div style={{
           position: "sticky", bottom: 0, zIndex: 20,
@@ -195,10 +266,10 @@ export default function CoachSessionModal({ athleteName, date, session, onSave, 
             Annuler
           </button>
           <button
-            onClick={handleSave} disabled={saving || !name.trim()}
-            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !name.trim() ? 0.6 : 1 }}
+            onClick={handleSave} disabled={saving || !canSave}
+            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !canSave ? 0.6 : 1 }}
           >
-            {saving ? "..." : isEdit ? "Enregistrer ✓" : "Ajouter →"}
+            {saveLabel}
           </button>
         </div>
       </div>
