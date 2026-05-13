@@ -3,30 +3,40 @@ import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST() {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) return NextResponse.json({ error: "STRIPE_SECRET_KEY manquant" }, { status: 500 });
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("user_id", user.id)
-    .single();
+    const stripe = new Stripe(secretKey);
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let customerId = profile?.stripe_customer_id ?? undefined;
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .single();
 
-  if (!customerId) {
-    const customer = await stripe.customers.create({ email: user.email });
-    customerId = customer.id;
-    await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("user_id", user.id);
+    if (profileError) return NextResponse.json({ error: `Profil: ${profileError.message}` }, { status: 500 });
+
+    let customerId = profile?.stripe_customer_id ?? undefined;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({ email: user.email });
+      customerId = customer.id;
+      await supabase.from("profiles").update({ stripe_customer_id: customerId }).eq("user_id", user.id);
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      usage: "off_session",
+      automatic_payment_methods: { enabled: true },
+    });
+
+    return NextResponse.json({ clientSecret: setupIntent.client_secret });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const setupIntent = await stripe.setupIntents.create({
-    customer: customerId,
-    usage: "off_session",
-    automatic_payment_methods: { enabled: true },
-  });
-
-  return NextResponse.json({ clientSecret: setupIntent.client_secret });
 }

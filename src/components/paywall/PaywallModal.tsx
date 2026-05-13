@@ -135,7 +135,11 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   useEffect(() => {
     fetch("/api/stripe/setup-intent", { method: "POST" })
       .then(r => r.json())
-      .then(({ clientSecret: cs }) => { setClientSecret(cs); setLoadingIntent(false); })
+      .then((json) => {
+        if (json.error) { setSetupError(`Erreur: ${json.error}`); setLoadingIntent(false); return; }
+        setClientSecret(json.clientSecret);
+        setLoadingIntent(false);
+      })
       .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
   }, []);
 
