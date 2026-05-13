@@ -17,8 +17,29 @@ interface Props {
   userId: string;
 }
 
-function scoreState(s: number) { return s >= 75 ? "good" : s >= 60 ? "ok" : ""; }
-function scoreBg(s: number) { return s >= 75 ? "#2f9e44" : s >= 60 ? "#f28a00" : "#d44000"; }
+function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+
+function WellnessRing({ score, size = 72 }: { score: number; size?: number }) {
+  const r = Math.round(size * 0.423);
+  const circ = +(2 * Math.PI * r).toFixed(1);
+  const offset = +(circ * (1 - Math.max(0, Math.min(100, score)) / 100)).toFixed(1);
+  const sw = Math.round(size * 0.077);
+  const color = scoreColor(score);
+  return (
+    <div style={{ position: "relative", flexShrink: 0, width: size, height: size, borderRadius: "50%", background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 6px 16px rgba(0,0,0,.18))" }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
+          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score}</span>
+        <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
+      </div>
+    </div>
+  );
+}
 
 function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
   const s = sessions.filter(x => x.athlete_id === athleteId);
@@ -54,14 +75,7 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
       borderRadius: 26, padding: 18,
       boxShadow: isPriority ? "0 18px 46px rgba(212,64,0,.10)" : "0 14px 36px rgba(0,0,0,.065)",
     }}>
-      <div style={{
-        width: 70, height: 70, borderRadius: "50%", flexShrink: 0,
-        background: scoreBg(athlete.wellness_score),
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontWeight: 950, color: "#fff", fontSize: 23,
-      }}>
-        {athlete.wellness_score}
-      </div>
+      <WellnessRing score={athlete.wellness_score} size={72} />
 
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 950, color: "#1f2428", letterSpacing: "-0.02em" }}>{athlete.name}</div>

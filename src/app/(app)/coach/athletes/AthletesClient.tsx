@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import InviteModal from "@/components/coach/InviteModal";
 import type { CoachAthlete } from "@/types";
 
-function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 60 ? "#f28a00" : "#d10000"; }
+function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function statusLabel(s: number) { return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller"; }
 
 function AthleteRing({ score }: { score: number }) {
@@ -20,7 +20,7 @@ function AthleteRing({ score }: { score: number }) {
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 14, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.04em", color: "#fff" }}>{score}</span>
+        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color: scoreColor(score) }}>{score}</span>
         <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
       </div>
     </div>
