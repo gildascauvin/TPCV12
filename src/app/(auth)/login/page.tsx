@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import AuthBackground from "@/components/auth/AuthBackground";
 
 function EyeOn() {
   return (
@@ -86,7 +87,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f0ee", padding: 20 }}>
+    <AuthBackground>
       <div style={{ width: "100%", maxWidth: 400 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -95,8 +96,8 @@ export default function LoginPage() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#fff" strokeLinejoin="round" />
             </svg>
           </div>
-          <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f" }}>ThePerfClub</div>
-          <div style={{ fontSize: 14, color: "#62686e", marginTop: 4 }}>Ton espace d'entraînement intelligent</div>
+          <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#fff" }}>ThePerfClub</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", marginTop: 4 }}>Ton espace d'entraînement intelligent</div>
         </div>
 
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 30, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
@@ -242,6 +243,6 @@ export default function LoginPage() {
 
         </div>
       </div>
-    </div>
+    </AuthBackground>
   );
 }

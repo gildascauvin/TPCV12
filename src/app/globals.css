@@ -16,6 +16,13 @@
   --danger: #c81e1e;
   --warn: #f28a00;
   --radius: 12px;
+  --wk-col: 240px;
+}
+@media (min-width: 640px) {
+  :root { --wk-col: 265px; }
+}
+@media (min-width: 1024px) {
+  :root { --wk-col: 290px; }
 }
 
 * {
@@ -65,6 +72,93 @@ select:focus {
   width: 24px;
   height: 24px;
   display: block;
+}
+
+/* ─── Responsive layout ─── */
+.page-shell {
+  padding: 16px 16px 110px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+@media (min-width: 640px) {
+  .page-shell {
+    padding: 24px 24px 120px;
+    max-width: 720px;
+  }
+}
+@media (min-width: 1024px) {
+  .page-shell {
+    padding: 32px 40px 120px;
+    max-width: 1000px;
+  }
+}
+
+/* ─── Stats 3-col grid — collapses gracefully ─── */
+.stats-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 340px) {
+  .stats-grid-3 {
+    gap: 6px;
+  }
+}
+
+/* ─── Signature / panel 3-col — wraps to 1-col on narrow ─── */
+.sig-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 480px) {
+  .sig-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+@media (min-width: 481px) and (max-width: 680px) {
+  .sig-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .sig-grid > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ─── Today page — 2-col on md+ ─── */
+.today-layout {
+  display: block;
+}
+@media (min-width: 640px) {
+  .today-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+}
+@media (min-width: 1024px) {
+  .today-layout {
+    grid-template-columns: 5fr 4fr;
+    gap: 24px;
+  }
+}
+
+/* ─── Week column items — width driven by grid track, not the item ─── */
+.week-col-width {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ─── MissionCard grid — right column always stays compact ─── */
+.mission-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 @layer components {

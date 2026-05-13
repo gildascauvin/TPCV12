@@ -10,6 +10,7 @@ import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { Profile, WellnessDaily, Session } from "@/types";
 
 const BEHAVIOR_LABELS: Record<string, string> = {
@@ -81,26 +82,27 @@ function buildDotMap(sessions: Session[], anchor: string) {
   return map;
 }
 
-/* ─── WellnessRing inline (104px, matches v59 POC) ─── */
-function WellnessRingPOC({ score }: { score: number | null }) {
-  const r = 44;
-  const circ = +(2 * Math.PI * r).toFixed(1); // ≈276.5
+/* ─── WellnessRing inline (responsive size) ─── */
+function WellnessRingPOC({ score, size = 104 }: { score: number | null; size?: number }) {
+  const r = Math.round(size * 0.423);
+  const circ = +(2 * Math.PI * r).toFixed(1);
   const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
   const offset = +(circ * (1 - pct / 100)).toFixed(1);
   const color = scoreColor(score);
+  const sw = Math.round(size * 0.077);
   return (
-    <div style={{ position: "relative", flexShrink: 0, width: 104, height: 104 }}>
-      <svg width="104" height="104" viewBox="0 0 104 104" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="52" cy="52" r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="8" />
-        <circle cx="52" cy="52" r={r} fill="none" stroke={color} strokeWidth="8"
+    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
           style={{ transition: "all 0.5s ease" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 32, fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
+        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
           {score !== null ? score : "—"}
         </span>
-        <span style={{ fontSize: 8, fontWeight: 1000, color: "rgba(255,255,255,0.58)", letterSpacing: "0.14em", marginTop: 2, textTransform: "uppercase" }}>
+        <span style={{ fontSize: Math.round(size * 0.077), fontWeight: 1000, color: "rgba(255,255,255,0.58)", letterSpacing: "0.14em", marginTop: 2, textTransform: "uppercase" }}>
           wellness
         </span>
       </div>
@@ -245,6 +247,7 @@ interface Props {
 export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions }: Props) {
   const supabase = createClient();
   const router = useRouter();
+  const { isMd, isLg } = useBreakpoint();
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -313,140 +316,126 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     router.refresh();
   }, [supabase, editing, router]);
 
+  const ringSize = isLg ? 120 : isMd ? 112 : 96;
+  const pad = isLg ? 32 : isMd ? 24 : 16;
+
   return (
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
 
-      <div style={{ padding: "14px 16px 18px" }}>
+      <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
         {/* Greeting */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>
-              {greeting()} {profile.name ? profile.name : ""}
-              {" "}👋
-            </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
+            {greeting()} {profile.name ? profile.name : ""} 👋
           </div>
         </div>
 
-        {/* ── Wellness + Conseils card (v59 POC exact design) ── */}
-        <div
-          onClick={() => setShowWellness(true)}
-          style={{
-            position: "relative",
-            overflow: "hidden",
-            borderRadius: 30,
-            padding: 24,
-            marginBottom: 12,
-            background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-            border: "1px solid rgba(255,255,255,0.13)",
-            boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
-            color: "#fff",
-            cursor: "pointer",
-            minHeight: 236,
-          }}
-        >
-          {/* Orange glow blob bottom-right (replaces ::after) */}
-          <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
+        {/* ── 2-col layout on md+ ── */}
+        <div className="today-layout">
 
-          {/* Top: ring + status */}
-          <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 20, marginBottom: 18 }}>
-            <WellnessRingPOC score={score} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
-                Score &amp; conseils
+          {/* ── Wellness + Conseils card ── */}
+          <div
+            onClick={() => setShowWellness(true)}
+            style={{
+              position: "relative", overflow: "hidden",
+              borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
+              background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
+              border: "1px solid rgba(255,255,255,0.13)",
+              boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
+              color: "#fff", cursor: "pointer",
+            }}
+          >
+            <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
+
+            {/* Ring + status */}
+            <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18 }}>
+              <WellnessRingPOC score={score} size={ringSize} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
+                  Score &amp; conseils
+                </div>
+                <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
+                  {formLabel(score)}
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
+                  {wellness ? "Rempli aujourd'hui" : "Non rempli · Appuie pour remplir"}
+                </div>
+                {wellness && wellness.behaviors.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                    {wellness.behaviors.map((b) => (
+                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_LABELS[b] || b}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
+                    ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
+                  </span>
+                </div>
               </div>
-              <div style={{ fontSize: 34, fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.02, letterSpacing: "-0.055em" }}>
-                {formLabel(score)}
+            </div>
+
+            {score !== null && score < 55 && (
+              <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 7, background: "rgba(212,64,0,0.18)", border: "1px solid rgba(212,64,0,0.36)", borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
+                🔥 Wellness bas — pense à alléger ou reporter si la séance est intense
               </div>
-              <div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
-                {wellness ? "Rempli aujourd'hui" : "Non rempli · Appuie pour remplir"}
+            )}
+
+            <div style={{ position: "relative", zIndex: 2, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+                ✦ Conseils
               </div>
-              {wellness && wellness.behaviors.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                  {wellness.behaviors.map((b) => (
-                    <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_LABELS[b] || b}</span>
-                  ))}
+              <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>⚡ Entraînement</div>
+                <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.training}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>🌿 Récupération</div>
+                <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.recovery}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Sessions column ── */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+              <div className="section-label" style={{ marginBottom: 0 }}>
+                {format(new Date(selectedDate + "T12:00:00"), "EEEE d MMMM", { locale: fr })}
+              </div>
+            </div>
+
+            <div id="day-sessions-container">
+              {todaySessions.length === 0 && (
+                <div style={{ border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "var(--muted)", fontSize: 12, marginBottom: 9 }}>
+                  Repos ou séance libre
                 </div>
               )}
-              {/* V43 reward pills */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "8px 11px", fontSize: 12, fontWeight: 900 }}>
-                  ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
-                </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "8px 11px", fontSize: 12, fontWeight: 900 }}>
-                  {todaySessions.filter(s => s.done && s.rpe && s.duration).length >= 3
-                    ? "Ton système apprend ta réponse à la charge"
-                    : "Plus tu renseignes tes séances, plus la décision devient personnelle"}
-                </span>
-              </div>
+              {todaySessions.map((s) => (
+                <TodaySessionCard
+                  key={s.id}
+                  session={s}
+                  onComplete={setCompleting}
+                  onEdit={setEditing}
+                  onDelete={deleteSession}
+                />
+              ))}
+            </div>
+
+            <div
+              onClick={() => setShowAddSession(true)}
+              style={{
+                border: "0.5px dashed rgba(212,64,0,0.34)",
+                color: "var(--accent)", background: "#fff",
+                borderRadius: "var(--radius)", padding: "18px 14px",
+                textAlign: "center", fontSize: 13, fontWeight: 600,
+                cursor: "pointer", marginTop: 10, transition: "all 0.15s",
+              }}
+            >
+              + Ajouter une séance
             </div>
           </div>
 
-          {/* Fatigue banner */}
-          {score !== null && score < 55 && (
-            <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 7, background: "rgba(212,64,0,0.18)", border: "1px solid rgba(212,64,0,0.36)", borderRadius: 16, padding: "12px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
-              🔥 Wellness bas — pense à alléger ou reporter si la séance est intense
-            </div>
-          )}
-
-          {/* AI advice — bordered sections */}
-          <div style={{ position: "relative", zIndex: 2, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-              ✦ Conseils
-            </div>
-            <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>⚡ Entraînement</div>
-              <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.training}</div>
-            </div>
-            <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>🌿 Récupération</div>
-              <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.recovery}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Sessions ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-          <div className="section-label" style={{ marginBottom: 0 }}>
-            {format(new Date(selectedDate + "T12:00:00"), "EEEE d MMMM", { locale: fr })}
-          </div>
-        </div>
-
-        <div id="day-sessions-container">
-          {todaySessions.length === 0 && (
-            <div style={{ border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "var(--muted)", fontSize: 12, marginBottom: 9 }}>
-              Repos ou séance libre
-            </div>
-          )}
-          {todaySessions.map((s) => (
-            <TodaySessionCard
-              key={s.id}
-              session={s}
-              onComplete={setCompleting}
-              onEdit={setEditing}
-              onDelete={deleteSession}
-            />
-          ))}
-        </div>
-
-        {/* Add session button */}
-        <div
-          onClick={() => setShowAddSession(true)}
-          style={{
-            border: "0.5px dashed rgba(212,64,0,0.34)",
-            color: "var(--accent)",
-            background: "#fff",
-            borderRadius: "var(--radius)",
-            padding: "18px 14px",
-            textAlign: "center",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: "pointer",
-            marginTop: 10,
-            transition: "all 0.15s",
-          }}
-        >
-          + Ajouter une séance
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
 interface Props {
@@ -92,6 +93,7 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
 export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId }: Props) {
   const router = useRouter();
   const supabase = createClient();
+  const { isMd, isLg } = useBreakpoint();
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
@@ -153,7 +155,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
 
-      <div style={{ padding: "16px 18px 100px", maxWidth: 600, margin: "0 auto" }}>
+      <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         <div style={{
           position: "relative", overflow: "hidden",
@@ -174,7 +176,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, margin: "12px 0" }}>
+        <div className="stats-grid-3" style={{ margin: "12px 0" }}>
           {[
             { value: priority.length, label: "Décisions à prendre" },
             { value: avgWellness || "—", label: "Wellness équipe" },
@@ -210,12 +212,12 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                   <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Le coach voit d'abord ce qui mérite une action.</div>
                 </div>
               </div>
-              <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {priority.length > 0 ? priority.map(a => (
                   <MissionCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
                     onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)} />
                 )) : (
-                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
+                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Aucune décision urgente. L'équipe peut suivre le plan.
                   </div>
                 )}
@@ -229,12 +231,12 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                   <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Pas d'intervention immédiate.</div>
                 </div>
               </div>
-              <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {stable.length > 0 ? stable.map(a => (
                   <MissionCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)} />
                 )) : (
-                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
+                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Tous les sportifs nécessitent une attention aujourd'hui.
                   </div>
                 )}

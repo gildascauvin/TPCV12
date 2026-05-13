@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import AuthBackground from "@/components/auth/AuthBackground";
 
 /* ─── types ─── */
 type Role = "athlete" | "coach";
@@ -254,8 +255,8 @@ export default function OnboardingFlow({ userId }: Props) {
   };
 
   return (
-    <div style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", padding: 22, background: "#f1f1f1" }}>
-      <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.92)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.22)" }}>
+    <AuthBackground>
+      <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.94)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.40)" }}>
 
         {/* Badge */}
         <div style={{ display: "inline-flex", marginBottom: 10, padding: "6px 10px", borderRadius: 999, background: "rgba(212,64,0,.08)", color: "#d44000", fontSize: 10, fontWeight: 950, textTransform: "uppercase", letterSpacing: "0.10em" }}>
@@ -473,6 +474,6 @@ export default function OnboardingFlow({ userId }: Props) {
         )}
 
       </div>
-    </div>
+    </AuthBackground>
   );
 }

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
@@ -85,6 +86,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isMd, isLg } = useBreakpoint();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
@@ -249,7 +251,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     return (
       <>
         <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
-        <div style={{ padding: "20px 18px 100px", maxWidth: 600, margin: "0 auto", textAlign: "center" }}>
+        <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
           <button onClick={() => router.push("/coach/athletes")}
@@ -265,7 +267,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
 
-      <div style={{ padding: "12px 18px 0", maxWidth: 600, margin: "0 auto" }}>
+      <div style={{ padding: isLg ? "12px 40px 0" : isMd ? "12px 24px 0" : "12px 16px 0", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
         <div style={{
           position: "relative", overflow: "hidden",
           background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
@@ -298,11 +300,15 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         </div>
       </div>
 
+      {/* 7-column scrollable grid — full-width, always scrolls horizontally */}
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(7, 300px)",
-        gap: 10, overflowX: "auto",
-        padding: "14px 18px 18px",
-        scrollSnapType: "x proximity", scrollbarWidth: "thin",
+        display: "grid",
+        gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+        gap: isMd ? 12 : 10,
+        overflowX: "auto",
+        padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
+        scrollSnapType: "x proximity",
+        scrollbarWidth: "thin",
       }}>
         {weekDates.map(date => {
           const dstr = format(date, "yyyy-MM-dd");
@@ -313,8 +319,8 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           const tagColor = ruleTagColors[rule.cls];
 
           return (
-            <div key={dstr} style={{
-              minWidth: 244, background: "#fff",
+            <div key={dstr} className="week-col-width" style={{
+              background: "#fff",
               border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
               borderRadius: 26, padding: 16,
               boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",

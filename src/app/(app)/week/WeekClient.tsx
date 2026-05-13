@@ -9,6 +9,7 @@ import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { Session, WellnessDaily } from "@/types";
 
 /* ─── helpers ─── */
@@ -185,8 +186,8 @@ function DayColumn({ date, sessions, wellness, todayStr, onAddSession, onComplet
   const tagColor = ruleTagColors[rule.cls];
 
   return (
-    <div style={{
-      minWidth: 244, background: "#fff",
+    <div className="week-col-width" style={{
+      background: "#fff",
       border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
       borderRadius: 26, padding: 16,
       boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
@@ -268,6 +269,7 @@ interface Props { userId: string; initialSessions: Session[]; initialWellness: W
 export default function WeekClient({ userId, initialSessions, initialWellness }: Props) {
   const supabase = createClient();
   const router = useRouter();
+  const { isMd, isLg } = useBreakpoint();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [weekBase, setWeekBase] = useState(new Date());
@@ -375,12 +377,15 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
 
-      {/* 7-column scrollable grid */}
+      {/* 7-column scrollable grid — full-width, always scrolls horizontally */}
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(7, 300px)",
-        gap: 10, overflowX: "auto",
-        padding: "14px 16px 18px",
-        scrollSnapType: "x proximity", scrollbarWidth: "thin",
+        display: "grid",
+        gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+        gap: isMd ? 12 : 10,
+        overflowX: "auto",
+        padding: isMd ? "14px 20px 18px" : "14px 14px 18px",
+        scrollSnapType: "x proximity",
+        scrollbarWidth: "thin",
       }}>
         {dates.map(date => {
           const dstr = format(date, "yyyy-MM-dd");

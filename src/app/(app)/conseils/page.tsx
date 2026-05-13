@@ -93,7 +93,7 @@ export default async function ConseilsPage() {
   ];
 
   return (
-    <div style={{ padding: "20px 18px 100px", maxWidth: 600, margin: "0 auto" }}>
+    <div className="page-shell">
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "#8a8f94", marginBottom: 4 }}>
@@ -109,7 +109,7 @@ export default async function ConseilsPage() {
       </div>
 
       {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 18 }}>
+      <div className="stats-grid-3" style={{ marginBottom: 18 }}>
         {[
           { value: done7.length, label: "SÉANCES" },
           { value: avgRpe ?? "—", label: "DIFF. MOY." },
@@ -146,7 +146,7 @@ export default async function ConseilsPage() {
             {sig.signals ? `${sig.signals} signaux` : "À construire"}
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, position: "relative" as const, zIndex: 2 }}>
+        <div className="sig-grid" style={{ position: "relative", zIndex: 2 }}>
           {[
             { value: sig.nervous, label: "Nerveux", text: toleranceText },
             { value: sig.muscular, label: "Musculaire", text: "Les séances longues et lourdes définissent ton coût musculaire." },

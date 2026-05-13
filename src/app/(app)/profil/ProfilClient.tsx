@@ -55,7 +55,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
 
   return (
     <>
-      <div style={{ padding: "20px 18px 100px", maxWidth: 600, margin: "0 auto" }}>
+      <div className="page-shell">
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
@@ -104,7 +104,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
 
         {/* Stats cette semaine */}
         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Stats cette semaine</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 22 }}>
+        <div className="stats-grid-3" style={{ marginBottom: 22 }}>
           {[
             { value: doneSessions.length, label: "SÉANCES" },
             { value: avgRpe ?? "—", label: "DIFF. MOY." },

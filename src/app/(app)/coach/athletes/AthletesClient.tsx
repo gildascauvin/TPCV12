@@ -53,7 +53,7 @@ export default function AthletesClient({ userId, initialAthletes }: Props) {
 
   return (
     <>
-      <div style={{ padding: "16px 18px 100px", maxWidth: 600, margin: "0 auto" }}>
+      <div className="page-shell">
 
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>

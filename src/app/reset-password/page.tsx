@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AuthBackground from "@/components/auth/AuthBackground";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -67,7 +68,7 @@ export default function ResetPasswordPage() {
   );
 
   return (
-    <div style={{ minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f0ee", padding: 20 }}>
+    <AuthBackground>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 28 }}>
           <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 18, background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 12px 30px rgba(212,64,0,.30)", marginBottom: 14 }}>
@@ -75,7 +76,7 @@ export default function ResetPasswordPage() {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#fff" strokeLinejoin="round" />
             </svg>
           </div>
-          <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f" }}>ThePerfClub</div>
+          <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#fff" }}>ThePerfClub</div>
         </div>
 
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 30, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
@@ -120,7 +121,7 @@ export default function ResetPasswordPage() {
           )}
         </div>
       </div>
-    </div>
+    </AuthBackground>
   );
 }
 
