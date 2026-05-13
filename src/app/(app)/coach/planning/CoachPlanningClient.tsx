@@ -6,6 +6,7 @@ import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
@@ -87,6 +88,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
+  useRefreshOnFocus();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";

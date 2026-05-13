@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { createClient } from "@/lib/supabase/server";
 import ProfilClient from "./ProfilClient";
 import type { Session, WellnessDaily } from "@/types";

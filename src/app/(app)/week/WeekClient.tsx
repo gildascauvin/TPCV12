@@ -10,6 +10,7 @@ import CompleteModal from "@/components/sessions/CompleteModal";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { Session, WellnessDaily } from "@/types";
 
 /* ─── helpers ─── */
@@ -270,6 +271,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
+  useRefreshOnFocus();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [weekBase, setWeekBase] = useState(new Date());

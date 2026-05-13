@@ -11,6 +11,7 @@ import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { Profile, WellnessDaily, Session } from "@/types";
 
 const BEHAVIOR_LABELS: Record<string, string> = {
@@ -248,6 +249,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
+  useRefreshOnFocus();
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);

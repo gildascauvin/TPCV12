@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
 interface Props {
@@ -94,6 +95,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
+  useRefreshOnFocus();
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
