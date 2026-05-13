@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import InviteModal from "@/components/coach/InviteModal";
-import type { CoachAthlete } from "@/types";
+import PaywallModal from "@/components/paywall/PaywallModal";
+import { usePaywall } from "@/hooks/usePaywall";
+import type { CoachAthlete, SubscriptionStatus } from "@/types";
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function statusLabel(s: number) { return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller"; }
@@ -30,13 +32,15 @@ function AthleteRing({ score }: { score: number }) {
 interface Props {
   userId: string;
   initialAthletes: CoachAthlete[];
+  subscriptionStatus: SubscriptionStatus;
 }
 
-export default function AthletesClient({ userId, initialAthletes }: Props) {
+export default function AthletesClient({ userId, initialAthletes, subscriptionStatus }: Props) {
   const router = useRouter();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
 
   async function handleDelete(athlete: CoachAthlete) {
     const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
@@ -64,7 +68,7 @@ export default function AthletesClient({ userId, initialAthletes }: Props) {
             </div>
           </div>
           <button
-            onClick={() => setShowInvite(true)}
+            onClick={() => requireSubscription(() => setShowInvite(true))}
             style={{ height: 40, paddingLeft: 18, paddingRight: 18, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", flexShrink: 0, marginTop: 4 }}
           >
             + Inviter
@@ -79,7 +83,7 @@ export default function AthletesClient({ userId, initialAthletes }: Props) {
               Invite un sportif pour commencer à suivre son wellness et ses séances.
             </div>
             <button
-              onClick={() => setShowInvite(true)}
+              onClick={() => requireSubscription(() => setShowInvite(true))}
               style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
             >
               Inviter un sportif →
@@ -133,6 +137,14 @@ export default function AthletesClient({ userId, initialAthletes }: Props) {
         <InviteModal
           onClose={() => setShowInvite(false)}
           onLinked={() => router.refresh()}
+        />
+      )}
+      {showPaywall && (
+        <PaywallModal
+          mode="coach"
+          allowDismiss={allowDismiss}
+          onClose={() => setShowPaywall(false)}
+          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
         />
       )}
     </>

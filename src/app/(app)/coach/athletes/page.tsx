@@ -10,7 +10,7 @@ export default async function CoachAthletesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status").eq("user_id", user.id).maybeSingle();
   if (!profile || profile.mode !== "coach") redirect("/today");
 
   const { data: rawAthletes } = await supabase
@@ -23,6 +23,7 @@ export default async function CoachAthletesPage() {
     <AthletesClient
       userId={user.id}
       initialAthletes={(rawAthletes || []) as CoachAthlete[]}
+      subscriptionStatus={profile.subscription_status ?? "free"}
     />
   );
 }

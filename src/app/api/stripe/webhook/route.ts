@@ -38,20 +38,32 @@ export async function POST(request: Request) {
       }
       break;
     }
+    case "customer.subscription.created":
+    case "customer.subscription.updated": {
+      const sub = event.data.object as Stripe.Subscription;
+      const userId = sub.metadata?.user_id;
+      const plan = sub.metadata?.plan;
+      if (userId && plan && (sub.status === "trialing" || sub.status === "active")) {
+        await supabase
+          .from("profiles")
+          .update({ subscription_status: plan as "athlete" | "coach" })
+          .eq("user_id", userId);
+      } else if (userId && ["past_due", "canceled", "unpaid"].includes(sub.status)) {
+        await supabase
+          .from("profiles")
+          .update({ subscription_status: "expired" })
+          .eq("user_id", userId);
+      }
+      break;
+    }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
       const customer = await stripe.customers.retrieve(sub.customer as string);
       if (!customer.deleted) {
-        const { data: profiles } = await supabase
+        await supabase
           .from("profiles")
-          .select("user_id")
+          .update({ subscription_status: "expired" })
           .eq("stripe_customer_id", customer.id);
-        if (profiles?.length) {
-          await supabase
-            .from("profiles")
-            .update({ subscription_status: "expired" })
-            .eq("stripe_customer_id", customer.id);
-        }
       }
       break;
     }

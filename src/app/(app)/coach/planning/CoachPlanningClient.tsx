@@ -7,11 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
+import { usePaywall } from "@/hooks/usePaywall";
+import PaywallModal from "@/components/paywall/PaywallModal";
 
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -81,14 +83,16 @@ interface Props {
   athletes: CoachAthlete[];
   initialSessions: CoachViewSession[];
   initialWellnessMap: Record<string, Record<string, number>>;
+  subscriptionStatus: SubscriptionStatus;
 }
 
-export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap }: Props) {
+export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap, subscriptionStatus }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
+  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
@@ -381,7 +385,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                   return (
                     <div key={s.id}
                       style={{ border: s.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}
-                      onClick={() => setEditingSession(s)}>
+                      onClick={() => requireSubscription(() => setEditingSession(s))}>
                       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
                         <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
                           {s.name}
@@ -409,7 +413,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                   );
                 })}
 
-                <div onClick={() => setAddingDate(dstr)}
+                <div onClick={() => requireSubscription(() => setAddingDate(dstr))}
                   style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
                   + Ajouter une séance
                 </div>
@@ -441,6 +445,15 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
+        />
+      )}
+
+      {showPaywall && (
+        <PaywallModal
+          mode="coach"
+          allowDismiss={allowDismiss}
+          onClose={() => setShowPaywall(false)}
+          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
         />
       )}
 

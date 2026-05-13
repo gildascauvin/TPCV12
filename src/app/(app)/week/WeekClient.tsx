@@ -11,7 +11,9 @@ import DuplicateModal from "@/components/sessions/DuplicateModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import type { Session, WellnessDaily } from "@/types";
+import PaywallModal from "@/components/paywall/PaywallModal";
+import { usePaywall } from "@/hooks/usePaywall";
+import type { Session, WellnessDaily, SubscriptionStatus } from "@/types";
 
 /* ─── helpers ─── */
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -265,13 +267,14 @@ function DayColumn({ date, sessions, wellness, todayStr, onAddSession, onComplet
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; initialSessions: Session[]; initialWellness: WellnessDaily[]; }
+interface Props { userId: string; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; }
 
-export default function WeekClient({ userId, initialSessions, initialWellness }: Props) {
+export default function WeekClient({ userId, initialSessions, initialWellness, subscriptionStatus }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
+  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [weekBase, setWeekBase] = useState(new Date());
@@ -397,11 +400,11 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
               sessions={sessions.filter(s => s.date === dstr)}
               wellness={wellnessList.find(w => w.date === dstr) ?? null}
               todayStr={todayStr}
-              onAddSession={setAddingDate}
-              onComplete={setCompleting}
-              onEdit={setEditing}
-              onDuplicate={setDuplicating}
-              onWellness={() => setShowWellness(true)}
+              onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
+              onComplete={(s) => requireSubscription(() => setCompleting(s))}
+              onEdit={(s) => requireSubscription(() => setEditing(s))}
+              onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
+              onWellness={() => requireSubscription(() => setShowWellness(true))}
             />
           );
         })}
@@ -427,6 +430,14 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
       )}
       {showWellness && (
         <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => setShowWellness(false)} />
+      )}
+      {showPaywall && (
+        <PaywallModal
+          mode="athlete"
+          allowDismiss={allowDismiss}
+          onClose={() => setShowPaywall(false)}
+          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
+        />
       )}
     </>
   );

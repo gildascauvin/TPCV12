@@ -9,7 +9,7 @@ export default async function TodayPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: profileCheck } = await supabase.from("profiles").select("mode").eq("user_id", user!.id).maybeSingle();
+  const { data: profileCheck } = await supabase.from("profiles").select("mode, subscription_status").eq("user_id", user!.id).maybeSingle();
   if (profileCheck?.mode === "coach") redirect("/coach");
 
   const today = format(new Date(), "yyyy-MM-dd");
@@ -27,6 +27,7 @@ export default async function TodayPage() {
       initialDate={today}
       initialWellness={wellness ?? null}
       initialSessions={sessions ?? []}
+      subscriptionStatus={profileCheck?.subscription_status ?? "free"}
     />
   );
 }

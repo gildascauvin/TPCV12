@@ -12,7 +12,9 @@ import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import type { Profile, WellnessDaily, Session } from "@/types";
+import PaywallModal from "@/components/paywall/PaywallModal";
+import { usePaywall } from "@/hooks/usePaywall";
+import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
 const BEHAVIOR_LABELS: Record<string, string> = {
   alcohol: "🍷 Alcool",
@@ -243,13 +245,15 @@ interface Props {
   initialDate: string;
   initialWellness: WellnessDaily | null;
   initialSessions: Session[];
+  subscriptionStatus: SubscriptionStatus;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
+  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -338,7 +342,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
           {/* ── Wellness + Conseils card ── */}
           <div
-            onClick={() => setShowWellness(true)}
+            onClick={() => requireSubscription(() => setShowWellness(true))}
             style={{
               position: "relative", overflow: "hidden",
               borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
@@ -417,15 +421,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 <TodaySessionCard
                   key={s.id}
                   session={s}
-                  onComplete={setCompleting}
-                  onEdit={setEditing}
-                  onDelete={deleteSession}
+                  onComplete={(s) => requireSubscription(() => setCompleting(s))}
+                  onEdit={(s) => requireSubscription(() => setEditing(s))}
+                  onDelete={(s) => requireSubscription(() => deleteSession(s))}
                 />
               ))}
             </div>
 
             <div
-              onClick={() => setShowAddSession(true)}
+              onClick={() => requireSubscription(() => setShowAddSession(true))}
               style={{
                 border: "0.5px dashed rgba(212,64,0,0.34)",
                 color: "var(--accent)", background: "#fff",
@@ -458,6 +462,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onSave={saveEdit}
           onDelete={async () => { await deleteSession(editing); setEditing(null); }}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {showPaywall && (
+        <PaywallModal
+          mode="athlete"
+          allowDismiss={allowDismiss}
+          onClose={() => setShowPaywall(false)}
+          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
         />
       )}
     </>

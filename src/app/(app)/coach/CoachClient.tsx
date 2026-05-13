@@ -7,7 +7,7 @@ import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
   coachName: string | null;
@@ -15,6 +15,7 @@ interface Props {
   todaySessions: CoachViewSession[];
   today: string;
   userId: string;
+  subscriptionStatus: SubscriptionStatus;
 }
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
@@ -105,7 +106,7 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
   );
 }
 
-export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId }: Props) {
+export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();

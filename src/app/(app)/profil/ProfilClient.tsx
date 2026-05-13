@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import LogoutButton from "@/components/auth/LogoutButton";
+import PaywallModal from "@/components/paywall/PaywallModal";
 import type { Profile, Session, WellnessDaily, Objective } from "@/types";
 
 const OBJ_LABELS: Record<string, string> = {
@@ -41,6 +42,8 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
   const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
   const [editOpen, setEditOpen] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const initials = profile.name
     ? profile.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -51,6 +54,14 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
     if (saved) setProfile(saved as Profile);
     setEditOpen(false);
     router.refresh();
+  }
+
+  async function handlePortal() {
+    setPortalLoading(true);
+    const res = await fetch("/api/stripe/portal", { method: "POST" });
+    const { url } = await res.json();
+    if (url) window.location.href = url;
+    setPortalLoading(false);
   }
 
   return (
@@ -117,6 +128,46 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
           ))}
         </div>
 
+        {/* Abonnement */}
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Abonnement</div>
+        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 22 }}>
+          {(() => {
+            const s = profile.subscription_status;
+            const label = s === "athlete" ? "Athlète" : s === "coach" ? "Coach" : s === "expired" ? "Expiré" : "Gratuit";
+            const color = s === "athlete" || s === "coach" ? "#2f9e44" : s === "expired" ? "#d10000" : "#8a8f94";
+            const bg = s === "athlete" || s === "coach" ? "rgba(47,158,68,.1)" : s === "expired" ? "rgba(209,0,0,.08)" : "rgba(0,0,0,.05)";
+            const isActive = s === "athlete" || s === "coach";
+            return (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 800, color, background: bg }}>
+                    {label}
+                  </span>
+                  {isActive && <span style={{ fontSize: 12, color: "#62686e" }}>Plan actif</span>}
+                  {s === "free" && <span style={{ fontSize: 12, color: "#62686e" }}>Version gratuite</span>}
+                  {s === "expired" && <span style={{ fontSize: 12, color: "#d10000" }}>Abonnement expiré</span>}
+                </div>
+                {isActive ? (
+                  <button
+                    onClick={handlePortal}
+                    disabled={portalLoading}
+                    style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    {portalLoading ? "..." : "Gérer"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setPaywallOpen(true)}
+                    style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    S'abonner
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Comportements récents */}
         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Comportements récents</div>
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "14px 16px", marginBottom: 22 }}>
@@ -144,6 +195,14 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
           initialFreq={profile.freq_target}
           onSave={handleSaveProfile}
           onClose={() => setEditOpen(false)}
+        />
+      )}
+      {paywallOpen && (
+        <PaywallModal
+          mode={profile.mode as "athlete" | "coach"}
+          allowDismiss
+          onClose={() => setPaywallOpen(false)}
+          onSuccess={() => { setPaywallOpen(false); router.refresh(); }}
         />
       )}
     </>

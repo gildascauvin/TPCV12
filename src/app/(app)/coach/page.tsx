@@ -14,7 +14,7 @@ export default async function CoachPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode, name")
+    .select("mode, name, subscription_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -69,6 +69,7 @@ export default async function CoachPage() {
       todaySessions={todaySessions}
       today={today}
       userId={user.id}
+      subscriptionStatus={profile.subscription_status ?? "free"}
     />
   );
 }

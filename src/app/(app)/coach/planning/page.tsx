@@ -12,7 +12,7 @@ export default async function CoachPlanningPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status").eq("user_id", user.id).maybeSingle();
   if (!profile || profile.mode !== "coach") redirect("/today");
 
   const since = new Date();
@@ -62,6 +62,7 @@ export default async function CoachPlanningPage() {
       athletes={athletes}
       initialSessions={initialSessions}
       initialWellnessMap={wellnessMap}
+      subscriptionStatus={profile.subscription_status ?? "free"}
     />
   );
 }
