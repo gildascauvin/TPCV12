@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   // Supprimer le record coach_athletes (cascade supprime les coach_sessions)
-  await admin.from("coach_athletes").delete().eq("id", coachAthleteId);
+  await supabase.from("coach_athletes").delete().eq("id", coachAthleteId);
 
   return Response.json({ ok: true });
 }
