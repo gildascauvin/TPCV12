@@ -1,12 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import TodayClient from "./TodayClient";
 import { format } from "date-fns";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: profileCheck } = await supabase.from("profiles").select("mode").eq("user_id", user!.id).maybeSingle();
+  if (profileCheck?.mode === "coach") redirect("/coach");
 
   const today = format(new Date(), "yyyy-MM-dd");
 

@@ -22,7 +22,8 @@ export default async function CoachPlanningPage() {
 
   const admin = createAdminClient();
 
-  const { data: rawAthletes } = await admin
+  // Use regular client for coach_athletes — RLS allows coach to read own records
+  const { data: rawAthletes } = await supabase
     .from("coach_athletes")
     .select("*")
     .eq("coach_id", user.id)
