@@ -4,9 +4,9 @@ import { useState } from "react";
 import type { Objective } from "@/types";
 
 const SPORTS = [
-  "Course à pied", "Cyclisme", "Natation", "Triathlon", "Musculation",
-  "CrossFit", "Tennis", "Football", "Basketball", "Rugby",
-  "Arts martiaux", "Yoga", "Escalade", "Randonnée", "Autre",
+  "Haltérophilie", "Sprint", "Préparation physique", "CrossFit",
+  "Fitness", "Rugby", "Football", "Natation", "Cyclisme",
+  "Course à pied", "Tennis", "Basketball", "Arts martiaux", "Autre",
 ];
 
 const OBJECTIVES: { id: Objective; icon: string; label: string }[] = [

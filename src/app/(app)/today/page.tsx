@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import TodayClient from "./TodayClient";
 import { format } from "date-fns";
 
+export const dynamic = "force-dynamic";
+
 export default async function TodayPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

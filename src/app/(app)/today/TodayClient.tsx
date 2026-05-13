@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { format, addDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -243,6 +244,7 @@ interface Props {
 
 export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions }: Props) {
   const supabase = createClient();
+  const router = useRouter();
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -276,14 +278,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .select().single();
     if (saved) setWellness(saved as WellnessDaily);
     setShowWellness(false);
-  }, [supabase, userId, selectedDate]);
+    router.refresh();
+  }, [supabase, userId, selectedDate, router]);
 
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     const { data: saved } = await supabase
       .from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
     setShowAddSession(false);
-  }, [supabase, userId]);
+    router.refresh();
+  }, [supabase, userId, router]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     if (!completing) return;
@@ -291,12 +295,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
     if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved as Session : s));
     setCompleting(null);
-  }, [supabase, completing]);
+    router.refresh();
+  }, [supabase, completing, router]);
 
   const deleteSession = useCallback(async (session: Session) => {
     await supabase.from("sessions").delete().eq("id", session.id);
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
-  }, [supabase]);
+    router.refresh();
+  }, [supabase, router]);
 
   const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     if (!editing) return;
@@ -304,7 +310,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .from("sessions").update(data).eq("id", editing.id).select().single();
     if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved as Session : s));
     setEditing(null);
-  }, [supabase, editing]);
+    router.refresh();
+  }, [supabase, editing, router]);
 
   return (
     <>

@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachPlanningClient from "./CoachPlanningClient";
-import type { CoachAthlete, CoachSession } from "@/types";
+import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
 export default async function CoachPlanningPage() {
   const supabase = await createClient();
@@ -18,16 +20,45 @@ export default async function CoachPlanningPage() {
   const sinceStr = since.toISOString().split("T")[0];
   const untilStr = until.toISOString().split("T")[0];
 
-  const [{ data: rawAthletes }, { data: rawSessions }] = await Promise.all([
-    supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
-    supabase.from("coach_sessions").select("*").eq("coach_id", user.id).gte("date", sinceStr).lte("date", untilStr),
+  const admin = createAdminClient();
+
+  const { data: rawAthletes } = await admin
+    .from("coach_athletes")
+    .select("*")
+    .eq("coach_id", user.id)
+    .order("created_at");
+
+  const athletes = (rawAthletes || []) as CoachAthlete[];
+  const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
+  const allAthleteIds = athletes.map(a => a.id);
+
+  const [realSessionsRes, coachSessionsRes, wellnessRes] = await Promise.all([
+    realUserIds.length
+      ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
+      : Promise.resolve({ data: [] as Session[] }),
+    allAthleteIds.length
+      ? admin.from("coach_sessions").select("*").eq("coach_id", user.id).in("athlete_id", allAthleteIds).gte("date", sinceStr).lte("date", untilStr)
+      : Promise.resolve({ data: [] as CoachSession[] }),
+    realUserIds.length
+      ? admin.from("wellness_daily").select("user_id, date, score").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
+      : Promise.resolve({ data: [] as { user_id: string; date: string; score: number | null }[] }),
   ]);
+
+  const initialSessions: CoachViewSession[] = [
+    ...(realSessionsRes.data || []).map(s => realToView(s as Session, athletes)),
+    ...(coachSessionsRes.data || []).map(s => demoToView(s as CoachSession)),
+  ];
+
+  const wellnessMap = buildWellnessMap(
+    (wellnessRes.data || []) as { user_id: string; date: string; score: number | null }[]
+  );
 
   return (
     <CoachPlanningClient
       userId={user.id}
-      athletes={(rawAthletes || []) as CoachAthlete[]}
-      initialSessions={(rawSessions || []) as CoachSession[]}
+      athletes={athletes}
+      initialSessions={initialSessions}
+      initialWellnessMap={wellnessMap}
     />
   );
 }

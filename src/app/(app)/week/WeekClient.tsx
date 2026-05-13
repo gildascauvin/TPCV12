@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -266,6 +267,7 @@ interface Props { userId: string; initialSessions: Session[]; initialWellness: W
 
 export default function WeekClient({ userId, initialSessions, initialWellness }: Props) {
   const supabase = createClient();
+  const router = useRouter();
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [weekBase, setWeekBase] = useState(new Date());
@@ -316,27 +318,31 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
     const { data: saved } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
     setAddingDate(null);
-  }, [supabase, userId]);
+    router.refresh();
+  }, [supabase, userId, router]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     if (!completing) return;
     const { data: saved } = await supabase.from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
     if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
     setCompleting(null);
-  }, [supabase, completing]);
+    router.refresh();
+  }, [supabase, completing, router]);
 
   const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     if (!editing) return;
     const { data: saved } = await supabase.from("sessions").update(data).eq("id", editing.id).select().single();
     if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
     setEditing(null);
-  }, [supabase, editing]);
+    router.refresh();
+  }, [supabase, editing, router]);
 
   const deleteSession = useCallback(async (session: Session) => {
     await supabase.from("sessions").delete().eq("id", session.id);
     setSessions(prev => prev.filter(s => s.id !== session.id));
     setEditing(null);
-  }, [supabase]);
+    router.refresh();
+  }, [supabase, router]);
 
   const duplicateSession = useCallback(async (newDate: string) => {
     if (!duplicating) return;
@@ -350,7 +356,8 @@ export default function WeekClient({ userId, initialSessions, initialWellness }:
     }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
     setDuplicating(null);
-  }, [supabase, userId, duplicating]);
+    router.refresh();
+  }, [supabase, userId, duplicating, router]);
 
   const saveWellness = useCallback(async (data: {
     sleep: number; stress: number; recovery: number; motivation: number;

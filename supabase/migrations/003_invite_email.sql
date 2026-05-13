@@ -1,0 +1,1 @@
+ALTER TABLE coach_invites ADD COLUMN IF NOT EXISTS email TEXT;

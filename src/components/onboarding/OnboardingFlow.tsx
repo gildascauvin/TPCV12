@@ -236,6 +236,7 @@ export default function OnboardingFlow({ userId }: Props) {
         const uid = data.user?.id;
         if (!uid) { setError("Erreur lors de la création du compte."); setSaving(false); return; }
         await saveData(uid);
+        await fetch("/api/invite/link", { method: "POST" });
       } else {
         await saveData(userId!);
       }

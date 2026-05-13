@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import type { CoachAthlete, CoachSession } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
 interface Props {
   coachName: string | null;
   athletes: CoachAthlete[];
-  todaySessions: CoachSession[];
+  todaySessions: CoachViewSession[];
   today: string;
   userId: string;
 }
@@ -17,7 +18,7 @@ interface Props {
 function scoreState(s: number) { return s >= 75 ? "good" : s >= 60 ? "ok" : ""; }
 function scoreBg(s: number) { return s >= 75 ? "#2f9e44" : s >= 60 ? "#f28a00" : "#d44000"; }
 
-function maxDiffToday(athleteId: string, sessions: CoachSession[]) {
+function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
   const s = sessions.filter(x => x.athlete_id === athleteId);
   return s.length ? Math.max(...s.map(x => x.target_difficulty ?? 6)) : 0;
 }
@@ -35,7 +36,7 @@ function decisionText(a: CoachAthlete, maxDiff: number) {
 
 function MissionCard({ athlete, sessions, isPriority, onDecide }: {
   athlete: CoachAthlete;
-  sessions: CoachSession[];
+  sessions: CoachViewSession[];
   isPriority: boolean;
   onDecide: () => void;
 }) {
@@ -51,7 +52,6 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
       borderRadius: 26, padding: 18,
       boxShadow: isPriority ? "0 18px 46px rgba(212,64,0,.10)" : "0 14px 36px rgba(0,0,0,.065)",
     }}>
-      {/* Score circle */}
       <div style={{
         width: 70, height: 70, borderRadius: "50%", flexShrink: 0,
         background: scoreBg(athlete.wellness_score),
@@ -61,7 +61,6 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
         {athlete.wellness_score}
       </div>
 
-      {/* Middle */}
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 950, color: "#1f2428", letterSpacing: "-0.02em" }}>{athlete.name}</div>
         <div style={{ fontSize: 11, color: "#6b7277", marginTop: 2 }}>
@@ -78,7 +77,6 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
         </div>
       </div>
 
-      {/* Action */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
         <button
           onClick={onDecide}
@@ -91,22 +89,58 @@ function MissionCard({ athlete, sessions, isPriority, onDecide }: {
   );
 }
 
-export default function CoachClient({ athletes, todaySessions, today, userId }: Props) {
+export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId }: Props) {
   const router = useRouter();
   const supabase = createClient();
 
   const [selectedDate, setSelectedDate] = useState(today);
-  const [sessions, setSessions] = useState<CoachSession[]>(todaySessions);
+  const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
+  const [athletes, setAthletes] = useState(initialAthletes);
+
+  // Realtime: update wellness scores as athletes fill in their daily wellness
+  useEffect(() => {
+    const realAthletes = athletes.filter(a => a.user_id);
+    if (!realAthletes.length) return;
+
+    const channels = realAthletes.map(a =>
+      supabase
+        .channel(`dash-wellness-${a.user_id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${a.user_id}` },
+          (payload) => {
+            const row = payload.new as any;
+            if (row?.score != null) {
+              setAthletes(prev => prev.map(x =>
+                x.user_id === a.user_id ? { ...x, wellness_score: row.score } : x
+              ));
+            }
+          })
+        .subscribe()
+    );
+
+    return () => { channels.forEach(c => supabase.removeChannel(c)); };
+  }, []);
 
   const handleDateChange = useCallback(async (date: string) => {
     setSelectedDate(date);
-    const { data } = await supabase
-      .from("coach_sessions")
-      .select("*")
-      .eq("coach_id", userId)
-      .eq("date", date);
-    setSessions((data as CoachSession[]) || []);
-  }, [supabase, userId]);
+
+    const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
+    const demoAthleteIds = athletes.filter(a => !a.user_id).map(a => a.id);
+
+    const [realRes, demoRes] = await Promise.all([
+      realUserIds.length
+        ? supabase.from("sessions").select("*").in("user_id", realUserIds).eq("date", date)
+        : Promise.resolve({ data: [] }),
+      demoAthleteIds.length
+        ? supabase.from("coach_sessions").select("*").eq("coach_id", userId).in("athlete_id", demoAthleteIds).eq("date", date)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const unified: CoachViewSession[] = [
+      ...(realRes.data || []).map(s => realToView(s as Session, athletes)),
+      ...(demoRes.data || []).map(s => demoToView(s as CoachSession)),
+    ];
+    setSessions(unified);
+  }, [supabase, userId, athletes]);
 
   const priority = athletes.filter(a => attention(a, maxDiffToday(a.id, sessions)));
   const stable = athletes.filter(a => !attention(a, maxDiffToday(a.id, sessions)));
@@ -121,7 +155,6 @@ export default function CoachClient({ athletes, todaySessions, today, userId }: 
 
       <div style={{ padding: "16px 18px 100px", maxWidth: 600, margin: "0 auto" }}>
 
-        {/* Coach hero */}
         <div style={{
           position: "relative", overflow: "hidden",
           background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
@@ -141,7 +174,6 @@ export default function CoachClient({ athletes, todaySessions, today, userId }: 
           </div>
         </div>
 
-        {/* Stats grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, margin: "12px 0" }}>
           {[
             { value: priority.length, label: "Décisions à prendre" },
@@ -171,7 +203,6 @@ export default function CoachClient({ athletes, todaySessions, today, userId }: 
           </div>
         ) : (
           <>
-            {/* Priority */}
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
@@ -191,7 +222,6 @@ export default function CoachClient({ athletes, todaySessions, today, userId }: 
               </div>
             </div>
 
-            {/* Stable */}
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
@@ -213,7 +243,6 @@ export default function CoachClient({ athletes, todaySessions, today, userId }: 
           </>
         )}
 
-        {/* Quick nav */}
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button onClick={() => router.push("/coach/athletes")}
             style={{ flex: 1, height: 46, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#171b1f", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>

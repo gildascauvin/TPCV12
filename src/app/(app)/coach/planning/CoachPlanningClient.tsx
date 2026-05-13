@@ -4,23 +4,30 @@ import { useState, useCallback, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
+import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
+
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
-import type { CoachAthlete, CoachSession } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function formLabel(s: number) { return s >= 82 ? "Zone optimale" : s >= 65 ? "Zone stable" : s >= 45 ? "Zone prudente" : "Zone récupération"; }
 
-function dayWellness(athlete: CoachAthlete, dateStr: string, todayStr: string): number {
-  if (dateStr === todayStr) return athlete.wellness_score;
-  const d = new Date(dateStr + "T12:00:00");
-  return Math.max(45, Math.min(92, athlete.wellness_score + ((d.getDate() % 5) - 2) * 4));
+function dayWellness(
+  athlete: CoachAthlete,
+  dateStr: string,
+  wellnessMap: Record<string, Record<string, number>>
+): number {
+  if (athlete.user_id && wellnessMap[athlete.user_id]?.[dateStr] !== undefined) {
+    return wellnessMap[athlete.user_id][dateStr];
+  }
+  return athlete.wellness_score;
 }
 
-function loadRule(sessions: CoachSession[]): { title: string; tag: string; text: string; cls: string } {
+function loadRule(sessions: CoachViewSession[]): { title: string; tag: string; text: string; cls: string } {
   const maxDiff = sessions.length ? Math.max(...sessions.map(s => s.target_difficulty ?? 6)) : 0;
   if (maxDiff >= 8) return { cls: "hard", tag: "Charge haute", title: "Séance dure isolée", text: "OK si elle reste isolée : garde la variation autour pour préserver la récupération." };
   if (maxDiff >= 5) return { cls: "moderate", tag: "Modérée", title: "Charge maîtrisable", text: "Enchaîner du modéré est acceptable si tu varies le stimulus." };
@@ -70,10 +77,11 @@ function DiffGauge({ value, height = 11 }: { value: number | null; height?: numb
 interface Props {
   userId: string;
   athletes: CoachAthlete[];
-  initialSessions: CoachSession[];
+  initialSessions: CoachViewSession[];
+  initialWellnessMap: Record<string, Record<string, number>>;
 }
 
-export default function CoachPlanningClient({ userId, athletes, initialSessions }: Props) {
+export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,10 +90,11 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
   const [selectedAthleteId, setSelectedAthleteId] = useState(defaultAthleteId);
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [sessions, setSessions] = useState<CoachSession[]>(initialSessions);
+  const [sessions, setSessions] = useState<CoachViewSession[]>(initialSessions);
+  const [wellnessMap, setWellnessMap] = useState(initialWellnessMap);
   const [addingDate, setAddingDate] = useState<string | null>(null);
-  const [editingSession, setEditingSession] = useState<CoachSession | null>(null);
-  const [completing, setCompleting] = useState<CoachSession | null>(null);
+  const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
+  const [completing, setCompleting] = useState<CoachViewSession | null>(null);
 
   useEffect(() => {
     const id = searchParams.get("athlete");
@@ -94,6 +103,40 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
 
   const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
 
+  // Realtime: sync athlete's sessions and wellness as they change
+  useEffect(() => {
+    if (!athlete?.user_id) return;
+    const uid = athlete.user_id;
+
+    const channel = supabase
+      .channel(`coach-watch-${uid}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${uid}` },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const s = realToView(payload.new as Session, athletes);
+            if (s.athlete_id) setSessions(prev => prev.find(x => x.id === s.id) ? prev : [...prev, s]);
+          } else if (payload.eventType === "UPDATE") {
+            const s = realToView(payload.new as Session, athletes);
+            setSessions(prev => prev.map(x => x.id === s.id ? { ...s, athlete_id: x.athlete_id } : x));
+          } else if (payload.eventType === "DELETE") {
+            setSessions(prev => prev.filter(x => x.id !== (payload.old as any).id));
+          }
+        })
+      .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${uid}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.score != null) {
+            setWellnessMap(prev => ({
+              ...prev,
+              [uid]: { ...(prev[uid] ?? {}), [row.date]: row.score },
+            }));
+          }
+        })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [athlete?.user_id]);
+
   const weekStart = startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 });
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
@@ -101,11 +144,41 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
     setSelectedDate(date);
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    const { data } = await supabase.from("coach_sessions").select("*")
-      .eq("coach_id", userId).gte("date", mon).lte("date", sun);
-    if (data) setSessions(prev => {
+
+    const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
+    const allAthleteIds = athletes.map(a => a.id);
+
+    const [realRes, coachRes, wellnessRes] = await Promise.all([
+      realUserIds.length
+        ? supabase.from("sessions").select("*").in("user_id", realUserIds).gte("date", mon).lte("date", sun)
+        : Promise.resolve({ data: [] }),
+      allAthleteIds.length
+        ? supabase.from("coach_sessions").select("*").eq("coach_id", userId).in("athlete_id", allAthleteIds).gte("date", mon).lte("date", sun)
+        : Promise.resolve({ data: [] }),
+      realUserIds.length
+        ? supabase.from("wellness_daily").select("user_id, date, score").in("user_id", realUserIds).gte("date", mon).lte("date", sun)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const newSessions: CoachViewSession[] = [
+      ...(realRes.data || []).map(s => realToView(s as Session, athletes)),
+      ...(coachRes.data || []).map(s => demoToView(s as CoachSession)),
+    ];
+
+    setSessions(prev => {
       const out = prev.filter(s => s.date < mon || s.date > sun);
-      return [...out, ...data as CoachSession[]];
+      return [...out, ...newSessions];
+    });
+
+    const newWellness = buildWellnessMap(
+      (wellnessRes.data || []) as { user_id: string; date: string; score: number | null }[]
+    );
+    setWellnessMap(prev => {
+      const merged = { ...prev };
+      for (const uid of Object.keys(newWellness)) {
+        merged[uid] = { ...(merged[uid] ?? {}), ...newWellness[uid] };
+      }
+      return merged;
     });
   }
 
@@ -124,34 +197,53 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
     return map;
   })();
 
+  async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
+    const res = await fetch("/api/coach/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     if (!athlete) return;
-    const { data: saved } = await supabase.from("coach_sessions")
-      .insert({ coach_id: userId, athlete_id: athlete.id, done: false, ...data }).select().single();
-    if (saved) setSessions(prev => [...prev, saved as CoachSession]);
+    const result = await callSessionAPI({ action: "add", athleteId: athlete.id, data });
+    if (result.ok && result.session) {
+      const saved: CoachViewSession = result._real
+        ? realToView(result.session as Session, athletes)
+        : demoToView(result.session as CoachSession);
+      setSessions(prev => [...prev, saved]);
+    }
     setAddingDate(null);
-  }, [supabase, userId, athlete]);
+  }, [athlete, athletes]);
 
   const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
-    if (!editingSession) return;
-    const { data: saved } = await supabase.from("coach_sessions").update(data).eq("id", editingSession.id).select().single();
-    if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as CoachSession : s));
+    if (!editingSession || !athlete) return;
+    const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data });
+    if (result.ok) {
+      const updated: CoachViewSession = { ...editingSession, ...data };
+      setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
+    }
     setEditingSession(null);
-  }, [supabase, editingSession]);
+  }, [editingSession, athlete]);
 
   const deleteSession = useCallback(async () => {
-    if (!editingSession) return;
-    await supabase.from("coach_sessions").delete().eq("id", editingSession.id);
+    if (!editingSession || !athlete) return;
+    await callSessionAPI({ action: "delete", athleteId: athlete.id, sessionId: editingSession.id });
     setSessions(prev => prev.filter(s => s.id !== editingSession.id));
     setEditingSession(null);
-  }, [supabase, editingSession]);
+  }, [editingSession, athlete]);
 
   const completeSession = useCallback(async (data: { rpe: number; duration: number }) => {
-    if (!completing) return;
-    const { data: saved } = await supabase.from("coach_sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
-    if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as CoachSession : s));
+    if (!completing || !athlete) return;
+    const result = await callSessionAPI({ action: "complete", athleteId: athlete.id, sessionId: completing.id, data });
+    if (result.ok) {
+      const updated: CoachViewSession = { ...completing, done: true, rpe: data.rpe, duration: data.duration };
+      setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
+    }
     setCompleting(null);
-  }, [supabase, completing]);
+  }, [completing, athlete]);
 
   if (!athlete) {
     return (
@@ -173,9 +265,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
 
-      {/* Hero + athlete selector */}
       <div style={{ padding: "12px 18px 0", maxWidth: 600, margin: "0 auto" }}>
-        {/* Planning hero */}
         <div style={{
           position: "relative", overflow: "hidden",
           background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
@@ -195,7 +285,6 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
           </div>
         </div>
 
-        {/* Athlete selector — always visible */}
         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
           <select
             value={selectedAthleteId}
@@ -209,7 +298,6 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
         </div>
       </div>
 
-      {/* 7-column week grid — identical to athlete week */}
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(7, 300px)",
         gap: 10, overflowX: "auto",
@@ -220,7 +308,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
           const dstr = format(date, "yyyy-MM-dd");
           const isToday = dstr === todayStr;
           const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-          const wellness = dayWellness(athlete, dstr, todayStr);
+          const wellness = dayWellness(athlete, dstr, wellnessMap);
           const rule = loadRule(daySessions);
           const tagColor = ruleTagColors[rule.cls];
 
@@ -232,7 +320,6 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
               boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
               scrollSnapAlign: "start",
             }}>
-              {/* Day header */}
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
                 <div>
                   <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
@@ -250,12 +337,10 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
                 <PlanningRing score={wellness} />
               </div>
 
-              {/* Wellness label */}
               <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor(wellness), marginBottom: 8 }}>
                 {formLabel(wellness)}
               </div>
 
-              {/* Load rule card */}
               <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
                   <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
@@ -266,7 +351,6 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
                 <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
               </div>
 
-              {/* Sessions label */}
               <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
                 Séances · {daySessions.length}
               </div>
@@ -324,7 +408,19 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
         <CoachSessionModal
           athleteName={athlete.name}
           date={addingDate ?? editingSession!.date}
-          session={editingSession}
+          session={editingSession ? {
+            id: editingSession.id,
+            coach_id: userId,
+            athlete_id: editingSession.athlete_id,
+            date: editingSession.date,
+            name: editingSession.name,
+            notes: editingSession.notes,
+            done: editingSession.done,
+            rpe: editingSession.rpe,
+            duration: editingSession.duration,
+            target_difficulty: editingSession.target_difficulty,
+            created_at: editingSession.created_at,
+          } : null}
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
@@ -333,7 +429,19 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions 
 
       {completing && athlete && (
         <CoachCompleteModal
-          session={completing}
+          session={{
+            id: completing.id,
+            coach_id: userId,
+            athlete_id: completing.athlete_id,
+            date: completing.date,
+            name: completing.name,
+            notes: completing.notes,
+            done: completing.done,
+            rpe: completing.rpe,
+            duration: completing.duration,
+            target_difficulty: completing.target_difficulty,
+            created_at: completing.created_at,
+          }}
           athleteName={athlete.name}
           onSave={completeSession}
           onClose={() => setCompleting(null)}

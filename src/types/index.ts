@@ -57,6 +57,7 @@ export interface CoachAthlete {
   name: string;
   sport: string | null;
   wellness_score: number;
+  user_id: string | null; // null = démo, string = vrai athlète lié
   created_at: string;
 }
 
@@ -72,6 +73,21 @@ export interface CoachSession {
   duration: number | null;
   target_difficulty: number | null;
   created_at: string;
+}
+
+// Unified session for coach views (real athlete → sessions table, demo → coach_sessions)
+export interface CoachViewSession {
+  id: string;
+  athlete_id: string;      // coach_athletes.id
+  date: string;
+  name: string;
+  notes: string | null;
+  duration: number | null;
+  rpe: number | null;
+  done: boolean;
+  target_difficulty: number | null;
+  created_at: string;
+  _real: boolean;          // true = sessions table, false = coach_sessions
 }
 
 export interface FatigueLog {
