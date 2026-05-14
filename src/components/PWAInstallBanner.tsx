@@ -82,15 +82,12 @@ export default function PWAInstallBanner() {
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* App icon */}
-          <div style={{
-            width: 46, height: 46, borderRadius: 12, flexShrink: 0,
-            background: "linear-gradient(180deg,#f04a08,#d44000)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#fff" />
-            </svg>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon-192.png"
+            alt="ThePerfClub"
+            style={{ width: 46, height: 46, borderRadius: 12, flexShrink: 0, objectFit: "cover" }}
+          />
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>ThePerfClub</div>

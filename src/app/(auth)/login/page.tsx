@@ -91,12 +91,12 @@ export default function LoginPage() {
       <div style={{ width: "100%", maxWidth: 400 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 18, background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 12px 30px rgba(212,64,0,.30)", marginBottom: 14 }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#fff" strokeLinejoin="round" />
-            </svg>
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#fff" }}>ThePerfClub</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon-192.png"
+            alt="ThePerfClub"
+            style={{ width: 110, height: 110, borderRadius: 24, objectFit: "cover", boxShadow: "0 16px 40px rgba(0,0,0,.30)", marginBottom: 14, display: "block", margin: "0 auto 14px" }}
+          />
           <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", marginTop: 4 }}>Ton espace d'entraînement intelligent</div>
         </div>
 
