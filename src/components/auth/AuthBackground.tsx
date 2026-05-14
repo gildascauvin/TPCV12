@@ -3,7 +3,7 @@
 /* Decorative static app preview rendered behind auth/onboarding screens */
 export default function AuthBackground({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ position: "fixed", inset: 0, overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0 }}>
       {/* ── Fake app preview (blurred) ── */}
       <div style={{
         position: "absolute", inset: 0,
@@ -118,13 +118,17 @@ export default function AuthBackground({ children }: { children: React.ReactNode
         backdropFilter: "blur(1px)",
       }} />
 
-      {/* ── Content (card, form, etc.) ── */}
+      {/* ── Content (card, form, etc.) — independent scroll layer ── */}
       <div style={{
-        position: "relative", zIndex: 10,
-        minHeight: "100svh", display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 20, overflowY: "auto",
+        position: "absolute", inset: 0, zIndex: 10,
+        overflowY: "auto",
       }}>
-        {children}
+        <div style={{
+          minHeight: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20,
+        }}>
+          {children}
+        </div>
       </div>
     </div>
   );
