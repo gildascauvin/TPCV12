@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       const sub = event.data.object as Stripe.Subscription;
       const userId = sub.metadata?.user_id;
       const plan = sub.metadata?.plan;
-      if (userId && plan && (sub.status === "trialing" || sub.status === "active")) {
+      if (userId && plan && (sub.status === "trialing" || sub.status === "active") && !sub.cancel_at_period_end) {
         await supabase
           .from("profiles")
           .update({ subscription_status: plan as "athlete" | "coach" })
@@ -58,12 +58,12 @@ export async function POST(request: Request) {
     }
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
-      const customer = await stripe.customers.retrieve(sub.customer as string);
-      if (!customer.deleted) {
+      const userId = sub.metadata?.user_id;
+      if (userId) {
         await supabase
           .from("profiles")
           .update({ subscription_status: "expired" })
-          .eq("stripe_customer_id", customer.id);
+          .eq("user_id", userId);
       }
       break;
     }
