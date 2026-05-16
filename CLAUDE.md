@@ -36,12 +36,38 @@ src/app/
     login/        # Connexion + magic link + reset password
     register/     # Création de compte
   reset-password/ # Nouveau mot de passe (après lien email)
-  onboarding/     # Onboarding 4 étapes (post-register)
+  onboarding/     # Onboarding post-register (auth mode sans compte)
 ```
+
+## Onboarding — flows actuels (mai 2026)
+
+**Athlète (inscription) :** Prénom → Rôle → Sport → Niveau → Fréquence → Email/MDP → **Reveal**
+**Coach (inscription) :** Prénom → Rôle → Sport → Email/MDP → **Reveal**
+**Auth mode (déjà connecté) :** mêmes étapes sauf Email/MDP et Reveal
+
+L'écran **Reveal** (`step = "reveal"`) est la clé de conversion :
+- Montre ce qui a été généré (séances, wellness initialisé)
+- Présente l'offre trial 7j + CB au pic d'émotion positive
+- Coach : formulaire d'invitation du premier athlète (`POST /api/invite/create`)
+- Si email confirmation Supabase active : affiche "Vérifie tes emails" à la place du trial
+
+**Étapes supprimées :**
+- `readiness_a` — donnée quotidienne, posée maintenant dans `/today` au premier chargement du jour
+- `level_c` — n'avait aucun impact sur l'expérience coach
+- `count_c` — générait de la fausse data, supprimé avec les faux athlètes coach
+
+**Wellness baseline athlète :** valeurs neutres par défaut (`sleep=7, stress=5, recovery=6, motivation=7`), base_score = 74 + bonus niveau.
+
+Référence complète des 6 axes : `ONBOARDING_AXES.md` à la racine du projet.
 
 ## Composants clés
 ```
 src/components/
+  onboarding/
+    OnboardingFlow.tsx     # Flow complet athlète + coach (register + auth mode)
+  paywall/
+    PaywallModal.tsx       # Stripe Elements in-app, billing toggle, badge sécurité
+    PaywallGate.tsx        # Gating actions (free/expired)
   sessions/
     AddSessionModal.tsx    # Créer/modifier séance (exercices, difficulté)
     CompleteModal.tsx      # Marquer séance terminée (RPE + durée)
