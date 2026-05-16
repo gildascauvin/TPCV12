@@ -51,12 +51,16 @@ L'écran **Reveal** (`step = "reveal"`) est la clé de conversion :
 - Coach : formulaire d'invitation du premier athlète (`POST /api/invite/create`)
 - Si email confirmation Supabase active : affiche "Vérifie tes emails" à la place du trial
 
+**Création auto à l'inscription coach :** `saveData()` insère 1 `coach_athletes` démo (nom + sport du coach, `user_id=null`) + 4 `coach_sessions` lun/mer/ven/sam via `buildCoachDemoSessions()`. Le coach voit son propre profil dans Mission Control dès le premier login.
+
 **Étapes supprimées :**
 - `readiness_a` — donnée quotidienne, posée maintenant dans `/today` au premier chargement du jour
 - `level_c` — n'avait aucun impact sur l'expérience coach
 - `count_c` — générait de la fausse data, supprimé avec les faux athlètes coach
 
 **Wellness baseline athlète :** valeurs neutres par défaut (`sleep=7, stress=5, recovery=6, motivation=7`), base_score = 74 + bonus niveau.
+
+**Détection wellness rempli :** `bedtime == null` = baseline auto (non rempli par l'user). `bedtime != null` = rempli. TodayClient utilise `wellnessFilledToday` pour afficher `—` et auto-ouvrir le WellnessModal au premier chargement du jour (guard sessionStorage).
 
 Référence complète des 6 axes : `ONBOARDING_AXES.md` à la racine du projet.
 

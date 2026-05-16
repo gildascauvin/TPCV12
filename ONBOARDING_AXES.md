@@ -92,6 +92,49 @@ Si email confirmation est désactivée dans Supabase (session immédiate), l'éc
 
 ---
 
+## Axe 7 — Athlète démo "soi-même" pour le coach ✅
+
+**Problème résolu :** Après la suppression des faux athlètes (`count_c`), le dashboard `/coach` s'ouvrait complètement vide. Le coach n'avait rien à voir, rien à manipuler — pas d'aha moment côté coach.
+
+**Ce qui a été fait :** À la fin de l'onboarding coach, on crée automatiquement :
+- 1 entrée `coach_athletes` : nom du coach, sport choisi, `wellness_score = 74`, `user_id = null` (démo)
+- 4 `coach_sessions` pour la semaine en cours (lun/mer/ven/sam) via `buildCoachDemoSessions()`
+
+Le coach voit immédiatement son propre profil dans Mission Control avec des séances planifiées pour son sport. C'est honnête (son vrai nom, son vrai sport) et reconnaissable.
+
+**Différence avec l'ancien système :** Avant : 3/8/15/24 athlètes fictifs avec des noms génériques. Maintenant : 1 seul athlète démo (le coach lui-même).
+
+**Fichier :** `src/components/onboarding/OnboardingFlow.tsx` — `buildCoachDemoSessions()` + `saveData()` bloc coach
+
+---
+
+## Axe 8 — Dashboard coach : modale d'invitation centralisée ✅
+
+**Problème résolu :** Les boutons "Gérer les athlètes" et "Planning →" en bas du dashboard dispersaient l'attention. L'action principale (inviter un vrai athlète) n'était pas mise en avant.
+
+**Ce qui a été fait :**
+- Suppression des boutons "Gérer les athlètes" et "Planning →" du bas du Mission Control
+- Ajout d'un unique bouton "Inviter des athlètes" (pleine largeur, gradient orange)
+- Ce bouton ouvre une modale d'invitation inline (email → `/api/invite/create`)
+
+**Fichier :** `src/app/(app)/coach/CoachClient.tsx` — état `showInviteModal`, modale invite
+
+---
+
+## Axe 9 — Wellness quotidien dans /today ✅
+
+**Problème résolu :** Après suppression de `readiness_a` de l'onboarding, une baseline wellness neutre est créée automatiquement. Sans détection de cet état, le dashboard affichait un score par défaut comme si l'user l'avait rempli.
+
+**Ce qui a été fait :**
+- Détection via `bedtime == null` : la baseline auto a `bedtime: null`, le formulaire utilisateur a toujours un `bedtime`
+- `wellnessFilledToday = wellness !== null && wellness.bedtime != null`
+- Ring affiche `—` et label "Non renseigné" tant que l'user n'a pas rempli
+- `useEffect` au premier chargement : ouvre automatiquement le WellnessModal si pas rempli aujourd'hui (guard sessionStorage `wellness_prompted_YYYY-MM-DD`, skip pour free/expired)
+
+**Fichier :** `src/app/(app)/today/TodayClient.tsx`
+
+---
+
 ## Récapitulatif des flows post-implémentation
 
 ### Athlète (inscription)
@@ -104,10 +147,13 @@ Prénom → Rôle → Sport → Niveau → Fréquence → Email/MDP → Reveal (
 ```
 Prénom → Rôle → Sport → Email/MDP → Reveal (aha + invite athlète + trial)
 4 étapes de formulaire + 1 écran de révélation
++ création auto : 1 athlète démo (soi) + 4 séances semaine type
 ```
 
 ### Fichiers modifiés
 | Fichier | Changements |
 |---------|-------------|
-| `src/components/onboarding/OnboardingFlow.tsx` | Axes 1, 2, 3, 4, 6 |
+| `src/components/onboarding/OnboardingFlow.tsx` | Axes 1, 2, 3, 4, 6, 7 |
 | `src/components/paywall/PaywallModal.tsx` | Axe 5 |
+| `src/app/(app)/today/TodayClient.tsx` | Axe 9 |
+| `src/app/(app)/coach/CoachClient.tsx` | Axes 8 + empty state redesign |
