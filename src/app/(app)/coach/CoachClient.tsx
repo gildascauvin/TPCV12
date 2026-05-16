@@ -126,6 +126,11 @@ function MissionCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
       <div style={{ minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <div style={{ fontSize: 18, fontWeight: 950, color: "#1f2428", letterSpacing: "-0.02em" }}>{athlete.name}</div>
+          {athlete.user_id === null && (
+            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#f0efed", color: "#62686e", border: "1px solid rgba(0,0,0,.10)", borderRadius: 999, padding: "3px 8px" }}>
+              Aperçu
+            </div>
+          )}
           {showBadge && (
             <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
               Attention requise

@@ -110,6 +110,15 @@ function buildWellnessBaseline(userId: string, level: Level) {
   };
 }
 
+function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string) {
+  const templates = getSessionTemplates(sport);
+  const dows = [1, 3, 5, 6];
+  return dows.map((d, i) => {
+    const [name, notes] = templates[i % templates.length];
+    return { coach_id: coachId, athlete_id: athleteId, date: nextDateForDow(d), name, notes, done: false, target_difficulty: 7 };
+  });
+}
+
 /* ─── sub-components ─── */
 function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: string; sub: string; selected: boolean; onClick: () => void }) {
   return (
@@ -198,6 +207,17 @@ export default function OnboardingFlow({ userId }: Props) {
     if (role === "athlete") {
       await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, freq));
       await supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" });
+    }
+
+    if (role === "coach") {
+      const { data: demoAthlete } = await supabase
+        .from("coach_athletes")
+        .insert({ coach_id: uid, name: name.trim(), sport, wellness_score: 74, user_id: null })
+        .select("id")
+        .single();
+      if (demoAthlete?.id) {
+        await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, demoAthlete.id, sport));
+      }
     }
   }
 
@@ -462,8 +482,8 @@ export default function OnboardingFlow({ userId }: Props) {
               ) : (
                 <>
                   <CheckItem text="Tableau de bord configuré" />
-                  <CheckItem text="Modèles de séances prêts" />
-                  <CheckItem text="Prêt à accueillir tes athlètes" />
+                  <CheckItem text={`1 semaine type ${sport} générée`} />
+                  <CheckItem text="Un aperçu de toi ajouté — invite tes vrais athlètes" />
                 </>
               )}
             </div>
