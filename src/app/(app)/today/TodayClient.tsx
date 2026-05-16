@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -266,8 +266,24 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   const todaySessions = allSessions.filter((s) => s.date === selectedDate);
   const score = wellness?.score ?? null;
-  const advice = getAdvice(wellness, todaySessions);
+  const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
+  const displayScore = wellnessFilledToday ? score : null;
+  const displayWellness = wellnessFilledToday ? wellness : null;
+  const advice = getAdvice(displayWellness, todaySessions);
   const dotMap = buildDotMap(allSessions, selectedDate);
+
+  useEffect(() => {
+    const key = `wellness_prompted_${initialDate}`;
+    if (
+      subscriptionStatus !== "free" &&
+      subscriptionStatus !== "expired" &&
+      !wellnessFilledToday &&
+      !sessionStorage.getItem(key)
+    ) {
+      sessionStorage.setItem(key, "1");
+      setShowWellness(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleDateChange(date: string) {
     setSelectedDate(date);
@@ -356,18 +372,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
             {/* Ring + status */}
             <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18 }}>
-              <WellnessRingPOC score={score} size={ringSize} />
+              <WellnessRingPOC score={displayScore} size={ringSize} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
                   Score &amp; conseils
                 </div>
                 <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
-                  {formLabel(score)}
+                  {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
-                  {wellness ? "Rempli aujourd'hui" : "Non rempli · Appuie pour remplir"}
+                  {wellnessFilledToday ? "Rempli aujourd'hui" : "Non renseigné · Appuie pour remplir"}
                 </div>
-                {wellness && wellness.behaviors.length > 0 && (
+                {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
                     {wellness.behaviors.map((b) => (
                       <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_LABELS[b] || b}</span>
@@ -382,7 +398,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
             </div>
 
-            {score !== null && score < 55 && (
+            {displayScore !== null && displayScore < 55 && (
               <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 7, background: "rgba(212,64,0,0.18)", border: "1px solid rgba(212,64,0,0.36)", borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
                 🔥 Wellness bas — pense à alléger ou reporter si la séance est intense
               </div>
