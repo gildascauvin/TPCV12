@@ -113,11 +113,19 @@ function CheckoutForm({
         {loading ? "Traitement..." : "Commencer l'essai gratuit — 7 jours"}
       </button>
 
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12, marginBottom: 4 }}>
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+          <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
+          <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
+      </div>
+
       {allowDismiss && onClose && (
         <button
           type="button"
           onClick={onClose}
-          style={{ width: "100%", background: "none", border: "none", fontSize: 12, color: "#8a8f94", cursor: "pointer", marginTop: 12, padding: 0 }}
+          style={{ width: "100%", background: "none", border: "none", fontSize: 12, color: "#8a8f94", cursor: "pointer", marginTop: 8, padding: 0 }}
         >
           Plus tard
         </button>
