@@ -41,28 +41,66 @@ src/app/
 
 ## Onboarding — flows actuels (mai 2026)
 
-**Athlète (inscription) :** Prénom → Rôle → Sport → Niveau → Fréquence → Email/MDP → **Reveal**
-**Coach (inscription) :** Prénom → Rôle → Sport → Email/MDP → **Reveal**
-**Auth mode (déjà connecté) :** mêmes étapes sauf Email/MDP et Reveal
+### Athlète (inscription — 10 écrans)
+```
+role → sport_2a → level_2a → goal_2a → frustration_2a → freq_2a
+→ wellness_q (5 questions wellness)
+→ account (email + mdp + prénom)
+→ readiness_4a (score reveal — dark card)
+→ recap_5 (offre trial 7j)
+→ PaywallModal
+```
 
-L'écran **Reveal** (`step = "reveal"`) est la clé de conversion :
-- Montre ce qui a été généré (séances, wellness initialisé)
-- Présente l'offre trial 7j + CB au pic d'émotion positive
-- Coach : formulaire d'invitation du premier athlète (`POST /api/invite/create`)
-- Si email confirmation Supabase active : affiche "Vérifie tes emails" à la place du trial
+### Coach (inscription — 10 écrans)
+```
+role → context_2b → sport_2b → count_2b → challenge_2b → tool_2b
+→ account
+→ preview_4b (MissionCards démo avec WellnessRingCoach)
+→ recap_5
+→ PaywallModal
+```
 
-**Création auto à l'inscription coach :** `saveData()` insère 1 `coach_athletes` démo (nom + sport du coach, `user_id=null`) + 4 `coach_sessions` lun/mer/ven/sam via `buildCoachDemoSessions()`. Le coach voit son propre profil dans Mission Control dès le premier login.
+### Auth mode (déjà connecté — 6 écrans)
+```
+role → 5 questions rôle → saveData() → redirect /today ou /coach
+```
+Pas d'account, pas d'aha moment, pas de paywall.
 
-**Étapes supprimées :**
-- `readiness_a` — donnée quotidienne, posée maintenant dans `/today` au premier chargement du jour
-- `level_c` — n'avait aucun impact sur l'expérience coach
-- `count_c` — générait de la fausse data, supprimé avec les faux athlètes coach
+### Logique de conversion
+- **Sunk cost** : 10 étapes d'investissement (5 questions rôle + 5 questions wellness) avant de demander l'email
+- **Curiosity gap** : dernier bouton wellness = "Voir mon score →" — l'utilisateur ne voit son score qu'après avoir créé son compte
+- **Peak emotion avant paywall** : le score reveal (`readiness_4a`) est la dernière chose vue avant `recap_5` → PaywallModal
+- **Trial 7j** uniquement sur le plan annuel ; plan mensuel = débit immédiat
 
-**Wellness baseline athlète :** valeurs neutres par défaut (`sleep=7, stress=5, recovery=6, motivation=7`), base_score = 74 + bonus niveau.
+### Wellness athlète — mécanique
+- Les 5 questions (`wellness_q`) collectent sleep+bedtime, stress, recovery, behaviors, motivation
+- Le score est calculé en state via `computeWellnessScore()` à la fin de `wellness_q` (`handleWellnessQuestions`)
+- La sauvegarde DB se fait dans `handleFinish()` après création du compte (uid disponible), via upsert sur `wellness_daily` — écrase la baseline auto insérée par `saveData()`
+- **Baseline fallback** : `buildWellnessBaseline()` insère des valeurs neutres dans `saveData()` ; elle est systématiquement écrasée par les vraies données pour les athlètes register
 
-**Détection wellness rempli :** `bedtime == null` = baseline auto (non rempli par l'user). `bedtime != null` = rempli. TodayClient utilise `wellnessFilledToday` pour afficher `—` et auto-ouvrir le WellnessModal au premier chargement du jour (guard sessionStorage).
+**Détection wellness rempli :** `bedtime == null` = baseline auto. `bedtime != null` = rempli par l'user. `TodayClient` utilise `wellnessFilledToday` pour auto-ouvrir `WellnessModal` au premier chargement du jour (guard sessionStorage).
 
-Référence complète des 6 axes : `ONBOARDING_AXES.md` à la racine du projet.
+### Catégories sport (remplacent les sports spécifiques)
+`Force & puissance` · `Athlétisme & vitesse` · `Sports collectifs` · `Endurance` · `Arts martiaux & combat` · `Autre`
+Chaque catégorie mappe vers des session templates dédiés dans `getSessionTemplates()`.
+
+### Création auto à l'inscription coach
+`saveData()` insère 1 `coach_athletes` démo (nom + sport du coach, `user_id=null`) + 4 `coach_sessions` lun/mer/ven/sam via `buildCoachDemoSessions()`.
+
+### StepIds complets
+```typescript
+type StepId =
+  | "role"
+  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "freq_2a"   // athlète
+  | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"  // coach
+  | "wellness_q"      // questions wellness (avant account, athlète seulement)
+  | "account"
+  | "readiness_4a"    // score reveal (après account, athlète)
+  | "preview_4b"      // MissionCards démo (coach)
+  | "recap_5";        // offre trial + PaywallModal
+```
+
+`POST_PROGRESS` = `["wellness_q", "readiness_4a", "preview_4b", "recap_5"]` — ces étapes masquent la barre de progression principale (elles ont leur propre UI ou sont des écrans d'émotion).
 
 ## Composants clés
 ```

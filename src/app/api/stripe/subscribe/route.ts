@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     customer: customerId,
     items: [{ price: priceId }],
     default_payment_method: paymentMethodId,
-    trial_period_days: 7,
+    ...(billing === "annual" ? { trial_period_days: 7 } : {}),
     metadata: { user_id: user.id, plan },
   });
 

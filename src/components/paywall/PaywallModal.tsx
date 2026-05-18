@@ -96,8 +96,11 @@ function CheckoutForm({
       )}
 
       <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "14px 0 10px", lineHeight: 1.5 }}>
-        Essai gratuit jusqu'au {trialEndStr}.<br />
-        Ensuite {priceStr} · Résiliable à tout moment.
+        {billing === "annual" ? (
+          <>Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.</>
+        ) : (
+          <>{priceStr} · Débité immédiatement · Résiliable à tout moment.</>
+        )}
       </div>
 
       <button
@@ -110,10 +113,17 @@ function CheckoutForm({
           letterSpacing: "-0.01em",
         }}
       >
-        {loading ? "Traitement..." : "Commencer l'essai gratuit — 7 jours"}
+        {loading ? "Traitement..." : billing === "annual" ? "Commencer gratuitement" : "Commencer maintenant"}
       </button>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 12, marginBottom: 4 }}>
+      {billing === "annual" && (
+        <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+          Pour le plan annuel : tu ne seras débité qu'après 7 jours.<br />
+          Tu peux annuler avant sans frais.
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
         <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
           <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
           <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
@@ -171,7 +181,10 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             }
           </div>
           <p style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, margin: 0 }}>
-            <strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.
+            {billing === "annual"
+              ? <><strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.</>
+              : "Débité immédiatement · Résiliable à tout moment."
+            }
           </p>
         </div>
 
