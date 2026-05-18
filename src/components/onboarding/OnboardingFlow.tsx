@@ -263,6 +263,69 @@ function WellnessRingCoach({ score, size = 72 }: { score: number; size?: number 
   );
 }
 
+/* ── Difficulty gauge (exact copy from /today) ── */
+function DiffGauge({ value, height = 12 }: { value: number | null; height?: number }) {
+  if (!value) return null;
+  const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
+  const bg: Record<string, string> = {
+    hard: "linear-gradient(90deg,#ffb5a7,#d44000)",
+    moderate: "linear-gradient(90deg,#ffe0a0,#f28a00)",
+    easy: "linear-gradient(90deg,#bfeec8,#2f9e44)",
+  };
+  const w = Math.max(22, Math.min(100, Math.round(value * 10)));
+  return (
+    <div style={{ width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
+      <div style={{ height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
+    </div>
+  );
+}
+
+/* ── Demo session card (exact style from /today TodaySessionCard) ── */
+function DemoSessionCard({ sessionName, exercises, difficulty, athleteName }: {
+  sessionName: string;
+  exercises: string[];
+  difficulty: number;
+  athleteName?: string;
+}) {
+  return (
+    <div style={{
+      background: "#fff",
+      border: "1px solid rgba(212,64,0,0.16)",
+      boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
+      padding: 18, borderRadius: 24,
+    }}>
+      {athleteName && (
+        <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+          {athleteName}
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 17, fontWeight: 1000, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.04em" }}>
+          {sessionName}
+        </span>
+        <span style={{ fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: "rgba(212,64,0,0.10)", color: "#d44000" }}>
+          Prévu
+        </span>
+      </div>
+      <div style={{ marginBottom: 12 }}>
+        <DiffGauge value={difficulty} height={12} />
+      </div>
+      <div style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
+        {exercises.slice(0, 3).map((ex, i) => (
+          <div key={i} style={{
+            padding: "10px 12px", fontSize: 13.5, lineHeight: 1.45,
+            color: "#2c3236", fontWeight: 650,
+            borderTop: i > 0 ? "1px solid rgba(0,0,0,.08)" : "none",
+            background: "#fff", whiteSpace: "pre-wrap", wordBreak: "break-word",
+          }}>
+            {ex}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Coach demo MissionCards ── */
 function CoachMissionPreview({ sport }: { sport: string }) {
   const athletes = [
@@ -872,7 +935,22 @@ export default function OnboardingFlow({ userId }: Props) {
                   );
                 })()}
               </div>
-              <button onClick={next} style={ctaBtn}>Continuer →</button>
+              {(() => {
+                const [sName, sNotes] = getSessionTemplates(sport)[0];
+                const exos = sNotes.split("\n").filter(Boolean);
+                const diff = wScore !== null ? (wScore >= 75 ? 7 : wScore >= 55 ? 5 : 3) : 5;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+                      🎯 Séance de la semaine
+                    </div>
+                    <DemoSessionCard sessionName={sName} exercises={exos} difficulty={diff} />
+                  </div>
+                );
+              })()}
+              <div style={{ position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
+                <button onClick={next} style={ctaBtn}>Accéder à mon espace</button>
+              </div>
             </div>
           )
         )}
@@ -886,7 +964,21 @@ export default function OnboardingFlow({ userId }: Props) {
                 Voici ce que tu verras chaque matin pour chacun de tes athlètes.
               </div>
               <CoachMissionPreview sport={sport} />
-              <button onClick={next} style={ctaBtn}>Voir mon espace →</button>
+              {(() => {
+                const [sName, sNotes] = getSessionTemplates(sport)[0];
+                const exos = sNotes.split("\n").filter(Boolean);
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
+                      📋 Séance assignée — Thomas M.
+                    </div>
+                    <DemoSessionCard sessionName={sName} exercises={exos} difficulty={7} />
+                  </div>
+                );
+              })()}
+              <div style={{ position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
+                <button onClick={next} style={ctaBtn}>Accéder à mon espace</button>
+              </div>
             </div>
           )
         )}
