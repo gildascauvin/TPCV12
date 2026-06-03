@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { PHProvider } from "@/providers/PostHogProvider";
 
 export const metadata: Metadata = {
   title: "ThePerfClub",
@@ -32,7 +33,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       </head>
       <body>
-        {children}
+        <PHProvider>
+          {children}
+        </PHProvider>
         <ServiceWorkerRegister />
       </body>
     </html>

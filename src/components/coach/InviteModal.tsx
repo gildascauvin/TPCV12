@@ -64,7 +64,7 @@ export default function InviteModal({ onClose, onLinked }: Props) {
               Inviter un sportif
             </div>
             <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 22 }}>
-              Entre l'adresse email de ton athlète. S'il a déjà un compte, le lien est immédiat. Sinon, il sera lié dès qu'il créera son compte.
+              Entre l'adresse email de ton sportif. S'il a déjà un compte, le lien est immédiat. Sinon, il sera lié dès qu'il créera son compte.
             </div>
 
             {error && (

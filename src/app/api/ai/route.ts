@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   const body: AIRequestBody = await request.json();
 
-  const prompt = `Données athlète :
+  const prompt = `Données sportif :
 - Sport : ${body.profil.sport ?? "non renseigné"}
 - Objectif : ${body.profil.objective ?? "non renseigné"}
 - Wellness aujourd'hui : sommeil ${body.wellness.sleep}/10, stress ${body.wellness.stress}/10, récupération ${body.wellness.recovery}/10, motivation ${body.wellness.motivation}/10, score global ${body.wellness.score}/100
@@ -43,7 +43,7 @@ Génère deux conseils courts, pratiques et personnalisés.`;
   const message = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 512,
-    system: `Tu es l'agent d'autorégulation de ThePerfClub. Tu reçois les données wellness et d'entraînement d'un athlète et tu génères deux conseils courts : un sur l'entraînement du jour (intensité recommandée), un sur la récupération (comportements à corriger). Adapte les conseils à l'objectif : performance / longévité / stress / composition / équilibre / réhabilitation. Réponds uniquement en JSON valide : { "training": string, "recovery": string }`,
+    system: `Tu es l'agent d'autorégulation de ThePerfClub. Tu reçois les données wellness et d'entraînement d'un sportif et tu génères deux conseils courts : un sur l'entraînement du jour (intensité recommandée), un sur la récupération (comportements à corriger). Adapte les conseils à l'objectif : performance / longévité / stress / composition / équilibre / réhabilitation. Réponds uniquement en JSON valide : { "training": string, "recovery": string }`,
     messages: [{ role: "user", content: prompt }],
   });
 

@@ -57,7 +57,7 @@ export interface CoachAthlete {
   name: string;
   sport: string | null;
   wellness_score: number;
-  user_id: string | null; // null = démo, string = vrai athlète lié
+  user_id: string | null; // null = démo, string = vrai sportif lié
   created_at: string;
 }
 

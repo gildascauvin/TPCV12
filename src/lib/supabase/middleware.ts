@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/login", "/register", "/auth/callback", "/api/stripe/webhook"];
+  const publicPaths = ["/login", "/register", "/auth/callback", "/api/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {
@@ -50,15 +50,9 @@ export async function updateSession(request: NextRequest) {
       .eq("user_id", user.id)
       .single();
 
-    if (!profile?.onboarding_done && pathname !== "/onboarding") {
+    if (!profile?.onboarding_done) {
       const url = request.nextUrl.clone();
-      url.pathname = "/onboarding";
-      return NextResponse.redirect(url);
-    }
-
-    if (profile?.onboarding_done && pathname === "/onboarding") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/today";
+      url.pathname = "/register";
       return NextResponse.redirect(url);
     }
   }

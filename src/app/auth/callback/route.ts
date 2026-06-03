@@ -15,5 +15,10 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/reset-password`);
   }
 
+  const d = searchParams.get("d");
+  if (d) {
+    return NextResponse.redirect(`${origin}/register?d=${d}`);
+  }
+
   return NextResponse.redirect(`${origin}/today`);
 }

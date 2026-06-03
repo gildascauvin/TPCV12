@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import InviteModal from "@/components/coach/InviteModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import PrimingModal from "@/components/paywall/PrimingModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 
@@ -40,7 +41,7 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
 
   async function handleDelete(athlete: CoachAthlete) {
     const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
@@ -62,7 +63,7 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Coach</div>
-            <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>Mes athlètes</div>
+            <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>Mes sportifs</div>
             <div style={{ fontSize: 13, color: "#62686e", marginTop: 4 }}>
               {athletes.length} sportif{athletes.length !== 1 ? "s" : ""} suivi{athletes.length !== 1 ? "s" : ""}
             </div>
@@ -139,13 +140,14 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
           onLinked={() => router.refresh()}
         />
       )}
-      {showPaywall && (
-        <PaywallModal
-          mode="coach"
-          allowDismiss={allowDismiss}
-          onClose={() => setShowPaywall(false)}
-          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
-        />
+      {paywallStep === "priming" && (
+        <PrimingModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
     </>
   );

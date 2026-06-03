@@ -25,13 +25,13 @@ export default function ReviewCompleteModal({ onClose }: Props) {
           Revue terminée
         </div>
         <div style={{ fontSize: 15, color: "#687075", lineHeight: 1.6, marginBottom: 28 }}>
-          Vous avez passé en revue tous les athlètes ayant eu besoin d'attention aujourd'hui.
+          Vous avez passé en revue tous les sportifs ayant eu besoin d'attention aujourd'hui.
         </div>
         <button
           onClick={onClose}
           style={{ width: "100%", height: 52, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
         >
-          Retour au Mission Control
+          Retour au Coach Control
         </button>
       </div>
     </div>

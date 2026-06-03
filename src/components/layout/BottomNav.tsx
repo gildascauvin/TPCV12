@@ -77,7 +77,7 @@ const coachTabs = [
   },
   {
     href: "/coach/athletes",
-    label: "Athlètes",
+    label: "Sportifs",
     matchExact: false,
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"

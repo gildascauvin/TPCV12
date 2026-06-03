@@ -9,6 +9,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import PrimingModal from "@/components/paywall/PrimingModal";
 
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
@@ -92,7 +93,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
@@ -448,13 +449,14 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         />
       )}
 
-      {showPaywall && (
-        <PaywallModal
-          mode="coach"
-          allowDismiss={allowDismiss}
-          onClose={() => setShowPaywall(false)}
-          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
-        />
+      {paywallStep === "priming" && (
+        <PrimingModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
 
       {completing && athlete && (

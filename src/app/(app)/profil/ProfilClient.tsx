@@ -133,7 +133,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 22 }}>
           {(() => {
             const s = profile.subscription_status;
-            const label = s === "athlete" ? "Athlète" : s === "coach" ? "Coach" : s === "expired" ? "Expiré" : "Gratuit";
+            const label = s === "athlete" ? "Sportif" : s === "coach" ? "Coach" : s === "expired" ? "Expiré" : "Gratuit";
             const color = s === "athlete" || s === "coach" ? "#2f9e44" : s === "expired" ? "#d10000" : "#8a8f94";
             const bg = s === "athlete" || s === "coach" ? "rgba(47,158,68,.1)" : s === "expired" ? "rgba(209,0,0,.08)" : "rgba(0,0,0,.05)";
             const isActive = s === "athlete" || s === "coach";

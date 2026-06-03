@@ -30,7 +30,7 @@ export async function POST() {
     admin.from("coach_athletes").insert({
       coach_id: invite.coach_id,
       user_id: user.id,
-      name: athleteProfile?.name || "Athlète",
+      name: athleteProfile?.name || "Sportif",
       sport: athleteProfile?.sport || "",
       wellness_score: wellness?.score ?? 70,
     }),

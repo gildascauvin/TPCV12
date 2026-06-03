@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import posthog from "posthog-js";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
@@ -13,20 +14,8 @@ interface PaywallModalProps {
   allowDismiss?: boolean;
   onClose?: () => void;
   onSuccess: () => void;
+  initialBilling?: "monthly" | "annual";
 }
-
-const BENEFITS: Record<"athlete" | "coach", string[]> = {
-  athlete: [
-    "Score wellness quotidien & conseils personnalisés",
-    "Planification et suivi de toutes tes séances",
-    "Analyse de fatigue sur 28 jours",
-  ],
-  coach: [
-    "Tableau de bord wellness de tous tes athlètes en temps réel",
-    "Planification et partage de séances multi-athlètes",
-    "Alertes intelligentes : wellness bas + charge d'entraînement",
-  ],
-};
 
 const PRICING = {
   athlete: { monthly: 9,  annual: 59,  annualMonthly: 4.92 },
@@ -82,6 +71,7 @@ function CheckoutForm({
       return;
     }
 
+    posthog.capture("trial_started", { plan: mode, billing });
     onSuccess();
   }
 
@@ -99,7 +89,7 @@ function CheckoutForm({
         {billing === "annual" ? (
           <>Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.</>
         ) : (
-          <>{priceStr} · Débité immédiatement · Résiliable à tout moment.</>
+          <>{priceStr} · Sans engagement · Résiliable à tout moment.</>
         )}
       </div>
 
@@ -118,8 +108,7 @@ function CheckoutForm({
 
       {billing === "annual" && (
         <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
-          Pour le plan annuel : tu ne seras débité qu'après 7 jours.<br />
-          Tu peux annuler avant sans frais.
+          Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
         </div>
       )}
 
@@ -131,24 +120,16 @@ function CheckoutForm({
         <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
       </div>
 
-      {allowDismiss && onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          style={{ width: "100%", background: "none", border: "none", fontSize: 12, color: "#8a8f94", cursor: "pointer", marginTop: 8, padding: 0 }}
-        >
-          Plus tard
-        </button>
-      )}
     </form>
   );
 }
 
-export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess }: PaywallModalProps) {
-  const [billing, setBilling] = useState<Billing>("annual");
+export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling }: PaywallModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
+
+  const billing: Billing = initialBilling ?? "annual";
 
   useEffect(() => {
     fetch("/api/stripe/setup-intent", { method: "POST" })
@@ -162,15 +143,23 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   }, []);
 
   const p = PRICING[mode];
-  const planLabel = mode === "coach" ? "Plan Coach" : "Plan Athlète";
-  const savings = p.monthly * 12 - p.annual;
+  const planLabel = mode === "coach" ? "Plan Coach" : "Plan Sportif";
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
       <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto" }}>
 
+        {/* Back button */}
+        {allowDismiss && onClose && (
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "0 0 16px 0", display: "block" }}>
+            ← Retour
+          </button>
+        )}
+
         {/* Header */}
-        <div style={{ marginBottom: 18 }}>
+        <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
             ThePerfClub — {planLabel}
           </div>
@@ -183,50 +172,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
           <p style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, margin: 0 }}>
             {billing === "annual"
               ? <><strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.</>
-              : "Débité immédiatement · Résiliable à tout moment."
+              : "Sans engagement · Résiliable à tout moment."
             }
           </p>
-        </div>
-
-        {/* Billing toggle */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 18, background: "#f1f0ee", borderRadius: 14, padding: 4 }}>
-          {(["monthly", "annual"] as Billing[]).map(b => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => setBilling(b)}
-              style={{
-                flex: 1, height: 36, borderRadius: 11, border: "none", cursor: "pointer",
-                fontSize: 12, fontWeight: 800,
-                background: billing === b ? "#fff" : "transparent",
-                color: billing === b ? "#171b1f" : "#8a8f94",
-                boxShadow: billing === b ? "0 2px 8px rgba(0,0,0,.10)" : "none",
-                transition: "all 0.15s",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-              }}
-            >
-              {b === "monthly" ? "Mensuel" : "Annuel"}
-              {b === "annual" && (
-                <span style={{ background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "2px 6px", borderRadius: 999, letterSpacing: "0.05em" }}>
-                  -{savings}€
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Benefits */}
-        <div style={{ marginBottom: 20 }}>
-          {BENEFITS[mode].map((b, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
-              <div style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(212,64,0,.1)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                  <path d="M1 4L3.5 6.5L9 1" stroke="#d44000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, color: "#171b1f", lineHeight: 1.45 }}>{b}</span>
-            </div>
-          ))}
         </div>
 
         <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", marginBottom: 18 }} />

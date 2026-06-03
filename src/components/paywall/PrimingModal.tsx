@@ -1,93 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import PaywallModal from "./PaywallModal";
-import type { SubscriptionStatus } from "@/types";
-
-interface Props {
-  subscriptionStatus: SubscriptionStatus;
-  mode: "athlete" | "coach";
-}
+import posthog from "posthog-js";
 
 const PRICING = {
   athlete: { monthly: 9,  annual: 59,  annualMonthly: "4,92" },
   coach:   { monthly: 49, annual: 179, annualMonthly: "14,92" },
 };
 
-type GateStep = "idle" | "priming" | "paywall";
+interface Props {
+  mode: "athlete" | "coach";
+  billing: "monthly" | "annual";
+  setBilling: (b: "monthly" | "annual") => void;
+  allowDismiss: boolean;
+  onContinue: () => void;
+  onDismiss: () => void;
+}
 
-export default function PaywallGate({ subscriptionStatus, mode }: Props) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [gateStep, setGateStep] = useState<GateStep>("idle");
-  const [billing, setBilling] = useState<"monthly" | "annual">("annual");
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get("upgrade") === "success") {
-      setShowSuccess(true);
-      router.replace(window.location.pathname);
-      const t = setTimeout(() => setShowSuccess(false), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [searchParams, router]);
-
-  useEffect(() => {
-    if (subscriptionStatus === "athlete" || subscriptionStatus === "coach") return;
-    if (subscriptionStatus === "expired") {
-      setGateStep("priming");
-      return;
-    }
-    // free: check localStorage dismiss
-    const dismissed = localStorage.getItem("paywall_dismissed");
-    if (!dismissed || Date.now() > parseInt(dismissed)) {
-      setGateStep("priming");
-    }
-  }, [subscriptionStatus]);
-
-  function handleDismiss() {
-    localStorage.setItem("paywall_dismissed", String(Date.now() + 24 * 60 * 60 * 1000));
-    setGateStep("idle");
-  }
-
-  const allowDismiss = subscriptionStatus !== "expired";
+export default function PrimingModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss }: Props) {
   const p = PRICING[mode];
   const annualSavings = p.monthly * 12 - p.annual;
 
-  if (showSuccess) {
-    return (
-      <div style={{
-        position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)",
-        zIndex: 2147483200, background: "#2f9e44", color: "#fff",
-        padding: "13px 22px", borderRadius: 16, fontSize: 14, fontWeight: 800,
-        boxShadow: "0 8px 28px rgba(0,0,0,.22)", whiteSpace: "nowrap",
-      }}>
-        Bienvenue ! Ton abonnement est actif.
-      </div>
-    );
-  }
-
-  if (gateStep === "idle") return null;
-
-  if (gateStep === "paywall") {
-    return (
-      <PaywallModal
-        mode={mode}
-        allowDismiss={allowDismiss}
-        initialBilling={billing}
-        onClose={() => setGateStep("priming")}
-        onSuccess={() => setGateStep("idle")}
-      />
-    );
-  }
-
-  // Priming step
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
       <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto" }}>
 
-        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <div style={{ fontSize: 30, marginBottom: 8 }}>🚀</div>
           <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.2 }}>
@@ -122,9 +58,7 @@ export default function PaywallGate({ subscriptionStatus, mode }: Props) {
 
         {/* Plan cards */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-          {/* Monthly */}
-          <div
-            onClick={() => setBilling("monthly")}
+          <div onClick={() => setBilling("monthly")}
             style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "monthly" ? "#171b1f" : "#fff", transition: "all .15s" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: billing === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
@@ -136,14 +70,12 @@ export default function PaywallGate({ subscriptionStatus, mode }: Props) {
             <div style={{ fontSize: 11, color: billing === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
           </div>
 
-          {/* Annual */}
           <div style={{ position: "relative" }}>
             <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
               7 JOURS GRATUITS
             </div>
-            <div
-              onClick={() => setBilling("annual")}
-              style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" }}>
+            <div onClick={() => setBilling("annual")}
+              style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: billing === "annual" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annuel</div>
                 <div style={{ width: 18, height: 18, borderRadius: "50%", background: billing === "annual" ? "#d44000" : "transparent", border: `1.5px solid ${billing === "annual" ? "#d44000" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -160,20 +92,18 @@ export default function PaywallGate({ subscriptionStatus, mode }: Props) {
           </div>
         </div>
 
-        {/* Payment note */}
         <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: billing === "annual" ? "#2f9e44" : "#8a8f94", marginBottom: 14 }}>
           {billing === "annual" ? "✓ Aucun prélèvement maintenant" : "Sans engagement"}
         </div>
 
-        {/* CTA */}
-        <button
-          onClick={() => setGateStep("paywall")}
+        <button onClick={onContinue}
           style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
           {billing === "annual" ? "Commencer l'essai gratuit →" : "Commencer maintenant →"}
         </button>
 
         {allowDismiss && (
-          <button onClick={handleDismiss} style={{ width: "100%", background: "none", border: "none", fontSize: 12, color: "#8a8f94", cursor: "pointer", padding: "4px 0" }}>
+          <button onClick={() => { posthog.capture("paywall_skipped", { plan: mode, billing }); onDismiss(); }}
+            style={{ width: "100%", background: "none", border: "none", fontSize: 12, color: "#8a8f94", cursor: "pointer", padding: "4px 0" }}>
             Accéder sans abonnement →
           </button>
         )}

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  // Vérifie que l'athlète est bien lié à CE coach
+  // Vérifie que le sportif est bien lié à CE coach
   const { data: profile } = await admin
     .from("profiles")
     .select("invited_by_coach_id")

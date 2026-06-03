@@ -11,7 +11,7 @@ async function linkAthleteToCoach(admin: ReturnType<typeof createAdminClient>, c
     admin.from("coach_athletes").insert({
       coach_id: coachId,
       user_id: athleteUserId,
-      name: athleteProfile?.name || "Athlète",
+      name: athleteProfile?.name || "Sportif",
       sport: athleteProfile?.sport || "",
       wellness_score: wellness?.score ?? 70,
     }),

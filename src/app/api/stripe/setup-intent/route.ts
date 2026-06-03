@@ -16,7 +16,7 @@ export async function POST() {
       .from("profiles")
       .select("stripe_customer_id")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) return NextResponse.json({ error: `Profil: ${profileError.message}` }, { status: 500 });
 

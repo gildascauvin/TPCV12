@@ -36,77 +36,96 @@ src/app/
     login/        # Connexion + magic link + reset password
     register/     # Création de compte
   reset-password/ # Nouveau mot de passe (après lien email)
-  onboarding/     # Onboarding post-register (auth mode sans compte)
 ```
 
-## Onboarding — flows actuels (mai 2026)
+## Onboarding — flows actuels (juin 2026)
 
-### Athlète (inscription — 10 écrans)
+### Sportif (inscription — 15 écrans)
 ```
-role → sport_2a → level_2a → goal_2a → frustration_2a → freq_2a
+role → value_slides (3 slides stats) → sport_2a → level_2a → goal_2a → frustration_2a → freq_2a
+→ overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
 → wellness_q (5 questions wellness)
 → account (email + mdp + prénom)
-→ readiness_4a (score reveal — dark card)
-→ recap_5 (offre trial 7j)
-→ PaywallModal
+→ readiness_4a (score reveal — dark card)  [aha moment]
+→ social_proof (témoignage + compteur 300+)
+→ recap_5 (pricing page : timeline + plan cards)
+→ PaywallModal (formulaire CB Stripe)
 ```
 
-### Coach (inscription — 10 écrans)
+### Coach (inscription — 14 écrans)
 ```
-role → context_2b → sport_2b → count_2b → challenge_2b → tool_2b
+role → value_slides (3 slides stats) → context_2b → sport_2b → count_2b → challenge_2b → tool_2b
+→ overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
 → account
-→ preview_4b (MissionCards démo avec WellnessRingCoach)
+→ preview_4b (MissionCards démo avec WellnessRingCoach)  [aha moment]
+→ social_proof
 → recap_5
 → PaywallModal
 ```
 
-### Auth mode (déjà connecté — 6 écrans)
+### Auth mode (déjà connecté — 6 écrans, inchangé)
 ```
 role → 5 questions rôle → saveData() → redirect /today ou /coach
 ```
-Pas d'account, pas d'aha moment, pas de paywall.
 
 ### Logique de conversion
-- **Sunk cost** : 10 étapes d'investissement (5 questions rôle + 5 questions wellness) avant de demander l'email
-- **Curiosity gap** : dernier bouton wellness = "Voir mon score →" — l'utilisateur ne voit son score qu'après avoir créé son compte
-- **Peak emotion avant paywall** : le score reveal (`readiness_4a`) est la dernière chose vue avant `recap_5` → PaywallModal
-- **Trial 7j** uniquement sur le plan annuel ; plan mensuel = débit immédiat
+- **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%) pour créer l'urgence dès le début
+- **Pain points** : 3 questions contextuelles par rôle avec 4 réponses graduées (diagnostic, sunk cost)
+- **Auto-advance** : clic sur une réponse = avance automatiquement après 300ms (register mode uniquement)
+- **Aha moment** : `readiness_4a` (score wellness) ou `preview_4b` (dashboard coach) — demo live du produit
+- **Social proof** : 1 témoignage avec vraie photo + compteur +300 avec avatars réels
+- **Pricing page** (`recap_5`) : timeline 3 nœuds + 2 cards plan (Mensuel/Annuel) + "Aucun prélèvement maintenant"
+- **Trial 7j** sur plan annuel ; plan mensuel = "Sans engagement"
 
-### Wellness athlète — mécanique
+### Paywall flow dans l'app (post-skip)
+Quand un user free/expired déclenche une action gateée :
+1. `PrimingModal` s'affiche (timeline + plan cards, même design que `recap_5`)
+2. CTA → `PaywallModal` (formulaire CB)
+3. "← Retour" dans le formulaire → revient à `PrimingModal` pour changer de plan
+4. "Accéder sans abonnement →" → ferme (24h cooldown localStorage)
+
+Composants : `usePaywall` hook → `PrimingModal` → `PaywallModal`
+Pages concernées : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`
+
+### Profils de coaching (`context_2b`)
+- Coach (individuel ou en groupe)
+- Préparateur physique (individuel ou collectif)
+- Kiné ou professionnel de la réhabilitation
+- Autre (coach wellness, nutritionniste…)
+
+### Sport "Autre" — précision
+Si l'user sélectionne "Autre" dans `sport_2a` ou `sport_2b`, un champ texte s'affiche.
+Sauvegardé en DB comme `"Autre - {précision}"` dans le champ `sport` du profil.
+
+### Wellness athlète — mécanique (inchangée)
 - Les 5 questions (`wellness_q`) collectent sleep+bedtime, stress, recovery, behaviors, motivation
-- Le score est calculé en state via `computeWellnessScore()` à la fin de `wellness_q` (`handleWellnessQuestions`)
-- La sauvegarde DB se fait dans `handleFinish()` après création du compte (uid disponible), via upsert sur `wellness_daily` — écrase la baseline auto insérée par `saveData()`
-- **Baseline fallback** : `buildWellnessBaseline()` insère des valeurs neutres dans `saveData()` ; elle est systématiquement écrasée par les vraies données pour les athlètes register
-
-**Détection wellness rempli :** `bedtime == null` = baseline auto. `bedtime != null` = rempli par l'user. `TodayClient` utilise `wellnessFilledToday` pour auto-ouvrir `WellnessModal` au premier chargement du jour (guard sessionStorage).
-
-### Catégories sport (remplacent les sports spécifiques)
-`Force & puissance` · `Athlétisme & vitesse` · `Sports collectifs` · `Endurance` · `Arts martiaux & combat` · `Autre`
-Chaque catégorie mappe vers des session templates dédiés dans `getSessionTemplates()`.
-
-### Création auto à l'inscription coach
-`saveData()` insère 1 `coach_athletes` démo (nom + sport du coach, `user_id=null`) + 4 `coach_sessions` lun/mer/ven/sam via `buildCoachDemoSessions()`.
+- Le score est calculé en state via `computeWellnessScore()` à la fin de `wellness_q`
+- La sauvegarde DB se fait dans `handleFinish()` après création du compte, via upsert sur `wellness_daily`
 
 ### StepIds complets
 ```typescript
 type StepId =
   | "role"
-  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "freq_2a"   // athlète
-  | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"  // coach
-  | "wellness_q"      // questions wellness (avant account, athlète seulement)
+  | "value_slides"                                                             // 3 slides stats (POST_PROGRESS)
+  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "freq_2a"      // sportif
+  | "overload_2a" | "planning_2a" | "fatigue_2a"                             // pain points sportif
+  | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"     // coach
+  | "overload_2b" | "planning_time_2b" | "fatigue_2b"                        // pain points coach
+  | "wellness_q"       // questions wellness (POST_PROGRESS)
   | "account"
-  | "readiness_4a"    // score reveal (après account, athlète)
-  | "preview_4b"      // MissionCards démo (coach)
-  | "recap_5";        // offre trial + PaywallModal
+  | "readiness_4a"     // score reveal sportif (POST_PROGRESS)
+  | "preview_4b"       // MissionCards démo coach (POST_PROGRESS)
+  | "social_proof"     // témoignage (POST_PROGRESS)
+  | "recap_5";         // pricing page (POST_PROGRESS)
 ```
 
-`POST_PROGRESS` = `["wellness_q", "readiness_4a", "preview_4b", "recap_5"]` — ces étapes masquent la barre de progression principale (elles ont leur propre UI ou sont des écrans d'émotion).
+`POST_PROGRESS` = `["value_slides", "wellness_q", "readiness_4a", "preview_4b", "social_proof", "recap_5"]`
 
 ## Composants clés
 ```
 src/components/
   onboarding/
-    OnboardingFlow.tsx     # Flow complet athlète + coach (register + auth mode)
+    OnboardingFlow.tsx     # Flow complet sportif + coach (register + auth mode)
   paywall/
     PaywallModal.tsx       # Stripe Elements in-app, billing toggle, badge sécurité
     PaywallGate.tsx        # Gating actions (free/expired)
@@ -132,6 +151,48 @@ Session { id, user_id, date, name, notes, duration, rpe, done, target_difficulty
 WellnessDaily { id, user_id, date, sleep, stress, recovery, motivation, base_score, score, behaviors, bedtime }
 Profile { id, user_id, name, sport, objective, freq_target, mode, subscription_status, onboarding_done }
 ```
+
+## Wording — convention à respecter
+- **"sportif"** partout dans l'UI (jamais "athlète") — changement effectué juin 2026
+- Les noms de variables, routes API et colonnes DB gardent le terme `athlete` (ex: `coach_athletes`, `/api/athlete/delete`, `athleteCount`) — ne pas les renommer
+- En DB, `subscription_status = "athlete"` reste la valeur technique, mais s'affiche "Sportif" côté UI
+
+## Intégration Brevo (emailing)
+- Route : `src/app/api/brevo/contact/route.ts`
+- Env vars Vercel : `BREVO_API_KEY`, `BREVO_ONBOARDING_LIST_ID`
+- Déclenchement : après paiement Stripe réussi (`stripe/webhook`) → `markBrevoClient(userId)` retire l'user de la liste onboarding Brevo (stoppe la séquence email)
+- Route publique (pas d'auth requise) — déclarée dans `middleware.ts` sous `/api/brevo/`
+
+## Paywall — composants
+```
+src/components/paywall/
+  PaywallModal.tsx    # Formulaire CB Stripe (simplifié : pas de toggle, pas de bullet points)
+  PrimingModal.tsx    # Écran priming (timeline + plan cards) — utilisé par usePaywall dans l'app
+  PaywallGate.tsx     # Paywall auto au chargement des pages app (expired/free)
+src/hooks/
+  usePaywall.ts       # Hook 2-step : priming → paywall. Retourne paywallStep, setPaywallStep, billing, setBilling
+```
+
+**Flow paywall unifié** : `requireSubscription()` → `paywallStep = "priming"` → `PrimingModal` → CTA → `paywallStep = "paywall"` → `PaywallModal` → "← Retour" → `paywallStep = "priming"`.
+
+## Analytics PostHog — tracking onboarding
+Provider : `src/providers/PostHogProvider.tsx`, clé : `NEXT_PUBLIC_POSTHOG_KEY`
+
+### Events émis par `OnboardingFlow.tsx`
+Chaque changement de step déclenche **deux events** :
+```typescript
+posthog.capture("onboarding_step_viewed", { step, step_index, role, mode }); // pour les funnels
+posthog.capture(`onboarding_${currentStep}_viewed`, { step, step_index, role, mode }); // pour User Paths
+```
+- `onboarding_step_viewed` (générique) → utilisé par les funnels Athlète/Coach existants
+- `onboarding_${step}_viewed` (spécifique) → utilisé par le User Path (nœuds distincts par étape)
+
+**Règle :** ne jamais fusionner ces deux calls en un seul — les funnels ont besoin de l'event générique, le User Path a besoin des events spécifiques.
+
+### Insight User Path configuré
+- ID PostHog : `S3Tznl9b` (projet 187815, EU)
+- Start point : `onboarding_role_viewed`
+- Visible dès qu'un user fait l'onboarding après le déploiement du 2026-06-01
 
 ## Règles de développement
 1. **Une seule jauge par carte de séance** — RPE si terminée, target_difficulty si planifiée. Pas de label.

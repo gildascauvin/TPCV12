@@ -100,7 +100,7 @@ Si email confirmation est désactivée dans Supabase (session immédiate), l'éc
 - 1 entrée `coach_athletes` : nom du coach, sport choisi, `wellness_score = 74`, `user_id = null` (démo)
 - 4 `coach_sessions` pour la semaine en cours (lun/mer/ven/sam) via `buildCoachDemoSessions()`
 
-Le coach voit immédiatement son propre profil dans Mission Control avec des séances planifiées pour son sport. C'est honnête (son vrai nom, son vrai sport) et reconnaissable.
+Le coach voit immédiatement son propre profil dans Coach Control avec des séances planifiées pour son sport. C'est honnête (son vrai nom, son vrai sport) et reconnaissable.
 
 **Différence avec l'ancien système :** Avant : 3/8/15/24 athlètes fictifs avec des noms génériques. Maintenant : 1 seul athlète démo (le coach lui-même).
 
@@ -113,7 +113,7 @@ Le coach voit immédiatement son propre profil dans Mission Control avec des sé
 **Problème résolu :** Les boutons "Gérer les athlètes" et "Planning →" en bas du dashboard dispersaient l'attention. L'action principale (inviter un vrai athlète) n'était pas mise en avant.
 
 **Ce qui a été fait :**
-- Suppression des boutons "Gérer les athlètes" et "Planning →" du bas du Mission Control
+- Suppression des boutons "Gérer les athlètes" et "Planning →" du bas du Coach Control
 - Ajout d'un unique bouton "Inviter des athlètes" (pleine largeur, gradient orange)
 - Ce bouton ouvre une modale d'invitation inline (email → `/api/invite/create`)
 

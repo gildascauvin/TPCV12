@@ -47,7 +47,7 @@ export default function AddAthleteModal({ athlete, onSave, onDelete, onClose }: 
     >
       <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
         <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 20 }}>
-          {athlete ? "Modifier l'athlète" : "Ajouter un athlète"}
+          {athlete ? "Modifier le sportif" : "Ajouter un sportif"}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

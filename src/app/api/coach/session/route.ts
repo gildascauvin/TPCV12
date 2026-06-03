@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     .eq("coach_id", user.id)
     .single();
 
-  if (!athlete) return Response.json({ error: "Athlète introuvable" }, { status: 404 });
+  if (!athlete) return Response.json({ error: "Sportif introuvable" }, { status: 404 });
 
   const isReal = !!athlete.user_id;
 

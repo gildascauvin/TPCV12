@@ -18,9 +18,9 @@ export async function POST(req: Request) {
     .eq("coach_id", user.id)
     .single();
 
-  if (!record) return Response.json({ error: "Athlète introuvable." }, { status: 404 });
+  if (!record) return Response.json({ error: "Sportif introuvable." }, { status: 404 });
 
-  // Si vrai athlète : délier le profil
+  // Si vrai sportif : délier le profil
   if (record.user_id) {
     await admin.from("profiles").update({ invited_by_coach_id: null }).eq("user_id", record.user_id);
   }

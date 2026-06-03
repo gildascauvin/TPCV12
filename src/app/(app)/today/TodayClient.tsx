@@ -13,6 +13,7 @@ import { computeWellnessScore } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import PrimingModal from "@/components/paywall/PrimingModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
@@ -253,7 +254,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { showPaywall, setShowPaywall, allowDismiss, requireSubscription } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -480,13 +481,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onClose={() => setEditing(null)}
         />
       )}
-      {showPaywall && (
-        <PaywallModal
-          mode="athlete"
-          allowDismiss={allowDismiss}
-          onClose={() => setShowPaywall(false)}
-          onSuccess={() => { setShowPaywall(false); router.refresh(); }}
-        />
+      {paywallStep === "priming" && (
+        <PrimingModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
     </>
   );

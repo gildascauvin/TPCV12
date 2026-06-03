@@ -2,12 +2,24 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
-// Service-role client — bypasses RLS for webhook writes
 function getServiceClient() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
+}
+
+async function markBrevoClient(userId: string) {
+  if (!process.env.BREVO_API_KEY) return;
+  const supabase = getServiceClient();
+  const { data } = await supabase.auth.admin.getUserById(userId);
+  const email = data?.user?.email;
+  if (!email) return;
+  await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/brevo/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, status: "client" }),
+  }).catch(() => {});
 }
 
 export async function POST(request: Request) {
@@ -48,6 +60,7 @@ export async function POST(request: Request) {
           .from("profiles")
           .update({ subscription_status: plan as "athlete" | "coach" })
           .eq("user_id", userId);
+        markBrevoClient(userId);
       } else if (userId && ["past_due", "canceled", "unpaid"].includes(sub.status)) {
         await supabase
           .from("profiles")

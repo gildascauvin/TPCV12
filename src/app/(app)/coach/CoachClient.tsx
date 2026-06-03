@@ -69,7 +69,7 @@ function decisionText(a: CoachAthlete, maxDiff: number) {
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-function MissionCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
+function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -377,7 +377,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
           <div style={{ position: "absolute", right: -52, top: -52, width: 180, height: 180, borderRadius: "50%", background: "rgba(212,64,0,.24)", filter: "blur(18px)", pointerEvents: "none" }} />
           <div style={{ position: "relative", zIndex: 2 }}>
             <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1.02, color: "#fff", marginBottom: 6 }}>
-              Mission Control
+              Coach Control
             </div>
             <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.78)" }}>
               Wellness + difficulté attendue : les sportifs qui demandent une décision maintenant.
@@ -414,7 +414,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
               <div style={{ position: "relative", zIndex: 2 }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>🏋️</div>
                 <div style={{ fontSize: 26, fontWeight: 1000, letterSpacing: "-0.04em", color: "#fff", marginBottom: 8, lineHeight: 1.1 }}>
-                  Invite ton premier athlète
+                  Invite ton premier sportif
                 </div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
                   Ton espace est prêt. Partage une invitation pour commencer à suivre le wellness et les séances de tes sportifs.
@@ -423,7 +423,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
             </div>
 
             <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 22, padding: 24, boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", marginBottom: 12 }}>Email de l'athlète</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", marginBottom: 12 }}>Email du sportif</div>
               <input
                 type="email"
                 value={inviteEmail}
@@ -460,7 +460,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                   onClick={() => router.push("/coach/athletes")}
                   style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
                 >
-                  Gérer les athlètes →
+                  Gérer les sportifs →
                 </button>
               </div>
             </div>
@@ -481,7 +481,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {sortedPriority.length > 0 ? sortedPriority.map(a => (
-                  <MissionCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
+                  <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
                     isReviewed={reviewedIds.has(a.id)}
                     onDecide={() => handleDecide(a)} />
                 )) : (
@@ -501,7 +501,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {stable.length > 0 ? stable.map(a => (
-                  <MissionCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
+                  <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)} />
                 )) : (
@@ -519,7 +519,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
             onClick={() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); }}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
           >
-            + Inviter des athlètes
+            + Inviter des sportifs
           </button>
         </div>
       </div>
@@ -563,11 +563,11 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
           onClick={e => { if (e.target === e.currentTarget) setShowInviteModal(false); }}>
           <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>Inviter un athlète</div>
+              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>Inviter un sportif</div>
               <button onClick={() => setShowInviteModal(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#8a8f94", lineHeight: 1 }}>×</button>
             </div>
             <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 16 }}>
-              Entre l'email de ton athlète. S'il a déjà un compte, il sera lié immédiatement. Sinon, il recevra une invitation.
+              Entre l'email de ton sportif. S'il a déjà un compte, il sera lié immédiatement. Sinon, il recevra une invitation.
             </div>
             <input
               type="email"
