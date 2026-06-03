@@ -614,7 +614,6 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
       wSleep, wBedtime, wStress, wRecovery, wBehaviors, wMotivation, wScore,
     };
     const encoded = encodeURIComponent(btoa(JSON.stringify(pending)));
-    await supabase.auth.signOut();
     const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${location.origin}/auth/callback?d=${encoded}` },
