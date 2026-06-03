@@ -526,9 +526,11 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
   }
 
   async function saveData(uid: string) {
-    await supabase.from("profiles").update({
+    const sportValue = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
+    await supabase.from("profiles").upsert({
+      user_id: uid,
       ...(name.trim() ? { name: name.trim() } : {}),
-      sport: sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport, mode: role, onboarding_done: true,
+      sport: sportValue, mode: role, onboarding_done: true,
       freq_target:        role === "athlete" ? freq : null,
       objective:          role === "athlete" ? (goal || null) : null,
       frustration:        role === "athlete" ? (frustration || null) : null,
@@ -536,7 +538,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
       athletes_count:     role === "coach"   ? (athleteCount || null) : null,
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
       current_tool:       role === "coach"   ? (currentTool || null) : null,
-    }).eq("user_id", uid);
+    }, { onConflict: "user_id" });
 
     if (role === "athlete") {
       await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, freq));
