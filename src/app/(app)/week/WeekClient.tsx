@@ -441,29 +441,50 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                         background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
                         border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
                         borderRadius: isMd ? 14 : 10,
-                        padding: isMd ? "8px 8px 6px" : "5px 4px 4px",
-                        minHeight: isMd ? 100 : 64,
+                        padding: isMd ? "8px 8px 6px" : "6px 5px 6px",
+                        minHeight: isMd ? 100 : 90,
                         opacity: inMonth ? 1 : 0.4,
                         boxShadow: isToday ? "0 4px 14px rgba(212,64,0,.10)" : "0 2px 6px rgba(0,0,0,.04)",
                         display: "flex", flexDirection: "column",
                       }}
                     >
-                      {/* Date + wellness ring */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: isMd ? 6 : 4 }}>
-                        <div>
-                          {isMd && (
+                      {/* Desktop : date + ring côte à côte */}
+                      {isMd && (
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                          <div>
                             <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
                               {format(date, "EEE", { locale: fr }).slice(0, 3)}
                             </div>
-                          )}
-                          <div style={{ fontSize: isMd ? 18 : 14, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
+                            <div style={{ fontSize: 18, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
+                              {date.getDate()}
+                            </div>
+                          </div>
+                          {score !== null && <PlanningRing score={score} size={44} />}
+                        </div>
+                      )}
+
+                      {/* Mobile : numéro + ring empilés verticalement, dots dessous */}
+                      {!isMd && (
+                        <>
+                          <div style={{ fontSize: 13, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1, textAlign: "center", marginBottom: 4 }}>
                             {date.getDate()}
                           </div>
-                        </div>
-                        {score !== null && <PlanningRing score={score} size={isMd ? 32 : 24} />}
-                      </div>
+                          <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
+                            {score !== null
+                              ? <PlanningRing score={score} size={40} />
+                              : <div style={{ width: 40, height: 40 }} />}
+                          </div>
+                          {daySessions.length > 0 && (
+                            <div style={{ display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap" }}>
+                              {daySessions.slice(0, 3).map(s => (
+                                <div key={s.id} style={{ width: 6, height: 6, borderRadius: "50%", background: s.done ? "#2f9e44" : "#d44000", flexShrink: 0 }} />
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
 
-                      {/* Séances — masquées sur mobile */}
+                      {/* Desktop : séances + bouton ajouter */}
                       {isMd && (
                         <>
                           {daySessions.slice(0, 2).map(s => {
@@ -489,25 +510,15 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                           {daySessions.length > 2 && (
                             <div style={{ fontSize: 9, color: "#8a8f94", textAlign: "center" }}>+{daySessions.length - 2}</div>
                           )}
-                          {/* Bouton ajouter une séance */}
                           {inMonth && (
                             <div
                               onClick={e => { e.stopPropagation(); requireSubscription(() => setAddingDate(dstr)); }}
-                              style={{ marginTop: "auto", paddingTop: 4, border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
+                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
                             >
                               +
                             </div>
                           )}
                         </>
-                      )}
-
-                      {/* Mobile : dot séances */}
-                      {!isMd && daySessions.length > 0 && (
-                        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
-                          {daySessions.slice(0, 3).map(s => (
-                            <div key={s.id} style={{ width: 5, height: 5, borderRadius: "50%", background: s.done ? "#2f9e44" : "#d44000", flexShrink: 0 }} />
-                          ))}
-                        </div>
                       )}
                     </div>
                   );
