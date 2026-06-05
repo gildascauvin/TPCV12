@@ -2,9 +2,12 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfWeek } from "date-fns";
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
+import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
-import CalendarHeader from "@/components/calendar/CalendarHeader";
+import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
+import PlanningRing from "@/components/calendar/PlanningRing";
+import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
@@ -35,22 +38,8 @@ function getWeekDates(base: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(mon, i));
 }
 
-/* ─── Difficulty gauge (v46 POC) ─── */
-function DiffGauge({ value, height = 11 }: { value: number | null; height?: number }) {
-  if (!value) return null;
-  const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
-  const bg: Record<string, string> = {
-    hard: "linear-gradient(90deg,#ffb5a7,#d44000)",
-    moderate: "linear-gradient(90deg,#ffe0a0,#f28a00)",
-    easy: "linear-gradient(90deg,#bfeec8,#2f9e44)",
-  };
-  const w = Math.max(22, Math.min(100, Math.round(value * 10)));
-  return (
-    <div style={{ width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
-      <div style={{ height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
-    </div>
-  );
-}
+/* ─── Difficulty gauge — alias du composant partagé ─── */
+const DiffGauge = DiffGaugeShared;
 
 /* ─── Week session card (v59 POC exact layout) ─── */
 function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
@@ -150,31 +139,7 @@ const ruleTagColors: Record<string, { bg: string; color: string }> = {
   rest: { bg: "#e7e7e7", color: "#666" },
 };
 
-/* ─── Planning wellness ring ─── */
-function PlanningRing({ score }: { score: number | null }) {
-  const r = 22, circ = +(2 * Math.PI * r).toFixed(1);
-  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = +(circ * (1 - pct / 100)).toFixed(1);
-  const color = scoreColor(score);
-  return (
-    <div style={{ position: "relative", width: 58, height: 58, flexShrink: 0, borderRadius: 999, background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 8px 18px rgba(0,0,0,.12))" }}>
-      <svg width="58" height="58" viewBox="0 0 58 58" style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle cx="29" cy="29" r={r} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="6" />
-        <circle cx="29" cy="29" r={r} fill="none" stroke={color} strokeWidth="6"
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.28s ease, stroke 0.28s ease" }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <span style={{ fontSize: 15, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.04em", color: "#fff" }}>
-          {score !== null ? score : "—"}
-        </span>
-        <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>
-          well
-        </span>
-      </div>
-    </div>
-  );
-}
+/* PlanningRing importé depuis @/components/calendar/PlanningRing */
 
 /* ─── Day column ─── */
 function DayColumn({ date, sessions, wellness, todayStr, onAddSession, onComplete, onEdit, onDuplicate, onWellness }: {
@@ -278,10 +243,13 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekBase, setWeekBase] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
+  const [monthSessions, setMonthSessions] = useState<Session[]>([]);
+  const [monthWellness, setMonthWellness] = useState<WellnessDaily[]>([]);
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
@@ -315,11 +283,29 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     if (w) setWellnessList(prev => { const out = prev.filter(x => x.date < mon || x.date > sun); return [...out, ...w]; });
   }
 
+  async function loadMonth(anchor: string) {
+    const base = new Date(anchor + "T12:00:00");
+    const start = format(startOfMonth(base), "yyyy-MM-dd");
+    const end = format(endOfMonth(base), "yyyy-MM-dd");
+    const [{ data: s }, { data: w }] = await Promise.all([
+      supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
+      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
+    ]);
+    setMonthSessions(s ?? []);
+    setMonthWellness(w ?? []);
+  }
+
   function handleDateChange(date: string) {
     setSelectedDate(date);
     const nb = new Date(date + "T12:00:00");
     setWeekBase(nb);
-    loadWeek(nb);
+    if (viewMode === "week") loadWeek(nb);
+    else loadMonth(date);
+  }
+
+  function handleViewModeChange(mode: ViewMode) {
+    setViewMode(mode);
+    if (mode === "month") loadMonth(selectedDate);
   }
 
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
@@ -381,35 +367,156 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
 
   return (
     <>
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
+      <CalendarHeader
+        selectedDate={selectedDate}
+        onDateChange={handleDateChange}
+        dotMap={dotMap}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+      />
 
-      {/* 7-column scrollable grid — full-width, always scrolls horizontally */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
-        gap: isMd ? 12 : 10,
-        overflowX: "auto",
-        padding: isMd ? "14px 20px 18px" : "14px 14px 18px",
-        scrollSnapType: "x proximity",
-        scrollbarWidth: "thin",
-      }}>
-        {dates.map(date => {
-          const dstr = format(date, "yyyy-MM-dd");
-          return (
-            <DayColumn
-              key={dstr} date={date}
-              sessions={sessions.filter(s => s.date === dstr)}
-              wellness={wellnessList.find(w => w.date === dstr) ?? null}
-              todayStr={todayStr}
-              onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
-              onComplete={(s) => requireSubscription(() => setCompleting(s))}
-              onEdit={(s) => requireSubscription(() => setEditing(s))}
-              onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
-              onWellness={() => requireSubscription(() => setShowWellness(true))}
-            />
-          );
-        })}
-      </div>
+      {/* ── Vue semaine ── */}
+      {viewMode === "week" && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+          gap: isMd ? 12 : 10,
+          overflowX: "auto",
+          padding: isMd ? "14px 20px 18px" : "14px 14px 18px",
+          scrollSnapType: "x proximity",
+          scrollbarWidth: "thin",
+        }}>
+          {dates.map(date => {
+            const dstr = format(date, "yyyy-MM-dd");
+            return (
+              <DayColumn
+                key={dstr} date={date}
+                sessions={sessions.filter(s => s.date === dstr)}
+                wellness={wellnessList.find(w => w.date === dstr) ?? null}
+                todayStr={todayStr}
+                onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
+                onComplete={(s) => requireSubscription(() => setCompleting(s))}
+                onEdit={(s) => requireSubscription(() => setEditing(s))}
+                onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
+                onWellness={() => requireSubscription(() => setShowWellness(true))}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Vue mois ── */}
+      {viewMode === "month" && (() => {
+        const anchor = new Date(selectedDate + "T12:00:00");
+        const weeks = eachWeekOfInterval(
+          { start: startOfMonth(anchor), end: endOfMonth(anchor) },
+          { weekStartsOn: 1 }
+        );
+        const dayLabels = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+        return (
+          <div style={{ padding: isMd ? "14px 20px 100px" : "8px 8px 100px" }}>
+            {/* En-têtes colonnes */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: 4 }}>
+              {dayLabels.map(d => (
+                <div key={d} style={{ textAlign: "center", fontSize: 9, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.06em", textTransform: "uppercase", paddingBottom: 2 }}>
+                  {isMd ? d : d[0]}
+                </div>
+              ))}
+            </div>
+            {/* Grille semaines */}
+            {weeks.map(weekMonday => (
+              <div key={weekMonday.toISOString()} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: isMd ? 4 : 2 }}>
+                {Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)).map(date => {
+                  const dstr = format(date, "yyyy-MM-dd");
+                  const isToday = dstr === todayStr;
+                  const inMonth = date.getMonth() === anchor.getMonth();
+                  const daySessions = monthSessions.filter(s => s.date === dstr);
+                  const wellness = monthWellness.find(w => w.date === dstr) ?? null;
+                  const score = wellness?.score ?? null;
+
+                  return (
+                    <div
+                      key={dstr}
+                      style={{
+                        background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
+                        border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
+                        borderRadius: isMd ? 14 : 10,
+                        padding: isMd ? "8px 8px 6px" : "5px 4px 4px",
+                        minHeight: isMd ? 100 : 64,
+                        opacity: inMonth ? 1 : 0.4,
+                        boxShadow: isToday ? "0 4px 14px rgba(212,64,0,.10)" : "0 2px 6px rgba(0,0,0,.04)",
+                        display: "flex", flexDirection: "column",
+                      }}
+                    >
+                      {/* Date + wellness ring */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: isMd ? 6 : 4 }}>
+                        <div>
+                          {isMd && (
+                            <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
+                              {format(date, "EEE", { locale: fr }).slice(0, 3)}
+                            </div>
+                          )}
+                          <div style={{ fontSize: isMd ? 18 : 14, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
+                            {date.getDate()}
+                          </div>
+                        </div>
+                        {score !== null && <PlanningRing score={score} size={isMd ? 32 : 24} />}
+                      </div>
+
+                      {/* Séances — masquées sur mobile */}
+                      {isMd && (
+                        <>
+                          {daySessions.slice(0, 2).map(s => {
+                            const gaugeVal = s.done ? (s.rpe ?? null) : (s.target_difficulty ?? null);
+                            return (
+                              <div
+                                key={s.id}
+                                onClick={e => { e.stopPropagation(); requireSubscription(() => setEditing(s)); }}
+                                style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                                  <div style={{ fontSize: 10, fontWeight: 800, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                    {s.name}
+                                  </div>
+                                  <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
+                                    {s.done ? "Terminé" : "Prévu"}
+                                  </span>
+                                </div>
+                                <DiffGauge value={gaugeVal} height={5} />
+                              </div>
+                            );
+                          })}
+                          {daySessions.length > 2 && (
+                            <div style={{ fontSize: 9, color: "#8a8f94", textAlign: "center" }}>+{daySessions.length - 2}</div>
+                          )}
+                          {/* Bouton ajouter une séance */}
+                          {inMonth && (
+                            <div
+                              onClick={e => { e.stopPropagation(); requireSubscription(() => setAddingDate(dstr)); }}
+                              style={{ marginTop: "auto", paddingTop: 4, border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
+                            >
+                              +
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Mobile : dot séances */}
+                      {!isMd && daySessions.length > 0 && (
+                        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginTop: 2 }}>
+                          {daySessions.slice(0, 3).map(s => (
+                            <div key={s.id} style={{ width: 5, height: 5, borderRadius: "50%", background: s.done ? "#2f9e44" : "#d44000", flexShrink: 0 }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Modals */}
       {addingDate && (
