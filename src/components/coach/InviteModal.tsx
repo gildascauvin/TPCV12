@@ -5,13 +5,15 @@ import { useState } from "react";
 interface Props {
   onClose: () => void;
   onLinked: () => void;
+  inviteCode?: string | null;
 }
 
-export default function InviteModal({ onClose, onLinked }: Props) {
+export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<"linked" | "pending" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   async function handleInvite() {
     if (!email.trim()) return;
@@ -63,8 +65,42 @@ export default function InviteModal({ onClose, onLinked }: Props) {
             <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 6 }}>
               Inviter un sportif
             </div>
-            <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 22 }}>
-              Entre l'adresse email de ton sportif. S'il a déjà un compte, le lien est immédiat. Sinon, il sera lié dès qu'il créera son compte.
+
+            {/* Lien d'invitation */}
+            {inviteCode && (
+              <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                  Lien d'invitation
+                </div>
+                <div style={{ fontSize: 12, color: "#d44000", fontWeight: 700, wordBreak: "break-all" as const, marginBottom: 10 }}>
+                  go.theperfclub.com/join/{inviteCode}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2500);
+                    }}
+                    style={{ flex: 1, height: 38, borderRadius: 11, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}
+                  >
+                    {linkCopied ? "✓ Copié !" : "📋 Copier le lien"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+                      window.open(`https://wa.me/?text=${msg}`, "_blank");
+                    }}
+                    style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 11, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}
+                  >
+                    📲
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
+              Ou invite par email — le sportif sera lié dès qu'il créera son compte.
             </div>
 
             {error && (
@@ -83,14 +119,14 @@ export default function InviteModal({ onClose, onLinked }: Props) {
               onKeyDown={e => e.key === "Enter" && email.trim() && handleInvite()}
               placeholder="sportif@exemple.com"
               autoFocus
-              style={{ width: "100%", boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 16 }}
+              style={{ width: "100%", boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 12 }}
             />
 
             <button
               onClick={handleInvite}
               style={{ width: "100%", height: 48, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", opacity: saving || !email.trim() ? 0.6 : 1, marginBottom: 10 }}
             >
-              {saving ? "Vérification…" : "Inviter →"}
+              {saving ? "Vérification…" : "Inviter par email →"}
             </button>
 
             <button

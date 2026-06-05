@@ -34,9 +34,10 @@ interface Props {
   userId: string;
   initialAthletes: CoachAthlete[];
   subscriptionStatus: SubscriptionStatus;
+  inviteCode: string | null;
 }
 
-export default function AthletesClient({ userId, initialAthletes, subscriptionStatus }: Props) {
+export default function AthletesClient({ userId, initialAthletes, subscriptionStatus, inviteCode }: Props) {
   const router = useRouter();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
@@ -138,6 +139,7 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
         <InviteModal
           onClose={() => setShowInvite(false)}
           onLinked={() => router.refresh()}
+          inviteCode={inviteCode}
         />
       )}
       {paywallStep === "priming" && (

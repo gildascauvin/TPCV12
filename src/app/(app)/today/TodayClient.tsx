@@ -15,6 +15,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingModal from "@/components/paywall/PrimingModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
 const BEHAVIOR_LABELS: Record<string, string> = {
@@ -262,8 +263,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   const [showWellness, setShowWellness] = useState(false);
   const [showAddSession, setShowAddSession] = useState(false);
+  const [addSessionInitialName, setAddSessionInitialName] = useState<string | undefined>(undefined);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
+
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem(`welcome_shown_${userId}`)) setShowWelcome(true);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todaySessions = allSessions.filter((s) => s.date === selectedDate);
   const score = wellness?.score ?? null;
@@ -312,6 +320,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
     setShowAddSession(false);
+    setAddSessionInitialName(undefined);
     router.refresh();
   }, [supabase, userId, router]);
 
@@ -347,12 +356,62 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
 
       <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
+
+        {/* ── Welcome card (J0 seulement) ── */}
+        {showWelcome && (() => {
+          const trainingDaysCount = profile.training_days?.length ?? Math.max(1, Math.round(initialSessions.length / 2));
+          const hasTodaySession = allSessions.some(s => s.date === initialDate);
+          const firstUpcoming = allSessions.filter(s => s.date >= initialDate).sort((a, b) => a.date.localeCompare(b.date))[0];
+          const dismiss = () => { localStorage.setItem(`welcome_shown_${userId}`, "1"); setShowWelcome(false); };
+          return (
+            <div style={{
+              background: "#fff", borderRadius: 24, padding: "20px 20px 16px",
+              boxShadow: "0 8px 32px rgba(0,0,0,.09)", border: "1px solid rgba(212,64,0,.14)",
+              marginBottom: 14,
+            }}>
+              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 6 }}>
+                Bienvenue {profile.name ? profile.name : ""} 👋
+              </div>
+              <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, marginBottom: 4 }}>
+                Ton programme {profile.sport ? <strong>{profile.sport}</strong> : "personnalisé"} est prêt —{" "}
+                <strong>{trainingDaysCount}</strong> séance{trainingDaysCount > 1 ? "s" : ""} par semaine planifiées sur tes jours préférés.
+              </div>
+              {initialWellness && (
+                <div style={{ fontSize: 12, color: "#2f9e44", fontWeight: 700, marginBottom: 12 }}>
+                  ✓ Bilan de forme du jour renseigné
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    dismiss();
+                    if (hasTodaySession) {
+                      setTimeout(() => document.getElementById("day-sessions-container")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    }
+                  }}
+                  style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.24)" }}
+                >
+                  {hasTodaySession ? "Voir ma séance du jour →" : firstUpcoming ? `Prochaine séance : ${new Date(firstUpcoming.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} →` : "Voir mon planning →"}
+                </button>
+                <button
+                  onClick={dismiss}
+                  style={{ height: 44, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Passer
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Greeting */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
-            {greeting()} {profile.name ? profile.name : ""} 👋
+        {!showWelcome && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
+              {greeting()} {profile.name ? profile.name : ""} 👋
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── 2-col layout on md+ ── */}
         <div className="today-layout">
@@ -428,12 +487,52 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
             </div>
 
+            {/* Bandeau séance du jour */}
+            {(() => {
+              const nextSession = todaySessions.find(s => !s.done);
+              if (!nextSession) return null;
+              return (
+                <div style={{
+                  background: "linear-gradient(135deg,#171b1f,#2a2f35)",
+                  borderRadius: 18, padding: "14px 16px", marginBottom: 10,
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 4 }}>
+                      Séance du jour
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {nextSession.name}
+                    </div>
+                    {nextSession.target_difficulty && (
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)" }}>
+                        Diff. cible : {nextSession.target_difficulty}/10
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => requireSubscription(() => setCompleting(nextSession))}
+                    style={{ flexShrink: 0, height: 38, paddingLeft: 16, paddingRight: 16, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.3)" }}
+                  >
+                    ▶ Démarrer
+                  </button>
+                </div>
+              );
+            })()}
+
             <div id="day-sessions-container">
-              {todaySessions.length === 0 && (
+              {/* Empty state semaine entière */}
+              {allSessions.length === 0 ? (
+                <EmptySessionState
+                  sport={profile.sport}
+                  label="Créer ma première séance"
+                  onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
+                />
+              ) : todaySessions.length === 0 ? (
                 <div style={{ border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "var(--muted)", fontSize: 12, marginBottom: 9 }}>
                   Repos ou séance libre
                 </div>
-              )}
+              ) : null}
               {todaySessions.map((s) => (
                 <TodaySessionCard
                   key={s.id}
@@ -446,7 +545,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             </div>
 
             <div
-              onClick={() => requireSubscription(() => setShowAddSession(true))}
+              onClick={() => requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
               style={{
                 border: "0.5px dashed rgba(212,64,0,0.34)",
                 color: "var(--accent)", background: "#fff",
@@ -467,7 +566,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} onSave={saveWellness} onClose={() => setShowWellness(false)} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} onSave={addSession} onClose={() => setShowAddSession(false)} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} onSave={addSession} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={saveComplete} onClose={() => setCompleting(null)} />

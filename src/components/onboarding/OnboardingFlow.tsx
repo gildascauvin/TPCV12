@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
+import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
 import Link from "next/link";
 import AuthBackground from "@/components/auth/AuthBackground";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -14,19 +15,20 @@ type Level = "beginner" | "intermediate" | "elite";
 type StepId =
   | "role"
   | "value_slides"
-  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "freq_2a"
+  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"
   | "overload_2a" | "planning_2a" | "fatigue_2a"
   | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"
   | "wellness_q"
   | "account"
   | "readiness_4a" | "preview_4b"
+  | "invite_share"
   | "social_proof"
   | "recap_5";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
-  goal: string; frustration: string; freq: number;
+  goal: string; frustration: string; trainingDays: number[];
   coachingContext: string; athleteCount: string; coachingChallenge: string; currentTool: string;
   name: string; wSleep: number; wBedtime: string; wStress: number; wRecovery: number;
   wBehaviors: string[]; wMotivation: number; wScore: number | null;
@@ -35,7 +37,7 @@ interface Props { userId?: string; pendingData?: PendingData | null }
 
 const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
-  "sport_2a", "level_2a", "goal_2a", "frustration_2a", "freq_2a",
+  "sport_2a", "level_2a", "goal_2a", "frustration_2a", "days_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "wellness_q", "account", "readiness_4a", "social_proof", "recap_5",
 ];
@@ -43,10 +45,10 @@ const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "context_2b", "sport_2b", "count_2b", "challenge_2b", "tool_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
-  "account", "preview_4b", "social_proof", "recap_5",
+  "account", "preview_4b", "invite_share", "social_proof", "recap_5",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "readiness_4a", "preview_4b", "social_proof", "recap_5"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "social_proof", "recap_5"];
 
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
@@ -109,69 +111,37 @@ function getWellnessAdvice(score: number) {
   };
 }
 
-function getSessionTemplates(sport: string): [string, string][] {
-  const s = sport.toLowerCase();
-  if (s.includes("force") || s.includes("puissance")) return [
-    ["Snatch technique",   "Complexe : high pull + hang snatch\n5 séries @ 70–80%\nFocus vitesse sous la barre"],
-    ["Clean & Jerk lourd", "Clean + jerk 5x1\nFront squat 3x3\nDifficulté cible contrôlée"],
-    ["Squat + tirages",    "Back squat 5x5\nSnatch pull 4x3\nGainage 8 min"],
-    ["Technique légère",   "Power snatch 6x2\nJerk footwork\nMobilité épaules/hanches"],
-  ];
-  if (s.includes("athlé") || s.includes("vitesse")) return [
-    ["Accélération 20m",    "Échauffement complet\n6x20m départ arrêté\nRécup 3 min\nFocus : sortie de bloc"],
-    ["Vitesse max fly 30m", "4x30m lancé\nRécup complète 4–5 min\nQualité > volume"],
-    ["Tempo + mobilité",    "8x100m facile\nMobilité hanches/chevilles\nRespiration 5 min"],
-    ["Renforcement sprint", "Squat 4x4\nNordic curl 3x5\nGainage anti-rotation"],
-  ];
-  if (s.includes("collectif")) return [
-    ["Puissance terrain",       "Échauffement 10 min\nSprints courts 6x20m\nChangements de direction\nRenforcement membres inférieurs"],
-    ["Endurance collective",    "Jeu réduit 4vs4 × 4 sets\nRécup active 2 min\nFocus pressing et transition"],
-    ["Renforcement prévention", "Gainage 3x1min\nNordic curl 3x6\nMobilité hanches\nSauts amortis"],
-    ["Récupération active",     "Footing facile 20 min\nMobilité globale\nÉtirements doux"],
-  ];
-  if (s.includes("endurance")) return [
-    ["Sortie longue facile",    "Effort aérobie continu 45–60 min\nAllure conversationnelle\nFocus : respiration et économie"],
-    ["Fractionné court",        "Échauffement 15 min\n8x200m @ allure rapide\nRécup 90s entre chaque\nRetour au calme 10 min"],
-    ["Seuil progressif",        "Montée en allure progressive\n20 min @ seuil\nRetour au calme\nFocus : régularité"],
-    ["Renforcement spécifique", "Gainage 3 séries\nSquat unipodal 3x10\nMontées de marche\nMobilité chevilles/hanches"],
-  ];
-  if (s.includes("martial") || s.includes("combat")) return [
-    ["Travail technique",    "Échauffement cardio 10 min\nTechniques de base × séries\nCombination × 5 séries\nÉtirements actifs"],
-    ["Conditionnement",      "HIIT 5x2min effort\nRécup 1 min entre chaque\nExercices pliométriques\nGainage fonctionnel"],
-    ["Sparring / Randori",   "Échauffement complet\nSparring technique 3x3min\nDebriefing\nMobilité ciblée"],
-    ["Renforcement général", "Exercices poids de corps\nCore stability 20 min\nMobilité épaules/hanches\nRécupération"],
-  ];
-  return [
-    ["Séance qualité",          "Bloc principal technique\n3–5 séries propres\nDifficulté maîtrisée"],
-    ["Séance volume",           "Travail continu modéré\nVolume progressif\nRespiration contrôlée"],
-    ["Mobilité + récupération", "20–30 min facile\nMobilité globale\nMarche ou vélo doux"],
-    ["Renforcement général",    "Mouvements de base\nCore\nPrévention blessures"],
-  ];
-}
-
-function nextDateForDow(dow: number): string {
-  const today = new Date();
-  const diff = ((dow - today.getDay()) + 7) % 7;
-  const d = new Date(today);
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
-}
-
-function buildAthleteSessions(userId: string, sport: string, level: Level, freq: number) {
+function buildAthleteSessions(userId: string, sport: string, level: Level, days: number[]) {
   const templates = getSessionTemplates(sport);
   const rpe: Record<Level, number> = { beginner: 5, intermediate: 7, elite: 8 };
-  const days: Record<number, number[]> = {
-    2: [1, 4], 3: [1, 3, 5], 4: [1, 3, 5, 6], 5: [1, 2, 3, 5, 6],
-    6: [1, 2, 3, 4, 5, 6], 7: [1, 2, 3, 4, 5, 6, 0],
+  const dow = days.length > 0 ? days : [1, 3, 5];
+
+  // Planifier sur la semaine en cours ET la semaine suivante
+  // Semaine en cours = lundi de cette semaine. Utilise les dates locales pour éviter le décalage UTC.
+  const today = new Date();
+  const todayDow = today.getDay();
+  const daysToCurrentMonday = todayDow === 0 ? -6 : 1 - todayDow;
+
+  const dateForDow = (d: number, weekOffset: number): string => {
+    const offsetFromMonday = d === 0 ? 6 : d - 1;
+    const result = new Date(today);
+    result.setDate(today.getDate() + daysToCurrentMonday + offsetFromMonday + weekOffset * 7);
+    const y = result.getFullYear();
+    const m = String(result.getMonth() + 1).padStart(2, "0");
+    const day = String(result.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   };
-  const dow = days[freq] ?? days[3];
-  const sessions = dow.map((d, i) => {
-    const [name, notes] = templates[i % templates.length];
-    return { user_id: userId, date: nextDateForDow(d), name, notes: `${notes}\nDifficulté cible : ${rpe[level]}`, done: false, target_difficulty: rpe[level] };
-  });
-  if (freq < 6) {
-    const rec = dow.includes(0) ? 2 : 0;
-    sessions.push({ user_id: userId, date: nextDateForDow(rec), name: "Récupération active", notes: "Marche ou vélo facile 25–35 min\nMobilité 10 min\nObjectif : faire redescendre la fatigue", done: false, target_difficulty: 3 });
+
+  const sessions: object[] = [];
+  for (const weekOffset of [0, 1]) {
+    dow.forEach((d, i) => {
+      const [name, notes] = templates[i % templates.length];
+      sessions.push({ user_id: userId, date: dateForDow(d, weekOffset), name, notes: `${notes}\nDifficulté cible : ${rpe[level]}`, done: false, target_difficulty: rpe[level] });
+    });
+    if (days.length < 6) {
+      const rec = dow.includes(0) ? 2 : 0;
+      sessions.push({ user_id: userId, date: dateForDow(rec, weekOffset), name: "Récupération active", notes: "Marche ou vélo facile 25–35 min\nMobilité 10 min\nObjectif : faire redescendre la fatigue", done: false, target_difficulty: 3 });
+    }
   }
   return sessions;
 }
@@ -185,10 +155,26 @@ function buildWellnessBaseline(userId: string, level: Level) {
 
 function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string) {
   const templates = getSessionTemplates(sport);
-  return [1, 3, 5, 6].map((d, i) => {
-    const [name, notes] = templates[i % templates.length];
-    return { coach_id: coachId, athlete_id: athleteId, date: nextDateForDow(d), name, notes, done: false, target_difficulty: 7 };
-  });
+  const today = new Date();
+  const todayDow = today.getDay();
+  const daysToCurrentMonday = todayDow === 0 ? -6 : 1 - todayDow;
+  const dateForDow = (d: number, weekOffset: number): string => {
+    const offset = d === 0 ? 6 : d - 1;
+    const result = new Date(today);
+    result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
+    const y = result.getFullYear();
+    const m = String(result.getMonth() + 1).padStart(2, "0");
+    const day = String(result.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const sessions: object[] = [];
+  for (const weekOffset of [0, 1]) {
+    [1, 3, 5, 6].forEach((d, i) => {
+      const [name, notes] = templates[i % templates.length];
+      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: dateForDow(d, weekOffset), name, notes, done: false, target_difficulty: 7 });
+    });
+  }
+  return sessions;
 }
 
 function GoogleIcon() {
@@ -440,7 +426,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
   const [level, setLevel]                         = useState<Level>(pendingData?.level || "intermediate");
   const [goal, setGoal]                           = useState(pendingData?.goal || "");
   const [frustration, setFrustration]             = useState(pendingData?.frustration || "");
-  const [freq, setFreq]                           = useState(pendingData?.freq || 3);
+  const [trainingDays, setTrainingDays]           = useState<number[]>(pendingData?.trainingDays ?? [1, 3, 5]);
   const [coachingContext, setCoachingContext]     = useState(pendingData?.coachingContext || "");
   const [athleteCount, setAthleteCount]           = useState(pendingData?.athleteCount || "");
   const [coachingChallenge, setCoachingChallenge] = useState(pendingData?.coachingChallenge || "");
@@ -477,6 +463,9 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
   const [wScore, setWScore]           = useState<number | null>(pendingData?.wScore ?? null);
   const [wSaving, setWSaving]         = useState(false);
 
+  const [inviteCode, setInviteCode]       = useState<string | null>(null);
+  const [linkCopied, setLinkCopied]       = useState(false);
+
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
   const [initializing, setInitializing] = useState(!!pendingData);
 
@@ -489,7 +478,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
 
   const getPath = (r: Role): StepId[] => {
     if (pendingData) return r === "coach"
-      ? ["preview_4b", "social_proof", "recap_5"]
+      ? ["preview_4b", "invite_share", "social_proof", "recap_5"]
       : ["readiness_4a", "social_proof", "recap_5"];
     return r === "coach" ? COACH_PATH : ATHLETE_PATH;
   };
@@ -531,7 +520,8 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
       user_id: uid,
       ...(name.trim() ? { name: name.trim() } : {}),
       sport: sportValue, mode: role, onboarding_done: true,
-      freq_target:        role === "athlete" ? freq : null,
+      freq_target:        role === "athlete" ? trainingDays.length : null,
+      training_days:      role === "athlete" ? trainingDays : null,
       objective:          role === "athlete" ? (goal || null) : null,
       frustration:        role === "athlete" ? (frustration || null) : null,
       coaching_context:   role === "coach"   ? (coachingContext || null) : null,
@@ -541,7 +531,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
     }, { onConflict: "user_id" });
 
     if (role === "athlete") {
-      await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, freq));
+      await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
       await supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" });
     }
     if (role === "coach") {
@@ -552,6 +542,10 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
       if (demo?.id) {
         await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, demo.id, sport));
       }
+      const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+      const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+      const { error: codeErr } = await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
+      if (!codeErr) setInviteCode(code);
     }
   }
 
@@ -584,6 +578,17 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
           body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
+        if (role === "athlete") {
+          const storedCode = typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null;
+          if (storedCode) {
+            await fetch("/api/invite/join", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ invite_code: storedCode }),
+            });
+            localStorage.removeItem("coach_invite_code");
+          }
+        }
         setEmailSent(!data.session);
         setSaving(false);
         next();
@@ -611,7 +616,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
 
   async function handleGoogleRegister() {
     const pending: PendingData = {
-      role, sport, sportPrecision, level, goal, frustration, freq,
+      role, sport, sportPrecision, level, goal, frustration, trainingDays,
       coachingContext, athleteCount, coachingChallenge, currentTool, name,
       wSleep, wBedtime, wStress, wRecovery, wBehaviors, wMotivation, wScore,
     };
@@ -674,7 +679,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
     borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
 
-  const sessionCount  = freq + (freq < 6 ? 1 : 0);
+  const sessionCount  = trainingDays.length + (trainingDays.length < 6 ? 1 : 0);
   const progressSteps = path.filter(s => !POST_PROGRESS.includes(s));
   const progressIdx   = progressSteps.indexOf(currentStep);
   const showProgress  = !POST_PROGRESS.includes(currentStep);
@@ -977,28 +982,50 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
           </div>
         )}
 
-        {/* ── 2A-5. FREQUENCY ── */}
-        {currentStep === "freq_2a" && (
+        {/* ── 2A-5. JOURS D'ENTRAÎNEMENT ── */}
+        {currentStep === "days_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Combien de séances par semaine ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Le planning sera prérempli avec ce rythme.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
-              {[
-                { v: 2, title: "1–2 séances",       sub: "Minimal et régulier" },
-                { v: 3, title: "3–4 séances",       sub: "Base solide" },
-                { v: 5, title: "5–6 séances",       sub: "Rythme soutenu" },
-                { v: 7, title: "7 séances ou plus", sub: "Volume élevé" },
-              ].map(f => (
-                <Choice key={f.v} icon="" title={f.title} sub={f.sub} selected={freq === f.v}
-                  onClick={() => isRegisterMode ? nextAfterChoice(() => setFreq(f.v)) : setFreq(f.v)} />
-              ))}
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Quels sont tes jours d'entraînement ?</div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 18 }}>Tes séances seront planifiées sur ces jours.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5, marginBottom: 8 }}>
+              {([
+                { dow: 1, short: "L",  full: "Lun." },
+                { dow: 2, short: "M",  full: "Mar." },
+                { dow: 3, short: "M",  full: "Mer." },
+                { dow: 4, short: "J",  full: "Jeu." },
+                { dow: 5, short: "V",  full: "Ven." },
+                { dow: 6, short: "S",  full: "Sam." },
+                { dow: 0, short: "D",  full: "Dim." },
+              ] as const).map(({ dow, short, full }) => {
+                const selected = trainingDays.includes(dow);
+                return (
+                  <div
+                    key={dow}
+                    onClick={() => setTrainingDays(prev => {
+                      if (prev.includes(dow)) {
+                        if (prev.length === 1) return prev;
+                        return prev.filter(d => d !== dow);
+                      }
+                      const order = [1, 2, 3, 4, 5, 6, 0];
+                      return [...prev, dow].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+                    })}
+                    style={{
+                      borderRadius: 12, padding: "10px 2px", cursor: "pointer", textAlign: "center",
+                      border: selected ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)",
+                      background: selected ? "#171b1f" : "#fff",
+                      transition: "all .12s",
+                    }}
+                  >
+                    <div style={{ fontSize: 15, fontWeight: 900, color: selected ? "#fff" : "#171b1f" }}>{short}</div>
+                    <div style={{ fontSize: 9, color: selected ? "rgba(255,255,255,.55)" : "#8a8f94", marginTop: 2, fontWeight: 600 }}>{full}</div>
+                  </div>
+                );
+              })}
             </div>
-            {!isRegisterMode && isLast
-              ? <Actions onBack={back} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon planning"} nextDisabled={saving} />
-              : !isRegisterMode
-                ? <Actions onBack={back} onNext={next} nextLabel="Suivant →" />
-                : <button onClick={back} style={backOnlyBtn}>← Retour</button>
-            }
+            <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14, textAlign: "center" }}>
+              {trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} sélectionné{trainingDays.length > 1 ? "s" : ""}
+            </div>
+            <Actions onBack={back} onNext={next} nextLabel="Continuer →" nextDisabled={trainingDays.length === 0} />
           </div>
         )}
 
@@ -1508,6 +1535,66 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
               </div>
             </div>
           )
+        )}
+
+        {/* ── INVITE SHARE (coach) ── */}
+        {currentStep === "invite_share" && (
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+              Ton lien d'invitation est prêt
+            </div>
+            <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.6, marginBottom: 20 }}>
+              Partage-le à tes sportifs — ils peuvent s'inscrire maintenant, même avant que tu aies finalisé ton abonnement.
+            </div>
+
+            {inviteCode ? (
+              <>
+                <div style={{
+                  background: "rgba(212,64,0,.06)", border: "1.5px solid rgba(212,64,0,.22)",
+                  borderRadius: 14, padding: "14px 16px", marginBottom: 16,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#d44000", letterSpacing: "-0.01em", wordBreak: "break-all" }}>
+                    go.theperfclub.com/join/{inviteCode}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2500);
+                    posthog.capture("invite_link_copied", { invite_code: inviteCode });
+                  }}
+                  style={{ ...ctaBtn, marginBottom: 10, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", transition: "background .2s" }}
+                >
+                  {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
+                </button>
+
+                <button
+                  onClick={() => {
+                    const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+                    window.open(`https://wa.me/?text=${msg}`, "_blank");
+                    posthog.capture("invite_link_whatsapp", { invite_code: inviteCode });
+                  }}
+                  style={{ width: "100%", height: 50, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", color: "#1f2428", fontSize: 14, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12, boxSizing: "border-box" as const }}
+                >
+                  <span style={{ fontSize: 20 }}>📲</span> Envoyer via WhatsApp
+                </button>
+
+                <button
+                  onClick={() => {
+                    posthog.capture("invite_share_skipped", { invite_code: inviteCode });
+                    next();
+                  }}
+                  style={{ width: "100%", height: 44, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "transparent", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Passer pour l'instant
+                </button>
+              </>
+            ) : (
+              <button onClick={next} style={{ ...ctaBtn, marginBottom: 0 }}>Continuer →</button>
+            )}
+          </div>
         )}
 
         {/* ── SOCIAL PROOF ── */}

@@ -14,11 +14,20 @@ export default async function CoachPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode, name, subscription_status")
+    .select("mode, name, subscription_status, invite_code")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!profile || profile.mode !== "coach") redirect("/today");
+
+  // Generate invite_code server-side if missing
+  let inviteCode = profile.invite_code as string | null;
+  if (!inviteCode) {
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const { error } = await supabase.from("profiles").update({ invite_code: code }).eq("user_id", user.id);
+    if (!error) inviteCode = code;
+  }
 
   const today = new Date().toISOString().split("T")[0];
   const admin = createAdminClient();
@@ -70,6 +79,7 @@ export default async function CoachPage() {
       today={today}
       userId={user.id}
       subscriptionStatus={profile.subscription_status ?? "free"}
+      inviteCode={inviteCode}
     />
   );
 }

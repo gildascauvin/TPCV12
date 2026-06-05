@@ -96,7 +96,7 @@ export default function PrimingModal({ mode, billing, setBilling, allowDismiss, 
           {billing === "annual" ? "✓ Aucun prélèvement maintenant" : "Sans engagement"}
         </div>
 
-        <button onClick={onContinue}
+        <button onClick={() => { posthog.capture("paywall_opened", { plan: mode, billing }); onContinue(); }}
           style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
           {billing === "annual" ? "Commencer l'essai gratuit →" : "Commencer maintenant →"}
         </button>

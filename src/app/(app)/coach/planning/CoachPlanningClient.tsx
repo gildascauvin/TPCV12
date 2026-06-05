@@ -14,6 +14,7 @@ import PrimingModal from "@/components/paywall/PrimingModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
+import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -313,6 +314,17 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           </select>
         </div>
       </div>
+
+      {/* Empty state — aucune séance cette semaine pour cet athlète */}
+      {athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0 && (
+        <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
+          <EmptySessionState
+            sport={athlete.sport}
+            label={`Créer une séance pour ${athlete.name}`}
+            onAdd={() => requireSubscription(() => setAddingDate(todayStr))}
+          />
+        </div>
+      )}
 
       {/* 7-column scrollable grid — full-width, always scrolls horizontally */}
       <div style={{

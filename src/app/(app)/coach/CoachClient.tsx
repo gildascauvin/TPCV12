@@ -18,6 +18,7 @@ interface Props {
   today: string;
   userId: string;
   subscriptionStatus: SubscriptionStatus;
+  inviteCode: string | null;
 }
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
@@ -174,7 +175,7 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
   );
 }
 
-export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus }: Props) {
+export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -193,6 +194,14 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteError, setInviteError] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem(`welcome_shown_coach_${userId}`)) setShowWelcome(true);
+  }, [userId]);
 
   // Load persisted reviewed IDs after hydration to avoid SSR mismatch
   useEffect(() => {
@@ -365,6 +374,58 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
 
       <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
+
+        {/* ── Welcome card coach (J0) ── */}
+        {showWelcome && (
+          <div style={{
+            background: "#fff", borderRadius: 24, padding: "20px 20px 16px",
+            boxShadow: "0 8px 32px rgba(0,0,0,.09)", border: "1px solid rgba(212,64,0,.14)",
+            marginBottom: 14,
+          }}>
+            <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 6 }}>
+              Ton espace coach est prêt ! ⚡
+            </div>
+            <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, marginBottom: 14 }}>
+              Invite tes sportifs pour démarrer — ils peuvent rejoindre ton espace maintenant, même avant ton abonnement.
+            </div>
+            {inviteCode && (
+              <>
+                <div style={{ background: "rgba(212,64,0,.06)", border: "1.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#d44000", wordBreak: "break-all" }}>
+                    go.theperfclub.com/join/{inviteCode}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                      setLinkCopied(true);
+                      setTimeout(() => setLinkCopied(false), 2500);
+                    }}
+                    style={{ flex: 1, height: 44, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", transition: "background .2s" }}
+                  >
+                    {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+                      window.open(`https://wa.me/?text=${msg}`, "_blank");
+                    }}
+                    style={{ height: 44, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", color: "#1f2428", fontSize: 20, cursor: "pointer" }}
+                  >
+                    📲
+                  </button>
+                </div>
+              </>
+            )}
+            <button
+              onClick={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }}
+              style={{ width: "100%", height: 40, borderRadius: 11, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+            >
+              Je le ferai plus tard
+            </button>
+          </div>
+        )}
 
         <div style={{
           position: "relative", overflow: "hidden",

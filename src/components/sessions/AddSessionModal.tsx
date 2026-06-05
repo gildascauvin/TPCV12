@@ -11,13 +11,14 @@ interface Exercise {
 interface AddSessionModalProps {
   date: string;
   session?: Session;
+  initialName?: string;
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function AddSessionModal({ date, session, onSave, onDelete, onClose }: AddSessionModalProps) {
-  const [name, setName] = useState(session?.name ?? "");
+export default function AddSessionModal({ date, session, initialName, onSave, onDelete, onClose }: AddSessionModalProps) {
+  const [name, setName] = useState(session?.name ?? initialName ?? "");
   const [selectedDate, setSelectedDate] = useState(session?.date ?? date);
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
   const [exercises, setExercises] = useState<Exercise[]>(() => {

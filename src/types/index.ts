@@ -19,6 +19,8 @@ export interface Profile {
   subscription_status: SubscriptionStatus;
   stripe_customer_id: string | null;
   onboarding_done: boolean;
+  invite_code: string | null;
+  training_days: number[] | null;
   created_at: string;
   updated_at: string;
 }
