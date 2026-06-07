@@ -1777,25 +1777,30 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
             {/* Plan cards */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               {/* Monthly card */}
-              <div
-                onClick={() => { setRecapBilling("monthly"); posthog.capture("onboarding_recap_billing_selected", { role, billing: "monthly" }); }}
-                style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: recapBilling === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: recapBilling === "monthly" ? "#171b1f" : "#fff", transition: "all .15s" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: recapBilling === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${recapBilling === "monthly" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {recapBilling === "monthly" && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff" }} />}
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#171b1f", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
+                  ESSAI 7J GRATUITS
+                </div>
+                <div
+                  onClick={() => { setRecapBilling("monthly"); posthog.capture("onboarding_recap_billing_selected", { role, billing: "monthly" }); }}
+                  style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: recapBilling === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: recapBilling === "monthly" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: recapBilling === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
+                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${recapBilling === "monthly" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {recapBilling === "monthly" && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff" }} />}
+                    </div>
                   </div>
+                  <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: recapBilling === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>
+                    {pricingRole.monthly}€
+                  </div>
+                  <div style={{ fontSize: 11, color: recapBilling === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
                 </div>
-                <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: recapBilling === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>
-                  {pricingRole.monthly}€
-                </div>
-                <div style={{ fontSize: 11, color: recapBilling === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
               </div>
 
               {/* Annual card */}
               <div style={{ position: "relative" }}>
                 <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
-                  7 JOURS GRATUITS
+                  ÉCONOMISEZ {annualSavings}€
                 </div>
                 <div
                   onClick={() => { setRecapBilling("annual"); posthog.capture("onboarding_recap_billing_selected", { role, billing: "annual" }); }}
@@ -1819,14 +1824,14 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
             </div>
 
             {/* No payment note */}
-            <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: recapBilling === "annual" ? "#2f9e44" : "#8a8f94", marginBottom: 14 }}>
-              {recapBilling === "annual" ? "✓ Aucun prélèvement maintenant" : "Sans engagement"}
+            <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#2f9e44", marginBottom: 14 }}>
+              ✓ Aucun prélèvement maintenant
             </div>
 
             <button
               onClick={() => { posthog.capture("paywall_opened", { role, billing: recapBilling }); setShowPaywall(true); }}
               style={ctaBtn}>
-              {recapBilling === "annual" ? "Commencer l'essai gratuit →" : "Commencer maintenant →"}
+              Commencer l'essai gratuit →
             </button>
             <button onClick={() => { posthog.capture("paywall_skipped", { role, billing: recapBilling }); goToApp(); }} style={skipBtn}>Accéder sans abonnement →</button>
           </div>

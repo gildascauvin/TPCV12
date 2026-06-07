@@ -86,11 +86,7 @@ function CheckoutForm({
       )}
 
       <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "14px 0 10px", lineHeight: 1.5 }}>
-        {billing === "annual" ? (
-          <>Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.</>
-        ) : (
-          <>{priceStr} · Sans engagement · Résiliable à tout moment.</>
-        )}
+        Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
       </div>
 
       <button
@@ -103,14 +99,12 @@ function CheckoutForm({
           letterSpacing: "-0.01em",
         }}
       >
-        {loading ? "Traitement..." : billing === "annual" ? "Commencer gratuitement" : "Commencer maintenant"}
+        {loading ? "Traitement..." : "Commencer gratuitement"}
       </button>
 
-      {billing === "annual" && (
-        <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
-          Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
-        </div>
-      )}
+      <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+        Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
+      </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
         <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
@@ -170,10 +164,8 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             }
           </div>
           <p style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, margin: 0 }}>
-            {billing === "annual"
-              ? <><strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.</>
-              : "Sans engagement · Résiliable à tout moment."
-            }
+            <><strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.</>
+
           </p>
         </div>
 
