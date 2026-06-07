@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfWeek } from "date-fns";
+import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import WellnessModal from "@/components/wellness/WellnessModal";
@@ -260,6 +260,38 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
+  const [weekWellnessMap, setWeekWellnessMap] = useState<Record<string, number | null>>({
+    [initialDate]: initialWellness?.score ?? null,
+  });
+
+  const prevWeekRef = useRef("");
+
+  // Recharge wellness + sessions quand on change de semaine
+  useEffect(() => {
+    const weekStart = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    if (weekStart === prevWeekRef.current) return;
+    prevWeekRef.current = weekStart;
+    const dates = Array.from({ length: 7 }, (_, i) => format(addDays(new Date(weekStart + "T12:00:00"), i), "yyyy-MM-dd"));
+    const sun = dates[6];
+    Promise.all([
+      supabase.from("wellness_daily").select("date, score").eq("user_id", userId).in("date", dates),
+      supabase.from("sessions").select("*").eq("user_id", userId).gte("date", weekStart).lte("date", sun).order("created_at"),
+    ]).then(([{ data: wellData }, { data: sessData }]) => {
+      const map: Record<string, number | null> = {};
+      dates.forEach(d => { map[d] = null; });
+      (wellData ?? []).forEach((w: { date: string; score: number | null }) => { map[w.date] = w.score; });
+      setWeekWellnessMap(prev => ({ ...prev, ...map }));
+      if (sessData) setAllSessions(prev => [...prev.filter(s => s.date < weekStart || s.date > sun), ...(sessData as Session[])]);
+    });
+  }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function navigatePeriod(dir: "next" | "prev") {
+    const newDate = format(
+      dir === "next" ? addDays(new Date(selectedDate + "T12:00:00"), 7) : subDays(new Date(selectedDate + "T12:00:00"), 7),
+      "yyyy-MM-dd"
+    );
+    handleDateChange(newDate);
+  }
 
   const [showWellness, setShowWellness] = useState(false);
   const [showAddSession, setShowAddSession] = useState(false);
@@ -310,7 +342,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .from("wellness_daily")
       .upsert({ user_id: userId, date: selectedDate, ...data }, { onConflict: "user_id,date" })
       .select().single();
-    if (saved) setWellness(saved as WellnessDaily);
+    if (saved) {
+      setWellness(saved as WellnessDaily);
+      setWeekWellnessMap(prev => ({ ...prev, [selectedDate]: (saved as WellnessDaily).score }));
+    }
     setShowWellness(false);
     router.refresh();
   }, [supabase, userId, selectedDate, router]);
@@ -353,7 +388,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   return (
     <>
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} />
 
       <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 

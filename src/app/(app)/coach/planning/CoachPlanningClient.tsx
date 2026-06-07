@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
+import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
@@ -76,6 +76,11 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedAthleteId, setSelectedAthleteId] = useState(defaultAthleteId);
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [navKey, setNavKey] = useState(0);
+  const slideDirRef  = useRef<"left" | "right">("left");
+  const lastWheelNav = useRef(0);
+  const calGridRef   = useRef<HTMLDivElement>(null);
+  const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<CoachViewSession[]>(initialSessions);
   const [wellnessMap, setWellnessMap] = useState(initialWellnessMap);
   const [monthSessions, setMonthSessions] = useState<CoachViewSession[]>([]);
@@ -271,15 +276,57 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     }
   }
 
+  function navigatePeriod(dir: "next" | "prev") {
+    slideDirRef.current = dir === "next" ? "left" : "right";
+    setNavKey(k => k + 1);
+    const base = new Date(selectedDate + "T12:00:00");
+    const newBase = viewMode === "week"
+      ? (dir === "next" ? addDays(base, 7) : subDays(base, 7))
+      : (dir === "next" ? addMonths(base, 1) : subMonths(base, 1));
+    handleDateChange(format(newBase, "yyyy-MM-dd"));
+  }
+
+  useEffect(() => {
+    if (viewMode !== "week") return;
+    const todayIdx = weekDates.findIndex(d => format(d, "yyyy-MM-dd") === todayStr);
+    if (todayIdx >= 0) {
+      dayRefs.current[todayIdx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [selectedDate, viewMode]);
+
+  useEffect(() => {
+    const el = calGridRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (Math.abs(e.deltaY) < 60) return;
+      const now = Date.now();
+      if (now - lastWheelNav.current < 600) return;
+      lastWheelNav.current = now;
+      navigatePeriod(e.deltaY > 0 ? "next" : "prev");
+    };
+    el.addEventListener("wheel", handler, { passive: true });
+    return () => el.removeEventListener("wheel", handler);
+  });
+
   function handleViewModeChange(mode: ViewMode) {
     setViewMode(mode);
     if (mode === "month" && athlete) loadMonth(selectedDate, athlete);
   }
 
+  const coachWellnessHeader: Record<string, number | null> = {};
+  if (athlete?.user_id) {
+    const aw = wellnessMap[athlete.user_id] ?? {};
+    weekDates.forEach(d => {
+      const iso = format(d, "yyyy-MM-dd");
+      coachWellnessHeader[iso] = aw[iso] ?? null;
+    });
+  }
+
   if (!athlete) {
     return (
       <>
-        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
@@ -294,7 +341,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
 
   return (
     <>
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} viewMode={viewMode} onViewModeChange={handleViewModeChange} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
 
       <div style={{ padding: isLg ? "12px 40px 0" : isMd ? "12px 24px 0" : "12px 16px 0", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
         <div style={{
@@ -339,6 +386,13 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           />
         </div>
       )}
+
+      <div ref={calGridRef}>
+      <div key={`cal-${navKey}`} style={{
+        animation: navKey > 0
+          ? `${slideDirRef.current === "left" ? "calSlideFromRight" : "calSlideFromLeft"} 220ms ease-out`
+          : undefined,
+      }}>
 
       {/* ── Vue mois coach ── */}
       {viewMode === "month" && athlete && (() => {
@@ -469,7 +523,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         scrollSnapType: "x proximity",
         scrollbarWidth: "thin",
       }}>
-        {weekDates.map(date => {
+        {weekDates.map((date, idx) => {
           const dstr = format(date, "yyyy-MM-dd");
           const isToday = dstr === todayStr;
           const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
@@ -478,7 +532,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           const tagColor = ruleTagColors[rule.cls];
 
           return (
-            <div key={dstr} className="week-col-width" style={{
+            <div key={dstr} ref={el => { dayRefs.current[idx] = el; }} className="week-col-width" style={{
               background: "#fff",
               border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
               borderRadius: 26, padding: 16,
@@ -593,6 +647,9 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
         />
       )}
+
+      </div>{/* animation wrapper */}
+      </div>{/* calGridRef */}
 
       {paywallStep === "priming" && (
         <PrimingModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}

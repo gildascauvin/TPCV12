@@ -29,6 +29,15 @@
   box-sizing: border-box;
 }
 
+@keyframes calSlideFromRight {
+  from { opacity: 0; transform: translateX(5%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes calSlideFromLeft {
+  from { opacity: 0; transform: translateX(-5%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 html,
 body {
   min-height: 100%;

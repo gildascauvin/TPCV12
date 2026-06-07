@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
+import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
@@ -246,6 +246,11 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekBase, setWeekBase] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [navKey, setNavKey] = useState(0);
+  const slideDirRef  = useRef<"left" | "right">("left");
+  const lastWheelNav = useRef(0);
+  const weekGridRef  = useRef<HTMLDivElement>(null);
+  const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
   const [monthSessions, setMonthSessions] = useState<Session[]>([]);
@@ -308,6 +313,38 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     if (mode === "month") loadMonth(selectedDate);
   }
 
+  function navigatePeriod(dir: "next" | "prev") {
+    slideDirRef.current = dir === "next" ? "left" : "right";
+    setNavKey(k => k + 1);
+    const base = viewMode === "week"
+      ? (dir === "next" ? addDays(weekBase, 7) : subDays(weekBase, 7))
+      : (dir === "next" ? addMonths(weekBase, 1) : subMonths(weekBase, 1));
+    handleDateChange(format(base, "yyyy-MM-dd"));
+  }
+
+  useEffect(() => {
+    if (viewMode !== "week") return;
+    const todayIdx = dates.findIndex(d => format(d, "yyyy-MM-dd") === todayStr);
+    if (todayIdx >= 0) {
+      dayRefs.current[todayIdx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [weekBase, viewMode]);
+
+  useEffect(() => {
+    const el = weekGridRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (Math.abs(e.deltaY) < 60) return;
+      const now = Date.now();
+      if (now - lastWheelNav.current < 600) return;
+      lastWheelNav.current = now;
+      navigatePeriod(e.deltaY > 0 ? "next" : "prev");
+    };
+    el.addEventListener("wheel", handler, { passive: true });
+    return () => el.removeEventListener("wheel", handler);
+  });
+
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     const { data: saved } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
@@ -365,15 +402,30 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     setShowWellness(false);
   }, [supabase, userId]);
 
+  const wellnessMapForHeader: Record<string, number | null> = {};
+  dates.forEach(d => {
+    const iso = format(d, "yyyy-MM-dd");
+    wellnessMapForHeader[iso] = wellnessList.find(w => w.date === iso)?.score ?? null;
+  });
+
   return (
     <>
       <CalendarHeader
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
         dotMap={dotMap}
+        wellnessMap={wellnessMapForHeader}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
+        onSwipe={navigatePeriod}
       />
+
+      <div ref={weekGridRef}>
+        <div key={`cal-${navKey}`} style={{
+          animation: navKey > 0
+            ? `${slideDirRef.current === "left" ? "calSlideFromRight" : "calSlideFromLeft"} 220ms ease-out`
+            : undefined,
+        }}>
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
@@ -386,11 +438,12 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
           scrollSnapType: "x proximity",
           scrollbarWidth: "thin",
         }}>
-          {dates.map(date => {
+          {dates.map((date, idx) => {
             const dstr = format(date, "yyyy-MM-dd");
             return (
+              <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
               <DayColumn
-                key={dstr} date={date}
+                date={date}
                 sessions={sessions.filter(s => s.date === dstr)}
                 wellness={wellnessList.find(w => w.date === dstr) ?? null}
                 todayStr={todayStr}
@@ -400,6 +453,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
                 onWellness={() => requireSubscription(() => setShowWellness(true))}
               />
+              </div>
             );
           })}
         </div>
@@ -528,6 +582,9 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
           </div>
         );
       })()}
+
+        </div>{/* animation wrapper */}
+      </div>{/* weekGridRef */}
 
       {/* Modals */}
       {addingDate && (
