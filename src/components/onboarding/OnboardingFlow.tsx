@@ -23,7 +23,7 @@ type StepId =
   | "account"
   | "readiness_4a" | "preview_4b"
   | "invite_share"
-  | "social_proof"
+  | "priming_value" | "priming_notif"
   | "recap_5";
 
 type PendingData = {
@@ -39,16 +39,16 @@ const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
   "sport_2a", "level_2a", "goal_2a", "frustration_2a", "days_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
-  "wellness_q", "account", "readiness_4a", "social_proof", "recap_5",
+  "wellness_q", "account", "readiness_4a", "priming_value", "priming_notif", "recap_5",
 ];
 const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "context_2b", "sport_2b", "count_2b", "challenge_2b", "tool_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
-  "account", "preview_4b", "invite_share", "social_proof", "recap_5",
+  "account", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "social_proof", "recap_5"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"];
 
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
@@ -478,8 +478,8 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
 
   const getPath = (r: Role): StepId[] => {
     if (pendingData) return r === "coach"
-      ? ["preview_4b", "invite_share", "social_proof", "recap_5"]
-      : ["readiness_4a", "social_proof", "recap_5"];
+      ? ["preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"]
+      : ["readiness_4a", "priming_value", "priming_notif", "recap_5"];
     return r === "coach" ? COACH_PATH : ATHLETE_PATH;
   };
   const path        = getPath(role);
@@ -1597,19 +1597,26 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
           </div>
         )}
 
-        {/* ── SOCIAL PROOF ── */}
-        {currentStep === "social_proof" && (
-          <div>
-            {/* Header */}
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.2, marginBottom: 4 }}>
-                Rejoignez les {role === "athlete" ? "sportifs" : "coachs"} comme vous
-              </div>
-              <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5 }}>Ils ont changé leur approche avec ThePerfClub.</div>
+
+        {/* ── PRIMING 1 : offre gratuite + preuve sociale (fusion social_proof) ── */}
+        {currentStep === "priming_value" && (
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div style={{ textAlign: "center", marginBottom: 16 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#d44000", padding: "5px 12px", border: "1px solid rgba(212,64,0,.2)", borderRadius: 999, background: "rgba(212,64,0,.06)" }}>
+                ✦ L&apos;APP DE SUIVI DE PERFORMANCE
+              </span>
             </div>
 
-            {/* Community counter */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#f7f8f9", borderRadius: 16 }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#171b1f" }}>On veut que tu</div>
+              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2 }}>
+                essaies <span style={{ color: "#d44000" }}>ThePerfClub</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#d44000" }}>gratuitement</div>
+            </div>
+
+            {/* Compteur communauté */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "12px 14px", background: "#f7f8f9", borderRadius: 16 }}>
               <div style={{ display: "flex" }}>
                 {[
                   "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
@@ -1629,18 +1636,18 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
               </div>
             </div>
 
-            {/* Single testimonial */}
+            {/* Témoignage rôle-spécifique */}
             {role === "athlete" ? (
-              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ height: 130, overflow: "hidden" }}>
+              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 18 }}>
+                <div style={{ height: 110, overflow: "hidden" }}>
                   <img src="https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png" alt="Franck G." style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", display: "block" }} />
                 </div>
-                <div style={{ padding: "16px 16px 14px" }}>
-                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.65, fontStyle: "italic", marginBottom: 12 }}>
-                    "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi."
+                <div style={{ padding: "14px 16px 12px" }}>
+                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
+                    &ldquo;ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.&rdquo;
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
                       <img src="https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 15%", display: "block" }} />
                     </div>
                     <div>
@@ -1654,21 +1661,21 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
                 </div>
               </div>
             ) : (
-              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 20 }}>
-                <div style={{ height: 130, overflow: "hidden" }}>
+              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 18 }}>
+                <div style={{ height: 110, overflow: "hidden" }}>
                   <img src="https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png" alt="Killian Anno" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
                 </div>
-                <div style={{ padding: "16px 16px 14px" }}>
-                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.65, fontStyle: "italic", marginBottom: 12 }}>
-                    "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord d'un groupe d'entraînement."
+                <div style={{ padding: "14px 16px 12px" }}>
+                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
+                    &ldquo;Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.&rdquo;
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                    <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
                       <img src="https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
                     </div>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>Killian Anno</div>
-                      <div style={{ fontSize: 11, color: "#8a8f94" }}>Préparateur physique · Rugby Club Bassin d'Arcachon</div>
+                      <div style={{ fontSize: 11, color: "#8a8f94" }}>Préparateur physique · Rugby Club d&apos;Arcachon</div>
                     </div>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
                       {[0,1,2,3,4].map(i => <span key={i} style={{ color: "#f04a08", fontSize: 12 }}>★</span>)}
@@ -1678,7 +1685,57 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
               </div>
             )}
 
-            <button onClick={next} style={ctaBtn}>Continuer →</button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 12 }}>
+              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                <path d="M7 0L0 3V7.5C0 11.47 3 15.2 7 16C11 15.2 14 11.47 14 7.5V3L7 0Z" fill="#2f9e44" />
+                <path d="M4 8L6 10L10 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 900, color: "#2f9e44", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                AUCUN PAIEMENT MAINTENANT
+              </span>
+            </div>
+
+            <button onClick={next} style={ctaBtn}>Continuer gratuitement →</button>
+            <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
+              7 jours gratuits, puis {pricingRole.annualMonthly}€/mois · {pricingRole.annual}€/an
+            </div>
+          </div>
+        )}
+
+        {/* ── PRIMING 2 : rappel avant fin d'essai ── */}
+        {currentStep === "priming_notif" && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: "70vh" }}>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.25, color: "#171b1f" }}>
+                On te préviendra avant<br />la fin de ton essai gratuit
+              </div>
+            </div>
+
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 24 }}>
+              <div style={{ position: "relative", display: "inline-block" }}>
+                <div style={{ width: 150, height: 150, borderRadius: "50%", background: "linear-gradient(135deg, rgba(212,64,0,.07), rgba(212,64,0,.03))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 80, lineHeight: 1 }}>🔔</span>
+                </div>
+                <div style={{ position: "absolute", top: 6, right: 6, width: 36, height: 36, borderRadius: "50%", background: "#e03131", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#fff", boxShadow: "0 4px 14px rgba(224,49,49,.45)", border: "3px solid #fff" }}>
+                  1
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 12 }}>
+              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+                <path d="M7 0L0 3V7.5C0 11.47 3 15.2 7 16C11 15.2 14 11.47 14 7.5V3L7 0Z" fill="#2f9e44" />
+                <path d="M4 8L6 10L10 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 900, color: "#2f9e44", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                AUCUN PAIEMENT MAINTENANT
+              </span>
+            </div>
+
+            <button onClick={next} style={ctaBtn}>Continuer gratuitement →</button>
+            <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
+              7 jours gratuits, puis {pricingRole.annualMonthly}€/mois · {pricingRole.annual}€/an
+            </div>
           </div>
         )}
 
