@@ -479,7 +479,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     dismiss();
                     if (hasTodaySession) {
                       setTimeout(() => document.getElementById("day-sessions-container")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                    } else if (!firstUpcoming) {
+                    } else {
                       router.push("/week");
                     }
                   }}
