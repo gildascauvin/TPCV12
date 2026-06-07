@@ -197,14 +197,6 @@ function DayColumn({ date, sessions, wellness, todayStr, onAddSession, onComplet
           </div>
         </div>
         <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-        {isToday && !wellness && (
-          <button
-            onClick={e => { e.stopPropagation(); onWellness(); }}
-            style={{ width: "100%", marginTop: 9, padding: "7px 10px", borderRadius: 10, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer" }}
-          >
-            Renseigner mon wellness
-          </button>
-        )}
       </div>
 
       {/* Sessions label */}
@@ -257,9 +249,51 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const [monthWellness, setMonthWellness] = useState<WellnessDaily[]>([]);
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [completing, setCompleting] = useState<Session | null>(null);
+  const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
+
+  // Ref pour les closures realtime (évite staleness sur weekBase)
+  const weekBaseRef = useRef(weekBase);
+  useEffect(() => { weekBaseRef.current = weekBase; }, [weekBase]);
+
+  // Realtime — sessions + wellness_daily
+  useEffect(() => {
+    const sessionsCh = supabase
+      .channel(`week-sessions-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${userId}` }, (payload) => {
+        const base = weekBaseRef.current;
+        const mon = format(startOfWeek(base, { weekStartsOn: 1 }), "yyyy-MM-dd");
+        const sun = format(addDays(startOfWeek(base, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
+        if (payload.eventType === "INSERT") {
+          const s = payload.new as Session;
+          if (s.date >= mon && s.date <= sun) {
+            setSessions(prev => prev.some(x => x.id === s.id) ? prev : [...prev, s]);
+          }
+        } else if (payload.eventType === "UPDATE") {
+          setSessions(prev => prev.map(s => s.id === (payload.new as Session).id ? payload.new as Session : s));
+        } else if (payload.eventType === "DELETE") {
+          setSessions(prev => prev.filter(s => s.id !== (payload.old as { id: string }).id));
+        }
+      })
+      .subscribe();
+
+    const wellnessCh = supabase
+      .channel(`week-wellness-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${userId}` }, (payload) => {
+        if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          const w = payload.new as WellnessDaily;
+          setWellnessList(prev => { const out = prev.filter(x => x.date !== w.date); return [...out, w]; });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionsCh);
+      supabase.removeChannel(wellnessCh);
+    };
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dates = getWeekDates(weekBase);
 
@@ -400,7 +434,22 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
       .select().single();
     if (saved) setWellnessList(prev => { const w = prev.filter(x => x.date !== today); return [...w, saved as WellnessDaily]; });
     setShowWellness(false);
-  }, [supabase, userId]);
+    if (pendingCompleteSession) {
+      const pending = pendingCompleteSession;
+      setPendingCompleteSession(null);
+      setCompleting(pending);
+    }
+  }, [supabase, userId, pendingCompleteSession]);
+
+  function handleTerminer(session: Session) {
+    const wellnessTodayFilled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
+    if (session.date === todayStr && !wellnessTodayFilled) {
+      setPendingCompleteSession(session);
+      setShowWellness(true);
+    } else {
+      setCompleting(session);
+    }
+  }
 
   const wellnessMapForHeader: Record<string, number | null> = {};
   dates.forEach(d => {
@@ -448,7 +497,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 wellness={wellnessList.find(w => w.date === dstr) ?? null}
                 todayStr={todayStr}
                 onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
-                onComplete={(s) => requireSubscription(() => setCompleting(s))}
+                onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                 onEdit={(s) => requireSubscription(() => setEditing(s))}
                 onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
                 onWellness={() => requireSubscription(() => setShowWellness(true))}
@@ -605,7 +654,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         <DuplicateModal session={duplicating} onDuplicate={duplicateSession} onClose={() => setDuplicating(null)} />
       )}
       {showWellness && (
-        <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => setShowWellness(false)} />
+        <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {paywallStep === "priming" && (
         <PrimingModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}

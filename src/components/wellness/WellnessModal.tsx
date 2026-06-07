@@ -78,10 +78,10 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: "#f8faf3",
-        color: "#172018",
-        border: "1px solid rgba(34,54,38,.16)",
-        boxShadow: "0 28px 80px rgba(22,32,24,.22)",
+        background: "#fff",
+        color: "#171b1f",
+        border: "1px solid rgba(0,0,0,.10)",
+        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
         borderRadius: 34,
         padding: 34,
         width: "100%",

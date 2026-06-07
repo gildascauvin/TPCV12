@@ -297,12 +297,52 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [showAddSession, setShowAddSession] = useState(false);
   const [addSessionInitialName, setAddSessionInitialName] = useState<string | undefined>(undefined);
   const [completing, setCompleting] = useState<Session | null>(null);
+  const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
 
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem(`welcome_shown_${userId}`)) setShowWelcome(true);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ref pour les closures realtime (évite staleness sur selectedDate)
+  const selectedDateRef = useRef(selectedDate);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
+
+  // Realtime — sessions + wellness_daily
+  useEffect(() => {
+    const sessionsCh = supabase
+      .channel(`today-sessions-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${userId}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const s = payload.new as Session;
+          setAllSessions(prev => prev.some(x => x.id === s.id) ? prev : [...prev, s]);
+        } else if (payload.eventType === "UPDATE") {
+          setAllSessions(prev => prev.map(s => s.id === (payload.new as Session).id ? payload.new as Session : s));
+        } else if (payload.eventType === "DELETE") {
+          setAllSessions(prev => prev.filter(s => s.id !== (payload.old as { id: string }).id));
+        }
+      })
+      .subscribe();
+
+    const wellnessCh = supabase
+      .channel(`today-wellness-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${userId}` }, (payload) => {
+        if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          const w = payload.new as WellnessDaily;
+          if (w.date === selectedDateRef.current) {
+            setWellness(w);
+            setWeekWellnessMap(prev => ({ ...prev, [w.date]: w.score }));
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(sessionsCh);
+      supabase.removeChannel(wellnessCh);
+    };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todaySessions = allSessions.filter((s) => s.date === selectedDate);
@@ -347,8 +387,22 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       setWeekWellnessMap(prev => ({ ...prev, [selectedDate]: (saved as WellnessDaily).score }));
     }
     setShowWellness(false);
+    if (pendingCompleteSession) {
+      const pending = pendingCompleteSession;
+      setPendingCompleteSession(null);
+      setCompleting(pending);
+    }
     router.refresh();
-  }, [supabase, userId, selectedDate, router]);
+  }, [supabase, userId, selectedDate, router, pendingCompleteSession]);
+
+  function handleTerminer(session: Session) {
+    if (!wellnessFilledToday) {
+      setPendingCompleteSession(session);
+      setShowWellness(true);
+    } else {
+      setCompleting(session);
+    }
+  }
 
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
     const { data: saved } = await supabase
@@ -546,7 +600,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     )}
                   </div>
                   <button
-                    onClick={() => requireSubscription(() => setCompleting(nextSession))}
+                    onClick={() => requireSubscription(() => handleTerminer(nextSession))}
                     style={{ flexShrink: 0, height: 38, paddingLeft: 16, paddingRight: 16, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.3)" }}
                   >
                     ▶ Démarrer
@@ -572,7 +626,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 <TodaySessionCard
                   key={s.id}
                   session={s}
-                  onComplete={(s) => requireSubscription(() => setCompleting(s))}
+                  onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                   onEdit={(s) => requireSubscription(() => setEditing(s))}
                   onDelete={(s) => requireSubscription(() => deleteSession(s))}
                 />
@@ -598,7 +652,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
       {/* Modals */}
       {showWellness && (
-        <WellnessModal date={selectedDate} onSave={saveWellness} onClose={() => setShowWellness(false)} />
+        <WellnessModal date={selectedDate} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
         <AddSessionModal date={selectedDate} initialName={addSessionInitialName} onSave={addSession} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
