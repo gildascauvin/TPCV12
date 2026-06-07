@@ -346,6 +346,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todaySessions = allSessions.filter((s) => s.date === selectedDate);
+  const weekStart = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
+  const weekSessions = allSessions.filter(s => s.date >= weekStart && s.date <= weekEnd);
   const score = wellness?.score ?? null;
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
   const displayScore = wellnessFilledToday ? score : null;
@@ -476,6 +479,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     dismiss();
                     if (hasTodaySession) {
                       setTimeout(() => document.getElementById("day-sessions-container")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    } else if (!firstUpcoming) {
+                      router.push("/week");
                     }
                   }}
                   style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.24)" }}
@@ -611,7 +616,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
             <div id="day-sessions-container">
               {/* Empty state semaine entière */}
-              {allSessions.length === 0 ? (
+              {weekSessions.length === 0 ? (
                 <EmptySessionState
                   sport={profile.sport}
                   label="Créer ma première séance"
