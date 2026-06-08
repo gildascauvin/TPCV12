@@ -10,6 +10,9 @@ import ReviewCompleteModal from "@/components/coach/ReviewCompleteModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import WelcomeModal from "@/components/onboarding/WelcomeModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
+import PaywallModal from "@/components/paywall/PaywallModal";
+import { usePaywall } from "@/hooks/usePaywall";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
@@ -181,6 +184,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
@@ -530,7 +534,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
 
         <div style={{ marginTop: 16 }}>
           <button
-            onClick={() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); }}
+            onClick={() => requireSubscription(() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); })}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
           >
             + Inviter des sportifs
@@ -610,6 +614,15 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
       )}
       {showWelcome && (
         <WelcomeModal mode="coach" onClose={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }} />
+      )}
+      {paywallStep === "priming" && (
+        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
     </>
   );
