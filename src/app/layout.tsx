@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import { PHProvider } from "@/providers/PostHogProvider";
+import { PostHogPageview } from "@/components/PostHogPageview";
 
 export const metadata: Metadata = {
   title: "ThePerfClub",
@@ -34,6 +35,7 @@ export default function RootLayout({
       </head>
       <body>
         <PHProvider>
+          <PostHogPageview />
           {children}
         </PHProvider>
         <ServiceWorkerRegister />
