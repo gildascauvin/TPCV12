@@ -501,7 +501,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                 {sortedPriority.length > 0 ? sortedPriority.map(a => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
                     isReviewed={reviewedIds.has(a.id)}
-                    onDecide={() => handleDecide(a)} />
+                    onDecide={() => requireSubscription(() => handleDecide(a))} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Aucune décision urgente. L'équipe peut suivre le plan.
@@ -521,7 +521,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                 {stable.length > 0 ? stable.map(a => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
-                    onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)} />
+                    onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Tous les sportifs nécessitent une attention aujourd'hui.
