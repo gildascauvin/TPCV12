@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -209,7 +210,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
     const fromOnboarding = new URLSearchParams(window.location.search).get("welcome") === "1";
     const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
     if (fromOnboarding && !alreadySeen) setShowWelcome(true);
-    if (!localStorage.getItem(`activation_shown_coach_${userId}`)) setShowActivation(true);
+    if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
   }, [userId]);
 
   // Load persisted reviewed IDs after hydration to avoid SSR mismatch
@@ -401,6 +402,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={() => requireSubscription(() => {
+                  posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "copy_link" });
                   navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
                   setLinkCopied(true);
                   setTimeout(() => setLinkCopied(false), 2500);
@@ -413,6 +415,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
               </button>
               <button
                 onClick={() => requireSubscription(() => {
+                  posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "whatsapp" });
                   const msg = encodeURIComponent(`Salut ! Rejoins mon espace ThePerfClub ici : https://go.theperfclub.com/join/${inviteCode}`);
                   window.open(`https://wa.me/?text=${msg}`, "_blank");
                 })}

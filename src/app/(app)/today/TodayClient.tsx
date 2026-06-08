@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -310,7 +311,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     const fromOnboarding = params.get("welcome") === "1";
     const alreadySeen = localStorage.getItem(`welcome_shown_${userId}`);
     if (fromOnboarding && !alreadySeen) setShowWelcome(true);
-    if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) setShowActivation(true);
+    if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "athlete" }); }
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur selectedDate)
@@ -476,6 +477,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => {
+                    const ctaType = todaySession ? "start_session" : hasWeekSession ? "view_planning" : "add_session";
+                    posthog.capture("activation_banner_cta_clicked", { mode: "athlete", cta_type: ctaType });
                     dismissActivation();
                     if (todaySession) requireSubscription(() => handleTerminer(todaySession));
                     else if (hasWeekSession) router.push("/week");
