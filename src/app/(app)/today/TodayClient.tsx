@@ -303,12 +303,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [editing, setEditing] = useState<Session | null>(null);
 
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromOnboarding = params.get("welcome") === "1";
     const alreadySeen = localStorage.getItem(`welcome_shown_${userId}`);
     if (fromOnboarding && !alreadySeen) setShowWelcome(true);
+    if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) setShowActivation(true);
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur selectedDate)
@@ -455,6 +457,44 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         {/* ── Welcome handled by overlay modal below ── */}
+
+        {/* ── Bandeau d'activation (J0) ── */}
+        {showActivation && (() => {
+          const dismissActivation = () => { localStorage.setItem(`activation_shown_athlete_${userId}`, "1"); setShowActivation(false); };
+          const todaySession = allSessions.find(s => s.date === initialDate && !s.done);
+          const weekStart = format(startOfWeek(new Date(initialDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+          const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
+          const hasWeekSession = allSessions.some(s => s.date >= weekStart && s.date <= weekEnd);
+          return (
+            <div style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
+              <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
+                Ton espace est prêt, à toi de jouer 💪
+              </div>
+              <div style={{ fontSize: 12, color: "#62686e", marginBottom: 14, lineHeight: 1.5 }}>
+                {todaySession ? `Séance du jour : ${todaySession.name}` : hasWeekSession ? "Tes séances de la semaine sont planifiées." : "Lance-toi dès maintenant."}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    dismissActivation();
+                    if (todaySession) requireSubscription(() => handleTerminer(todaySession));
+                    else if (hasWeekSession) router.push("/week");
+                    else requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); });
+                  }}
+                  style={{ flex: 1, height: 42, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
+                >
+                  {todaySession ? "▶ Démarrer ma séance" : hasWeekSession ? "Voir mon planning →" : "+ Planifier une séance"}
+                </button>
+                <button
+                  onClick={dismissActivation}
+                  style={{ height: 42, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                >
+                  Passer
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Greeting */}
         <div style={{ marginBottom: 12 }}>

@@ -203,11 +203,13 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
     const fromOnboarding = new URLSearchParams(window.location.search).get("welcome") === "1";
     const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
     if (fromOnboarding && !alreadySeen) setShowWelcome(true);
+    if (!localStorage.getItem(`activation_shown_coach_${userId}`)) setShowActivation(true);
   }, [userId]);
 
   // Load persisted reviewed IDs after hydration to avoid SSR mismatch
@@ -383,6 +385,50 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
       <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         {/* ── Welcome overlay handled below ── */}
+
+        {/* ── Bandeau d'activation coach (J0) ── */}
+        {showActivation && inviteCode && (
+          <div style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
+            <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
+              Invite ton premier sportif 🎯
+            </div>
+            <div style={{ fontSize: 12, color: "#62686e", marginBottom: 10, lineHeight: 1.5 }}>
+              Envoie le lien, il rejoint ton espace en 30 secondes.
+            </div>
+            <div style={{ background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.18)", borderRadius: 10, padding: "8px 12px", marginBottom: 12, fontSize: 12, fontWeight: 700, color: "#d44000", wordBreak: "break-all" }}>
+              go.theperfclub.com/join/{inviteCode}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => requireSubscription(() => {
+                  navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 2500);
+                  localStorage.setItem(`activation_shown_coach_${userId}`, "1");
+                  setShowActivation(false);
+                })}
+                style={{ flex: 1, height: 42, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", transition: "background .2s" }}
+              >
+                {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
+              </button>
+              <button
+                onClick={() => requireSubscription(() => {
+                  const msg = encodeURIComponent(`Salut ! Rejoins mon espace ThePerfClub ici : https://go.theperfclub.com/join/${inviteCode}`);
+                  window.open(`https://wa.me/?text=${msg}`, "_blank");
+                })}
+                style={{ height: 42, width: 42, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >
+                📲
+              </button>
+              <button
+                onClick={() => { localStorage.setItem(`activation_shown_coach_${userId}`, "1"); setShowActivation(false); }}
+                style={{ height: 42, paddingLeft: 12, paddingRight: 12, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                Plus tard
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{
           position: "relative", overflow: "hidden",
