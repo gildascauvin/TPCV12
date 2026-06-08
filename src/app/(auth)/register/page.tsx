@@ -4,7 +4,9 @@ import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
+type SearchParams = { d?: string; utm_campaign?: string };
+
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -17,6 +19,11 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       /* param invalide — on ignore */
     }
   }
+
+  /* UTM campaign → bypass role step et aller direct aux value slides */
+  const utm = params?.utm_campaign?.toLowerCase();
+  const initialRole = utm === "coach" ? "coach" : utm === "sportif" ? "athlete" : undefined;
+  const initialStepIdx = initialRole ? 1 : undefined;
 
   if (user) {
     /* User connecté + pendingData → complétion onboarding Google */
@@ -37,5 +44,5 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   }
 
   /* User non connecté → flow d'inscription complet */
-  return <OnboardingFlow />;
+  return <OnboardingFlow initialRole={initialRole} initialStepIdx={initialStepIdx} />;
 }
