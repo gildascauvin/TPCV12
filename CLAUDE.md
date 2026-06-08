@@ -40,25 +40,28 @@ src/app/
 
 ## Onboarding — flows actuels (juin 2026)
 
-### Sportif (inscription — 15 écrans)
+### Sportif (inscription — 16 écrans)
 ```
 role → value_slides (3 slides stats) → sport_2a → level_2a → goal_2a → frustration_2a → freq_2a
 → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
 → wellness_q (5 questions wellness)
 → account (email + mdp + prénom)
 → readiness_4a (score reveal — dark card)  [aha moment]
-→ social_proof (témoignage + compteur 300+)
+→ priming_value (offre gratuite + témoignage sportif + compteur +300)  [pré-paywall]
+→ priming_notif (cloche + "on te préviendra avant la fin de l'essai")  [pré-paywall]
 → recap_5 (pricing page : timeline + plan cards)
 → PaywallModal (formulaire CB Stripe)
 ```
 
-### Coach (inscription — 14 écrans)
+### Coach (inscription — 15 écrans)
 ```
 role → value_slides (3 slides stats) → context_2b → sport_2b → count_2b → challenge_2b → tool_2b
 → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
 → account
 → preview_4b (MissionCards démo avec WellnessRingCoach)  [aha moment]
-→ social_proof
+→ invite_share
+→ priming_value (offre gratuite + témoignage coach + compteur +300)  [pré-paywall]
+→ priming_notif (cloche + "on te préviendra avant la fin de l'essai")  [pré-paywall]
 → recap_5
 → PaywallModal
 ```
@@ -73,7 +76,10 @@ role → 5 questions rôle → saveData() → redirect /today ou /coach
 - **Pain points** : 3 questions contextuelles par rôle avec 4 réponses graduées (diagnostic, sunk cost)
 - **Auto-advance** : clic sur une réponse = avance automatiquement après 300ms (register mode uniquement)
 - **Aha moment** : `readiness_4a` (score wellness) ou `preview_4b` (dashboard coach) — demo live du produit
-- **Social proof** : 1 témoignage avec vraie photo + compteur +300 avec avatars réels
+- **Priming pré-paywall** (2 screens, juin 2026) :
+  - `priming_value` : titre "On veut que tu essaies ThePerfClub gratuitement" + compteur +300 avatars + témoignage rôle-spécifique (Franck G. / Killian Anno) + bouclier "AUCUN PAIEMENT MAINTENANT" + CTA "Continuer gratuitement →"
+  - `priming_notif` : cloche 🔔 avec badge rouge + "On te préviendra avant la fin de ton essai gratuit" + même bouclier + CTA "Continuer gratuitement →"
+  - Le step `social_proof` a été supprimé et fusionné dans `priming_value`
 - **Pricing page** (`recap_5`) : timeline 3 nœuds + 2 cards plan (Mensuel/Annuel) + "Aucun prélèvement maintenant"
 - **Trial 7j** sur plan annuel ; plan mensuel = "Sans engagement"
 
@@ -115,11 +121,12 @@ type StepId =
   | "account"
   | "readiness_4a"     // score reveal sportif (POST_PROGRESS)
   | "preview_4b"       // MissionCards démo coach (POST_PROGRESS)
-  | "social_proof"     // témoignage (POST_PROGRESS)
+  | "priming_value"    // offre gratuite + témoignage (POST_PROGRESS)
+  | "priming_notif"    // cloche rappel essai (POST_PROGRESS)
   | "recap_5";         // pricing page (POST_PROGRESS)
 ```
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "readiness_4a", "preview_4b", "social_proof", "recap_5"]`
+`POST_PROGRESS` = `["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"]`
 
 ## Composants clés
 ```

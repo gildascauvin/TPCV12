@@ -1,11 +1,11 @@
 import { useState } from "react";
 import type { SubscriptionStatus } from "@/types";
 
-export function usePaywall(subscriptionStatus: SubscriptionStatus) {
+export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = false) {
   const [paywallStep, setPaywallStep] = useState<"idle" | "priming" | "paywall">("idle");
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
-  const isActive = subscriptionStatus === "athlete" || subscriptionStatus === "coach";
+  const isActive = subscriptionStatus === "athlete" || subscriptionStatus === "coach" || (subscriptionStatus === "free" && hasCoach);
   const allowDismiss = subscriptionStatus !== "expired";
 
   function requireSubscription(fn: () => void) {

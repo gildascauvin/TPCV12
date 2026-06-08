@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import InviteModal from "@/components/coach/InviteModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingModal from "@/components/paywall/PrimingModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 
@@ -143,7 +143,7 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
           onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
       )}
       {paywallStep === "paywall" && (

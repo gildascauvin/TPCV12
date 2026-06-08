@@ -20,6 +20,8 @@ export default async function TodayPage() {
     supabase.from("sessions").select("*").eq("user_id", user!.id).order("date").order("created_at"),
   ]);
 
+  const hasCoach = !!(profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id;
+
   return (
     <TodayClient
       userId={user!.id}
@@ -28,6 +30,7 @@ export default async function TodayPage() {
       initialWellness={wellness ?? null}
       initialSessions={sessions ?? []}
       subscriptionStatus={profileCheck?.subscription_status ?? "free"}
+      hasCoach={hasCoach}
     />
   );
 }

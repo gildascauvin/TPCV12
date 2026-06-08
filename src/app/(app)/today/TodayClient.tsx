@@ -13,8 +13,9 @@ import { computeWellnessScore } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingModal from "@/components/paywall/PrimingModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import WelcomeModal from "@/components/onboarding/WelcomeModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
@@ -248,14 +249,15 @@ interface Props {
   initialWellness: WellnessDaily | null;
   initialSessions: Session[];
   subscriptionStatus: SubscriptionStatus;
+  hasCoach?: boolean;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus, hasCoach);
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -303,7 +305,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem(`welcome_shown_${userId}`)) setShowWelcome(true);
+    const params = new URLSearchParams(window.location.search);
+    const fromOnboarding = params.get("welcome") === "1";
+    const alreadySeen = localStorage.getItem(`welcome_shown_${userId}`);
+    if (fromOnboarding && !alreadySeen) setShowWelcome(true);
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur selectedDate)
@@ -449,63 +454,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
       <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
-        {/* ── Welcome card (J0 seulement) ── */}
-        {showWelcome && (() => {
-          const trainingDaysCount = profile.training_days?.length ?? Math.max(1, Math.round(initialSessions.length / 2));
-          const hasTodaySession = allSessions.some(s => s.date === initialDate);
-          const firstUpcoming = allSessions.filter(s => s.date >= initialDate).sort((a, b) => a.date.localeCompare(b.date))[0];
-          const dismiss = () => { localStorage.setItem(`welcome_shown_${userId}`, "1"); setShowWelcome(false); };
-          return (
-            <div style={{
-              background: "#fff", borderRadius: 24, padding: "20px 20px 16px",
-              boxShadow: "0 8px 32px rgba(0,0,0,.09)", border: "1px solid rgba(212,64,0,.14)",
-              marginBottom: 14,
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 6 }}>
-                Bienvenue {profile.name ? profile.name : ""} 👋
-              </div>
-              <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, marginBottom: 4 }}>
-                Ton programme {profile.sport ? <strong>{profile.sport}</strong> : "personnalisé"} est prêt —{" "}
-                <strong>{trainingDaysCount}</strong> séance{trainingDaysCount > 1 ? "s" : ""} par semaine planifiées sur tes jours préférés.
-              </div>
-              {initialWellness && (
-                <div style={{ fontSize: 12, color: "#2f9e44", fontWeight: 700, marginBottom: 12 }}>
-                  ✓ Bilan de forme du jour renseigné
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    dismiss();
-                    if (hasTodaySession) {
-                      setTimeout(() => document.getElementById("day-sessions-container")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-                    } else {
-                      router.push("/week");
-                    }
-                  }}
-                  style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.24)" }}
-                >
-                  {hasTodaySession ? "Voir ma séance du jour →" : firstUpcoming ? `Prochaine séance : ${new Date(firstUpcoming.date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" })} →` : "Voir mon planning →"}
-                </button>
-                <button
-                  onClick={dismiss}
-                  style={{ height: 44, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-                >
-                  Passer
-                </button>
-              </div>
-            </div>
-          );
-        })()}
+        {/* ── Welcome handled by overlay modal below ── */}
 
         {/* Greeting */}
-        {!showWelcome && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
-              {greeting()} {profile.name ? profile.name : ""} 👋
-            </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
+            {greeting()} {profile.name ? profile.name : ""} 👋
           </div>
-        )}
+        </div>
 
         {/* ── 2-col layout on md+ ── */}
         <div className="today-layout">
@@ -674,8 +630,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onClose={() => setEditing(null)}
         />
       )}
+      {showWelcome && (
+        <WelcomeModal mode="athlete" onClose={() => { localStorage.setItem(`welcome_shown_${userId}`, "1"); setShowWelcome(false); }} />
+      )}
       {paywallStep === "priming" && (
-        <PrimingModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
           onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
       )}
       {paywallStep === "paywall" && (

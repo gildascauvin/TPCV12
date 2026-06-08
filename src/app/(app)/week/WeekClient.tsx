@@ -15,7 +15,7 @@ import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingModal from "@/components/paywall/PrimingModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import type { Session, WellnessDaily, SubscriptionStatus } from "@/types";
 
@@ -657,7 +657,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {paywallStep === "priming" && (
-        <PrimingModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
           onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
       )}
       {paywallStep === "paywall" && (

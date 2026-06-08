@@ -10,7 +10,8 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingModal from "@/components/paywall/PrimingModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
+import WelcomeModal from "@/components/onboarding/WelcomeModal";
 
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
@@ -22,17 +23,19 @@ import type { CoachAthlete, CoachViewSession, Session, CoachSession, Subscriptio
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
-function formLabel(s: number) { return s >= 82 ? "Zone optimale" : s >= 65 ? "Zone stable" : s >= 45 ? "Zone prudente" : "Zone récupération"; }
+function scoreColor(s: number | null) { if (s === null) return "#8a8f94"; return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+function formLabel(s: number | null) { if (s === null) return "—"; return s >= 82 ? "Zone optimale" : s >= 65 ? "Zone stable" : s >= 45 ? "Zone prudente" : "Zone récupération"; }
 
 function dayWellness(
   athlete: CoachAthlete,
   dateStr: string,
   wellnessMap: Record<string, Record<string, number>>
-): number {
+): number | null {
   if (athlete.user_id && wellnessMap[athlete.user_id]?.[dateStr] !== undefined) {
     return wellnessMap[athlete.user_id][dateStr];
   }
+  const todayStr = new Date().toISOString().split("T")[0];
+  if (!athlete.user_id && dateStr > todayStr) return null;
   return athlete.wellness_score;
 }
 
@@ -52,7 +55,7 @@ const ruleTagColors: Record<string, { bg: string; color: string }> = {
 };
 
 /* PlanningRing et DiffGauge — alias des composants partagés */
-const PlanningRing = ({ score }: { score: number }) => <PlanningRingShared score={score} />;
+const PlanningRing = ({ score }: { score: number | null }) => <PlanningRingShared score={score} />;
 const DiffGauge = DiffGaugeShared;
 
 interface Props {
@@ -88,11 +91,18 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     const id = searchParams.get("athlete");
     if (id && athletes.find(a => a.id === id)) setSelectedAthleteId(id);
   }, [searchParams, athletes]);
+
+  useEffect(() => {
+    const fromOnboarding = searchParams.get("welcome") === "1";
+    const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
+    if (fromOnboarding && !alreadySeen) setShowWelcome(true);
+  }, [userId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
 
@@ -651,8 +661,11 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
       </div>{/* animation wrapper */}
       </div>{/* calGridRef */}
 
+      {showWelcome && (
+        <WelcomeModal mode="coach" onClose={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }} />
+      )}
       {paywallStep === "priming" && (
-        <PrimingModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
           onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
       )}
       {paywallStep === "paywall" && (

@@ -39,16 +39,16 @@ const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
   "sport_2a", "level_2a", "goal_2a", "frustration_2a", "days_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
-  "wellness_q", "account", "readiness_4a", "priming_value", "priming_notif", "recap_5",
+  "wellness_q", "account",
 ];
 const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "context_2b", "sport_2b", "count_2b", "challenge_2b", "tool_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
-  "account", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5",
+  "account",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q"];
 
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
@@ -153,7 +153,54 @@ function buildWellnessBaseline(userId: string, level: Level) {
   return { user_id: userId, date: today, sleep: 7, stress: 5, recovery: 6, motivation: 7, base_score: base, score: base, behaviors: [] };
 }
 
-function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string) {
+function toIso(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function buildAthleteHistory(userId: string, sport: string, level: Level, days: number[]) {
+  const templates = getSessionTemplates(sport);
+  const rpe: Record<Level, number> = { beginner: 5, intermediate: 7, elite: 8 };
+  const dow = days.length > 0 ? days : [1, 3, 5];
+  const targetRpe = rpe[level];
+  const today = new Date();
+  const todayDow = today.getDay();
+  const daysToCurrentMonday = todayDow === 0 ? -6 : 1 - todayDow;
+
+  const sessions: object[] = [];
+  for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
+    dow.forEach((d, i) => {
+      const offsetFromMonday = d === 0 ? 6 : d - 1;
+      const result = new Date(today);
+      result.setDate(today.getDate() + daysToCurrentMonday + offsetFromMonday + weekOffset * 7);
+      if (result >= today) return;
+      const sessionRpe = Math.max(1, Math.min(10, targetRpe + Math.round((Math.random() - 0.5) * 4)));
+      const duration = 45 + Math.round(Math.random() * 30);
+      const [name, notes] = templates[i % templates.length];
+      sessions.push({ user_id: userId, date: toIso(result), name, notes: `${notes}\nDifficulté cible : ${targetRpe}`, done: true, target_difficulty: targetRpe, rpe: sessionRpe, duration });
+    });
+  }
+
+  const wellnessRows: object[] = [];
+  const baseScore = level === "elite" ? 74 : level === "intermediate" ? 70 : 65;
+  for (let i = 28; i >= 1; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const sleep = Math.max(4, Math.min(10, 7 + Math.round((Math.random() - 0.5) * 4)));
+    const stress = Math.max(1, Math.min(10, 5 + Math.round((Math.random() - 0.5) * 4)));
+    const recovery = Math.max(3, Math.min(10, 6 + Math.round((Math.random() - 0.5) * 4)));
+    const motivation = Math.max(4, Math.min(10, 7 + Math.round((Math.random() - 0.5) * 4)));
+    const variation = Math.round((Math.random() - 0.5) * 16);
+    const score = Math.max(30, Math.min(95, baseScore + variation));
+    wellnessRows.push({ user_id: userId, date: toIso(d), sleep, stress, recovery, motivation, behaviors: [], bedtime: "23to00", base_score: score, score });
+  }
+
+  return { sessions, wellnessRows };
+}
+
+function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number) {
   const templates = getSessionTemplates(sport);
   const today = new Date();
   const todayDow = today.getDay();
@@ -162,18 +209,32 @@ function buildCoachDemoSessions(coachId: string, athleteId: string, sport: strin
     const offset = d === 0 ? 6 : d - 1;
     const result = new Date(today);
     result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
-    const y = result.getFullYear();
-    const m = String(result.getMonth() + 1).padStart(2, "0");
-    const day = String(result.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    return toIso(result);
   };
   const sessions: object[] = [];
+
+  // 4 semaines passées
+  for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
+    [1, 3, 5, 6].forEach((d, i) => {
+      const offset = d === 0 ? 6 : d - 1;
+      const result = new Date(today);
+      result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
+      if (result >= today) return;
+      const sessionRpe = Math.max(1, Math.min(10, rpeBase + Math.round((Math.random() - 0.5) * 4)));
+      const duration = 45 + Math.round(Math.random() * 30);
+      const [name, notes] = templates[i % templates.length];
+      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: toIso(result), name, notes, done: true, target_difficulty: rpeBase, rpe: sessionRpe, duration });
+    });
+  }
+
+  // 2 semaines futures (S0 + S1)
   for (const weekOffset of [0, 1]) {
     [1, 3, 5, 6].forEach((d, i) => {
       const [name, notes] = templates[i % templates.length];
-      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: dateForDow(d, weekOffset), name, notes, done: false, target_difficulty: 7 });
+      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: dateForDow(d, weekOffset), name, notes, done: false, target_difficulty: rpeBase });
     });
   }
+
   return sessions;
 }
 
@@ -476,12 +537,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   }
 
-  const getPath = (r: Role): StepId[] => {
-    if (pendingData) return r === "coach"
-      ? ["preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"]
-      : ["readiness_4a", "priming_value", "priming_notif", "recap_5"];
-    return r === "coach" ? COACH_PATH : ATHLETE_PATH;
-  };
+  const getPath = (r: Role): StepId[] => r === "coach" ? COACH_PATH : ATHLETE_PATH;
   const path        = getPath(role);
   const currentStep = path[stepIdx];
   const isLast      = stepIdx === path.length - 1;
@@ -531,21 +587,36 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
     }, { onConflict: "user_id" });
 
     if (role === "athlete") {
-      await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
-      await supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" });
+      const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
+      await Promise.all([
+        supabase.from("sessions").insert(buildAthleteSessions(uid, sportValue, level, trainingDays)),
+        supabase.from("sessions").insert(pastSessions),
+        supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
+        supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
+      ]);
     }
     if (role === "coach") {
-      const { data: demo } = await supabase
-        .from("coach_athletes")
-        .insert({ coach_id: uid, name: name.trim() || "Moi-même", sport, wellness_score: 74, user_id: null })
-        .select("id").single();
-      if (demo?.id) {
-        await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, demo.id, sport));
-      }
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
       const { error: codeErr } = await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
       if (!codeErr) setInviteCode(code);
+
+      const DEMO_ATHLETES = [
+        { name: "Thomas M.", wellness_score: 82, rpeBase: 7 },
+        { name: "Emma L.",   wellness_score: 67, rpeBase: 8 },
+        { name: "Pierre D.", wellness_score: 43, rpeBase: 5 },
+        { name: "Sofia R.",  wellness_score: 71, rpeBase: 7 },
+        { name: "Lucas B.",  wellness_score: 28, rpeBase: 8 },
+      ];
+      for (const demo of DEMO_ATHLETES) {
+        const { data: athlete } = await supabase
+          .from("coach_athletes")
+          .insert({ coach_id: uid, name: demo.name, sport: sportValue, wellness_score: demo.wellness_score, user_id: null })
+          .select("id").single();
+        if (athlete?.id) {
+          await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase));
+        }
+      }
     }
   }
 
@@ -589,9 +660,13 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
             localStorage.removeItem("coach_invite_code");
           }
         }
-        setEmailSent(!data.session);
+        if (!data.session) {
+          setEmailSent(true);
+          setSaving(false);
+          return;
+        }
         setSaving(false);
-        next();
+        window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
       } else {
         await saveData(userId!);
         window.location.href = role === "coach" ? "/coach" : "/today";
@@ -611,7 +686,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
 
   async function goToApp() {
     await fetch("/api/onboarding/complete", { method: "POST" });
-    window.location.href = role === "coach" ? "/coach" : "/today";
+    window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
   }
 
   async function handleGoogleRegister() {
@@ -664,9 +739,8 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
           body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
+        window.location.href = pendingData.role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
       } catch {
-        /* silently continue — user still sees reveal */
-      } finally {
         setInitializing(false);
       }
     };
@@ -1293,7 +1367,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
         )}
 
         {/* ── 3. ACCOUNT ── */}
-        {currentStep === "account" && (
+        {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (
           <div>
             <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Crée ton compte ThePerfClub</div>
             <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>Pour sauvegarder ton profil et accéder à ton espace.</div>
@@ -1336,7 +1410,7 @@ export default function OnboardingFlow({ userId, pendingData }: Props) {
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
           </div>
-        )}
+        ))}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
         {currentStep === "wellness_q" && (
