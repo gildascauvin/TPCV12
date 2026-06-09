@@ -4,7 +4,7 @@ import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 
 export const dynamic = "force-dynamic";
 
-export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ d?: string; role?: string }> }) {
   const params = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -37,5 +37,5 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   }
 
   /* User non connecté → flow d'inscription complet */
-  return <OnboardingFlow />;
+  return <OnboardingFlow initialRole={params?.role === "coach" ? "coach" : params?.role === "athlete" ? "athlete" : undefined} />;
 }

@@ -33,7 +33,7 @@ type PendingData = {
   name: string; wSleep: number; wBedtime: string; wStress: number; wRecovery: number;
   wBehaviors: string[]; wMotivation: number; wScore: number | null;
 };
-interface Props { userId?: string; pendingData?: PendingData | null }
+interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role }
 
 const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
@@ -473,13 +473,13 @@ const LEVEL_LABELS: Record<Level, string> = { beginner: "Débutant", intermediat
 const FREQ_LABELS: Record<number, string>  = { 2: "1–2 séances/semaine", 3: "3–4 séances/semaine", 5: "5–6 séances/semaine", 7: "7 séances ou plus/semaine" };
 
 /* ── main ── */
-export default function OnboardingFlow({ userId, pendingData }: Props) {
+export default function OnboardingFlow({ userId, pendingData, initialRole }: Props) {
   const router   = useRouter();
   const supabase = createClient();
   const isRegisterMode = !userId;
 
-  const [stepIdx, setStepIdx] = useState(0);
-  const [role, setRole]       = useState<Role>(pendingData?.role || "athlete");
+  const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
+  const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
 
   /* questionnaire */
   const [sport, setSport]                         = useState(pendingData?.sport || "Force & puissance");
