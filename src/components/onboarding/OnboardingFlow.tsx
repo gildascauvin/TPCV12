@@ -543,6 +543,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const isLast      = stepIdx === path.length - 1;
 
   useEffect(() => {
+    if (initialRole) {
+      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
+      posthog.capture("onboarding_step_viewed", syntheticProps);
+      posthog.capture("onboarding_role_viewed", syntheticProps);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const props = {
       step: currentStep,
       step_index: stepIdx,
