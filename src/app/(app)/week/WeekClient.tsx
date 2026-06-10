@@ -17,7 +17,9 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
-import type { Session, WellnessDaily, SubscriptionStatus } from "@/types";
+import ProgramBanner from "@/components/programs/ProgramBanner";
+import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
+import type { Session, WellnessDaily, SubscriptionStatus, Program } from "@/types";
 
 /* ─── helpers ─── */
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -253,6 +255,36 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const [editing, setEditing] = useState<Session | null>(null);
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [activeProgram, setActiveProgram] = useState<Program | null>(null);
+  const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+
+  async function fetchActiveProgram() {
+    const { data } = await supabase
+      .from("program_assignments")
+      .select("*, programs(*)")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data?.programs) {
+      const prog = data.programs as Program;
+      setActiveProgram(prog);
+      setActiveAssignmentId(data.id);
+      const startDate = new Date(data.start_date + "T12:00:00");
+      const diffMs = Date.now() - startDate.getTime();
+      const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+      setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
+    } else {
+      setActiveProgram(null);
+      setActiveProgramWeek(-1);
+      setActiveAssignmentId(null);
+    }
+  }
+
+  useEffect(() => { fetchActiveProgram(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur weekBase)
   const weekBaseRef = useRef(weekBase);
@@ -469,6 +501,13 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         onSwipe={navigatePeriod}
       />
 
+      <ProgramBanner
+        program={activeProgram}
+        currentWeek={activeProgramWeek}
+        onEdit={activeProgram ? () => requireSubscription(() => setShowLibrary(true)) : undefined}
+        onOpenLibrary={() => requireSubscription(() => setShowLibrary(true))}
+      />
+
       <div ref={weekGridRef}>
         <div key={`cal-${navKey}`} style={{
           animation: navKey > 0
@@ -664,6 +703,16 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
+      )}
+
+      {showLibrary && (
+        <ProgramLibraryPage
+          athletes={[]}
+          selfUserId={userId}
+          activeProgram={activeProgram}
+          activeProgramWeek={activeProgramWeek}
+          onClose={async () => { setShowLibrary(false); await fetchActiveProgram(); router.refresh(); }}
+        />
       )}
     </>
   );

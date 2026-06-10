@@ -19,7 +19,9 @@ import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
+import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
+import ProgramBanner from "@/components/programs/ProgramBanner";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program } from "@/types";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -92,6 +94,10 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [activeProgram, setActiveProgram] = useState<Program | null>(null);
+  const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
+  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
 
   useEffect(() => {
     const id = searchParams.get("athlete");
@@ -105,6 +111,33 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   }, [userId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
+
+  // Fetch active program for selected athlete
+  useEffect(() => {
+    if (!athlete) { setActiveProgram(null); setActiveProgramWeek(-1); return; }
+    async function fetchAthleteProgram() {
+      let q = supabase
+        .from("program_assignments")
+        .select("*, programs(*)")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (athlete!.user_id) q = q.eq("user_id", athlete!.user_id);
+      else q = q.eq("athlete_id", athlete!.id);
+      const { data } = await q.maybeSingle();
+      if (data?.programs) {
+        const prog = data.programs as Program;
+        setActiveProgram(prog);
+        setActiveAssignmentId(data.id);
+        const diffMs = Date.now() - new Date(data.start_date + "T12:00:00").getTime();
+        const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+        setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
+      } else {
+        setActiveProgram(null); setActiveProgramWeek(-1); setActiveAssignmentId(null);
+      }
+    }
+    fetchAthleteProgram();
+  }, [athlete?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime: sync athlete's sessions and wellness as they change
   useEffect(() => {
@@ -353,38 +386,36 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     <>
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
 
-      <div style={{ padding: isLg ? "12px 40px 0" : isMd ? "12px 24px 0" : "12px 16px 0", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
-        <div style={{
-          position: "relative", overflow: "hidden",
-          background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
-          border: "1px solid rgba(255,255,255,.12)",
-          borderRadius: 22, padding: 16,
-          boxShadow: "0 18px 44px rgba(0,0,0,.20)",
-          marginBottom: 12,
-        }}>
-          <div style={{ position: "absolute", right: -52, top: -52, width: 180, height: 180, borderRadius: "50%", background: "rgba(212,64,0,.24)", filter: "blur(18px)", pointerEvents: "none" }} />
-          <div style={{ position: "relative", zIndex: 2 }}>
-            <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1.02, color: "#fff", marginBottom: 6 }}>
-              Planning · {athlete.name}
-            </div>
-            <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.78)" }}>
-              Charge prévue, wellness et séances individuelles.
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
-          <select
-            value={selectedAthleteId}
-            onChange={e => setSelectedAthleteId(e.target.value)}
-            style={{ flex: 1, background: "#fff", border: "1px solid rgba(0,0,0,.12)", borderRadius: 14, padding: "10px 14px", fontSize: 14, fontWeight: 700, color: "#171b1f", fontFamily: "inherit", outline: "none", cursor: "pointer" }}
+      {/* Athlete tabs bar */}
+      <div style={{
+        background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)",
+        display: "flex", alignItems: "stretch", overflowX: "auto",
+        gap: 0,
+      }}>
+        {athletes.map(a => (
+          <button
+            key={a.id}
+            onClick={() => setSelectedAthleteId(a.id)}
+            style={{
+              padding: "10px 16px", fontSize: 13, fontWeight: selectedAthleteId === a.id ? 700 : 600,
+              background: "none", border: "none", cursor: "pointer",
+              color: selectedAthleteId === a.id ? "#171b1f" : "#8a8f94",
+              borderBottom: selectedAthleteId === a.id ? "2.5px solid #d44000" : "2.5px solid transparent",
+              whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
+            }}
           >
-            {athletes.map(a => (
-              <option key={a.id} value={a.id}>{a.name} · {a.sport}</option>
-            ))}
-          </select>
-        </div>
+            {a.name}
+          </button>
+        ))}
       </div>
+
+      {/* Programme banner — full width */}
+      <ProgramBanner
+        program={activeProgram}
+        currentWeek={activeProgramWeek}
+        onEdit={activeProgram ? () => requireSubscription(() => setShowLibrary(true)) : undefined}
+        onOpenLibrary={() => requireSubscription(() => setShowLibrary(true))}
+      />
 
       {/* Empty state — aucune séance cette semaine pour cet athlète */}
       {viewMode === "week" && athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0 && (
@@ -692,6 +723,13 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           athleteName={athlete.name}
           onSave={completeSession}
           onClose={() => setCompleting(null)}
+        />
+      )}
+
+      {showLibrary && (
+        <ProgramLibraryPage
+          athletes={athletes}
+          onClose={() => setShowLibrary(false)}
         />
       )}
     </>

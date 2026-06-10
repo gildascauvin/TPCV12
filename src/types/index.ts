@@ -51,6 +51,7 @@ export interface Session {
   done: boolean;
   target_difficulty: number | null;
   created_at: string;
+  program_assignment_id?: string | null;
 }
 
 export interface CoachAthlete {
@@ -75,6 +76,7 @@ export interface CoachSession {
   duration: number | null;
   target_difficulty: number | null;
   created_at: string;
+  program_assignment_id?: string | null;
 }
 
 // Unified session for coach views (real athlete → sessions table, demo → coach_sessions)
@@ -103,6 +105,52 @@ export interface FatigueLog {
 export interface AIAdvice {
   training: string;
   recovery: string;
+}
+
+export type ProgramLevel = "debutant" | "intermediaire" | "avance" | "elite";
+export type ProgramFocus = "mixte" | "technique" | "volume" | "intensite" | "competition" | "combat" | "autre";
+export type SessionLoad = 1 | 2 | 3;
+export type SessionType = "technique" | "volume" | "intensite" | "recuperation" | "test";
+
+export interface SessionTemplate {
+  name: string;
+  notes: string | null;
+  target_difficulty: number;
+  load: SessionLoad;
+  type: SessionType;
+}
+
+export interface WeekTemplate {
+  [day: string]: SessionTemplate[];
+}
+
+export interface ProgramTemplate {
+  weeks: WeekTemplate[];
+}
+
+export interface Program {
+  id: string;
+  owner_id: string;
+  name: string;
+  sport: string | null;
+  level: ProgramLevel | null;
+  focus: ProgramFocus | null;
+  weeks_count: number;
+  sessions_per_week: number;
+  template: ProgramTemplate;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProgramAssignment {
+  id: string;
+  program_id: string;
+  coach_id: string;
+  athlete_id: string | null;
+  user_id: string | null;
+  start_date: string;
+  status: "active" | "paused" | "completed";
+  created_at: string;
 }
 
 export type Database = {
