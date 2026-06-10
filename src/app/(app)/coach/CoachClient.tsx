@@ -14,6 +14,7 @@ import WelcomeModal from "@/components/onboarding/WelcomeModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import DiffGauge from "@/components/calendar/DiffGauge";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
@@ -144,8 +145,22 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
           )}
         </div>
         <div style={{ fontSize: 11, color: "#6b7277", marginTop: 2 }}>
-          {athlete.sport} · {todaySessions.length} séance{todaySessions.length !== 1 ? "s" : ""} · difficulté prévue {maxDiff || "—"}/10
+          {athlete.sport} · {todaySessions.length} séance{todaySessions.length !== 1 ? "s" : ""}
         </div>
+        {todaySessions.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+            {todaySessions.map(s => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 10, color: "#6b7277", width: 90, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {s.name}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <DiffGauge value={s.target_difficulty} height={7} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 13, color: "#333", lineHeight: 1.35, marginTop: 6 }}>{decision}</div>
         {maxDiff >= 8 && (
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, borderRadius: 999, padding: "6px 9px", background: "#fff0e9", color: "#d44000", border: "1px solid rgba(212,64,0,.18)", fontSize: 10, fontWeight: 1000 }}>

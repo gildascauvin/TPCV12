@@ -37,7 +37,7 @@ function dayWellness(
     return wellnessMap[athlete.user_id][dateStr];
   }
   const todayStr = new Date().toISOString().split("T")[0];
-  if (!athlete.user_id && dateStr > todayStr) return null;
+  if (dateStr > todayStr) return null;
   return athlete.wellness_score;
 }
 
@@ -358,11 +358,10 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   }
 
   const coachWellnessHeader: Record<string, number | null> = {};
-  if (athlete?.user_id) {
-    const aw = wellnessMap[athlete.user_id] ?? {};
+  if (athlete) {
     weekDates.forEach(d => {
       const iso = format(d, "yyyy-MM-dd");
-      coachWellnessHeader[iso] = aw[iso] ?? null;
+      coachWellnessHeader[iso] = dayWellness(athlete, iso, wellnessMap);
     });
   }
 
