@@ -1378,8 +1378,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 3. ACCOUNT ── */}
         {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Crée ton compte ThePerfClub</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>Pour sauvegarder ton profil et accéder à ton espace.</div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>{role === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend"}</div>
+            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>Crée ton compte pour y accéder.</div>
             {error && (
               <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                 {error}{" "}
