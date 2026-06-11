@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ProgramTemplate, SessionTemplate, WeekTemplate, Session } from "@/types";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import DiffGauge from "@/components/calendar/DiffGauge";
+import { loadRule, ruleTagColors } from "@/lib/loadRule";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -195,8 +196,16 @@ export default function ProgramBuilderModal({ programName: initialName, template
       {/* 7-column grid */}
       <div style={{ flex: 1, overflowX: "auto", overflowY: "auto", padding: "12px 18px 0" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(160px, 1fr))", gap: 8, minWidth: 900 }}>
-          {DAYS.map(day => {
+          {DAYS.map((day, dayIdx) => {
             const daySessions = (week[day] ?? []) as SessionTemplate[];
+            const prevSess = (week[DAYS[dayIdx - 1]] ?? []) as SessionTemplate[];
+            const nextSess = (week[DAYS[dayIdx + 1]] ?? []) as SessionTemplate[];
+            const ctx = {
+              prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
+              nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
+            };
+            const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
+            const tagColor = ruleTagColors[rule.cls];
             return (
               <div key={day} style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)" }}>
                 {/* Header: day name only (no date/wellness/ring) */}
@@ -208,6 +217,17 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
                   Séances · {daySessions.length}
                 </div>
+
+                {/* Load rule card */}
+                {(daySessions.length > 0 || rule.cls !== "rest") && (
+                  <div style={{ margin: "0 0 8px", padding: "10px 12px", borderRadius: 14, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
+                      <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "3px 6px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
+                    </div>
+                    <div style={{ fontSize: 10, lineHeight: 1.4, color: "#555b60" }}>{rule.text}</div>
+                  </div>
+                )}
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {daySessions.length === 0 && (

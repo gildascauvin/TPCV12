@@ -14,6 +14,7 @@ import DuplicateModal from "@/components/sessions/DuplicateModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
+import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -124,36 +125,20 @@ function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
   );
 }
 
-/* ─── Load rule card (v49 POC) ─── */
-function loadRule(sessions: Session[]): { title: string; tag: string; text: string; cls: "hard" | "moderate" | "easy" | "rest" } {
-  const maxDiff = sessions.length
-    ? Math.max(...sessions.map(s => s.rpe ?? s.target_difficulty ?? (s.done ? 6 : 6)))
-    : 0;
-  if (maxDiff >= 8) return { cls: "hard", tag: "Charge haute", title: "Séance dure isolée", text: "OK si elle reste isolée : garde la variation autour pour préserver la récupération." };
-  if (maxDiff >= 5) return { cls: "moderate", tag: "Modérée", title: "Charge maîtrisable", text: "Enchaîner du modéré est acceptable si tu varies le stimulus : volume, intensité ou récupération active." };
-  if (maxDiff > 0) return { cls: "easy", tag: "Facile", title: "Variation utile", text: "Séance légère : bon tampon entre deux charges ou bon support technique sans trop de fatigue." };
-  return { cls: "rest", tag: "Libre", title: "Récupération", text: "Journée ouverte : elle crée de l'espace dans le bloc de charge." };
-}
-const ruleTagColors: Record<string, { bg: string; color: string }> = {
-  hard: { bg: "#ffe9df", color: "#d44000" },
-  moderate: { bg: "#fff1d8", color: "#b96500" },
-  easy: { bg: "#e4f3e8", color: "#166534" },
-  rest: { bg: "#e7e7e7", color: "#666" },
-};
 
 /* PlanningRing importé depuis @/components/calendar/PlanningRing */
 
 /* ─── Day column ─── */
-function DayColumn({ date, sessions, wellness, todayStr, onAddSession, onComplete, onEdit, onDuplicate, onWellness }: {
+function DayColumn({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness }: {
   date: Date; sessions: Session[]; wellness: WellnessDaily | null;
-  todayStr: string; onAddSession: (d: string) => void;
+  todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: Session) => void; onEdit: (s: Session) => void;
   onDuplicate: (s: Session) => void; onWellness: () => void;
 }) {
   const dstr = format(date, "yyyy-MM-dd");
   const isToday = dstr === todayStr;
   const score = wellness?.score ?? null;
-  const rule = loadRule(sessions);
+  const rule = loadRule(sessions, ctx);
   const tagColor = ruleTagColors[rule.cls];
 
   return (
@@ -528,6 +513,14 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         }}>
           {dates.map((date, idx) => {
             const dstr = format(date, "yyyy-MM-dd");
+            const prevStr = idx > 0 ? format(dates[idx - 1], "yyyy-MM-dd") : null;
+            const nextStr = idx < dates.length - 1 ? format(dates[idx + 1], "yyyy-MM-dd") : null;
+            const prevSess = prevStr ? sessions.filter(s => s.date === prevStr) : [];
+            const nextSess = nextStr ? sessions.filter(s => s.date === nextStr) : [];
+            const ctx: LoadContext = {
+              prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+              nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+            };
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
               <DayColumn
@@ -535,6 +528,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 sessions={sessions.filter(s => s.date === dstr)}
                 wellness={wellnessList.find(w => w.date === dstr) ?? null}
                 todayStr={todayStr}
+                ctx={ctx}
                 onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
                 onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                 onEdit={(s) => requireSubscription(() => setEditing(s))}

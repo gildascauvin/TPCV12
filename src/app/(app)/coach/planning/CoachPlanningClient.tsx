@@ -22,6 +22,7 @@ import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program } from "@/types";
+import { loadRule, ruleTagColors } from "@/lib/loadRule";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -41,20 +42,6 @@ function dayWellness(
   return athlete.wellness_score;
 }
 
-function loadRule(sessions: CoachViewSession[]): { title: string; tag: string; text: string; cls: string } {
-  const maxDiff = sessions.length ? Math.max(...sessions.map(s => s.target_difficulty ?? 6)) : 0;
-  if (maxDiff >= 8) return { cls: "hard", tag: "Charge haute", title: "Séance dure isolée", text: "OK si elle reste isolée : garde la variation autour pour préserver la récupération." };
-  if (maxDiff >= 5) return { cls: "moderate", tag: "Modérée", title: "Charge maîtrisable", text: "Enchaîner du modéré est acceptable si tu varies le stimulus." };
-  if (maxDiff > 0) return { cls: "easy", tag: "Facile", title: "Variation utile", text: "Séance légère : bon tampon entre deux charges ou bon support technique." };
-  return { cls: "rest", tag: "Libre", title: "Récupération", text: "Journée ouverte : elle crée de l'espace dans le bloc de charge." };
-}
-
-const ruleTagColors: Record<string, { bg: string; color: string }> = {
-  hard: { bg: "#ffe9df", color: "#d44000" },
-  moderate: { bg: "#fff1d8", color: "#b96500" },
-  easy: { bg: "#e4f3e8", color: "#166534" },
-  rest: { bg: "#e7e7e7", color: "#666" },
-};
 
 /* PlanningRing et DiffGauge — alias des composants partagés */
 const PlanningRing = ({ score }: { score: number | null }) => <PlanningRingShared score={score} />;
@@ -568,7 +555,15 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           const isToday = dstr === todayStr;
           const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
           const wellness = dayWellness(athlete, dstr, wellnessMap);
-          const rule = loadRule(daySessions);
+          const prevStr = idx > 0 ? format(weekDates[idx - 1], "yyyy-MM-dd") : null;
+          const nextStr = idx < weekDates.length - 1 ? format(weekDates[idx + 1], "yyyy-MM-dd") : null;
+          const prevSess = prevStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === prevStr) : [];
+          const nextSess = nextStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === nextStr) : [];
+          const ctx = {
+            prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
+            nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
+          };
+          const rule = loadRule(daySessions, ctx);
           const tagColor = ruleTagColors[rule.cls];
 
           return (
