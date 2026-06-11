@@ -7,26 +7,27 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
-function avgWeekRpe(week: WeekTemplate): number {
+export function avgWeekRpe(week: WeekTemplate): number {
   const sessions = DAYS.flatMap(d => (week[d] ?? []) as SessionTemplate[]);
   if (!sessions.length) return 0;
   return sessions.reduce((sum, s) => sum + (s.target_difficulty ?? 5), 0) / sessions.length;
 }
 
-function loadBarColor(avg: number): string {
+export function loadBarColor(avg: number): string {
   if (!avg) return "#e5e7eb";
   if (avg <= 4) return "#2f9e44";
   if (avg <= 7) return "#f28a00";
   return "#d44000";
 }
 
-function SessionTemplateCard({ session, onClick }: { session: SessionTemplate; onClick: () => void }) {
+export function SessionTemplateCard({ session, onClick }: { session: SessionTemplate; onClick?: () => void }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.target_difficulty ?? null;
   return (
     <div onClick={onClick} style={{
+      cursor: onClick ? "pointer" : "default",
       border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14,
-      padding: "10px 11px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
+      padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
       transition: "transform .2s ease, box-shadow .2s ease",
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>

@@ -674,10 +674,28 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           setSaving(false);
           return;
         }
+        const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
+        if (claimId) {
+          await fetch("/api/programs/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ programId: claimId }),
+          });
+          localStorage.removeItem("claim_program_id");
+        }
         setSaving(false);
         window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
       } else {
         await saveData(userId!);
+        const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
+        if (claimId) {
+          await fetch("/api/programs/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ programId: claimId }),
+          });
+          localStorage.removeItem("claim_program_id");
+        }
         window.location.href = role === "coach" ? "/coach" : "/today";
       }
     } catch {

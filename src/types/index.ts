@@ -138,6 +138,7 @@ export interface Program {
   weeks_count: number;
   sessions_per_week: number;
   template: ProgramTemplate;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 }

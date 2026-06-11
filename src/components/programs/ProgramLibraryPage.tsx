@@ -73,6 +73,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<UIStep>({ type: "list" });
+  const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
 
   async function fetchPrograms() {
     const res = await fetch("/api/programs");
@@ -122,6 +123,22 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   async function stopAssignment(assignmentId: string) {
     if (!confirm("Arrêter ce programme ? Les séances futures non terminées seront supprimées.")) return;
     await fetch(`/api/program-assignments/${assignmentId}`, { method: "DELETE" });
+    fetchPrograms();
+  }
+
+  async function toggleShare(p: Program) {
+    const next = !p.is_public;
+    await fetch(`/api/programs/${p.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_public: next }),
+    });
+    if (next) {
+      const url = `${window.location.origin}/p/${p.id}`;
+      navigator.clipboard.writeText(url).catch(() => {});
+      setLinkCopied(c => ({ ...c, [p.id]: true }));
+      setTimeout(() => setLinkCopied(c => ({ ...c, [p.id]: false })), 2000);
+    }
     fetchPrograms();
   }
 
@@ -310,6 +327,13 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                       ✏️ Modifier
                     </button>
                     <button onClick={() => duplicateProgram(p)} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}>⎘</button>
+                    <button
+                      onClick={() => toggleShare(p)}
+                      title={p.is_public ? "Copier le lien" : "Partager ce programme"}
+                      style={{ padding: "9px 10px", borderRadius: 10, border: `1.5px solid ${p.is_public ? "#d44000" : "rgba(0,0,0,.10)"}`, background: p.is_public ? "rgba(212,64,0,0.06)" : "#fff", fontSize: 14, cursor: "pointer", color: p.is_public ? "#d44000" : "#8a8f94" }}
+                    >
+                      {linkCopied[p.id] ? "✓" : "🔗"}
+                    </button>
                     <button onClick={() => deleteProgram(p.id)} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#d44000" }}>🗑</button>
                   </div>
                 </div>
