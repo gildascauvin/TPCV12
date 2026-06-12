@@ -3,27 +3,31 @@ export const dynamic = "force-dynamic";
 import { createClient } from "@/lib/supabase/server";
 import type { Session, WellnessDaily, Profile } from "@/types";
 
-const BEHAVIOR_LABELS: Record<string, string> = {
-  alcohol: "🍷 Alcool",
-  late_sleep: "🌙 Couché tardif",
-  tobacco: "🚬 Tabac",
-  screen_late: "📱 Écran tard",
-  heavy_meal: "🍔 Repas lourd",
-  caffeine_late: "☕ Caféine tard",
-  social_out: "🎉 Sortie sociale",
-  travel: "✈️ Voyage",
+const BEHAVIOR_META: Record<string, { emoji: string; label: string; positive: boolean }> = {
+  alcohol:       { emoji: "🍷", label: "Alcool",            positive: false },
+  late_sleep:    { emoji: "🌙", label: "Couché tardif",     positive: false },
+  tobacco:       { emoji: "🚬", label: "Tabac",             positive: false },
+  screen_late:   { emoji: "📱", label: "Écran tard",        positive: false },
+  heavy_meal:    { emoji: "🍔", label: "Repas lourd",       positive: false },
+  caffeine_late: { emoji: "☕", label: "Caféine tard",      positive: false },
+  social_out:    { emoji: "🎉", label: "Sortie sociale",    positive: false },
+  travel:        { emoji: "✈️", label: "Voyage",            positive: false },
+  stretching:    { emoji: "🧘", label: "Stretching",        positive: true  },
+  cold_shower:   { emoji: "🧊", label: "Douche froide",     positive: true  },
+  reading:       { emoji: "📖", label: "Lecture",           positive: true  },
+  meditation:    { emoji: "🧘‍♂️", label: "Méditation",       positive: true  },
+  hydration:     { emoji: "💧", label: "Bonne hydratation", positive: true  },
+  walk:          { emoji: "🚶", label: "Marche détente",    positive: true  },
 };
 
 const OBJECTIVE_LABELS: Record<string, string> = {
-  performance: "Performance",
-  longevite: "Longévité",
-  stress: "Gestion du stress",
-  composition: "Composition corporelle",
-  equilibre: "Équilibre",
-  rehab: "Réhabilitation",
+  performance:  "Performance",
+  longevite:    "Longévité",
+  stress:       "Gestion du stress",
+  composition:  "Composition corporelle",
+  equilibre:    "Équilibre",
+  rehab:        "Réhabilitation",
 };
-
-const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 function daysAgoStr(n: number): string {
   const d = new Date();
@@ -31,90 +35,184 @@ function daysAgoStr(n: number): string {
   return d.toISOString().split("T")[0];
 }
 
-function scoreColor(s: number | null): string {
-  if (s === null) return "rgba(0,0,0,0.10)";
-  return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000";
-}
-
-function zoneLabel(s: number | null): string {
-  if (s === null) return "Non renseigné";
-  if (s >= 82) return "Zone optimale";
-  if (s >= 65) return "Zone stable";
-  if (s >= 45) return "Zone prudente";
-  return "Zone récupération";
-}
-
 function computeSignature(sessions: Session[], wellnessScore: number) {
   const done = sessions.filter(s => s.done && s.rpe && s.duration);
   const load = done.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 0), 0);
-  const avg = done.length ? done.reduce((a, s) => a + (s.rpe || 0), 0) / done.length : 7;
+  const avgRpe = done.length
+    ? Math.round(done.reduce((a, s) => a + (s.rpe || 0), 0) / done.length * 10) / 10
+    : 7;
   const hard = done.filter(s => (s.rpe || 0) >= 8).length;
   const long = done.filter(s => (s.duration || 0) >= 70).length;
   const signals = done.length;
-  const nervous = Math.max(28, Math.min(94, Math.round(42 + hard * 10 + avg * 3)));
+  const nervous  = Math.max(28, Math.min(94, Math.round(42 + hard * 10 + avgRpe * 3)));
   const muscular = Math.max(30, Math.min(94, Math.round(38 + long * 10 + load / 120)));
   const recovery = Math.max(35, Math.min(92, Math.round(wellnessScore - hard * 3 + signals * 2)));
-  return { nervous, muscular, recovery, signals, load };
+  return { nervous, muscular, recovery, signals, hard, long, avgRpe };
 }
 
-// SVG ring for hero
-function WellnessRingSVG({ score, size = 96 }: { score: number | null; size?: number }) {
-  const r = Math.round(size * 0.423);
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = +(circ * (1 - pct / 100)).toFixed(1);
-  const sw = Math.round(size * 0.077);
-  const color = scoreColor(score);
+function sigDimInfo(dim: "cost" | "recovery", value: number): { label: string; color: string; text: string } {
+  if (dim === "cost") {
+    if (value < 55) return { label: "COÛT FAIBLE", color: "#2f9e44", text: "Tu absorbes bien ce type de séances." };
+    if (value < 75) return { label: "COÛT MODÉRÉ", color: "#f28a00", text: "Espace ces séances pour ne pas saturer." };
+    return            { label: "COÛT ÉLEVÉ",  color: "#d10000", text: "Ces séances te coûtent cher — espace-les." };
+  }
+  if (value >= 70) return { label: "BONNE RÉCUP",  color: "#2f9e44", text: "Bonne capacité de récupération." };
+  if (value >= 50) return { label: "RÉCUP STABLE", color: "#f28a00", text: "Récupération moyenne — surveille le sommeil." };
+  return             { label: "RÉCUP FRAGILE", color: "#d10000", text: "Récupération fragile — évite d'enchaîner les séances dures." };
+}
+
+function sessionStatusInfo(done: number, target: number): { label: string; color: string } {
+  if (done >= target) return { label: "OBJECTIF ATTEINT", color: "#2f9e44" };
+  if (done > 0)       return { label: "EN COURS",         color: "#f28a00" };
+  return                { label: "SEMAINE LÉGÈRE",   color: "#8a8f94" };
+}
+
+type BehaviorCorrelation = {
+  key: string; impact: number; occurrences: number;
+  emoji: string; label: string; positive: boolean;
+};
+
+function computeBehaviorCorrelations(wellness: WellnessDaily[]): BehaviorCorrelation[] {
+  const sorted = [...wellness].sort((a, b) => a.date.localeCompare(b.date));
+  const allKeys = Array.from(new Set(sorted.flatMap(w => w.behaviors || [])));
+  const results: BehaviorCorrelation[] = [];
+
+  for (const key of allKeys) {
+    const daysWith: number[] = [];
+    const daysWithout: number[] = [];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const dayD  = sorted[i];
+      const dayD1 = sorted[i + 1];
+      const diffDays = Math.round(
+        (new Date(dayD1.date + "T12:00:00").getTime() - new Date(dayD.date + "T12:00:00").getTime()) / 86400000
+      );
+      if (diffDays !== 1) continue;
+      const nextScore = dayD1.score ?? dayD1.base_score;
+      if (nextScore === null || nextScore === undefined) continue;
+      if ((dayD.behaviors || []).includes(key)) daysWith.push(nextScore);
+      else daysWithout.push(nextScore);
+    }
+    if (daysWith.length < 2 || daysWithout.length < 2) continue;
+    const avgWith    = daysWith.reduce((a, b) => a + b, 0) / daysWith.length;
+    const avgWithout = daysWithout.reduce((a, b) => a + b, 0) / daysWithout.length;
+    const impact = Math.round((avgWith - avgWithout) * 10) / 10;
+    const meta = BEHAVIOR_META[key];
+    if (!meta) continue;
+    results.push({ key, impact, occurrences: daysWith.length, emoji: meta.emoji, label: meta.label, positive: meta.positive });
+  }
+  return results.sort((a, b) => b.impact - a.impact);
+}
+
+function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
+  const MIN_DAYS = 10;
+
+  if (filledDays < MIN_DAYS || correlations.length === 0) {
+    const remaining = Math.max(0, MIN_DAYS - filledDays);
+    return (
+      <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
+        <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
+        <div style={{ position: "relative", zIndex: 2 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
+          <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", marginBottom: 8 }}>Données en cours de collecte</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,.60)", lineHeight: 1.5, marginBottom: 18 }}>
+            {remaining > 0
+              ? `Renseigne ton wellness ${remaining} jour${remaining > 1 ? "s" : ""} de plus pour voir l'impact réel de tes comportements.`
+              : "Continue à renseigner ton wellness — les corrélations apparaîtront bientôt."}
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+            {["🧘 Stretching", "🧊 Douche froide", "📖 Lecture", "💧 Hydratation", "🍷 Alcool", "📱 Écran tard"].map(b => (
+              <div key={b} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: "5px 11px", fontSize: 12, color: "rgba(255,255,255,.50)" }}>{b}</div>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, height: 4, background: "rgba(255,255,255,.08)", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(filledDays / MIN_DAYS * 100, 100)}%`, background: "#d44000", borderRadius: 2 }} />
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 6 }}>{filledDays}/{MIN_DAYS} jours collectés</div>
+        </div>
+      </div>
+    );
+  }
+
+  const maxAbs = Math.max(...correlations.map(c => Math.abs(c.impact)), 3);
+  const bestHelper  = correlations.find(c => c.impact > 0.5);
+  const worstHurt   = [...correlations].reverse().find(c => c.impact < -0.5);
+
   return (
-    <div style={{ position: "relative", flexShrink: 0, width: size, height: size, borderRadius: "50%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.10)" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={sw} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.29), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color: score !== null ? color : "rgba(255,255,255,0.4)" }}>
-          {score !== null ? score : "—"}
-        </span>
-        <span style={{ fontSize: Math.round(size * 0.09), fontWeight: 1000, letterSpacing: "0.12em", color: "rgba(255,255,255,0.5)", marginTop: 2, textTransform: "uppercase" }}>
-          well.
-        </span>
+    <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
+      <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
+      <div style={{ position: "relative", zIndex: 2 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
+            <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet sur ton wellness du lendemain</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
+        </div>
+
+        {/* En-têtes colonnes */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center", marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
+          <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>Comportement</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2px 1fr", alignItems: "center" }}>
+            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#d10000", textAlign: "right" as const }}>Pénalise</div>
+            <div />
+            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#2f9e44" }}>Aide</div>
+          </div>
+          <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)", textAlign: "right" as const }}>Impact</div>
+        </div>
+
+        {/* Lignes */}
+        <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
+          {correlations.map(c => {
+            const pct = Math.min(Math.abs(c.impact) / maxAbs * 100, 100);
+            const isPositive = c.impact > 0;
+            const isNeutral  = Math.abs(c.impact) < 0.3;
+            const barColor   = isPositive ? "#2f9e44" : "#d10000";
+            const impactStr  = isNeutral ? "0" : `${c.impact > 0 ? "+" : ""}${c.impact.toFixed(1)}`;
+            const textColor  = isNeutral ? "rgba(255,255,255,.35)" : barColor;
+            return (
+              <div key={c.key} style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>{c.emoji}</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: "rgba(255,255,255,.85)" }}>{c.label}</span>
+                </div>
+                <div style={{ position: "relative" as const, height: 6, background: "rgba(255,255,255,.08)", borderRadius: 3 }}>
+                  <div style={{ position: "absolute" as const, left: "50%", top: -3, width: 1, height: 12, background: "rgba(255,255,255,.20)", transform: "translateX(-50%)" }} />
+                  {!isNeutral && (
+                    <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 3, background: barColor, width: `${pct / 2}%`, ...(isPositive ? { left: "50%" } : { right: "50%" }) }} />
+                  )}
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: textColor, textAlign: "right" as const, letterSpacing: "-0.02em" }}>{impactStr} pts</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Conseil personnalisé */}
+        {(bestHelper || worstHurt) && (
+          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14, display: "flex", flexDirection: "column" as const, gap: 7 }}>
+            {bestHelper && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.45 }}>
+                <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
+                <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
+                {" "}améliore ton wellness du lendemain de{" "}
+                <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
+              </div>
+            )}
+            {worstHurt && (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.45 }}>
+                <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
+                <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
+                {" "}pénalise ton wellness du lendemain de{" "}
+                <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, fontSize: 11, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · corrélation J→J+1</div>
       </div>
     </div>
-  );
-}
-
-// 7-day mini bar chart
-function WellnessChart({ days }: { days: { date: string; score: number | null; isToday: boolean }[] }) {
-  const barW = 28;
-  const gap = 7;
-  const chartH = 52;
-  const totalW = days.length * (barW + gap) - gap;
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${totalW} ${chartH + 18}`} style={{ display: "block", overflow: "visible" }}>
-      {days.map((d, i) => {
-        const x = i * (barW + gap);
-        const h = d.score !== null ? Math.max(8, Math.round((d.score / 100) * chartH)) : 6;
-        const y = chartH - h;
-        const color = d.score !== null ? scoreColor(d.score) : "rgba(0,0,0,0.08)";
-        const dayIdx = new Date(d.date + "T12:00:00").getDay();
-        const label = DAY_LABELS[dayIdx];
-        return (
-          <g key={d.date}>
-            <rect x={x} y={y} width={barW} height={h} rx={7} fill={color}
-              opacity={d.score === null ? 0.5 : 1} />
-            {d.score !== null && (
-              <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize="9" fill={color} fontWeight="800">{d.score}</text>
-            )}
-            <text x={x + barW / 2} y={chartH + 14} textAnchor="middle" fontSize="9"
-              fill={d.isToday ? "#d44000" : "#8a8f94"} fontWeight={d.isToday ? "900" : "600"}>
-              {label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
   );
 }
 
@@ -122,9 +220,26 @@ export default async function ConseilsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today   = new Date().toISOString().split("T")[0];
   const since28 = daysAgoStr(28);
-  const since7 = daysAgoStr(7);
+  const since7  = daysAgoStr(7); // fenêtre glissante (comportements, alerte demain)
+
+  const startOfWeek = (() => {
+    const d = new Date();
+    const day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1)); // ramène au lundi
+    return d.toISOString().split("T")[0];
+  })();
+
+  const startOfPrevWeek = (() => {
+    const d = new Date(startOfWeek);
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split("T")[0];
+  })();
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
   const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
@@ -132,171 +247,76 @@ export default async function ConseilsPage() {
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).gte("date", since28).order("date", { ascending: false }),
   ]);
 
-  const profile = rawProfile as Profile | null;
+  const profile     = rawProfile as Profile | null;
   const allSessions = (rawSessions || []) as Session[];
   const allWellness = (rawWellness || []) as WellnessDaily[];
 
-  // Last 7 days
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    const dateStr = d.toISOString().split("T")[0];
-    const w = allWellness.find(w => w.date === dateStr);
-    return { date: dateStr, score: w?.score ?? null, isToday: dateStr === today };
-  });
-
-  // Trend: last 3 days filled vs previous 3
-  const filled7 = last7Days.filter(d => d.score !== null);
-  const last3avg = filled7.slice(-3).length
-    ? filled7.slice(-3).reduce((a, d) => a + d.score!, 0) / filled7.slice(-3).length : null;
-  const prev3avg = filled7.slice(0, Math.max(0, filled7.length - 3)).length
-    ? filled7.slice(0, Math.max(0, filled7.length - 3)).reduce((a, d) => a + d.score!, 0) / filled7.slice(0, Math.max(0, filled7.length - 3)).length : null;
-  const trendDelta = last3avg !== null && prev3avg !== null ? Math.round(last3avg - prev3avg) : null;
-  const trendIcon = trendDelta === null ? "" : trendDelta > 3 ? " ↑" : trendDelta < -3 ? " ↓" : " →";
-  const trendColor = trendDelta === null ? "#8a8f94" : trendDelta > 3 ? "#2f9e44" : trendDelta < -3 ? "#d10000" : "#f28a00";
-
-  // Stats 7 days
-  const recent7Sessions = allSessions.filter(s => s.date >= since7);
-  const done7 = recent7Sessions.filter(s => s.done && s.rpe);
-  const planned7 = recent7Sessions.filter(s => !s.done);
-  const avgRpe = done7.length
-    ? Math.round(done7.reduce((a, s) => a + (s.rpe || 0), 0) / done7.length * 10) / 10 : null;
-  const totalLoad = done7.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 45), 0);
-  const recent7Wellness = allWellness.filter(w => w.date >= since7);
-  const avgWellness = recent7Wellness.length
-    ? Math.round(recent7Wellness.reduce((a, w) => a + (w.score ?? w.base_score ?? 0), 0) / recent7Wellness.length) : null;
-
-  // Today
+  // Wellness du jour
   const todayWellness = allWellness.find(w => w.date === today);
   const wellnessScore = todayWellness?.score ?? todayWellness?.base_score ?? null;
 
-  // Behaviors last 7 days
-  const recentBehaviors: { date: string; behaviors: string[] }[] = allWellness
+  // Séances semaine calendaire courante (lundi → aujourd'hui)
+  const done7 = allSessions.filter(s => s.date >= startOfWeek && s.done && s.rpe);
+  const avgRpe = done7.length
+    ? Math.round(done7.reduce((a, s) => a + (s.rpe || 0), 0) / done7.length * 10) / 10
+    : null;
+
+  const freqTarget    = profile?.freq_target ?? 3;
+  const sessionStatus = sessionStatusInfo(done7.length, freqTarget);
+
+  // Tendance charge : semaine calendaire courante vs semaine calendaire précédente
+  const currLoad = done7.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 45), 0);
+  const prevDone = allSessions.filter(s => s.date >= startOfPrevWeek && s.date < startOfWeek && s.done && s.rpe);
+  const prevLoad = prevDone.reduce((a, s) => a + (s.rpe || 0) * (s.duration || 45), 0);
+  const loadTrend: number | null = prevLoad > 0
+    ? Math.round((currLoad - prevLoad) / prevLoad * 100)
+    : null;
+
+  // Alerte séance demain + récup fragile
+  const hasTomorrowSession = allSessions.some(s => s.date === tomorrowStr && !s.done);
+
+  // Comportements — 7 jours
+  const recentBehaviors = allWellness
     .filter(w => w.date >= since7 && w.behaviors?.length > 0)
     .map(w => ({ date: w.date, behaviors: w.behaviors }));
   const allRecentBehaviorKeys = Array.from(new Set(recentBehaviors.flatMap(r => r.behaviors)));
 
-  // Fatigue signature (28 days)
+  // Corrélations comportements (28j)
+  const correlations = computeBehaviorCorrelations(allWellness);
+  const filledDays   = allWellness.filter(w => w.score !== null || w.base_score !== null).length;
+
+  // Signature de fatigue (28j)
   const sig = computeSignature(allSessions, wellnessScore ?? 75);
+  const recoveryAlert = hasTomorrowSession && sig.recovery < 50 && sig.signals > 0;
 
-  // Personalized advice
-  const freqTarget = profile?.freq_target ?? 3;
-  const freqRatio = done7.length / freqTarget;
-  const loadAdvice = totalLoad > 1000
-    ? "Charge élevée cette semaine : prévois au moins une journée mobilité ou récupération active avant ta prochaine séance intense."
-    : totalLoad > 500
-    ? "Charge modérée : bon niveau d'entraînement. Surveille le sommeil et le stress avant les séances clés."
-    : freqRatio < 0.5 && done7.length === 0
-    ? "Aucune séance réalisée cette semaine. Si c'est voulu (récupération), c'est bien. Sinon, reprends progressivement."
-    : "Charge plutôt basse. Si ton énergie le permet, tu peux ajouter une séance technique ou de faible intensité.";
-  const wellnessAdvice = wellnessScore !== null
-    ? (wellnessScore >= 75
-      ? `Bonne disponibilité (${wellnessScore}/100) : créneau favorable pour tenir l'intensité prévue.`
-      : wellnessScore >= 55
-      ? `Disponibilité moyenne (${wellnessScore}/100) : garde le plan, mais réduis le volume si les sensations baissent en séance.`
-      : `Fatigue élevée (${wellnessScore}/100) : privilégie récupération, technique légère ou réduis l'intensité de 20–30%.`)
-    : "Renseigne ton wellness aujourd'hui pour fiabiliser les conseils et adapter la charge de la semaine.";
-  const behaviorAdvice = allRecentBehaviorKeys.length
-    ? "Comportements à surveiller sur les 7 derniers jours. Limite surtout ceux qui impactent le sommeil les veilles de séances importantes."
-    : "Comportements récents propres : continue à prioriser hydratation, nutrition et heure de coucher régulière.";
-  const focusAdvice = profile?.objective === "performance"
-    ? "Focus performance : protéines 1,8–2g/kg/j, coucher avant 23h les veilles de séance, hydratation 35ml/kg."
-    : profile?.objective === "stress"
-    ? "Focus gestion du stress : priorise les séances courtes et régulières, évite de sauter le sommeil pour t'entraîner."
-    : profile?.objective === "longevite"
-    ? "Focus longévité : régularité > intensité. Deux séances modérées valent mieux qu'une intense qui épuise."
-    : "Hydratation 35ml/kg, protéines 1,6–2g/kg/j, coucher avant 23h les veilles d'entraînement important.";
-
-  const adviceItems = [
-    { icon: "⚡", title: "Entraînement", text: loadAdvice },
-    { icon: "🌿", title: "Récupération", text: wellnessAdvice },
-    { icon: "🔍", title: "Comportements", text: behaviorAdvice },
-    { icon: "🎯", title: "Focus", text: focusAdvice },
-  ];
+  // Conseil entraînement
+  const loadAdviceShort = done7.length >= freqTarget
+    ? avgRpe !== null && avgRpe >= 8
+      ? "Objectif atteint à haute intensité — soigne la récup avant la semaine prochaine."
+      : "Bonne régularité cette semaine — maintiens le rythme."
+    : done7.length > 0
+    ? `Plus que ${freqTarget - done7.length} séance${freqTarget - done7.length > 1 ? "s" : ""} pour atteindre ton objectif de la semaine.`
+    : "Aucune séance cette semaine — reprends progressivement si l'arrêt n'était pas voulu.";
 
   return (
     <div className="page-shell">
 
       {/* Header */}
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 22 }}>
         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "#8a8f94", marginBottom: 4 }}>
           Conseils
         </div>
         <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>
-          {profile?.name ? `Bonjour, ${profile.name.split(" ")[0]}` : "Conseils de la semaine"}
+          {profile?.name ? `Bonjour, ${profile.name.split(" ")[0]}` : "Analyse & conseils"}
         </div>
         {profile?.sport && (
           <div style={{ fontSize: 13, color: "#62686e", marginTop: 4 }}>
-            {profile.sport}
-            {profile.objective ? ` · ${OBJECTIVE_LABELS[profile.objective] ?? profile.objective}` : ""}
+            {profile.sport}{profile.objective ? ` · ${OBJECTIVE_LABELS[profile.objective] ?? profile.objective}` : ""}
           </div>
         )}
       </div>
 
-      {/* Hero card — zone du jour */}
-      <div style={{
-        position: "relative", overflow: "hidden",
-        background: "linear-gradient(135deg,#111 0%,#2a2a2a 60%,#151515 100%)",
-        border: "1px solid rgba(255,255,255,.10)",
-        borderRadius: 28, padding: "20px 22px", marginBottom: 14,
-        boxShadow: "0 24px 64px rgba(0,0,0,.18)",
-      }}>
-        <div style={{ position: "absolute", right: -60, top: -60, width: 200, height: 200, borderRadius: "50%", background: `${scoreColor(wellnessScore)}22`, filter: "blur(32px)", pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 2, display: "flex", gap: 18, alignItems: "center" }}>
-          <WellnessRingSVG score={wellnessScore} size={92} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.5)", marginBottom: 4 }}>
-              Zone du jour
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#fff", lineHeight: 1.1, marginBottom: 6 }}>
-              {zoneLabel(wellnessScore)}
-            </div>
-            {trendDelta !== null && (
-              <div style={{ fontSize: 12, fontWeight: 700, color: trendColor }}>
-                {trendIcon} {trendDelta > 0 ? "+" : ""}{trendDelta} pts sur 7 jours
-              </div>
-            )}
-            {wellnessScore === null && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", lineHeight: 1.4 }}>
-                Remplis ton wellness pour voir ta zone du jour
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats 4-grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 14 }}>
-        {[
-          { value: done7.length, label: "Séances" },
-          { value: avgRpe ?? "—", label: "RPE moy." },
-          { value: totalLoad > 0 ? totalLoad : "—", label: "Charge" },
-          { value: avgWellness ?? "—", label: "Wellness" },
-        ].map(({ value, label }) => (
-          <div key={label} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: "14px 8px", textAlign: "center" as const, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.05em", lineHeight: 1 }}>{value}</div>
-            <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase" as const, color: "#8a8f94", marginTop: 5 }}>{label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* 7-day wellness chart */}
-      <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: "16px 18px", marginBottom: 14, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 1000, color: "#171b1f", letterSpacing: "-0.02em" }}>Wellness — 7 jours</div>
-          <div style={{ fontSize: 11, color: "#8a8f94" }}>
-            {filled7.length}/{last7Days.length} jours renseignés
-          </div>
-        </div>
-        <WellnessChart days={last7Days} />
-        {planned7.length > 0 && (
-          <div style={{ marginTop: 10, fontSize: 12, color: "#62686e" }}>
-            {planned7.length} séance{planned7.length > 1 ? "s" : ""} planifiée{planned7.length > 1 ? "s" : ""} cette semaine
-          </div>
-        )}
-      </div>
-
-      {/* Fatigue Signature */}
+      {/* Signature de fatigue + Entraînement */}
       <div style={{
         background: "linear-gradient(135deg,#161616,#333 64%,#111)",
         border: "1px solid rgba(255,255,255,.12)",
@@ -305,63 +325,128 @@ export default async function ConseilsPage() {
         position: "relative" as const, overflow: "hidden",
       }}>
         <div style={{ position: "absolute", right: -80, bottom: -90, width: 240, height: 210, background: "rgba(212,64,0,.18)", borderRadius: "50%", filter: "blur(30px)", pointerEvents: "none" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 16, position: "relative" as const, zIndex: 2 }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 6, position: "relative" as const, zIndex: 2 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.045em" }}>Ta signature de fatigue</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.70)", lineHeight: 1.45, marginTop: 4 }}>
-              28 jours de données · comment tu réponds à la charge
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginTop: 4 }}>
+              28 jours · Nerveux = intensité, Musculaire = durée & volume, Récup = wellness ajusté
             </div>
           </div>
-          <div style={{ background: "#d44000", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 10, fontWeight: 1000, whiteSpace: "nowrap" as const, flexShrink: 0 }}>
-            {sig.signals ? `${sig.signals} signaux` : "À construire"}
+          <div style={{ background: sig.signals ? "#d44000" : "rgba(255,255,255,.10)", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 10, fontWeight: 1000, whiteSpace: "nowrap" as const, flexShrink: 0 }}>
+            {sig.signals ? `${sig.signals} séances` : "À construire"}
           </div>
         </div>
-        <div className="sig-grid" style={{ position: "relative", zIndex: 2 }}>
-          {[
-            { value: sig.nervous, label: "Nerveux", text: sig.nervous < 68 ? "Tu tolères bien les séances nerveuses courtes." : "Les séances nerveuses te coûtent plus cher cette semaine." },
-            { value: sig.muscular, label: "Musculaire", text: "Les séances longues et lourdes définissent ton coût musculaire." },
-            { value: sig.recovery, label: "Récupération", text: sig.recovery >= 70 ? "Bonne capacité de récupération récente." : "Récupération plus fragile : surveiller sommeil et enchaînements durs." },
-          ].map(({ value, label, text }) => (
-            <div key={label} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: 14 }}>
-              <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.055em", color: "#fff" }}>{value}</div>
-              <div style={{ fontSize: 10, color: "#ff8a55", textTransform: "uppercase" as const, letterSpacing: ".13em", fontWeight: 1000, margin: "2px 0 8px" }}>{label}</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.76)", lineHeight: 1.38 }}>{text}</div>
-            </div>
-          ))}
-        </div>
-      </div>
 
-      {/* Advice items */}
-      <div style={{ display: "flex", flexDirection: "column" as const, gap: 10, marginBottom: 14 }}>
-        {adviceItems.map(({ icon, title, text }) => (
-          <div key={title} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 18, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-            <div style={{ fontSize: 12, fontWeight: 1000, color: "#d44000", letterSpacing: ".10em", textTransform: "uppercase" as const, marginBottom: 7 }}>
-              {icon} {title}
-            </div>
-            <div style={{ fontSize: 14, color: "#2b3034", lineHeight: 1.56 }}>{text}</div>
+        {sig.signals === 0 ? (
+          <div style={{ position: "relative" as const, zIndex: 2, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "16px 18px", marginTop: 14, fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.5 }}>
+            Termine des séances avec RPE + durée pour construire ta signature de fatigue.
           </div>
-        ))}
+        ) : (
+          <div style={{ position: "relative" as const, zIndex: 2 }}>
+            {/* Alerte récup */}
+            {recoveryAlert && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(242,138,0,.12)", border: "1px solid rgba(242,138,0,.35)", borderRadius: 14, padding: "10px 14px", marginTop: 14, marginBottom: 16 }}>
+                <span style={{ fontSize: 15, flexShrink: 0 }}>⚠️</span>
+                <div style={{ fontSize: 12, color: "#f28a00", lineHeight: 1.45, fontWeight: 600 }}>
+                  Séance planifiée demain — ta récupération est fragile. Considère de réduire l'intensité.
+                </div>
+              </div>
+            )}
+
+            {/* 3 jauges */}
+            <div style={{ display: "flex", flexDirection: "column" as const, gap: 16, marginTop: recoveryAlert ? 0 : 18 }}>
+              {([
+                { key: "nervous",  label: "Coût nerveux",    dim: "cost"     as const, value: sig.nervous,  icon: "⚡", inputLine: `${sig.hard} séance${sig.hard !== 1 ? "s" : ""} RPE ≥ 8 · RPE moy. ${sig.avgRpe} sur 28j` },
+                { key: "muscular", label: "Coût musculaire", dim: "cost"     as const, value: sig.muscular, icon: "💪", inputLine: `${sig.long} séance${sig.long !== 1 ? "s" : ""} ≥ 70 min sur 28j` },
+                { key: "recovery", label: "Récupération",    dim: "recovery" as const, value: sig.recovery, icon: "🌿", inputLine: "Basé sur ton wellness ajusté par la charge récente" },
+              ]).map(({ key, label, dim, value, icon, inputLine }) => {
+                const info = sigDimInfo(dim, value);
+                return (
+                  <div key={key}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
+                        {icon} {label}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: info.color }}>{info.label}</span>
+                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: info.color, flexShrink: 0 }} />
+                      </div>
+                    </div>
+                    <div style={{ position: "relative" as const, height: 7, background: "rgba(255,255,255,.10)", borderRadius: 4, marginBottom: 6, overflow: "hidden" }}>
+                      <div style={{ position: "absolute" as const, left: 0, top: 0, height: "100%", width: `${Math.min(value, 100)}%`, background: info.color, borderRadius: 4, opacity: 0.85 }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", lineHeight: 1.4 }}>{info.text}</div>
+                    <div style={{ fontSize: 10, color: "rgba(255,255,255,.28)", marginTop: 3, fontStyle: "italic" as const }}>{inputLine}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Séparateur + bloc "Cette semaine" */}
+            <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 20, paddingTop: 16 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.38)", marginBottom: 12 }}>
+                Cette semaine
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
+                  <span style={{ fontSize: 34, fontWeight: 1000, letterSpacing: "-0.055em", lineHeight: 1, color: sessionStatus.color }}>
+                    {done7.length}
+                  </span>
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,.45)" }}>
+                    / {freqTarget} séances
+                  </span>
+                  {avgRpe !== null && (
+                    <span style={{ fontSize: 13, color: "rgba(255,255,255,.38)" }}>
+                      · RPE moy. {avgRpe}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 900, color: sessionStatus.color, background: `${sessionStatus.color}22`, border: `1px solid ${sessionStatus.color}44`, borderRadius: 999, padding: "4px 10px", letterSpacing: "0.08em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const }}>
+                    {sessionStatus.label}
+                  </div>
+                  {loadTrend !== null && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: Math.abs(loadTrend) < 15 ? "rgba(255,255,255,.38)" : loadTrend > 0 ? "#f28a00" : "#2f9e44", whiteSpace: "nowrap" as const }}>
+                      {Math.abs(loadTrend) < 15 ? "→ Stable" : loadTrend > 0 ? `↑ +${loadTrend}%` : `↓ ${loadTrend}%`} vs sem. préc.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.62)", lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 800, color: "#d44000" }}>→</span> {loadAdviceShort}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Behavior history */}
+      {/* Impact comportements (WHOOP + conseil personnalisé) */}
+      <BehaviorImpactCard correlations={correlations} filledDays={filledDays} />
+
+      {/* Comportements — 7 jours */}
       {allRecentBehaviorKeys.length > 0 && (
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 18, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-          <div style={{ fontSize: 12, fontWeight: 1000, color: "#d44000", letterSpacing: ".10em", textTransform: "uppercase" as const, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: ".10em", textTransform: "uppercase" as const, color: "#62686e", marginBottom: 12 }}>
             🔍 Comportements — 7 jours
           </div>
           <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
             {allRecentBehaviorKeys.map(b => {
               const count = recentBehaviors.filter(r => r.behaviors.includes(b)).length;
+              const meta  = BEHAVIOR_META[b];
+              const accentColor = meta?.positive ? "#2f9e44" : "#d44000";
               return (
-                <div key={b} style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid rgba(212,64,0,.26)", background: "rgba(212,64,0,.06)", borderRadius: 20, padding: "6px 12px" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#d44000" }}>{BEHAVIOR_LABELS[b] || b}</span>
-                  <span style={{ fontSize: 10, fontWeight: 900, background: "#d44000", color: "#fff", borderRadius: 999, padding: "1px 6px" }}>{count}×</span>
+                <div key={b} style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${accentColor}44`, background: `${accentColor}0d`, borderRadius: 20, padding: "6px 12px" }}>
+                  <span style={{ fontSize: 13 }}>{meta?.emoji ?? "•"}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{meta?.label ?? b}</span>
+                  <span style={{ fontSize: 10, fontWeight: 900, background: accentColor, color: "#fff", borderRadius: 999, padding: "1px 6px" }}>{count}×</span>
                 </div>
               );
             })}
           </div>
           <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 12, lineHeight: 1.45 }}>
-            Ces comportements ont été renseignés {recentBehaviors.length} jour{recentBehaviors.length > 1 ? "s" : ""} sur 7. Limite-les les veilles de séances importantes.
+            Renseigné {recentBehaviors.length} jour{recentBehaviors.length > 1 ? "s" : ""} sur 7.
           </div>
         </div>
       )}

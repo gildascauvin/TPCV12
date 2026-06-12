@@ -11,7 +11,7 @@ const BEDTIME_OPTIONS = [
   { value: "after01", label: "Après 1h" },
 ];
 
-const BEHAVIORS = [
+const NEGATIVE_BEHAVIORS = [
   { key: "alcohol", emoji: "🍷", label: "Alcool" },
   { key: "late_sleep", emoji: "🌙", label: "Couché tardif" },
   { key: "tobacco", emoji: "🚬", label: "Tabac" },
@@ -20,6 +20,15 @@ const BEHAVIORS = [
   { key: "caffeine_late", emoji: "☕", label: "Caféine tard" },
   { key: "social_out", emoji: "🎉", label: "Sortie sociale" },
   { key: "travel", emoji: "✈️", label: "Voyage" },
+];
+
+const POSITIVE_BEHAVIORS = [
+  { key: "stretching", emoji: "🧘", label: "Stretching" },
+  { key: "cold_shower", emoji: "🧊", label: "Douche froide" },
+  { key: "reading", emoji: "📖", label: "Lecture" },
+  { key: "meditation", emoji: "🧘‍♂️", label: "Méditation" },
+  { key: "hydration", emoji: "💧", label: "Bonne hydratation" },
+  { key: "walk", emoji: "🚶", label: "Marche détente" },
 ];
 
 const WQ_TOTAL = 5;
@@ -70,7 +79,9 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
     if (step > 0) setStep((s) => s - 1);
   }
 
-  const penalty = Math.min(behaviors.length * 3, 15);
+  const negativeCount = behaviors.filter(b => NEGATIVE_BEHAVIORS.some(n => n.key === b)).length;
+  const positiveCount = behaviors.filter(b => POSITIVE_BEHAVIORS.some(p => p.key === b)).length;
+  const penalty = Math.min(negativeCount * 3, 15);
 
   return (
     <div
@@ -191,18 +202,34 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
         {step === 3 && (
           <div>
             <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
-              🔍 Comportements d'hier soir
+              🔍 Comportements d'hier
             </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
+            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
               Coche tout ce qui s'applique
             </div>
-            {behaviors.length > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "8px 12px", marginBottom: 14, fontSize: 12, background: "rgba(200,30,30,0.08)", border: "0.5px solid rgba(200,30,30,0.22)", color: "#c81e1e" }}>
-                ⚠ −{penalty} pts sur le score
+
+            {/* Score impact badges */}
+            {(penalty > 0 || positiveCount > 0) && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                {penalty > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, background: "rgba(200,30,30,0.08)", border: "0.5px solid rgba(200,30,30,0.22)", color: "#c81e1e" }}>
+                    ⚠ −{penalty} pts
+                  </div>
+                )}
+                {positiveCount > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, background: "rgba(47,158,68,0.08)", border: "0.5px solid rgba(47,158,68,0.30)", color: "#2f9e44" }}>
+                    ✓ +{Math.min(positiveCount * 2, 10)} pts
+                  </div>
+                )}
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {BEHAVIORS.map((b) => {
+
+            {/* Negative section */}
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
+              Ce qui m'a pénalisé
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
+              {NEGATIVE_BEHAVIORS.map((b) => {
                 const checked = behaviors.includes(b.key);
                 return (
                   <button
@@ -213,7 +240,32 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
                       border: checked ? "1px solid rgba(200,30,30,0.40)" : "1px solid rgba(0,0,0,0.10)",
                       background: checked ? "rgba(200,30,30,0.08)" : "#fff",
                       color: checked ? "#c81e1e" : "#7b7f82",
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all 0.14s",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Positive section */}
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
+              Ce que j'ai fait de bien
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+              {POSITIVE_BEHAVIORS.map((b) => {
+                const checked = behaviors.includes(b.key);
+                return (
+                  <button
+                    key={b.key}
+                    onClick={() => toggleBehavior(b.key)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 10,
+                      border: checked ? "1px solid rgba(47,158,68,0.40)" : "1px solid rgba(0,0,0,0.10)",
+                      background: checked ? "rgba(47,158,68,0.08)" : "#fff",
+                      color: checked ? "#2f9e44" : "#7b7f82",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
                     }}
                   >
                     <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}

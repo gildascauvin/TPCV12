@@ -1,3 +1,7 @@
+export const POSITIVE_BEHAVIOR_KEYS = new Set([
+  "stretching", "cold_shower", "reading", "meditation", "hydration", "walk",
+]);
+
 export function computeWellnessScore(
   sleep: number,
   stress: number,
@@ -8,8 +12,11 @@ export function computeWellnessScore(
   const base_score = Math.round(
     ((sleep + (10 - stress) + recovery + motivation) / 40) * 100
   );
-  const penalty = Math.min(behaviors.length * 3, 15);
-  const score = Math.max(0, base_score - penalty);
+  const negatives = behaviors.filter(b => !POSITIVE_BEHAVIOR_KEYS.has(b));
+  const positives = behaviors.filter(b => POSITIVE_BEHAVIOR_KEYS.has(b));
+  const penalty = Math.min(negatives.length * 3, 15);
+  const bonus = Math.min(positives.length * 2, 10);
+  const score = Math.max(0, Math.min(100, base_score - penalty + bonus));
   return { base_score, score };
 }
 
