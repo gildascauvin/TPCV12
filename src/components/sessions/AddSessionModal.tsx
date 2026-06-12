@@ -12,12 +12,13 @@ interface AddSessionModalProps {
   date: string;
   session?: Session;
   initialName?: string;
+  hideDate?: boolean;
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function AddSessionModal({ date, session, initialName, onSave, onDelete, onClose }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, onSave, onDelete, onClose }: AddSessionModalProps) {
   const [name, setName] = useState(session?.name ?? initialName ?? "");
   const [selectedDate, setSelectedDate] = useState(session?.date ?? date);
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
@@ -103,13 +104,15 @@ export default function AddSessionModal({ date, session, initialName, onSave, on
         )}
 
         {/* Date */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
-          <input
-            type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-            style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
-          />
-        </div>
+        {!hideDate && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
+            <input
+              type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+            />
+          </div>
+        )}
 
         {/* Nom */}
         <div style={{ marginBottom: 16 }}>
