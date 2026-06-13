@@ -67,15 +67,24 @@ const BEDTIME_OPTIONS = [
   { value: "after01",  label: "Après 1h" },
 ];
 
-const BEHAVIORS = [
-  { key: "alcohol",      emoji: "🍷", label: "Alcool" },
-  { key: "late_sleep",   emoji: "🌙", label: "Couché tardif" },
-  { key: "tobacco",      emoji: "🚬", label: "Tabac" },
-  { key: "screen_late",  emoji: "📱", label: "Écran tard" },
-  { key: "heavy_meal",   emoji: "🍔", label: "Repas lourd" },
-  { key: "caffeine_late",emoji: "☕", label: "Caféine tard" },
-  { key: "social_out",   emoji: "🎉", label: "Sortie sociale" },
-  { key: "travel",       emoji: "✈️", label: "Voyage" },
+const NEGATIVE_BEHAVIORS = [
+  { key: "alcohol",       emoji: "🍷", label: "Alcool" },
+  { key: "late_sleep",    emoji: "🌙", label: "Couché tardif" },
+  { key: "tobacco",       emoji: "🚬", label: "Tabac" },
+  { key: "screen_late",   emoji: "📱", label: "Écran tard" },
+  { key: "heavy_meal",    emoji: "🍔", label: "Repas lourd" },
+  { key: "caffeine_late", emoji: "☕", label: "Caféine tard" },
+  { key: "social_out",    emoji: "🎉", label: "Sortie sociale" },
+  { key: "travel",        emoji: "✈️", label: "Voyage" },
+];
+
+const POSITIVE_BEHAVIORS = [
+  { key: "stretching",  emoji: "🧘",   label: "Stretching" },
+  { key: "cold_shower", emoji: "🧊",   label: "Douche froide" },
+  { key: "reading",     emoji: "📖",   label: "Lecture" },
+  { key: "meditation",  emoji: "🧘‍♂️", label: "Méditation" },
+  { key: "hydration",   emoji: "💧",   label: "Bonne hydratation" },
+  { key: "walk",        emoji: "🚶",   label: "Marche détente" },
 ];
 
 const PRICING_ONBOARDING = {
@@ -1501,17 +1510,31 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div>
                 <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>🔍 Comportements d'hier soir</div>
                 <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 12 }}>Coche tout ce qui s'applique</div>
-                {wBehaviors.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "7px 12px", marginBottom: 12, fontSize: 12, background: "rgba(200,30,30,.08)", border: "0.5px solid rgba(200,30,30,.22)", color: "#c81e1e" }}>
-                    ⚠ −{wBehaviorPenalty} pts sur le score
-                  </div>
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                  {BEHAVIORS.map(b => {
+
+                <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#c81e1e", marginBottom: 8 }}>
+                  Ce qui m'a pénalisé
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
+                  {NEGATIVE_BEHAVIORS.map(b => {
                     const checked = wBehaviors.includes(b.key);
                     return (
                       <button key={b.key} onClick={() => toggleBehavior(b.key)}
                         style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 10, border: checked ? "1px solid rgba(200,30,30,.40)" : "1px solid rgba(0,0,0,.10)", background: checked ? "rgba(200,30,30,.08)" : "#fff", color: checked ? "#c81e1e" : "#62686e", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all .14s" }}>
+                        <span style={{ fontSize: 15 }}>{b.emoji}</span>{b.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#2f9e44", marginBottom: 8 }}>
+                  Ce que j'ai fait de bien
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+                  {POSITIVE_BEHAVIORS.map(b => {
+                    const checked = wBehaviors.includes(b.key);
+                    return (
+                      <button key={b.key} onClick={() => toggleBehavior(b.key)}
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 10, border: checked ? "1px solid rgba(47,158,68,.40)" : "1px solid rgba(0,0,0,.10)", background: checked ? "rgba(47,158,68,.08)" : "#fff", color: checked ? "#2f9e44" : "#62686e", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left", transition: "all .14s" }}>
                         <span style={{ fontSize: 15 }}>{b.emoji}</span>{b.label}
                       </button>
                     );
@@ -1534,7 +1557,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
               <button onClick={() => wStep > 0 ? setWStep(s => s - 1) : back()}
                 style={{ flex: 1, height: 44, borderRadius: 12, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                 ← Retour
