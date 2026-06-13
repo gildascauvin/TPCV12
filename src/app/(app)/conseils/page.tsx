@@ -112,22 +112,22 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
       <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
         <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
         <div style={{ position: "relative", zIndex: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
-          <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", marginBottom: 8 }}>Données en cours de collecte</div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,.60)", lineHeight: 1.5, marginBottom: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
+          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", marginBottom: 8 }}>Données en cours de collecte</div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", lineHeight: 1.5, marginBottom: 18 }}>
             {remaining > 0
               ? `Renseigne ton wellness ${remaining} jour${remaining > 1 ? "s" : ""} de plus pour voir l'impact réel de tes comportements.`
               : "Continue à renseigner ton wellness — les corrélations apparaîtront bientôt."}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             {["🧘 Stretching", "🧊 Douche froide", "📖 Lecture", "💧 Hydratation", "🍷 Alcool", "📱 Écran tard"].map(b => (
-              <div key={b} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: "5px 11px", fontSize: 12, color: "rgba(255,255,255,.50)" }}>{b}</div>
+              <div key={b} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: "5px 11px", fontSize: 13, color: "rgba(255,255,255,.50)" }}>{b}</div>
             ))}
           </div>
           <div style={{ marginTop: 14, height: 4, background: "rgba(255,255,255,.08)", borderRadius: 2, overflow: "hidden" }}>
             <div style={{ height: "100%", width: `${Math.min(filledDays / MIN_DAYS * 100, 100)}%`, background: "#d44000", borderRadius: 2 }} />
           </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 6 }}>{filledDays}/{MIN_DAYS} jours collectés</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", marginTop: 6 }}>{filledDays}/{MIN_DAYS} jours collectés</div>
         </div>
       </div>
     );
@@ -143,26 +143,26 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
-            <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet sur ton wellness du lendemain</div>
+            <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
+            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet sur ton wellness du lendemain</div>
           </div>
-          <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
+          <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
         </div>
 
         {/* En-têtes colonnes */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center", marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-          <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>Comportement</div>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>Comportement</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2px 1fr", alignItems: "center" }}>
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#d10000", textAlign: "right" as const }}>Pénalise</div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#d10000", textAlign: "right" as const }}>Pénalise</div>
             <div />
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#2f9e44" }}>Aide</div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#2f9e44" }}>Aide</div>
           </div>
-          <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)", textAlign: "right" as const }}>Impact</div>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)", textAlign: "right" as const }}>Impact</div>
         </div>
 
         {/* Lignes */}
-        <div style={{ display: "flex", flexDirection: "column" as const, gap: 10 }}>
+        <div style={{ display: "flex", flexDirection: "column" as const, gap: 12 }}>
           {correlations.map(c => {
             const pct = Math.min(Math.abs(c.impact) / maxAbs * 100, 100);
             const isPositive = c.impact > 0;
@@ -172,8 +172,8 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
             const textColor  = isNeutral ? "rgba(255,255,255,.35)" : barColor;
             return (
               <div key={c.key} style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <span style={{ fontSize: 15, flexShrink: 0 }}>{c.emoji}</span>
+                <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: "rgba(255,255,255,.85)" }}>{c.label}</span>
                 </div>
                 <div style={{ position: "relative" as const, height: 6, background: "rgba(255,255,255,.08)", borderRadius: 3 }}>
@@ -182,7 +182,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
                     <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 3, background: barColor, width: `${pct / 2}%`, ...(isPositive ? { left: "50%" } : { right: "50%" }) }} />
                   )}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 900, color: textColor, textAlign: "right" as const, letterSpacing: "-0.02em" }}>{impactStr} pts</div>
+                <div style={{ fontSize: 13, fontWeight: 900, color: textColor, textAlign: "right" as const, letterSpacing: "-0.02em" }}>{impactStr} pts</div>
               </div>
             );
           })}
@@ -190,9 +190,9 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
 
         {/* Conseil personnalisé */}
         {(bestHelper || worstHurt) && (
-          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14, display: "flex", flexDirection: "column" as const, gap: 7 }}>
+          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14, display: "flex", flexDirection: "column" as const, gap: 8 }}>
             {bestHelper && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.45 }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
                 <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
                 {" "}améliore ton wellness du lendemain de{" "}
@@ -200,7 +200,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
               </div>
             )}
             {worstHurt && (
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.45 }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
                 <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
                 {" "}pénalise ton wellness du lendemain de{" "}
@@ -210,7 +210,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
           </div>
         )}
 
-        <div style={{ marginTop: 12, fontSize: 11, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · corrélation J→J+1</div>
+        <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · corrélation J→J+1</div>
       </div>
     </div>
   );
@@ -303,14 +303,14 @@ export default async function ConseilsPage() {
 
       {/* Header */}
       <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "#8a8f94", marginBottom: 4 }}>
+        <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "#8a8f94", marginBottom: 4 }}>
           Conseils
         </div>
-        <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>
+        <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>
           {profile?.name ? `Bonjour, ${profile.name.split(" ")[0]}` : "Analyse & conseils"}
         </div>
         {profile?.sport && (
-          <div style={{ fontSize: 13, color: "#62686e", marginTop: 4 }}>
+          <div style={{ fontSize: 15, color: "#62686e", marginTop: 4 }}>
             {profile.sport}{profile.objective ? ` · ${OBJECTIVE_LABELS[profile.objective] ?? profile.objective}` : ""}
           </div>
         )}
@@ -329,12 +329,12 @@ export default async function ConseilsPage() {
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", marginBottom: 6, position: "relative" as const, zIndex: 2 }}>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.045em" }}>Ta signature de fatigue</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginTop: 4 }}>
+            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>Ta signature de fatigue</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginTop: 4 }}>
               28 jours · Nerveux = intensité, Musculaire = durée & volume, Récup = wellness ajusté
             </div>
           </div>
-          <div style={{ background: sig.signals ? "#d44000" : "rgba(255,255,255,.10)", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 10, fontWeight: 1000, whiteSpace: "nowrap" as const, flexShrink: 0 }}>
+          <div style={{ background: sig.signals ? "#d44000" : "rgba(255,255,255,.10)", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 1000, whiteSpace: "nowrap" as const, flexShrink: 0 }}>
             {sig.signals ? `${sig.signals} séances` : "À construire"}
           </div>
         </div>
@@ -348,8 +348,8 @@ export default async function ConseilsPage() {
             {/* Alerte récup */}
             {recoveryAlert && (
               <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(242,138,0,.12)", border: "1px solid rgba(242,138,0,.35)", borderRadius: 14, padding: "10px 14px", marginTop: 14, marginBottom: 16 }}>
-                <span style={{ fontSize: 15, flexShrink: 0 }}>⚠️</span>
-                <div style={{ fontSize: 12, color: "#f28a00", lineHeight: 1.45, fontWeight: 600 }}>
+                <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                <div style={{ fontSize: 14, color: "#f28a00", lineHeight: 1.45, fontWeight: 600 }}>
                   Séance planifiée demain — ta récupération est fragile. Considère de réduire l'intensité.
                 </div>
               </div>
@@ -366,19 +366,19 @@ export default async function ConseilsPage() {
                 return (
                   <div key={key}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
                         {icon} {label}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: info.color }}>{info.label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: info.color }}>{info.label}</span>
                         <div style={{ width: 7, height: 7, borderRadius: "50%", background: info.color, flexShrink: 0 }} />
                       </div>
                     </div>
                     <div style={{ position: "relative" as const, height: 7, background: "rgba(255,255,255,.10)", borderRadius: 4, marginBottom: 6, overflow: "hidden" }}>
                       <div style={{ position: "absolute" as const, left: 0, top: 0, height: "100%", width: `${Math.min(value, 100)}%`, background: info.color, borderRadius: 4, opacity: 0.85 }} />
                     </div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", lineHeight: 1.4 }}>{info.text}</div>
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,.28)", marginTop: 3, fontStyle: "italic" as const }}>{inputLine}</div>
+                    <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.4 }}>{info.text}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.28)", marginTop: 3, fontStyle: "italic" as const }}>{inputLine}</div>
                   </div>
                 );
               })}
@@ -386,35 +386,35 @@ export default async function ConseilsPage() {
 
             {/* Séparateur + bloc "Cette semaine" */}
             <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 20, paddingTop: 16 }}>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.38)", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.38)", marginBottom: 12 }}>
                 Cette semaine
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
-                  <span style={{ fontSize: 34, fontWeight: 1000, letterSpacing: "-0.055em", lineHeight: 1, color: sessionStatus.color }}>
+                  <span style={{ fontSize: 38, fontWeight: 1000, letterSpacing: "-0.055em", lineHeight: 1, color: sessionStatus.color }}>
                     {done7.length}
                   </span>
-                  <span style={{ fontSize: 13, color: "rgba(255,255,255,.45)" }}>
+                  <span style={{ fontSize: 14, color: "rgba(255,255,255,.45)" }}>
                     / {freqTarget} séances
                   </span>
                   {avgRpe !== null && (
-                    <span style={{ fontSize: 13, color: "rgba(255,255,255,.38)" }}>
+                    <span style={{ fontSize: 14, color: "rgba(255,255,255,.38)" }}>
                       · RPE moy. {avgRpe}
                     </span>
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 900, color: sessionStatus.color, background: `${sessionStatus.color}22`, border: `1px solid ${sessionStatus.color}44`, borderRadius: 999, padding: "4px 10px", letterSpacing: "0.08em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const }}>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: sessionStatus.color, background: `${sessionStatus.color}22`, border: `1px solid ${sessionStatus.color}44`, borderRadius: 999, padding: "4px 10px", letterSpacing: "0.08em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const }}>
                     {sessionStatus.label}
                   </div>
                   {loadTrend !== null && (
-                    <div style={{ fontSize: 11, fontWeight: 700, color: Math.abs(loadTrend) < 15 ? "rgba(255,255,255,.38)" : loadTrend > 0 ? "#f28a00" : "#2f9e44", whiteSpace: "nowrap" as const }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: Math.abs(loadTrend) < 15 ? "rgba(255,255,255,.38)" : loadTrend > 0 ? "#f28a00" : "#2f9e44", whiteSpace: "nowrap" as const }}>
                       {Math.abs(loadTrend) < 15 ? "→ Stable" : loadTrend > 0 ? `↑ +${loadTrend}%` : `↓ ${loadTrend}%`} vs sem. préc.
                     </div>
                   )}
                 </div>
               </div>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,.62)", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.62)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 800, color: "#d44000" }}>→</span> {loadAdviceShort}
               </div>
             </div>
@@ -428,7 +428,7 @@ export default async function ConseilsPage() {
       {/* Comportements — 7 jours */}
       {allRecentBehaviorKeys.length > 0 && (
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 18, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: ".10em", textTransform: "uppercase" as const, color: "#62686e", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: ".10em", textTransform: "uppercase" as const, color: "#62686e", marginBottom: 12 }}>
             🔍 Comportements — 7 jours
           </div>
           <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
@@ -437,15 +437,15 @@ export default async function ConseilsPage() {
               const meta  = BEHAVIOR_META[b];
               const accentColor = meta?.positive ? "#2f9e44" : "#d44000";
               return (
-                <div key={b} style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${accentColor}44`, background: `${accentColor}0d`, borderRadius: 20, padding: "6px 12px" }}>
-                  <span style={{ fontSize: 13 }}>{meta?.emoji ?? "•"}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{meta?.label ?? b}</span>
-                  <span style={{ fontSize: 10, fontWeight: 900, background: accentColor, color: "#fff", borderRadius: 999, padding: "1px 6px" }}>{count}×</span>
+                <div key={b} style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${accentColor}44`, background: `${accentColor}0d`, borderRadius: 20, padding: "7px 13px" }}>
+                  <span style={{ fontSize: 15 }}>{meta?.emoji ?? "•"}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: accentColor }}>{meta?.label ?? b}</span>
+                  <span style={{ fontSize: 11, fontWeight: 900, background: accentColor, color: "#fff", borderRadius: 999, padding: "1px 6px" }}>{count}×</span>
                 </div>
               );
             })}
           </div>
-          <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 12, lineHeight: 1.45 }}>
+          <div style={{ fontSize: 13, color: "#8a8f94", marginTop: 12, lineHeight: 1.45 }}>
             Renseigné {recentBehaviors.length} jour{recentBehaviors.length > 1 ? "s" : ""} sur 7.
           </div>
         </div>
