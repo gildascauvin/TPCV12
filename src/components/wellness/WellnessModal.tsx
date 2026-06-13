@@ -97,6 +97,8 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
         padding: 34,
         width: "100%",
         maxWidth: 560,
+        maxHeight: "90vh",
+        overflowY: "auto",
         animation: "fadeIn 0.14s ease",
       }}>
         {/* Header */}
@@ -208,22 +210,6 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
               Coche tout ce qui s'applique
             </div>
 
-            {/* Score impact badges */}
-            {(penalty > 0 || positiveCount > 0) && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                {penalty > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, background: "rgba(200,30,30,0.08)", border: "0.5px solid rgba(200,30,30,0.22)", color: "#c81e1e" }}>
-                    ⚠ −{penalty} pts
-                  </div>
-                )}
-                {positiveCount > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, background: "rgba(47,158,68,0.08)", border: "0.5px solid rgba(47,158,68,0.30)", color: "#2f9e44" }}>
-                    ✓ +{Math.min(positiveCount * 2, 10)} pts
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Negative section */}
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
               Ce qui m'a pénalisé
@@ -300,7 +286,7 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
         )}
 
         {/* Navigation */}
-        <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
+        <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -34px 0", padding: "14px 34px 20px", background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)" }}>
           {step > 0 ? (
             <button
               onClick={goBack}
