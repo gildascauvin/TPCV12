@@ -180,7 +180,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
               onClick={handleClaimGuest}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
-              👤 S&apos;approprier →
+              👤 Utiliser ce programme →
             </button>
           </>
         )}
