@@ -18,6 +18,11 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const [userMode, setUserMode] = useState<"coach" | "athlete" | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
+  const [isEmbedded, setIsEmbedded] = useState(false);
+
+  useEffect(() => {
+    try { setIsEmbedded(window.self !== window.top); } catch { setIsEmbedded(true); }
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -39,7 +44,9 @@ export default function PublicProgramView({ program, coachName }: Props) {
       if (res.ok) {
         setClaimed(true);
         setTimeout(() => {
-          window.location.href = userMode === "coach" ? "/coach/planning" : "/today";
+          const dest = userMode === "coach" ? "/coach/planning" : "/today";
+          if (isEmbedded) window.open(dest, "_blank");
+          else window.location.href = dest;
         }, 1200);
       }
     } finally {
@@ -51,7 +58,8 @@ export default function PublicProgramView({ program, coachName }: Props) {
     if (typeof window !== "undefined") {
       localStorage.setItem("claim_program_id", program.id);
     }
-    window.location.href = "/register";
+    if (isEmbedded) window.open("/register", "_blank");
+    else window.location.href = "/register";
   }
 
   const weekAvgLoads = program.template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
@@ -64,7 +72,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
       {/* Topbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/" style={{ color: "#8a8f94", fontSize: 20, textDecoration: "none", padding: "4px 6px" }}>←</a>
+          {!isEmbedded && <a href="/" style={{ color: "#8a8f94", fontSize: 20, textDecoration: "none", padding: "4px 6px" }}>←</a>}
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
               {program.name}
@@ -74,7 +82,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             )}
           </div>
         </div>
-        <a href="/login" style={{ fontSize: 13, fontWeight: 600, color: "#8a8f94", textDecoration: "none" }}>Se connecter</a>
+        <a href="/login" target={isEmbedded ? "_blank" : undefined} rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: "#8a8f94", textDecoration: "none" }}>Se connecter</a>
       </div>
 
       {/* Week tabs */}
