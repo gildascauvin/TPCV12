@@ -38,5 +38,21 @@ export default async function PublicProgramPage({ params }: { params: Promise<{ 
     .eq("user_id", (program as Program).owner_id)
     .maybeSingle();
 
-  return <PublicProgramView program={program as Program} coachName={profile?.name ?? null} />;
+  const p = program as Program;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ExercisePlan",
+    name: p.name,
+    description: [p.sport, p.level, p.weeks_count ? `${p.weeks_count} semaines` : null, p.sessions_per_week ? `${p.sessions_per_week} séances/sem` : null].filter(Boolean).join(" · "),
+    url: `https://go.theperfclub.com/p/${p.id}`,
+    provider: { "@type": "Organization", name: "ThePerfClub", url: "https://go.theperfclub.com" },
+    ...(p.weeks_count && { additionalProperty: { "@type": "PropertyValue", name: "Durée", value: `${p.weeks_count} semaines` } }),
+  };
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <PublicProgramView program={p} coachName={profile?.name ?? null} />
+    </>
+  );
 }
