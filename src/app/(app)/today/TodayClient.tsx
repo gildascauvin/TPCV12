@@ -50,6 +50,20 @@ function formLabel(score: number | null) {
   return "Zone récupération";
 }
 
+function getContextualInsight(wellness: WellnessDaily): string {
+  const { sleep, stress, recovery, motivation } = wellness;
+  const signals = [
+    { value: sleep, low: sleep < 5, msg: "Sommeil court — intensité réduite recommandée" },
+    { value: 10 - stress, low: stress > 6, msg: "Stress élevé — favorise la récupération aujourd'hui" },
+    { value: recovery, low: recovery < 5, msg: "Récupération insuffisante — séance légère ou repos" },
+    { value: motivation, low: motivation < 5, msg: "Motivation en berne — commence doucement, ça viendra" },
+  ];
+  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
+  if (weakest) return weakest.msg;
+  if ((wellness.score ?? 0) >= 82) return "Tous les signaux au vert — fenêtre idéale pour t'entraîner";
+  return "Signaux stables — bon entraînement possible";
+}
+
 function getAdvice(wellness: WellnessDaily | null, sessions: Session[]) {
   const done = sessions.filter((s) => s.done && s.rpe && s.duration);
   const score = wellness?.score ?? null;
@@ -534,7 +548,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
-                  {wellnessFilledToday ? "Rempli aujourd'hui" : "Non renseigné · Appuie pour remplir"}
+                  {wellnessFilledToday && wellness ? getContextualInsight(wellness) : "Non renseigné · Appuie pour remplir"}
                 </div>
                 {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
