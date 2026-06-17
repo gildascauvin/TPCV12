@@ -174,6 +174,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         programName={step.programName ?? (step.meta.sport ? `Programme ${step.meta.sport}` : "Mon programme")}
         template={step.template}
         assignmentCount={step.assignmentCount ?? 0}
+        requireSubscription={requireSubscription}
         onBack={() => setStep(isEdit ? { type: "list" } : { type: "criteria" })}
         onSaveToLibrary={async (name, template) => {
           if (isEdit) await updateProgram(step.programId!, name, template);
@@ -319,11 +320,11 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                       Assigner →
                     </button>
                     <button
-                      onClick={() => gate(() => {
+                      onClick={() => {
                         const fakeMeta: ProgramMeta = { sport: p.sport ?? "", level: (p.level as ProgramMeta["level"]) ?? "intermediaire", focus: (p.focus as ProgramMeta["focus"]) ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"] };
                         const activeCount = assignments.filter(a => a.program_id === p.id && a.status === "active").length;
                         setStep({ type: "builder", template: p.template, meta: fakeMeta, programId: p.id, programName: p.name, assignmentCount: activeCount });
-                      })}
+                      }}
                       style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#555" }}
                     >
                       ✏️ Modifier

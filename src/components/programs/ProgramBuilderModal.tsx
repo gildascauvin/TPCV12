@@ -61,12 +61,14 @@ interface Props {
   programName: string;
   template: ProgramTemplate;
   assignmentCount?: number;
+  requireSubscription?: (fn: () => void) => void;
   onSaveToLibrary: (name: string, template: ProgramTemplate) => Promise<void>;
   onSaveAndAssign: (name: string, template: ProgramTemplate) => Promise<void>;
   onBack: () => void;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, requireSubscription, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
+  const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
   const [weekIdx, setWeekIdx] = useState(0);
@@ -174,7 +176,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 <span onClick={() => setWeekIdx(i)} style={{ fontSize: 11, fontWeight: isActive ? 800 : 500, color: isActive ? "#171b1f" : "#8a8f94", cursor: "pointer", padding: "0 4px" }}>S{i + 1}</span>
                 {isActive && template.weeks.length > 1 && (
                   <button
-                    onClick={e => { e.stopPropagation(); deleteWeek(i); }}
+                    onClick={e => { e.stopPropagation(); gate(() => deleteWeek(i)); }}
                     title="Supprimer cette semaine"
                     style={{ width: 14, height: 14, borderRadius: "50%", border: "none", background: "rgba(212,64,0,.15)", color: "#d44000", fontSize: 9, fontWeight: 900, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, flexShrink: 0 }}
                   >×</button>
@@ -183,7 +185,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             </div>
           );
         })}
-        <button onClick={addWeek} style={{ padding: "0 12px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8a8f94", display: "flex", alignItems: "flex-end", borderBottom: "2.5px solid transparent", flexShrink: 0 }}>+</button>
+        <button onClick={() => gate(addWeek)} style={{ padding: "0 12px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8a8f94", display: "flex", alignItems: "flex-end", borderBottom: "2.5px solid transparent", flexShrink: 0 }}>+</button>
       </div>
 
       {/* Warning: programme with active assignments */}
@@ -243,10 +245,10 @@ export default function ProgramBuilderModal({ programName: initialName, template
                   </div>
                 )}
                 {daySessions.map((s, sIdx) => (
-                  <SessionTemplateCard key={sIdx} session={s} onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })} />
+                  <SessionTemplateCard key={sIdx} session={s} onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))} />
                 ))}
                 <div
-                  onClick={() => addSession(day)}
+                  onClick={() => gate(() => addSession(day))}
                   style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
                 >
                   + Ajouter une séance
@@ -264,10 +266,10 @@ export default function ProgramBuilderModal({ programName: initialName, template
         </div>
       )}
       <div style={{ background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)", padding: "12px 18px 20px", display: "flex", gap: 10, flexShrink: 0 }}>
-        <button onClick={() => handleSave("library")} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "#faf9f7" : "#f5f5f5", color: name.trim() && !saving ? "#555" : "#aaa", fontWeight: 700, fontSize: 13 }}>
+        <button onClick={() => gate(() => handleSave("library"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "#faf9f7" : "#f5f5f5", color: name.trim() && !saving ? "#555" : "#aaa", fontWeight: 700, fontSize: 13 }}>
           {saving === "library" ? "Enregistrement…" : "💾 Enregistrer en librairie"}
         </button>
-        <button onClick={() => handleSave("assign")} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df", color: name.trim() && !saving ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, boxShadow: name.trim() && !saving ? "0 4px 12px rgba(212,64,0,.20)" : "none" }}>
+        <button onClick={() => gate(() => handleSave("assign"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df", color: name.trim() && !saving ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, boxShadow: name.trim() && !saving ? "0 4px 12px rgba(212,64,0,.20)" : "none" }}>
           {saving === "assign" ? "Assignation…" : "👤 Assigner →"}
         </button>
       </div>
