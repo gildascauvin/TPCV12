@@ -40,6 +40,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         boxShadow: "0 42px 120px rgba(0,0,0,.34)",
         borderRadius: 30, padding: 28,
         width: "100%", maxWidth: 400,
+        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         {/* Title */}
         <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>

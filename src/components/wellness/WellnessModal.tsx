@@ -99,7 +99,7 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
         maxWidth: 560,
         maxHeight: "90vh",
         overflowY: "auto",
-        animation: "fadeIn 0.14s ease",
+        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>

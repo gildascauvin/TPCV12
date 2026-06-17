@@ -87,6 +87,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         width: "100%", maxWidth: 480,
         maxHeight: "calc(100vh - 34px)",
         overflowY: "auto",
+        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
         overscrollBehavior: "contain",
         scrollbarWidth: "thin" as const,
       }}>

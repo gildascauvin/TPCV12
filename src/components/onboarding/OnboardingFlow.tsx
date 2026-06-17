@@ -298,6 +298,27 @@ function CheckItem({ text }: { text: string }) {
 
 /* ── WellnessRing (dark, identical to /today) ── */
 function WellnessRingDark({ score, size = 96 }: { score: number | null; size?: number }) {
+  const [animated, setAnimated] = useState(false);
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (score === null || !animated) return;
+    let current = 0;
+    const target = score;
+    const inc = target / 20;
+    const timer = setInterval(() => {
+      current += inc;
+      if (current >= target) { setDisplayScore(target); clearInterval(timer); return; }
+      setDisplayScore(Math.round(current));
+    }, 600 / 20);
+    return () => clearInterval(timer);
+  }, [animated, score]);
+
   const r = Math.round(size * 0.423);
   const circ = +(2 * Math.PI * r).toFixed(1);
   const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
@@ -309,12 +330,12 @@ function WellnessRingDark({ score, size = 96 }: { score: number | null; size?: n
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "all 0.5s ease" }} />
+          strokeDasharray={circ} strokeDashoffset={animated ? offset : circ} strokeLinecap="round"
+          style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
-          {score !== null ? score : "—"}
+          {score !== null ? displayScore : "—"}
         </span>
         <span style={{ fontSize: Math.round(size * 0.085), fontWeight: 1000, color: "rgba(255,255,255,0.58)", letterSpacing: "0.14em", marginTop: 2, textTransform: "uppercase" }}>
           wellness
@@ -845,6 +866,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
         {/* ── 1. ROLE ── */}
         {currentStep === "role" && (
           <div>
@@ -1575,7 +1597,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           emailSent ? <EmailSentScreen email={email} /> : (
             <div>
               <div style={{ fontSize: 13, color: "#8a8f94", marginBottom: 12 }}>Voici ton score de départ — il évoluera chaque jour.</div>
-              <div style={{ position: "relative", overflow: "hidden", borderRadius: 24, padding: 20, marginBottom: 16, background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", border: "1px solid rgba(255,255,255,0.13)", boxShadow: "0 28px 72px rgba(0,0,0,0.28)", color: "#fff" }}>
+              <div style={{ position: "relative", overflow: "hidden", borderRadius: 24, padding: 20, marginBottom: 16, background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", border: "1px solid rgba(255,255,255,0.13)", boxShadow: "0 28px 72px rgba(0,0,0,0.28)", color: "#fff", animation: "revealIn 0.35s cubic-bezier(0.2,0,0.38,0.9)" }}>
                 <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 260, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
                 <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 18, marginBottom: 14 }}>
                   <WellnessRingDark score={wScore} size={88} />
@@ -1961,6 +1983,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        </div>
       </div>
     </AuthBackground>
   );

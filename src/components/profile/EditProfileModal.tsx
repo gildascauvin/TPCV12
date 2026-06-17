@@ -60,6 +60,7 @@ export default function EditProfileModal({
         borderRadius: 30, paddingTop: 28, paddingLeft: 28, paddingRight: 28, paddingBottom: 0,
         width: "100%", maxWidth: 440,
         maxHeight: "calc(100vh - 34px)", overflowY: "auto",
+        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
         scrollbarWidth: "thin" as const,
       }}>
         <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>

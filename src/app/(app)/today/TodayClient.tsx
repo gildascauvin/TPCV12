@@ -105,6 +105,12 @@ function buildDotMap(sessions: Session[], anchor: string) {
 
 /* ─── WellnessRing inline (responsive size) ─── */
 function WellnessRingPOC({ score, size = 104 }: { score: number | null; size?: number }) {
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 80);
+    return () => clearTimeout(t);
+  }, []);
+
   const r = Math.round(size * 0.423);
   const circ = +(2 * Math.PI * r).toFixed(1);
   const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
@@ -116,8 +122,8 @@ function WellnessRingPOC({ score, size = 104 }: { score: number | null; size?: n
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "all 0.5s ease" }} />
+          strokeDasharray={circ} strokeDashoffset={animated ? offset : circ} strokeLinecap="round"
+          style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
@@ -156,8 +162,17 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
   onDelete: (s: Session) => void;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
-  // Single gauge: rpe if done, target_difficulty if planned
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
+  const [justDone, setJustDone] = useState(false);
+  const prevDoneRef = useRef(session.done);
+  useEffect(() => {
+    if (!prevDoneRef.current && session.done) {
+      setJustDone(true);
+      const t = setTimeout(() => setJustDone(false), 700);
+      return () => clearTimeout(t);
+    }
+    prevDoneRef.current = session.done;
+  }, [session.done]);
 
   return (
     <div
@@ -168,6 +183,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
         boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
         padding: 18, borderRadius: 24,
         transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        animation: justDone ? "sessionDone 0.7s ease" : undefined,
       }}
       onClick={() => onEdit(session)}
     >

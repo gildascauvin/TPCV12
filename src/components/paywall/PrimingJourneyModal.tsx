@@ -55,9 +55,11 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
   const overlay = (children: React.ReactNode) => (
     <div onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
-      <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto" }}>
+      <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
         <button onClick={onDismiss} style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.06)", border: "none", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
-        {children}
+        <div key={step} style={{ animation: "stepIn 0.2s ease" }}>
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -163,7 +165,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 24 }}>
         <div style={{ position: "relative", display: "inline-block" }}>
           <div style={{ width: 150, height: 150, borderRadius: "50%", background: "linear-gradient(135deg, rgba(212,64,0,.07), rgba(212,64,0,.03))", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 80, lineHeight: 1 }}>🔔</span>
+            <span style={{ fontSize: 80, lineHeight: 1, display: "inline-block", animation: "bellBounce 0.7s ease 0.3s both" }}>🔔</span>
           </div>
           <div style={{ position: "absolute", top: 6, right: 6, width: 36, height: 36, borderRadius: "50%", background: "#e03131", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#fff", boxShadow: "0 4px 14px rgba(224,49,49,.45)", border: "3px solid #fff" }}>
             1
