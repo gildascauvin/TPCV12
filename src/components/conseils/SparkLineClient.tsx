@@ -44,10 +44,11 @@ interface Props {
   animDelay?: number;
   metricType: "nervous" | "muscular" | "recovery";
   uid: string;
+  chartType?: "line" | "bars";
 }
 
 export default function SparkLineClient({
-  points, dates, color, maxVal, height = 52, animDelay = 0, metricType, uid,
+  points, dates, color, maxVal, height = 52, animDelay = 0, metricType, uid, chartType = "line",
 }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
@@ -153,29 +154,54 @@ export default function SparkLineClient({
 
         {/* Chart content — animated reveal via clipPath */}
         <g clipPath={`url(#sc-${uid})`}>
-          {segments.map((seg, si) => {
-            if (!seg.length) return null;
-            const ptStr = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-            const baseline = H - PAD_BOT;
-            const fillD = [
-              `M ${seg[0].x.toFixed(1)},${baseline}`,
-              `L ${seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" L ")}`,
-              `L ${seg[seg.length - 1].x.toFixed(1)},${baseline} Z`,
-            ].join(" ");
-            return (
-              <g key={si}>
-                <path d={fillD} fill={color} fillOpacity={0.12} />
-                {seg.length > 1
-                  ? <polyline points={ptStr} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                  : <circle cx={seg[0].x} cy={seg[0].y} r={3} fill={color} />}
-              </g>
-            );
-          })}
-          {lastPt && (
-            <circle
-              cx={lastPt.x.toFixed(1)} cy={lastPt.y.toFixed(1)}
-              r={4} fill={color} stroke="rgba(0,0,0,0.45)" strokeWidth={1.5}
-            />
+          {chartType === "bars" ? (
+            // Bar chart: one column per day
+            (() => {
+              const barW = Math.max(5, Math.floor(W / n * 0.55));
+              const baseline = H - PAD_BOT;
+              return points.map((v, i) => {
+                if (v === null || v === 0) return null;
+                const x = toX(i);
+                const y = toY(v);
+                const bh = baseline - y;
+                return (
+                  <rect
+                    key={i}
+                    x={(x - barW / 2).toFixed(1)} y={y.toFixed(1)}
+                    width={barW} height={bh > 0 ? bh.toFixed(1) : 0}
+                    rx={2} fill={color} fillOpacity={0.75}
+                  />
+                );
+              });
+            })()
+          ) : (
+            // Line + area chart
+            <>
+              {segments.map((seg, si) => {
+                if (!seg.length) return null;
+                const ptStr = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+                const baseline = H - PAD_BOT;
+                const fillD = [
+                  `M ${seg[0].x.toFixed(1)},${baseline}`,
+                  `L ${seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" L ")}`,
+                  `L ${seg[seg.length - 1].x.toFixed(1)},${baseline} Z`,
+                ].join(" ");
+                return (
+                  <g key={si}>
+                    <path d={fillD} fill={color} fillOpacity={0.12} />
+                    {seg.length > 1
+                      ? <polyline points={ptStr} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                      : <circle cx={seg[0].x} cy={seg[0].y} r={3} fill={color} />}
+                  </g>
+                );
+              })}
+              {lastPt && (
+                <circle
+                  cx={lastPt.x.toFixed(1)} cy={lastPt.y.toFixed(1)}
+                  r={4} fill={color} stroke="rgba(0,0,0,0.45)" strokeWidth={1.5}
+                />
+              )}
+            </>
           )}
         </g>
 
@@ -190,8 +216,8 @@ export default function SparkLineClient({
           />
         )}
 
-        {/* Hover dot */}
-        {cursorX !== null && hIdx !== null && hVal !== null && (
+        {/* Hover dot — only for line charts */}
+        {chartType === "line" && cursorX !== null && hIdx !== null && hVal !== null && (
           <circle
             cx={cursorX.toFixed(1)}
             cy={toY(hVal).toFixed(1)}

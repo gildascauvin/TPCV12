@@ -106,8 +106,8 @@ function computeBehaviorCorrelations(wellness: WellnessDaily[]): BehaviorCorrela
 
 type DayPoint = {
   date: string;
-  nervousLoad: number;   // RPE × durée / 60 ce jour-là
-  muscularLoad: number;  // durée totale séances ce jour-là (minutes)
+  nervousLoad: number;   // avgRPE × 10 ce jour-là (0–100), signal d'intensité pure
+  muscularLoad: number;  // durée totale séances ce jour-là (minutes), signal de volume
   recovery: number | null; // wellness score ce jour-là
 };
 
@@ -116,9 +116,9 @@ function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDaily[], da
   for (let i = days - 1; i >= 0; i--) {
     const date = daysAgoStr(i);
     const daySessions = sessions.filter(s => s.date === date && s.done && s.rpe && s.duration);
-    const nervousLoad = Math.round(
-      Math.min(100, daySessions.reduce((acc, s) => acc + (s.rpe || 0) * (s.duration || 0) / 60, 0))
-    );
+    const rpeValues = daySessions.map(s => s.rpe || 0).filter(r => r > 0);
+    const avgRpe = rpeValues.length > 0 ? rpeValues.reduce((a, b) => a + b, 0) / rpeValues.length : 0;
+    const nervousLoad = Math.round(avgRpe * 10);
     const muscularLoad = Math.min(180, daySessions.reduce((acc, s) => acc + (s.duration || 0), 0));
     const w = wellness.find(wd => wd.date === date);
     const recovery = (w?.score ?? w?.base_score) ?? null;
@@ -316,7 +316,7 @@ export default async function ConseilsPage() {
 
   // Série temporelle pour sparklines
   const timeSeries = buildDailyTimeSeries(allSessions, allWellness);
-  const maxNervous  = Math.max(...timeSeries.map(p => p.nervousLoad), 15);
+  const maxNervous  = Math.max(...timeSeries.map(p => p.nervousLoad), 40);
   const maxMuscular = Math.max(...timeSeries.map(p => p.muscularLoad), 60);
 
   // Conseil entraînement
@@ -397,32 +397,33 @@ export default async function ConseilsPage() {
                 info: { label: string; color: string; text: string };
                 sparkPoints: (number | null)[];
                 maxVal: number; sparkColor: string; footer: string; animDelay: number;
+                chartType: "line" | "bars";
               }> = [
                 {
                   key: "nervous",  icon: "⚡", label: "Coût nerveux",    info: nervousInfo,
                   sparkPoints: timeSeries.map(p => p.nervousLoad),
                   maxVal: maxNervous,  sparkColor: "#f04a08",
-                  footer: `${sig.hard} séance${sig.hard !== 1 ? "s" : ""} RPE ≥ 8 · RPE moy. ${sig.avgRpe} sur 28j`,
-                  animDelay: 0,
+                  footer: `RPE moy. ${sig.avgRpe} · ${sig.hard} séance${sig.hard !== 1 ? "s" : ""} RPE ≥ 8 sur 28j`,
+                  animDelay: 0, chartType: "line",
                 },
                 {
                   key: "muscular", icon: "💪", label: "Coût musculaire", info: muscularInfo,
                   sparkPoints: timeSeries.map(p => p.muscularLoad),
                   maxVal: maxMuscular, sparkColor: "#f28a00",
                   footer: `${sig.long} séance${sig.long !== 1 ? "s" : ""} ≥ 70 min sur 28j`,
-                  animDelay: 150,
+                  animDelay: 150, chartType: "bars",
                 },
                 {
                   key: "recovery", icon: "🌿", label: "Récupération",    info: recoveryInfo,
                   sparkPoints: timeSeries.map(p => p.recovery),
                   maxVal: 100,         sparkColor: recoveryInfo.color,
                   footer: "Wellness quotidien · ● = aujourd'hui",
-                  animDelay: 300,
+                  animDelay: 300, chartType: "line",
                 },
               ];
               return (
                 <div style={{ display: "flex", flexDirection: "column" as const, gap: 18, marginTop: recoveryAlert ? 0 : 18 }}>
-                  {rows.map(({ key, icon, label, info, sparkPoints, maxVal, sparkColor, footer, animDelay }) => (
+                  {rows.map(({ key, icon, label, info, sparkPoints, maxVal, sparkColor, footer, animDelay, chartType }) => (
                     <div key={key}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                         <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
@@ -437,7 +438,7 @@ export default async function ConseilsPage() {
                         <SparkLineClient
                           points={sparkPoints} dates={dates} color={sparkColor}
                           maxVal={maxVal} height={52} animDelay={animDelay}
-                          metricType={key} uid={key}
+                          metricType={key} uid={key} chartType={chartType}
                         />
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
