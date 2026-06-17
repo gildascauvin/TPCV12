@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
   const { data: record } = await supabase
     .from("coach_athletes")
-    .select("id, coach_id, user_id")
+    .select("id, coach_id, user_id, invite_email")
     .eq("id", coachAthleteId)
     .eq("coach_id", user.id)
     .single();
@@ -23,6 +23,15 @@ export async function POST(req: Request) {
   // Si vrai sportif : délier le profil
   if (record.user_id) {
     await admin.from("profiles").update({ invited_by_coach_id: null }).eq("user_id", record.user_id);
+  }
+
+  // Si invitation pending : annuler l'invite pour éviter la re-création du placeholder
+  if (record.invite_email) {
+    await admin.from("coach_invites")
+      .delete()
+      .eq("coach_id", user.id)
+      .eq("email", record.invite_email)
+      .eq("status", "pending");
   }
 
   // Supprimer le record coach_athletes (cascade supprime les coach_sessions)

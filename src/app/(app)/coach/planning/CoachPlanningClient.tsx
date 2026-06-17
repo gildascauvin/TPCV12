@@ -399,8 +399,8 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
       <ProgramBanner
         program={activeProgram}
         currentWeek={activeProgramWeek}
-        onEdit={activeProgram ? () => requireSubscription(() => setShowLibrary(true)) : undefined}
-        onOpenLibrary={() => requireSubscription(() => setShowLibrary(true))}
+        onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
+        onOpenLibrary={() => setShowLibrary(true)}
       />
 
       {/* Empty state — aucune séance cette semaine pour cet athlète */}
@@ -723,6 +723,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
       {showLibrary && (
         <ProgramLibraryPage
           athletes={athletes}
+          requireSubscription={requireSubscription}
           onClose={() => setShowLibrary(false)}
         />
       )}

@@ -489,8 +489,8 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
       <ProgramBanner
         program={activeProgram}
         currentWeek={activeProgramWeek}
-        onEdit={activeProgram ? () => requireSubscription(() => setShowLibrary(true)) : undefined}
-        onOpenLibrary={() => requireSubscription(() => setShowLibrary(true))}
+        onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
+        onOpenLibrary={() => setShowLibrary(true)}
       />
 
       <div ref={weekGridRef}>
@@ -705,6 +705,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
           selfUserId={userId}
           activeProgram={activeProgram}
           activeProgramWeek={activeProgramWeek}
+          requireSubscription={requireSubscription}
           onClose={async () => { setShowLibrary(false); await fetchActiveProgram(); router.refresh(); }}
         />
       )}

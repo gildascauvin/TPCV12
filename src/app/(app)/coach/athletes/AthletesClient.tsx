@@ -93,10 +93,12 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-            {athletes.map(a => (
+            {athletes.map(a => {
+              const isPending = !a.user_id && !!a.invite_email;
+              return (
               <div key={a.id} style={{
-                background: a.user_id ? "#fff" : "rgba(255,255,255,.72)",
-                border: a.user_id ? "1px solid rgba(47,158,68,.20)" : "1px solid rgba(34,54,38,.12)",
+                background: a.user_id ? "#fff" : isPending ? "rgba(255,245,230,.85)" : "rgba(255,255,255,.72)",
+                border: a.user_id ? "1px solid rgba(47,158,68,.20)" : isPending ? "1px solid rgba(242,138,0,.25)" : "1px solid rgba(34,54,38,.12)",
                 borderRadius: 26, padding: 18,
                 boxShadow: a.user_id ? "0 8px 24px rgba(47,158,68,.07)" : "0 12px 32px rgba(32,59,43,.08)",
               }}>
@@ -108,9 +110,15 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
                       {a.user_id && (
                         <div style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(47,158,68,.12)", color: "#2f9e44", fontSize: 9, fontWeight: 900, letterSpacing: "0.08em" }}>RÉEL</div>
                       )}
+                      {isPending && (
+                        <div style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(242,138,0,.12)", color: "#f28a00", fontSize: 9, fontWeight: 900, letterSpacing: "0.08em" }}>EN ATTENTE</div>
+                      )}
                     </div>
                     <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>
-                      {a.sport} · <span style={{ color: scoreColor(a.wellness_score), fontWeight: 700 }}>{statusLabel(a.wellness_score)}</span>
+                      {isPending
+                        ? <span style={{ color: "#f28a00" }}>{a.invite_email}</span>
+                        : <>{a.sport}{a.sport ? " · " : ""}<span style={{ color: scoreColor(a.wellness_score), fontWeight: 700 }}>{statusLabel(a.wellness_score)}</span></>
+                      }
                     </div>
                   </div>
                 </div>
@@ -126,11 +134,12 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
                     onClick={() => handleDelete(a)}
                     style={{ height: 38, paddingLeft: 12, paddingRight: 12, borderRadius: 11, background: "#fff8f8", border: "1px solid rgba(200,30,30,.20)", color: "#c81e1e", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deleting === a.id ? 0.5 : 1 }}
                   >
-                    {a.user_id ? "Retirer" : "Supprimer"}
+                    {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

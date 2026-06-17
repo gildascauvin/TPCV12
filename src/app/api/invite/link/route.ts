@@ -24,16 +24,32 @@ export async function POST() {
     admin.from("wellness_daily").select("score").eq("user_id", user.id).order("date", { ascending: false }).limit(1).single(),
   ]);
 
+  // Cherche un placeholder créé à l'invitation
+  const { data: placeholder } = await admin
+    .from("coach_athletes")
+    .select("id")
+    .eq("coach_id", invite.coach_id)
+    .eq("invite_email", user.email)
+    .maybeSingle();
+
   await Promise.all([
     admin.from("profiles").update({ invited_by_coach_id: invite.coach_id }).eq("user_id", user.id),
     admin.from("coach_invites").update({ status: "accepted" }).eq("id", invite.id),
-    admin.from("coach_athletes").insert({
-      coach_id: invite.coach_id,
-      user_id: user.id,
-      name: athleteProfile?.name || "Sportif",
-      sport: athleteProfile?.sport || "",
-      wellness_score: wellness?.score ?? 70,
-    }),
+    placeholder
+      ? admin.from("coach_athletes").update({
+          user_id: user.id,
+          name: athleteProfile?.name || "Sportif",
+          sport: athleteProfile?.sport || "",
+          wellness_score: wellness?.score ?? 70,
+          invite_email: null,
+        }).eq("id", placeholder.id)
+      : admin.from("coach_athletes").insert({
+          coach_id: invite.coach_id,
+          user_id: user.id,
+          name: athleteProfile?.name || "Sportif",
+          sport: athleteProfile?.sport || "",
+          wellness_score: wellness?.score ?? 70,
+        }),
   ]);
 
   return Response.json({ ok: true });

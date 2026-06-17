@@ -56,6 +56,7 @@ interface Props {
   selfUserId?: string;
   activeProgram?: Program | null;
   activeProgramWeek?: number;
+  requireSubscription?: (fn: () => void) => void;
   onClose: () => void;
 }
 
@@ -67,7 +68,8 @@ type UIStep =
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, onClose }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, onClose }: Props) {
+  const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
@@ -215,7 +217,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
         </div>
         <button
-          onClick={() => setStep({ type: "criteria" })}
+          onClick={() => gate(() => setStep({ type: "criteria" }))}
           style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
         >
           + Nouveau
@@ -292,7 +294,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                               <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{displayName}</span>
                               <span style={{ fontSize: 11, color: "#8a8f94" }}>Démarre {fmtDate(a.start_date)}</span>
                               <button
-                                onClick={() => stopAssignment(a.id)}
+                                onClick={() => gate(() => stopAssignment(a.id))}
                                 style={{ fontSize: 11, fontWeight: 600, color: "#d44000", background: "rgba(212,64,0,0.08)", border: "none", borderRadius: 8, padding: "3px 8px", cursor: "pointer" }}
                               >Arrêter ×</button>
                               {!isSelf && (
@@ -311,30 +313,30 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                   {/* Actions */}
                   <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
                     <button
-                      onClick={() => setStep({ type: "assign", programId: p.id, programName: p.name })}
+                      onClick={() => gate(() => setStep({ type: "assign", programId: p.id, programName: p.name }))}
                       style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                     >
                       Assigner →
                     </button>
                     <button
-                      onClick={() => {
+                      onClick={() => gate(() => {
                         const fakeMeta: ProgramMeta = { sport: p.sport ?? "", level: (p.level as ProgramMeta["level"]) ?? "intermediaire", focus: (p.focus as ProgramMeta["focus"]) ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"] };
                         const activeCount = assignments.filter(a => a.program_id === p.id && a.status === "active").length;
                         setStep({ type: "builder", template: p.template, meta: fakeMeta, programId: p.id, programName: p.name, assignmentCount: activeCount });
-                      }}
+                      })}
                       style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#555" }}
                     >
                       ✏️ Modifier
                     </button>
-                    <button onClick={() => duplicateProgram(p)} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}>⎘</button>
+                    <button onClick={() => gate(() => duplicateProgram(p))} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}>⎘</button>
                     <button
-                      onClick={() => toggleShare(p)}
+                      onClick={() => gate(() => toggleShare(p))}
                       title={p.is_public ? "Copier le lien" : "Partager ce programme"}
                       style={{ padding: "9px 10px", borderRadius: 10, border: `1.5px solid ${p.is_public ? "#d44000" : "rgba(0,0,0,.10)"}`, background: p.is_public ? "rgba(212,64,0,0.06)" : "#fff", fontSize: 14, cursor: "pointer", color: p.is_public ? "#d44000" : "#8a8f94" }}
                     >
                       {linkCopied[p.id] ? "✓" : "🔗"}
                     </button>
-                    <button onClick={() => deleteProgram(p.id)} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#d44000" }}>🗑</button>
+                    <button onClick={() => gate(() => deleteProgram(p.id))} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#d44000" }}>🗑</button>
                   </div>
                 </div>
               );

@@ -23,12 +23,10 @@ export async function POST(request: Request) {
   const coachId = coachProfile.user_id;
   if (coachId === user.id) return NextResponse.json({ ok: true });
 
-  const { data: existing } = await admin
-    .from("coach_athletes")
-    .select("id")
-    .eq("coach_id", coachId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: existing }, { data: placeholder }] = await Promise.all([
+    admin.from("coach_athletes").select("id").eq("coach_id", coachId).eq("user_id", user.id).maybeSingle(),
+    admin.from("coach_athletes").select("id").eq("coach_id", coachId).eq("invite_email", user.email ?? "").maybeSingle(),
+  ]);
 
   if (existing) return NextResponse.json({ ok: true, already_linked: true });
 
@@ -38,13 +36,21 @@ export async function POST(request: Request) {
   ]);
 
   await Promise.all([
-    admin.from("coach_athletes").insert({
-      coach_id: coachId,
-      user_id: user.id,
-      name: athleteProfile?.name || "Sportif",
-      sport: athleteProfile?.sport || "",
-      wellness_score: wellness?.score ?? 70,
-    }),
+    placeholder
+      ? admin.from("coach_athletes").update({
+          user_id: user.id,
+          name: athleteProfile?.name || "Sportif",
+          sport: athleteProfile?.sport || "",
+          wellness_score: wellness?.score ?? 70,
+          invite_email: null,
+        }).eq("id", placeholder.id)
+      : admin.from("coach_athletes").insert({
+          coach_id: coachId,
+          user_id: user.id,
+          name: athleteProfile?.name || "Sportif",
+          sport: athleteProfile?.sport || "",
+          wellness_score: wellness?.score ?? 70,
+        }),
     admin.from("profiles").update({ invited_by_coach_id: coachId }).eq("user_id", user.id),
   ]);
 

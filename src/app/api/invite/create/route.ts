@@ -53,9 +53,18 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, linked: true });
   }
 
-  // Pas encore inscrit → invite en attente
+  // Pas encore inscrit → invite en attente + placeholder dans coach_athletes
   const { error } = await admin.from("coach_invites").insert({ coach_id: user.id, email });
   if (error) return Response.json({ error: "Erreur lors de la création de l'invitation." }, { status: 500 });
+
+  await admin.from("coach_athletes").insert({
+    coach_id: user.id,
+    user_id: null,
+    name: email.split("@")[0],
+    sport: "",
+    wellness_score: 0,
+    invite_email: email,
+  });
 
   return Response.json({ ok: true, linked: false });
 }

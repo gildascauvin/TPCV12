@@ -60,7 +60,8 @@ export interface CoachAthlete {
   name: string;
   sport: string | null;
   wellness_score: number;
-  user_id: string | null; // null = démo, string = vrai sportif lié
+  user_id: string | null; // null = démo ou invite pending, string = vrai sportif lié
+  invite_email: string | null; // non-null = invitation pending (sportif pas encore inscrit)
   created_at: string;
 }
 
