@@ -689,16 +689,6 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
       {showWellness && (
         <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
-      {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
-      )}
-      {paywallStep === "paywall" && (
-        <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
-          onClose={() => setPaywallStep("priming")}
-          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
-      )}
-
       {showLibrary && (
         <ProgramLibraryPage
           athletes={[]}
@@ -708,6 +698,15 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
           requireSubscription={requireSubscription}
           onClose={async () => { setShowLibrary(false); await fetchActiveProgram(); router.refresh(); }}
         />
+      )}
+      {paywallStep === "priming" && (
+        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
     </>
   );

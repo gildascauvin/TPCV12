@@ -689,6 +689,13 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
       {showWelcome && (
         <WelcomeModal mode="coach" onClose={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }} />
       )}
+      {showLibrary && (
+        <ProgramLibraryPage
+          athletes={athletes}
+          requireSubscription={requireSubscription}
+          onClose={() => setShowLibrary(false)}
+        />
+      )}
       {paywallStep === "priming" && (
         <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
           onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
@@ -720,13 +727,6 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         />
       )}
 
-      {showLibrary && (
-        <ProgramLibraryPage
-          athletes={athletes}
-          requireSubscription={requireSubscription}
-          onClose={() => setShowLibrary(false)}
-        />
-      )}
     </>
   );
 }
