@@ -103,6 +103,89 @@ function computeBehaviorCorrelations(wellness: WellnessDaily[]): BehaviorCorrela
   return results.sort((a, b) => b.impact - a.impact);
 }
 
+type DayPoint = {
+  date: string;
+  nervousLoad: number;   // RPE × durée / 60 ce jour-là
+  muscularLoad: number;  // durée totale séances ce jour-là (minutes)
+  recovery: number | null; // wellness score ce jour-là
+};
+
+function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDaily[], days = 28): DayPoint[] {
+  const points: DayPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = daysAgoStr(i);
+    const daySessions = sessions.filter(s => s.date === date && s.done && s.rpe && s.duration);
+    const nervousLoad = Math.round(
+      Math.min(100, daySessions.reduce((acc, s) => acc + (s.rpe || 0) * (s.duration || 0) / 60, 0))
+    );
+    const muscularLoad = Math.min(180, daySessions.reduce((acc, s) => acc + (s.duration || 0), 0));
+    const w = wellness.find(wd => wd.date === date);
+    const recovery = (w?.score ?? w?.base_score) ?? null;
+    points.push({ date, nervousLoad, muscularLoad, recovery });
+  }
+  return points;
+}
+
+function SparkLine({ points, color, height = 52, maxVal }: {
+  points: (number | null)[];
+  color: string;
+  height?: number;
+  maxVal: number;
+}) {
+  const W = 400;
+  const H = height;
+  const n = points.length;
+  const PAD_TOP = 5;
+  const PAD_BOT = 2;
+
+  const toX = (i: number) => (i / (n - 1)) * W;
+  const toY = (v: number) => {
+    const pct = maxVal > 0 ? Math.min(v / maxVal, 1) : 0;
+    return H - PAD_BOT - pct * (H - PAD_TOP - PAD_BOT);
+  };
+
+  type Seg = { x: number; y: number }[];
+  const segments: Seg[] = [];
+  let cur: Seg = [];
+  points.forEach((v, i) => {
+    if (v === null) { if (cur.length) { segments.push(cur); cur = []; } }
+    else cur.push({ x: toX(i), y: toY(v) });
+  });
+  if (cur.length) segments.push(cur);
+
+  const lastNonNull = [...points].reverse().find(v => v !== null);
+  const lastIdx = points.length - 1 - [...points].reverse().findIndex(v => v !== null);
+  const lastX = toX(lastIdx);
+  const lastY = lastNonNull !== null && lastNonNull !== undefined ? toY(lastNonNull) : null;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height, display: "block" }} preserveAspectRatio="none">
+      <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+      {segments.map((seg, si) => {
+        if (!seg.length) return null;
+        const ptStr = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+        const baseline = H - PAD_BOT;
+        const fillD = [
+          `M ${seg[0].x.toFixed(1)},${baseline}`,
+          `L ${seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" L ")}`,
+          `L ${seg[seg.length - 1].x.toFixed(1)},${baseline} Z`,
+        ].join(" ");
+        return (
+          <g key={si}>
+            <path d={fillD} fill={color} fillOpacity={0.12} />
+            {seg.length > 1
+              ? <polyline points={ptStr} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              : <circle cx={seg[0].x} cy={seg[0].y} r={3} fill={color} />}
+          </g>
+        );
+      })}
+      {lastY !== null && (
+        <circle cx={lastX.toFixed(1)} cy={lastY.toFixed(1)} r={4} fill={color} stroke="rgba(0,0,0,0.45)" strokeWidth={1.5} />
+      )}
+    </svg>
+  );
+}
+
 function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
   const MIN_DAYS = 10;
 
@@ -289,6 +372,11 @@ export default async function ConseilsPage() {
   const sig = computeSignature(allSessions, wellnessScore ?? 75);
   const recoveryAlert = hasTomorrowSession && sig.recovery < 50 && sig.signals > 0;
 
+  // Série temporelle pour sparklines
+  const timeSeries = buildDailyTimeSeries(allSessions, allWellness);
+  const maxNervous  = Math.max(...timeSeries.map(p => p.nervousLoad), 15);
+  const maxMuscular = Math.max(...timeSeries.map(p => p.muscularLoad), 60);
+
   // Conseil entraînement
   const loadAdviceShort = done7.length >= freqTarget
     ? avgRpe !== null && avgRpe >= 8
@@ -331,7 +419,7 @@ export default async function ConseilsPage() {
           <div>
             <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>Ta signature de fatigue</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginTop: 4 }}>
-              28 jours · Nerveux = intensité, Musculaire = durée & volume, Récup = wellness ajusté
+              Évolution sur 28 jours · Nerveux = intensité, Musculaire = volume, Récup = wellness
             </div>
           </div>
           <div style={{ background: sig.signals ? "#d44000" : "rgba(255,255,255,.10)", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 1000, whiteSpace: "nowrap" as const, flexShrink: 0 }}>
@@ -355,34 +443,56 @@ export default async function ConseilsPage() {
               </div>
             )}
 
-            {/* 3 jauges */}
-            <div style={{ display: "flex", flexDirection: "column" as const, gap: 16, marginTop: recoveryAlert ? 0 : 18 }}>
-              {([
-                { key: "nervous",  label: "Coût nerveux",    dim: "cost"     as const, value: sig.nervous,  icon: "⚡", inputLine: `${sig.hard} séance${sig.hard !== 1 ? "s" : ""} RPE ≥ 8 · RPE moy. ${sig.avgRpe} sur 28j` },
-                { key: "muscular", label: "Coût musculaire", dim: "cost"     as const, value: sig.muscular, icon: "💪", inputLine: `${sig.long} séance${sig.long !== 1 ? "s" : ""} ≥ 70 min sur 28j` },
-                { key: "recovery", label: "Récupération",    dim: "recovery" as const, value: sig.recovery, icon: "🌿", inputLine: "Basé sur ton wellness ajusté par la charge récente" },
-              ]).map(({ key, label, dim, value, icon, inputLine }) => {
-                const info = sigDimInfo(dim, value);
-                return (
-                  <div key={key}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
-                        {icon} {label}
+            {/* 3 sparklines */}
+            {(() => {
+              const nervousInfo  = sigDimInfo("cost",     sig.nervous);
+              const muscularInfo = sigDimInfo("cost",     sig.muscular);
+              const recoveryInfo = sigDimInfo("recovery", sig.recovery);
+              const rows = [
+                {
+                  key: "nervous",  icon: "⚡", label: "Coût nerveux",    info: nervousInfo,
+                  sparkPoints: timeSeries.map(p => p.nervousLoad),
+                  maxVal: maxNervous,  sparkColor: "#f04a08",
+                  footer: `${sig.hard} séance${sig.hard !== 1 ? "s" : ""} RPE ≥ 8 · RPE moy. ${sig.avgRpe} sur 28j`,
+                },
+                {
+                  key: "muscular", icon: "💪", label: "Coût musculaire", info: muscularInfo,
+                  sparkPoints: timeSeries.map(p => p.muscularLoad),
+                  maxVal: maxMuscular, sparkColor: "#f28a00",
+                  footer: `${sig.long} séance${sig.long !== 1 ? "s" : ""} ≥ 70 min sur 28j`,
+                },
+                {
+                  key: "recovery", icon: "🌿", label: "Récupération",    info: recoveryInfo,
+                  sparkPoints: timeSeries.map(p => p.recovery),
+                  maxVal: 100,         sparkColor: recoveryInfo.color,
+                  footer: "Wellness quotidien · ● = aujourd'hui",
+                },
+              ];
+              return (
+                <div style={{ display: "flex", flexDirection: "column" as const, gap: 18, marginTop: recoveryAlert ? 0 : 18 }}>
+                  {rows.map(({ key, icon, label, info, sparkPoints, maxVal, sparkColor, footer }) => (
+                    <div key={key}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.70)" }}>
+                          {icon} {label}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: info.color }}>{info.label}</span>
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: info.color, flexShrink: 0 }} />
+                        </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: info.color }}>{info.label}</span>
-                        <div style={{ width: 7, height: 7, borderRadius: "50%", background: info.color, flexShrink: 0 }} />
+                      <div style={{ borderRadius: 10, overflow: "hidden", marginBottom: 6 }}>
+                        <SparkLine points={sparkPoints} color={sparkColor} maxVal={maxVal} height={52} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.4 }}>{info.text}</div>
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", marginLeft: 8, flexShrink: 0, fontStyle: "italic" as const }}>{footer}</div>
                       </div>
                     </div>
-                    <div style={{ position: "relative" as const, height: 7, background: "rgba(255,255,255,.10)", borderRadius: 4, marginBottom: 6, overflow: "hidden" }}>
-                      <div style={{ position: "absolute" as const, left: 0, top: 0, height: "100%", width: `${Math.min(value, 100)}%`, background: info.color, borderRadius: 4, opacity: 0.85 }} />
-                    </div>
-                    <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.4 }}>{info.text}</div>
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.28)", marginTop: 3, fontStyle: "italic" as const }}>{inputLine}</div>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Séparateur + bloc "Cette semaine" */}
             <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 20, paddingTop: 16 }}>
