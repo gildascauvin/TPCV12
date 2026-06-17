@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Program, SessionTemplate, WeekTemplate } from "@/types";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/ProgramBuilderModal";
@@ -21,7 +22,14 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const [isEmbedded, setIsEmbedded] = useState(false);
 
   useEffect(() => {
-    try { setIsEmbedded(window.self !== window.top); } catch { setIsEmbedded(true); }
+    let embedded = false;
+    try { embedded = window.self !== window.top; } catch { embedded = true; }
+    setIsEmbedded(embedded);
+    posthog.capture("program_page_viewed", {
+      program_id: program.id,
+      program_name: program.name,
+      is_embedded: embedded,
+    });
   }, []);
 
   useEffect(() => {
@@ -34,6 +42,12 @@ export default function PublicProgramView({ program, coachName }: Props) {
   }, []);
 
   async function handleClaimConnected() {
+    posthog.capture("program_cta_clicked", {
+      program_id: program.id,
+      program_name: program.name,
+      cta: "add_to_library",
+      is_embedded: isEmbedded,
+    });
     setClaiming(true);
     try {
       const res = await fetch("/api/programs/claim", {
@@ -42,6 +56,12 @@ export default function PublicProgramView({ program, coachName }: Props) {
         body: JSON.stringify({ programId: program.id }),
       });
       if (res.ok) {
+        posthog.capture("program_claimed", {
+          program_id: program.id,
+          program_name: program.name,
+          user_mode: userMode,
+          is_embedded: isEmbedded,
+        });
         setClaimed(true);
         setTimeout(() => {
           const dest = userMode === "coach" ? "/coach/planning" : "/today";
@@ -54,7 +74,13 @@ export default function PublicProgramView({ program, coachName }: Props) {
     }
   }
 
-  function handleClaimGuest() {
+  function handleClaimGuest(cta: "create_account" | "use_program") {
+    posthog.capture("program_cta_clicked", {
+      program_id: program.id,
+      program_name: program.name,
+      cta,
+      is_embedded: isEmbedded,
+    });
     if (typeof window !== "undefined") {
       localStorage.setItem("claim_program_id", program.id);
     }
@@ -179,13 +205,13 @@ export default function PublicProgramView({ program, coachName }: Props) {
         ) : (
           <>
             <button
-              onClick={handleClaimGuest}
+              onClick={() => handleClaimGuest("create_account")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
             >
               Créer un compte →
             </button>
             <button
-              onClick={handleClaimGuest}
+              onClick={() => handleClaimGuest("use_program")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
               👤 Utiliser ce programme →
