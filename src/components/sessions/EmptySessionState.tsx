@@ -35,6 +35,28 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
       >
         + {label} →
       </button>
+
+      <a
+        href="https://www.theperfclub.com/bibliotheque-de-programmes-dentrainement-sportif/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginTop: 12, padding: "12px 14px",
+          background: "#f7f8f9", borderRadius: 14,
+          border: "1px solid rgba(0,0,0,.08)", textDecoration: "none",
+          transition: "background .14s",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 20 }}>📚</span>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 12, fontWeight: 900, color: "#171b1f", lineHeight: 1.2 }}>Bibliothèque — 36 programmes testés</div>
+            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2 }}>Explorer les programmes →</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 16, color: "#8a8f94" }}>›</span>
+      </a>
     </div>
   );
 }

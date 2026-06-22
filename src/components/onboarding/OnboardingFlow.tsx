@@ -8,7 +8,8 @@ import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
 import Link from "next/link";
 import AuthBackground from "@/components/auth/AuthBackground";
-import PaywallModal from "@/components/paywall/PaywallModal";
+import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
+import WeekPreviewStepCoach from "@/components/onboarding/WeekPreviewStepCoach";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -19,12 +20,9 @@ type StepId =
   | "overload_2a" | "planning_2a" | "fatigue_2a"
   | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"
+  | "week_preview_2a" | "week_preview_2b"
   | "wellness_q"
-  | "account"
-  | "readiness_4a" | "preview_4b"
-  | "invite_share"
-  | "priming_value" | "priming_notif"
-  | "recap_5";
+  | "account";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -37,14 +35,18 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
 
 const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
-  "sport_2a", "level_2a", "goal_2a", "frustration_2a", "days_2a",
+  "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
+  "sport_2a", "level_2a", "goal_2a", "days_2a",
+  "week_preview_2a",
   "wellness_q", "account",
 ];
 const COACH_PATH: StepId[] = [
   "role", "value_slides",
-  "context_2b", "sport_2b", "count_2b", "challenge_2b", "tool_2b",
+  "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
+  "context_2b", "sport_2b", "count_2b", "tool_2b",
+  "week_preview_2b",
   "account",
 ];
 
@@ -86,39 +88,6 @@ const POSITIVE_BEHAVIORS = [
   { key: "hydration",   emoji: "💧",   label: "Bonne hydratation" },
   { key: "walk",        emoji: "🚶",   label: "Marche détente" },
 ];
-
-const PRICING_ONBOARDING = {
-  athlete: { monthly: 9,  annual: 59,  annualMonthly: "4,92" },
-  coach:   { monthly: 49, annual: 179, annualMonthly: "14,92" },
-};
-
-function scoreColor(s: number | null) {
-  if (s === null) return "rgba(255,255,255,0.18)";
-  return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000";
-}
-function formLabel(s: number | null) {
-  if (s === null) return "—";
-  if (s >= 82) return "Zone optimale";
-  if (s >= 65) return "Zone stable";
-  if (s >= 45) return "Zone prudente";
-  return "Zone récupération";
-}
-function getWellnessAdvice(score: number) {
-  return {
-    training: score >= 80
-      ? `Score excellent (${score}/100). Fenêtre idéale pour une séance qualitative.`
-      : score >= 65
-      ? `Forme correcte (${score}/100). Intensité normale.`
-      : score >= 45
-      ? `Fatigue modérée (${score}/100). Allège légèrement l'intensité.`
-      : `Score bas (${score}/100). Réduis l'intensité de 20–30%.`,
-    recovery: score >= 75
-      ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier."
-      : score >= 55
-      ? "Priorise hydratation 35ml/kg, protéines 1,6–2g/kg/j et coucher avant 23h."
-      : "Récupération prioritaire : sommeil, nutrition simple, pas d'effort max.",
-  };
-}
 
 function buildAthleteSessions(userId: string, sport: string, level: Level, days: number[]) {
   const templates = getSessionTemplates(sport);
@@ -296,192 +265,6 @@ function CheckItem({ text }: { text: string }) {
   );
 }
 
-/* ── WellnessRing (dark, identical to /today) ── */
-function WellnessRingDark({ score, size = 96 }: { score: number | null; size?: number }) {
-  const [animated, setAnimated] = useState(false);
-  const [displayScore, setDisplayScore] = useState(0);
-
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 100);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (score === null || !animated) return;
-    let current = 0;
-    const target = score;
-    const inc = target / 20;
-    const timer = setInterval(() => {
-      current += inc;
-      if (current >= target) { setDisplayScore(target); clearInterval(timer); return; }
-      setDisplayScore(Math.round(current));
-    }, 600 / 20);
-    return () => clearInterval(timer);
-  }, [animated, score]);
-
-  const r = Math.round(size * 0.423);
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = +(circ * (1 - pct / 100)).toFixed(1);
-  const color = scoreColor(score);
-  const sw = Math.round(size * 0.077);
-  return (
-    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={animated ? offset : circ} strokeLinecap="round"
-          style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
-          {score !== null ? displayScore : "—"}
-        </span>
-        <span style={{ fontSize: Math.round(size * 0.085), fontWeight: 1000, color: "rgba(255,255,255,0.58)", letterSpacing: "0.14em", marginTop: 2, textTransform: "uppercase" }}>
-          wellness
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ── WellnessRing for MissionCard (dark bg sphere, identical to /coach) ── */
-function WellnessRingCoach({ score, size = 72 }: { score: number; size?: number }) {
-  const r = Math.round(size * 0.423);
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const offset = +(circ * (1 - Math.max(0, Math.min(100, score)) / 100)).toFixed(1);
-  const sw = Math.round(size * 0.077);
-  const color = scoreColor(score);
-  return (
-    <div style={{ position: "relative", flexShrink: 0, width: size, height: size, borderRadius: "50%", background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 6px 16px rgba(0,0,0,.18))" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={sw} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.5s ease" }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score}</span>
-        <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
-      </div>
-    </div>
-  );
-}
-
-/* ── Difficulty gauge (exact copy from /today) ── */
-function DiffGauge({ value, height = 12 }: { value: number | null; height?: number }) {
-  if (!value) return null;
-  const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
-  const bg: Record<string, string> = {
-    hard: "linear-gradient(90deg,#ffb5a7,#d44000)",
-    moderate: "linear-gradient(90deg,#ffe0a0,#f28a00)",
-    easy: "linear-gradient(90deg,#bfeec8,#2f9e44)",
-  };
-  const w = Math.max(22, Math.min(100, Math.round(value * 10)));
-  return (
-    <div style={{ width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
-      <div style={{ height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
-    </div>
-  );
-}
-
-/* ── Demo session card (exact style from /today TodaySessionCard) ── */
-function DemoSessionCard({ sessionName, exercises, difficulty, athleteName }: {
-  sessionName: string;
-  exercises: string[];
-  difficulty: number;
-  athleteName?: string;
-}) {
-  return (
-    <div style={{
-      background: "#fff",
-      border: "1px solid rgba(212,64,0,0.16)",
-      boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-      padding: 18, borderRadius: 24,
-    }}>
-      {athleteName && (
-        <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-          {athleteName}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 17, fontWeight: 1000, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.04em" }}>
-          {sessionName}
-        </span>
-        <span style={{ fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: "rgba(212,64,0,0.10)", color: "#d44000" }}>
-          Prévu
-        </span>
-      </div>
-      <div style={{ marginBottom: 12 }}>
-        <DiffGauge value={difficulty} height={12} />
-      </div>
-      <div style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
-        {exercises.slice(0, 3).map((ex, i) => (
-          <div key={i} style={{
-            padding: "10px 12px", fontSize: 13.5, lineHeight: 1.45,
-            color: "#2c3236", fontWeight: 650,
-            borderTop: i > 0 ? "1px solid rgba(0,0,0,.08)" : "none",
-            background: "#fff", whiteSpace: "pre-wrap", wordBreak: "break-word",
-          }}>
-            {ex}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── Coach demo MissionCards ── */
-function CoachMissionPreview({ sport }: { sport: string }) {
-  const athletes = [
-    { name: "Thomas M.", score: 88, maxDiff: 8,  attention: true,  decision: "Séance dure prévue : vérifier qu'il n'enchaîne pas dur." },
-    { name: "Emma L.",   score: 67, maxDiff: 6,  attention: false, decision: "Plan cohérent : suivre la difficulté réelle." },
-    { name: "Pierre D.", score: 41, maxDiff: 7,  attention: true,  decision: "Wellness bas + séance difficile : alléger maintenant." },
-  ];
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-      {athletes.map((a, i) => {
-        const isAttn = a.attention;
-        return (
-          <div key={i} style={{
-            position: "relative", overflow: "hidden",
-            display: "grid", gridTemplateColumns: "auto 1fr", gap: 12, alignItems: "center",
-            background: isAttn ? "linear-gradient(180deg,#fff,#fff5ef)" : "#fff",
-            border: isAttn ? "1.5px solid rgba(212,64,0,.45)" : "1px solid rgba(0,0,0,.08)",
-            borderRadius: 22, padding: "14px 16px",
-            boxShadow: isAttn ? "0 18px 46px rgba(212,64,0,.10)" : "0 10px 28px rgba(0,0,0,.06)",
-          }}>
-            {isAttn && (
-              <>
-                <style>{`@keyframes perf-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(1.35)}}`}</style>
-                <div style={{ position: "absolute", top: 12, right: 12, width: 8, height: 8, borderRadius: "50%", background: "#d44000", animation: "perf-pulse 1.8s ease-in-out infinite" }} />
-              </>
-            )}
-            <WellnessRingCoach score={a.score} size={64} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
-                <div style={{ fontSize: 16, fontWeight: 950, color: "#1f2428", letterSpacing: "-0.02em" }}>{a.name}</div>
-                {isAttn && (
-                  <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>Attention requise</div>
-                )}
-              </div>
-              <div style={{ fontSize: 11, color: "#6b7277", marginBottom: 4 }}>
-                {sport} · 1 séance · difficulté prévue {a.maxDiff}/10
-              </div>
-              <div style={{ fontSize: 12, color: "#333", lineHeight: 1.35 }}>{a.decision}</div>
-            </div>
-          </div>
-        );
-      })}
-      <div style={{ padding: "10px 14px", borderRadius: 12, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.15)" }}>
-        <span style={{ fontSize: 12, color: "#d44000", fontWeight: 700, lineHeight: 1.5 }}>
-          En temps réel, ThePerfClub te montre l'état de forme de chaque sportif — pour décider qui pousse et qui récupère.
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function EmailSentScreen({ email }: { email: string }) {
   return (
     <div style={{ textAlign: "center" }}>
@@ -531,13 +314,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [emailSent, setEmailSent]   = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
 
   /* value_slides */
   const [vSlide, setVSlide] = useState(0);
-
-  /* recap billing selection */
-  const [recapBilling, setRecapBilling] = useState<"monthly" | "annual">("annual");
 
   /* pain point visual feedback */
   const [lastClickedPain, setLastClickedPain] = useState<string | null>(null);
@@ -553,9 +332,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [wMotivation, setWMotivation] = useState(pendingData?.wMotivation ?? 8);
   const [wScore, setWScore]           = useState<number | null>(pendingData?.wScore ?? null);
   const [wSaving, setWSaving]         = useState(false);
-
-  const [inviteCode, setInviteCode]       = useState<string | null>(null);
-  const [linkCopied, setLinkCopied]       = useState(false);
 
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
   const [initializing, setInitializing] = useState(!!pendingData);
@@ -637,8 +413,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "coach") {
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-      const { error: codeErr } = await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
-      if (!codeErr) setInviteCode(code);
+      await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
 
       const DEMO_ATHLETES = [
         { name: "Thomas M.", wellness_score: 82, rpeBase: 7 },
@@ -664,9 +439,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     setError(null);
     try {
       if (isRegisterMode) {
+        const emailRedirectTo = location.hostname === "localhost"
+          ? undefined
+          : `${location.origin}/auth/callback`;
         const { data, error: signUpErr } = await supabase.auth.signUp({
           email: email.trim(), password,
-          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+          ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
         });
         if (signUpErr) { setError(signUpErr.message); setSaving(false); return; }
         const uid = data.user?.id;
@@ -739,11 +517,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const { score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
     setWScore(score);
     next();
-  }
-
-  async function goToApp() {
-    await fetch("/api/onboarding/complete", { method: "POST" });
-    window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
   }
 
   async function handleGoogleRegister() {
@@ -830,8 +603,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
 
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
-  const pricingRole = PRICING_ONBOARDING[role === "coach" ? "coach" : "athlete"];
-  const annualSavings = pricingRole.monthly * 12 - pricingRole.annual;
 
   if (initializing) {
     return (
@@ -847,10 +618,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   return (
     <AuthBackground>
-      {showPaywall && (
-        <PaywallModal mode={role} allowDismiss={true} onClose={() => setShowPaywall(false)} onSuccess={goToApp} initialBilling={recapBilling} />
-      )}
-
       <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.94)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.40)" }}>
 
         {showProgress && (
@@ -931,7 +698,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ background: "linear-gradient(180deg,#fff,#fff5ef)", border: "1.5px solid rgba(212,64,0,.40)", borderRadius: 13, padding: "10px 11px", width: 170, boxShadow: "0 10px 24px rgba(212,64,0,.18)", position: "relative" }}>
               <div style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: "50%", background: "#d44000" }} />
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                <WellnessRingCoach score={88} size={36} />
+                {/* mini wellness ring — score 88, size 36 */}
+                <div style={{ position: "relative", flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(145deg,#171717,#2f2f2f)" }}>
+                  <svg width={36} height={36} viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)", display: "block" }}>
+                    <circle cx={18} cy={18} r={15} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={3} />
+                    <circle cx={18} cy={18} r={15} fill="none" stroke="#2f9e44" strokeWidth={3} strokeDasharray={94.2} strokeDashoffset={11.3} strokeLinecap="round" />
+                  </svg>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: 1000, color: "#2f9e44" }}>88</span>
+                  </div>
+                </div>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 950, color: "#1f2428", marginBottom: 3 }}>Thomas M.</div>
                   <span style={{ fontSize: 7, fontWeight: 900, background: "#d44000", color: "#fff", padding: "2px 5px", borderRadius: 999 }}>ATTENTION REQUISE</span>
@@ -1470,6 +1246,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         ))}
 
+        {/* ── WEEK PREVIEW SPORTIF ── */}
+        {currentStep === "week_preview_2a" && (
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} />
+        )}
+
+        {/* ── WEEK PREVIEW COACH ── */}
+        {currentStep === "week_preview_2b" && (
+          <WeekPreviewStepCoach sport={sport} athleteCount={parseInt(athleteCount) || 1} onNext={next} />
+        )}
+
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
         {currentStep === "wellness_q" && (
           <div>
@@ -1589,397 +1375,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
               </button>
             </div>
-          </div>
-        )}
-
-        {/* ── SCORE REVEAL (athlete, après account) ── */}
-        {currentStep === "readiness_4a" && (
-          emailSent ? <EmailSentScreen email={email} /> : (
-            <div>
-              <div style={{ fontSize: 13, color: "#8a8f94", marginBottom: 12 }}>Voici ton score de départ — il évoluera chaque jour.</div>
-              <div style={{ position: "relative", overflow: "hidden", borderRadius: 24, padding: 20, marginBottom: 16, background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", border: "1px solid rgba(255,255,255,0.13)", boxShadow: "0 28px 72px rgba(0,0,0,0.28)", color: "#fff", animation: "revealIn 0.35s cubic-bezier(0.2,0,0.38,0.9)" }}>
-                <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 260, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
-                <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 18, marginBottom: 14 }}>
-                  <WellnessRingDark score={wScore} size={88} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 4 }}>Score &amp; conseils</div>
-                    <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.1, marginBottom: 4 }}>
-                      {formLabel(wScore)}
-                    </div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "5px 10px", fontSize: 11, fontWeight: 900 }}>
-                        ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {wScore !== null && wScore < 55 && (
-                  <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 7, background: "rgba(212,64,0,0.18)", border: "1px solid rgba(212,64,0,0.36)", borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
-                    🔥 Wellness bas — pense à alléger ou reporter si la séance est intense
-                  </div>
-                )}
-                {wScore !== null && (() => {
-                  const adv = getWellnessAdvice(wScore);
-                  return (
-                    <div style={{ position: "relative", zIndex: 2, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>✦ Conseils</div>
-                      <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, marginBottom: 10 }}>
-                        <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>⚡ Entraînement</div>
-                        <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{adv.training}</div>
-                      </div>
-                      <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14 }}>
-                        <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>🌿 Récupération</div>
-                        <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{adv.recovery}</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-              {(() => {
-                const [sName, sNotes] = getSessionTemplates(sport)[0];
-                const exos = sNotes.split("\n").filter(Boolean);
-                const diff = wScore !== null ? (wScore >= 75 ? 7 : wScore >= 55 ? 5 : 3) : 5;
-                return (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
-                      🎯 Séance de la semaine
-                    </div>
-                    <DemoSessionCard sessionName={sName} exercises={exos} difficulty={diff} />
-                  </div>
-                );
-              })()}
-              <div style={{ position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
-                <button onClick={next} style={ctaBtn}>Accéder à mon espace</button>
-              </div>
-            </div>
-          )
-        )}
-
-        {/* ── 4B. COACH MISSION PREVIEW ── */}
-        {currentStep === "preview_4b" && (
-          emailSent ? <EmailSentScreen email={email} /> : (
-            <div>
-              <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>Ton espace coach est presque prêt</div>
-              <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>
-                Voici ce que tu verras chaque matin pour chacun de tes sportifs.
-              </div>
-              <CoachMissionPreview sport={sport} />
-              {(() => {
-                const [sName, sNotes] = getSessionTemplates(sport)[0];
-                const exos = sNotes.split("\n").filter(Boolean);
-                return (
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>
-                      📋 Séance assignée — Thomas M.
-                    </div>
-                    <DemoSessionCard sessionName={sName} exercises={exos} difficulty={7} />
-                  </div>
-                );
-              })()}
-              <div style={{ position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
-                <button onClick={next} style={ctaBtn}>Accéder à mon espace</button>
-              </div>
-            </div>
-          )
-        )}
-
-        {/* ── INVITE SHARE (coach) ── */}
-        {currentStep === "invite_share" && (
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
-              Ton lien d'invitation est prêt
-            </div>
-            <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.6, marginBottom: 20 }}>
-              Partage-le à tes sportifs — ils peuvent s'inscrire maintenant, même avant que tu aies finalisé ton abonnement.
-            </div>
-
-            {inviteCode ? (
-              <>
-                <div style={{
-                  background: "rgba(212,64,0,.06)", border: "1.5px solid rgba(212,64,0,.22)",
-                  borderRadius: 14, padding: "14px 16px", marginBottom: 16,
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#d44000", letterSpacing: "-0.01em", wordBreak: "break-all" }}>
-                    go.theperfclub.com/join/{inviteCode}
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
-                    setLinkCopied(true);
-                    setTimeout(() => setLinkCopied(false), 2500);
-                    posthog.capture("invite_link_copied", { invite_code: inviteCode });
-                  }}
-                  style={{ ...ctaBtn, marginBottom: 10, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", transition: "background .2s" }}
-                >
-                  {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
-                </button>
-
-                <button
-                  onClick={() => {
-                    const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
-                    window.open(`https://wa.me/?text=${msg}`, "_blank");
-                    posthog.capture("invite_link_whatsapp", { invite_code: inviteCode });
-                  }}
-                  style={{ width: "100%", height: 50, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", color: "#1f2428", fontSize: 14, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 12, boxSizing: "border-box" as const }}
-                >
-                  <span style={{ fontSize: 20 }}>📲</span> Envoyer via WhatsApp
-                </button>
-
-                <button
-                  onClick={() => {
-                    posthog.capture("invite_share_skipped", { invite_code: inviteCode });
-                    next();
-                  }}
-                  style={{ width: "100%", height: 44, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "transparent", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-                >
-                  Passer pour l'instant
-                </button>
-              </>
-            ) : (
-              <button onClick={next} style={{ ...ctaBtn, marginBottom: 0 }}>Continuer →</button>
-            )}
-          </div>
-        )}
-
-
-        {/* ── PRIMING 1 : offre gratuite + preuve sociale (fusion social_proof) ── */}
-        {currentStep === "priming_value" && (
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#d44000", padding: "5px 12px", border: "1px solid rgba(212,64,0,.2)", borderRadius: 999, background: "rgba(212,64,0,.06)" }}>
-                ✦ L&apos;APP DE SUIVI DE PERFORMANCE
-              </span>
-            </div>
-
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#171b1f" }}>On veut que tu</div>
-              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2 }}>
-                essaies <span style={{ color: "#d44000" }}>ThePerfClub</span>
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#d44000" }}>gratuitement</div>
-            </div>
-
-            {/* Compteur communauté */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "12px 14px", background: "#f7f8f9", borderRadius: 16 }}>
-              <div style={{ display: "flex" }}>
-                {[
-                  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-                  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
-                  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
-                  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
-                  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
-                ].map((src, i) => (
-                  <div key={i} style={{ width: 32, height: 32, borderRadius: "50%", border: "2px solid #f7f8f9", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#171b1f", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
-                <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-              </div>
-            </div>
-
-            {/* Témoignage rôle-spécifique */}
-            {role === "athlete" ? (
-              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 18 }}>
-                <div style={{ height: 110, overflow: "hidden" }}>
-                  <img src="https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png" alt="Franck G." style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 20%", display: "block" }} />
-                </div>
-                <div style={{ padding: "14px 16px 12px" }}>
-                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
-                    &ldquo;ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.&rdquo;
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                      <img src="https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 15%", display: "block" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>Franck G.</div>
-                      <div style={{ fontSize: 11, color: "#8a8f94" }}>Sportif · Membre ThePerfClub</div>
-                    </div>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                      {[0,1,2,3,4].map(i => <span key={i} style={{ color: "#f04a08", fontSize: 12 }}>★</span>)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ background: "#f7f8f9", borderRadius: 20, overflow: "hidden", marginBottom: 18 }}>
-                <div style={{ height: 110, overflow: "hidden" }}>
-                  <img src="https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png" alt="Killian Anno" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
-                </div>
-                <div style={{ padding: "14px 16px 12px" }}>
-                  <div style={{ fontSize: 13, color: "#1f2428", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
-                    &ldquo;Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.&rdquo;
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                      <img src="https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png" alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top", display: "block" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>Killian Anno</div>
-                      <div style={{ fontSize: 11, color: "#8a8f94" }}>Préparateur physique · Rugby Club d&apos;Arcachon</div>
-                    </div>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                      {[0,1,2,3,4].map(i => <span key={i} style={{ color: "#f04a08", fontSize: 12 }}>★</span>)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 12 }}>
-              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-                <path d="M7 0L0 3V7.5C0 11.47 3 15.2 7 16C11 15.2 14 11.47 14 7.5V3L7 0Z" fill="#2f9e44" />
-                <path d="M4 8L6 10L10 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span style={{ fontSize: 11, fontWeight: 900, color: "#2f9e44", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                AUCUN PAIEMENT MAINTENANT
-              </span>
-            </div>
-
-            <button onClick={next} style={ctaBtn}>Continuer gratuitement →</button>
-            <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
-              7 jours gratuits, puis {pricingRole.annualMonthly}€/mois · {pricingRole.annual}€/an
-            </div>
-          </div>
-        )}
-
-        {/* ── PRIMING 2 : rappel avant fin d'essai ── */}
-        {currentStep === "priming_notif" && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minHeight: "70vh" }}>
-            <div style={{ textAlign: "center", marginBottom: 28 }}>
-              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.25, color: "#171b1f" }}>
-                On te préviendra avant<br />la fin de ton essai gratuit
-              </div>
-            </div>
-
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", paddingBottom: 24 }}>
-              <div style={{ position: "relative", display: "inline-block" }}>
-                <div style={{ width: 150, height: 150, borderRadius: "50%", background: "linear-gradient(135deg, rgba(212,64,0,.07), rgba(212,64,0,.03))", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span style={{ fontSize: 80, lineHeight: 1 }}>🔔</span>
-                </div>
-                <div style={{ position: "absolute", top: 6, right: 6, width: 36, height: 36, borderRadius: "50%", background: "#e03131", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 900, color: "#fff", boxShadow: "0 4px 14px rgba(224,49,49,.45)", border: "3px solid #fff" }}>
-                  1
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 12 }}>
-              <svg width="14" height="16" viewBox="0 0 14 16" fill="none">
-                <path d="M7 0L0 3V7.5C0 11.47 3 15.2 7 16C11 15.2 14 11.47 14 7.5V3L7 0Z" fill="#2f9e44" />
-                <path d="M4 8L6 10L10 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span style={{ fontSize: 11, fontWeight: 900, color: "#2f9e44", letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                AUCUN PAIEMENT MAINTENANT
-              </span>
-            </div>
-
-            <button onClick={next} style={ctaBtn}>Continuer gratuitement →</button>
-            <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
-              7 jours gratuits, puis {pricingRole.annualMonthly}€/mois · {pricingRole.annual}€/an
-            </div>
-          </div>
-        )}
-
-        {/* ── 5. RECAP + PRICING TIMELINE ── */}
-        {currentStep === "recap_5" && (
-          <div>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🚀</div>
-              <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.2 }}>
-                {role === "athlete" ? "Débloquez les progrès" : "Coachez comme un pro"}
-              </div>
-              <div style={{ fontSize: 13, color: "#62686e", marginTop: 6, lineHeight: 1.5 }}>
-                Commence ton essai gratuit de 7 jours. Annule à tout moment.
-              </div>
-            </div>
-
-            {/* Timeline */}
-            <div style={{ position: "relative", paddingLeft: 32, marginBottom: 22 }}>
-              <div style={{ position: "absolute", left: 9, top: 10, bottom: 10, width: 2, background: "rgba(212,64,0,0.20)", borderRadius: 1 }} />
-              {[
-                { title: "Accès complet dès le premier jour", sub: "Toutes les fonctionnalités débloquées immédiatement." },
-                { title: "Rappel 2 jours avant la fin de l'essai", sub: "On te préviendra avant tout prélèvement." },
-                { title: "Annule à tout moment, sans condition", sub: "Pas d'engagement, pas de frais cachés." },
-              ].map((node, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: i < 2 ? 16 : 0 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "rgba(212,64,0,0.10)", border: "1.5px solid #d44000", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path d="M1 4L3.5 6.5L9 1" stroke="#d44000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#1f2428", lineHeight: 1.3 }}>{node.title}</div>
-                    <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.4, marginTop: 2 }}>{node.sub}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Plan cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              {/* Monthly card */}
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#171b1f", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
-                  ESSAI 7J GRATUITS
-                </div>
-                <div
-                  onClick={() => { setRecapBilling("monthly"); posthog.capture("onboarding_recap_billing_selected", { role, billing: "monthly" }); }}
-                  style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: recapBilling === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: recapBilling === "monthly" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: recapBilling === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${recapBilling === "monthly" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {recapBilling === "monthly" && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff" }} />}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: recapBilling === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>
-                    {pricingRole.monthly}€
-                  </div>
-                  <div style={{ fontSize: 11, color: recapBilling === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
-                </div>
-              </div>
-
-              {/* Annual card */}
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
-                  ÉCONOMISEZ {annualSavings}€
-                </div>
-                <div
-                  onClick={() => { setRecapBilling("annual"); posthog.capture("onboarding_recap_billing_selected", { role, billing: "annual" }); }}
-                  style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: recapBilling === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: recapBilling === "annual" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: recapBilling === "annual" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annuel</div>
-                    <div style={{ width: 18, height: 18, borderRadius: "50%", background: recapBilling === "annual" ? "#d44000" : "transparent", border: `1.5px solid ${recapBilling === "annual" ? "#d44000" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {recapBilling === "annual" && (
-                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                          <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: recapBilling === "annual" ? "#fff" : "#171b1f", lineHeight: 1 }}>
-                    {pricingRole.annualMonthly}€
-                  </div>
-                  <div style={{ fontSize: 11, color: recapBilling === "annual" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois · {pricingRole.annual}€/an</div>
-                </div>
-              </div>
-            </div>
-
-            {/* No payment note */}
-            <div style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "#2f9e44", marginBottom: 14 }}>
-              ✓ Aucun prélèvement maintenant
-            </div>
-
-            <button
-              onClick={() => { posthog.capture("paywall_opened", { role, billing: recapBilling }); setShowPaywall(true); }}
-              style={ctaBtn}>
-              Commencer l'essai gratuit →
-            </button>
-            <button onClick={() => { posthog.capture("paywall_skipped", { role, billing: recapBilling }); goToApp(); }} style={skipBtn}>Accéder sans abonnement →</button>
           </div>
         )}
 

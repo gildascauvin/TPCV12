@@ -189,7 +189,6 @@ select:focus {
   overflow: hidden;
 }
 
-/* ─── MissionCard grid — right column always stays compact ─── */
 .mission-actions {
   display: flex;
   gap: 6px;

@@ -10,7 +10,7 @@ import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import ReviewCompleteModal from "@/components/coach/ReviewCompleteModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import WelcomeModal from "@/components/onboarding/WelcomeModal";
+import WelcomeReveal from "@/components/onboarding/WelcomeReveal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -76,12 +76,13 @@ function decisionText(a: CoachAthlete, maxDiff: number) {
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
+function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
   isReviewed: boolean;
   onDecide: () => void;
+  tourId?: string;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
@@ -104,7 +105,7 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
   }
 
   return (
-    <div style={{
+    <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
       display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 12, alignItems: "center",
       background: cardBg, border: cardBorder, borderRadius: 26, padding: 18,
@@ -176,6 +177,7 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
         <button
+          data-tour={tourId ? "decider-btn" : undefined}
           onClick={onDecide}
           style={{
             height: 36, paddingLeft: 14, paddingRight: 14, borderRadius: 12,
@@ -195,7 +197,7 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide }: {
   );
 }
 
-export default function CoachClient({ athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -222,11 +224,10 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
   const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
-    const fromOnboarding = new URLSearchParams(window.location.search).get("welcome") === "1";
-    const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
-    if (fromOnboarding && !alreadySeen) setShowWelcome(true);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welcome") === "1" && !localStorage.getItem(`welcome_shown_coach_${userId}`)) setShowWelcome(true);
     if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
-  }, [userId]);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load persisted reviewed IDs after hydration to avoid SSR mismatch
   useEffect(() => {
@@ -514,6 +515,7 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                 style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", padding: "0 16px", fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
               />
               <button
+                data-tour="invite-btn"
                 onClick={handleEmptyInvite}
                 disabled={inviteStatus === "loading" || !inviteEmail.trim()}
                 style={{
@@ -562,9 +564,10 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
                 )}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
-                {sortedPriority.length > 0 ? sortedPriority.map(a => (
+                {sortedPriority.length > 0 ? sortedPriority.map((a, idx) => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
                     isReviewed={reviewedIds.has(a.id)}
+                    tourId={idx === 0 ? "coach-card-alert" : undefined}
                     onDecide={() => requireSubscription(() => handleDecide(a))} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
@@ -677,7 +680,15 @@ export default function CoachClient({ athletes: initialAthletes, todaySessions, 
         </div>
       )}
       {showWelcome && (
-        <WelcomeModal mode="coach" onClose={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }} />
+        <WelcomeReveal
+          name={coachName}
+          sport={null}
+          mode="coach"
+          onDismiss={() => {
+            localStorage.setItem(`welcome_shown_coach_${userId}`, "1");
+            setShowWelcome(false);
+          }}
+        />
       )}
       {paywallStep === "priming" && (
         <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}

@@ -55,6 +55,7 @@ const coachTabs = [
     href: "/coach",
     label: "Dashboard",
     matchExact: true,
+    tourId: undefined as string | undefined,
     icon: (active: boolean) => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.15"
@@ -67,6 +68,7 @@ const coachTabs = [
     href: "/coach/planning",
     label: "Planning",
     matchExact: false,
+    tourId: "coach-planning-tab" as string | undefined,
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill="none" stroke="currentColor" strokeWidth="2.15"
@@ -79,6 +81,7 @@ const coachTabs = [
     href: "/coach/athletes",
     label: "Sportifs",
     matchExact: false,
+    tourId: "coach-athletes-tab" as string | undefined,
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill="none" stroke="currentColor" strokeWidth="2.15"
@@ -93,6 +96,7 @@ const coachTabs = [
     href: "/profil",
     label: "Profil",
     matchExact: false,
+    tourId: undefined as string | undefined,
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill="none" stroke="currentColor" strokeWidth="2.15"
@@ -140,10 +144,12 @@ export default function BottomNav({ role = "athlete" }: Props) {
           const active = isCoachTab
             ? (tab.matchExact ? pathname === tab.href : pathname.startsWith(tab.href))
             : (pathname === tab.href || pathname.startsWith(tab.href + "/"));
+          const tourId = "tourId" in tab ? tab.tourId : undefined;
           return (
             <Link
               key={tab.href}
               href={tab.href}
+              {...(tourId ? { "data-tour": tourId } : {})}
               style={{
                 display: "flex",
                 flexDirection: "column",

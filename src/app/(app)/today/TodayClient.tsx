@@ -16,7 +16,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
-import WelcomeModal from "@/components/onboarding/WelcomeModal";
+import WelcomeReveal from "@/components/onboarding/WelcomeReveal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
@@ -66,7 +66,9 @@ function getContextualInsight(wellness: WellnessDaily): string {
 
 function getAdvice(wellness: WellnessDaily | null, sessions: Session[]) {
   const done = sessions.filter((s) => s.done && s.rpe && s.duration);
+  const planned = sessions.filter((s) => !s.done && s.target_difficulty);
   const score = wellness?.score ?? null;
+  const plannedDiff = planned.length ? Math.max(...planned.map(s => s.target_difficulty!)) : null;
 
   if (!wellness && !done.length) {
     return {
@@ -81,6 +83,26 @@ function getAdvice(wellness: WellnessDaily | null, sessions: Session[]) {
     return {
       training: `${done.length} séance${done.length > 1 ? "s" : ""} terminée${done.length > 1 ? "s" : ""} · Effort moy. ${avgRpe}/10 · ${mins} min. ${load > 600 ? "Charge haute : récupération prioritaire." : load > 300 ? "Charge modérée : évite d'ajouter de l'intensité." : "Charge légère : progression possible."}`,
       recovery: load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce." : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier." : "Routine simple : hydratation, marche légère et sommeil stable.",
+    };
+  }
+  if (score !== null && plannedDiff !== null) {
+    if (plannedDiff >= 8 && score < 65) return {
+      training: `Séance dure prévue (${plannedDiff}/10) · Score aujourd'hui ${score} — allège à 6/10 ou reporte si possible.`,
+      recovery: "Wellness bas + séance intense : priorité hydratation, sommeil avant 23h, pas d'effort max.",
+    };
+    if (plannedDiff >= 8 && score >= 80) return {
+      training: `Séance dure prévue (${plannedDiff}/10) · Score excellent (${score}) — fenêtre idéale, vas-y !`,
+      recovery: "Maintiens les bons signaux : hydratation, protéines et coucher régulier.",
+    };
+    if (plannedDiff >= 8) return {
+      training: `Séance dure prévue (${plannedDiff}/10) · Score ${score} — reste attentif à ta récupération après.`,
+      recovery: "Post-séance intense : protéines 1,6–2g/kg/j et coucher avant 23h.",
+    };
+    const diff = plannedDiff;
+    const expectedScore = (diff / 10) * 100;
+    if (Math.abs(score - expectedScore) <= 15) return {
+      training: `Séance à ${diff}/10 · Cohérent avec ton score du jour (${score}) — go !`,
+      recovery: score >= 75 ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier." : "Hydrate-toi bien et vise un coucher avant 23h.",
     };
   }
   return {
@@ -176,6 +198,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
 
   return (
     <div
+      data-tour="session-card"
       className="mb-2 cursor-pointer"
       style={{
         background: "#fff",
@@ -245,6 +268,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
       {/* 5. Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
         <button
+          data-tour="terminer-btn"
           onClick={() => onComplete(session)}
           style={{
             flex: 1, height: 46, borderRadius: 14, fontSize: 14, fontWeight: 800, cursor: "pointer",
@@ -338,9 +362,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const fromOnboarding = params.get("welcome") === "1";
-    const alreadySeen = localStorage.getItem(`welcome_shown_${userId}`);
-    if (fromOnboarding && !alreadySeen) setShowWelcome(true);
+    if (params.get("welcome") === "1" && !localStorage.getItem(`welcome_shown_${userId}`)) setShowWelcome(true);
     if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "athlete" }); }
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -581,11 +603,62 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
             </div>
 
-            {displayScore !== null && displayScore < 55 && (
-              <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: 7, background: "rgba(212,64,0,0.18)", border: "1px solid rgba(212,64,0,0.36)", borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
-                🔥 Wellness bas — pense à alléger ou reporter si la séance est intense
-              </div>
-            )}
+            {(() => {
+              const pendingDiffs = todaySessions
+                .filter(s => !s.done && s.target_difficulty)
+                .map(s => s.target_difficulty!);
+              const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
+
+              const scrollToSessions = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                document.getElementById("day-sessions-container")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              };
+              const openWellness = (e: React.MouseEvent) => {
+                e.stopPropagation();
+                requireSubscription(() => setShowWellness(true));
+              };
+
+              const row = (
+                bg: string, border: string, text: string,
+                cta?: string, onCta?: (e: React.MouseEvent) => void
+              ) => (
+                <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
+                  <span style={{ lineHeight: 1.4 }}>{text}</span>
+                  {cta && onCta && (
+                    <button onClick={onCta} style={{ flexShrink: 0, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      {cta}
+                    </button>
+                  )}
+                </div>
+              );
+
+              if (!wellnessFilledToday) return row(
+                "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
+                "Complète ton wellness pour des conseils personnalisés",
+                "Comment tu vas ? →", openWellness
+              );
+              if (displayScore !== null && displayScore < 55 && maxDiff >= 8) return row(
+                "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
+                `🔥 Wellness bas · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
+                "Baisse la charge →", scrollToSessions
+              );
+              if (displayScore !== null && displayScore < 55 && maxDiff >= 5) return row(
+                "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
+                `⚠️ Wellness bas · Séance à ${maxDiff}/10 — surveille ton effort`,
+                "Voir la séance →", scrollToSessions
+              );
+              if (displayScore !== null && displayScore < 55) return row(
+                "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
+                "💛 Wellness bas — journée de récupération recommandée"
+              );
+              if (displayScore !== null && displayScore >= 80 && maxDiff >= 8) return row(
+                "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",
+                `✅ Score ${displayScore} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
+                "C'est parti →", scrollToSessions
+              );
+              return null;
+            })()}
 
             <div style={{ position: "relative", zIndex: 2, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
@@ -704,7 +777,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         />
       )}
       {showWelcome && (
-        <WelcomeModal mode="athlete" onClose={() => { localStorage.setItem(`welcome_shown_${userId}`, "1"); setShowWelcome(false); }} />
+        <WelcomeReveal
+          name={profile.name}
+          sport={profile.sport}
+          mode={profile.mode ?? "athlete"}
+          onDismiss={() => {
+            localStorage.setItem(`welcome_shown_${userId}`, "1");
+            setShowWelcome(false);
+          }}
+        />
       )}
       {paywallStep === "priming" && (
         <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
