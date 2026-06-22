@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import posthog from "posthog-js";
 
 const PRICING = {
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function PrimingModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss }: Props) {
+  useEffect(() => { posthog.capture("paywall_viewed", { plan: mode }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const p = PRICING[mode];
   const annualSavings = p.monthly * 12 - p.annual;
 
