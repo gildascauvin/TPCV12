@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -35,11 +36,44 @@ function CheckoutForm({
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+
+  const p = PRICING[mode];
+
+  useEffect(() => {
+    if (!stripe) return;
+    const amount = billing === "annual" ? p.annual * 100 : p.monthly * 100;
+    const pr = stripe.paymentRequest({
+      country: "FR",
+      currency: "eur",
+      total: { label: `ThePerfClub — ${billing === "annual" ? "Annuel" : "Mensuel"}`, amount },
+      requestPayerName: false,
+      requestPayerEmail: false,
+    });
+    pr.canMakePayment().then(result => { if (result) setPaymentRequest(pr); });
+    pr.on("paymentmethod", async (ev) => {
+      setLoading(true);
+      setError(null);
+      const res = await fetch("/api/stripe/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentMethodId: ev.paymentMethod.id, plan: mode, billing }),
+      });
+      if (!res.ok) {
+        ev.complete("fail");
+        setError("Erreur lors de la création de l'abonnement. Réessaie.");
+        setLoading(false);
+      } else {
+        ev.complete("success");
+        posthog.capture("trial_started", { plan: mode, billing, method: "wallet" });
+        onSuccess();
+      }
+    });
+  }, [stripe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + 7);
   const trialEndStr = trialEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
-  const p = PRICING[mode];
   const priceStr = billing === "annual" ? `${p.annual}€/an` : `${p.monthly}€/mois`;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -77,6 +111,21 @@ function CheckoutForm({
 
   return (
     <form onSubmit={handleSubmit}>
+      {paymentRequest && (
+        <>
+          <PaymentRequestButtonElement
+            options={{
+              paymentRequest,
+              style: { paymentRequestButton: { type: "default", theme: "dark", height: "48px" } },
+            }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
+            <span style={{ fontSize: 11, color: "#8a8f94", fontWeight: 600 }}>ou payer par carte</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
+          </div>
+        </>
+      )}
       <PaymentElement options={{ layout: "tabs" }} />
 
       {error && (

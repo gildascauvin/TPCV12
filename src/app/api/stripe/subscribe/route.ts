@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { setupIntentId, plan, billing } = await request.json();
+  const { setupIntentId, paymentMethodId: walletPaymentMethodId, plan, billing } = await request.json();
 
   const priceId = billing === "annual"
     ? (plan === "coach" ? process.env.STRIPE_PRICE_COACH_ANNUAL : process.env.STRIPE_PRICE_ATHLETE_ANNUAL)
@@ -16,8 +16,13 @@ export async function POST(request: Request) {
 
   if (!priceId) return NextResponse.json({ error: "Invalid plan or missing annual price" }, { status: 400 });
 
-  const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
-  const paymentMethodId = setupIntent.payment_method as string;
+  let paymentMethodId: string;
+  if (walletPaymentMethodId) {
+    paymentMethodId = walletPaymentMethodId;
+  } else {
+    const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
+    paymentMethodId = setupIntent.payment_method as string;
+  }
   if (!paymentMethodId) return NextResponse.json({ error: "No payment method" }, { status: 400 });
 
   const { data: profile } = await supabase
