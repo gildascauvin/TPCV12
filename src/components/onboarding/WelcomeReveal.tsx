@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import posthog from "posthog-js";
+
 interface Props {
   name: string | null;
   sport: string | null;
@@ -20,6 +23,7 @@ const COACH_STEPS = [
 ];
 
 export default function WelcomeReveal({ name, sport, mode, onDismiss }: Props) {
+  useEffect(() => { posthog.capture("welcome_modal_viewed", { mode }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const steps = mode === "coach" ? COACH_STEPS : ATHLETE_STEPS;
   const summary = mode === "coach"
     ? "Ton espace a été configuré selon tes préférences de coaching."
