@@ -134,7 +134,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   if (filledDays < MIN_DAYS || correlations.length === 0) {
     const remaining = Math.max(0, MIN_DAYS - filledDays);
     return (
-      <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
+      <div data-tour="conseils-chart" style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
         <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
         <div style={{ position: "relative", zIndex: 2 }}>
           <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
@@ -163,7 +163,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   const worstHurt   = [...correlations].reverse().find(c => c.impact < -0.5);
 
   return (
-    <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
+    <div data-tour="conseils-chart" style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
       <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>

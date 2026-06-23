@@ -492,7 +492,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           localStorage.removeItem("claim_program_id");
         }
         setSaving(false);
-        window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
+        window.location.href = role === "coach" ? "/coach" : "/today";
       } else {
         await saveData(userId!);
         const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
@@ -569,7 +569,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
-        window.location.href = pendingData.role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
+        window.location.href = pendingData.role === "coach" ? "/coach" : "/today";
       } catch {
         setInitializing(false);
       }

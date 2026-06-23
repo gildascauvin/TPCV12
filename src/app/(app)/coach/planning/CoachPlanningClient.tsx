@@ -414,7 +414,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         </div>
       )}
 
-      <div ref={calGridRef}>
+      <div ref={calGridRef} data-tour="coach-planning">
       <div key={`cal-${navKey}`} style={{
         animation: navKey > 0
           ? `${slideDirRef.current === "left" ? "calSlideFromRight" : "calSlideFromLeft"} 220ms ease-out`

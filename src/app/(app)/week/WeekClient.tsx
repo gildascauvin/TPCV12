@@ -493,7 +493,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         onOpenLibrary={() => setShowLibrary(true)}
       />
 
-      <div ref={weekGridRef}>
+      <div ref={weekGridRef} data-tour="week-sessions">
         <div key={`cal-${navKey}`} style={{
           animation: navKey > 0
             ? `${slideDirRef.current === "left" ? "calSlideFromRight" : "calSlideFromLeft"} 220ms ease-out`

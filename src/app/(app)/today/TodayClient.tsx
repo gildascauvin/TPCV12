@@ -519,7 +519,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
           const hasWeekSession = allSessions.some(s => s.date >= weekStart && s.date <= weekEnd);
           return (
-            <div style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
+            <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
               <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
                 Ton espace est prêt, à toi de jouer 💪
               </div>
@@ -563,6 +563,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
           {/* ── Wellness + Conseils card ── */}
           <div
+            data-tour="wellness-card"
             onClick={() => requireSubscription(() => setShowWellness(true))}
             style={{
               position: "relative", overflow: "hidden",

@@ -423,7 +423,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
         {/* ── Bandeau d'activation coach (J0) ── */}
         {showActivation && inviteCode && (
-          <div style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
+          <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
             <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
               Invite ton premier sportif 🎯
             </div>
@@ -617,7 +617,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           </>
         )}
 
-        <div style={{ marginTop: 16 }}>
+        <div data-tour="invite-section" style={{ marginTop: 16 }}>
           <button
             onClick={() => requireSubscription(() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); })}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}

@@ -220,3 +220,11 @@ select:focus {
     @apply text-[10px] font-black tracking-[0.12em] text-muted uppercase mb-2;
   }
 }
+
+/* Tour active — hide activation CTAs */
+body.tour-active [data-tour="terminer-btn"],
+body.tour-active [data-tour="invite-section"],
+body.tour-active [data-tour="decider-btn"],
+body.tour-active [data-tour="activation-banner"] {
+  display: none !important;
+}

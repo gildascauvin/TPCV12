@@ -6,7 +6,7 @@ export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = fa
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
   const isActive = subscriptionStatus === "athlete" || subscriptionStatus === "coach" || (subscriptionStatus === "free" && hasCoach);
-  const allowDismiss = subscriptionStatus !== "expired";
+  const allowDismiss = hasCoach;
 
   function requireSubscription(fn: () => void) {
     if (isActive) fn();
