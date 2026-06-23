@@ -57,7 +57,10 @@ function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
 }
 
 function attention(a: CoachAthlete, maxDiff: number) {
-  return a.wellness_score < 65 || maxDiff >= 8 || (a.wellness_score < 72 && maxDiff >= 6);
+  return a.wellness_score < 55 ||
+    (a.wellness_score < 65 && maxDiff >= 5) ||
+    maxDiff >= 8 ||
+    (a.wellness_score < 72 && maxDiff >= 6);
 }
 
 function riskScore(a: CoachAthlete, maxDiff: number): number {
@@ -72,7 +75,8 @@ function riskScore(a: CoachAthlete, maxDiff: number): number {
 function decisionText(a: CoachAthlete, maxDiff: number) {
   if (a.wellness_score < 55 && maxDiff >= 7) return "Wellness bas + séance difficile : alléger maintenant.";
   if (maxDiff >= 8) return "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
-  if (a.wellness_score < 65) return "Wellness à surveiller : réduire volume ou vérifier la difficulté réelle.";
+  if (a.wellness_score < 65 && maxDiff <= 4) return "Wellness légèrement bas, séance légère : rien à changer, surveiller demain.";
+  if (a.wellness_score < 65) return "Wellness à surveiller : réduire le volume ou vérifier la difficulté réelle.";
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
@@ -149,30 +153,44 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
           {athlete.sport} · {todaySessions.length} séance{todaySessions.length !== 1 ? "s" : ""}
         </div>
         {todaySessions.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-            {todaySessions.map(s => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 10, color: "#6b7277", width: 90, flexShrink: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {s.name}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <DiffGauge value={s.target_difficulty} height={7} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {todaySessions.map(s => {
+              const exercises = s.notes ? s.notes.split("\n").filter(Boolean) : [];
+              const extra = exercises.length - 3;
+              return (
+                <div key={s.id}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: exercises.length ? 4 : 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#2c3236", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em" }}>
+                      {s.name}
+                    </span>
+                    <div style={{ width: 64, flexShrink: 0 }}>
+                      <DiffGauge value={s.target_difficulty} height={7} />
+                    </div>
+                  </div>
+                  {exercises.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
+                      {exercises.slice(0, 3).map((ex, i) => (
+                        <div key={i} style={{ fontSize: 11, color: "#4a5057", fontWeight: 500 }}>· {ex}</div>
+                      ))}
+                      {extra > 0 && (
+                        <div style={{ fontSize: 11, color: "#8a8f94" }}>+{extra} autre{extra > 1 ? "s" : ""}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-        <div style={{ fontSize: 13, color: "#333", lineHeight: 1.35, marginTop: 6 }}>{decision}</div>
-        {maxDiff >= 8 && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, borderRadius: 999, padding: "6px 9px", background: "#fff0e9", color: "#d44000", border: "1px solid rgba(212,64,0,.18)", fontSize: 10, fontWeight: 1000 }}>
-            Séance dure à valider
-          </div>
-        )}
-        {!showBadge && !showReviewed && (
-          <div style={{ display: "inline-flex", marginTop: 8, borderRadius: 999, padding: "6px 9px", background: isPriority ? "#fff0e9" : "#eef8f1", color: isPriority ? "#d44000" : "#166534", fontSize: 11, fontWeight: 1000 }}>
-            {isPriority ? "Décision requise" : "Plan cohérent"}
-          </div>
-        )}
+        <div style={{
+          marginTop: 8, padding: "8px 12px", borderRadius: 12,
+          background: isPriority ? "#fff0e9" : "#eef8f1",
+          border: `1px solid ${isPriority ? "rgba(212,64,0,.18)" : "rgba(47,158,68,.22)"}`,
+          fontSize: 12, fontWeight: 600, lineHeight: 1.4,
+          color: isPriority ? "#d44000" : "#166534",
+        }}>
+          {decision}
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
