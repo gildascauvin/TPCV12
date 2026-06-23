@@ -232,6 +232,29 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+
+        {/* Encart bibliothèque externe */}
+        <a
+          href="https://www.theperfclub.com/bibliotheque-de-programmes-dentrainement-sportif/"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "13px 16px", marginBottom: 16,
+            background: "#fff3ef", borderRadius: 16,
+            border: "1px solid rgba(212,64,0,.22)", textDecoration: "none",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 22 }}>📚</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.2 }}>36 programmes gratuits à explorer</div>
+              <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2 }}>Trail, vélo, fitness, sports co… →</div>
+            </div>
+          </div>
+          <span style={{ fontSize: 18, color: "#d44000" }}>›</span>
+        </a>
+
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>
         ) : programs.length === 0 ? (
