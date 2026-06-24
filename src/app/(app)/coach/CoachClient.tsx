@@ -30,17 +30,33 @@ interface Props {
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
-function getCoachAdvice(avgWellness: number, avgDifficulty: number | null, decisionCount: number): string {
-  if (avgDifficulty !== null && avgDifficulty >= 8 && avgWellness < 65)
-    return `Charge haute prévue (${avgDifficulty}/10) avec une équipe en fatigue (${avgWellness}/100). Allège le volume des séances les plus dures ou reporte — le risque de blessure est élevé.`;
-  if (avgDifficulty !== null && avgDifficulty >= 8 && avgWellness >= 80)
-    return `Séance intense prévue (${avgDifficulty}/10) et équipe en forme (${avgWellness}/100). Fenêtre idéale — valide les charges et laisse tes sportifs performer.`;
-  if (avgDifficulty !== null && avgDifficulty >= 8)
-    return `Charge haute prévue (${avgDifficulty}/10). Wellness équipe à ${avgWellness}/100 — surveille les réponses individuelles et n'hésite pas à adapter en cours de séance.`;
-  if (decisionCount >= 2)
-    return `${decisionCount} sportifs ont un niveau de forme incompatible avec leur séance prévue. Traite les décisions avant qu'ils s'entraînent.`;
+function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], avgWellness: number, avgDifficulty: number | null): string {
+  function names(list: CoachAthlete[]) {
+    const ns = list.map(a => a.name);
+    if (ns.length === 1) return ns[0];
+    if (ns.length === 2) return `${ns[0]} et ${ns[1]}`;
+    return `${ns[0]}, ${ns[1]} et ${ns.length - 2} autre${ns.length - 2 > 1 ? "s" : ""}`;
+  }
+  function verb(list: CoachAthlete[], sing: string, plur: string) { return list.length > 1 ? plur : sing; }
+
+  const inRed = athletes.filter(a => a.wellness_score < 55);
+  const withHard = athletes.filter(a => sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
+  const critical = athletes.filter(a => a.wellness_score < 55 && sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
+
+  if (critical.length > 0)
+    return `${names(critical)} ${verb(critical, "est dans le rouge", "sont dans le rouge")} avec une séance difficile prévue. Allège ou reporte avant ${verb(critical, "qu'il", "qu'ils")} s'entraîne${verb(critical, "", "nt")}.`;
+  if (inRed.length > 0 && withHard.length > 0)
+    return `${names(inRed)} ${verb(inRed, "est dans le rouge", "sont dans le rouge")}. ${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue. Vérifie les charges avant de valider.`;
+  if (inRed.length > 0)
+    return `${names(inRed)} ${verb(inRed, "est dans le rouge", "sont dans le rouge")} (score < 55). Réduis l'intensité ou propose une récupération active.`;
+  if (withHard.length > 0 && avgWellness < 65)
+    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue avec un niveau de forme bas. Surveille et adapte si nécessaire.`;
+  if (withHard.length > 0 && avgWellness >= 80)
+    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue — équipe en forme (${avgWellness}/100). Fenêtre idéale, valide les charges.`;
+  if (withHard.length > 0)
+    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile (≥8/10) prévue. Wellness équipe à ${avgWellness}/100 — surveille les réponses après séance.`;
   if (avgWellness < 55)
-    return `Wellness équipe bas (${avgWellness}/100). Réduis les intensités prévues et favorise la récupération — évite d'ajouter de la charge aujourd'hui.`;
+    return `Wellness équipe bas (${avgWellness}/100). Réduis les intensités et favorise la récupération aujourd'hui.`;
   if (avgWellness < 70)
     return `Forme correcte (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Les charges planifiées sont adaptées, pas besoin d'intervenir.`;
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
@@ -491,18 +507,15 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           </div>
         )}
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1.02, color: "#171b1f" }}>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
             {greeting()} {coachName ?? ""} 👋
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#73787c", marginTop: 4 }}>
-            Coach Control
           </div>
         </div>
 
         {athletes.length > 0 && (() => {
           const decisionCount = sortedPriority.filter(a => !reviewedIds.has(a.id)).length;
-          const advice = getCoachAdvice(avgWellness, avgDifficulty, decisionCount);
+          const advice = getCoachAdvice(athletes, sessions, avgWellness, avgDifficulty);
           const label: React.CSSProperties = { fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.38)", marginTop: 5 };
           const divider = <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.10)", margin: "0 4px" }} />;
           return (
