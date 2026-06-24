@@ -14,11 +14,11 @@ interface TourStep {
 }
 
 const SPORT_SUBTITLES: Record<string, string> = {
-  "Endurance":              "Fractionné, sortie longue, récup — planifiés selon ton état du jour.",
-  "Force & puissance":      "Push, pull, legs — organisés selon ta récupération.",
+  "Endurance":              "Fractionné, sortie longue, récup. Planifiés selon ton état du jour.",
+  "Force & puissance":      "Push, pull, legs. Organisés selon ta récupération.",
   "Sports collectifs":      "Séances collectif + récup entre les matchs, calibrées à ton état.",
   "Arts martiaux & combat": "Séances techniques + récup selon ton état physique réel.",
-  "Athlétisme & vitesse":   "Séances vitesse, force, récup — adaptées à ton état chaque semaine.",
+  "Athlétisme & vitesse":   "Séances vitesse, force, récup. Adaptées à ton état chaque semaine.",
 };
 
 function getAthleteSteps(objective: string, sport: string): TourStep[] {
@@ -36,7 +36,7 @@ function getAthleteSteps(objective: string, sport: string): TourStep[] {
           ? "Entraîne-toi avec un plan clair"
           : "Entraîne-toi au bon moment",
       subtitle: isRecovery
-        ? "Ton niveau de forme oriente l'intensité du jour. Plus de séances à contre-corps."
+        ? "Ton niveau de forme oriente l'intensité du jour. Chaque séance colle à ce que ton corps peut vraiment donner."
         : isStructure
           ? "Tes séances sont planifiées sur tes jours dispo. Plus d'improvisation."
           : "Ton niveau de forme oriente l'intensité du jour. Plus de surmenage, plus de séances ratées.",
@@ -77,14 +77,14 @@ function getCoachSteps(coachingContext: string, coachingChallenge: string): Tour
       subtitle: isKine
         ? "Niveau de forme croisé avec la charge. Suis l'évolution de chaque sportif en réhab semaine après semaine."
         : isWellness
-          ? "Fatigue, stress, comportements — une vision globale de chaque personne suivie."
+          ? "Fatigue, stress, comportements. Une vision globale de chaque personne suivie."
           : "Niveau de forme croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
     },
     {
       page: "/coach/planning",
       emoji: "📋",
       title: "Plus de temps à coacher, moins à planifier",
-      subtitle: "Génère une prog IA ou pars d'un template. Assigne en un clic.",
+      subtitle: "Génère une prog IA ou pars d'un template. Tout est personnalisable. Assigne en un clic.",
     },
     {
       page: "/coach/athletes",
