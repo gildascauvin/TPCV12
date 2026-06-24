@@ -13,61 +13,112 @@ interface TourStep {
   subtitle: string;
 }
 
-const ATHLETE_STEPS: TourStep[] = [
-  {
-    page: "/today",
-    emoji: "🏃",
-    title: "Entraîne-toi au bon moment",
-    subtitle: "Ton wellness oriente l'intensité du jour. Plus de surmenage, plus de séances ratées.",
-  },
-  {
-    page: "/week",
-    emoji: "📅",
-    title: "Une semaine construite sur mesure",
-    subtitle: "Séances ajustées à ton profil. Modifie, ajoute, ou laisse telle quelle.",
-  },
-  {
-    page: "/conseils",
-    emoji: "📊",
-    title: "Découvre ce qui fait vraiment la différence",
-    subtitle: "Sommeil, stress, comportements — vois l'impact réel sur tes perfs, en chiffres.",
-  },
-];
+const SPORT_SUBTITLES: Record<string, string> = {
+  "Endurance":              "Fractionné, sortie longue, récup — planifiés selon ton état du jour.",
+  "Force & puissance":      "Push, pull, legs — organisés selon ta récupération.",
+  "Sports collectifs":      "Séances collectif + récup entre les matchs, calibrées à ton état.",
+  "Arts martiaux & combat": "Séances techniques + récup selon ton état physique réel.",
+  "Athlétisme & vitesse":   "Séances vitesse, force, récup — adaptées à ton état chaque semaine.",
+};
 
-const COACH_STEPS: TourStep[] = [
-  {
-    page: "/coach",
-    emoji: "👥",
-    title: "Sache exactement qui surveiller",
-    subtitle: "Wellness croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
-  },
-  {
-    page: "/coach/planning",
-    emoji: "📋",
-    title: "Plus de temps à coacher, moins à planifier",
-    subtitle: "Génère une prog IA ou pars d'un template. Assigne en un clic.",
-  },
-  {
-    page: "/coach/athletes",
-    emoji: "🎯",
-    title: "Prêt à suivre de vrais sportifs",
-    subtitle: "Débloque l'accès pour inviter ton équipe et activer le suivi en temps réel.",
-  },
-];
+function getAthleteSteps(objective: string, sport: string): TourStep[] {
+  const isRecovery = objective === "Éviter le surmenage et les blessures" || objective === "Mieux récupérer entre les séances";
+  const isStructure = objective === "Structurer et suivre mon entraînement";
+  const sportSubtitle = SPORT_SUBTITLES[sport] ?? "Séances ajustées à ton profil. Modifie, ajoute, ou laisse telle quelle.";
+
+  return [
+    {
+      page: "/today",
+      emoji: "🏃",
+      title: isRecovery
+        ? "Entraîne-toi selon ton état réel"
+        : isStructure
+          ? "Entraîne-toi avec un plan clair"
+          : "Entraîne-toi au bon moment",
+      subtitle: isRecovery
+        ? "Ton niveau de forme oriente l'intensité du jour. Plus de séances à contre-corps."
+        : isStructure
+          ? "Tes séances sont planifiées sur tes jours dispo. Plus d'improvisation."
+          : "Ton niveau de forme oriente l'intensité du jour. Plus de surmenage, plus de séances ratées.",
+    },
+    {
+      page: "/week",
+      emoji: "📅",
+      title: "Une semaine construite sur mesure",
+      subtitle: sportSubtitle,
+    },
+    {
+      page: "/conseils",
+      emoji: "📊",
+      title: isRecovery
+        ? "Repère les signaux avant les blessures"
+        : "Découvre ce qui fait vraiment la différence",
+      subtitle: isRecovery
+        ? "Sommeil, stress, comportements — identifie ce qui te fragilise avant que ça devienne une blessure."
+        : "Sommeil, stress, comportements — vois l'impact réel sur tes perfs, en chiffres.",
+    },
+  ];
+}
+
+function getCoachSteps(coachingContext: string, coachingChallenge: string): TourStep[] {
+  const isKine = coachingContext.startsWith("Kiné");
+  const isWellness = coachingContext.startsWith("Autre");
+  const isCommunication = coachingChallenge.includes("Communiquer");
+
+  return [
+    {
+      page: "/coach",
+      emoji: "👥",
+      title: isKine
+        ? "Identifie qui est en bonne route vers le retour à l'entraînement"
+        : isWellness
+          ? "Suis le bien-être de chaque client"
+          : "Sache exactement qui surveiller",
+      subtitle: isKine
+        ? "Niveau de forme croisé avec la charge. Suis l'évolution de chaque sportif en réhab semaine après semaine."
+        : isWellness
+          ? "Fatigue, stress, comportements — une vision globale de chaque personne suivie."
+          : "Niveau de forme croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
+    },
+    {
+      page: "/coach/planning",
+      emoji: "📋",
+      title: "Plus de temps à coacher, moins à planifier",
+      subtitle: "Génère une prog IA ou pars d'un template. Assigne en un clic.",
+    },
+    {
+      page: "/coach/athletes",
+      emoji: "🎯",
+      title: isCommunication
+        ? "Un lien direct avec chaque sportif"
+        : "Prêt à suivre de vrais sportifs",
+      subtitle: isCommunication
+        ? "Tes sportifs reçoivent leurs séances et partagent leur ressenti. Tout centralisé."
+        : "Débloque l'accès pour inviter ton équipe et activer le suivi en temps réel.",
+    },
+  ];
+}
 
 interface Props {
   role: "athlete" | "coach";
   hasCoach: boolean;
+  objective?: string;
+  frustration?: string;
+  sport?: string;
+  coachingContext?: string;
+  coachingChallenge?: string;
 }
 
-export default function ProductTourOverlay({ role, hasCoach }: Props) {
+export default function ProductTourOverlay({ role, hasCoach, objective = "", frustration = "", sport = "", coachingContext = "", coachingChallenge = "" }: Props) {
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [paywallStage, setPaywallStage] = useState<"none" | "journey" | "paywall">("none");
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
-  const steps = role === "coach" ? COACH_STEPS : ATHLETE_STEPS;
+  const steps = role === "coach"
+    ? getCoachSteps(coachingContext, coachingChallenge)
+    : getAthleteSteps(objective, sport);
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
 
@@ -121,6 +172,10 @@ export default function ProductTourOverlay({ role, hasCoach }: Props) {
         allowDismiss={hasCoach}
         onContinue={() => setPaywallStage("paywall")}
         onDismiss={() => setPaywallStage("none")}
+        objective={objective}
+        frustration={frustration}
+        coachingContext={coachingContext}
+        coachingChallenge={coachingChallenge}
       />
     );
   }

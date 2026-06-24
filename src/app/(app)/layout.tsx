@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode, subscription_status")
+    .select("mode, subscription_status, objective, frustration, sport, coaching_context, coaching_challenge")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -31,7 +31,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-bg pb-[132px]">
       {children}
       <BottomNav role={role} />
-      {showTour && <ProductTourOverlay role={role} hasCoach={hasCoach} />}
+      {showTour && (
+        <ProductTourOverlay
+          role={role}
+          hasCoach={hasCoach}
+          objective={profile?.objective ?? ""}
+          frustration={profile?.frustration ?? ""}
+          sport={profile?.sport ?? ""}
+          coachingContext={profile?.coaching_context ?? ""}
+          coachingChallenge={profile?.coaching_challenge ?? ""}
+        />
+      )}
     </div>
   );
 }

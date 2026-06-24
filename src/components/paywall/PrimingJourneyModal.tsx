@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import posthog from "posthog-js";
+import { getPrimingHeadline } from "@/lib/primingCopy";
 
 const PRICING = {
   athlete: { monthly: 9, annual: 59, annualMonthly: "4,92" },
@@ -23,12 +24,24 @@ interface Props {
   allowDismiss: boolean;
   onContinue: () => void;
   onDismiss: () => void;
+  objective?: string;
+  frustration?: string;
+  coachingContext?: string;
+  coachingChallenge?: string;
 }
 
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, objective = "", frustration = "", coachingContext = "", coachingChallenge = "" }: Props) {
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const p = PRICING[mode];
   const annualSavings = p.monthly * 12 - p.annual;
+
+  const personalizedHeadline = (objective || coachingContext)
+    ? getPrimingHeadline(
+        mode === "athlete"
+          ? { mode: "athlete", goal: objective, frustration }
+          : { mode: "coach", coachingContext, coachingChallenge }
+      )
+    : null;
 
   const shield = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 12 }}>
@@ -74,11 +87,19 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       </div>
 
       <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#171b1f" }}>On veut que tu</div>
-        <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2 }}>
-          essaies <span style={{ color: "#d44000" }}>ThePerfClub</span>
-        </div>
-        <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#d44000" }}>gratuitement</div>
+        {personalizedHeadline ? (
+          <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: "-0.03em", lineHeight: 1.35, color: "#171b1f" }}>
+            {personalizedHeadline}
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#171b1f" }}>On veut que tu</div>
+            <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2 }}>
+              essaies <span style={{ color: "#d44000" }}>ThePerfClub</span>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.2, color: "#d44000" }}>gratuitement</div>
+          </>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "12px 14px", background: "#f7f8f9", borderRadius: 16 }}>
@@ -144,7 +165,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       )}
 
       {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); setStep(1); }} style={ctaBtn}>
+      <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective, coachingContext }); setStep(1); }} style={ctaBtn}>
         Continuer gratuitement →
       </button>
       <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
@@ -174,7 +195,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       </div>
 
       {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode }); setStep(2); }} style={ctaBtn}>
+      <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective, coachingContext }); setStep(2); }} style={ctaBtn}>
         Continuer gratuitement →
       </button>
       <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>

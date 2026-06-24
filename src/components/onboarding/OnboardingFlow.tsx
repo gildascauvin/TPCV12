@@ -10,6 +10,8 @@ import Link from "next/link";
 import AuthBackground from "@/components/auth/AuthBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import WeekPreviewStepCoach from "@/components/onboarding/WeekPreviewStepCoach";
+import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
+import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -18,8 +20,10 @@ type StepId =
   | "value_slides"
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"
   | "overload_2a" | "planning_2a" | "fatigue_2a"
+  | "autoreg_score"
   | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"
+  | "autoreg_score_coach"
   | "week_preview_2a" | "week_preview_2b"
   | "wellness_q"
   | "account";
@@ -37,6 +41,7 @@ const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
+  "autoreg_score",
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "week_preview_2a",
   "wellness_q", "account",
@@ -45,12 +50,13 @@ const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
+  "autoreg_score_coach",
   "context_2b", "sport_2b", "count_2b", "tool_2b",
   "week_preview_2b",
   "account",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"];
 
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
@@ -318,8 +324,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* value_slides */
   const [vSlide, setVSlide] = useState(0);
 
-  /* pain point visual feedback */
-  const [lastClickedPain, setLastClickedPain] = useState<string | null>(null);
+  /* pain point answers — athlete */
+  const [overloadAns, setOverloadAns] = useState("");
+  const [planningAns, setPlanningAns] = useState("");
+  const [fatigueAns, setFatigueAns]   = useState("");
+  /* pain point answers — coach */
+  const [overloadCoachAns, setOverloadCoachAns] = useState("");
+  const [planningCoachAns, setPlanningCoachAns] = useState("");
+  const [fatigueCoachAns, setFatigueCoachAns]   = useState("");
 
   /* wellness sub-steps */
   const WQ_TOTAL = 5;
@@ -367,7 +379,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     posthog.capture("onboarding_step_viewed", props);
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
     advancingRef.current = false;
-    setLastClickedPain(null);
   }, [currentStep]);
 
   useEffect(() => {
@@ -949,10 +960,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Souvent, je pousse quand j'y suis",
                 "Tout le temps, j'envoie tout à chaque fois",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={overloadAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setOverloadAns(ans));
                   }} />
               ))}
             </div>
@@ -971,10 +982,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Souvent, c'est flou d'une semaine à l'autre",
                 "Complètement, je fais entièrement au feeling",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={planningAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setPlanningAns(ans));
                   }} />
               ))}
             </div>
@@ -993,10 +1004,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Souvent, la fatigue ne change pas mon plan",
                 "Tout le temps, je pousse quoi qu'il arrive",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={fatigueAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setFatigueAns(ans));
                   }} />
               ))}
             </div>
@@ -1145,10 +1156,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Souvent, le RPE réel dépasse régulièrement",
                 "Très souvent, c'est un problème récurrent",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={overloadCoachAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setOverloadCoachAns(ans));
                   }} />
               ))}
             </div>
@@ -1167,10 +1178,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Oui, c'est souvent chronophage",
                 "Oui, c'est le principal frein de ma semaine",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={planningCoachAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setPlanningCoachAns(ans));
                   }} />
               ))}
             </div>
@@ -1189,15 +1200,36 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 "Souvent, difficile de modifier le plan en cours",
                 "Oui, je préfère maintenir le programme prévu",
               ].map(ans => (
-                <Choice key={ans} icon="" title={ans} sub="" selected={lastClickedPain === ans}
+                <Choice key={ans} icon="" title={ans} sub="" selected={fatigueCoachAns === ans}
                   onClick={() => {
                     posthog.capture("onboarding_pain_point_answered", { step: currentStep, answer: ans, role });
-                    nextAfterChoice(() => setLastClickedPain(ans));
+                    nextAfterChoice(() => setFatigueCoachAns(ans));
                   }} />
               ))}
             </div>
             <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
+        )}
+
+        {/* ── SCORE AUTORÉGULATION SPORTIF ── */}
+        {currentStep === "autoreg_score" && (
+          <AutoRegScoreStep
+            overloadAns={overloadAns}
+            planningAns={planningAns}
+            fatigueAns={fatigueAns}
+            frustration={frustration}
+            onNext={next}
+          />
+        )}
+
+        {/* ── SCORE AUTORÉGULATION COACH ── */}
+        {currentStep === "autoreg_score_coach" && (
+          <AutoRegScoreStepCoach
+            overloadCoachAns={overloadCoachAns}
+            planningCoachAns={planningCoachAns}
+            fatigueCoachAns={fatigueCoachAns}
+            onNext={next}
+          />
         )}
 
         {/* ── 3. ACCOUNT ── */}
