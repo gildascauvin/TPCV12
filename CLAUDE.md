@@ -40,30 +40,32 @@ src/app/
 
 ## Onboarding — flows actuels (juin 2026)
 
-### Sportif (inscription — 16 écrans)
+### Sportif (inscription — 14 écrans dans OnboardingFlow, puis tour+paywall dans l'app)
 ```
-role → value_slides (3 slides stats) → sport_2a → level_2a → goal_2a → frustration_2a → freq_2a
-→ overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
-→ wellness_q (5 questions wellness)
+role → value_slides (3 slides stats)
+→ frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
+→ autoreg_score  [dark card : score % + 3 jauges animées]
+→ sport_2a → level_2a → goal_2a → days_2a
+→ week_preview_2a (programme preview)
+→ wellness_q (5 questions niveau de forme)
 → account (email + mdp + prénom)
-→ readiness_4a (score reveal — dark card)  [aha moment]
-→ priming_value (offre gratuite + témoignage sportif + compteur +300)  [pré-paywall]
-→ priming_notif (cloche + "on te préviendra avant la fin de l'essai")  [pré-paywall]
-→ recap_5 (pricing page : timeline + plan cards)
+[après compte créé → redirect /today → ProductTourOverlay :]
+→ tour 3 steps (pages /today /week /conseils, bottom sheet)
+→ PrimingJourneyModal (priming value + notif + pricing)
 → PaywallModal (formulaire CB Stripe)
 ```
 
-### Coach (inscription — 15 écrans)
+### Coach (inscription — 13 écrans dans OnboardingFlow, puis tour+paywall dans l'app)
 ```
-role → value_slides (3 slides stats) → context_2b → sport_2b → count_2b → challenge_2b → tool_2b
-→ overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
+role → value_slides (3 slides stats)
+→ challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
+→ autoreg_score_coach  [dark card : score % + 3 jauges animées]
+→ context_2b → sport_2b → count_2b → tool_2b
+→ week_preview_2b (programme preview coach)
 → account
-→ preview_4b (MissionCards démo avec WellnessRingCoach)  [aha moment]
-→ invite_share
-→ priming_value (offre gratuite + témoignage coach + compteur +300)  [pré-paywall]
-→ priming_notif (cloche + "on te préviendra avant la fin de l'essai")  [pré-paywall]
-→ recap_5
-→ PaywallModal
+[après compte créé → redirect /coach → ProductTourOverlay :]
+→ tour 3 steps (pages /coach /coach/planning /coach/athletes)
+→ PrimingJourneyModal → PaywallModal
 ```
 
 ### Auth mode (déjà connecté — 6 écrans, inchangé)
@@ -72,15 +74,12 @@ role → 5 questions rôle → saveData() → redirect /today ou /coach
 ```
 
 ### Logique de conversion
-- **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%) pour créer l'urgence dès le début
-- **Pain points** : 3 questions contextuelles par rôle avec 4 réponses graduées (diagnostic, sunk cost)
-- **Auto-advance** : clic sur une réponse = avance automatiquement après 300ms (register mode uniquement)
-- **Aha moment** : `readiness_4a` (score wellness) ou `preview_4b` (dashboard coach) — demo live du produit
-- **Priming pré-paywall** (2 screens, juin 2026) :
-  - `priming_value` : titre "On veut que tu essaies ThePerfClub gratuitement" + compteur +300 avatars + témoignage rôle-spécifique (Franck G. / Killian Anno) + bouclier "AUCUN PAIEMENT MAINTENANT" + CTA "Continuer gratuitement →"
-  - `priming_notif` : cloche 🔔 avec badge rouge + "On te préviendra avant la fin de ton essai gratuit" + même bouclier + CTA "Continuer gratuitement →"
-  - Le step `social_proof` a été supprimé et fusionné dans `priming_value`
-- **Pricing page** (`recap_5`) : timeline 3 nœuds + 2 cards plan (Mensuel/Annuel) + "Aucun prélèvement maintenant"
+- **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%)
+- **Pain points** : 3 questions par rôle, auto-advance 300ms (register mode uniquement)
+- **Score d'autorégulation** (`autoreg_score` / `autoreg_score_coach`) : dark card après les pain points, score global en %, 3 jauges (pleine=vert=bien, vide=rouge=risque). Animation : "Analyse du profil..." 1,5s puis barres une par une + message-pont
+- **Paywall personnalisé** : `PrimingJourneyModal` titre dynamique via `src/lib/primingCopy.ts` (16 headlines sportif frustration×objectif, 4-5 variantes coach contexte×challenge)
+- **Tour personnalisé** : `ProductTourOverlay` steps dynamiques selon objectif/sport (sportif) et contexte/challenge (coach)
+- **"niveau de forme"** dans tous les textes UI (jamais "wellness" côté visible utilisateur)
 - **Trial 7j** sur plan annuel ; plan mensuel = "Sans engagement"
 
 ### Paywall flow dans l'app (post-skip)
@@ -113,26 +112,26 @@ Sauvegardé en DB comme `"Autre - {précision}"` dans le champ `sport` du profil
 type StepId =
   | "role"
   | "value_slides"                                                             // 3 slides stats (POST_PROGRESS)
-  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "freq_2a"      // sportif
+  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"     // sportif
   | "overload_2a" | "planning_2a" | "fatigue_2a"                             // pain points sportif
+  | "autoreg_score"                                                            // score autorégulation sportif (POST_PROGRESS)
   | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"     // coach
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"                        // pain points coach
-  | "wellness_q"       // questions wellness (POST_PROGRESS)
-  | "account"
-  | "readiness_4a"     // score reveal sportif (POST_PROGRESS)
-  | "preview_4b"       // MissionCards démo coach (POST_PROGRESS)
-  | "priming_value"    // offre gratuite + témoignage (POST_PROGRESS)
-  | "priming_notif"    // cloche rappel essai (POST_PROGRESS)
-  | "recap_5";         // pricing page (POST_PROGRESS)
+  | "autoreg_score_coach"                                                      // score autorégulation coach (POST_PROGRESS)
+  | "week_preview_2a" | "week_preview_2b"                                     // preview programme
+  | "wellness_q"       // questions niveau de forme (POST_PROGRESS)
+  | "account";
 ```
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "readiness_4a", "preview_4b", "invite_share", "priming_value", "priming_notif", "recap_5"]`
+`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"]`
 
 ## Composants clés
 ```
 src/components/
   onboarding/
-    OnboardingFlow.tsx     # Flow complet sportif + coach (register + auth mode)
+    OnboardingFlow.tsx          # Flow complet sportif + coach (register + auth mode)
+    AutoRegScoreStep.tsx        # Score autorégulation sportif (dark card, 3 jauges, score %)
+    AutoRegScoreStepCoach.tsx   # Score autorégulation coach (même mécanique)
   paywall/
     PaywallModal.tsx       # Stripe Elements in-app, billing toggle, badge sécurité
     PaywallGate.tsx        # Gating actions (free/expired)

@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   if (!priceId) return NextResponse.json({ error: "Invalid plan or missing annual price" }, { status: 400 });
 
   let paymentMethodId: string;
-  if (walletPaymentMethodId) {
+  const isWallet = !!walletPaymentMethodId;
+  if (isWallet) {
     paymentMethodId = walletPaymentMethodId;
   } else {
     const setupIntent = await stripe.setupIntents.retrieve(setupIntentId);
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
 
   const customerId = profile?.stripe_customer_id;
   if (!customerId) return NextResponse.json({ error: "No customer" }, { status: 400 });
+
+  // Wallet PMs (Apple Pay / Google Pay) are not attached to the customer automatically
+  if (isWallet) {
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId });
+  }
 
   await stripe.customers.update(customerId, {
     invoice_settings: { default_payment_method: paymentMethodId },

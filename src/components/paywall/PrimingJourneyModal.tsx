@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import posthog from "posthog-js";
 import { getPrimingHeadline } from "@/lib/primingCopy";
 
@@ -32,6 +32,10 @@ interface Props {
 
 export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, objective = "", frustration = "", coachingContext = "", coachingChallenge = "" }: Props) {
   const [step, setStep] = useState<0 | 1 | 2>(0);
+
+  useEffect(() => {
+    posthog.capture("paywall_priming_viewed", { plan: mode, objective, coachingContext });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const p = PRICING[mode];
   const annualSavings = p.monthly * 12 - p.annual;
 

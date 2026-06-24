@@ -53,6 +53,7 @@ export default function CalendarHeader({
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const showControls = !!onViewModeChange;
+  const showTodayBtn = !!onDateChange;
 
   function selectDay(d: Date) {
     const iso = format(d, "yyyy-MM-dd");
@@ -101,9 +102,9 @@ export default function CalendarHeader({
       {/* Top row */}
       <div className="flex items-center px-4 pb-3 pt-[14px] gap-2">
 
-        {/* Gauche : Aujourd'hui — toujours visible */}
+        {/* Gauche : Aujourd'hui — visible dès qu'il y a un onDateChange */}
         <div style={{ minWidth: 80 }}>
-          {showControls && (
+          {showTodayBtn && (
             <button
               onClick={isOnCurrentPeriod ? undefined : goToday}
               style={{

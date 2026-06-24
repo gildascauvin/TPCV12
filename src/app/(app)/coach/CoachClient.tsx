@@ -28,6 +28,7 @@ interface Props {
 }
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
 function WellnessRing({ score, size = 72 }: { score: number; size?: number }) {
   const r = Math.round(size * 0.423);
@@ -159,13 +160,11 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
               const extra = exercises.length - 3;
               return (
                 <div key={s.id}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: exercises.length ? 4 : 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#2c3236", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em" }}>
+                  <div style={{ marginBottom: exercises.length ? 4 : 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#2c3236", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", marginBottom: s.target_difficulty != null ? 4 : 0 }}>
                       {s.name}
-                    </span>
-                    <div style={{ width: 64, flexShrink: 0 }}>
-                      <DiffGauge value={s.target_difficulty} height={7} />
                     </div>
+                    {s.target_difficulty != null && <DiffGauge value={s.target_difficulty} height={6} />}
                   </div>
                   {exercises.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
@@ -467,39 +466,39 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           </div>
         )}
 
-        <div style={{
-          position: "relative", overflow: "hidden",
-          background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
-          border: "1px solid rgba(255,255,255,.12)",
-          borderRadius: 22, padding: 16,
-          boxShadow: "0 18px 44px rgba(0,0,0,.20)",
-          marginBottom: 14,
-        }}>
-          <div style={{ position: "absolute", right: -52, top: -52, width: 180, height: 180, borderRadius: "50%", background: "rgba(212,64,0,.24)", filter: "blur(18px)", pointerEvents: "none" }} />
-          <div style={{ position: "relative", zIndex: 2 }}>
-            <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1.02, color: "#fff", marginBottom: 6 }}>
-              Coach Control
-            </div>
-            <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.78)" }}>
-              Wellness + difficulté attendue : les sportifs qui demandent une décision maintenant.
-            </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1.02, color: "#171b1f" }}>
+            {greeting()} {coachName ?? ""} 👋
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#73787c", marginTop: 4 }}>
+            Coach Control
           </div>
         </div>
 
-        {athletes.length > 0 && (
-          <div className="stats-grid-3" style={{ margin: "12px 0" }}>
-            {[
-              { value: sortedPriority.filter(a => !reviewedIds.has(a.id)).length, label: "Décisions restantes" },
-              { value: avgWellness || "—", label: "Wellness équipe" },
-              { value: totalSessions, label: "Séances prévues" },
-            ].map(({ value, label }) => (
-              <div key={label} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: 13, textAlign: "center", boxShadow: "0 12px 34px rgba(0,0,0,.055)" }}>
-                <div style={{ fontSize: 34, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.05em", lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "#73787c", marginTop: 5 }}>{label}</div>
+        {athletes.length > 0 && (() => {
+          const decisionCount = sortedPriority.filter(a => !reviewedIds.has(a.id)).length;
+          const darkCard: React.CSSProperties = { background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "14px 10px", textAlign: "center", boxShadow: "0 12px 34px rgba(0,0,0,.28)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
+          const label: React.CSSProperties = { fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.38)", marginTop: 6 };
+          return (
+            <div className="stats-grid-3" style={{ margin: "12px 0" }}>
+              <div style={darkCard}>
+                <div style={{ fontSize: 34, fontWeight: 1000, color: decisionCount > 0 ? "#f04a08" : "#2f9e44", letterSpacing: "-0.05em", lineHeight: 1 }}>{decisionCount}</div>
+                <div style={label}>Décisions restantes</div>
               </div>
-            ))}
-          </div>
-        )}
+              <div style={darkCard}>
+                {typeof avgWellness === "number" && avgWellness > 0
+                  ? <WellnessRing score={avgWellness} size={56} />
+                  : <div style={{ fontSize: 34, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
+                }
+                <div style={label}>Wellness équipe</div>
+              </div>
+              <div style={darkCard}>
+                <div style={{ fontSize: 34, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.05em", lineHeight: 1 }}>{totalSessions}</div>
+                <div style={label}>Séances prévues</div>
+              </div>
+            </div>
+          );
+        })()}
 
         {athletes.length === 0 ? (
           <>
