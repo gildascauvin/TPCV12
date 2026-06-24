@@ -13,9 +13,9 @@ type PrimingParams = AthleteParams | CoachParams;
 const ATHLETE_HEADLINES: Record<string, Record<string, string>> = {
   "Progresser en performance": {
     "Les programmes sont trop rigides, pas adaptés à mon état du jour":
-      "Tes programmes ne s'adaptent pas à toi — ThePerfClub ajuste chaque séance à ton état réel pour que tu performes vraiment.",
+      "Tes programmes ne s'adaptent pas à toi. ThePerfClub ajuste chaque séance à ton état réel pour que tu performes vraiment.",
     "Je ne sais pas quand forcer et quand récupérer":
-      "Tu ne sais pas toujours quand pousser — ThePerfClub t'indique exactement quand forcer pour progresser.",
+      "Tu ne sais pas toujours quand pousser. ThePerfClub t'indique exactement quand forcer pour progresser.",
     "Je manque de structure et de suivi":
       "Sans structure claire, les progrès sont lents. ThePerfClub te donne le cadre pour performer.",
     "Je perds du temps sans progresser vraiment":
@@ -58,7 +58,7 @@ function getCoachHeadline(context: string, challenge: string): string {
     return "Suis l'évolution de chaque sportif en réhab et identifie qui est en bonne route vers le retour à l'entraînement.";
   }
   if (context.startsWith("Autre")) {
-    return "Suivi bien-être, charge, comportements — un tableau de bord complet pour chacun de tes clients.";
+    return "Suivi bien-être, charge, comportements. Un tableau de bord complet pour chacun de tes clients.";
   }
   if (challenge.includes("charge") || challenge.includes("Personnaliser")) {
     return "ThePerfClub centralise le niveau de forme et la charge de toute ton équipe en temps réel.";
