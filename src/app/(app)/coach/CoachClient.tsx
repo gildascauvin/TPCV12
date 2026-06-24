@@ -30,6 +30,22 @@ interface Props {
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
+function getCoachAdvice(avgWellness: number, avgDifficulty: number | null, decisionCount: number): string {
+  if (avgDifficulty !== null && avgDifficulty >= 8 && avgWellness < 65)
+    return `Charge haute prévue (${avgDifficulty}/10) avec une équipe en fatigue (${avgWellness}/100). Allège le volume des séances les plus dures ou reporte — le risque de blessure est élevé.`;
+  if (avgDifficulty !== null && avgDifficulty >= 8 && avgWellness >= 80)
+    return `Séance intense prévue (${avgDifficulty}/10) et équipe en forme (${avgWellness}/100). Fenêtre idéale — valide les charges et laisse tes sportifs performer.`;
+  if (avgDifficulty !== null && avgDifficulty >= 8)
+    return `Charge haute prévue (${avgDifficulty}/10). Wellness équipe à ${avgWellness}/100 — surveille les réponses individuelles et n'hésite pas à adapter en cours de séance.`;
+  if (decisionCount >= 2)
+    return `${decisionCount} sportifs ont un niveau de forme incompatible avec leur séance prévue. Traite les décisions avant qu'ils s'entraînent.`;
+  if (avgWellness < 55)
+    return `Wellness équipe bas (${avgWellness}/100). Réduis les intensités prévues et favorise la récupération — évite d'ajouter de la charge aujourd'hui.`;
+  if (avgWellness < 70)
+    return `Forme correcte (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Les charges planifiées sont adaptées, pas besoin d'intervenir.`;
+  return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
+}
+
 function WellnessRing({ score, size = 72 }: { score: number; size?: number }) {
   const r = Math.round(size * 0.423);
   const circ = +(2 * Math.PI * r).toFixed(1);
@@ -344,8 +360,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }
   }
 
-  const priority = athletes.filter(a => attention(a, maxDiffToday(a.id, sessions)));
-  const stable = athletes.filter(a => !attention(a, maxDiffToday(a.id, sessions)));
+  const priority = athletes.filter(a => {
+    const hasSessions = sessions.some(s => s.athlete_id === a.id);
+    return hasSessions && attention(a, maxDiffToday(a.id, sessions));
+  });
+  const stable = athletes.filter(a => {
+    const hasSessions = sessions.some(s => s.athlete_id === a.id);
+    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions));
+  });
   const sortedPriority = [...priority].sort((a, b) =>
     riskScore(b, maxDiffToday(b.id, sessions)) - riskScore(a, maxDiffToday(a.id, sessions))
   );
@@ -353,7 +375,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const avgWellness = athletes.length
     ? Math.round(athletes.reduce((s, a) => s + a.wellness_score, 0) / athletes.length)
     : 0;
-  const totalSessions = athletes.reduce((n, a) => n + sessions.filter(s => s.athlete_id === a.id).length, 0);
+  const sessionsWithDiff = sessions.filter(s => s.target_difficulty != null);
+  const avgDifficulty = sessionsWithDiff.length
+    ? Math.round(sessionsWithDiff.reduce((acc, s) => acc + (s.target_difficulty ?? 0), 0) / sessionsWithDiff.length * 10) / 10
+    : null;
 
   function getTopSession(athleteId: string): CoachViewSession | null {
     return sessions
@@ -477,24 +502,60 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
         {athletes.length > 0 && (() => {
           const decisionCount = sortedPriority.filter(a => !reviewedIds.has(a.id)).length;
-          const darkCard: React.CSSProperties = { background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "14px 10px", textAlign: "center", boxShadow: "0 12px 34px rgba(0,0,0,.28)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
-          const label: React.CSSProperties = { fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.38)", marginTop: 6 };
+          const advice = getCoachAdvice(avgWellness, avgDifficulty, decisionCount);
+          const label: React.CSSProperties = { fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.38)", marginTop: 5 };
+          const divider = <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.10)", margin: "0 4px" }} />;
           return (
-            <div className="stats-grid-3" style={{ margin: "12px 0" }}>
-              <div style={darkCard}>
-                <div style={{ fontSize: 34, fontWeight: 1000, color: decisionCount > 0 ? "#f04a08" : "#2f9e44", letterSpacing: "-0.05em", lineHeight: 1 }}>{decisionCount}</div>
-                <div style={label}>Décisions restantes</div>
+            <div style={{ margin: "12px 0", background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "14px 10px", boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ fontSize: 34, fontWeight: 1000, color: decisionCount > 0 ? "#f04a08" : "#2f9e44", letterSpacing: "-0.05em", lineHeight: 1 }}>{decisionCount}</div>
+                  <div style={label}>Décisions restantes</div>
+                </div>
+                {divider}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {typeof avgWellness === "number" && avgWellness > 0
+                    ? <WellnessRing score={avgWellness} size={52} />
+                    : <div style={{ fontSize: 34, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
+                  }
+                  <div style={label}>Wellness équipe</div>
+                </div>
+                {divider}
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {avgDifficulty !== null ? (
+                    <>
+                      <div style={{ fontSize: 30, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1, color: avgDifficulty >= 8 ? "#d44000" : avgDifficulty >= 5 ? "#f28a00" : "#2f9e44", marginBottom: 5 }}>
+                        {avgDifficulty}
+                      </div>
+                      <div style={{ width: "70%" }}>
+                        <DiffGauge value={avgDifficulty} height={5} />
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 30, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
+                  )}
+                  <div style={label}>RPE prévu</div>
+                </div>
               </div>
-              <div style={darkCard}>
-                {typeof avgWellness === "number" && avgWellness > 0
-                  ? <WellnessRing score={avgWellness} size={56} />
-                  : <div style={{ fontSize: 34, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
-                }
-                <div style={label}>Wellness équipe</div>
-              </div>
-              <div style={darkCard}>
-                <div style={{ fontSize: 34, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.05em", lineHeight: 1 }}>{totalSessions}</div>
-                <div style={label}>Séances prévues</div>
+
+              <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 14, paddingTop: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+                  ✦ Lecture d&apos;équipe
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,.88)" }}>
+                  {advice}
+                </div>
+                {decisionCount > 0 && (() => {
+                  const first = sortedPriority.find(a => !reviewedIds.has(a.id));
+                  return first ? (
+                    <button
+                      onClick={() => requireSubscription(() => handleDecide(first))}
+                      style={{ marginTop: 12, width: "100%", height: 44, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 20px rgba(212,64,0,.35)", letterSpacing: "-0.01em" }}
+                    >
+                      Traiter les décisions ({decisionCount}) →
+                    </button>
+                  ) : null;
+                })()}
               </div>
             </div>
           );
