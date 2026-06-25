@@ -48,8 +48,8 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
           <div style={{ fontSize: 11, color: "#8a8f94" }}>Les séances libres restent disponibles</div>
         </div>
         {onOpenLibrary && (
-          <button onClick={onOpenLibrary} style={{ padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}>
-            📚 Programmes
+          <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}>
+            📚 Programmes<span className="tour-lock">🔒</span>
           </button>
         )}
       </div>
@@ -95,8 +95,8 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
       {/* Actions */}
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {onEdit && (
-          <button onClick={onEdit} style={{ padding: "6px 12px", borderRadius: 8, border: "1.5px solid rgba(212,64,0,.25)", cursor: "pointer", background: "#fff", color: "#d44000", fontWeight: 700, fontSize: 11 }}>
-            ✏️ Modifier
+          <button data-tour="modifier-btn" onClick={onEdit} style={{ padding: "6px 12px", borderRadius: 8, border: "1.5px solid rgba(212,64,0,.25)", cursor: "pointer", background: "#fff", color: "#d44000", fontWeight: 700, fontSize: 11 }}>
+            ✏️ Modifier<span className="tour-lock">🔒</span>
           </button>
         )}
         {onStop && (

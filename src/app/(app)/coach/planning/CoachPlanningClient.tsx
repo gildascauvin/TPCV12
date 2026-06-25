@@ -640,17 +640,17 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                         </div>
                       )}
                       <div style={{ display: "flex", gap: 5, marginTop: 8 }} onClick={e => e.stopPropagation()}>
-                        <button onClick={() => setCompleting(s)} style={{ flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer", background: s.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)", color: s.done ? "#171b1f" : "#fff", border: s.done ? "1px solid rgba(0,0,0,.10)" : "none", boxShadow: s.done ? "none" : "0 4px 12px rgba(212,64,0,.20)" }}>
-                          {s.done ? "Résultat" : "Terminer"}
+                        <button data-tour="terminer-btn" onClick={() => setCompleting(s)} style={{ flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer", background: s.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)", color: s.done ? "#171b1f" : "#fff", border: s.done ? "1px solid rgba(0,0,0,.10)" : "none", boxShadow: s.done ? "none" : "0 4px 12px rgba(212,64,0,.20)" }}>
+                          {s.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
                         </button>
                       </div>
                     </div>
                   );
                 })}
 
-                <div onClick={() => requireSubscription(() => setAddingDate(dstr))}
+                <div data-tour="add-session-btn" onClick={() => requireSubscription(() => setAddingDate(dstr))}
                   style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
-                  + Ajouter une séance
+                  + Ajouter une séance<span className="tour-lock">🔒</span>
                 </div>
               </div>
             </div>

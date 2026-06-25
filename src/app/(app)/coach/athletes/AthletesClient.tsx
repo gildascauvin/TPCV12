@@ -70,10 +70,11 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
             </div>
           </div>
           <button
+            data-tour="invite-btn"
             onClick={() => requireSubscription(() => setShowInvite(true))}
             style={{ height: 40, paddingLeft: 18, paddingRight: 18, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", flexShrink: 0, marginTop: 4 }}
           >
-            + Inviter
+            + Inviter<span className="tour-lock">🔒</span>
           </button>
         </div>
 
@@ -85,10 +86,11 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
               Invite un sportif pour commencer à suivre son wellness et ses séances.
             </div>
             <button
+              data-tour="invite-btn"
               onClick={() => requireSubscription(() => setShowInvite(true))}
               style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
             >
-              Inviter un sportif →
+              Inviter un sportif →<span className="tour-lock">🔒</span>
             </button>
           </div>
         ) : (
@@ -125,16 +127,18 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
 
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
+                    data-tour="voir-planning-btn"
                     onClick={() => router.push(`/coach/planning?athlete=${a.id}`)}
                     style={{ flex: 1, height: 38, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
                   >
-                    Voir planning
+                    Voir planning<span className="tour-lock">🔒</span>
                   </button>
                   <button
+                    data-tour="supprimer-btn"
                     onClick={() => handleDelete(a)}
                     style={{ height: 38, paddingLeft: 12, paddingRight: 12, borderRadius: 11, background: "#fff8f8", border: "1px solid rgba(200,30,30,.20)", color: "#c81e1e", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deleting === a.id ? 0.5 : 1 }}
                   >
-                    {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}
+                    {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
                   </button>
                 </div>
               </div>

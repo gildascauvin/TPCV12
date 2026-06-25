@@ -221,10 +221,56 @@ select:focus {
   }
 }
 
-/* Tour active — hide activation CTAs */
-body.tour-active [data-tour="terminer-btn"],
-body.tour-active [data-tour="invite-section"],
-body.tour-active [data-tour="decider-btn"],
+/* Tour active — hide activation banners, show premium actions with lock */
 body.tour-active [data-tour="activation-banner"] {
   display: none !important;
+}
+
+/* ── Boutons premium : opacité + cursor ── */
+body.tour-active [data-tour="terminer-btn"],
+body.tour-active [data-tour="decider-btn"],
+body.tour-active [data-tour="invite-btn"],
+body.tour-active [data-tour="demarrer-btn"],
+body.tour-active [data-tour="voir-planning-btn"],
+body.tour-active [data-tour="supprimer-btn"],
+body.tour-active [data-tour="programmes-btn"],
+body.tour-active [data-tour="modifier-btn"] {
+  opacity: 0.75;
+  cursor: default !important;
+}
+
+/* ── Div "+ Ajouter" : opacité + cursor ── */
+body.tour-active [data-tour="add-session-btn"] {
+  opacity: 0.75;
+  cursor: default !important;
+}
+
+/* ── Cadenas dans les boutons (span réel, toujours fiable) ── */
+.tour-lock {
+  display: none;
+}
+body.tour-active .tour-lock {
+  display: inline;
+  font-size: 13px;
+  margin-left: 5px;
+}
+
+/* ── Dark cards (wellness, conseils, fatigue) : cadenas coin intérieur ── */
+body.tour-active [data-tour="wellness-card"]::after,
+body.tour-active [data-tour="conseils-chart"]::after,
+body.tour-active [data-tour="fatigue-signature"]::after {
+  content: '🔒';
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 26px;
+  height: 26px;
+  background: rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 26px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
 }

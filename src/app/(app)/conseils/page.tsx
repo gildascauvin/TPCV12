@@ -347,7 +347,7 @@ export default async function ConseilsPage() {
       </div>
 
       {/* Signature de fatigue + Entraînement */}
-      <div style={{
+      <div data-tour="fatigue-signature" style={{
         background: "linear-gradient(135deg,#161616,#333 64%,#111)",
         border: "1px solid rgba(255,255,255,.12)",
         borderRadius: 28, padding: 22, marginBottom: 14,

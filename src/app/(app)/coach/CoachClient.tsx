@@ -239,7 +239,7 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
             whiteSpace: "nowrap",
           }}
         >
-          {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"}
+          {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"}<span className="tour-lock">🔒</span>
         </button>
       </div>
     </div>
@@ -562,10 +562,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   const first = sortedPriority.find(a => !reviewedIds.has(a.id));
                   return first ? (
                     <button
+                      data-tour="decider-btn"
                       onClick={() => requireSubscription(() => handleDecide(first))}
                       style={{ marginTop: 12, width: "100%", height: 44, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 20px rgba(212,64,0,.35)", letterSpacing: "-0.01em" }}
                     >
-                      Traiter les décisions ({decisionCount}) →
+                      Traiter les décisions ({decisionCount}) →<span className="tour-lock">🔒</span>
                     </button>
                   ) : null;
                 })()}
@@ -692,10 +693,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
         <div data-tour="invite-section" style={{ marginTop: 16 }}>
           <button
+            data-tour="invite-btn"
             onClick={() => requireSubscription(() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); })}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
           >
-            + Inviter des sportifs
+            + Inviter des sportifs<span className="tour-lock">🔒</span>
           </button>
         </div>
       </div>

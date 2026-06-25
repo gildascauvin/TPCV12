@@ -278,7 +278,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
             boxShadow: session.done ? "none" : "0 8px 20px rgba(212,64,0,.22)",
           }}
         >
-          {session.done ? "Résultat" : "Terminer"}
+          {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
         </button>
         <button
           onClick={() => onDelete(session)}
@@ -708,10 +708,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     )}
                   </div>
                   <button
+                    data-tour="demarrer-btn"
                     onClick={() => requireSubscription(() => handleTerminer(nextSession))}
                     style={{ flexShrink: 0, height: 38, paddingLeft: 16, paddingRight: 16, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.3)" }}
                   >
-                    ▶ Démarrer
+                    ▶ Démarrer<span className="tour-lock">🔒</span>
                   </button>
                 </div>
               );
@@ -742,6 +743,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             </div>
 
             <div
+              data-tour="add-session-btn"
               onClick={() => requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
               style={{
                 border: "0.5px dashed rgba(212,64,0,0.34)",

@@ -105,6 +105,7 @@ function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
       {/* 4. Actions */}
       <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
         <button
+          data-tour="terminer-btn"
           onClick={() => onComplete(session)}
           style={{
             flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer",
@@ -114,7 +115,7 @@ function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
             boxShadow: session.done ? "none" : "0 4px 12px rgba(212,64,0,.20)",
           }}
         >
-          {session.done ? "Résultat" : "Terminer"}
+          {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
         </button>
         <button
           onClick={() => onDuplicate(session)} title="Dupliquer"
@@ -201,6 +202,7 @@ function DayColumn({ date, sessions, wellness, todayStr, ctx, onAddSession, onCo
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
         <div
+          data-tour="add-session-btn"
           onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
           style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
         >
