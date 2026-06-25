@@ -113,7 +113,9 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [stepIndex, setStepIndex] = useState(0);
-  const [paywallStage, setPaywallStage] = useState<"none" | "journey" | "paywall">("none");
+  const [paywallStage, setPaywallStage] = useState<"none" | "journey" | "paywall">(() =>
+    typeof window !== "undefined" && localStorage.getItem("tour_priming_pending") ? "journey" : "none"
+  );
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
   const steps = role === "coach"
@@ -129,6 +131,7 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   }, []);
 
   useEffect(() => {
+    if (paywallStage !== "none") return;
     router.push(steps[0].page);
     posthog.capture("tour_step_viewed", { step: 1, role, page: steps[0].page });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -154,6 +157,8 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   function handleNext() {
     if (isLast) {
       posthog.capture("tour_completed", { role });
+      posthog.capture("paywall_priming_viewed", { plan: role, objective, coachingContext });
+      localStorage.setItem("tour_priming_pending", "1");
       setPaywallStage("journey");
     } else {
       const next = stepIndex + 1;
@@ -188,6 +193,7 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
         initialBilling={billing}
         onClose={() => setPaywallStage("journey")}
         onSuccess={() => {
+          localStorage.removeItem("tour_priming_pending");
           window.location.href = role === "coach" ? "/coach?welcome=1" : "/today?welcome=1";
         }}
       />
