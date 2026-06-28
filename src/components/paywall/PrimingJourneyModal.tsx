@@ -26,24 +26,23 @@ interface Props {
   onDismiss: () => void;
   objective?: string;
   frustration?: string;
-  coachingContext?: string;
   coachingChallenge?: string;
 }
 
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, objective = "", frustration = "", coachingContext = "", coachingChallenge = "" }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, objective = "", frustration = "", coachingChallenge = "" }: Props) {
   const [step, setStep] = useState<0 | 1 | 2>(0);
 
   useEffect(() => {
-    posthog.capture("paywall_priming_viewed", { plan: mode, objective, coachingContext });
+    posthog.capture("paywall_priming_viewed", { plan: mode, objective });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const p = PRICING[mode];
   const annualSavings = p.monthly * 12 - p.annual;
 
-  const personalizedHeadline = (objective || coachingContext)
+  const personalizedHeadline = (objective || coachingChallenge)
     ? getPrimingHeadline(
         mode === "athlete"
           ? { mode: "athlete", goal: objective, frustration }
-          : { mode: "coach", coachingContext, coachingChallenge }
+          : { mode: "coach", coachingChallenge }
       )
     : null;
 
@@ -169,7 +168,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       )}
 
       {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective, coachingContext }); setStep(1); }} style={ctaBtn}>
+      <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective }); setStep(1); }} style={ctaBtn}>
         Continuer gratuitement →
       </button>
       <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
@@ -199,7 +198,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       </div>
 
       {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective, coachingContext }); setStep(2); }} style={ctaBtn}>
+      <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective }); setStep(2); }} style={ctaBtn}>
         Continuer gratuitement →
       </button>
       <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>

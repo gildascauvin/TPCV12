@@ -47,25 +47,15 @@ function getAthleteSteps(_objective: string, _sport: string): TourStep[] {
   ];
 }
 
-function getCoachSteps(coachingContext: string, coachingChallenge: string): TourStep[] {
-  const isKine = coachingContext.startsWith("Kiné");
-  const isWellness = coachingContext.startsWith("Autre");
+function getCoachSteps(coachingChallenge: string): TourStep[] {
   const isCommunication = coachingChallenge.includes("Communiquer");
 
   return [
     {
       page: "/coach",
       emoji: "👥",
-      title: isKine
-        ? "Identifie qui est en bonne route vers le retour à l'entraînement"
-        : isWellness
-          ? "Suis le bien-être de chaque client"
-          : "Sache exactement qui surveiller",
-      subtitle: isKine
-        ? "Niveau de forme croisé avec la charge. Suis l'évolution de chaque sportif en réhab semaine après semaine."
-        : isWellness
-          ? "Fatigue, stress, comportements. Une vision globale de chaque personne suivie."
-          : "Niveau de forme croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
+      title: "Sache exactement qui surveiller",
+      subtitle: "Niveau de forme croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
     },
     {
       page: "/coach/planning",
@@ -92,11 +82,10 @@ interface Props {
   objective?: string;
   frustration?: string;
   sport?: string;
-  coachingContext?: string;
   coachingChallenge?: string;
 }
 
-export default function ProductTourOverlay({ role, hasCoach, objective = "", frustration = "", sport = "", coachingContext = "", coachingChallenge = "" }: Props) {
+export default function ProductTourOverlay({ role, hasCoach, objective = "", frustration = "", sport = "", coachingChallenge = "" }: Props) {
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -106,7 +95,7 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   );
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
-  const coachSteps = getCoachSteps(coachingContext, coachingChallenge);
+  const coachSteps = getCoachSteps(coachingChallenge);
   if (programStartDate) {
     coachSteps[1] = { ...coachSteps[1], page: `/coach/planning?date=${programStartDate}` };
   }
@@ -149,7 +138,7 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   function handleNext() {
     if (isLast) {
       posthog.capture("tour_completed", { role });
-      posthog.capture("paywall_priming_viewed", { plan: role, objective, coachingContext });
+      posthog.capture("paywall_priming_viewed", { plan: role, objective });
       localStorage.setItem("tour_priming_pending", "1");
       setPaywallStage("journey");
     } else {
@@ -171,7 +160,6 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
         onDismiss={() => setPaywallStage("none")}
         objective={objective}
         frustration={frustration}
-        coachingContext={coachingContext}
         coachingChallenge={coachingChallenge}
       />
     );

@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
+import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
 import AuthBackground from "@/components/auth/AuthBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
-import WeekPreviewStepCoach from "@/components/onboarding/WeekPreviewStepCoach";
 import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
 
@@ -51,7 +51,7 @@ const COACH_PATH: StepId[] = [
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
-  "context_2b", "sport_2b", "count_2b", "tool_2b",
+  "sport_2a", "level_2a", "goal_2a", "days_2a",
   "week_preview_2b",
   "account",
 ];
@@ -68,6 +68,28 @@ function getNextMonday(): string {
   const monday = new Date(today);
   monday.setDate(today.getDate() + daysUntilMonday);
   return monday.toISOString().split("T")[0];
+}
+
+const LEVEL_DIFF_ADJ: Record<Level, number> = { beginner: -2, intermediate: 0, elite: 1 };
+const LEVEL_TO_DB: Record<Level, string> = { beginner: "debutant", intermediate: "intermediaire", elite: "elite" };
+const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+
+function buildProgramTemplate(sport: string, level: Level, days: number[]): ProgramTemplate {
+  const templates = getSessionTemplates(sport);
+  const adj = LEVEL_DIFF_ADJ[level];
+  const weeks: WeekTemplate[] = [0, 1, 2, 3].map(w => {
+    const week: WeekTemplate = {};
+    days.forEach((d, i) => {
+      const tpl = templates[i % templates.length];
+      const diff = Math.max(1, Math.min(10, tpl[2] + adj + (w === 3 ? -1 : w)));
+      const dayName = DOW_NAMES[d] ?? "Lun";
+      if (!week[dayName]) week[dayName] = [];
+      const session: SessionTemplate = { name: tpl[0], notes: tpl[1], target_difficulty: diff, load: 2, type: "volume" };
+      week[dayName].push(session);
+    });
+    return week;
+  });
+  return { weeks };
 }
 
 const SPORT_CATEGORIES = [
@@ -438,14 +460,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       user_id: uid,
       ...(name.trim() ? { name: name.trim() } : {}),
       sport: sportValue, mode: role, onboarding_done: true,
-      freq_target:        role === "athlete" ? trainingDays.length : null,
-      training_days:      role === "athlete" ? trainingDays : null,
-      objective:          role === "athlete" ? (goal || null) : null,
+      freq_target:        trainingDays.length || null,
+      training_days:      trainingDays.length ? trainingDays : null,
+      objective:          goal || null,
       frustration:        role === "athlete" ? (frustration || null) : null,
-      coaching_context:   role === "coach"   ? (coachingContext || null) : null,
-      athletes_count:     role === "coach"   ? (athleteCount || null) : null,
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
-      current_tool:       role === "coach"   ? (currentTool || null) : null,
     }, { onConflict: "user_id" });
 
     if (role === "athlete") {
@@ -469,13 +488,44 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         { name: "Sofia R.",  wellness_score: 71, rpeBase: 7 },
         { name: "Lucas B.",  wellness_score: 28, rpeBase: 8 },
       ];
+      const demoAthleteIds: string[] = [];
       for (const demo of DEMO_ATHLETES) {
         const { data: athlete } = await supabase
           .from("coach_athletes")
           .insert({ coach_id: uid, name: demo.name, sport: sportValue, wellness_score: demo.wellness_score, user_id: null })
           .select("id").single();
         if (athlete?.id) {
+          demoAthleteIds.push(athlete.id);
           await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase));
+        }
+      }
+
+      // Auto-generate a program and assign to first demo athlete
+      const firstAthleteId = demoAthleteIds[0];
+      if (firstAthleteId && trainingDays.length > 0) {
+        const template = buildProgramTemplate(sportValue, level, trainingDays);
+        const { data: program } = await supabase
+          .from("programs")
+          .insert({
+            owner_id: uid,
+            name: `Programme ${sportValue} — 4 semaines`,
+            sport: sportValue,
+            level: LEVEL_TO_DB[level],
+            weeks_count: 4,
+            sessions_per_week: trainingDays.length,
+            is_public: false,
+            template,
+          })
+          .select("id")
+          .single();
+        if (program?.id) {
+          await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
+          await fetch(`/api/programs/${program.id}/assign`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthleteId }),
+          });
+          localStorage.setItem("program_start_date", getNextMonday());
         }
       }
     }
@@ -1387,7 +1437,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW COACH ── */}
         {currentStep === "week_preview_2b" && (
-          <WeekPreviewStepCoach sport={sport} athleteCount={parseInt(athleteCount) || 1} onNext={next} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}

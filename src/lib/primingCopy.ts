@@ -5,7 +5,6 @@ type AthleteParams = {
 };
 type CoachParams = {
   mode: "coach";
-  coachingContext: string;
   coachingChallenge: string;
 };
 type PrimingParams = AthleteParams | CoachParams;
@@ -53,13 +52,7 @@ const ATHLETE_HEADLINES: Record<string, Record<string, string>> = {
   },
 };
 
-function getCoachHeadline(context: string, challenge: string): string {
-  if (context.startsWith("Kiné")) {
-    return "Suis l'évolution de chaque sportif en réhab et identifie qui est en bonne route vers le retour à l'entraînement.";
-  }
-  if (context.startsWith("Autre")) {
-    return "Suivi bien-être, charge, comportements. Un tableau de bord complet pour chacun de tes clients.";
-  }
+function getCoachHeadline(challenge: string): string {
   if (challenge.includes("charge") || challenge.includes("Personnaliser")) {
     return "ThePerfClub centralise le niveau de forme et la charge de toute ton équipe en temps réel.";
   }
@@ -79,5 +72,5 @@ export function getPrimingHeadline(params: PrimingParams): string {
       "ThePerfClub adapte chaque séance à ton état réel pour que tu progresses sans te blesser."
     );
   }
-  return getCoachHeadline(params.coachingContext, params.coachingChallenge);
+  return getCoachHeadline(params.coachingChallenge);
 }
