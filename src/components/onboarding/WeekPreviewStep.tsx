@@ -7,6 +7,13 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import type { ProgramTemplate, SessionTemplate } from "@/types";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+function loadBarColor(avg: number): string {
+  if (!avg) return "#e5e7eb";
+  if (avg <= 4) return "#2f9e44";
+  if (avg <= 7) return "#f28a00";
+  return "#d44000";
+}
 const DOW_MAP: Record<string, number> = { Lun: 0, Mar: 1, Mer: 2, Jeu: 3, Ven: 4, Sam: 5, Dim: 6 };
 
 function getSportEmoji(sport: string): string {
@@ -144,8 +151,8 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
       </div>
       <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>
         {programFlow
-          ? (displayName ? "Voici la progression de charge semaine après semaine" : "Chargement du programme…")
-          : "Généré selon ton niveau et tes jours d'entraînement"}
+          ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
+          : "Généré selon ton niveau et tes jours d'entraînement. Personnalisable à tout moment."}
       </div>
 
       {/* S1-S4 charge progression */}
@@ -153,15 +160,23 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
         <div style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10 }}>
           Charge sur 4 semaines
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-          {weekPhases.map(({ label, diff }) => (
-            <div key={label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 8, fontWeight: 800, color: "#62686e", textAlign: "center" }}>{label}</div>
-              <DiffGauge value={diff} height={8} />
-              <div style={{ fontSize: 9, fontWeight: 700, color: "#8a8f94", textAlign: "center" }}>{diff}/10</div>
+        {(() => {
+          const maxDiff = Math.max(...weekPhases.map(p => p.diff), 0.01);
+          return (
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
+              {weekPhases.map(({ label, diff }, i) => {
+                const barH = Math.max(4, Math.round((diff / maxDiff) * 28));
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                    <div style={{ width: 18, height: barH, borderRadius: "2px 2px 0 0", background: loadBarColor(diff) }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#171b1f" }}>S{i + 1}</span>
+                    <span style={{ fontSize: 8, fontWeight: 600, color: "#8a8f94" }}>{label}</span>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
+          );
+        })()}
       </div>
 
       {/* Mini-calendrier semaine */}

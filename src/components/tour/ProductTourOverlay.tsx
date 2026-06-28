@@ -36,7 +36,7 @@ function getAthleteSteps(_objective: string, _sport: string): TourStep[] {
       page: `/week?date=${getNextMonday()}`,
       emoji: "📅",
       title: "Ton programme t'attend ici",
-      subtitle: "Retrouve tes séances, leur difficulté cible, et ta progression semaine après semaine.",
+      subtitle: "On a prérempli un programme selon ton sport et ton niveau. Retrouve tes séances et personnalise-les à tout moment.",
     },
     {
       page: "/conseils",
@@ -55,13 +55,13 @@ function getCoachSteps(coachingChallenge: string): TourStep[] {
       page: "/coach",
       emoji: "👥",
       title: "Sache exactement qui surveiller",
-      subtitle: "Niveau de forme croisé avec la charge prévue. Identifie d'un coup d'œil qui peut pousser et qui doit lever le pied.",
+      subtitle: "Voici des sportifs démo avant d'inviter les tiens. Tu verras leur niveau de forme croisé avec la charge prévue. Identifie d'un coup d'oeil qui peut pousser et qui doit lever le pied.",
     },
     {
       page: "/coach/planning",
       emoji: "📋",
       title: "Plus de temps à coacher, moins à planifier",
-      subtitle: "Génère une prog IA ou pars d'un template. Tout est personnalisable. Assigne en un clic.",
+      subtitle: "On a prérempli un programme selon le sport et le niveau de tes sportifs. Personnalise-le séance par séance et assigne-le en un clic.",
     },
     {
       page: "/coach/athletes",

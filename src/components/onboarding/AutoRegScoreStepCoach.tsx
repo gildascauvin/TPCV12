@@ -101,7 +101,7 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
       margin: "-8px -4px", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)",
     }}>
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#d44000", marginBottom: 16 }}>
-        ⚡ Diagnostic d'autorégulation équipe
+        ⚡ Diagnostic d'autorégulation
       </div>
 
       {phase === "loading" ? (
@@ -131,15 +131,15 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
               {globalPct}%
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.5)", marginTop: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Score d'autorégulation équipe
+              Score d'autorégulation
             </div>
           </div>
 
           {/* Dimensions */}
           <div style={{ marginBottom: 18 }}>
-            <DimensionBar label="Maîtrise de l'intensité équipe" risk={overloadRisk} visible={visibleBars >= 1} />
-            <DimensionBar label="Efficacité de planification"    risk={planningRisk} visible={visibleBars >= 2} />
-            <DimensionBar label="Gestion de la fatigue équipe"   risk={fatigueRisk}  visible={visibleBars >= 3} />
+            <DimensionBar label="Maîtrise de l'intensité" risk={overloadRisk} visible={visibleBars >= 1} />
+            <DimensionBar label="Efficacité de planification" risk={planningRisk} visible={visibleBars >= 2} />
+            <DimensionBar label="Gestion de la fatigue"   risk={fatigueRisk}  visible={visibleBars >= 3} />
           </div>
 
           {/* Message-pont */}
