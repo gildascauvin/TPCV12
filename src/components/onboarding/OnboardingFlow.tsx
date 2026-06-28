@@ -58,6 +58,18 @@ const COACH_PATH: StepId[] = [
 
 const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"];
 
+const PROGRAM_ATHLETE_PATH: StepId[] = ["week_preview_2a", "role", "wellness_q", "account"];
+const PROGRAM_COACH_PATH: StepId[] = ["week_preview_2a", "role", "account"];
+
+function getNextMonday(): string {
+  const today = new Date();
+  const dow = today.getDay();
+  const daysUntilMonday = dow === 1 ? 7 : (8 - dow) % 7 || 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + daysUntilMonday);
+  return monday.toISOString().split("T")[0];
+}
+
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
   { id: "Athlétisme & vitesse",   icon: "🏃", sub: "Sprint, saut, lancer…" },
@@ -212,11 +224,18 @@ function buildCoachDemoSessions(coachId: string, athleteId: string, sport: strin
   }
 
   // 2 semaines futures (S0 + S1)
+  const scheduledDays = [1, 3, 5, 6];
   for (const weekOffset of [0, 1]) {
-    [1, 3, 5, 6].forEach((d, i) => {
+    scheduledDays.forEach((d, i) => {
       const [name, notes] = templates[i % templates.length];
       sessions.push({ coach_id: coachId, athlete_id: athleteId, date: dateForDow(d, weekOffset), name, notes, done: false, target_difficulty: rpeBase });
     });
+  }
+
+  // Garantir une séance aujourd'hui pour le coach control (filtre hasSessions)
+  if (!scheduledDays.includes(todayDow)) {
+    const [name, notes] = templates[0];
+    sessions.push({ coach_id: coachId, athlete_id: athleteId, date: today.toISOString().split("T")[0], name, notes, done: false, target_difficulty: rpeBase });
   }
 
   return sessions;
@@ -296,6 +315,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const router   = useRouter();
   const supabase = createClient();
   const isRegisterMode = !userId;
+  const [hasClaimedProgram, setHasClaimedProgram] = useState<boolean | null>(null);
 
   const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
@@ -355,7 +375,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   }
 
-  const getPath = (r: Role): StepId[] => r === "coach" ? COACH_PATH : ATHLETE_PATH;
+  const getPath = (r: Role): StepId[] => {
+    if (hasClaimedProgram) return r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
+    return r === "coach" ? COACH_PATH : ATHLETE_PATH;
+  };
   const path        = getPath(role);
   const currentStep = path[stepIdx];
   const isLast      = stepIdx === path.length - 1;
@@ -378,8 +401,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     };
     posthog.capture("onboarding_step_viewed", props);
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
+    if (hasClaimedProgram && currentStep === "week_preview_2a") {
+      posthog.capture("program_preview_viewed", { program_id: localStorage.getItem("claim_program_id") });
+    }
     advancingRef.current = false;
   }, [currentStep]);
+
+  useEffect(() => {
+    const claimed = !!localStorage.getItem("claim_program_id");
+    setHasClaimedProgram(claimed);
+    if (claimed) {
+      posthog.setPersonProperties({ onboarding_source: "program", claimed_program_id: localStorage.getItem("claim_program_id") });
+      posthog.capture("program_onboarding_start", { program_id: localStorage.getItem("claim_program_id") });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (currentStep !== "value_slides") return;
@@ -415,7 +451,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
       await Promise.all([
-        supabase.from("sessions").insert(buildAthleteSessions(uid, sportValue, level, trainingDays)),
+        ...(!hasClaimedProgram ? [supabase.from("sessions").insert(buildAthleteSessions(uid, sportValue, level, trainingDays))] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -429,7 +465,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       const DEMO_ATHLETES = [
         { name: "Thomas M.", wellness_score: 82, rpeBase: 7 },
         { name: "Emma L.",   wellness_score: 67, rpeBase: 8 },
-        { name: "Pierre D.", wellness_score: 43, rpeBase: 5 },
+        { name: "Pierre D.", wellness_score: 43, rpeBase: 9 },
         { name: "Sofia R.",  wellness_score: 71, rpeBase: 7 },
         { name: "Lucas B.",  wellness_score: 28, rpeBase: 8 },
       ];
@@ -495,12 +531,41 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         }
         const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
         if (claimId) {
-          await fetch("/api/programs/claim", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ programId: claimId }),
-          });
-          localStorage.removeItem("claim_program_id");
+          try {
+            const claimRes = await fetch("/api/programs/claim", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ programId: claimId }),
+            });
+            if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
+            const { programId: copiedId } = await claimRes.json();
+            if (role === "athlete") {
+              const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ start_date: getNextMonday(), user_id: uid }),
+              });
+              if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
+            } else if (role === "coach") {
+              const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", uid).limit(1).maybeSingle();
+              if (firstAthlete?.id) {
+                await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthlete.id);
+                await fetch(`/api/programs/${copiedId}/assign`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
+                });
+                localStorage.setItem("program_start_date", getNextMonday());
+              }
+            }
+          } catch (err: unknown) {
+            const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
+            if (status !== 409 && role === "athlete") {
+              await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
+            }
+          } finally {
+            localStorage.removeItem("claim_program_id");
+          }
         }
         setSaving(false);
         window.location.href = role === "coach" ? "/coach" : "/today";
@@ -508,12 +573,41 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         await saveData(userId!);
         const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
         if (claimId) {
-          await fetch("/api/programs/claim", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ programId: claimId }),
-          });
-          localStorage.removeItem("claim_program_id");
+          try {
+            const claimRes = await fetch("/api/programs/claim", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ programId: claimId }),
+            });
+            if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
+            const { programId: copiedId } = await claimRes.json();
+            if (role === "athlete") {
+              const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ start_date: getNextMonday(), user_id: userId }),
+              });
+              if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
+            } else if (role === "coach") {
+              const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", userId!).limit(1).maybeSingle();
+              if (firstAthlete?.id) {
+                await supabase.from("coach_sessions").delete().eq("coach_id", userId!).eq("athlete_id", firstAthlete.id);
+                await fetch(`/api/programs/${copiedId}/assign`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
+                });
+                localStorage.setItem("program_start_date", getNextMonday());
+              }
+            }
+          } catch (err: unknown) {
+            const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
+            if (status !== 409 && role === "athlete") {
+              await supabase.from("sessions").insert(buildAthleteSessions(userId!, sport, level, trainingDays));
+            }
+          } finally {
+            localStorage.removeItem("claim_program_id");
+          }
         }
         window.location.href = role === "coach" ? "/coach" : "/today";
       }
@@ -614,6 +708,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
 
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
+
+  if (hasClaimedProgram === null) {
+    return (
+      <AuthBackground>
+        <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.94)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.40)", minHeight: 280 }} />
+      </AuthBackground>
+    );
+  }
 
   if (initializing) {
     return (
@@ -1280,7 +1382,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} programFlow={hasClaimedProgram} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}

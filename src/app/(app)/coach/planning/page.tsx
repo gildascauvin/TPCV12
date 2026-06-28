@@ -7,7 +7,7 @@ import CoachPlanningClient from "./CoachPlanningClient";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
 
-export default async function CoachPlanningPage() {
+export default async function CoachPlanningPage({ searchParams }: { searchParams: { date?: string } }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -63,6 +63,7 @@ export default async function CoachPlanningPage() {
       initialSessions={initialSessions}
       initialWellnessMap={wellnessMap}
       subscriptionStatus={profile.subscription_status ?? "free"}
+      initialDate={searchParams.date}
     />
   );
 }

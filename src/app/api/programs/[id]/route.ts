@@ -1,6 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("programs")
+    .select("name, sport, level, template")
+    .eq("id", id)
+    .eq("is_public", true)
+    .maybeSingle();
+  if (!data) return Response.json({ error: "Not found" }, { status: 404 });
+  return Response.json(data);
+}
+
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();

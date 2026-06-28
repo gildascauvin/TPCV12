@@ -305,9 +305,10 @@ interface Props {
   initialSessions: Session[];
   subscriptionStatus: SubscriptionStatus;
   hasCoach?: boolean;
+  activeProgram?: { start_date: string; name: string } | null;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, activeProgram }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -721,11 +722,29 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             <div id="day-sessions-container">
               {/* Empty state semaine entière */}
               {weekSessions.length === 0 ? (
-                <EmptySessionState
-                  sport={profile.sport}
-                  label="Créer ma première séance"
-                  onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
-                />
+                activeProgram && activeProgram.start_date > initialDate ? (
+                  <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#2f9e44", marginBottom: 4 }}>
+                      Programme en attente
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>
+                      {activeProgram.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#62686e", lineHeight: 1.5 }}>
+                      {(() => {
+                        const [, m, d] = activeProgram.start_date.split("-").map(Number);
+                        const MONTHS = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+                        return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Semaine.`;
+                      })()}
+                    </div>
+                  </div>
+                ) : (
+                  <EmptySessionState
+                    sport={profile.sport}
+                    label="Créer ma première séance"
+                    onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
+                  />
+                )
               ) : todaySessions.length === 0 ? (
                 <div style={{ border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "var(--muted)", fontSize: 12, marginBottom: 9 }}>
                   Repos ou séance libre

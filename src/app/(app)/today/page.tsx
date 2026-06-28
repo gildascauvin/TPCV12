@@ -14,13 +14,23 @@ export default async function TodayPage() {
 
   const today = format(new Date(), "yyyy-MM-dd");
 
-  const [{ data: profile }, { data: wellness }, { data: sessions }] = await Promise.all([
+  const [{ data: profile }, { data: wellness }, { data: sessions }, { data: activeAssignment }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).eq("date", today).maybeSingle(),
     supabase.from("sessions").select("*").eq("user_id", user!.id).order("date").order("created_at"),
+    supabase.from("program_assignments").select("start_date, programs(name)").eq("user_id", user!.id).eq("status", "active").maybeSingle(),
   ]);
 
   const hasCoach = !!(profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id;
+
+  type ActiveProgram = { start_date: string; name: string } | null;
+  const programsData = activeAssignment?.programs;
+  const programName = Array.isArray(programsData)
+    ? (programsData[0]?.name ?? "")
+    : ((programsData as unknown as { name: string } | null)?.name ?? "");
+  const activeProgram: ActiveProgram = activeAssignment
+    ? { start_date: activeAssignment.start_date, name: programName }
+    : null;
 
   return (
     <TodayClient
@@ -31,6 +41,7 @@ export default async function TodayPage() {
       initialSessions={sessions ?? []}
       subscriptionStatus={profileCheck?.subscription_status ?? "free"}
       hasCoach={hasCoach}
+      activeProgram={activeProgram}
     />
   );
 }

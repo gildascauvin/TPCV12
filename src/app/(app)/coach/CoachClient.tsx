@@ -92,8 +92,7 @@ function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
 function attention(a: CoachAthlete, maxDiff: number) {
   return a.wellness_score < 55 ||
     (a.wellness_score < 65 && maxDiff >= 5) ||
-    maxDiff >= 8 ||
-    (a.wellness_score < 72 && maxDiff >= 6);
+    maxDiff >= 8;
 }
 
 function riskScore(a: CoachAthlete, maxDiff: number): number {

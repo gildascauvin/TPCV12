@@ -20,7 +20,7 @@ export function getSessionTemplates(sport: string): [string, string, number][] {
     ["Endurance collective",     "Jeu réduit 4vs4 × 4 sets\nRécup active 2 min\nFocus pressing et transitions\nConduite balle + sprints 3x30m\nDebriefing tactique", 6],
     ["Renforcement prévention",  "Gainage 3x1min\nNordic curl 3x6\nMobilité hanches 10 min\nSauts amortis 3x8\nBand work genoux 2x15", 4],
   ];
-  if (s.includes("endurance")) return [
+  if (s.includes("endurance") || s.includes("course") || s.includes("marathon") || s.includes("trail") || s.includes("vélo") || s.includes("cyclisme") || s.includes("triathlon")) return [
     ["Fractionné court",         "Échauffement 15 min\n8x200m @ allure rapide\nRécup 90s entre chaque\nNote ta cadence de foulée\nRetour au calme 10 min", 8],
     ["Sortie longue facile",     "Effort aérobie continu 45–60 min\nAllure conversationnelle\nFocus : respiration et économie\nRavitaillement toutes les 30 min\nNote FC moyenne", 3],
     ["Seuil progressif",         "Montée en allure progressive 10 min\n20 min @ seuil\nFocus : régularité d'allure\nMesure FC max & moyenne\nRetour au calme 10 min", 7],

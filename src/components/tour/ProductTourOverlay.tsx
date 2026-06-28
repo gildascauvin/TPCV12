@@ -13,49 +13,36 @@ interface TourStep {
   subtitle: string;
 }
 
-const SPORT_SUBTITLES: Record<string, string> = {
-  "Endurance":              "Fractionné, sortie longue, récup. Planifiés selon ton état du jour.",
-  "Force & puissance":      "Push, pull, legs. Organisés selon ta récupération.",
-  "Sports collectifs":      "Séances collectif + récup entre les matchs, calibrées à ton état.",
-  "Arts martiaux & combat": "Séances techniques + récup selon ton état physique réel.",
-  "Athlétisme & vitesse":   "Séances vitesse, force, récup. Adaptées à ton état chaque semaine.",
-};
 
-function getAthleteSteps(objective: string, sport: string): TourStep[] {
-  const isRecovery = objective === "Éviter le surmenage et les blessures" || objective === "Mieux récupérer entre les séances";
-  const isStructure = objective === "Structurer et suivre mon entraînement";
-  const sportSubtitle = SPORT_SUBTITLES[sport] ?? "Séances ajustées à ton profil. Modifie, ajoute, ou laisse telle quelle.";
+function getNextMonday(): string {
+  const today = new Date();
+  const dow = today.getDay();
+  const daysUntilMonday = dow === 1 ? 7 : (8 - dow) % 7 || 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + daysUntilMonday);
+  return monday.toISOString().split("T")[0];
+}
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getAthleteSteps(_objective: string, _sport: string): TourStep[] {
   return [
     {
       page: "/today",
       emoji: "🏃",
-      title: isRecovery
-        ? "Entraîne-toi selon ton état réel"
-        : isStructure
-          ? "Entraîne-toi avec un plan clair"
-          : "Entraîne-toi au bon moment",
-      subtitle: isRecovery
-        ? "Ton niveau de forme oriente l'intensité du jour. Chaque séance colle à ce que ton corps peut vraiment donner."
-        : isStructure
-          ? "Tes séances sont planifiées sur tes jours dispo. Plus d'improvisation."
-          : "Ton niveau de forme oriente l'intensité du jour. Plus de surmenage, plus de séances ratées.",
+      title: "Ta séance du jour, ajustée à ta forme",
+      subtitle: "Ton wellness oriente l'intensité recommandée. Adapte selon ce que tu ressens vraiment.",
     },
     {
-      page: "/week",
+      page: `/week?date=${getNextMonday()}`,
       emoji: "📅",
-      title: "Une semaine construite sur mesure",
-      subtitle: sportSubtitle,
+      title: "Ton programme t'attend ici",
+      subtitle: "Retrouve tes séances, leur difficulté cible, et ta progression semaine après semaine.",
     },
     {
       page: "/conseils",
       emoji: "📊",
-      title: isRecovery
-        ? "Repère les signaux avant les blessures"
-        : "Découvre ce qui fait vraiment la différence",
-      subtitle: isRecovery
-        ? "Sommeil, stress, comportements — identifie ce qui te fragilise avant que ça devienne une blessure."
-        : "Sommeil, stress, comportements — vois l'impact réel sur tes perfs, en chiffres.",
+      title: "Tes données de performance",
+      subtitle: "Corrélations charge et forme, rapport hebdo, signaux de fatigue. Tout en un coup d'oeil.",
     },
   ];
 }
@@ -113,13 +100,18 @@ export default function ProductTourOverlay({ role, hasCoach, objective = "", fru
   const router = useRouter();
   const sheetRef = useRef<HTMLDivElement>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const programStartDate = typeof window !== "undefined" ? localStorage.getItem("program_start_date") : null;
   const [paywallStage, setPaywallStage] = useState<"none" | "journey" | "paywall">(() =>
     typeof window !== "undefined" && localStorage.getItem("tour_priming_pending") ? "journey" : "none"
   );
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
+  const coachSteps = getCoachSteps(coachingContext, coachingChallenge);
+  if (programStartDate) {
+    coachSteps[1] = { ...coachSteps[1], page: `/coach/planning?date=${programStartDate}` };
+  }
   const steps = role === "coach"
-    ? getCoachSteps(coachingContext, coachingChallenge)
+    ? coachSteps
     : getAthleteSteps(objective, sport);
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;

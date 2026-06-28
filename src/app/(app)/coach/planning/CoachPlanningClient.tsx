@@ -53,9 +53,10 @@ interface Props {
   initialSessions: CoachViewSession[];
   initialWellnessMap: Record<string, Record<string, number>>;
   subscriptionStatus: SubscriptionStatus;
+  initialDate?: string;
 }
 
-export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap, subscriptionStatus }: Props) {
+export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,7 +68,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [selectedAthleteId, setSelectedAthleteId] = useState(defaultAthleteId);
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [selectedDate, setSelectedDate] = useState(initialDate ?? todayStr);
   const [navKey, setNavKey] = useState(0);
   const slideDirRef  = useRef<"left" | "right">("left");
   const lastWheelNav = useRef(0);
