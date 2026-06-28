@@ -107,11 +107,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
   let weekPhases: { label: string; diff: number }[];
   if (fetchedProgram?.template?.weeks) {
     const weeks = fetchedProgram.template.weeks;
-    const phaseLabels = ["Base", "Accum.", "Pic", "Récup"];
-    weekPhases = weeks.map((week, i) => ({
-      label: phaseLabels[i] ?? "",
-      diff: weekAvgDiff(week),
-    }));
+    weekPhases = weeks.map(week => ({ label: "", diff: weekAvgDiff(week) }));
   } else {
     const baseDiff = adjustDiff(getSessionTemplates(displaySport)[0][2], displayLevel);
     weekPhases = [
