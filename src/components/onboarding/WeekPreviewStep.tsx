@@ -103,17 +103,17 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
     });
   }
 
-  // S1-S4 gauges
+  // S1-SN gauges
   let weekPhases: { label: string; diff: number }[];
   if (fetchedProgram?.template?.weeks) {
     const weeks = fetchedProgram.template.weeks;
     const phaseLabels = ["Base", "Accum.", "Pic", "Récup"];
-    weekPhases = [0, 1, 2, 3].map(i => ({
-      label: phaseLabels[i],
-      diff: weeks[i] ? weekAvgDiff(weeks[i]) : weekAvgDiff(weeks[weeks.length - 1] ?? {}),
+    weekPhases = weeks.map((week, i) => ({
+      label: phaseLabels[i] ?? "",
+      diff: weekAvgDiff(week),
     }));
   } else {
-    const baseDiff = week1 ? 6 : adjustDiff(getSessionTemplates(displaySport)[0][2], displayLevel);
+    const baseDiff = adjustDiff(getSessionTemplates(displaySport)[0][2], displayLevel);
     weekPhases = [
       { label: "Base",   diff: baseDiff },
       { label: "Accum.", diff: Math.min(10, baseDiff + 1) },
@@ -158,7 +158,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
       {/* S1-S4 charge progression */}
       <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
         <div style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10 }}>
-          Charge sur 4 semaines
+          Charge sur {weekPhases.length} semaine{weekPhases.length > 1 ? "s" : ""}
         </div>
         {(() => {
           const maxDiff = Math.max(...weekPhases.map(p => p.diff), 0.01);
@@ -170,7 +170,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
                   <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
                     <div style={{ width: 18, height: barH, borderRadius: "2px 2px 0 0", background: loadBarColor(diff) }} />
                     <span style={{ fontSize: 10, fontWeight: 800, color: "#171b1f" }}>S{i + 1}</span>
-                    <span style={{ fontSize: 8, fontWeight: 600, color: "#8a8f94" }}>{label}</span>
+                    {label && <span style={{ fontSize: 8, fontWeight: 600, color: "#8a8f94" }}>{label}</span>}
                   </div>
                 );
               })}
