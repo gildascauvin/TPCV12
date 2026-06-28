@@ -951,11 +951,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           );
         })()}
 
-        {/* ── 2A-1. SPORT ATHLETE ── */}
+        {/* ── 2A-1. SPORT ── */}
         {currentStep === "sport_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton sport principal ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>On génère des séances adaptées à ta discipline.</div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+              {role === "coach" ? "Le sport de tes sportifs ?" : "Ton sport principal ?"}
+            </div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+              {role === "coach" ? "On génère les séances de ton premier programme." : "On génère des séances adaptées à ta discipline."}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14, maxHeight: "42vh", overflowY: "auto" }}>
               {SPORT_CATEGORIES.map(s => (
                 <Choice key={s.id} icon={s.icon} title={s.id} sub={s.sub} selected={sport === s.id}
@@ -970,7 +974,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 <input
                   type="text" value={sportPrecision}
                   onChange={e => setSportPrecision(e.target.value)}
-                  placeholder="Précise ton sport (ex : rugby, yoga, escalade…)"
+                  placeholder={role === "coach" ? "Précise le sport de tes sportifs (ex : rugby, natation…)" : "Précise ton sport (ex : rugby, yoga, escalade…)"}
                   style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none" }}
                   autoFocus
                 />
@@ -988,15 +992,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-2. LEVEL ── */}
         {currentStep === "level_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton niveau actuel ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Cela ajuste l'intensité des séances générées.</div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+              {role === "coach" ? "Niveau de tes sportifs ?" : "Ton niveau actuel ?"}
+            </div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+              {role === "coach" ? "L'intensité du programme s'ajuste en conséquence." : "Cela ajuste l'intensité des séances générées."}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {([
-                { key: "beginner" as Level, icon: "🌱", title: "Débutant",      sub: "Je structure mon entraînement" },
-                { key: "intermediate" as Level, icon: "📈", title: "Intermédiaire", sub: "J'ai une pratique régulière" },
-                { key: "elite" as Level, icon: "🏆", title: "Compétiteur",   sub: "Je prépare des compétitions" },
+                { key: "beginner" as Level, icon: "🌱", title: "Débutant",       subAthlete: "Je structure mon entraînement",    subCoach: "Bases sportives, progression douce" },
+                { key: "intermediate" as Level, icon: "📈", title: "Intermédiaire", subAthlete: "J'ai une pratique régulière",      subCoach: "Pratique régulière, objectifs précis" },
+                { key: "elite" as Level, icon: "🏆", title: "Compétiteur",    subAthlete: "Je prépare des compétitions",      subCoach: "Préparation compétitions, haute intensité" },
               ] as const).map(l => (
-                <Choice key={l.key} icon={l.icon} title={l.title} sub={l.sub} selected={level === l.key}
+                <Choice key={l.key} icon={l.icon} title={l.title} sub={role === "coach" ? l.subCoach : l.subAthlete} selected={level === l.key}
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setLevel(l.key)) : setLevel(l.key)} />
               ))}
             </div>
@@ -1010,8 +1018,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-3. GOAL ── */}
         {currentStep === "goal_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton objectif principal ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>ThePerfClub adapte son suivi à ce qui compte pour toi.</div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+              {role === "coach" ? "L'objectif de tes sportifs ?" : "Ton objectif principal ?"}
+            </div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+              {role === "coach" ? "Le programme sera orienté autour de cet objectif." : "ThePerfClub adapte son suivi à ce qui compte pour toi."}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 { id: "Progresser en performance",             icon: "🎯" },
@@ -1056,8 +1068,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-5. JOURS D'ENTRAÎNEMENT ── */}
         {currentStep === "days_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Quels sont tes jours d'entraînement ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 18 }}>Tes séances seront planifiées sur ces jours.</div>
+            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+              {role === "coach" ? "Créons un premier programme" : "Quels sont tes jours d'entraînement ?"}
+            </div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 18 }}>
+              {role === "coach" ? "Choisis les jours d'entraînement de tes sportifs." : "Tes séances seront planifiées sur ces jours."}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5, marginBottom: 8 }}>
               {([
                 { dow: 1, short: "L",  full: "Lun." },
