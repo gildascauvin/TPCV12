@@ -38,9 +38,9 @@ src/app/
   reset-password/ # Nouveau mot de passe (après lien email)
 ```
 
-## Onboarding — flows actuels (juin 2026)
+## Onboarding — flows actuels (2026-06-28)
 
-### Sportif (inscription — 14 écrans dans OnboardingFlow, puis tour+paywall dans l'app)
+### Sportif — flux classique (14 steps)
 ```
 role → value_slides (3 slides stats)
 → frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
@@ -50,80 +50,139 @@ role → value_slides (3 slides stats)
 → wellness_q (5 questions niveau de forme)
 → account (email + mdp + prénom)
 [après compte créé → redirect /today → ProductTourOverlay :]
-→ tour 3 steps (pages /today /week /conseils, bottom sheet)
+→ tour 3 steps (/today /week?date=prochain-lundi /conseils)
 → PrimingJourneyModal (priming value + notif + pricing)
 → PaywallModal (formulaire CB Stripe)
 ```
 
-### Coach (inscription — 13 écrans dans OnboardingFlow, puis tour+paywall dans l'app)
+### Sportif — flux programme raccourci (PROGRAM_PATH — 4 steps)
+Activé si `claim_program_id` en localStorage (user venant d'une iframe `/p/[id]`).
+```
+week_preview_2a (programme réel depuis template) → role → wellness_q → account
+[après compte créé :]
+→ claim programme → assign user_id + start_date = prochain lundi
+→ redirect /today → ProductTourOverlay (tour step 2 → /week?date=prochain-lundi)
+```
+
+### Coach — flux classique (14 steps)
 ```
 role → value_slides (3 slides stats)
 → challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
 → autoreg_score_coach  [dark card : score % + 3 jauges animées]
-→ context_2b → sport_2b → count_2b → tool_2b
-→ week_preview_2b (programme preview coach)
+→ sport_2a → level_2a → goal_2a → days_2a  ← wording adapté "de tes sportifs"
+→ week_preview_2b (= WeekPreviewStep, preview du programme généré)
 → account
-[après compte créé → redirect /coach → ProductTourOverlay :]
-→ tour 3 steps (pages /coach /coach/planning /coach/athletes)
+[après compte créé → saveData() :]
+  - crée 5 sportifs démo (Thomas M., Emma L., Pierre D., Sofia R., Lucas B.)
+  - buildProgramTemplate(sport, level, days) → insère programme 4 semaines en DB
+  - assigne le programme au premier sportif démo (Thomas M.) dès prochain lundi
+  - localStorage.setItem("program_start_date", nextMonday)
+→ redirect /coach → ProductTourOverlay (tour step 2 → /coach/planning?date=nextMonday)
 → PrimingJourneyModal → PaywallModal
 ```
 
-### Auth mode (déjà connecté — 6 écrans, inchangé)
+### Coach — flux programme raccourci (PROGRAM_COACH_PATH — 3 steps)
+Activé si `claim_program_id` en localStorage ET role=coach.
 ```
-role → 5 questions rôle → saveData() → redirect /today ou /coach
+week_preview_2a → role → account
+[après compte créé :]
+→ claim programme → assign athlete_id (premier sportif démo) + start_date = prochain lundi
+→ localStorage.setItem("program_start_date", nextMonday)
+```
+
+### Auth mode (déjà connecté)
+```
+role → questions selon rôle → saveData() → redirect /today ou /coach
 ```
 
 ### Logique de conversion
 - **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%)
 - **Pain points** : 3 questions par rôle, auto-advance 300ms (register mode uniquement)
-- **Score d'autorégulation** (`autoreg_score` / `autoreg_score_coach`) : dark card après les pain points, score global en %, 3 jauges (pleine=vert=bien, vide=rouge=risque). Animation : "Analyse du profil..." 1,5s puis barres une par une + message-pont
-- **Paywall personnalisé** : `PrimingJourneyModal` titre dynamique via `src/lib/primingCopy.ts` (16 headlines sportif frustration×objectif, 4-5 variantes coach contexte×challenge)
-- **Tour personnalisé** : `ProductTourOverlay` steps dynamiques selon objectif/sport (sportif) et contexte/challenge (coach)
-- **"niveau de forme"** dans tous les textes UI (jamais "wellness" côté visible utilisateur)
-- **Trial 7j** sur plan annuel ; plan mensuel = "Sans engagement"
+- **Score d'autorégulation** : dark card après les pain points, score % + 3 jauges animées
+- **Paywall personnalisé** : `PrimingJourneyModal` titre via `src/lib/primingCopy.ts`
+  - Sportif : 16 headlines (frustration × objectif)
+  - Coach : basé sur `coachingChallenge` uniquement (4 variantes)
+- **Tour personnalisé** : `ProductTourOverlay` — sportif selon objectif/sport, coach statique
+- **`coachingContext` supprimé (2026-06-28)** — remplacé par sport+goal dans tous les composants
+
+### Wording steps 8-11 selon rôle (sport_2a / level_2a / goal_2a / days_2a)
+| Step | Sportif | Coach |
+|---|---|---|
+| sport_2a | "Ton sport principal ?" | "Le sport de tes sportifs ?" |
+| level_2a | "Ton niveau actuel ?" | "Niveau de tes sportifs ?" |
+| goal_2a | "Ton objectif principal ?" | "L'objectif de tes sportifs ?" |
+| days_2a | "Quels sont tes jours d'entraînement ?" | "Créons un premier programme" |
+
+### saveData() — ce qui est créé à l'inscription
+
+**Sportif :** sessions 2 semaines + 4 semaines historique + wellness baseline
+**Coach :**
+- invite_code généré
+- 5 coach_athletes démo (Thomas M. / Emma L. / Pierre D. / Sofia R. / Lucas B.) avec coach_sessions
+- Pierre D. rpeBase=9, Lucas B. rpeBase=8 → toujours dans "À décider maintenant"
+- coach_sessions garantit une séance AUJOURD'HUI même si le jour n'est pas dans [1,3,5,6]
+- Programme auto-généré (4 semaines) + assigné à Thomas M. dès prochain lundi
+- `profiles.objective` = goal (pour les deux rôles)
+
+### Tour coach — step 2 pointe vers le programme
+- `ProductTourOverlay` lit `program_start_date` en localStorage
+- Si présent : step 2 → `/coach/planning?date=${programStartDate}` (au lieu de `/coach/planning`)
+- `CoachPlanningPage` accepte `searchParams.date` → passe `initialDate` à `CoachPlanningClient`
+
+### WeekPreviewStep — données réelles en PROGRAM_PATH
+- Fetch `GET /api/programs/${claimId}` (endpoint public, admin bypass RLS)
+- Affiche `template.weeks[0]` : vrais jours, vrais noms, vraies difficultés
+- Jauges S1-S4 : moyenne `target_difficulty` par semaine du template
+- CTA : "Personnaliser ce programme →"
+- Flux classique (sans claim) : `getSessionTemplates(sport)` inchangé
+
+### buildProgramTemplate (coach onboarding)
+```typescript
+// Génère 4 semaines depuis getSessionTemplates(sport)
+// levelAdj : beginner=-2, intermediate=0, elite=+1
+// Semaine 4 = récup (diff -1 par rapport au calcul normal)
+// SessionLoad = 2 (moderate), SessionType = "volume"
+// level DB = LEVEL_TO_DB[level] : beginner→debutant, intermediate→intermediaire, elite→elite
+```
 
 ### Paywall flow dans l'app (post-skip)
-Quand un user free/expired déclenche une action gateée :
-1. `PrimingModal` s'affiche (timeline + plan cards, même design que `recap_5`)
-2. CTA → `PaywallModal` (formulaire CB)
-3. "← Retour" dans le formulaire → revient à `PrimingModal` pour changer de plan
+1. `PrimingModal` s'affiche (timeline + plan cards)
+2. CTA → `PaywallModal` (Stripe Elements in-app)
+3. "← Retour" → revient à `PrimingModal`
 4. "Accéder sans abonnement →" → ferme (24h cooldown localStorage)
 
 Composants : `usePaywall` hook → `PrimingModal` → `PaywallModal`
-Pages concernées : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`
-
-### Profils de coaching (`context_2b`)
-- Coach (individuel ou en groupe)
-- Préparateur physique (individuel ou collectif)
-- Kiné ou professionnel de la réhabilitation
-- Autre (coach wellness, nutritionniste…)
+Pages : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`
 
 ### Sport "Autre" — précision
-Si l'user sélectionne "Autre" dans `sport_2a` ou `sport_2b`, un champ texte s'affiche.
-Sauvegardé en DB comme `"Autre - {précision}"` dans le champ `sport` du profil.
+Si l'user sélectionne "Autre" dans `sport_2a`, un champ texte s'affiche.
+Sauvegardé comme `"Autre - {précision}"` dans `profiles.sport`.
+Placeholder coach : "Précise le sport de tes sportifs".
 
-### Wellness athlète — mécanique (inchangée)
+### Wellness athlète — mécanique
 - Les 5 questions (`wellness_q`) collectent sleep+bedtime, stress, recovery, behaviors, motivation
-- Le score est calculé en state via `computeWellnessScore()` à la fin de `wellness_q`
-- La sauvegarde DB se fait dans `handleFinish()` après création du compte, via upsert sur `wellness_daily`
+- Score calculé en state via `computeWellnessScore()` à la fin de `wellness_q`
+- Sauvegarde dans `handleFinish()` via upsert sur `wellness_daily`
 
 ### StepIds complets
 ```typescript
 type StepId =
   | "role"
-  | "value_slides"                                                             // 3 slides stats (POST_PROGRESS)
-  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"     // sportif
-  | "overload_2a" | "planning_2a" | "fatigue_2a"                             // pain points sportif
-  | "autoreg_score"                                                            // score autorégulation sportif (POST_PROGRESS)
-  | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"     // coach
-  | "overload_2b" | "planning_time_2b" | "fatigue_2b"                        // pain points coach
-  | "autoreg_score_coach"                                                      // score autorégulation coach (POST_PROGRESS)
-  | "week_preview_2a" | "week_preview_2b"                                     // preview programme
-  | "wellness_q"       // questions niveau de forme (POST_PROGRESS)
+  | "value_slides"                                                           // POST_PROGRESS
+  | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"   // sportif ET coach
+  | "overload_2a" | "planning_2a" | "fatigue_2a"                           // pain points sportif
+  | "autoreg_score"                                                          // POST_PROGRESS
+  | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"   // coach (dead code — hors paths)
+  | "overload_2b" | "planning_time_2b" | "fatigue_2b"                      // pain points coach
+  | "autoreg_score_coach"                                                    // POST_PROGRESS
+  | "week_preview_2a" | "week_preview_2b"                                   // preview programme
+  | "wellness_q"                                                             // POST_PROGRESS
   | "account";
 ```
 
 `POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"]`
+
+Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
 
 ## Composants clés
 ```
