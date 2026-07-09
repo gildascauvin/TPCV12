@@ -58,8 +58,8 @@ const COACH_PATH: StepId[] = [
 
 const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"];
 
-const PROGRAM_ATHLETE_PATH: StepId[] = ["week_preview_2a", "role", "wellness_q", "account"];
-const PROGRAM_COACH_PATH: StepId[] = ["week_preview_2a", "role", "account"];
+const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "wellness_q", "account"];
+const PROGRAM_COACH_PATH: StepId[] = ["role", "account"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -423,9 +423,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     };
     posthog.capture("onboarding_step_viewed", props);
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
-    if (hasClaimedProgram && currentStep === "week_preview_2a") {
-      posthog.capture("program_preview_viewed", { program_id: localStorage.getItem("claim_program_id") });
-    }
     advancingRef.current = false;
   }, [currentStep]);
 
