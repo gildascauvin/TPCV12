@@ -341,6 +341,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
+  const [roleChosen, setRoleChosen] = useState(!!(pendingData?.role || initialRole));
 
   /* questionnaire */
   const [sport, setSport]                         = useState(pendingData?.sport || "Force & puissance");
@@ -811,14 +812,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement" },
                 { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs" },
               ].map(({ r, icon, label, sub }) => (
-                <div key={r} onClick={() => { setRole(r); posthog.setPersonProperties({ role: r }); }}
-                  style={{ cursor: "pointer", borderRadius: 14, padding: "16px 14px", border: role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s" }}>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: role === r ? "#d44000" : "#1f2428", marginBottom: 3 }}>{icon} {label}</div>
+                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); })}
+                  style={{ cursor: "pointer", borderRadius: 14, padding: "16px 14px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s" }}>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 3 }}>{icon} {label}</div>
                   <div style={{ fontSize: 12, color: "#8a8f94" }}>{sub}</div>
                 </div>
               ))}
             </div>
-            <button onClick={next} style={{ ...ctaBtn, marginBottom: 0 }}>Continuer →</button>
           </div>
         )}
 

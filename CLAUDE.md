@@ -55,10 +55,11 @@ role → value_slides (3 slides stats)
 → PaywallModal (formulaire CB Stripe)
 ```
 
-### Sportif — flux programme raccourci (PROGRAM_PATH — 4 steps)
-Activé si `claim_program_id` en localStorage (user venant d'une iframe `/p/[id]`).
+### Sportif — flux programme raccourci (PROGRAM_PATH — 3 steps)
+Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`).
+MAJ 2026-07-09 : `week_preview_2a` supprimé — l'user vient de voir le programme sur la page WP.
 ```
-week_preview_2a (programme réel depuis template) → role → wellness_q → account
+role → wellness_q → account
 [après compte créé :]
 → claim programme → assign user_id + start_date = prochain lundi
 → redirect /today → ProductTourOverlay (tour step 2 → /week?date=prochain-lundi)
@@ -81,10 +82,11 @@ role → value_slides (3 slides stats)
 → PrimingJourneyModal → PaywallModal
 ```
 
-### Coach — flux programme raccourci (PROGRAM_COACH_PATH — 3 steps)
+### Coach — flux programme raccourci (PROGRAM_COACH_PATH — 2 steps)
 Activé si `claim_program_id` en localStorage ET role=coach.
+MAJ 2026-07-09 : `week_preview_2a` supprimé — l'user vient de voir le programme sur la page WP.
 ```
-week_preview_2a → role → account
+role → account
 [après compte créé :]
 → claim programme → assign athlete_id (premier sportif démo) + start_date = prochain lundi
 → localStorage.setItem("program_start_date", nextMonday)
@@ -132,7 +134,10 @@ role → questions selon rôle → saveData() → redirect /today ou /coach
 ### WeekPreviewStep — données réelles en PROGRAM_PATH
 - Fetch `GET /api/programs/${claimId}` (endpoint public, admin bypass RLS)
 - Affiche `template.weeks[0]` : vrais jours, vrais noms, vraies difficultés
-- Jauges S1-S4 : moyenne `target_difficulty` par semaine du template
+- Jauges charge : rectangles verticaux colorés (`loadBarColor`) — autant de barres que de semaines dans le template (S1…SN)
+  - Programme clamé : N semaines, pas de labels de phase, juste S1/S2/…
+  - Onboarding classique (sans claim) : toujours 4 semaines avec labels "Base / Accum. / Pic / Récup"
+- Header : "Charge sur N semaines" (dynamique)
 - CTA : "Personnaliser ce programme →"
 - Flux classique (sans claim) : `getSessionTemplates(sport)` inchangé
 
