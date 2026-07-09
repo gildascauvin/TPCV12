@@ -430,6 +430,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [currentStep]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const claimParam = params.get("claim");
+    if (claimParam && !localStorage.getItem("claim_program_id")) {
+      localStorage.setItem("claim_program_id", claimParam);
+    }
     const claimed = !!localStorage.getItem("claim_program_id");
     setHasClaimedProgram(claimed);
     if (claimed) {
