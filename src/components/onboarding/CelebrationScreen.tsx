@@ -59,19 +59,15 @@ export default function CelebrationScreen({
   const scoreColor = wScore == null ? "#8a8f94" : wScore >= 70 ? "#2f9e44" : wScore >= 45 ? "#f28a00" : "#d44000";
 
   return (
-    <div style={{
-      margin: "-18px", borderRadius: 24, overflow: "hidden",
-      background: "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-      position: "relative",
-    }}>
-      <div style={{ position: "absolute", right: "-10%", top: "-20%", width: 240, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.16)", filter: "blur(30px)", pointerEvents: "none" }} />
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
 
-      <div style={{ position: "relative", zIndex: 2, padding: "24px 20px 22px" }}>
+      <div style={{ position: "relative", zIndex: 2, padding: "12px 4px" }}>
         {/* Header */}
-        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 14 }}>
           ✦ Bienvenue
         </div>
-        <div style={{ fontSize: 24, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
+        <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 22 }}>
           {name ? `Bienvenue, ${name} ! 🎉` : "Bienvenue ! 🎉"}
         </div>
 

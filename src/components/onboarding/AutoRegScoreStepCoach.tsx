@@ -96,12 +96,9 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
   };
 
   return (
-    <div style={{
-      background: "#171b1f", borderRadius: 24, padding: "26px 22px 22px",
-      margin: "-8px -4px", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)",
-    }}>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#d44000", marginBottom: 16 }}>
-        ⚡ Diagnostic d'autorégulation
+    <div style={{ padding: "12px 4px", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 20 }}>
+        ⚡ Diagnostic d&apos;autorégulation
       </div>
 
       {phase === "loading" ? (
@@ -127,7 +124,7 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
             transform: scoreVisible ? "scale(1)" : "scale(0.8)",
             transition: "all 0.45s cubic-bezier(0.2,0,0,1)",
           }}>
-            <div style={{ fontSize: 56, fontWeight: 950, letterSpacing: "-0.04em", color: gColor, lineHeight: 1 }}>
+            <div style={{ fontSize: 64, fontWeight: 950, letterSpacing: "-0.04em", color: gColor, lineHeight: 1 }}>
               {globalPct}%
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.5)", marginTop: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>

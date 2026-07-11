@@ -8,7 +8,7 @@ import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
 import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
-import AuthBackground from "@/components/auth/AuthBackground";
+import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
@@ -63,6 +63,8 @@ const COACH_PATH: StepId[] = [
 ];
 
 const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach"];
+
+const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration"];
 
 const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "wellness_q", "account", "celebration"];
 const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "account", "celebration"];
@@ -283,11 +285,11 @@ function GoogleIcon() {
 /* ── sub-components ── */
 function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: string; sub: string; selected: boolean; onClick: () => void }) {
   return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 12, padding: 11, border: selected ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)", background: selected ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s" }}>
-      <div style={{ fontSize: 13, fontWeight: 900, marginBottom: sub ? 3 : 0, color: selected ? "#d44000" : "#1f2428" }}>
+    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 14, padding: "13px 14px", border: selected ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)", background: selected ? "rgba(212,64,0,.05)" : "#fff", boxShadow: selected ? "none" : "0 2px 8px rgba(0,0,0,.03)", transition: "all .15s" }}>
+      <div style={{ fontSize: 14, fontWeight: 900, marginBottom: sub ? 4 : 0, color: selected ? "#d44000" : "#1f2428" }}>
         {icon}{icon ? " " : ""}{title}
       </div>
-      {sub && <div style={{ fontSize: 11, color: "#8a8f94", lineHeight: 1.4 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45 }}>{sub}</div>}
     </div>
   );
 }
@@ -790,28 +792,24 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
   if (hasClaimedProgram === null) {
-    return (
-      <AuthBackground>
-        <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.94)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.40)", minHeight: 280 }} />
-      </AuthBackground>
-    );
+    return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
   }
 
   if (initializing) {
     return (
-      <AuthBackground>
+      <OnboardingBackground variant="dark">
         <div style={{ textAlign: "center", color: "#fff" }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
           <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Création de ton espace…</div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
         </div>
-      </AuthBackground>
+      </OnboardingBackground>
     );
   }
 
   return (
-    <AuthBackground>
-      <div style={{ width: "100%", maxWidth: 430, background: "rgba(255,255,255,.94)", backdropFilter: "blur(22px)", WebkitBackdropFilter: "blur(22px)", border: "1px solid rgba(0,0,0,.12)", borderRadius: 24, padding: 18, boxShadow: "0 26px 80px rgba(0,0,0,.40)" }}>
+    <OnboardingBackground variant={DARK_STEPS.includes(currentStep) ? "dark" : "light"}>
+      <div>
 
         {showProgress && (
           <div style={{ display: "inline-flex", marginBottom: 10, padding: "6px 10px", borderRadius: 999, background: "rgba(212,64,0,.08)", color: "#d44000", fontSize: 10, fontWeight: 950, textTransform: "uppercase", letterSpacing: "0.10em" }}>
@@ -830,19 +828,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 1. ROLE ── */}
         {currentStep === "role" && (
           <div>
-            <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Tu es ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Tu es ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
               Cette réponse détermine ton parcours et les données préparées pour toi.
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
               {[
                 { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement" },
                 { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs" },
               ].map(({ r, icon, label, sub }) => (
                 <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); })}
-                  style={{ cursor: "pointer", borderRadius: 14, padding: "16px 14px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s" }}>
-                  <div style={{ fontSize: 15, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 3 }}>{icon} {label}</div>
-                  <div style={{ fontSize: 12, color: "#8a8f94" }}>{sub}</div>
+                  style={{ cursor: "pointer", borderRadius: 16, padding: "18px 16px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 4 }}>{icon} {label}</div>
+                  <div style={{ fontSize: 13, color: "#8a8f94" }}>{sub}</div>
                 </div>
               ))}
             </div>
@@ -922,7 +920,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           const slides = role === "athlete" ? athleteSlides : coachSlides;
           const slide = slides[vSlide];
           return (
-            <div style={{ margin: "-18px", borderRadius: 24, overflow: "hidden", background: "#fff" }}>
+            <div style={{ borderRadius: 24, overflow: "hidden", background: "#fff", boxShadow: "0 30px 70px rgba(0,0,0,.45)" }}>
               {/* Photo */}
               <div
                 onClick={() => { if (vSlide < 2) setVSlide(v => v + 1); }}
@@ -982,19 +980,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── VALUE PROGRAM (PROGRAM_ATHLETE_PATH) ── */}
         {currentStep === "value_program" && (
-          <div style={{ margin: "-18px", borderRadius: 24, overflow: "hidden", background: "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", padding: "28px 22px 22px", position: "relative" }}>
-            <div style={{ position: "absolute", right: "-10%", top: "-20%", width: 240, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.16)", filter: "blur(30px)", pointerEvents: "none" }} />
+          <div style={{ position: "relative", padding: "12px 4px" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
             <div style={{ position: "relative", zIndex: 2 }}>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
                 ✦ ThePerfClub
               </div>
-              <div style={{ fontSize: 24, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.2, marginBottom: 14 }}>
+              <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
                 Ton programme s&apos;adapte à toi
               </div>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.65, marginBottom: 24 }}>
+              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
               </div>
-              <button onClick={next} style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
                 Continuer →
               </button>
               <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
@@ -1004,19 +1002,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── VALUE PROGRAM COACH (PROGRAM_COACH_PATH) ── */}
         {currentStep === "value_program_coach" && (
-          <div style={{ margin: "-18px", borderRadius: 24, overflow: "hidden", background: "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", padding: "28px 22px 22px", position: "relative" }}>
-            <div style={{ position: "absolute", right: "-10%", top: "-20%", width: 240, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.16)", filter: "blur(30px)", pointerEvents: "none" }} />
+          <div style={{ position: "relative", padding: "12px 4px" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
             <div style={{ position: "relative", zIndex: 2 }}>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
                 ✦ ThePerfClub
               </div>
-              <div style={{ fontSize: 24, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.2, marginBottom: 14 }}>
+              <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
                 Un programme qui s&apos;adapte à chaque sportif
               </div>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.65, marginBottom: 24 }}>
+              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
               </div>
-              <button onClick={next} style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
                 Continuer →
               </button>
               <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
@@ -1027,10 +1025,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-1. SPORT ── */}
         {currentStep === "sport_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               {role === "coach" ? "Le sport de tes sportifs ?" : "Ton sport principal ?"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
               {role === "coach" ? "On génère les séances de ton premier programme." : "On génère des séances adaptées à ta discipline."}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14, maxHeight: "42vh", overflowY: "auto" }}>
@@ -1065,10 +1063,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-2. LEVEL ── */}
         {currentStep === "level_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               {role === "coach" ? "Niveau de tes sportifs ?" : "Ton niveau actuel ?"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
               {role === "coach" ? "L'intensité du programme s'ajuste en conséquence." : "Cela ajuste l'intensité des séances générées."}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
@@ -1091,10 +1089,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-3. GOAL ── */}
         {currentStep === "goal_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               {role === "coach" ? "L'objectif de tes sportifs ?" : "Ton objectif principal ?"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
               {role === "coach" ? "Le programme sera orienté autour de cet objectif." : "ThePerfClub adapte son suivi à ce qui compte pour toi."}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
@@ -1118,8 +1116,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-4. FRUSTRATION ── */}
         {currentStep === "frustration_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ta plus grande frustration ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Ça nous aide à prioriser ce qui compte le plus.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Ta plus grande frustration ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Ça nous aide à prioriser ce qui compte le plus.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 { id: "Les programmes sont trop rigides, pas adaptés à mon état du jour", icon: "📋" },
@@ -1141,10 +1139,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2A-5. JOURS D'ENTRAÎNEMENT ── */}
         {currentStep === "days_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               {role === "coach" ? "Créons un premier programme" : "Quels sont tes jours d'entraînement ?"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 18 }}>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>
               {role === "coach" ? "Choisis les jours d'entraînement de tes sportifs." : "Tes séances seront planifiées sur ces jours."}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5, marginBottom: 8 }}>
@@ -1192,8 +1190,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── PAIN POINTS ATHLETE ── */}
         {currentStep === "overload_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que ça t'arrive de faire des séances plus dures que prévu ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Ça nous aide à calibrer ton suivi d'intensité.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que ça t'arrive de faire des séances plus dures que prévu ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Ça nous aide à calibrer ton suivi d'intensité.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, je maîtrise toujours mon intensité",
@@ -1214,8 +1212,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {currentStep === "planning_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que tu as des difficultés à prévoir ta charge d'entraînement ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>La planification adaptative, c'est le cœur de ThePerfClub.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tu as des difficultés à prévoir ta charge d'entraînement ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>La planification adaptative, c'est le cœur de ThePerfClub.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, j'ai un plan clair que je respecte",
@@ -1236,8 +1234,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {currentStep === "fatigue_2a" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que tu t'entraînes dur même quand tu es fatigué ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Le wellness score t'aide à prendre les bonnes décisions.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tu t'entraînes dur même quand tu es fatigué ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Le wellness score t'aide à prendre les bonnes décisions.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, je sais récupérer quand il le faut",
@@ -1259,8 +1257,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2B-1. COACHING CONTEXT ── */}
         {currentStep === "context_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton contexte de coaching ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Pour adapter les outils à ta réalité terrain.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Ton contexte de coaching ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Pour adapter les outils à ta réalité terrain.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 { id: "Coach",                                   icon: "👤", sub: "Individuel ou en groupe" },
@@ -1282,8 +1280,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2B-2. SPORT COACH ── */}
         {currentStep === "sport_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton sport principal ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>On paramètre les modèles de séances proposés.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Ton sport principal ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On paramètre les modèles de séances proposés.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14, maxHeight: "42vh", overflowY: "auto" }}>
               {SPORT_CATEGORIES.map(s => (
                 <Choice key={s.id} icon={s.icon} title={s.id} sub={s.sub} selected={sport === s.id}
@@ -1316,8 +1314,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2B-3. ATHLETE COUNT ── */}
         {currentStep === "count_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Combien de sportifs tu gères ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Pour dimensionner les outils de suivi collectif.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Combien de sportifs tu gères ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Pour dimensionner les outils de suivi collectif.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
               {[
                 { v: "1–5 sportifs",   sub: "Coaching rapproché" },
@@ -1339,8 +1337,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2B-4. CHALLENGE ── */}
         {currentStep === "challenge_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Ton plus grand défi de coaching ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>On priorise les fonctionnalités qui t'aident le plus.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Ton plus grand défi de coaching ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On priorise les fonctionnalités qui t'aident le plus.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 { id: "Suivre la charge collective de mes sportifs",  icon: "📊" },
@@ -1363,8 +1361,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 2B-5. CURRENT TOOL ── */}
         {currentStep === "tool_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Tu utilises quoi actuellement ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Pour mieux comprendre ce que tu vas remplacer.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Tu utilises quoi actuellement ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Pour mieux comprendre ce que tu vas remplacer.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
               {[
                 { id: "Excel / Sheets",   icon: "📊", sub: "Tableur" },
@@ -1388,8 +1386,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── PAIN POINTS COACH ── */}
         {currentStep === "overload_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que tes sportifs trouvent tes séances plus dures que prévu ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Le RPE réel vs prévu, ThePerfClub le suit automatiquement.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tes sportifs trouvent tes séances plus dures que prévu ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Le RPE réel vs prévu, ThePerfClub le suit automatiquement.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Rarement, ils respectent bien la charge prévue",
@@ -1410,8 +1408,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {currentStep === "planning_time_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que la planification de la charge te prend trop de temps ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>ThePerfClub automatise cette partie.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que la planification de la charge te prend trop de temps ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>ThePerfClub automatise cette partie.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, j'ai un process bien rodé",
@@ -1432,8 +1430,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {currentStep === "fatigue_2b" && (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>Est-ce que tu maintiens des séances dures quand tes sportifs se sentent fatigués ?</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 14 }}>Les alertes wellness détectent ça en temps réel pour toi.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tu maintiens des séances dures quand tes sportifs se sentent fatigués ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Les alertes wellness détectent ça en temps réel pour toi.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, je m'adapte toujours au ressenti",
@@ -1476,8 +1474,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 3. ACCOUNT ── */}
         {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (
           <div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 6 }}>{role === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend"}</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>Crée ton compte pour y accéder.</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>{role === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend"}</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 20 }}>Crée ton compte pour y accéder.</div>
             {error && (
               <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                 {error}{" "}
@@ -1543,8 +1541,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
             {wStep === 0 && (
               <div>
-                <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>😴 Comment as-tu dormi ?</div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>Qualité et récupération pendant le sommeil</div>
+                <div style={{ fontSize: 23, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8 }}>😴 Comment as-tu dormi ?</div>
+                <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Qualité et récupération pendant le sommeil</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
                   <input type="range" min={1} max={10} value={wSleep} step={1} onChange={e => setWSleep(Number(e.target.value))} style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
                   <div style={{ fontSize: 32, fontWeight: 1000, color: "#d44000", minWidth: 42, textAlign: "center", lineHeight: 1 }}>{wSleep}</div>
@@ -1561,8 +1559,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
             {wStep === 1 && (
               <div>
-                <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>🧠 Niveau de stress mental</div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>Travail, vie personnelle, charge mentale</div>
+                <div style={{ fontSize: 23, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8 }}>🧠 Niveau de stress mental</div>
+                <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Travail, vie personnelle, charge mentale</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
                   <input type="range" min={1} max={10} value={wStress} step={1} onChange={e => setWStress(Number(e.target.value))} style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
                   <div style={{ fontSize: 32, fontWeight: 1000, color: "#d44000", minWidth: 42, textAlign: "center", lineHeight: 1 }}>{wStress}</div>
@@ -1575,8 +1573,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
             {wStep === 2 && (
               <div>
-                <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>💪 État physique aujourd'hui</div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>Ressenti musculaire, douleurs, lourdeur</div>
+                <div style={{ fontSize: 23, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8 }}>💪 État physique aujourd'hui</div>
+                <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Ressenti musculaire, douleurs, lourdeur</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
                   <input type="range" min={1} max={10} value={wRecovery} step={1} onChange={e => setWRecovery(Number(e.target.value))} style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
                   <div style={{ fontSize: 32, fontWeight: 1000, color: "#d44000", minWidth: 42, textAlign: "center", lineHeight: 1 }}>{wRecovery}</div>
@@ -1589,8 +1587,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
             {wStep === 3 && (
               <div>
-                <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>🔍 Comportements d'hier soir</div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 12 }}>Coche tout ce qui s'applique</div>
+                <div style={{ fontSize: 23, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8 }}>🔍 Comportements d'hier soir</div>
+                <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 16 }}>Coche tout ce qui s'applique</div>
 
                 <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#c81e1e", marginBottom: 8 }}>
                   Ce qui m'a pénalisé
@@ -1626,8 +1624,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
             {wStep === 4 && (
               <div>
-                <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>⚡ As-tu envie de t'entraîner ?</div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>Motivation intrinsèque du moment</div>
+                <div style={{ fontSize: 23, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8 }}>⚡ As-tu envie de t'entraîner ?</div>
+                <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Motivation intrinsèque du moment</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 4 }}>
                   <input type="range" min={1} max={10} value={wMotivation} step={1} onChange={e => setWMotivation(Number(e.target.value))} style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
                   <div style={{ fontSize: 32, fontWeight: 1000, color: "#d44000", minWidth: 42, textAlign: "center", lineHeight: 1 }}>{wMotivation}</div>
@@ -1638,7 +1636,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.92) 28%,#fff 50%)" }}>
+            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 20px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.92) 28%,#f1f0ee 50%)" }}>
               <button onClick={() => wStep > 0 ? setWStep(s => s - 1) : back()}
                 style={{ flex: 1, height: 44, borderRadius: 12, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                 ← Retour
@@ -1680,6 +1678,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           onSuccess={handleTrialSuccess}
         />
       )}
-    </AuthBackground>
+    </OnboardingBackground>
   );
 }
