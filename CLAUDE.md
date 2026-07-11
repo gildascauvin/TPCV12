@@ -46,8 +46,8 @@ Refonte complète en 5 chantiers le 2026-07-11 : suppression du tour produit (re
 ```
 role → value_slides (3 slides stats)
 → frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
-→ concept_autoreg (slide dark, graphique SVG comparatif "Avec ThePerfClub" vs "Programme rigide")
-→ autoreg_score  [dark card : score % + 3 jauges animées]
+→ autoreg_score  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
+→ concept_autoreg (slide dark, graphique SVG comparatif "Avec ThePerfClub" vs "Programme rigide" — la solution ensuite)
 → sport_2a → level_2a → goal_2a → days_2a
 → profile_recap (phrase humaine + icône sport, "On a bien compris")
 → week_preview_2a (programme preview)
@@ -75,7 +75,8 @@ Pas de `week_preview_2a` dans ce path (l'user a déjà vu le programme sur la pa
 ```
 role → value_slides (3 slides stats)
 → challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
-→ concept_autoreg → autoreg_score_coach  [dark card : score % + 3 jauges animées]
+→ autoreg_score_coach  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
+→ concept_autoreg (la solution ensuite)
 → sport_2a → level_2a → goal_2a → days_2a  ← wording adapté "de tes sportifs"
 → profile_recap → week_preview_2b (= WeekPreviewStep, preview du programme généré)
 → account → celebration
@@ -115,9 +116,9 @@ role → questions selon rôle → saveData() → transition vers "celebration" 
 - **Step role** : aucune carte présélectionnée (`roleChosen` state), clic = `nextAfterChoice` → avance direct, pas de bouton "Continuer" (tous funnels)
 - **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%)
 - **Pain points** : 3 questions par rôle, auto-advance 300ms (register mode uniquement)
-- **concept_autoreg** : slide dark avec `ProgressComparisonChart` (SVG, 2 courbes animées) — "Avec ThePerfClub" nettement supérieure, "Programme rigide" progresse quand même mais moins (pas un plateau plat)
-- **Score d'autorégulation** : dark card après les pain points, score % + 3 jauges animées
-- **profile_recap** : phrase humaine (pas de tags/chips) avec mots-clés en accent couleur inline, icône sport en grand format ; CTA "Voir mon programme →" si un `week_preview_*` suit dans le path, sinon "Continuer →"
+- **Score d'autorégulation** : dark card juste après les pain points (diagnostic d'abord), score % + 3 jauges animées
+- **concept_autoreg** : vient après le score (la solution ThePerfClub, pas avant) — slide dark avec `ProgressComparisonChart` (SVG, 2 courbes animées) — "Avec ThePerfClub" nettement supérieure, "Programme rigide" progresse quand même mais moins (pas un plateau plat)
+- **profile_recap** : composant `ProfileRecapStep` (extrait, pas une IIFE inline — nécessaire pour `useState`/`useEffect`) — phrase humaine (pas de tags/chips) toujours visible immédiatement avec mots-clés en accent couleur inline + icône sport en grand format, puis juste en dessous un loader "Génération de ton programme…" (~1.4s, pulsing dots) qui se transforme en CTA ("Voir mon programme →" si un `week_preview_*` suit dans le path, sinon "Continuer →") — augmente la qualité perçue sans retarder l'affichage du recap lui-même
 - **Paywall personnalisé** : headline via `src/lib/primingCopy.ts`
   - Sportif : 16 headlines (frustration × objectif)
   - Coach : basé sur `coachingChallenge` uniquement (4 variantes) + `COACH_AUTOREG_HEADLINE` pour la célébration

@@ -46,8 +46,8 @@ const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
-  "concept_autoreg",
   "autoreg_score",
+  "concept_autoreg",
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "profile_recap",
   "week_preview_2a",
@@ -58,8 +58,8 @@ const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
-  "concept_autoreg",
   "autoreg_score_coach",
+  "concept_autoreg",
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "profile_recap",
   "week_preview_2b",
@@ -308,6 +308,57 @@ function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: 
       <button onClick={() => { if (!nextDisabled) onNext(); }} style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
         {nextLabel}
       </button>
+    </div>
+  );
+}
+
+function ProfileRecapStep({
+  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, hasPreviewNext, onBack, onNext,
+}: {
+  role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
+  showDays: boolean; trainingDays: number[]; hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
+}) {
+  const [phase, setPhase] = useState<"loading" | "reveal">("loading");
+  useEffect(() => {
+    const t = setTimeout(() => setPhase("reveal"), 1400);
+    return () => clearTimeout(t);
+  }, []);
+  const accent: React.CSSProperties = { color: "#d44000", fontWeight: 800 };
+
+  return (
+    <div>
+      <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
+      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
+      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 28 }}>
+        {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
+        <span style={accent}>{sportLabel}</span>
+        {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
+        {goalLower && <>, pour <span style={accent}>{goalLower}</span></>}
+        {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
+        .
+      </div>
+      {phase === "loading" ? (
+        <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>
+            {role === "coach" ? "Génération du programme…" : "Génération de ton programme…"}
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: "#d44000", animation: `profileRecapPulse 1.2s ease-in-out ${i * 0.2}s infinite`, opacity: 0.7 }} />
+            ))}
+          </div>
+          <style>{`
+            @keyframes profileRecapPulse {
+              0%, 100% { transform: scale(1); opacity: 0.5; }
+              50% { transform: scale(1.4); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      ) : (
+        <div style={{ animation: "modalIn 0.3s cubic-bezier(0.2,0,0,1)" }}>
+          <Actions onBack={onBack} onNext={onNext} nextLabel={hasPreviewNext ? "Voir mon programme →" : "Continuer →"} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1584,30 +1635,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         ))}
 
         {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
-        {currentStep === "profile_recap" && (() => {
-          const sportLabel = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
-          const sportIcon = SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️";
-          const showLevel = path.includes("level_2a");
-          const showDays = path.includes("days_2a");
-          const accent: React.CSSProperties = { color: "#d44000", fontWeight: 800 };
-          const goalLower = goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "";
-          const hasPreviewNext = path.includes("week_preview_2a") || path.includes("week_preview_2b");
-          return (
-            <div>
-              <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
-              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
-              <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 28 }}>
-                {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
-                <span style={accent}>{sportLabel}</span>
-                {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
-                {goalLower && <>, pour <span style={accent}>{goalLower}</span></>}
-                {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
-                .
-              </div>
-              <Actions onBack={back} onNext={next} nextLabel={hasPreviewNext ? "Voir mon programme →" : "Continuer →"} />
-            </div>
-          );
-        })()}
+        {currentStep === "profile_recap" && (
+          <ProfileRecapStep
+            role={role}
+            sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
+            sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
+            showLevel={path.includes("level_2a")}
+            level={level}
+            goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
+            showDays={path.includes("days_2a")}
+            trainingDays={trainingDays}
+            hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
+            onBack={back}
+            onNext={next}
+          />
+        )}
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
