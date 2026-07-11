@@ -290,7 +290,7 @@ function GoogleIcon() {
 /* ── sub-components ── */
 function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: string; sub: string; selected: boolean; onClick: () => void }) {
   return (
-    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 14, padding: "13px 14px", border: selected ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)", background: selected ? "rgba(212,64,0,.05)" : "#fff", boxShadow: selected ? "none" : "0 2px 8px rgba(0,0,0,.03)", transition: "all .15s" }}>
+    <div onClick={onClick} style={{ cursor: "pointer", borderRadius: 14, padding: "18px 16px", minHeight: 24, display: "flex", flexDirection: "column", justifyContent: "center", border: selected ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)", background: selected ? "rgba(212,64,0,.05)" : "#fff", boxShadow: selected ? "none" : "0 2px 8px rgba(0,0,0,.03)", transition: "all .15s" }}>
       <div style={{ fontSize: 14, fontWeight: 900, marginBottom: sub ? 4 : 0, color: selected ? "#d44000" : "#1f2428" }}>
         {icon}{icon ? " " : ""}{title}
       </div>
@@ -301,11 +301,11 @@ function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: 
 
 function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: () => void; onNext: () => void; nextLabel: string; nextDisabled?: boolean }) {
   return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <button onClick={onBack} style={{ flex: 1, height: 44, borderRadius: 12, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-        ← Retour
+    <div style={{ position: "sticky", bottom: 0, display: "flex", gap: 8, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
+      <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+        ←
       </button>
-      <button onClick={() => { if (!nextDisabled) onNext(); }} style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+      <button onClick={() => { if (!nextDisabled) onNext(); }} style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
         {nextLabel}
       </button>
     </div>
@@ -930,7 +930,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs" },
               ].map(({ r, icon, label, sub }) => (
                 <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); })}
-                  style={{ cursor: "pointer", borderRadius: 16, padding: "18px 16px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
+                  style={{ cursor: "pointer", borderRadius: 16, padding: "24px 16px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 4 }}>{icon} {label}</div>
                   <div style={{ fontSize: 13, color: "#8a8f94" }}>{sub}</div>
                 </div>
@@ -1084,7 +1084,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
               </div>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
+            </div>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>
               <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
@@ -1106,7 +1108,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
               </div>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
+            </div>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>
               <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
@@ -1559,7 +1563,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   ? "Fatigue, sommeil, stress : le corps de chaque sportif envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations claires, pour toi et pour eux. C'est ce qu'on appelle l'autorégulation."
                   : "Fatigue, sommeil, stress : ton corps envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations d'entraînement claires, jour après jour. C'est ce qu'on appelle l'autorégulation."}
               </div>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
+            </div>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>
               <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
@@ -1770,13 +1776,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 20px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.92) 28%,#f1f0ee 50%)" }}>
-              <button onClick={() => wStep > 0 ? setWStep(s => s - 1) : back()}
-                style={{ flex: 1, height: 44, borderRadius: 12, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                ← Retour
+            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
+              <button onClick={() => wStep > 0 ? setWStep(s => s - 1) : back()} aria-label="Retour"
+                style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                ←
               </button>
               <button onClick={handleWellnessQuestions}
-                style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+                style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
                 {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
               </button>
             </div>

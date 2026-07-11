@@ -129,11 +129,14 @@ export default function CelebrationScreen({
           </div>
         </div>
 
-        {/* CTA */}
+      </div>
+
+      {/* CTA */}
+      <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
         <button
           onClick={onStartTrial}
           disabled={saving}
-          style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: saving ? "default" : "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.30)", letterSpacing: "-0.01em", marginBottom: 10 }}
+          style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: saving ? "default" : "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.30)", letterSpacing: "-0.01em", marginBottom: 10 }}
         >
           Commencer mon essai gratuit →
         </button>
