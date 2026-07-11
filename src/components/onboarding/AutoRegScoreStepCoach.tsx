@@ -62,6 +62,15 @@ function DimensionBar({ label, risk, visible }: { label: string; risk: number; v
   );
 }
 
+export function computeCoachAutoregPct(overloadCoachAns: string, planningCoachAns: string, fatigueCoachAns: string): { pct: number; color: string } {
+  const overloadRisk = toRisk(overloadCoachAns, ["très souvent", "problème récurrent"]);
+  const planningRisk = toRisk(planningCoachAns, ["principal frein"]);
+  const fatigueRisk  = toRisk(fatigueCoachAns,  ["je préfère maintenir"]);
+  const totalRisk    = overloadRisk + planningRisk + fatigueRisk;
+  const pct = Math.round(((9 - totalRisk) / 9) * 100);
+  return { pct, color: globalColor(pct) };
+}
+
 export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachAns, fatigueCoachAns, onNext }: Props) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
   const [visibleBars, setVisibleBars] = useState(0);

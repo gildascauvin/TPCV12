@@ -10,8 +10,8 @@ import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
-import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
-import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
+import AutoRegScoreStep, { computeAthleteAutoregPct } from "@/components/onboarding/AutoRegScoreStep";
+import AutoRegScoreStepCoach, { computeCoachAutoregPct } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import PaywallModal from "@/components/paywall/PaywallModal";
 
@@ -313,10 +313,11 @@ function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: 
 }
 
 function ProfileRecapStep({
-  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, hasPreviewNext, onBack, onNext,
+  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregScore, hasPreviewNext, onBack, onNext,
 }: {
   role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
-  showDays: boolean; trainingDays: number[]; hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
+  showDays: boolean; trainingDays: number[]; autoregScore: { pct: number; color: string } | null;
+  hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
   useEffect(() => {
@@ -329,7 +330,7 @@ function ProfileRecapStep({
     <div>
       <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
       <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
-      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 28 }}>
+      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregScore ? 16 : 28 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
         <span style={accent}>{sportLabel}</span>
         {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
@@ -337,6 +338,12 @@ function ProfileRecapStep({
         {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
         .
       </div>
+      {autoregScore && (
+        <div style={{ display: "inline-flex", alignItems: "baseline", gap: 6, padding: "8px 14px", borderRadius: 999, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.15)", marginBottom: 28 }}>
+          <span style={{ fontSize: 18, fontWeight: 950, color: autoregScore.color, letterSpacing: "-0.02em" }}>{autoregScore.pct}%</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#62686e" }}>score d&apos;autorégulation</span>
+        </div>
+      )}
       {phase === "loading" ? (
         <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>
@@ -1651,6 +1658,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
             showDays={path.includes("days_2a")}
             trainingDays={trainingDays}
+            autoregScore={
+              path.includes("autoreg_score") ? computeAthleteAutoregPct(overloadAns, planningAns, fatigueAns)
+              : path.includes("autoreg_score_coach") ? computeCoachAutoregPct(overloadCoachAns, planningCoachAns, fatigueCoachAns)
+              : null
+            }
             hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
             onBack={back}
             onNext={next}
