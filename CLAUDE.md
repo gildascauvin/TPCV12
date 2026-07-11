@@ -38,55 +38,58 @@ src/app/
   reset-password/ # Nouveau mot de passe (après lien email)
 ```
 
-## Onboarding — flows actuels (2026-06-28)
+## Onboarding — flows actuels (2026-07-11)
 
-### Sportif — flux classique (14 steps)
+Refonte complète en 5 chantiers le 2026-07-11 : suppression du tour produit (remplacé par un écran de célébration plein-page), personnalisation réelle du `PROGRAM_PATH` via le wellness, refonte visuelle plein-page (plus de carte flottante/modale), et ajout d'interstitiels type BetterMe (`concept_autoreg`, `profile_recap`) dans tous les flows. Détail complet et historique dans la mémoire Claude (`project_onboarding_celebration_screen.md`, `project_product_tour_paywall.md`) et le plan `/Users/Gildas/.claude/plans/je-vourdais-am-liorer-mes-rosy-ritchie.md`.
+
+### Sportif — flux classique
 ```
 role → value_slides (3 slides stats)
 → frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
+→ concept_autoreg (slide dark, graphique SVG comparatif "Avec ThePerfClub" vs "Programme rigide")
 → autoreg_score  [dark card : score % + 3 jauges animées]
 → sport_2a → level_2a → goal_2a → days_2a
+→ profile_recap (phrase humaine + icône sport, "On a bien compris")
 → week_preview_2a (programme preview)
 → wellness_q (5 questions niveau de forme)
 → account (email + mdp + prénom)
-[après compte créé → redirect /today → ProductTourOverlay :]
-→ tour 3 steps (/today /week?date=prochain-lundi /conseils)
-→ PrimingJourneyModal (priming value + notif + pricing)
-→ PaywallModal (formulaire CB Stripe)
+→ celebration (recap profil + score wellness + upgrade pitch, CTA ouvre PaywallModal directement)
+[après compte créé, PLUS de redirect immédiat : on reste sur /register, stepIdx passe à "celebration"]
+→ succès/dismiss du paywall → redirect /today
 ```
 
-### Sportif — flux programme raccourci (PROGRAM_PATH — 3 steps)
+### Sportif — flux programme (PROGRAM_ATHLETE_PATH)
 Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`).
-MAJ 2026-07-09 : `week_preview_2a` supprimé — l'user vient de voir le programme sur la page WP.
 ```
-role → wellness_q → account
+role → value_program (1 slide, explique pourquoi le wellness personnalise le programme)
+→ sport_2a → goal_2a
+→ concept_autoreg → wellness_q → profile_recap
+→ account → celebration
 [après compte créé :]
-→ claim programme → assign user_id + start_date = prochain lundi
-→ redirect /today → ProductTourOverlay (tour step 2 → /week?date=prochain-lundi)
+→ claim programme → assign user_id + start_date = prochain lundi + wellnessAdjustment
+  (ajustement de target_difficulty semaine 1 basé sur computeWellnessScore, clampé 1-10)
 ```
+Pas de `week_preview_2a` dans ce path (l'user a déjà vu le programme sur la page WP).
 
-### Coach — flux classique (14 steps)
+### Coach — flux classique
 ```
 role → value_slides (3 slides stats)
 → challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
-→ autoreg_score_coach  [dark card : score % + 3 jauges animées]
+→ concept_autoreg → autoreg_score_coach  [dark card : score % + 3 jauges animées]
 → sport_2a → level_2a → goal_2a → days_2a  ← wording adapté "de tes sportifs"
-→ week_preview_2b (= WeekPreviewStep, preview du programme généré)
-→ account
+→ profile_recap → week_preview_2b (= WeekPreviewStep, preview du programme généré)
+→ account → celebration
 [après compte créé → saveData() :]
   - crée 5 sportifs démo (Thomas M., Emma L., Pierre D., Sofia R., Lucas B.)
   - buildProgramTemplate(sport, level, days) → insère programme 4 semaines en DB
   - assigne le programme au premier sportif démo (Thomas M.) dès prochain lundi
   - localStorage.setItem("program_start_date", nextMonday)
-→ redirect /coach → ProductTourOverlay (tour step 2 → /coach/planning?date=nextMonday)
-→ PrimingJourneyModal → PaywallModal
 ```
 
-### Coach — flux programme raccourci (PROGRAM_COACH_PATH — 2 steps)
-Activé si `claim_program_id` en localStorage ET role=coach.
-MAJ 2026-07-09 : `week_preview_2a` supprimé — l'user vient de voir le programme sur la page WP.
+### Coach — flux programme (PROGRAM_COACH_PATH)
+Activé si `claim_program_id` en localStorage ET role=coach. Gagne `sport_2a`/`goal_2a` (2026-07-11, pour que `profile_recap` ait une vraie phrase à construire côté coach aussi — pas de niveau/jours, parcours reste plus court que le classique).
 ```
-role → account
+role → value_program_coach → sport_2a → goal_2a → concept_autoreg → profile_recap → account → celebration
 [après compte créé :]
 → claim programme → assign athlete_id (premier sportif démo) + start_date = prochain lundi
 → localStorage.setItem("program_start_date", nextMonday)
@@ -94,20 +97,33 @@ role → account
 
 ### Auth mode (déjà connecté)
 ```
-role → questions selon rôle → saveData() → redirect /today ou /coach
+role → questions selon rôle → saveData() → transition vers "celebration" (plus de redirect direct)
 ```
 
+### Écran de célébration (remplace l'ancien tour produit + PrimingJourneyModal en fin de flow)
+- Composant `src/components/onboarding/CelebrationScreen.tsx`, dernier step de tous les paths.
+- Recap chips-free (sport/niveau/objectif si collectés dans le path courant via `path.includes(...)`), score wellness animé si `wellness_q` fait partie du path, aperçus statiques des écrans clés, pitch upgrade (`getPrimingHeadline()`/`COACH_AUTOREG_HEADLINE` + `UNLIMITED_BULLET` de `primingCopy.ts`).
+- CTA unique → ouvre `PaywallModal` directement dans `OnboardingFlow.tsx` (pas de redirect intermédiaire). `onSuccess`/dismiss redirige enfin vers `/today` ou `/coach`.
+- **`ProductTourOverlay.tsx` et `WelcomeReveal.tsx` ont été supprimés** — ne pas les recréer, ni chercher `?welcome=1` (plumbing retirée de `TodayClient.tsx`/`CoachClient.tsx`).
+- **`PrimingJourneyModal.tsx` existe toujours** et reste utilisé par `usePaywall` dans les 5 pages client (`TodayClient`/`WeekClient`/`CoachClient`/`CoachPlanningClient`/`AthletesClient`) pour le gating in-app free/expired — ne pas le confondre avec `PrimingModal.tsx` (celui-là est mort, zéro import).
+
+### Verrouillage premium (🔒) — permanent, plus lié au tour
+- `.tour-lock` (span 🔒 sur les CTAs premium) et le bloc CSS `body.tour-active` (bannière d'activation, opacité boutons) ont été renommés en `.locked`, posé sur le wrapper de `src/app/(app)/layout.tsx` selon l'état réel d'abonnement (`!isActive`), plus lié à une session de tour éphémère.
+- `usePaywall.requireSubscription()` n'a plus de check `tour-active`.
+
 ### Logique de conversion
+- **Step role** : aucune carte présélectionnée (`roleChosen` state), clic = `nextAfterChoice` → avance direct, pas de bouton "Continuer" (tous funnels)
 - **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%)
 - **Pain points** : 3 questions par rôle, auto-advance 300ms (register mode uniquement)
+- **concept_autoreg** : slide dark avec `ProgressComparisonChart` (SVG, 2 courbes animées) — "Avec ThePerfClub" nettement supérieure, "Programme rigide" progresse quand même mais moins (pas un plateau plat)
 - **Score d'autorégulation** : dark card après les pain points, score % + 3 jauges animées
-- **Paywall personnalisé** : `PrimingJourneyModal` titre via `src/lib/primingCopy.ts`
+- **profile_recap** : phrase humaine (pas de tags/chips) avec mots-clés en accent couleur inline, icône sport en grand format ; CTA "Voir mon programme →" si un `week_preview_*` suit dans le path, sinon "Continuer →"
+- **Paywall personnalisé** : headline via `src/lib/primingCopy.ts`
   - Sportif : 16 headlines (frustration × objectif)
-  - Coach : basé sur `coachingChallenge` uniquement (4 variantes)
-- **Tour personnalisé** : `ProductTourOverlay` — sportif selon objectif/sport, coach statique
-- **`coachingContext` supprimé (2026-06-28)** — remplacé par sport+goal dans tous les composants
+  - Coach : basé sur `coachingChallenge` uniquement (4 variantes) + `COACH_AUTOREG_HEADLINE` pour la célébration
+- **`coachingContext` supprimé** — remplacé par sport+goal dans tous les composants
 
-### Wording steps 8-11 selon rôle (sport_2a / level_2a / goal_2a / days_2a)
+### Wording selon rôle (sport_2a / level_2a / goal_2a / days_2a)
 | Step | Sportif | Coach |
 |---|---|---|
 | sport_2a | "Ton sport principal ?" | "Le sport de tes sportifs ?" |
@@ -126,10 +142,8 @@ role → questions selon rôle → saveData() → redirect /today ou /coach
 - Programme auto-généré (4 semaines) + assigné à Thomas M. dès prochain lundi
 - `profiles.objective` = goal (pour les deux rôles)
 
-### Tour coach — step 2 pointe vers le programme
-- `ProductTourOverlay` lit `program_start_date` en localStorage
-- Si présent : step 2 → `/coach/planning?date=${programStartDate}` (au lieu de `/coach/planning`)
-- `CoachPlanningPage` accepte `searchParams.date` → passe `initialDate` à `CoachPlanningClient`
+### `program_start_date` (localStorage) — write-only depuis la suppression du tour
+Toujours posé par `OnboardingFlow.tsx` pour les paths coach (`getNextMonday()`), mais plus aucun lecteur depuis la suppression de `ProductTourOverlay.tsx` (qui pointait le step 2 du tour vers `/coach/planning?date=...`). Candidat à un nettoyage futur si confirmé inutile ailleurs.
 
 ### WeekPreviewStep — données réelles en PROGRAM_PATH
 - Fetch `GET /api/programs/${claimId}` (endpoint public, admin bypass RLS)
@@ -150,14 +164,15 @@ role → questions selon rôle → saveData() → redirect /today ou /coach
 // level DB = LEVEL_TO_DB[level] : beginner→debutant, intermediate→intermediaire, elite→elite
 ```
 
-### Paywall flow dans l'app (post-skip)
-1. `PrimingModal` s'affiche (timeline + plan cards)
+### Paywall flow dans l'app (gating in-app free/expired)
+1. `PrimingJourneyModal` s'affiche (value personnalisée + social proof → rappel essai → timeline + plan cards)
 2. CTA → `PaywallModal` (Stripe Elements in-app)
-3. "← Retour" → revient à `PrimingModal`
+3. "← Retour" → revient à `PrimingJourneyModal`
 4. "Accéder sans abonnement →" → ferme (24h cooldown localStorage)
 
-Composants : `usePaywall` hook → `PrimingModal` → `PaywallModal`
-Pages : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`
+Composants : `usePaywall` hook → `PrimingJourneyModal` → `PaywallModal`
+Pages : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`, `CoachClient`
+**Attention au nom** : `PrimingModal.tsx` (sans "Journey") existe aussi dans le repo mais est du code mort (zéro import) — ne pas le confondre avec `PrimingJourneyModal.tsx` qui est le composant réellement utilisé.
 
 ### Sport "Autre" — précision
 Si l'user sélectionne "Autre" dans `sport_2a`, un champ texte s'affiche.
@@ -173,19 +188,24 @@ Placeholder coach : "Précise le sport de tes sportifs".
 ```typescript
 type StepId =
   | "role"
-  | "value_slides"                                                           // POST_PROGRESS
+  | "value_slides"                                                           // POST_PROGRESS, DARK_STEPS
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"   // sportif ET coach
   | "overload_2a" | "planning_2a" | "fatigue_2a"                           // pain points sportif
-  | "autoreg_score"                                                          // POST_PROGRESS
+  | "autoreg_score"                                                          // POST_PROGRESS, DARK_STEPS
   | "context_2b" | "sport_2b" | "count_2b" | "challenge_2b" | "tool_2b"   // coach (dead code — hors paths)
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"                      // pain points coach
-  | "autoreg_score_coach"                                                    // POST_PROGRESS
+  | "autoreg_score_coach"                                                    // POST_PROGRESS, DARK_STEPS
   | "week_preview_2a" | "week_preview_2b"                                   // preview programme
   | "wellness_q"                                                             // POST_PROGRESS
-  | "account";
+  | "account"
+  | "celebration"                                                           // POST_PROGRESS, DARK_STEPS — dernier step de tous les paths
+  | "value_program" | "value_program_coach"                                 // POST_PROGRESS, DARK_STEPS — PROGRAM_PATH uniquement
+  | "concept_autoreg"                                                        // POST_PROGRESS, DARK_STEPS
+  | "profile_recap";                                                        // POST_PROGRESS (light, pas dans DARK_STEPS)
 ```
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"]`
+`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap"]`
+`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"]` — tout le reste (questions/formulaire) est en `variant="light"` (`#f1f0ee`).
 
 Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
 
@@ -194,11 +214,14 @@ Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId 
 src/components/
   onboarding/
     OnboardingFlow.tsx          # Flow complet sportif + coach (register + auth mode)
+    OnboardingBackground.tsx    # Fond plein-page dark/light selon step (remplace AuthBackground pour l'onboarding)
+    CelebrationScreen.tsx       # Dernier step de tous les paths — recap + upgrade pitch, ouvre PaywallModal
     AutoRegScoreStep.tsx        # Score autorégulation sportif (dark card, 3 jauges, score %)
     AutoRegScoreStepCoach.tsx   # Score autorégulation coach (même mécanique)
   paywall/
     PaywallModal.tsx       # Stripe Elements in-app, billing toggle, badge sécurité
-    PaywallGate.tsx        # Gating actions (free/expired)
+    PrimingJourneyModal.tsx # Priming in-app (value/social proof → rappel essai → pricing), utilisé par usePaywall
+    PaywallGate.tsx        # Code mort (zéro import) — ne pas réutiliser sans vérifier
   sessions/
     AddSessionModal.tsx    # Créer/modifier séance (exercices, difficulté)
     CompleteModal.tsx      # Marquer séance terminée (RPE + durée)
@@ -236,14 +259,16 @@ Profile { id, user_id, name, sport, objective, freq_target, mode, subscription_s
 ## Paywall — composants
 ```
 src/components/paywall/
-  PaywallModal.tsx    # Formulaire CB Stripe (simplifié : pas de toggle, pas de bullet points)
-  PrimingModal.tsx    # Écran priming (timeline + plan cards) — utilisé par usePaywall dans l'app
-  PaywallGate.tsx     # Paywall auto au chargement des pages app (expired/free)
+  PaywallModal.tsx         # Formulaire CB Stripe (simplifié : pas de toggle, pas de bullet points)
+  PrimingJourneyModal.tsx  # Écran priming (value/social proof → rappel essai → timeline + plan cards) — utilisé par usePaywall dans l'app ET par CelebrationScreen en fin d'onboarding
+  PrimingModal.tsx         # Code mort (zéro import) — ne pas confondre avec PrimingJourneyModal
+  PaywallGate.tsx          # Code mort (zéro import)
 src/hooks/
   usePaywall.ts       # Hook 2-step : priming → paywall. Retourne paywallStep, setPaywallStep, billing, setBilling
 ```
 
-**Flow paywall unifié** : `requireSubscription()` → `paywallStep = "priming"` → `PrimingModal` → CTA → `paywallStep = "paywall"` → `PaywallModal` → "← Retour" → `paywallStep = "priming"`.
+**Flow paywall unifié** : `requireSubscription()` → `paywallStep = "priming"` → `PrimingJourneyModal` → CTA → `paywallStep = "paywall"` → `PaywallModal` → "← Retour" → `paywallStep = "priming"`.
+Le cadenas `.locked`/`.tour-lock` (cf. section Onboarding) est désormais permanent, plus lié à une session de tour.
 
 ## Analytics PostHog — tracking onboarding
 Provider : `src/providers/PostHogProvider.tsx`, clé : `NEXT_PUBLIC_POSTHOG_KEY`
@@ -271,6 +296,7 @@ posthog.capture(`onboarding_${currentStep}_viewed`, { step, step_index, role, mo
 4. **Sticky actions bar dans les modales** : `position:sticky; bottom:0; margin:16px -28px 0; padding:14px 28px 20px; background:linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)`
 5. **Pages serveur** pour le fetch initial, **Client components** pour l'interactivité.
 6. **Pas de commentaires** sauf si le WHY est non-évident.
+7. **Service worker (`public/sw.js`) cache-first** : en dev local, le navigateur peut servir un bundle JS obsolète malgré un restart complet de `npm run dev`. Avant toute vérification visuelle après un changement de code, désenregistrer le SW + vider les caches dans la console du navigateur : `(async()=>{const r=await navigator.serviceWorker.getRegistrations();for(const x of r)await x.unregister();const k=await caches.keys();for(const x of k)await caches.delete(x);})()`, puis recharger.
 
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
