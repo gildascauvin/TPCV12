@@ -71,8 +71,8 @@ const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", 
 
 const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"];
 
-const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "wellness_q", "account", "celebration"];
-const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "account", "celebration"];
+const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "concept_autoreg", "wellness_q", "profile_recap", "account", "celebration"];
+const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "sport_2a", "goal_2a", "concept_autoreg", "profile_recap", "account", "celebration"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -308,6 +308,42 @@ function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: 
       <button onClick={() => { if (!nextDisabled) onNext(); }} style={{ flex: 1, height: 44, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
         {nextLabel}
       </button>
+    </div>
+  );
+}
+
+function ProgressComparisonChart() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+  const withoutPath = "M0,100 C30,96 55,92 85,94 C115,96 140,85 165,88 C195,91 225,80 255,82 C280,84 300,74 320,72";
+  const withPath = "M0,100 C40,92 70,60 110,48 C150,36 190,20 230,14 C260,10 290,4 320,2";
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <svg width="100%" viewBox="0 0 320 130" style={{ display: "block", overflow: "visible" }}>
+        <path d={withoutPath} fill="none" stroke="rgba(255,255,255,.28)" strokeWidth={2.5} strokeDasharray="5 4" strokeLinecap="round" />
+        <path
+          d={withPath} fill="none" stroke="#ff6b2b" strokeWidth={3.5} strokeLinecap="round"
+          style={{
+            strokeDasharray: 460,
+            strokeDashoffset: visible ? 0 : 460,
+            transition: "stroke-dashoffset 1.1s cubic-bezier(0.4,0,0.2,1)",
+            filter: "drop-shadow(0 0 6px rgba(255,107,43,.5))",
+          }}
+        />
+      </svg>
+      <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff6b2b" }} />
+          <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.75)" }}>Avec ThePerfClub</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,.3)" }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)" }}>Programme rigide</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1466,6 +1502,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
                 {role === "coach" ? "Le corps de tes sportifs parle" : "Ton corps parle. On l'écoute."}
               </div>
+              <ProgressComparisonChart />
               <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 {role === "coach"
                   ? "Fatigue, sommeil, stress : le corps de chaque sportif envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations claires, pour toi et pour eux. C'est ce qu'on appelle l'autorégulation."
@@ -1549,28 +1586,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
         {currentStep === "profile_recap" && (() => {
           const sportLabel = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
-          const chips = [
-            sportLabel,
-            LEVEL_LABELS[level],
-            goal,
-            `${trainingDays.length} jour${trainingDays.length > 1 ? "s" : ""}/semaine`,
-          ].filter(Boolean);
+          const sportIcon = SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️";
+          const showLevel = path.includes("level_2a");
+          const showDays = path.includes("days_2a");
+          const accent: React.CSSProperties = { color: "#d44000", fontWeight: 800 };
+          const goalLower = goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "";
+          const hasPreviewNext = path.includes("week_preview_2a") || path.includes("week_preview_2b");
           return (
             <div>
-              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>On a bien compris</div>
-              <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 22 }}>
-                {role === "coach"
-                  ? "Voici ce qu'on a retenu pour créer un premier programme adapté à tes sportifs."
-                  : "Voici ce qu'on a retenu pour te préparer un programme sur mesure."}
+              <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
+              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
+              <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 28 }}>
+                {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
+                <span style={accent}>{sportLabel}</span>
+                {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
+                {goalLower && <>, pour <span style={accent}>{goalLower}</span></>}
+                {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
+                .
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-                {chips.map((c, i) => (
-                  <div key={i} style={{ padding: "9px 14px", borderRadius: 999, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.20)", color: "#d44000", fontSize: 13, fontWeight: 800 }}>
-                    {c}
-                  </div>
-                ))}
-              </div>
-              <Actions onBack={back} onNext={next} nextLabel="Voir mon programme →" />
+              <Actions onBack={back} onNext={next} nextLabel={hasPreviewNext ? "Voir mon programme →" : "Continuer →"} />
             </div>
           );
         })()}
