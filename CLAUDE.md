@@ -122,6 +122,10 @@ role → questions selon rôle → saveData() → transition vers "celebration" 
 - **Paywall personnalisé** : headline via `src/lib/primingCopy.ts`
   - Sportif : 16 headlines (frustration × objectif)
   - Coach : basé sur `coachingChallenge` uniquement (4 variantes) + `COACH_AUTOREG_HEADLINE` pour la célébration
+- **CTA sticky partout (2026-07-11)** : sur tous les steps, le(s) bouton(s) restent visibles en bas de viewport même si le contenu dépasse l'écran.
+  - Pattern clair (steps question/formulaire, composant `Actions` réutilisé par sport_2a/level_2a/goal_2a/days_2a/account/profile_recap) : `position:sticky; bottom:0; margin:16px -20px -56px; padding:14px 20px 24px; background:linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)`. Bouton retour minimisé en icône carrée 52×52 (`←`), le CTA principal (`flex:1`, height 52) prend le reste de la largeur.
+  - Pattern dark (steps value_slides/autoreg_score(_coach)/concept_autoreg/value_program(_coach)/celebration) : même structure, gradient `rgba(17,17,17,0)`→`#161616`. Le lien "Retour" y est un texte discret (`rgba(255,255,255,.45)`), pas un bouton icône — ces steps n'ont qu'un seul CTA pleine largeur au-dessus.
+  - Cards `Choice` (et cards custom du step role) : padding remonté à `18px 16px` (`24px 16px` pour role) pour des cards plus hautes, plus faciles à taper au doigt.
 - **`coachingContext` supprimé** — remplacé par sport+goal dans tous les composants
 
 ### Wording selon rôle (sport_2a / level_2a / goal_2a / days_2a)
