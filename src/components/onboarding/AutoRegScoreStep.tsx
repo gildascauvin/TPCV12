@@ -63,13 +63,37 @@ function DimensionBar({ label, risk, visible }: { label: string; risk: number; v
   );
 }
 
-export function computeAthleteAutoregPct(overloadAns: string, planningAns: string, fatigueAns: string): { pct: number; color: string } {
+export interface AutoregProfile {
+  persona: { title: string; description: string };
+  dimensions: { label: string; riskLabel: string; color: string }[];
+}
+
+function pickAthletePersona(overloadRisk: number, planningRisk: number, fatigueRisk: number): { title: string; description: string } {
+  const maxRisk = Math.max(overloadRisk, planningRisk, fatigueRisk);
+  if (maxRisk === 0) {
+    return { title: "Autorégulé confirmé", description: "Tu sais déjà lire ton corps. ThePerfClub objective ce que tu sens déjà, pour affiner encore la précision." };
+  }
+  if (overloadRisk === maxRisk) {
+    return { title: "Battant instinctif", description: "Tu avances à l'instinct et tu ne recules devant rien. ThePerfClub calibre cette énergie à ta récupération réelle, pour progresser sans te griller." };
+  }
+  if (fatigueRisk === maxRisk) {
+    return { title: "Volontaire du dépassement", description: "Tu tiens le cap même fatigué. ThePerfClub repère les signaux avant qu'ils ne deviennent des blessures." };
+  }
+  return { title: "Improvisateur engagé", description: "Tu t'entraînes sérieusement mais sans structure fixe. ThePerfClub cadre ta charge semaine après semaine, sans t'enfermer." };
+}
+
+export function computeAthleteAutoregProfile(overloadAns: string, planningAns: string, fatigueAns: string): AutoregProfile {
   const overloadRisk = toRisk(overloadAns, ["tout le temps", "j'envoie"]);
   const planningRisk = toRisk(planningAns, ["complètement", "entièrement au feeling"]);
   const fatigueRisk  = toRisk(fatigueAns,  ["tout le temps", "quoi qu'il arrive"]);
-  const totalRisk    = overloadRisk + planningRisk + fatigueRisk;
-  const pct = Math.round(((9 - totalRisk) / 9) * 100);
-  return { pct, color: globalColor(pct) };
+  return {
+    persona: pickAthletePersona(overloadRisk, planningRisk, fatigueRisk),
+    dimensions: [
+      { label: "Gestion de l'intensité",     riskLabel: RISK_LABELS[overloadRisk], color: riskColor(overloadRisk) },
+      { label: "Planification de la charge", riskLabel: RISK_LABELS[planningRisk], color: riskColor(planningRisk) },
+      { label: "Récupération",               riskLabel: RISK_LABELS[fatigueRisk],  color: riskColor(fatigueRisk) },
+    ],
+  };
 }
 
 export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns, onNext }: Props) {

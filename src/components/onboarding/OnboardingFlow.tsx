@@ -10,8 +10,8 @@ import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
-import AutoRegScoreStep, { computeAthleteAutoregPct } from "@/components/onboarding/AutoRegScoreStep";
-import AutoRegScoreStepCoach, { computeCoachAutoregPct } from "@/components/onboarding/AutoRegScoreStepCoach";
+import AutoRegScoreStep, { computeAthleteAutoregProfile, AutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
+import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import PaywallModal from "@/components/paywall/PaywallModal";
 
@@ -313,10 +313,10 @@ function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: 
 }
 
 function ProfileRecapStep({
-  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregScore, hasPreviewNext, onBack, onNext,
+  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, hasPreviewNext, onBack, onNext,
 }: {
   role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
-  showDays: boolean; trainingDays: number[]; autoregScore: { pct: number; color: string } | null;
+  showDays: boolean; trainingDays: number[]; autoregProfile: AutoregProfile | null;
   hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
@@ -330,7 +330,7 @@ function ProfileRecapStep({
     <div>
       <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
       <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
-      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregScore ? 16 : 28 }}>
+      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregProfile ? 20 : 28 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
         <span style={accent}>{sportLabel}</span>
         {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
@@ -338,10 +338,25 @@ function ProfileRecapStep({
         {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
         .
       </div>
-      {autoregScore && (
-        <div style={{ display: "inline-flex", alignItems: "baseline", gap: 6, padding: "8px 14px", borderRadius: 999, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.15)", marginBottom: 28 }}>
-          <span style={{ fontSize: 18, fontWeight: 950, color: autoregScore.color, letterSpacing: "-0.02em" }}>{autoregScore.pct}%</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#62686e" }}>score d&apos;autorégulation</span>
+      {autoregProfile && (
+        <div style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 16px", border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 2px 12px rgba(0,0,0,.04)", marginBottom: 28, textAlign: "left" }}>
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", color: "#d44000", textTransform: "uppercase", marginBottom: 8 }}>
+            Ton profil d&apos;autorégulation
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428", marginBottom: 8 }}>
+            {autoregProfile.persona.title}
+          </div>
+          <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55, marginBottom: 14 }}>
+            {autoregProfile.persona.description}
+          </div>
+          <div>
+            {autoregProfile.dimensions.map((d, i) => (
+              <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.05)" : "none" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#3a3f44" }}>{d.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: d.color }}>{d.riskLabel}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {phase === "loading" ? (
@@ -401,6 +416,50 @@ function ProgressComparisonChart() {
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,.3)" }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)" }}>Programme rigide</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CoachBlindSpotWheel() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setVisible(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+  const size = 200, r = 82, cx = size / 2, cy = size / 2, strokeWidth = 20;
+  const circumference = 2 * Math.PI * r;
+  const trainingLen = circumference / 6;
+  const restLen = circumference - trainingLen;
+  const dims = ["⚡ Énergie", "😴 Sommeil", "🍽️ Diet", "💭 Émotions", "😓 Stress"];
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 18, marginBottom: 16, fontSize: 11, fontWeight: 800 }}>
+        <span style={{ color: "rgba(255,255,255,.5)" }}>Ce que l&apos;athlète vit</span>
+        <span style={{ color: "#ff6b2b" }}>Ce que le coach voit</span>
+      </div>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block", margin: "0 auto" }}>
+        <circle
+          cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth={strokeWidth}
+          strokeDasharray={`${visible ? restLen : 0} ${circumference}`}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1)" }}
+        />
+        <circle
+          cx={cx} cy={cy} r={r} fill="none" stroke="#ff6b2b" strokeWidth={strokeWidth}
+          strokeDasharray={`${visible ? trainingLen : 0} ${circumference}`}
+          strokeDashoffset={-restLen}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1) 0.2s", filter: "drop-shadow(0 0 8px rgba(255,107,43,.5))" }}
+        />
+      </svg>
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 16 }}>
+        {dims.map(l => (
+          <span key={l} style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.55)", background: "rgba(255,255,255,.06)", padding: "5px 10px", borderRadius: 999 }}>{l}</span>
+        ))}
+        <span style={{ fontSize: 11, fontWeight: 800, color: "#ff6b2b", background: "rgba(255,107,43,.12)", padding: "5px 10px", borderRadius: 999, border: "1px solid rgba(255,107,43,.3)" }}>🏋️ Entraînement</span>
       </div>
     </div>
   );
@@ -1564,7 +1623,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
                 {role === "coach" ? "Le corps de tes sportifs parle" : "Ton corps parle. On l'écoute."}
               </div>
-              <ProgressComparisonChart />
+              {role === "coach" ? <CoachBlindSpotWheel /> : <ProgressComparisonChart />}
               <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
                 {role === "coach"
                   ? "Fatigue, sommeil, stress : le corps de chaque sportif envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations claires, pour toi et pour eux. C'est ce qu'on appelle l'autorégulation."
@@ -1658,9 +1717,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
             showDays={path.includes("days_2a")}
             trainingDays={trainingDays}
-            autoregScore={
-              path.includes("autoreg_score") ? computeAthleteAutoregPct(overloadAns, planningAns, fatigueAns)
-              : path.includes("autoreg_score_coach") ? computeCoachAutoregPct(overloadCoachAns, planningCoachAns, fatigueCoachAns)
+            autoregProfile={
+              path.includes("autoreg_score") ? computeAthleteAutoregProfile(overloadAns, planningAns, fatigueAns)
+              : path.includes("autoreg_score_coach") ? computeCoachAutoregProfile(overloadCoachAns, planningCoachAns, fatigueCoachAns)
               : null
             }
             hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}

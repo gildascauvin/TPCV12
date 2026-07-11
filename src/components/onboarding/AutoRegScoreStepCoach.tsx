@@ -62,13 +62,37 @@ function DimensionBar({ label, risk, visible }: { label: string; risk: number; v
   );
 }
 
-export function computeCoachAutoregPct(overloadCoachAns: string, planningCoachAns: string, fatigueCoachAns: string): { pct: number; color: string } {
+export interface AutoregProfile {
+  persona: { title: string; description: string };
+  dimensions: { label: string; riskLabel: string; color: string }[];
+}
+
+function pickCoachPersona(overloadRisk: number, planningRisk: number, fatigueRisk: number): { title: string; description: string } {
+  const maxRisk = Math.max(overloadRisk, planningRisk, fatigueRisk);
+  if (maxRisk === 0) {
+    return { title: "Coach data-driven", description: "Tu suis déjà tes sportifs de près. ThePerfClub te donne encore plus de précision, séance après séance." };
+  }
+  if (overloadRisk === maxRisk) {
+    return { title: "Coach du volume", description: "Tu pousses le collectif fort, quitte à ce que certains dépassent leurs limites sans que tu le voies venir. ThePerfClub te donne la visibilité qui manque." };
+  }
+  if (fatigueRisk === maxRisk) {
+    return { title: "Coach exigeant", description: "Tu maintiens l'intensité même quand la fatigue s'accumule dans le groupe. ThePerfClub objective la récupération de chaque sportif." };
+  }
+  return { title: "Coach terrain", description: "Tu gères au feeling, séance après séance. ThePerfClub structure le suivi sans t'enlever la main sur le programme." };
+}
+
+export function computeCoachAutoregProfile(overloadCoachAns: string, planningCoachAns: string, fatigueCoachAns: string): AutoregProfile {
   const overloadRisk = toRisk(overloadCoachAns, ["très souvent", "problème récurrent"]);
   const planningRisk = toRisk(planningCoachAns, ["principal frein"]);
   const fatigueRisk  = toRisk(fatigueCoachAns,  ["je préfère maintenir"]);
-  const totalRisk    = overloadRisk + planningRisk + fatigueRisk;
-  const pct = Math.round(((9 - totalRisk) / 9) * 100);
-  return { pct, color: globalColor(pct) };
+  return {
+    persona: pickCoachPersona(overloadRisk, planningRisk, fatigueRisk),
+    dimensions: [
+      { label: "Maîtrise de l'intensité",      riskLabel: RISK_LABELS[overloadRisk], color: riskColor(overloadRisk) },
+      { label: "Efficacité de planification",  riskLabel: RISK_LABELS[planningRisk], color: riskColor(planningRisk) },
+      { label: "Gestion de la fatigue",        riskLabel: RISK_LABELS[fatigueRisk],  color: riskColor(fatigueRisk) },
+    ],
+  };
 }
 
 export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachAns, fatigueCoachAns, onNext }: Props) {
