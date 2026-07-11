@@ -16,7 +16,6 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
-import WelcomeReveal from "@/components/onboarding/WelcomeReveal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 
@@ -358,12 +357,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
 
-  const [showWelcome, setShowWelcome] = useState(false);
   const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("welcome") === "1" && !localStorage.getItem(`welcome_shown_${userId}`)) setShowWelcome(true);
     if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "athlete" }); }
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -796,17 +792,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onSave={saveEdit}
           onDelete={async () => { await deleteSession(editing); setEditing(null); }}
           onClose={() => setEditing(null)}
-        />
-      )}
-      {showWelcome && (
-        <WelcomeReveal
-          name={profile.name}
-          sport={profile.sport}
-          mode={profile.mode ?? "athlete"}
-          onDismiss={() => {
-            localStorage.setItem(`welcome_shown_${userId}`, "1");
-            setShowWelcome(false);
-          }}
         />
       )}
       {paywallStep === "priming" && (

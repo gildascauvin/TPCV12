@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
-import ProductTourOverlay from "@/components/tour/ProductTourOverlay";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -10,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode, subscription_status, objective, frustration, sport, coaching_challenge")
+    .select("mode, subscription_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -25,22 +24,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .maybeSingle();
 
   const hasCoach = !!coachLink;
-  const showTour = (subscriptionStatus === "free" || subscriptionStatus === "expired") && !hasCoach;
+  const isActive = subscriptionStatus === "athlete" || subscriptionStatus === "coach" || (subscriptionStatus === "free" && hasCoach);
+  const locked = !isActive;
 
   return (
-    <div className="min-h-screen bg-bg pb-[132px]">
+    <div className={`min-h-screen bg-bg pb-[132px]${locked ? " locked" : ""}`}>
       {children}
       <BottomNav role={role} />
-      {showTour && (
-        <ProductTourOverlay
-          role={role}
-          hasCoach={hasCoach}
-          objective={profile?.objective ?? ""}
-          frustration={profile?.frustration ?? ""}
-          sport={profile?.sport ?? ""}
-          coachingChallenge={profile?.coaching_challenge ?? ""}
-        />
-      )}
     </div>
   );
 }

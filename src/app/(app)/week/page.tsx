@@ -17,8 +17,10 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       .gte("date", start).lte("date", end).order("created_at"),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id)
       .gte("date", start).lte("date", end),
-    supabase.from("profiles").select("subscription_status").eq("user_id", user!.id).single(),
+    supabase.from("profiles").select("subscription_status, invited_by_coach_id").eq("user_id", user!.id).single(),
   ]);
+
+  const hasCoach = !!(profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id;
 
   return (
     <WeekClient
@@ -26,6 +28,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       initialSessions={sessions ?? []}
       initialWellness={wellness ?? []}
       subscriptionStatus={profile?.subscription_status ?? "free"}
+      hasCoach={hasCoach}
       initialDate={searchParams.date}
     />
   );

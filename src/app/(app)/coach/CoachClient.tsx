@@ -10,7 +10,6 @@ import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import ReviewCompleteModal from "@/components/coach/ReviewCompleteModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import WelcomeReveal from "@/components/onboarding/WelcomeReveal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -268,12 +267,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(false);
   const [showActivation, setShowActivation] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("welcome") === "1" && !localStorage.getItem(`welcome_shown_coach_${userId}`)) setShowWelcome(true);
     if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -770,17 +766,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             </div>
           </div>
         </div>
-      )}
-      {showWelcome && (
-        <WelcomeReveal
-          name={coachName}
-          sport={null}
-          mode="coach"
-          onDismiss={() => {
-            localStorage.setItem(`welcome_shown_coach_${userId}`, "1");
-            setShowWelcome(false);
-          }}
-        />
       )}
       {paywallStep === "priming" && (
         <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}

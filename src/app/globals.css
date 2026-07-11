@@ -221,26 +221,26 @@ select:focus {
   }
 }
 
-/* Tour active — hide activation banners, show premium actions with lock */
-body.tour-active [data-tour="activation-banner"] {
+/* User free/expired sans coach — masque les bannières d'activation, affiche les actions premium verrouillées */
+.locked [data-tour="activation-banner"] {
   display: none !important;
 }
 
 /* ── Boutons premium : opacité + cursor ── */
-body.tour-active [data-tour="terminer-btn"],
-body.tour-active [data-tour="decider-btn"],
-body.tour-active [data-tour="invite-btn"],
-body.tour-active [data-tour="demarrer-btn"],
-body.tour-active [data-tour="voir-planning-btn"],
-body.tour-active [data-tour="supprimer-btn"],
-body.tour-active [data-tour="programmes-btn"],
-body.tour-active [data-tour="modifier-btn"] {
+.locked [data-tour="terminer-btn"],
+.locked [data-tour="decider-btn"],
+.locked [data-tour="invite-btn"],
+.locked [data-tour="demarrer-btn"],
+.locked [data-tour="voir-planning-btn"],
+.locked [data-tour="supprimer-btn"],
+.locked [data-tour="programmes-btn"],
+.locked [data-tour="modifier-btn"] {
   opacity: 0.75;
   cursor: default !important;
 }
 
 /* ── Div "+ Ajouter" : opacité + cursor ── */
-body.tour-active [data-tour="add-session-btn"] {
+.locked [data-tour="add-session-btn"] {
   opacity: 0.75;
   cursor: default !important;
 }
@@ -249,16 +249,16 @@ body.tour-active [data-tour="add-session-btn"] {
 .tour-lock {
   display: none;
 }
-body.tour-active .tour-lock {
+.locked .tour-lock {
   display: inline;
   font-size: 13px;
   margin-left: 5px;
 }
 
 /* ── Dark cards (wellness, conseils, fatigue) : cadenas coin intérieur ── */
-body.tour-active [data-tour="wellness-card"]::after,
-body.tour-active [data-tour="conseils-chart"]::after,
-body.tour-active [data-tour="fatigue-signature"]::after {
+.locked [data-tour="wellness-card"]::after,
+.locked [data-tour="conseils-chart"]::after,
+.locked [data-tour="fatigue-signature"]::after {
   content: '🔒';
   position: absolute;
   top: 14px;

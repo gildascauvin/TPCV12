@@ -12,6 +12,8 @@ import AuthBackground from "@/components/auth/AuthBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
+import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
+import PaywallModal from "@/components/paywall/PaywallModal";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -26,7 +28,8 @@ type StepId =
   | "autoreg_score_coach"
   | "week_preview_2a" | "week_preview_2b"
   | "wellness_q"
-  | "account";
+  | "account"
+  | "celebration";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -45,6 +48,7 @@ const ATHLETE_PATH: StepId[] = [
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "week_preview_2a",
   "wellness_q", "account",
+  "celebration",
 ];
 const COACH_PATH: StepId[] = [
   "role", "value_slides",
@@ -54,12 +58,13 @@ const COACH_PATH: StepId[] = [
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "week_preview_2b",
   "account",
+  "celebration",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration"];
 
-const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "wellness_q", "account"];
-const PROGRAM_COACH_PATH: StepId[] = ["role", "account"];
+const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "wellness_q", "account", "celebration"];
+const PROGRAM_COACH_PATH: StepId[] = ["role", "account", "celebration"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -621,7 +626,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           }
         }
         setSaving(false);
-        window.location.href = role === "coach" ? "/coach" : "/today";
+        setStepIdx(path.length - 1);
       } else {
         await saveData(userId!);
         const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
@@ -662,7 +667,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             localStorage.removeItem("claim_program_id");
           }
         }
-        window.location.href = role === "coach" ? "/coach" : "/today";
+        setSaving(false);
+        setStepIdx(path.length - 1);
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -675,6 +681,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const { score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
     setWScore(score);
     next();
+  }
+
+  const [showTrialPaywall, setShowTrialPaywall] = useState(false);
+
+  function handleStartTrial() {
+    posthog.capture("celebration_cta_clicked", { role });
+    posthog.capture("paywall_priming_viewed", { plan: role, objective: goal });
+    setShowTrialPaywall(true);
+  }
+
+  function handleSkipCelebration() {
+    posthog.capture("celebration_skip_clicked", { role });
+    window.location.href = role === "coach" ? "/coach" : "/today";
+  }
+
+  function handleTrialSuccess() {
+    window.location.href = role === "coach" ? "/coach" : "/today";
   }
 
   async function handleGoogleRegister() {
@@ -727,7 +750,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
-        window.location.href = pendingData.role === "coach" ? "/coach" : "/today";
+        setInitializing(false);
+        setStepIdx(path.length - 1);
       } catch {
         setInitializing(false);
       }
@@ -1580,8 +1604,35 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        {/* ── CÉLÉBRATION + UPGRADE PITCH ── */}
+        {currentStep === "celebration" && (
+          <CelebrationScreen
+            role={role}
+            name={name}
+            sport={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
+            level={level}
+            goal={goal}
+            frustration={frustration}
+            coachingChallenge={coachingChallenge}
+            wScore={wScore}
+            showProfile={path.includes("sport_2a")}
+            showWellness={path.includes("wellness_q")}
+            saving={saving}
+            onStartTrial={handleStartTrial}
+            onSkip={handleSkipCelebration}
+          />
+        )}
+
         </div>
       </div>
+      {showTrialPaywall && (
+        <PaywallModal
+          mode={role}
+          allowDismiss
+          onClose={() => setShowTrialPaywall(false)}
+          onSuccess={handleTrialSuccess}
+        />
+      )}
     </AuthBackground>
   );
 }

@@ -10,7 +10,7 @@ export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = fa
 
   function requireSubscription(fn: () => void) {
     if (isActive) fn();
-    else if (!document.body.classList.contains("tour-active")) setPaywallStep("priming");
+    else setPaywallStep("priming");
   }
 
   function handleDismiss() {

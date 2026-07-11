@@ -214,14 +214,14 @@ function DayColumn({ date, sessions, wellness, todayStr, ctx, onAddSession, onCo
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; initialDate?: string; }
+interface Props { userId: string; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; initialDate?: string; }
 
-export default function WeekClient({ userId, initialSessions, initialWellness, subscriptionStatus, initialDate }: Props) {
+export default function WeekClient({ userId, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, initialDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus, hasCoach);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
