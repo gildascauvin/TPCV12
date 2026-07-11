@@ -29,7 +29,8 @@ type StepId =
   | "week_preview_2a" | "week_preview_2b"
   | "wellness_q"
   | "account"
-  | "celebration";
+  | "celebration"
+  | "value_program" | "value_program_coach";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -61,10 +62,10 @@ const COACH_PATH: StepId[] = [
   "celebration",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach"];
 
-const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "wellness_q", "account", "celebration"];
-const PROGRAM_COACH_PATH: StepId[] = ["role", "account", "celebration"];
+const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "wellness_q", "account", "celebration"];
+const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "account", "celebration"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -598,10 +599,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
             const { programId: copiedId } = await claimRes.json();
             if (role === "athlete") {
+              const wellnessAdjustment = wScore != null && wScore < 45 ? -1 : 0;
               const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ start_date: getNextMonday(), user_id: uid }),
+                body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
               });
               if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
             } else if (role === "coach") {
@@ -640,10 +642,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
             const { programId: copiedId } = await claimRes.json();
             if (role === "athlete") {
+              const wellnessAdjustment = wScore != null && wScore < 45 ? -1 : 0;
               const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ start_date: getNextMonday(), user_id: userId }),
+                body: JSON.stringify({ start_date: getNextMonday(), user_id: userId, wellnessAdjustment }),
               });
               if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
             } else if (role === "coach") {
@@ -976,6 +979,50 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             </div>
           );
         })()}
+
+        {/* ── VALUE PROGRAM (PROGRAM_ATHLETE_PATH) ── */}
+        {currentStep === "value_program" && (
+          <div style={{ margin: "-18px", borderRadius: 24, overflow: "hidden", background: "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", padding: "28px 22px 22px", position: "relative" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-20%", width: 240, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.16)", filter: "blur(30px)", pointerEvents: "none" }} />
+            <div style={{ position: "relative", zIndex: 2 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 12 }}>
+                ✦ ThePerfClub
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.2, marginBottom: 14 }}>
+                Ton programme s&apos;adapte à toi
+              </div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.65, marginBottom: 24 }}>
+                Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
+              </div>
+              <button onClick={next} style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
+                Continuer →
+              </button>
+              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── VALUE PROGRAM COACH (PROGRAM_COACH_PATH) ── */}
+        {currentStep === "value_program_coach" && (
+          <div style={{ margin: "-18px", borderRadius: 24, overflow: "hidden", background: "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)", padding: "28px 22px 22px", position: "relative" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-20%", width: 240, height: 200, borderRadius: "50%", background: "rgba(212,64,0,0.16)", filter: "blur(30px)", pointerEvents: "none" }} />
+            <div style={{ position: "relative", zIndex: 2 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 12 }}>
+                ✦ ThePerfClub
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.2, marginBottom: 14 }}>
+                Un programme qui s&apos;adapte à chaque sportif
+              </div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.65, marginBottom: 24 }}>
+                Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
+              </div>
+              <button onClick={next} style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10 }}>
+                Continuer →
+              </button>
+              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
+            </div>
+          </div>
+        )}
 
         {/* ── 2A-1. SPORT ── */}
         {currentStep === "sport_2a" && (

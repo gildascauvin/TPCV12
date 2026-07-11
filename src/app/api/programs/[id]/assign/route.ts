@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: "Non authentifié" }, { status: 401 });
 
-    const { athlete_id, user_id, start_date } = await req.json();
+    const { athlete_id, user_id, start_date, wellnessAdjustment } = await req.json();
     const admin = createAdminClient();
 
     const { data: program } = await admin
@@ -64,11 +64,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         const date = addDays(start_date, weekIdx * 7 + dayOffset);
 
         daySessions.forEach((s) => {
+          // Semaine 1 seulement : ajuste la difficulté à la récupération réelle déclarée à l'inscription
+          const target_difficulty = weekIdx === 0 && typeof wellnessAdjustment === "number"
+            ? Math.max(1, Math.min(10, s.target_difficulty + wellnessAdjustment))
+            : s.target_difficulty;
           const base = {
             date,
             name: s.name,
             notes: s.notes,
-            target_difficulty: s.target_difficulty,
+            target_difficulty,
             done: false,
           };
 
