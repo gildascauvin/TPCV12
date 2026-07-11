@@ -329,7 +329,7 @@ function ProfileRecapStep({
   return (
     <div>
       <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
-      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>On a bien compris</div>
+      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>Ton profil d&apos;entraînement</div>
       <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregProfile ? 20 : 28 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
         <span style={accent}>{sportLabel}</span>
