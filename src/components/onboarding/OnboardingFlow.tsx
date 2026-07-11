@@ -30,7 +30,8 @@ type StepId =
   | "wellness_q"
   | "account"
   | "celebration"
-  | "value_program" | "value_program_coach";
+  | "value_program" | "value_program_coach"
+  | "concept_autoreg" | "profile_recap";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -45,8 +46,10 @@ const ATHLETE_PATH: StepId[] = [
   "role", "value_slides",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
+  "concept_autoreg",
   "autoreg_score",
   "sport_2a", "level_2a", "goal_2a", "days_2a",
+  "profile_recap",
   "week_preview_2a",
   "wellness_q", "account",
   "celebration",
@@ -55,16 +58,18 @@ const COACH_PATH: StepId[] = [
   "role", "value_slides",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
+  "concept_autoreg",
   "autoreg_score_coach",
   "sport_2a", "level_2a", "goal_2a", "days_2a",
+  "profile_recap",
   "week_preview_2b",
   "account",
   "celebration",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap"];
 
-const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration"];
+const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"];
 
 const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "wellness_q", "account", "celebration"];
 const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "account", "celebration"];
@@ -1450,6 +1455,30 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        {/* ── CONCEPT AUTORÉGULATION (interstitiel avant le score) ── */}
+        {currentStep === "concept_autoreg" && (
+          <div style={{ position: "relative", padding: "12px 4px" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
+            <div style={{ position: "relative", zIndex: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
+                ✦ Autorégulation
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
+                {role === "coach" ? "Le corps de tes sportifs parle" : "Ton corps parle. On l'écoute."}
+              </div>
+              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
+                {role === "coach"
+                  ? "Fatigue, sommeil, stress : le corps de chaque sportif envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations claires, pour toi et pour eux. C'est ce qu'on appelle l'autorégulation."
+                  : "Fatigue, sommeil, stress : ton corps envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations d'entraînement claires, jour après jour. C'est ce qu'on appelle l'autorégulation."}
+              </div>
+              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 12 }}>
+                Continuer →
+              </button>
+              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
+            </div>
+          </div>
+        )}
+
         {/* ── SCORE AUTORÉGULATION SPORTIF ── */}
         {currentStep === "autoreg_score" && (
           <AutoRegScoreStep
@@ -1516,6 +1545,35 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             </div>
           </div>
         ))}
+
+        {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
+        {currentStep === "profile_recap" && (() => {
+          const sportLabel = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
+          const chips = [
+            sportLabel,
+            LEVEL_LABELS[level],
+            goal,
+            `${trainingDays.length} jour${trainingDays.length > 1 ? "s" : ""}/semaine`,
+          ].filter(Boolean);
+          return (
+            <div>
+              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>On a bien compris</div>
+              <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 22 }}>
+                {role === "coach"
+                  ? "Voici ce qu'on a retenu pour créer un premier programme adapté à tes sportifs."
+                  : "Voici ce qu'on a retenu pour te préparer un programme sur mesure."}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+                {chips.map((c, i) => (
+                  <div key={i} style={{ padding: "9px 14px", borderRadius: 999, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.20)", color: "#d44000", fontSize: 13, fontWeight: 800 }}>
+                    {c}
+                  </div>
+                ))}
+              </div>
+              <Actions onBack={back} onNext={next} nextLabel="Voir mon programme →" />
+            </div>
+          );
+        })()}
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
