@@ -1151,7 +1151,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
               <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>
@@ -1175,7 +1175,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
               <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>
@@ -1630,7 +1630,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   : "Fatigue, sommeil, stress : ton corps envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations d'entraînement claires, jour après jour. C'est ce qu'on appelle l'autorégulation."}
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
               <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
                 Continuer →
               </button>

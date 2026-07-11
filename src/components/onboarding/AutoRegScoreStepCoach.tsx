@@ -181,7 +181,7 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
             {getBridgeMessage(globalPct)}
           </div>
 
-          <div style={{ position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+          <div style={{ position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
             <button onClick={onNext} style={{
               ...ctaBtn,
               opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.4s ease 0.5s",

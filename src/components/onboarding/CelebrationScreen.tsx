@@ -189,7 +189,7 @@ export default function CelebrationScreen({
       </div>
 
       {/* CTA */}
-      <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(17,17,17,0) 0%,rgba(17,17,17,.85) 30%,#161616 55%)" }}>
+      <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
         <button
           onClick={onStartTrial}
           disabled={saving}
