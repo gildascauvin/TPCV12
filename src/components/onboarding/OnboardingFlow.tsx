@@ -31,7 +31,8 @@ type StepId =
   | "account"
   | "celebration"
   | "value_program" | "value_program_coach"
-  | "concept_autoreg" | "profile_recap";
+  | "concept_autoreg" | "profile_recap"
+  | "invite_team";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -51,7 +52,8 @@ const ATHLETE_PATH: StepId[] = [
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "profile_recap",
   "week_preview_2a",
-  "wellness_q", "account",
+  "account",
+  "wellness_q",
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
@@ -64,15 +66,28 @@ const COACH_PATH: StepId[] = [
   "profile_recap",
   "week_preview_2b",
   "account",
+  "invite_team",
   "celebration",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"];
 
 const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"];
 
-const PROGRAM_ATHLETE_PATH: StepId[] = ["role", "value_program", "sport_2a", "goal_2a", "concept_autoreg", "wellness_q", "profile_recap", "account", "celebration"];
-const PROGRAM_COACH_PATH: StepId[] = ["role", "value_program_coach", "sport_2a", "goal_2a", "concept_autoreg", "profile_recap", "account", "celebration"];
+const PROGRAM_ATHLETE_PATH: StepId[] = [
+  "role", "value_program",
+  "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
+  "autoreg_score",
+  "concept_autoreg",
+  "profile_recap", "account", "wellness_q", "celebration",
+];
+const PROGRAM_COACH_PATH: StepId[] = [
+  "role", "value_program_coach",
+  "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
+  "autoreg_score_coach",
+  "concept_autoreg",
+  "profile_recap", "account", "invite_team", "celebration",
+];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -85,6 +100,7 @@ function getNextMonday(): string {
 
 const LEVEL_DIFF_ADJ: Record<Level, number> = { beginner: -2, intermediate: 0, elite: 1 };
 const LEVEL_TO_DB: Record<Level, string> = { beginner: "debutant", intermediate: "intermediaire", elite: "elite" };
+const DB_TO_LEVEL: Record<string, Level> = { debutant: "beginner", intermediaire: "intermediate", avance: "elite", elite: "elite" };
 const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 function buildProgramTemplate(sport: string, level: Level, days: number[]): ProgramTemplate {
@@ -313,10 +329,10 @@ function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: 
 }
 
 function ProfileRecapStep({
-  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, hasPreviewNext, onBack, onNext,
+  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, claimedProgramName, hasPreviewNext, onBack, onNext,
 }: {
   role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
-  showDays: boolean; trainingDays: number[]; autoregProfile: AutoregProfile | null;
+  showDays: boolean; trainingDays: number[]; autoregProfile: AutoregProfile | null; claimedProgramName?: string | null;
   hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
@@ -332,7 +348,7 @@ function ProfileRecapStep({
       <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>Ton profil d&apos;entraînement</div>
       <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregProfile ? 20 : 28 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
-        <span style={accent}>{sportLabel}</span>
+        <span style={accent}>{claimedProgramName || sportLabel}</span>
         {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
         {goalLower && <>, pour <span style={accent}>{goalLower}</span></>}
         {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
@@ -508,6 +524,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
   const [roleChosen, setRoleChosen] = useState(!!(pendingData?.role || initialRole));
+  const [newUserId, setNewUserId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [claimedProgramName, setClaimedProgramName] = useState<string | null>(null);
+  const [claimedProgramWeeks, setClaimedProgramWeeks] = useState<number | null>(null);
+
+  /* invite_team */
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteResult, setInviteResult] = useState<"linked" | "pending" | null>(null);
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   /* questionnaire */
   const [sport, setSport]                         = useState(pendingData?.sport || "Force & puissance");
@@ -599,11 +625,22 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (claimParam && !localStorage.getItem("claim_program_id")) {
       localStorage.setItem("claim_program_id", claimParam);
     }
-    const claimed = !!localStorage.getItem("claim_program_id");
+    const claimId = localStorage.getItem("claim_program_id");
+    const claimed = !!claimId;
     setHasClaimedProgram(claimed);
     if (claimed) {
-      posthog.setPersonProperties({ onboarding_source: "program", claimed_program_id: localStorage.getItem("claim_program_id") });
-      posthog.capture("program_onboarding_start", { program_id: localStorage.getItem("claim_program_id") });
+      posthog.setPersonProperties({ onboarding_source: "program", claimed_program_id: claimId });
+      posthog.capture("program_onboarding_start", { program_id: claimId });
+      fetch(`/api/programs/${claimId}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (!data) return;
+          if (data.sport) setSport(data.sport);
+          if (data.level && DB_TO_LEVEL[data.level]) setLevel(DB_TO_LEVEL[data.level]);
+          if (data.name) setClaimedProgramName(data.name);
+          if (data.weeks_count) setClaimedProgramWeeks(data.weeks_count);
+        })
+        .catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -648,6 +685,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "coach") {
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+      setInviteCode(code);
       await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
 
       const DEMO_ATHLETES = [
@@ -700,6 +738,78 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   }
 
+  function goToActivationStep() {
+    const target: StepId = role === "coach" ? "invite_team" : "wellness_q";
+    const idx = path.indexOf(target);
+    setStepIdx(idx >= 0 ? idx : path.length - 1);
+  }
+
+  async function finishCoachClaim(uid: string) {
+    const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
+    if (!claimId) return;
+    try {
+      const claimRes = await fetch("/api/programs/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programId: claimId }),
+      });
+      if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
+      const { programId: copiedId } = await claimRes.json();
+      const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", uid).limit(1).maybeSingle();
+      if (firstAthlete?.id) {
+        await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthlete.id);
+        await fetch(`/api/programs/${copiedId}/assign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
+        });
+        localStorage.setItem("program_start_date", getNextMonday());
+      }
+    } catch {
+      /* coach a déjà un programme démo généré dans saveData(), pas de fallback nécessaire */
+    } finally {
+      localStorage.removeItem("claim_program_id");
+    }
+  }
+
+  async function finishAthleteActivation(base_score: number, score: number) {
+    const uid = userId || newUserId;
+    if (uid) {
+      const today = new Date().toISOString().split("T")[0];
+      await supabase.from("wellness_daily").upsert(
+        { user_id: uid, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score },
+        { onConflict: "user_id,date" }
+      );
+      const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
+      if (claimId) {
+        try {
+          const claimRes = await fetch("/api/programs/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ programId: claimId }),
+          });
+          if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
+          const { programId: copiedId } = await claimRes.json();
+          const wellnessAdjustment = score < 45 ? -1 : 0;
+          const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
+          });
+          if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
+        } catch (err: unknown) {
+          const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
+          if (status !== 409) {
+            await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
+          }
+        } finally {
+          localStorage.removeItem("claim_program_id");
+        }
+      }
+    }
+    next();
+  }
+
   async function handleFinish() {
     setSaving(true);
     setError(null);
@@ -715,15 +825,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         if (signUpErr) { setError(signUpErr.message); setSaving(false); return; }
         const uid = data.user?.id;
         if (!uid) { setError("Erreur lors de la création du compte."); setSaving(false); return; }
+        setNewUserId(uid);
         await saveData(uid);
-        if (role === "athlete") {
-          const today = new Date().toISOString().split("T")[0];
-          const { base_score, score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
-          await supabase.from("wellness_daily").upsert(
-            { user_id: uid, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score },
-            { onConflict: "user_id,date" }
-          );
-        }
         posthog.identify(uid, { email: email.trim(), role });
         posthog.capture("account_created", { role });
         fetch("/api/brevo/contact", {
@@ -748,90 +851,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           setSaving(false);
           return;
         }
-        const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
-        if (claimId) {
-          try {
-            const claimRes = await fetch("/api/programs/claim", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ programId: claimId }),
-            });
-            if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
-            const { programId: copiedId } = await claimRes.json();
-            if (role === "athlete") {
-              const wellnessAdjustment = wScore != null && wScore < 45 ? -1 : 0;
-              const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
-              });
-              if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
-            } else if (role === "coach") {
-              const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", uid).limit(1).maybeSingle();
-              if (firstAthlete?.id) {
-                await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthlete.id);
-                await fetch(`/api/programs/${copiedId}/assign`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
-                });
-                localStorage.setItem("program_start_date", getNextMonday());
-              }
-            }
-          } catch (err: unknown) {
-            const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
-            if (status !== 409 && role === "athlete") {
-              await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
-            }
-          } finally {
-            localStorage.removeItem("claim_program_id");
-          }
-        }
+        if (role === "coach") await finishCoachClaim(uid);
         setSaving(false);
-        setStepIdx(path.length - 1);
+        goToActivationStep();
       } else {
         await saveData(userId!);
-        const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
-        if (claimId) {
-          try {
-            const claimRes = await fetch("/api/programs/claim", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ programId: claimId }),
-            });
-            if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
-            const { programId: copiedId } = await claimRes.json();
-            if (role === "athlete") {
-              const wellnessAdjustment = wScore != null && wScore < 45 ? -1 : 0;
-              const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ start_date: getNextMonday(), user_id: userId, wellnessAdjustment }),
-              });
-              if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
-            } else if (role === "coach") {
-              const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", userId!).limit(1).maybeSingle();
-              if (firstAthlete?.id) {
-                await supabase.from("coach_sessions").delete().eq("coach_id", userId!).eq("athlete_id", firstAthlete.id);
-                await fetch(`/api/programs/${copiedId}/assign`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
-                });
-                localStorage.setItem("program_start_date", getNextMonday());
-              }
-            }
-          } catch (err: unknown) {
-            const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
-            if (status !== 409 && role === "athlete") {
-              await supabase.from("sessions").insert(buildAthleteSessions(userId!, sport, level, trainingDays));
-            }
-          } finally {
-            localStorage.removeItem("claim_program_id");
-          }
-        }
+        if (role === "coach") await finishCoachClaim(userId!);
         setSaving(false);
-        setStepIdx(path.length - 1);
+        goToActivationStep();
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -841,9 +868,22 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   function handleWellnessQuestions() {
     if (wStep < WQ_TOTAL - 1) { setWStep(s => s + 1); return; }
-    const { score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
+    const { base_score, score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
     setWScore(score);
-    next();
+    finishAthleteActivation(base_score, score);
+  }
+
+  async function handleInviteSend() {
+    if (!inviteEmail.trim()) return;
+    setInviteSending(true);
+    const res = await fetch("/api/invite/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteEmail: inviteEmail.trim() }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setInviteSending(false);
+    if (res.ok) setInviteResult(json.linked ? "linked" : "pending");
   }
 
   const [showTrialPaywall, setShowTrialPaywall] = useState(false);
@@ -896,15 +936,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           await supabase.from("profiles").update({ name: finalName }).eq("user_id", userId);
         }
 
-        if (pendingData.role === "athlete") {
-          const today = new Date().toISOString().split("T")[0];
-          const { base_score, score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
-          await supabase.from("wellness_daily").upsert(
-            { user_id: userId, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score },
-            { onConflict: "user_id,date" }
-          );
-        }
-
         posthog.identify(userId, { email: userEmail, role: pendingData.role });
         posthog.capture("account_created", { role: pendingData.role, method: "google" });
         fetch("/api/brevo/contact", {
@@ -914,7 +945,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         });
         await fetch("/api/invite/link", { method: "POST" });
         setInitializing(false);
-        setStepIdx(path.length - 1);
+        goToActivationStep();
       } catch {
         setInitializing(false);
       }
@@ -1712,11 +1743,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             role={role}
             sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
             sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
-            showLevel={path.includes("level_2a")}
+            showLevel={path.includes("level_2a") || (hasClaimedProgram === true && !!level)}
             level={level}
             goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
             showDays={path.includes("days_2a")}
             trainingDays={trainingDays}
+            claimedProgramName={claimedProgramName}
             autoregProfile={
               path.includes("autoreg_score") ? computeAthleteAutoregProfile(overloadAns, planningAns, fatigueAns)
               : path.includes("autoreg_score_coach") ? computeCoachAutoregProfile(overloadCoachAns, planningCoachAns, fatigueCoachAns)
@@ -1857,6 +1889,92 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── INVITE TEAM (coach) ── */}
+        {currentStep === "invite_team" && (
+          <div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
+              Invite tes premiers sportifs
+            </div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>
+              Ils rejoignent ton espace en un clic. Tu peux le faire plus tard aussi.
+            </div>
+
+            {inviteResult ? (
+              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: "20px 18px", textAlign: "center", marginBottom: 20 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>{inviteResult === "linked" ? "🔗" : "✅"}</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 6 }}>
+                  {inviteResult === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
+                </div>
+                <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5 }}>
+                  {inviteResult === "linked"
+                    ? <><strong style={{ color: "#171b1f" }}>{inviteEmail}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
+                    : <>Dès que <strong style={{ color: "#171b1f" }}>{inviteEmail}</strong> créera son compte, il sera automatiquement lié à ton espace.</>}
+                </div>
+              </div>
+            ) : (
+              <>
+                {inviteCode && (
+                  <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+                      Lien d&apos;invitation
+                    </div>
+                    <div style={{ fontSize: 12, color: "#d44000", fontWeight: 700, wordBreak: "break-all", marginBottom: 10 }}>
+                      go.theperfclub.com/join/{inviteCode}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                          setInviteLinkCopied(true);
+                          setTimeout(() => setInviteLinkCopied(false), 2500);
+                        }}
+                        style={{ flex: 1, height: 38, borderRadius: 11, background: inviteLinkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}>
+                        {inviteLinkCopied ? "✓ Copié !" : "📋 Copier le lien"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+                          window.open(`https://wa.me/?text=${msg}`, "_blank");
+                        }}
+                        style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 11, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}>
+                        📲
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 8 }}>Ou par email</div>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="sportif@exemple.com"
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 20 }}
+                />
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
+              <button onClick={back} aria-label="Retour"
+                style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                ←
+              </button>
+              <button
+                onClick={async () => {
+                  if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
+                  next();
+                }}
+                style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.6 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
+                {inviteSending ? "Envoi…" : "Continuer →"}
+              </button>
+            </div>
+            {!inviteResult && (
+              <button onClick={next} style={{ display: "block", width: "100%", textAlign: "center", background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}>
+                Passer →
+              </button>
+            )}
           </div>
         )}
 

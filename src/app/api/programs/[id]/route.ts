@@ -6,7 +6,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const admin = createAdminClient();
   const { data } = await admin
     .from("programs")
-    .select("name, sport, level, template")
+    .select("name, sport, level, weeks_count, template")
     .eq("id", id)
     .eq("is_public", true)
     .maybeSingle();
