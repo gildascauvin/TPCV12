@@ -102,7 +102,8 @@ role → value_program_coach
 ```
 
 ### Étape `invite_team` (coach, nouveau 2026-07-12)
-Adaptée de `InviteModal.tsx` (`src/components/coach/InviteModal.tsx`) en step inline — lien d'invitation (`go.theperfclub.com/join/{code}` généré dans `saveData()`, capturé en state `inviteCode`) + copier + WhatsApp + formulaire email (`POST /api/invite/create`, ne envoie pas de vrai email — enregistre une invitation "pending" auto-liée à la prochaine inscription avec cet email). CTA "Continuer →" et lien "Passer →" tous les deux dans le même footer sticky (le lien "Passer" a été sorti d'un élément séparé le 2026-07-12 — il pouvait sortir du viewport), jamais bloquant, avance toujours vers `celebration`.
+Adaptée de `InviteModal.tsx` (`src/components/coach/InviteModal.tsx`) — lien d'invitation (`go.theperfclub.com/join/{code}` généré dans `saveData()`, capturé en state `inviteCode`) + copier + WhatsApp + formulaire email (`POST /api/invite/create`, ne envoie pas de vrai email — enregistre une invitation "pending" auto-liée à la prochaine inscription avec cet email). CTA "Continuer →" et lien "Passer →" tous les deux dans le même footer sticky, jamais bloquant, avance toujours vers `celebration`.
+- **Rendu en carte flottante depuis le 2026-07-12** (pas plein-page) : `position:fixed; inset:0; zIndex:2147483100` + backdrop flou (`rgba(0,0,0,0.65)`, `backdropFilter:blur(16px)`) + carte blanche `borderRadius:30, padding:28, maxWidth:420, overflowY:auto` — même shell que `PaywallModal.tsx`/`WelcomeModal.tsx`. Décision : `celebration`/`invite_team` gagnent la sensation "produit réel" de la modale sans redirection vers `/today`/`/coach` réel (qui aurait exigé d'extraire ces steps hors du state machine `OnboardingFlow.tsx` — même complexité cross-page que le tour supprimé le 2026-07-11). `wellness_q` reste plein-page (vrai formulaire séquentiel, la modale n'apporte rien à une saisie).
 
 ### Auth mode (déjà connecté)
 ```
@@ -117,10 +118,32 @@ Pour les paths sportif : submit `account` → `saveData()` (profil, PAS le welln
 
 ### Écran de célébration (remplace l'ancien tour produit + PrimingJourneyModal en fin de flow)
 - Composant `src/components/onboarding/CelebrationScreen.tsx`, dernier step de tous les paths.
-- Recap chips-free (sport/niveau/objectif si collectés dans le path courant via `path.includes(...)`), score wellness animé si `wellness_q` fait partie du path, aperçus statiques des écrans clés, **preuve sociale** (avatars "+300 sportifs, coachs et clubs" + témoignage 5 étoiles, sportif/coach — `AVATARS`/`TESTIMONIALS` locaux, rapatriés depuis `PrimingJourneyModal` qui n'était plus jamais affiché dans ce chemin), pitch upgrade (`getPrimingHeadline()`/`COACH_AUTOREG_HEADLINE` + `UNLIMITED_BULLET` de `primingCopy.ts`) — dans cet ordre, preuve sociale juste avant le pitch.
-- CTA unique → ouvre `PaywallModal` directement dans `OnboardingFlow.tsx` (pas de redirect intermédiaire). `onSuccess`/dismiss redirige enfin vers `/today` ou `/coach`.
+- **Rendu en carte flottante depuis le 2026-07-12** — même shell/raisonnement que `invite_team` ci-dessus (carte `#161616` en dégradé remplacé par un `background:"#161616"` solide, voir "Fix fond sticky" plus bas). Bonus : `celebration`-modale → `PaywallModal` (déjà une modale) devient une transition modale→modale cohérente au lieu du plein-page→modale d'avant.
+- Recap chips-free (sport/niveau/objectif si collectés dans le path courant via `path.includes(...)`).
+- **Score wellness (sportif)** : `<WellnessRing dark score={wScore} .../>` (composant `src/components/wellness/WellnessRing.tsx`, réutilisé depuis Today/Coach — nouveau prop `dark?: boolean` pour l'intégrer à la carte sombre) + un **tip personnalisé** (`wellnessTip`, calculé par `computeWellnessTip()` dans `OnboardingFlow.tsx` à la fin de `wellness_q`, à partir de `wSleep`/`wStress`/`wRecovery`/`score` — identifie la dimension la plus faible et donne un conseil dédié ; le cas `score < 45` est phrasé différemment selon `hasClaimedProgram` pour rester honnête, seul le programme claimé bénéficie réellement du `wellnessAdjustment`). Pas de réutilisation du moteur de corrélation `/conseils` — un compte neuf n'a pas l'historique J→J+1 nécessaire.
+- **Capacité illimitée (coach)** : remplace le slot vide qu'avait le coach (pas de wellness) — `<WellnessRing dark infinite score={null} .../>` (nouveau mode `infinite` sur `WellnessRing`, ring plein vert + label "∞"/"ILLIMITÉ", ignore `score`) + texte `COACH_LIBRARY_PITCH` (`primingCopy.ts`) : "Choisis parmi 40+ programmes prêts à l'emploi, ou génère le tien sur-mesure en quelques clics" — nombre et wording vérifiés sur le code (`/api/programs/generate` n'est pas de l'IA, template instantané, pas "en 1 minute").
+- **Programme claimé** : si `claimedProgramName` (state déjà existant, passé en prop), bloc dédié avec le nom réel + `claimedProgramWeeks`.
+- **Aperçus statiques personnalisés au sport** : les items `"Ton programme {sport}, semaine par semaine"` (sportif) / `"Un programme {sport} prêt à assigner"` (coach) interpolent le sport de l'user (`getAthletePreviews(sport)`/`getCoachPreviews(sport)`, fonctions au lieu de constantes).
+- Preuve sociale (avatars "+300 sportifs, coachs et clubs" + témoignage 5 étoiles, sportif/coach — `AVATARS`/`TESTIMONIALS` locaux), pitch upgrade (`getPrimingHeadline()`/`COACH_AUTOREG_HEADLINE` + `UNLIMITED_BULLET` de `primingCopy.ts`, `UNLIMITED_BULLET.coach` étendu pour mentionner aussi les programmes).
+- **CTA unique** (plus de "Accéder sans abonnement →", voir "Paywall obligatoire" plus bas) → ouvre `PaywallModal` directement dans `OnboardingFlow.tsx` (pas de redirect intermédiaire). `onSuccess` redirige enfin vers `/today` ou `/coach`.
 - **`ProductTourOverlay.tsx` et `WelcomeReveal.tsx` ont été supprimés** — ne pas les recréer, ni chercher `?welcome=1` (plumbing retirée de `TodayClient.tsx`/`CoachClient.tsx`).
-- **`PrimingJourneyModal.tsx` existe toujours** et reste utilisé par `usePaywall` dans les 5 pages client (`TodayClient`/`WeekClient`/`CoachClient`/`CoachPlanningClient`/`AthletesClient`) pour le gating in-app free/expired — ne pas le confondre avec `PrimingModal.tsx` (celui-là est mort, zéro import).
+- **`PrimingJourneyModal.tsx` existe toujours** et reste utilisé par `usePaywall` dans les 5 pages client (`TodayClient`/`WeekClient`/`CoachClient`/`CoachPlanningClient`/`AthletesClient`) pour le gating in-app free/expired — ne pas le confondre avec `PrimingModal.tsx` (celui-là est mort, zéro import). Son contenu N'EST PAS affiché dans le chemin onboarding (celebration ouvre `PaywallModal` directement).
+
+### Paywall obligatoire à la fin de l'onboarding (2026-07-12)
+Le paywall affiché juste après `celebration` ne peut plus être fermé ni contourné — décision explicite (nouveau compte = carte obligatoire pour accéder à l'app). **Scope : onboarding uniquement.** Le paywall in-app (`usePaywall`, essai/abonnement qui expire pour un user existant) garde son comportement actuel (rappel + fermeture possible selon `allowDismiss`/`hasCoach`).
+- `handleSkipCelebration()` (bouton "Accéder sans abonnement →") et le prop `onSkip` de `CelebrationScreen` ont été supprimés.
+- Call site onboarding de `<PaywallModal>` : `allowDismiss={false}`, pas de `onClose`.
+- **Fix de faille dans `PaywallModal.tsx`** : le clic sur le fond (`backdrop click`) appelait `onClose?.()` sans vérifier `allowDismiss` (contrairement au "×" et à "← Retour", eux bien gated) — corrigé pour respecter `allowDismiss` partout, bénéficie à tous les appelants existants (comportement enfin cohérent avec l'intention `allowDismiss={false}` déjà utilisée sur les pages coach).
+- **Limite assumée** : l'application reste 100% côté client (`requireSubscription()`), aucune vérification serveur/RLS sur `subscription_status`. Retirer les boutons de sortie UI empêche l'usage normal gratuit, pas un contournement technique délibéré — un verrou serveur serait un chantier séparé, plus large.
+
+### `PaywallModal.tsx` — choix mensuel/annuel + garanties restaurés (2026-07-12)
+Repéré en vérifiant le paywall obligatoire : le choix mensuel/annuel et le rappel des 3 garanties (accès immédiat, rappel avant prélèvement, résiliation sans condition) avaient disparu de l'onboarding quand celui-ci est passé de `PrimingJourneyModal` (3 steps, dont ce contenu au step 2) à `PaywallModal` direct le 2026-07-11 — `billing` était un `const` figé sur `initialBilling ?? "annual"`, jamais choisi par l'user.
+- `billing` devient un `useState` dans `PaywallModal` (plus un `const`), avec les 2 cartes toggle mensuel/annuel (badges "ESSAI 7J GRATUITS"/"ÉCONOMISEZ Xâ‚¬", carte sombre sélectionnée) — copié depuis le step 2 de `PrimingJourneyModal.tsx`, `annualSavings` calculé pareil.
+- Le rappel des 3 garanties (icône check + titre + sous-texte, ligne verticale orange) est copié verbatim depuis `PrimingJourneyModal.tsx` step 2 et inséré directement dans `PaywallModal.tsx`, entre le toggle et le formulaire Stripe.
+- **Choix : fusionné dans l'écran unique, pas réintroduit comme step séparé** — maintenant que ce paywall n'est plus contournable, un seul écran complet et digne de confiance vaut mieux qu'un enchaînement d'étapes sans échappatoire.
+
+### Fix fond sticky des modales (2026-07-12)
+Les footers sticky des modales (`PaywallModal.tsx`, `PrimingJourneyModal.tsx` ×3, `invite_team`, `CelebrationScreen.tsx`) utilisaient un `linear-gradient(...,#fff 38%)` (stop en pourcentage) — l'opacité pleine n'était atteinte qu'à 38% de la hauteur TOTALE du bloc sticky, qui peut être haute (ex. `PaywallModal` avec plusieurs lignes de texte + bouton). Le texte tout en haut du bloc (juste après le padding) restait donc partiellement transparent, laissant le contenu défilé en dessous se superposer visuellement — repéré en vérifiant le paywall obligatoire, avec le texte "Essai gratuit jusqu'au..." illisible par-dessus un champ de carte bancaire. **Fix : fond opaque simple (`"#fff"` / `"#161616"`) au lieu du gradient**, sur les 6 occurrences. Le même piège avait déjà été rencontré et corrigé différemment le 2026-07-11 sur les footers dark plein-page (voir commit `bb5687e`) — **règle : ne pas utiliser de gradient à stop en pourcentage pour un fond de fade sticky dans une carte au contenu de hauteur variable, utiliser un fond opaque simple.**
 
 ### Verrouillage premium (🔒) — permanent, plus lié au tour
 - `.tour-lock` (span 🔒 sur les CTAs premium) et le bloc CSS `body.tour-active` (bannière d'activation, opacité boutons) ont été renommés en `.locked`, posé sur le wrapper de `src/app/(app)/layout.tsx` selon l'état réel d'abonnement (`!isActive`), plus lié à une session de tour éphémère.
@@ -195,7 +218,7 @@ Composants : `usePaywall` hook → `PrimingJourneyModal` → `PaywallModal`
 Pages : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`, `CoachClient`
 **Attention au nom** : `PrimingModal.tsx` (sans "Journey") existe aussi dans le repo mais est du code mort (zéro import) — ne pas le confondre avec `PrimingJourneyModal.tsx` qui est le composant réellement utilisé.
 
-**CTA sticky sur les 3 steps de `PrimingJourneyModal` + sur le formulaire Stripe de `PaywallModal`** (2026-07-12) : pattern modale (`margin:"16px -28px -28px"`, `padding:"14px 28px 20px"`, `background:"linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)"`, `position:"sticky", bottom:0`) — bleed jusqu'aux bords de padding de la carte (`padding:28`) puisque la carte a `overflowY:auto` (contenu qui peut scroller, notamment le formulaire Stripe avec `PaymentElement`). **Diffère légèrement de la règle 4 ci-dessous** (`margin-bottom:0` au lieu de `-28px`, opacité de départ `0` au lieu de `.88`) — ces valeurs sont les bonnes pour ce cas précis (carte scrollable), la règle 4 documente un pattern plus ancien/simplifié à ne pas suivre à la lettre ici.
+**CTA sticky sur les 3 steps de `PrimingJourneyModal` + sur le formulaire Stripe de `PaywallModal`** (2026-07-12) : pattern modale (`margin:"16px -28px -28px"`, `padding:"14px 28px 20px"`, `position:"sticky", bottom:0`) — bleed jusqu'aux bords de padding de la carte (`padding:28`) puisque la carte a `overflowY:auto` (contenu qui peut scroller, notamment le formulaire Stripe avec `PaymentElement`). **Diffère de la règle 4 ci-dessous** (`margin-bottom:0` au lieu de `-28px`) — ces valeurs sont les bonnes pour ce cas précis (carte scrollable), la règle 4 documente un pattern plus ancien/simplifié à ne pas suivre à la lettre ici. **Fond : `"#fff"` opaque simple** (pas de gradient — un `linear-gradient(...,#fff 38%)` a été essayé puis retiré le même jour, voir section "Fix fond sticky des modales" plus haut : le stop en pourcentage laissait le texte du haut du bloc partiellement transparent sur les cartes à contenu haut/variable).
 
 ### Sport "Autre" — précision
 Si l'user sélectionne "Autre" dans `sport_2a`, un champ texte s'affiche.
@@ -252,6 +275,7 @@ src/components/
     DuplicateModal.tsx     # Dupliquer une séance sur une autre date
   wellness/
     WellnessModal.tsx      # Formulaire wellness 5 étapes
+    WellnessRing.tsx       # Ring SVG réutilisable (score, dark?, infinite? — modes ajoutés 2026-07-12 pour CelebrationScreen). Today/Coach ont chacun leur propre copie locale du même ring (WellnessRingPOC/PlanningRing) — pas encore unifiées avec ce composant
   calendar/
     CalendarHeader.tsx     # En-tête calendrier semaine avec dots
   profile/
@@ -283,8 +307,8 @@ Profile { id, user_id, name, sport, objective, freq_target, mode, subscription_s
 ## Paywall — composants
 ```
 src/components/paywall/
-  PaywallModal.tsx         # Formulaire CB Stripe (simplifié : pas de toggle, pas de bullet points)
-  PrimingJourneyModal.tsx  # Écran priming (value/social proof → rappel essai → timeline + plan cards) — utilisé par usePaywall dans l'app ET par CelebrationScreen en fin d'onboarding
+  PaywallModal.tsx         # Toggle mensuel/annuel + 3 garanties + formulaire CB Stripe (toggle/garanties restaurés le 2026-07-12, voir section Onboarding)
+  PrimingJourneyModal.tsx  # Écran priming (value/social proof → rappel essai → timeline + plan cards) — utilisé par usePaywall dans l'app (gating in-app free/expired) UNIQUEMENT, pas dans le chemin onboarding (celebration ouvre PaywallModal directement)
   PrimingModal.tsx         # Code mort (zéro import) — ne pas confondre avec PrimingJourneyModal
   PaywallGate.tsx          # Code mort (zéro import)
 src/hooks/
