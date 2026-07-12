@@ -9,6 +9,10 @@ interface WellnessRingProps {
   strokeWidth?: number;
   showLabel?: boolean;
   className?: string;
+  /** Fond sombre (célébration onboarding) — track + texte adaptés. */
+  dark?: boolean;
+  /** Mode "capacité illimitée" (coach, pas de score wellness) — ring plein + label "∞". */
+  infinite?: boolean;
 }
 
 export default function WellnessRing({
@@ -17,10 +21,12 @@ export default function WellnessRing({
   strokeWidth = 5,
   showLabel = true,
   className,
+  dark = false,
+  infinite = false,
 }: WellnessRingProps) {
   const r = (size - strokeWidth * 2) / 2;
   const circumference = 2 * Math.PI * r;
-  const pct = score != null ? Math.max(0, Math.min(100, score)) : 0;
+  const pct = infinite ? 100 : score != null ? Math.max(0, Math.min(100, score)) : 0;
   const offset = circumference - (pct / 100) * circumference;
 
   const label = score != null ? scoreLabel(score) : "s-empty";
@@ -30,7 +36,8 @@ export default function WellnessRing({
     "s-low": "#d10000",
     "s-empty": "#c0c0c0",
   };
-  const trackColor = "rgba(0,0,0,0.07)";
+  const ringColor = infinite ? "#78bf13" : colorMap[label];
+  const trackColor = dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.07)";
 
   return (
     <div className={cn("relative flex-shrink-0", className)} style={{ width: size, height: size }}>
@@ -48,7 +55,7 @@ export default function WellnessRing({
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={colorMap[label]}
+          stroke={ringColor}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -60,11 +67,16 @@ export default function WellnessRing({
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className="text-[14px] font-bold leading-none"
-            style={{ color: colorMap[label] }}
+            style={{ color: infinite ? ringColor : dark ? "#fff" : colorMap[label] }}
           >
-            {score != null ? score : "—"}
+            {infinite ? "∞" : score != null ? score : "—"}
           </span>
-          <span className="text-[7px] text-muted tracking-[0.06em] mt-[1px]">FORM</span>
+          <span
+            className={cn("text-[7px] tracking-[0.06em] mt-[1px]", !dark && "text-muted")}
+            style={dark ? { color: "rgba(255,255,255,0.55)" } : undefined}
+          >
+            {infinite ? "ILLIMITÉ" : "FORM"}
+          </span>
         </div>
       )}
     </div>

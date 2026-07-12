@@ -134,7 +134,7 @@ function CheckoutForm({
         </div>
       )}
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)" }}>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
         <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
           Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
         </div>
@@ -174,7 +174,8 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
 
-  const billing: Billing = initialBilling ?? "annual";
+  const [billing, setBilling] = useState<Billing>(initialBilling ?? "annual");
+  const annualSavings = PRICING[mode].monthly * 12 - PRICING[mode].annual;
 
   useEffect(() => {
     fetch("/api/stripe/setup-intent", { method: "POST" })
@@ -191,7 +192,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const planLabel = mode === "coach" ? "Plan Coach" : "Plan Sportif";
 
   return (
-    <div onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
+    <div onClick={(e) => { if (allowDismiss && e.target === e.currentTarget) onClose?.(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
       <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
 
         {allowDismiss && onClose && (
@@ -209,19 +210,70 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
         {/* Header */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 14 }}>
             ThePerfClub — {planLabel}
           </div>
-          <div style={{ fontSize: 21, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.15, marginBottom: 6 }}>
-            {billing === "annual"
-              ? <>{p.annualMonthly}€<span style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>/mois</span> <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>· {p.annual}€ facturé annuellement</span></>
-              : <>{p.monthly}€<span style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>/mois</span></>
-            }
-          </div>
-          <p style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, margin: 0 }}>
-            <><strong>7 jours gratuits</strong> · Aucun prélèvement avant la fin de l'essai.</>
 
-          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div style={{ position: "relative" }}>
+              <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#171b1f", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
+                ESSAI 7J GRATUITS
+              </div>
+              <div onClick={() => setBilling("monthly")}
+                style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "monthly" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${billing === "monthly" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {billing === "monthly" && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff" }} />}
+                  </div>
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.monthly}€</div>
+                <div style={{ fontSize: 11, color: billing === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
+              </div>
+            </div>
+
+            <div style={{ position: "relative" }}>
+              <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
+                ÉCONOMISEZ {annualSavings}€
+              </div>
+              <div onClick={() => setBilling("annual")}
+                style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "annual" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annuel</div>
+                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: billing === "annual" ? "#d44000" : "transparent", border: `1.5px solid ${billing === "annual" ? "#d44000" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {billing === "annual" && (
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "annual" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.annualMonthly}€</div>
+                <div style={{ fontSize: 11, color: billing === "annual" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois · {p.annual}€/an</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ position: "relative", paddingLeft: 32 }}>
+            <div style={{ position: "absolute", left: 9, top: 10, bottom: 10, width: 2, background: "rgba(212,64,0,0.20)", borderRadius: 1 }} />
+            {[
+              { title: "Accès complet dès le premier jour", sub: "Toutes les fonctionnalités débloquées immédiatement." },
+              { title: "Rappel 2 jours avant la fin de l'essai", sub: "On te préviendra avant tout prélèvement." },
+              { title: "Annule à tout moment, sans condition", sub: "Pas d'engagement, pas de frais cachés." },
+            ].map((node, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: i < 2 ? 16 : 0 }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "rgba(212,64,0,0.10)", border: "1.5px solid #d44000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="#d44000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "#1f2428", lineHeight: 1.3 }}>{node.title}</div>
+                  <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.4, marginTop: 2 }}>{node.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", marginBottom: 18 }} />

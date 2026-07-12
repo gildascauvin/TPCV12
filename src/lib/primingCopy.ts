@@ -78,8 +78,12 @@ export function getPrimingHeadline(params: PrimingParams): string {
 /* Copy pour l'écran de célébration post-inscription — pitch upgrade */
 export const UNLIMITED_BULLET: Record<"athlete" | "coach", string> = {
   athlete: "Programmes personnalisés illimités",
-  coach: "Nombre de sportifs illimité",
+  coach: "Sportifs et programmes illimités",
 };
 
 export const COACH_AUTOREG_HEADLINE =
   "Le seul outil qui ajuste chaque séance à la récupération réelle de chaque sportif.";
+
+/* Bloc "capacité illimitée" côté coach dans l'écran de célébration */
+export const COACH_LIBRARY_PITCH =
+  "Choisis parmi 40+ programmes prêts à l'emploi, ou génère le tien sur-mesure en quelques clics.";

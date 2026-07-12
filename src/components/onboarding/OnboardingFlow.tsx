@@ -121,6 +121,24 @@ function buildProgramTemplate(sport: string, level: Level, days: number[]): Prog
   return { weeks };
 }
 
+function computeWellnessTip(sleep: number, stress: number, recovery: number, score: number, claimed: boolean): string {
+  if (score < 45) {
+    return claimed
+      ? "On a légèrement allégé ta première semaine pour laisser ta récupération remonter."
+      : "Ta récupération est basse en ce moment — vise des séances plus courtes cette semaine, et laisse une vraie place au repos.";
+  }
+  const dims = [
+    { value: sleep, low: "Priorise le sommeil ce soir : c'est le levier n°1 de ta récupération.", mid: "Ton sommeil est correct, mais quelques nuits plus longues t'aideraient à mieux encaisser les séances." },
+    { value: 10 - stress, low: "Ton stress est élevé en ce moment — une séance plus courte ou plus douce peut suffire à souffler.", mid: "Garde un œil sur ton niveau de stress cette semaine, il pèse sur ta récupération." },
+    { value: recovery, low: "Tes courbatures sont prises en compte : la progression sera douce cette semaine.", mid: "Tes muscles récupèrent doucement — un bon échauffement fera la différence." },
+  ];
+  const weakest = dims.reduce((a, b) => (b.value < a.value ? b : a));
+  if (weakest.value <= 4) return weakest.low;
+  if (weakest.value <= 6) return weakest.mid;
+  if (score >= 80) return "Ta forme est excellente — ton programme démarre directement à pleine intensité.";
+  return "Ton profil est équilibré : sommeil, stress et récupération sont sous contrôle. Continue comme ça.";
+}
+
 const SPORT_CATEGORIES = [
   { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
   { id: "Athlétisme & vitesse",   icon: "🏃", sub: "Sprint, saut, lancer…" },
@@ -578,6 +596,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [wBehaviors, setWBehaviors] = useState<string[]>(pendingData?.wBehaviors || []);
   const [wMotivation, setWMotivation] = useState(pendingData?.wMotivation ?? 8);
   const [wScore, setWScore]           = useState<number | null>(pendingData?.wScore ?? null);
+  const [wellnessTip, setWellnessTip] = useState<string | null>(null);
   const [wSaving, setWSaving]         = useState(false);
 
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
@@ -875,6 +894,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     finishGuardRef.current = true;
     const { base_score, score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
     setWScore(score);
+    setWellnessTip(computeWellnessTip(wSleep, wStress, wRecovery, score, hasClaimedProgram === true));
     finishAthleteActivation(base_score, score);
   }
 
@@ -897,11 +917,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     posthog.capture("celebration_cta_clicked", { role });
     posthog.capture("paywall_priming_viewed", { plan: role, objective: goal });
     setShowTrialPaywall(true);
-  }
-
-  function handleSkipCelebration() {
-    posthog.capture("celebration_skip_clicked", { role });
-    window.location.href = role === "coach" ? "/coach" : "/today";
   }
 
   function handleTrialSuccess() {
@@ -1899,7 +1914,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── INVITE TEAM (coach) ── */}
         {currentStep === "invite_team" && (
-          <div>
+          <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
+          <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               Invite tes premiers sportifs
             </div>
@@ -1961,7 +1977,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </>
             )}
 
-            <div style={{ position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
+            <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={back} aria-label="Retour"
                   style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
@@ -1985,6 +2001,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               )}
             </div>
           </div>
+          </div>
         )}
 
         {/* ── CÉLÉBRATION + UPGRADE PITCH ── */}
@@ -1998,11 +2015,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             frustration={frustration}
             coachingChallenge={coachingChallenge}
             wScore={wScore}
+            wellnessTip={wellnessTip}
+            claimedProgramName={claimedProgramName}
+            claimedProgramWeeks={claimedProgramWeeks}
             showProfile={path.includes("sport_2a")}
             showWellness={path.includes("wellness_q")}
             saving={saving}
             onStartTrial={handleStartTrial}
-            onSkip={handleSkipCelebration}
           />
         )}
 
@@ -2011,8 +2030,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       {showTrialPaywall && (
         <PaywallModal
           mode={role}
-          allowDismiss
-          onClose={() => setShowTrialPaywall(false)}
+          allowDismiss={false}
           onSuccess={handleTrialSuccess}
         />
       )}
