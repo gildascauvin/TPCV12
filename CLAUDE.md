@@ -38,9 +38,9 @@ src/app/
   reset-password/ # Nouveau mot de passe (après lien email)
 ```
 
-## Onboarding — flows actuels (2026-07-11)
+## Onboarding — flows actuels (2026-07-12)
 
-Refonte complète en 5 chantiers le 2026-07-11 : suppression du tour produit (remplacé par un écran de célébration plein-page), personnalisation réelle du `PROGRAM_PATH` via le wellness, refonte visuelle plein-page (plus de carte flottante/modale), et ajout d'interstitiels type BetterMe (`concept_autoreg`, `profile_recap`) dans tous les flows. Détail complet et historique dans la mémoire Claude (`project_onboarding_celebration_screen.md`, `project_product_tour_paywall.md`) et le plan `/Users/Gildas/.claude/plans/je-vourdais-am-liorer-mes-rosy-ritchie.md`.
+Refonte tour→célébration livrée le 2026-07-11 (5 chantiers), puis convergence des 4 funnels + repositionnement de l'activation le 2026-07-12 : les paths `PROGRAM_*` gagnent le diagnostic complet (pain points + score d'autorégulation) qu'ils n'avaient jamais eu, `wellness_q` (sportif) et la nouvelle étape `invite_team` (coach) se déplacent entre `account` et `celebration` sur les 4 paths (au lieu d'avant `account` pour `wellness_q`, absent pour le coach), et `profile_recap` référence le programme claimé par son nom réel quand disponible. Détail complet et historique dans la mémoire Claude (`project_onboarding_celebration_screen.md`, `project_product_tour_paywall.md`, `project_analytics.md`) et le plan `/Users/Gildas/.claude/plans/je-vourdais-am-liorer-mes-rosy-ritchie.md`.
 
 ### Sportif — flux classique
 ```
@@ -49,23 +49,24 @@ role → value_slides (3 slides stats)
 → autoreg_score  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
 → concept_autoreg (slide dark, graphique SVG comparatif "Avec ThePerfClub" vs "Programme rigide" — la solution ensuite)
 → sport_2a → level_2a → goal_2a → days_2a
-→ profile_recap (phrase humaine + icône sport, "On a bien compris")
+→ profile_recap (phrase humaine + icône sport + carte persona, "Ton profil d'entraînement")
 → week_preview_2a (programme preview)
-→ wellness_q (5 questions niveau de forme)
-→ account (email + mdp + prénom)
+→ account (email + mdp + prénom — création du compte, saveData() SANS le wellness_daily ni claim/assign)
+→ wellness_q (5 questions niveau de forme — après le compte, juste avant la célébration)
 → celebration (recap profil + score wellness + upgrade pitch, CTA ouvre PaywallModal directement)
-[après compte créé, PLUS de redirect immédiat : on reste sur /register, stepIdx passe à "celebration"]
 → succès/dismiss du paywall → redirect /today
 ```
 
 ### Sportif — flux programme (PROGRAM_ATHLETE_PATH)
-Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`).
+Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`). Depuis 2026-07-12, gagne le diagnostic complet et perd `sport_2a`/`goal_2a`/`level_2a`/`days_2a` (déduits automatiquement du programme claimé).
 ```
-role → value_program (1 slide, explique pourquoi le wellness personnalise le programme)
-→ sport_2a → goal_2a
-→ concept_autoreg → wellness_q → profile_recap
-→ account → celebration
-[après compte créé :]
+role → value_program (1 slide, transition iframe WP → onboarding)
+→ frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, [NOUVEAU 2026-07-12])
+→ autoreg_score [NOUVEAU]
+→ concept_autoreg
+→ profile_recap (nom réel du programme claimé + niveau — via GET /api/programs/[id], sport/level/name/weeks_count)
+→ account → wellness_q → celebration
+[claim+assign exécutés à la FIN de wellness_q, pas à la création du compte — voir finishAthleteActivation]
 → claim programme → assign user_id + start_date = prochain lundi + wellnessAdjustment
   (ajustement de target_difficulty semaine 1 basé sur computeWellnessScore, clampé 1-10)
 ```
@@ -76,30 +77,43 @@ Pas de `week_preview_2a` dans ce path (l'user a déjà vu le programme sur la pa
 role → value_slides (3 slides stats)
 → challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
 → autoreg_score_coach  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
-→ concept_autoreg (la solution ensuite)
+→ concept_autoreg (donut CoachBlindSpotWheel — la solution ensuite)
 → sport_2a → level_2a → goal_2a → days_2a  ← wording adapté "de tes sportifs"
 → profile_recap → week_preview_2b (= WeekPreviewStep, preview du programme généré)
-→ account → celebration
+→ account (création du compte + saveData() + finishCoachClaim si claim — voir plus bas)
+→ invite_team (lien d'invitation + email, skippable — [NOUVEAU 2026-07-12])
+→ celebration
 [après compte créé → saveData() :]
   - crée 5 sportifs démo (Thomas M., Emma L., Pierre D., Sofia R., Lucas B.)
-  - buildProgramTemplate(sport, level, days) → insère programme 4 semaines en DB
-  - assigne le programme au premier sportif démo (Thomas M.) dès prochain lundi
+  - buildProgramTemplate(sport, level, days) → insère programme 4 semaines en DB, assigne à Thomas M.
   - localStorage.setItem("program_start_date", nextMonday)
 ```
 
 ### Coach — flux programme (PROGRAM_COACH_PATH)
-Activé si `claim_program_id` en localStorage ET role=coach. Gagne `sport_2a`/`goal_2a` (2026-07-11, pour que `profile_recap` ait une vraie phrase à construire côté coach aussi — pas de niveau/jours, parcours reste plus court que le classique).
+Activé si `claim_program_id` en localStorage ET role=coach. Depuis 2026-07-12, gagne le diagnostic complet (comme le sportif) et perd `sport_2a`/`goal_2a` (déduits du programme claimé) — l'ajout `sport_2a`/`goal_2a` du 2026-07-11 est donc de nouveau retiré, remplacé par la déduction automatique.
 ```
-role → value_program_coach → sport_2a → goal_2a → concept_autoreg → profile_recap → account → celebration
-[après compte créé :]
-→ claim programme → assign athlete_id (premier sportif démo) + start_date = prochain lundi
-→ localStorage.setItem("program_start_date", nextMonday)
+role → value_program_coach
+→ challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, [NOUVEAU 2026-07-12])
+→ autoreg_score_coach [NOUVEAU]
+→ concept_autoreg → profile_recap (nom réel du programme claimé)
+→ account (saveData() + finishCoachClaim(uid) — claim/assign immédiat, ne dépend pas du wellness)
+→ invite_team [NOUVEAU]
+→ celebration
 ```
+
+### Étape `invite_team` (coach, nouveau 2026-07-12)
+Adaptée de `InviteModal.tsx` (`src/components/coach/InviteModal.tsx`) en step inline — lien d'invitation (`go.theperfclub.com/join/{code}` généré dans `saveData()`, capturé en state `inviteCode`) + copier + WhatsApp + formulaire email (`POST /api/invite/create`, ne envoie pas de vrai email — enregistre une invitation "pending" auto-liée à la prochaine inscription avec cet email). CTA "Continuer →" et lien "Passer →" tous les deux dans le même footer sticky (le lien "Passer" a été sorti d'un élément séparé le 2026-07-12 — il pouvait sortir du viewport), jamais bloquant, avance toujours vers `celebration`.
 
 ### Auth mode (déjà connecté)
 ```
 role → questions selon rôle → saveData() → transition vers "celebration" (plus de redirect direct)
 ```
+
+### Scission `handleFinish()` en deux phases (2026-07-12)
+Pour les paths sportif : submit `account` → `saveData()` (profil, PAS le wellness_daily, PAS le claim/assign) → avance à `wellness_q` (via `goToActivationStep()`) → à la fin de `wellness_q`, `finishAthleteActivation()` calcule le score, upsert `wellness_daily`, PUIS exécute claim+assign avec le vrai `wellnessAdjustment` → avance à `celebration`. Pour les paths coach : `saveData()` inchangée, `finishCoachClaim(uid)` (claim+assign, ne dépend pas du wellness) reste appelée immédiatement dans `handleFinish()`, `invite_team` est un step purement additif sans dépendance en aval.
+
+### Garde anti-double-clic (`finishGuardRef`, 2026-07-12)
+`handleWellnessQuestions()`/`finishAthleteActivation()` (dernier "Voir mon score →" sur `wellness_q`) et le bouton "Continuer"/"Passer" d'`invite_team` n'avaient à l'origine aucune protection contre un double-clic. Un double-clic déclenchait `finishAthleteActivation`/le handler `next()` deux fois en parallèle → double claim+assign (programmes clonés en double en DB) ET `stepIdx` qui dépasse `path.length` (`next()` utilise `isLast` calculé au moment du clic, pas une valeur live) → écran totalement blanc, sans CTA, sans moyen d'avancer. **Fix** : `finishGuardRef` (`useRef`, réinitialisé à chaque changement de `currentStep` dans le même effet que `advancingRef`), posé en entrée de `finishAthleteActivation` et des deux handlers d'`invite_team` — même principe que `advancingRef` déjà utilisé pour l'auto-advance des pain points. **Règle : tout handler qui déclenche une écriture DB non-idempotente (claim/assign, upsert avec side-effects) suivie d'un `next()` doit avoir cette garde.**
 
 ### Écran de célébration (remplace l'ancien tour produit + PrimingJourneyModal en fin de flow)
 - Composant `src/components/onboarding/CelebrationScreen.tsx`, dernier step de tous les paths.
@@ -181,6 +195,8 @@ Composants : `usePaywall` hook → `PrimingJourneyModal` → `PaywallModal`
 Pages : `TodayClient`, `WeekClient`, `AthletesClient`, `CoachPlanningClient`, `CoachClient`
 **Attention au nom** : `PrimingModal.tsx` (sans "Journey") existe aussi dans le repo mais est du code mort (zéro import) — ne pas le confondre avec `PrimingJourneyModal.tsx` qui est le composant réellement utilisé.
 
+**CTA sticky sur les 3 steps de `PrimingJourneyModal` + sur le formulaire Stripe de `PaywallModal`** (2026-07-12) : pattern modale (`margin:"16px -28px -28px"`, `padding:"14px 28px 20px"`, `background:"linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)"`, `position:"sticky", bottom:0`) — bleed jusqu'aux bords de padding de la carte (`padding:28`) puisque la carte a `overflowY:auto` (contenu qui peut scroller, notamment le formulaire Stripe avec `PaymentElement`). **Diffère légèrement de la règle 4 ci-dessous** (`margin-bottom:0` au lieu de `-28px`, opacité de départ `0` au lieu de `.88`) — ces valeurs sont les bonnes pour ce cas précis (carte scrollable), la règle 4 documente un pattern plus ancien/simplifié à ne pas suivre à la lettre ici.
+
 ### Sport "Autre" — précision
 Si l'user sélectionne "Autre" dans `sport_2a`, un champ texte s'affiche.
 Sauvegardé comme `"Autre - {précision}"` dans `profiles.sport`.
@@ -208,11 +224,12 @@ type StepId =
   | "celebration"                                                           // POST_PROGRESS, DARK_STEPS — dernier step de tous les paths
   | "value_program" | "value_program_coach"                                 // POST_PROGRESS, DARK_STEPS — PROGRAM_PATH uniquement
   | "concept_autoreg"                                                        // POST_PROGRESS, DARK_STEPS
-  | "profile_recap";                                                        // POST_PROGRESS (light, pas dans DARK_STEPS)
+  | "profile_recap"                                                         // POST_PROGRESS (light, pas dans DARK_STEPS)
+  | "invite_team";                                                          // POST_PROGRESS (light) — coach uniquement, entre account et celebration
 ```
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap"]`
-`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"]` — tout le reste (questions/formulaire) est en `variant="light"` (`#f1f0ee`).
+`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"]`
+`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"]` — tout le reste (questions/formulaire, y compris `invite_team`) est en `variant="light"` (`#f1f0ee`).
 
 Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
 
