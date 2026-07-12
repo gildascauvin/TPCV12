@@ -134,33 +134,35 @@ function CheckoutForm({
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "14px 0 10px", lineHeight: 1.5 }}>
-        Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
-      </div>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)" }}>
+        <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
+          Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
+        </div>
 
-      <button
-        type="submit"
-        disabled={!stripe || loading}
-        style={{
-          width: "100%", height: 50, borderRadius: 14, border: "none",
-          background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
-          color: "#fff", fontSize: 14, fontWeight: 900, cursor: loading ? "default" : "pointer",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        {loading ? "Traitement..." : "Commencer gratuitement"}
-      </button>
+        <button
+          type="submit"
+          disabled={!stripe || loading}
+          style={{
+            width: "100%", height: 50, borderRadius: 14, border: "none",
+            background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
+            color: "#fff", fontSize: 14, fontWeight: 900, cursor: loading ? "default" : "pointer",
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {loading ? "Traitement..." : "Commencer gratuitement"}
+        </button>
 
-      <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
-        Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
-      </div>
+        <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+          Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
+        </div>
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
-        <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
-          <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
-          <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-        <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
+          <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+            <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
+            <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+          <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
+        </div>
       </div>
 
     </form>

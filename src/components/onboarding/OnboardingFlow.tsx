@@ -585,6 +585,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* auto-advance guard */
   const advancingRef = useRef(false);
+  /* guard contre double-clic sur les CTA de fin de step (finishAthleteActivation / invite_team) — évite un double claim+assign et un stepIdx qui dépasse path.length (écran blanc) */
+  const finishGuardRef = useRef(false);
 
   function toggleBehavior(key: string) {
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -617,6 +619,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     posthog.capture("onboarding_step_viewed", props);
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
     advancingRef.current = false;
+    finishGuardRef.current = false;
   }, [currentStep]);
 
   useEffect(() => {
@@ -868,6 +871,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   function handleWellnessQuestions() {
     if (wStep < WQ_TOTAL - 1) { setWStep(s => s + 1); return; }
+    if (finishGuardRef.current) return;
+    finishGuardRef.current = true;
     const { base_score, score } = computeWellnessScore(wSleep, wStress, wRecovery, wMotivation, wBehaviors);
     setWScore(score);
     finishAthleteActivation(base_score, score);
@@ -1956,25 +1961,29 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </>
             )}
 
-            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
-              <button onClick={back} aria-label="Retour"
-                style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
-                ←
-              </button>
-              <button
-                onClick={async () => {
-                  if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
-                  next();
-                }}
-                style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.6 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-                {inviteSending ? "Envoi…" : "Continuer →"}
-              </button>
+            <div style={{ position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={back} aria-label="Retour"
+                  style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                  ←
+                </button>
+                <button
+                  onClick={async () => {
+                    if (finishGuardRef.current) return;
+                    finishGuardRef.current = true;
+                    if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
+                    next();
+                  }}
+                  style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.6 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
+                  {inviteSending ? "Envoi…" : "Continuer →"}
+                </button>
+              </div>
+              {!inviteResult && (
+                <button onClick={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }} style={{ display: "block", width: "100%", textAlign: "center", background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}>
+                  Passer →
+                </button>
+              )}
             </div>
-            {!inviteResult && (
-              <button onClick={next} style={{ display: "block", width: "100%", textAlign: "center", background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}>
-                Passer →
-              </button>
-            )}
           </div>
         )}
 

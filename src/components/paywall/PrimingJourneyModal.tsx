@@ -167,12 +167,14 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         </div>
       )}
 
-      {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective }); setStep(1); }} style={ctaBtn}>
-        Continuer gratuitement →
-      </button>
-      <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
-        7 jours gratuits, puis {p.annualMonthly}€/mois · {p.annual}€/an
+      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)" }}>
+        {shield}
+        <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective }); setStep(1); }} style={ctaBtn}>
+          Continuer gratuitement →
+        </button>
+        <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
+          7 jours gratuits, puis {p.annualMonthly}€/mois · {p.annual}€/an
+        </div>
       </div>
     </div>
   );
@@ -197,12 +199,14 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         </div>
       </div>
 
-      {shield}
-      <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective }); setStep(2); }} style={ctaBtn}>
-        Continuer gratuitement →
-      </button>
-      <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
-        7 jours gratuits, puis {p.annualMonthly}€/mois · {p.annual}€/an
+      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)" }}>
+        {shield}
+        <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective }); setStep(2); }} style={ctaBtn}>
+          Continuer gratuitement →
+        </button>
+        <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94" }}>
+          7 jours gratuits, puis {p.annualMonthly}€/mois · {p.annual}€/an
+        </div>
       </div>
     </div>
   );
@@ -285,14 +289,16 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         ✓ Aucun prélèvement maintenant
       </div>
 
-      <button onClick={() => { posthog.capture("paywall_opened", { plan: mode, billing }); onContinue(); }} style={ctaBtn}>
-        Commencer l&apos;essai gratuit →
-      </button>
-      {allowDismiss && (
-        <button onClick={() => { posthog.capture("paywall_skipped", { plan: mode, billing }); onDismiss(); }} style={skipBtn}>
-          Accéder sans abonnement →
+      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),#fff 38%)" }}>
+        <button onClick={() => { posthog.capture("paywall_opened", { plan: mode, billing }); onContinue(); }} style={ctaBtn}>
+          Commencer l&apos;essai gratuit →
         </button>
-      )}
+        {allowDismiss && (
+          <button onClick={() => { posthog.capture("paywall_skipped", { plan: mode, billing }); onDismiss(); }} style={skipBtn}>
+            Accéder sans abonnement →
+          </button>
+        )}
+      </div>
     </div>
   );
 }
