@@ -601,6 +601,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
   const [initializing, setInitializing] = useState(!!pendingData);
+  const [googleInitDone, setGoogleInitDone] = useState(false);
 
   /* auto-advance guard */
   const advancingRef = useRef(false);
@@ -974,7 +975,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         });
         await fetch("/api/invite/link", { method: "POST" });
         setInitializing(false);
-        goToActivationStep();
+        setGoogleInitDone(true);
       } catch {
         setInitializing(false);
       }
@@ -982,6 +983,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* `init()` ci-dessus est figé au premier render (deps []) — s'il appelait goToActivationStep()
+     directement, il utiliserait un `path` calculé AVANT que hasClaimedProgram (qui se résout de
+     façon asynchrone juste après le montage) n'ait sa valeur finale. Pour un compte Google venant
+     d'un programme claimé, ça pointait vers l'index de wellness_q dans le MAUVAIS path (plus long),
+     donnant un stepIdx hors limites du VRAI path → écran blanc. Confirmé en prod via PostHog sur
+     deux comptes Google réels. Ce useEffect séparé, retriggé par un state, capture toujours un
+     `path` à jour au moment où il s'exécute. */
+  useEffect(() => {
+    if (googleInitDone) goToActivationStep();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleInitDone]);
 
   const inputStyle: React.CSSProperties = {
     width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)",
