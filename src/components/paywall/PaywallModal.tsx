@@ -69,7 +69,7 @@ function CheckoutForm({
         onSuccess();
       }
     });
-  }, [stripe]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trialEnd = new Date();
   trialEnd.setDate(trialEnd.getDate() + 7);

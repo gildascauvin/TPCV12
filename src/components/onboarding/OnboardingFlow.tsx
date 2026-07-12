@@ -615,9 +615,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (hasClaimedProgram) return r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
     return r === "coach" ? COACH_PATH : ATHLETE_PATH;
   };
-  const path        = getPath(role);
-  const currentStep = path[stepIdx];
-  const isLast      = stepIdx === path.length - 1;
+  const path         = getPath(role);
+  /* Filet de sécurité : si stepIdx dépasse jamais path.length (double-invocation d'un handler,
+     changement de path non anticipé…), on ne rend jamais un currentStep undefined — écran
+     blanc et irrécupérable sinon, confirmé en prod via des sessions PostHog qui s'arrêtaient
+     net juste après account_created avec onboarding_undefined_viewed. */
+  const safeStepIdx  = Math.min(stepIdx, path.length - 1);
+  const currentStep  = path[safeStepIdx];
+  const isLast       = safeStepIdx === path.length - 1;
+
+  useEffect(() => {
+    if (stepIdx > path.length - 1) setStepIdx(path.length - 1);
+  }, [path.length, stepIdx]);
 
   useEffect(() => {
     if (initialRole) {
