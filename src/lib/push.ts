@@ -29,8 +29,20 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
-/** No-op silencieux si non supporté/refusé — jamais bloquant pour l'onboarding. */
-export async function subscribeToPush(reminderType: string): Promise<boolean> {
+/** Abonnement déjà actif dans CE navigateur (indépendant de la permission côté onboarding). */
+export async function isSubscribedToPush(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const sub = await registration.pushManager.getSubscription();
+    return !!sub;
+  } catch {
+    return false;
+  }
+}
+
+/** No-op silencieux si non supporté/refusé — jamais bloquant. */
+export async function subscribeToPush(): Promise<boolean> {
   if (!isPushSupported() || needsInstallForPush()) return false;
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidKey) return false;
@@ -45,7 +57,26 @@ export async function subscribeToPush(reminderType: string): Promise<boolean> {
     await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reminderType, subscription: subscription.toJSON() }),
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function unsubscribeFromPush(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const sub = await registration.pushManager.getSubscription();
+    if (!sub) return true;
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe();
+    await fetch("/api/push/subscribe", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint }),
     });
     return true;
   } catch {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import EditProfileModal from "@/components/profile/EditProfileModal";
+import NotificationToggle from "@/components/profile/NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import type { Profile, Session, WellnessDaily, Objective } from "@/types";
@@ -167,6 +168,8 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
             );
           })()}
         </div>
+
+        <NotificationToggle />
 
         {/* Comportements récents */}
         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Comportements récents</div>

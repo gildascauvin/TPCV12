@@ -1963,7 +1963,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               onNext={() => {
                 if (finishGuardRef.current) return;
                 finishGuardRef.current = true;
-                if (!pushBlockedIOS) subscribeToPush("session").catch(() => {});
+                if (!pushBlockedIOS) subscribeToPush().catch(() => {});
                 next();
               }}
               nextLabel={pushBlockedIOS ? "Continuer →" : "🔔 Oui, me prévenir"}
@@ -2064,7 +2064,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     onClick={() => {
                       if (finishGuardRef.current) return;
                       finishGuardRef.current = true;
-                      if (!pushBlockedIOS) subscribeToPush("invite_team").catch(() => {});
+                      if (!pushBlockedIOS) subscribeToPush().catch(() => {});
                       next();
                     }}
                     style={{ background: "none", border: "none", color: "#d44000", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "10px 0 0" }}
