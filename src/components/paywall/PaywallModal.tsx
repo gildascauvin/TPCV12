@@ -134,7 +134,7 @@ function CheckoutForm({
         </div>
       )}
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 0", background: "#fff" }}>
         <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
           Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
         </div>
