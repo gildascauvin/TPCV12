@@ -197,6 +197,8 @@ Gildas : "les boutons sticky ne sont pas toujours en bas de l'écran". Reproduit
 | goal_2a | "Ton objectif principal ?" | "L'objectif de tes sportifs ?" |
 | days_2a | "Quels sont tes jours d'entraînement ?" | "Créons un premier programme" |
 
+**`days_2a` — sélecteur en colonne (2026-07-13)** : remplace la grille 7 colonnes (lettre + abrév. "L"/"Lun.") par une liste verticale de 7 lignes pleine-largeur, nom du jour en entier (Lundi, Mardi…), coche ronde à droite — plus lisible, utilise la hauteur d'écran disponible plutôt que de compresser 7 colonnes dans la largeur mobile. Même logique de sélection multiple sous-jacente (`trainingDays`, `setTrainingDays`, au moins 1 jour obligatoire), juste la présentation qui change.
+
 ### saveData() — ce qui est créé à l'inscription
 
 **Sportif :** sessions 2 semaines + 4 semaines historique + wellness baseline

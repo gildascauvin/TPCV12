@@ -1338,16 +1338,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>
               {role === "coach" ? "Choisis les jours d'entraînement de tes sportifs." : "Tes séances seront planifiées sur ces jours."}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5, marginBottom: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 8 }}>
               {([
-                { dow: 1, short: "L",  full: "Lun." },
-                { dow: 2, short: "M",  full: "Mar." },
-                { dow: 3, short: "M",  full: "Mer." },
-                { dow: 4, short: "J",  full: "Jeu." },
-                { dow: 5, short: "V",  full: "Ven." },
-                { dow: 6, short: "S",  full: "Sam." },
-                { dow: 0, short: "D",  full: "Dim." },
-              ] as const).map(({ dow, short, full }) => {
+                { dow: 1, full: "Lundi" },
+                { dow: 2, full: "Mardi" },
+                { dow: 3, full: "Mercredi" },
+                { dow: 4, full: "Jeudi" },
+                { dow: 5, full: "Vendredi" },
+                { dow: 6, full: "Samedi" },
+                { dow: 0, full: "Dimanche" },
+              ] as const).map(({ dow, full }) => {
                 const selected = trainingDays.includes(dow);
                 return (
                   <div
@@ -1361,14 +1361,26 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                       return [...prev, dow].sort((a, b) => order.indexOf(a) - order.indexOf(b));
                     })}
                     style={{
-                      borderRadius: 12, padding: "10px 2px", cursor: "pointer", textAlign: "center",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      borderRadius: 12, padding: "13px 16px", cursor: "pointer",
                       border: selected ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)",
                       background: selected ? "#171b1f" : "#fff",
                       transition: "all .12s",
                     }}
                   >
-                    <div style={{ fontSize: 15, fontWeight: 900, color: selected ? "#fff" : "#171b1f" }}>{short}</div>
-                    <div style={{ fontSize: 9, color: selected ? "rgba(255,255,255,.55)" : "#8a8f94", marginTop: 2, fontWeight: 600 }}>{full}</div>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: selected ? "#fff" : "#171b1f" }}>{full}</span>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                      border: selected ? "none" : "1.5px solid rgba(0,0,0,.18)",
+                      background: selected ? "#fff" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {selected && (
+                        <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                          <path d="M1 4.5L4 7.5L10 1" stroke="#171b1f" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
                   </div>
                 );
               })}
