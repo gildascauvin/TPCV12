@@ -1,11 +1,20 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+/* setVapidDetails() valide process.env.VAPID_SUBJECT immédiatement — un appel au niveau
+   module s'exécute pendant la phase de build Next.js ("collect page data"), avant que les
+   env vars de build soient garanties disponibles, et fait planter le build sur Vercel.
+   Déplacé dans le handler pour ne s'exécuter qu'à la vraie requête (runtime). */
+let vapidConfigured = false;
+function ensureVapidConfigured() {
+  if (vapidConfigured) return;
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT!,
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+  vapidConfigured = true;
+}
 
 type Admin = ReturnType<typeof createAdminClient>;
 type Payload = { title: string; body: string; url: string; tag: string };
@@ -105,6 +114,7 @@ async function handle(req: Request) {
     return Response.json({ error: "Non autorisé" }, { status: 401 });
   }
 
+  ensureVapidConfigured();
   const admin = createAdminClient();
   const job = new URL(req.url).searchParams.get("job");
 
