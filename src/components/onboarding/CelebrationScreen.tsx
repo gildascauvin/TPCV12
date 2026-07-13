@@ -1,6 +1,6 @@
 "use client";
 
-import { COACH_LIBRARY_PITCH } from "@/lib/primingCopy";
+import { COACH_UNLIMITED_ATHLETES_PITCH } from "@/lib/primingCopy";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import Actions from "@/components/onboarding/Actions";
 
@@ -137,9 +137,9 @@ export default function CelebrationScreen({
             <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
               <WellnessRing dark infinite score={null} size={64} strokeWidth={6} />
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Capacité illimitée</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Sportifs illimités</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.5 }}>
-                  {COACH_LIBRARY_PITCH}
+                  {COACH_UNLIMITED_ATHLETES_PITCH}
                 </div>
               </div>
             </div>

@@ -84,6 +84,6 @@ export const UNLIMITED_BULLET: Record<"athlete" | "coach", string> = {
 export const COACH_AUTOREG_HEADLINE =
   "Le seul outil qui ajuste chaque séance à la récupération réelle de chaque sportif.";
 
-/* Bloc "capacité illimitée" côté coach dans l'écran de célébration */
-export const COACH_LIBRARY_PITCH =
-  "Choisis parmi 40+ programmes prêts à l'emploi, ou génère le tien sur-mesure en quelques clics.";
+/* Bloc "sportifs illimités" côté coach dans l'écran de célébration */
+export const COACH_UNLIMITED_ATHLETES_PITCH =
+  "Ajoute autant de sportifs que tu veux à ton espace coach, sans coût supplémentaire.";
