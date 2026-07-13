@@ -12,7 +12,7 @@ export default function OnboardingBackground({ variant, children }: { variant: "
       transition: "background .25s ease",
     }}>
       <div style={{ minHeight: "100%", display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", maxWidth: 560, padding: "36px 20px 56px" }}>
+        <div style={{ width: "100%", maxWidth: 560, padding: "36px 20px 120px" }}>
           {children}
         </div>
       </div>

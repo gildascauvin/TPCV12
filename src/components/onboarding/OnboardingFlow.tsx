@@ -1848,17 +1848,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "#f1f0ee" }}>
-              {wStep > 0 && (
-                <button onClick={() => setWStep(s => s - 1)} aria-label="Question précédente"
-                  style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
-                  ←
+            <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#f1f0ee" }}>
+              <div style={{ display: "flex", gap: 8, maxWidth: 560, margin: "0 auto" }}>
+                {wStep > 0 && (
+                  <button onClick={() => setWStep(s => s - 1)} aria-label="Question précédente"
+                    style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                    ←
+                  </button>
+                )}
+                <button onClick={handleWellnessQuestions}
+                  style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
+                  {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
                 </button>
-              )}
-              <button onClick={handleWellnessQuestions}
-                style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-                {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
-              </button>
+              </div>
             </div>
           </div>
         )}
