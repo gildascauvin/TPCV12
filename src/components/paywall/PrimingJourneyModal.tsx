@@ -167,7 +167,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         </div>
       )}
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 0", background: "#fff" }}>
         {shield}
         <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode, objective }); setStep(1); }} style={ctaBtn}>
           Continuer gratuitement →
@@ -199,7 +199,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         </div>
       </div>
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 0", background: "#fff" }}>
         {shield}
         <button onClick={() => { posthog.capture("paywall_priming_notif_next", { plan: mode, objective }); setStep(2); }} style={ctaBtn}>
           Continuer gratuitement →
@@ -289,7 +289,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         ✓ Aucun prélèvement maintenant
       </div>
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+      <div style={{ position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 0", background: "#fff" }}>
         <button onClick={() => { posthog.capture("paywall_opened", { plan: mode, billing }); onContinue(); }} style={ctaBtn}>
           Commencer l&apos;essai gratuit →
         </button>
