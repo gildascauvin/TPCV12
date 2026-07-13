@@ -1,6 +1,6 @@
 "use client";
 
-import { getPrimingHeadline, UNLIMITED_BULLET, COACH_AUTOREG_HEADLINE, COACH_LIBRARY_PITCH } from "@/lib/primingCopy";
+import { COACH_LIBRARY_PITCH } from "@/lib/primingCopy";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import Actions from "@/components/onboarding/Actions";
 
@@ -54,7 +54,6 @@ interface Props {
   sport: string;
   level: Level;
   goal: string;
-  frustration: string;
   coachingChallenge: string;
   wScore: number | null;
   wellnessTip?: string | null;
@@ -79,15 +78,11 @@ function Chip({ label }: { label: string }) {
 }
 
 export default function CelebrationScreen({
-  role, name, sport, level, goal, frustration, coachingChallenge, wScore, wellnessTip,
+  role, name, sport, level, goal, coachingChallenge, wScore, wellnessTip,
   claimedProgramName, claimedProgramWeeks,
   showProfile, showWellness, saving, onStartTrial,
 }: Props) {
   const previews = role === "coach" ? getCoachPreviews(sport) : getAthletePreviews(sport);
-  const headline = role === "coach"
-    ? COACH_AUTOREG_HEADLINE
-    : getPrimingHeadline({ mode: "athlete", goal, frustration });
-  const unlimitedBullet = UNLIMITED_BULLET[role];
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
@@ -181,7 +176,7 @@ export default function CelebrationScreen({
           </div>
 
           {/* Preuve sociale */}
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 14px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16 }}>
               <div style={{ display: "flex" }}>
                 {AVATARS.map((src, i) => (
@@ -211,21 +206,6 @@ export default function CelebrationScreen({
                   {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#ff8a4c", fontSize: 12 }}>★</span>)}
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Upgrade pitch */}
-          <div style={{ background: "rgba(212,64,0,0.10)", border: "1px solid rgba(212,64,0,0.30)", borderRadius: 16, padding: "16px 16px 14px" }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#fff", lineHeight: 1.45, marginBottom: 10 }}>
-              {headline}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(212,64,0,.20)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-                  <path d="M1 4L3.5 6.5L9 1" stroke="#ff8a4c" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{unlimitedBullet}</span>
             </div>
           </div>
         </div>

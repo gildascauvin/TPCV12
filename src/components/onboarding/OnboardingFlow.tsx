@@ -555,8 +555,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* invite_team */
   const [inviteEmail, setInviteEmail] = useState("");
+  const [extraInviteEmails, setExtraInviteEmails] = useState<string[]>([]);
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteResult, setInviteResult] = useState<"linked" | "pending" | null>(null);
+  const [inviteSentCount, setInviteSentCount] = useState(0);
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   /* questionnaire */
@@ -921,16 +923,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
 
   async function handleInviteSend() {
-    if (!inviteEmail.trim()) return;
+    const emails = [inviteEmail, ...extraInviteEmails].map(e => e.trim()).filter(Boolean);
+    if (!emails.length) return;
     setInviteSending(true);
-    const res = await fetch("/api/invite/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athleteEmail: inviteEmail.trim() }),
-    });
-    const json = await res.json().catch(() => ({}));
+    const results = await Promise.all(emails.map(email =>
+      fetch("/api/invite/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteEmail: email }),
+      }).then(async res => ({ ok: res.ok, linked: (await res.json().catch(() => ({}))).linked }))
+    ));
     setInviteSending(false);
-    if (res.ok) setInviteResult(json.linked ? "linked" : "pending");
+    const sent = results.filter(r => r.ok);
+    setInviteSentCount(sent.length);
+    if (sent.length) setInviteResult(sent.some(r => r.linked) ? "linked" : "pending");
   }
 
   const [showTrialPaywall, setShowTrialPaywall] = useState(false);
@@ -1989,10 +1995,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: "20px 18px", textAlign: "center", marginBottom: 20 }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>{inviteResult === "linked" ? "🔗" : "✅"}</div>
                 <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 6 }}>
-                  {inviteResult === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
+                  {inviteSentCount > 1 ? "Invitations enregistrées !" : inviteResult === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
                 </div>
                 <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5 }}>
-                  {inviteResult === "linked"
+                  {inviteSentCount > 1
+                    ? <>Tes <strong style={{ color: "#171b1f" }}>{inviteSentCount} sportifs</strong> rejoindront ton espace dès qu&apos;ils créeront leur compte.</>
+                    : inviteResult === "linked"
                     ? <><strong style={{ color: "#171b1f" }}>{inviteEmail}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
                     : <>Dès que <strong style={{ color: "#171b1f" }}>{inviteEmail}</strong> créera son compte, il sera automatiquement lié à ton espace.</>}
                 </div>
@@ -2034,8 +2042,31 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
                   placeholder="sportif@exemple.com"
-                  style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 20 }}
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 10 }}
                 />
+                {extraInviteEmails.map((email, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={e => setExtraInviteEmails(arr => arr.map((v, idx) => idx === i ? e.target.value : v))}
+                      placeholder="sportif@exemple.com"
+                      style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                    />
+                    <button
+                      onClick={() => setExtraInviteEmails(arr => arr.filter((_, idx) => idx !== i))}
+                      style={{ width: 44, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setExtraInviteEmails(arr => [...arr, ""])}
+                  style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, marginBottom: 20 }}
+                >
+                  + Inviter un autre sportif
+                </button>
               </>
             )}
 
@@ -2051,7 +2082,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={async () => {
                     if (finishGuardRef.current) return;
                     finishGuardRef.current = true;
-                    if (inviteEmail.trim() && !inviteSending) await handleInviteSend();
+                    const hasEmail = inviteEmail.trim() || extraInviteEmails.some(e => e.trim());
+                    if (hasEmail && !inviteSending) await handleInviteSend();
                     next();
                   }}
                   disabled={inviteSending}
@@ -2059,7 +2091,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 >
                   {inviteSending ? "Envoi…" : "Continuer →"}
                 </button>
-                <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 4 }}>
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
                   <button
                     onClick={() => {
                       if (finishGuardRef.current) return;
@@ -2070,12 +2102,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     style={{ background: "none", border: "none", color: "#d44000", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "10px 0 0" }}
                   >
                     {pushBlockedIOS ? "📲 Me le rappeler plus tard" : "🔔 Plus tard — me le rappeler"}
-                  </button>
-                  <button
-                    onClick={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
-                    style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}
-                  >
-                    Passer
                   </button>
                 </div>
               </div>
@@ -2092,7 +2118,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             sport={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
             level={level}
             goal={goal}
-            frustration={frustration}
             coachingChallenge={coachingChallenge}
             wScore={wScore}
             wellnessTip={wellnessTip}
