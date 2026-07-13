@@ -65,13 +65,13 @@ async function runSessionJob(admin: Admin): Promise<{ session: number; wellness:
       const { data: todaysSessions } = await admin.from("sessions").select("id, done").eq("user_id", p.user_id).eq("date", today);
       const hasUndone = (todaysSessions ?? []).some(s => !s.done);
       if (hasUndone) {
-        const delivered = await sendToUser(admin, p.user_id, { title: "Ta séance du jour t'attend 💪", body: "2 minutes pour démarrer.", url: "/today", tag: "session-reminder" });
+        const delivered = await sendToUser(admin, p.user_id, { title: "Ta séance du jour t'attend 💪", body: "30 secondes pour démarrer.", url: "/today", tag: "session-reminder" });
         if (delivered) sessionSent++;
       }
     } else if (p.subscription_status === "athlete") {
       const { data: wellnessToday } = await admin.from("wellness_daily").select("id").eq("user_id", p.user_id).eq("date", today).maybeSingle();
       if (!wellnessToday) {
-        const delivered = await sendToUser(admin, p.user_id, { title: "Comment tu te sens aujourd'hui ?", body: "2 minutes pour ton bilan de forme du matin.", url: "/today", tag: "wellness-reminder" });
+        const delivered = await sendToUser(admin, p.user_id, { title: "Comment tu te sens aujourd'hui ?", body: "30 secondes pour ton bilan de forme du matin.", url: "/today", tag: "wellness-reminder" });
         if (delivered) wellnessSent++;
       }
     }
