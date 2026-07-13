@@ -14,6 +14,7 @@ import AutoRegScoreStep, { computeAthleteAutoregProfile, AutoregProfile } from "
 import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import Actions from "@/components/onboarding/Actions";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -333,25 +334,12 @@ function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: 
   );
 }
 
-function Actions({ onBack, onNext, nextLabel, nextDisabled = false }: { onBack: () => void; onNext: () => void; nextLabel: string; nextDisabled?: boolean }) {
-  return (
-    <div style={{ position: "sticky", bottom: 0, display: "flex", gap: 8, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
-      <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
-        ←
-      </button>
-      <button onClick={() => { if (!nextDisabled) onNext(); }} style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-        {nextLabel}
-      </button>
-    </div>
-  );
-}
-
 function ProfileRecapStep({
-  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, claimedProgramName, hasPreviewNext, onBack, onNext,
+  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, claimedProgramName, hasPreviewNext, onNext,
 }: {
   role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
   showDays: boolean; trainingDays: number[]; autoregProfile: AutoregProfile | null; claimedProgramName?: string | null;
-  hasPreviewNext: boolean; onBack: () => void; onNext: () => void;
+  hasPreviewNext: boolean; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
   useEffect(() => {
@@ -412,7 +400,7 @@ function ProfileRecapStep({
         </div>
       ) : (
         <div style={{ animation: "modalIn 0.3s cubic-bezier(0.2,0,0,1)" }}>
-          <Actions onBack={onBack} onNext={onNext} nextLabel={hasPreviewNext ? "Voir mon programme →" : "Continuer →"} />
+          <Actions onNext={onNext} nextLabel={hasPreviewNext ? "Voir mon programme →" : "Continuer →"} />
         </div>
       )}
     </div>
@@ -681,7 +669,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [vSlide, currentStep]);
 
   function next() { if (!isLast) setStepIdx(i => i + 1); }
-  function back() { if (stepIdx > 0) setStepIdx(i => i - 1); }
 
   function nextAfterChoice(setter: () => void) {
     if (advancingRef.current) return;
@@ -1017,11 +1004,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     width: "100%", background: "none", border: "none",
     fontSize: 12, color: "#8a8f94", cursor: "pointer", padding: "4px 0",
   };
-  const backOnlyBtn: React.CSSProperties = {
-    display: "block", background: "none", border: "none",
-    color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "4px 0", marginTop: 2,
-  };
-
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
   if (hasClaimedProgram === null) {
@@ -1160,12 +1142,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 style={{ position: "relative", height: 270, cursor: vSlide < 2 ? "pointer" : "default", overflow: "hidden", userSelect: "none" }}>
                 <img src={slide.img} alt={slide.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 {/* top nav */}
-                <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 4 }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); if (vSlide > 0) setVSlide(v => v - 1); else back(); }}
-                    style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(8px)", border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "6px 12px", borderRadius: 999 }}>
-                    ← Retour
-                  </button>
+                <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "flex-end", alignItems: "center", zIndex: 4 }}>
                   <div style={{ display: "flex", gap: 5 }}>
                     {[0, 1, 2].map(i => (
                       <div key={i} style={{ height: 3, borderRadius: 2, background: i === vSlide ? "#fff" : "rgba(255,255,255,0.40)", width: i === vSlide ? 20 : 6, transition: "all 0.2s" }} />
@@ -1226,12 +1203,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
-                Continuer →
-              </button>
-              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
-            </div>
+            <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
           </div>
         )}
 
@@ -1250,12 +1222,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
-                Continuer →
-              </button>
-              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
-            </div>
+            <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
           </div>
         )}
 
@@ -1289,10 +1256,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
             {isRegisterMode
-              ? sport === "Autre"
-                ? <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
-                : <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" />
+              ? sport === "Autre" && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
+              : <Actions onNext={next} nextLabel="Suivant →" />
             }
           </div>
         )}
@@ -1316,10 +1281,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setLevel(l.key)) : setLevel(l.key)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" />}
           </div>
         )}
 
@@ -1343,10 +1305,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setGoal(o.id)) : setGoal(o.id)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />}
           </div>
         )}
 
@@ -1366,10 +1325,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setFrustration(f.id)) : setFrustration(f.id)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!frustration} />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!frustration} />}
           </div>
         )}
 
@@ -1420,7 +1376,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14, textAlign: "center" }}>
               {trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} sélectionné{trainingDays.length > 1 ? "s" : ""}
             </div>
-            <Actions onBack={back} onNext={next} nextLabel="Continuer →" nextDisabled={trainingDays.length === 0} />
+            <Actions onNext={next} nextLabel="Continuer →" nextDisabled={trainingDays.length === 0} />
           </div>
         )}
 
@@ -1443,7 +1399,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1465,7 +1420,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1487,7 +1441,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1507,10 +1460,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCoachingContext(c.id)) : setCoachingContext(c.id)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!coachingContext} />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!coachingContext} />}
           </div>
         )}
 
@@ -1540,10 +1490,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
             {isRegisterMode
-              ? sport === "Autre"
-                ? <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
-                : <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" />
+              ? sport === "Autre" && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
+              : <Actions onNext={next} nextLabel="Suivant →" />
             }
           </div>
         )}
@@ -1564,10 +1512,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setAthleteCount(c.v)) : setAthleteCount(c.v)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />}
           </div>
         )}
 
@@ -1588,10 +1533,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCoachingChallenge(c.id)) : setCoachingChallenge(c.id)} />
               ))}
             </div>
-            {isRegisterMode
-              ? <button onClick={back} style={backOnlyBtn}>← Retour</button>
-              : <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!coachingChallenge} />
-            }
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!coachingChallenge} />}
           </div>
         )}
 
@@ -1611,12 +1553,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCurrentTool(t.id)) : setCurrentTool(t.id)} />
               ))}
             </div>
-            {!isRegisterMode && isLast
-              ? <Actions onBack={back} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon espace coach"} nextDisabled={saving || !currentTool} />
-              : !isRegisterMode
-                ? <Actions onBack={back} onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />
-                : <button onClick={back} style={backOnlyBtn}>← Retour</button>
-            }
+            {!isRegisterMode && (isLast
+              ? <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon espace coach"} nextDisabled={saving || !currentTool} />
+              : <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />
+            )}
           </div>
         )}
 
@@ -1639,7 +1579,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1661,7 +1600,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1683,7 +1621,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   }} />
               ))}
             </div>
-            <button onClick={back} style={backOnlyBtn}>← Retour</button>
           </div>
         )}
 
@@ -1705,12 +1642,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   : "Fatigue, sommeil, stress : ton corps envoie des signaux avant la blessure ou la contre-performance. ThePerfClub les traduit en recommandations d'entraînement claires, jour après jour. C'est ce qu'on appelle l'autorégulation."}
               </div>
             </div>
-            <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
-              <button onClick={next} style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 24px rgba(212,64,0,.32)", marginBottom: 10 }}>
-                Continuer →
-              </button>
-              <button onClick={back} style={{ ...backOnlyBtn, color: "rgba(255,255,255,.45)", textAlign: "center", width: "100%" }}>← Retour</button>
-            </div>
+            <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
           </div>
         )}
 
@@ -1768,7 +1700,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 8 }} />
             <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 16 }}>Tu recevras un email pour créer ton mot de passe.</div>
-            <Actions onBack={back} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
+            <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
             <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
@@ -1793,7 +1725,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               : null
             }
             hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
-            onBack={back}
             onNext={next}
           />
         )}
@@ -1917,11 +1848,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "linear-gradient(180deg,rgba(241,240,238,0) 0%,rgba(241,240,238,.88) 30%,#f1f0ee 55%)" }}>
-              <button onClick={() => wStep > 0 ? setWStep(s => s - 1) : back()} aria-label="Retour"
-                style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
-                ←
-              </button>
+            <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px", background: "#f1f0ee" }}>
+              {wStep > 0 && (
+                <button onClick={() => setWStep(s => s - 1)} aria-label="Question précédente"
+                  style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
+                  ←
+                </button>
+              )}
               <button onClick={handleWellnessQuestions}
                 style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
                 {wStep === WQ_TOTAL - 1 ? "Voir mon score →" : "Suivant →"}
@@ -1995,29 +1928,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </>
             )}
 
-            <div style={{ position: "sticky", bottom: 0, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={back} aria-label="Retour"
-                  style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
-                  ←
-                </button>
-                <button
-                  onClick={async () => {
-                    if (finishGuardRef.current) return;
-                    finishGuardRef.current = true;
-                    if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
-                    next();
-                  }}
-                  style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.6 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-                  {inviteSending ? "Envoi…" : "Continuer →"}
-                </button>
-              </div>
-              {!inviteResult && (
-                <button onClick={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }} style={{ display: "block", width: "100%", textAlign: "center", background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}>
-                  Passer →
-                </button>
-              )}
-            </div>
+            <Actions
+              variant="modal-light"
+              nextDisabled={inviteSending}
+              nextLabel={inviteSending ? "Envoi…" : "Continuer →"}
+              onNext={async () => {
+                if (finishGuardRef.current) return;
+                finishGuardRef.current = true;
+                if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
+                next();
+              }}
+              onSkip={!inviteResult ? () => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); } : undefined}
+              skipLabel="Passer →"
+            />
           </div>
           </div>
         )}

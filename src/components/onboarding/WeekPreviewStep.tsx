@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Actions from "@/components/onboarding/Actions";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
@@ -252,14 +253,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
         </div>
       )}
 
-      <div style={{ position: "sticky", bottom: 0, margin: "16px -18px -18px", padding: "14px 18px 20px", background: "linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.92) 28%,#fff 50%)" }}>
-        <button
-          onClick={onNext}
-          style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13.5, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)", lineHeight: 1.3 }}
-        >
-          Personnaliser ce programme →
-        </button>
-      </div>
+      <Actions onNext={onNext} nextLabel="Personnaliser ce programme →" />
     </div>
   );
 }

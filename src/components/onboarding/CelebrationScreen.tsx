@@ -2,6 +2,7 @@
 
 import { getPrimingHeadline, UNLIMITED_BULLET, COACH_AUTOREG_HEADLINE, COACH_LIBRARY_PITCH } from "@/lib/primingCopy";
 import WellnessRing from "@/components/wellness/WellnessRing";
+import Actions from "@/components/onboarding/Actions";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -230,15 +231,7 @@ export default function CelebrationScreen({
         </div>
 
         {/* CTA */}
-        <div style={{ position: "sticky", bottom: 0, zIndex: 2, margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#161616" }}>
-          <button
-            onClick={onStartTrial}
-            disabled={saving}
-            style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: saving ? "default" : "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.30)", letterSpacing: "-0.01em" }}
-          >
-            Commencer mon essai gratuit →
-          </button>
-        </div>
+        <Actions variant="modal-dark" onNext={onStartTrial} nextDisabled={saving} nextLabel="Commencer mon essai gratuit →" />
       </div>
     </div>
   );

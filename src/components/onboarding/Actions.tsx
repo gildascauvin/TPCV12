@@ -1,0 +1,42 @@
+"use client";
+
+type Variant = "light" | "dark" | "modal-light" | "modal-dark";
+
+interface Props {
+  variant?: Variant;
+  onNext: () => void;
+  nextLabel: string;
+  nextDisabled?: boolean;
+  onSkip?: () => void;
+  skipLabel?: string;
+}
+
+const RECIPES: Record<Variant, React.CSSProperties> = {
+  light:         { margin: "16px -20px -56px", padding: "14px 20px 24px", background: "#f1f0ee" },
+  dark:          { margin: "16px -20px -56px", padding: "14px 20px 24px" },
+  "modal-light": { margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" },
+  "modal-dark":  { margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#161616" },
+};
+
+export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel }: Props) {
+  const isDark = variant === "dark" || variant === "modal-dark";
+  return (
+    <div style={{ position: "sticky", bottom: 0, zIndex: 2, ...RECIPES[variant] }}>
+      <button
+        onClick={() => { if (!nextDisabled) onNext(); }}
+        disabled={nextDisabled}
+        style={{ width: "100%", height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+      >
+        {nextLabel}
+      </button>
+      {onSkip && (
+        <button
+          onClick={onSkip}
+          style={{ display: "block", width: "100%", textAlign: "center", background: "none", border: "none", color: isDark ? "rgba(255,255,255,.45)" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}
+        >
+          {skipLabel}
+        </button>
+      )}
+    </div>
+  );
+}

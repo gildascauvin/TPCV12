@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Actions from "@/components/onboarding/Actions";
 
 interface Props {
   overloadAns: string;
@@ -122,13 +123,6 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
     return () => [t0, t1, t2, t3].forEach(clearTimeout);
   }, [phase]);
 
-  const ctaBtn: React.CSSProperties = {
-    width: "100%", height: 50, borderRadius: 14, border: "none",
-    background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff",
-    fontSize: 15, fontWeight: 900, cursor: "pointer",
-    boxShadow: "0 8px 20px rgba(212,64,0,.28)", marginTop: 4,
-  };
-
   return (
     <div style={{ padding: "12px 4px", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 20 }}>
@@ -182,13 +176,8 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
             {getBridgeMessage(globalPct)}
           </div>
 
-          <div style={{ position: "sticky", bottom: 0, margin: "16px -20px -56px", padding: "14px 20px 24px" }}>
-            <button onClick={onNext} style={{
-              ...ctaBtn,
-              opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.4s ease 0.5s",
-            }}>
-              Construisons ton programme →
-            </button>
+          <div style={{ opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.4s ease 0.5s" }}>
+            <Actions variant="dark" onNext={onNext} nextLabel="Construisons ton programme →" />
           </div>
         </>
       )}
