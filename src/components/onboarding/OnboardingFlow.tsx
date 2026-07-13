@@ -15,6 +15,9 @@ import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import Actions from "@/components/onboarding/Actions";
+import WellnessRing from "@/components/wellness/WellnessRing";
+import { subscribeToPush, needsInstallForPush } from "@/lib/push";
+import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -29,6 +32,7 @@ type StepId =
   | "autoreg_score_coach"
   | "week_preview_2a" | "week_preview_2b"
   | "wellness_q"
+  | "wellness_reveal"
   | "account"
   | "celebration"
   | "value_program" | "value_program_coach"
@@ -55,6 +59,7 @@ const ATHLETE_PATH: StepId[] = [
   "week_preview_2a",
   "account",
   "wellness_q",
+  "wellness_reveal",
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
@@ -71,16 +76,16 @@ const COACH_PATH: StepId[] = [
   "celebration",
 ];
 
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"];
+const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"];
 
-const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"];
+const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
 
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "role", "value_program",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
-  "profile_recap", "account", "wellness_q", "celebration",
+  "profile_recap", "account", "wellness_q", "wellness_reveal", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "role", "value_program_coach",
@@ -138,6 +143,19 @@ function computeWellnessTip(sleep: number, stress: number, recovery: number, sco
   if (weakest.value <= 6) return weakest.mid;
   if (score >= 80) return "Ta forme est excellente — ton programme démarre directement à pleine intensité.";
   return "Ton profil est équilibré : sommeil, stress et récupération sont sous contrôle. Continue comme ça.";
+}
+
+const DOW_FULL = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
+function nextSessionDayLabel(trainingDays: number[]): string | null {
+  if (!trainingDays.length) return null;
+  const iso = trainingDays.map(d => nextDateForDow(d)).sort()[0];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(`${iso}T00:00:00`);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays === 0) return "aujourd'hui";
+  if (diffDays === 1) return "demain";
+  return DOW_FULL[target.getDay()];
 }
 
 const SPORT_CATEGORIES = [
@@ -588,6 +606,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
   const [initializing, setInitializing] = useState(!!pendingData);
   const [googleInitDone, setGoogleInitDone] = useState(false);
+
+  /* iOS Safari n'expose PushManager que si le site est ajouté à l'écran d'accueil — calculé
+     une fois au montage (window/navigator indisponibles côté SSR malgré "use client"). */
+  const [pushBlockedIOS, setPushBlockedIOS] = useState(false);
+  useEffect(() => { setPushBlockedIOS(needsInstallForPush()); }, []);
 
   /* auto-advance guard */
   const advancingRef = useRef(false);
@@ -1877,6 +1900,80 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        {/* ── RÉVÉLATION NIVEAU DE FORME + ASK NOTIFICATION SÉANCE (sportif) ── */}
+        {currentStep === "wellness_reveal" && (() => {
+          const wellnessObj = { sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, score: wScore };
+          const advice = getAdvice(wScore != null ? wellnessObj : null, []);
+          return (
+          <div style={{ position: "relative", padding: "12px 4px" }}>
+            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
+            <div style={{ position: "relative", zIndex: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
+                ✦ Ton niveau de forme
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 18 }}>
+                <WellnessRing dark score={wScore} size={84} strokeWidth={7} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "clamp(22px, 7vw, 30px)", fontWeight: 1000, color: "#fff", marginBottom: 6, lineHeight: 1.1, letterSpacing: "-0.04em" }}>
+                    {zoneLabel(wScore)}
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
+                    {wScore != null ? getContextualInsight(wellnessObj) : ""}
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginBottom: 22 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
+                  ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
+                </span>
+              </div>
+
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16, marginBottom: 22 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+                  ✦ Conseils
+                </div>
+                <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>⚡ Entraînement</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.training}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>🌿 Récupération</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.recovery}</div>
+                </div>
+              </div>
+
+              {nextSessionDayLabel(trainingDays) && (
+                <>
+                  <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.16em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 8 }}>
+                    Ta prochaine séance
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 22, textTransform: "capitalize" }}>
+                    {nextSessionDayLabel(trainingDays)}
+                  </div>
+                </>
+              )}
+              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.6, marginBottom: 32 }}>
+                {pushBlockedIOS
+                  ? "📲 Ajoute ThePerfClub à ton écran d'accueil pour activer les rappels de séance."
+                  : "Tu veux être prévenu pour ta prochaine séance ?"}
+              </div>
+            </div>
+            <Actions
+              variant="dark"
+              onNext={() => {
+                if (finishGuardRef.current) return;
+                finishGuardRef.current = true;
+                if (!pushBlockedIOS) subscribeToPush("session").catch(() => {});
+                next();
+              }}
+              nextLabel={pushBlockedIOS ? "Continuer →" : "🔔 Oui, me prévenir"}
+              onSkip={!pushBlockedIOS ? () => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); } : undefined}
+              skipLabel="Passer"
+            />
+          </div>
+          );
+        })()}
+
         {/* ── INVITE TEAM (coach) ── */}
         {currentStep === "invite_team" && (
           <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
@@ -1942,19 +2039,47 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </>
             )}
 
-            <Actions
-              variant="modal-light"
-              nextDisabled={inviteSending}
-              nextLabel={inviteSending ? "Envoi…" : "Continuer →"}
-              onNext={async () => {
-                if (finishGuardRef.current) return;
-                finishGuardRef.current = true;
-                if (!inviteResult && inviteEmail.trim() && !inviteSending) await handleInviteSend();
-                next();
-              }}
-              onSkip={!inviteResult ? () => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); } : undefined}
-              skipLabel="Passer →"
-            />
+            {inviteResult ? (
+              <Actions
+                variant="modal-light"
+                nextLabel="Continuer →"
+                onNext={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
+              />
+            ) : (
+              <div style={{ margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+                <button
+                  onClick={async () => {
+                    if (finishGuardRef.current) return;
+                    finishGuardRef.current = true;
+                    if (inviteEmail.trim() && !inviteSending) await handleInviteSend();
+                    next();
+                  }}
+                  disabled={inviteSending}
+                  style={{ width: "100%", height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+                >
+                  {inviteSending ? "Envoi…" : "Continuer →"}
+                </button>
+                <div style={{ display: "flex", justifyContent: "center", gap: 18, marginTop: 4 }}>
+                  <button
+                    onClick={() => {
+                      if (finishGuardRef.current) return;
+                      finishGuardRef.current = true;
+                      if (!pushBlockedIOS) subscribeToPush("invite_team").catch(() => {});
+                      next();
+                    }}
+                    style={{ background: "none", border: "none", color: "#d44000", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "10px 0 0" }}
+                  >
+                    {pushBlockedIOS ? "📲 Me le rappeler plus tard" : "🔔 Plus tard — me le rappeler"}
+                  </button>
+                  <button
+                    onClick={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
+                    style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", padding: "10px 0 0" }}
+                  >
+                    Passer
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           </div>
         )}

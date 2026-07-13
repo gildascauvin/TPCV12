@@ -267,6 +267,7 @@ type StepId =
   | "autoreg_score_coach"                                                    // POST_PROGRESS, DARK_STEPS
   | "week_preview_2a" | "week_preview_2b"                                   // preview programme
   | "wellness_q"                                                             // POST_PROGRESS
+  | "wellness_reveal"                                                        // POST_PROGRESS, DARK_STEPS — sportif uniquement, entre wellness_q et celebration
   | "account"
   | "celebration"                                                           // POST_PROGRESS, DARK_STEPS — dernier step de tous les paths
   | "value_program" | "value_program_coach"                                 // POST_PROGRESS, DARK_STEPS — PROGRAM_PATH uniquement
@@ -275,8 +276,8 @@ type StepId =
   | "invite_team";                                                          // POST_PROGRESS (light) — coach uniquement, entre account et celebration
 ```
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"]`
-`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg"]` — tout le reste (questions/formulaire, y compris `invite_team`) est en `variant="light"` (`#f1f0ee`).
+`POST_PROGRESS` = `["value_slides", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"]`
+`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"]` — tout le reste (questions/formulaire, y compris `invite_team`) est en `variant="light"` (`#f1f0ee`).
 
 Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
 
@@ -371,10 +372,27 @@ posthog.capture(`onboarding_${currentStep}_viewed`, { step, step_index, role, mo
 6. **Pas de commentaires** sauf si le WHY est non-évident.
 7. **Service worker (`public/sw.js`) cache-first** : en dev local, le navigateur peut servir un bundle JS obsolète malgré un restart complet de `npm run dev`. Avant toute vérification visuelle après un changement de code, désenregistrer le SW + vider les caches dans la console du navigateur : `(async()=>{const r=await navigator.serviceWorker.getRegistrations();for(const x of r)await x.unregister();const k=await caches.keys();for(const x of k)await caches.delete(x);})()`, puis recharger.
 
+## Notifications push (2026-07-13)
+
+Chantier lancé après évaluation d'opportunité (l'app est déjà une PWA fonctionnelle — manifest, service worker, meta tags iOS — et `web-push`/VAPID étaient déjà scaffoldés sans être branchés). Objectif prioritaire : relancer par push les comptes créés qui n'ont pas démarré leur essai (paywall obligatoire non passé), en captant la permission le plus tôt possible dans le funnel — avant l'abandon potentiel au paywall.
+
+- **Nouveau step `wellness_reveal`** (sportif uniquement, entre `wellness_q` et `celebration` sur `ATHLETE_PATH`/`PROGRAM_ATHLETE_PATH`, ajouté à `POST_PROGRESS`/`DARK_STEPS`) : reprend le style de la carte "Score & conseils" de `/today` (zone wellness via `zoneLabel()`, insight via `getContextualInsight()`, pill "Autorégulation active", conseils Entraînement/Récupération via `getAdvice()` — fonctions extraites de `TodayClient.tsx` vers `src/lib/wellness.ts` pour être réutilisées ici sans dupliquer la logique). Affiche la date de la prochaine séance (`nextSessionDayLabel()`, dérivé de `training_days` + `nextDateForDow`) et demande la permission notification : **"🔔 Oui, me prévenir"** (CTA principal) / **"Passer"** (secondaire) — clic sur l'un ou l'autre avance vers `celebration`. `celebration` n'a pas été modifiée (bloc wellness existant conservé, décision explicite de ne pas alléger pour l'instant).
+- **`invite_team` (coach)** : le simple lien "Passer" est remplacé par un choix explicite quand le coach ne veut pas inviter tout de suite — **"🔔 Plus tard — me le rappeler"** vs **"Passer"** (pas de rappel). Implémenté en JSX custom (pas via `Actions.tsx`, pour garder le composant partagé simple) dans le même style que le footer modal-light existant.
+- **Limite iOS** : `src/lib/push.ts` expose `needsInstallForPush()` (iOS Safari + non-standalone) — sur ces deux écrans, le bouton de permission est remplacé par un nudge "📲 Ajoute à l'écran d'accueil" et l'appel à `subscribeToPush()` est skip (no-op silencieux, jamais bloquant).
+- **Infra** : table `push_subscriptions` (migration `008_push_subscriptions.sql`, RLS `auth.uid() = user_id`), `src/lib/push.ts` (subscribe client, détection iOS/standalone), `POST /api/push/subscribe` (auth cookie, upsert par `endpoint`), `GET|POST /api/push/send?job=session|winback` (protégé par `CRON_SECRET`).
+- **Cron Vercel (plan Hobby confirmé)** : 2 jobs distincts dans `vercel.json` (Hobby limite à des crons quotidiens, pas horaires) — `job=session` à `0 8 * * *` UTC (9h Paris hiver) déclenche le rappel séance du jour, `job=winback` à `0 19 * * *` UTC (20h Paris hiver) déclenche la relance "essai non démarré". **Horaires en UTC fixe, pas de gestion DST** : en heure d'été (CEST, UTC+2) ça glisse à 10h/21h locaux — accepté comme approximation, pas critique pour ce type de notif.
+- **Relance winback — logique compteur, pas fenêtres d'heures fixes** : `runWinback()` dans `route.ts` envoie jusqu'à `profiles.winback_push_count` = 3 touches par compte `free`, espacées d'au moins 18h (`last_winback_push_at`), dès que le compte a plus de 4h. Remplace l'ancienne approche par fenêtres H+4/H+5 exactes (pensée pour un cron horaire) — avec seulement 2 checks/jour sur Hobby, des fenêtres étroites auraient raté la plupart des comptes selon l'heure d'inscription.
+- Rappel séance du jour (`runSessionReminder()`) : sportifs ayant opté in sur `wellness_reveal` (`reminder_type = "session"`), séance du jour non terminée.
+- **`public/sw.js`** : handlers `push`/`notificationclick` déjà présents, jamais branchés jusqu'ici. Un seul fix apporté : `event.data?.json() ?? {}` ne rattrape pas une exception (seulement `null`/`undefined`) — si le payload ne parse pas, `event.waitUntil()` n'est jamais appelé et rien ne s'affiche, silencieusement. Remplacé par un vrai `try/catch`.
+- **Bug préexistant corrigé en chemin, sans rapport avec ce chantier** : `src/middleware.ts` — le matcher n'excluait pas `sw.js`/`manifest.webmanifest`, donc `updateSession` redirigeait ces fichiers vers `/login` pour tout visiteur non authentifié (`SecurityError: script resource is behind a redirect` à l'enregistrement du service worker). Corrigé en les ajoutant à l'exclusion du matcher, même endroit que `_next/static`/favicon/images.
+- **Vérification bout-en-bout tentée en local, non concluante** : abonnement réel créé, FCM répond systématiquement 201 (accepté), mais aucune notification n'apparaît sur macOS malgré permissions/réglages vérifiés (macOS notif Chrome, style d'alerte, `chrome://settings/content/notifications`) et un test de démo externe (gauntface.com) qui fonctionne sur la même machine — donc pas un blocage réseau/OS général. Clés VAPID vérifiées cryptographiquement correctes (dérivation de la clé publique depuis la privée = clé stockée). Cause probable : fiabilité connue de la livraison push sur `http://localhost`, à re-tester une fois en prod sur `go.theperfclub.com` (HTTPS réel).
+- Plan complet : `/Users/Gildas/.claude/plans/evalue-l-opportunit-de-mettre-fuzzy-fiddle.md`.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
 - `profiles` : créé automatiquement via trigger à l'inscription
+- `push_subscriptions` : RLS `auth.uid() = user_id`, unique sur `endpoint` (voir section Notifications push)
 
 ## Flow auth / reset password
 1. Magic link → `/auth/callback` → `/today`

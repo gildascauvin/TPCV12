@@ -10,7 +10,7 @@ import WellnessModal from "@/components/wellness/WellnessModal";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore } from "@/lib/wellness";
+import { computeWellnessScore, zoneLabel as formLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -39,75 +39,6 @@ function greeting() {
 function scoreColor(score: number | null) {
   if (score === null) return "rgba(255,255,255,0.18)";
   return score >= 75 ? "#2f9e44" : score >= 55 ? "#f28a00" : "#d10000";
-}
-
-function formLabel(score: number | null) {
-  if (score === null) return "Non renseigné";
-  if (score >= 82) return "Zone optimale";
-  if (score >= 65) return "Zone stable";
-  if (score >= 45) return "Zone prudente";
-  return "Zone récupération";
-}
-
-function getContextualInsight(wellness: WellnessDaily): string {
-  const { sleep, stress, recovery, motivation } = wellness;
-  const signals = [
-    { value: sleep, low: sleep < 5, msg: "Sommeil court — intensité réduite recommandée" },
-    { value: 10 - stress, low: stress > 6, msg: "Stress élevé — favorise la récupération aujourd'hui" },
-    { value: recovery, low: recovery < 5, msg: "Récupération insuffisante — séance légère ou repos" },
-    { value: motivation, low: motivation < 5, msg: "Motivation en berne — commence doucement, ça viendra" },
-  ];
-  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
-  if (weakest) return weakest.msg;
-  if ((wellness.score ?? 0) >= 82) return "Tous les signaux au vert — fenêtre idéale pour t'entraîner";
-  return "Signaux stables — bon entraînement possible";
-}
-
-function getAdvice(wellness: WellnessDaily | null, sessions: Session[]) {
-  const done = sessions.filter((s) => s.done && s.rpe && s.duration);
-  const planned = sessions.filter((s) => !s.done && s.target_difficulty);
-  const score = wellness?.score ?? null;
-  const plannedDiff = planned.length ? Math.max(...planned.map(s => s.target_difficulty!)) : null;
-
-  if (!wellness && !done.length) {
-    return {
-      training: "Remplis ton wellness pour obtenir tes recommandations.",
-      recovery: "Les conseils apparaîtront ici.",
-    };
-  }
-  if (done.length) {
-    const load = done.reduce((a, s) => a + s.rpe! * s.duration!, 0);
-    const avgRpe = +(done.reduce((a, s) => a + s.rpe!, 0) / done.length).toFixed(1);
-    const mins = done.reduce((a, s) => a + s.duration!, 0);
-    return {
-      training: `${done.length} séance${done.length > 1 ? "s" : ""} terminée${done.length > 1 ? "s" : ""} · Effort moy. ${avgRpe}/10 · ${mins} min. ${load > 600 ? "Charge haute : récupération prioritaire." : load > 300 ? "Charge modérée : évite d'ajouter de l'intensité." : "Charge légère : progression possible."}`,
-      recovery: load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce." : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier." : "Routine simple : hydratation, marche légère et sommeil stable.",
-    };
-  }
-  if (score !== null && plannedDiff !== null) {
-    if (plannedDiff >= 8 && score < 65) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score aujourd'hui ${score} — allège à 6/10 ou reporte si possible.`,
-      recovery: "Wellness bas + séance intense : priorité hydratation, sommeil avant 23h, pas d'effort max.",
-    };
-    if (plannedDiff >= 8 && score >= 80) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score excellent (${score}) — fenêtre idéale, vas-y !`,
-      recovery: "Maintiens les bons signaux : hydratation, protéines et coucher régulier.",
-    };
-    if (plannedDiff >= 8) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score ${score} — reste attentif à ta récupération après.`,
-      recovery: "Post-séance intense : protéines 1,6–2g/kg/j et coucher avant 23h.",
-    };
-    const diff = plannedDiff;
-    const expectedScore = (diff / 10) * 100;
-    if (Math.abs(score - expectedScore) <= 15) return {
-      training: `Séance à ${diff}/10 · Cohérent avec ton score du jour (${score}) — go !`,
-      recovery: score >= 75 ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier." : "Hydrate-toi bien et vise un coucher avant 23h.",
-    };
-  }
-  return {
-    training: score! >= 80 ? `Score excellent (${score}/100). Fenêtre idéale pour une séance qualitative.` : score! >= 65 ? `Forme correcte (${score}/100). Intensité normale.` : score! >= 45 ? `Fatigue modérée (${score}/100). Allège légèrement l'intensité.` : `Score bas (${score}/100). Réduis l'intensité de 20–30%.`,
-    recovery: score! >= 75 ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier." : score! >= 55 ? "Priorise hydratation 35ml/kg, protéines 1,6–2g/kg/j et coucher avant 23h." : "Récupération prioritaire : sommeil, nutrition simple, pas d'effort max.",
-  };
 }
 
 function buildDotMap(sessions: Session[], anchor: string) {

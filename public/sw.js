@@ -38,7 +38,12 @@ self.addEventListener("fetch", (event) => {
 });
 
 self.addEventListener("push", (event) => {
-  const data = event.data?.json() ?? {};
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (err) {
+    data = { title: "ThePerfClub (erreur payload)", body: String(err) };
+  }
   event.waitUntil(
     self.registration.showNotification(data.title ?? "ThePerfClub", {
       body: data.body ?? "",
