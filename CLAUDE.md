@@ -361,3 +361,6 @@ posthog.capture(`onboarding_${currentStep}_viewed`, { step, step_index, role, mo
 1. Magic link → `/auth/callback` → `/today`
 2. Reset password → `/auth/callback?type=recovery` → `/reset-password`
 3. Nouveau mot de passe → `supabase.auth.updateUser({ password })` → `/today`
+
+### Inscription sans mot de passe (2026-07-13)
+L'étape `account` de l'onboarding ne demande plus de mot de passe (prénom + email uniquement, en plus du bouton Google). Dans `handleFinish()` (`OnboardingFlow.tsx`), `supabase.auth.signUp()` reçoit un mot de passe généré aléatoirement (`crypto.randomUUID() + crypto.randomUUID()`, jamais vu par l'utilisateur), puis un `supabase.auth.resetPasswordForEmail(email, { redirectTo: ".../auth/callback?type=recovery&first=1" })` est déclenché en tâche de fond (non bloquant, `.catch(() => {})`) juste après la création du compte, pour envoyer l'email "crée ton mot de passe" — réutilise tel quel le pipeline reset-password existant. Le flag `first=1` est forwardé par `auth/callback/route.ts` jusqu'à `/reset-password` pour adapter le wording ("Crée ton mot de passe" au lieu de "Nouveau mot de passe"). Le flux Google (`handleGoogleRegister`) n'est pas concerné (Google reste la méthode de connexion pour ces comptes). Le login par lien magique (`signInWithOtp`, déjà sur `/login`) reste un filet de sécurité si l'utilisateur ne clique jamais sur l'email.

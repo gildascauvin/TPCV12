@@ -12,7 +12,8 @@ export async function GET(request: Request) {
   }
 
   if (type === "recovery") {
-    return NextResponse.redirect(`${origin}/reset-password`);
+    const first = searchParams.get("first");
+    return NextResponse.redirect(`${origin}/reset-password${first ? "?first=1" : ""}`);
   }
 
   const d = searchParams.get("d");

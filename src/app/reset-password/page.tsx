@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthBackground from "@/components/auth/AuthBackground";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const [isFirstTime, setIsFirstTime] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -13,6 +14,10 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    setIsFirstTime(new URLSearchParams(window.location.search).get("first") === "1");
+  }, []);
 
   async function handleReset(e: React.FormEvent) {
     e.preventDefault();
@@ -89,10 +94,12 @@ export default function ResetPasswordPage() {
           ) : (
             <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 4 }}>
-                Nouveau mot de passe
+                {isFirstTime ? "Crée ton mot de passe" : "Nouveau mot de passe"}
               </div>
               <div style={{ fontSize: 14, color: "#62686e", marginBottom: 4 }}>
-                Choisis un mot de passe sécurisé d'au moins 8 caractères.
+                {isFirstTime
+                  ? "Choisis un mot de passe sécurisé d'au moins 8 caractères pour sécuriser ton compte."
+                  : "Choisis un mot de passe sécurisé d'au moins 8 caractères."}
               </div>
 
               {error && (

@@ -32,7 +32,7 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
   test:        ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
-type SportCategory = "halterophilie" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "autre";
+type SportCategory = "halterophilie" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
 
 function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
@@ -43,6 +43,9 @@ function getSportCategory(sport: string): SportCategory {
   if (s.includes("collectif") || s.includes("foot") || s.includes("basket") || s.includes("rugby") || s.includes("handball") || s.includes("volley")) return "collectif";
   if (s.includes("nata") || s.includes("aqua") || s.includes("swim")) return "natation";
   if (s.includes("cycl") || s.includes("vélo") || s.includes("velo") || s.includes("bike")) return "cyclisme";
+  if (s.includes("ski") || s.includes("snowboard")) return "ski";
+  if (s.includes("aviron") || s.includes("rowing") || s.includes("rameur")) return "aviron";
+  if (s.includes("gym") || s.includes("agrès") || s.includes("agres")) return "gymnastique";
   if (s.includes("run") || s.includes("marathon") || s.includes("trail") || s.includes("course") || s.includes("fond")) return "endurance";
   return "autre";
 }
@@ -316,6 +319,107 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Test 400m allure compétition",
       "Sprint 50m chronométré",
       "Test VO2 : 3×300m progressif",
+      "Bilan technique vidéo",
+    ],
+  },
+
+  ski: {
+    technique: [
+      "Position de ski statique (chaise) + transferts d'appui — 4×45s",
+      "Proprioception genou sur plateau instable — 3×10 par jambe",
+      "Fentes latérales dynamiques (dévers) — 4×10 par jambe",
+      "Gainage rotatoire type slalom — 3×40s",
+    ],
+    volume: [
+      "Squat bulgare — 4×10 par jambe",
+      "Chaise au mur — 4×60s",
+      "Fentes marchées + rotation tronc — 3×12",
+      "Gainage complet : planche + gainage latéral — 3×45s",
+      "Mollets debout — 4×15",
+    ],
+    intensite: [
+      "Pliométrie latérale : sauts de côté — 4×10",
+      "Squat jump — 5×8",
+      "Circuit explosivité jambes : squats sautés + fentes sautées — 4 tours",
+      "Sprints courts en côte — 6×20m",
+    ],
+    recuperation: [
+      "Mobilité chevilles et hanches — 15 min",
+      "Stretching quadriceps et ischio-jambiers — 15 min",
+      "Foam rolling jambes complètes",
+      "Vélo léger — 20 min",
+    ],
+    test: [
+      "Test chaise au mur : temps max",
+      "Test squat jump : hauteur",
+      "Test proprioception unipodal : temps de tenue",
+      "Bilan gainage : planche max",
+    ],
+  },
+
+  aviron: {
+    technique: [
+      "Rameur technique basse intensité : focus séquence jambes-dos-bras — 20 min",
+      "Tirage horizontal poulie, focus gainage — 4×10",
+      "Rameur : drill par segments (jambes seules / dos seul / bras seuls) — 15 min",
+      "Mobilité thoracique et hanches — 10 min",
+    ],
+    volume: [
+      "Rameur endurance continue — 30-40 min à allure modérée",
+      "Soulevé de terre — 4×8",
+      "Tirage vertical + tirage horizontal — 4×10",
+      "Gainage anti-flexion (planche + superman) — 3×45s",
+    ],
+    intensite: [
+      "Rameur intervalles : 6×500m (récup 2 min)",
+      "Rameur sprint : 8×250m effort max (récup 90s)",
+      "Squat + tirage complexe — 4×6",
+      "Circuit puissance : deadlift + row + squat jump — 4 tours",
+    ],
+    recuperation: [
+      "Rameur très léger — 15 min",
+      "Stretching dos, épaules, ischio-jambiers — 15 min",
+      "Foam rolling dos et jambes",
+      "Mobilité colonne thoracique — 10 min",
+    ],
+    test: [
+      "Test rameur 2000m chronométré",
+      "Test rameur 500m sprint",
+      "Test deadlift 5RM",
+      "Bilan technique vidéo du geste",
+    ],
+  },
+
+  gymnastique: {
+    technique: [
+      "Gainage statique : ATR contre mur — 4×20-30s",
+      "Placement bassin et gainage en suspension — 4×15s",
+      "Technique de réception de saut — 4×6",
+      "Mobilité épaules et poignets — 15 min",
+    ],
+    volume: [
+      "Tractions strictes — 4×6",
+      "Dips — 4×8",
+      "L-sit ou tuck-sit tenu — 4×15-20s",
+      "Pompes déclinées — 3×12",
+      "Gainage complet : planche + gainage latéral — 3×40s",
+    ],
+    intensite: [
+      "Pliométrie : sauts groupés + réceptions — 4×6",
+      "Muscle-up ou tractions explosives — 4×5",
+      "Circuit force relative : tractions + dips + pompes — 4 tours",
+      "Handstand hold contre mur — 4×20s",
+    ],
+    recuperation: [
+      "Mobilité épaules, hanches, poignets — 15 min",
+      "Stretching global — 15 min",
+      "Foam rolling dos et épaules",
+      "Respiration et relaxation — 10 min",
+    ],
+    test: [
+      "Test tractions strictes max",
+      "Test ATR/handstand : temps de tenue",
+      "Test L-sit : temps max",
       "Bilan technique vidéo",
     ],
   },

@@ -568,8 +568,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* account */
   const [name, setName]         = useState(pendingData?.name || "");
   const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd]   = useState(false);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [emailSent, setEmailSent]   = useState(false);
@@ -850,8 +848,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         const emailRedirectTo = location.hostname === "localhost"
           ? undefined
           : `${location.origin}/auth/callback`;
+        const randomPassword = crypto.randomUUID() + crypto.randomUUID();
         const { data, error: signUpErr } = await supabase.auth.signUp({
-          email: email.trim(), password,
+          email: email.trim(), password: randomPassword,
           ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
         });
         if (signUpErr) { setError(signUpErr.message); setSaving(false); return; }
@@ -884,6 +883,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           return;
         }
         if (role === "coach") await finishCoachClaim(uid);
+        supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
+        }).catch(() => {});
         setSaving(false);
         goToActivationStep();
       } else {
@@ -1764,15 +1766,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
             <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={inputStyle} />
-            <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Mot de passe</div>
-            <div style={{ position: "relative", marginBottom: 16 }}>
-              <input type={showPwd ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="8 caractères minimum" minLength={8} style={{ ...inputStyle, marginBottom: 0, paddingRight: 48 }} />
-              <button type="button" onClick={() => setShowPwd(v => !v)} style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 13, padding: 0 }}>
-                {showPwd ? "Masquer" : "Afficher"}
-              </button>
-            </div>
-            <Actions onBack={back} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim() || password.length < 8} />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 8 }} />
+            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 16 }}>Tu recevras un email pour créer ton mot de passe.</div>
+            <Actions onBack={back} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
             <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
