@@ -2079,7 +2079,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 onNext={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
               />
             ) : (
-              <div style={{ padding: "16px 28px 24px", background: "#fff", flexShrink: 0 }}>
+              <div style={{ padding: "20px 28px 20px", background: "#fff", flexShrink: 0 }}>
                 <button
                   onClick={async () => {
                     if (finishGuardRef.current) return;

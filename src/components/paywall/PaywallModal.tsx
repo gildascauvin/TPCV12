@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import type { PaymentRequest } from "@stripe/stripe-js";
@@ -24,12 +25,11 @@ const PRICING = {
 };
 
 function CheckoutForm({
-  mode, billing, allowDismiss, onClose, onSuccess,
+  mode, billing, footerPortalNode, onSuccess,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
-  allowDismiss?: boolean;
-  onClose?: () => void;
+  footerPortalNode: HTMLDivElement | null;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
@@ -111,7 +111,7 @@ function CheckoutForm({
 
   return (
     <>
-      <form id="checkout-form" onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      <form id="checkout-form" onSubmit={handleSubmit}>
         {paymentRequest && (
           <>
             <PaymentRequestButtonElement
@@ -136,37 +136,40 @@ function CheckoutForm({
         )}
       </form>
 
-      <div style={{ flexShrink: 0, padding: "16px 0 0", background: "#fff" }}>
-        <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-          Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
-        </div>
+      {footerPortalNode && createPortal(
+        <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
+          <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
+            Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
+          </div>
 
-        <button
-          type="submit"
-          form="checkout-form"
-          disabled={!stripe || loading}
-          style={{
-            width: "100%", height: 50, borderRadius: 14, border: "none",
-            background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
-            color: "#fff", fontSize: 14, fontWeight: 900, cursor: loading ? "default" : "pointer",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          {loading ? "Traitement..." : "Commencer gratuitement"}
-        </button>
+          <button
+            type="submit"
+            form="checkout-form"
+            disabled={!stripe || loading}
+            style={{
+              width: "100%", height: 50, borderRadius: 14, border: "none",
+              background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
+              color: "#fff", fontSize: 14, fontWeight: 900, cursor: loading ? "default" : "pointer",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {loading ? "Traitement..." : "Commencer gratuitement"}
+          </button>
 
-        <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
-          Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
-        </div>
+          <div style={{ fontSize: 10, color: "#b0b5ba", textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+            Tu ne seras débité qu'après 7 jours. Annule avant sans frais.
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
-          <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
-            <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
-            <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-          <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
-        </div>
-      </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
+            <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
+              <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
+              <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
+          </div>
+        </div>,
+        footerPortalNode
+      )}
     </>
   );
 }
@@ -175,6 +178,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
+  const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
   const [billing, setBilling] = useState<Billing>(initialBilling ?? "annual");
   const annualSavings = PRICING[mode].monthly * 12 - PRICING[mode].annual;
@@ -196,7 +200,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   return (
     <div onClick={(e) => { if (allowDismiss && e.target === e.currentTarget) onClose?.(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
       <div style={{ position: "relative", background: "#fff", borderRadius: 30, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
-      <div style={{ padding: "28px 28px 0", flexShrink: 0 }}>
+      <div style={{ overflowY: "auto", padding: 28 }}>
 
         {allowDismiss && onClose && (
           <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.06)", border: "none", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
@@ -280,9 +284,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         </div>
 
         <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", marginBottom: 18 }} />
-      </div>
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "0 28px 24px" }}>
         {loadingIntent && (
           <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>
             Chargement du formulaire...
@@ -303,10 +305,12 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
               appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } },
             }}
           >
-            <CheckoutForm mode={mode} billing={billing} allowDismiss={allowDismiss} onClose={onClose} onSuccess={onSuccess} />
+            <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} />
           </Elements>
         )}
       </div>
+
+      <div ref={setFooterPortalNode} style={{ flexShrink: 0 }} />
       </div>
     </div>
   );

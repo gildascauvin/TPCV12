@@ -16,8 +16,8 @@ const PAGE_VARIANTS: Variant[] = ["light", "dark"];
 const RECIPES: Record<Variant, React.CSSProperties> = {
   light:         { padding: "14px 20px 24px", background: "#f1f0ee" },
   dark:          { padding: "14px 20px 24px" },
-  "modal-light": { padding: "16px 28px 24px", background: "#fff", flexShrink: 0 },
-  "modal-dark":  { padding: "16px 28px 24px", background: "#161616", flexShrink: 0 },
+  "modal-light": { padding: "20px 28px 20px", background: "#fff", flexShrink: 0 },
+  "modal-dark":  { padding: "20px 28px 20px", background: "#161616", flexShrink: 0 },
 };
 
 export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel }: Props) {
