@@ -110,37 +110,40 @@ function CheckoutForm({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {paymentRequest && (
-        <>
-          <PaymentRequestButtonElement
-            options={{
-              paymentRequest,
-              style: { paymentRequestButton: { type: "default", theme: "dark", height: "48px" } },
-            }}
-          />
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
-            <span style={{ fontSize: 11, color: "#8a8f94", fontWeight: 600 }}>ou payer par carte</span>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
+    <>
+      <form id="checkout-form" onSubmit={handleSubmit} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        {paymentRequest && (
+          <>
+            <PaymentRequestButtonElement
+              options={{
+                paymentRequest,
+                style: { paymentRequestButton: { type: "default", theme: "dark", height: "48px" } },
+              }}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0" }}>
+              <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
+              <span style={{ fontSize: 11, color: "#8a8f94", fontWeight: 600 }}>ou payer par carte</span>
+              <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.1)" }} />
+            </div>
+          </>
+        )}
+        <PaymentElement options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }} />
+
+        {error && (
+          <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>
+            {error}
           </div>
-        </>
-      )}
-      <PaymentElement options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }} />
+        )}
+      </form>
 
-      {error && (
-        <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ position: "sticky", bottom: 0, margin: "16px 0 0", padding: "14px 0 0", background: "#fff" }}>
+      <div style={{ flexShrink: 0, padding: "16px 0 0", background: "#fff" }}>
         <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
           Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
         </div>
 
         <button
           type="submit"
+          form="checkout-form"
           disabled={!stripe || loading}
           style={{
             width: "100%", height: 50, borderRadius: 14, border: "none",
@@ -164,8 +167,7 @@ function CheckoutForm({
           <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé · Résiliable à tout moment</span>
         </div>
       </div>
-
-    </form>
+    </>
   );
 }
 
@@ -193,7 +195,8 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
   return (
     <div onClick={(e) => { if (allowDismiss && e.target === e.currentTarget) onClose?.(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
-      <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", overflowY: "auto", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+      <div style={{ position: "relative", background: "#fff", borderRadius: 30, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+      <div style={{ padding: "28px 28px 0", flexShrink: 0 }}>
 
         {allowDismiss && onClose && (
           <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.06)", border: "none", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
@@ -277,7 +280,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         </div>
 
         <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", marginBottom: 18 }} />
+      </div>
 
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", padding: "0 28px 24px" }}>
         {loadingIntent && (
           <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>
             Chargement du formulaire...
@@ -301,6 +306,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             <CheckoutForm mode={mode} billing={billing} allowDismiss={allowDismiss} onClose={onClose} onSuccess={onSuccess} />
           </Elements>
         )}
+      </div>
       </div>
     </div>
   );

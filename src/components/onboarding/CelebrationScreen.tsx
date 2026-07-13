@@ -87,10 +87,12 @@ export default function CelebrationScreen({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
       <div style={{
-        position: "relative", width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", overflowX: "hidden",
-        borderRadius: 30, padding: 28, boxShadow: "0 42px 120px rgba(0,0,0,.34)",
+        position: "relative", width: "100%", maxWidth: 420, maxHeight: "92vh",
+        borderRadius: 30, boxShadow: "0 42px 120px rgba(0,0,0,.34)",
         background: "#161616",
+        display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
+      <div style={{ overflowY: "auto", overflowX: "hidden", padding: 28 }}>
         <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
 
         <div style={{ position: "relative", zIndex: 2 }}>
@@ -209,6 +211,7 @@ export default function CelebrationScreen({
             </div>
           </div>
         </div>
+      </div>
 
         {/* CTA */}
         <Actions variant="modal-dark" onNext={onStartTrial} nextDisabled={saving} nextLabel="Commencer mon essai gratuit →" />

@@ -1983,7 +1983,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── INVITE TEAM (coach) ── */}
         {currentStep === "invite_team" && (
           <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
-          <div style={{ position: "relative", background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+          <div style={{ position: "relative", background: "#fff", borderRadius: 30, width: "100%", maxWidth: 420, maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+          <div style={{ overflowY: "auto", padding: 28 }}>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
               Invite tes premiers sportifs
             </div>
@@ -2069,6 +2070,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </button>
               </>
             )}
+          </div>
 
             {inviteResult ? (
               <Actions
@@ -2077,7 +2079,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 onNext={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
               />
             ) : (
-              <div style={{ margin: "16px -28px -28px", padding: "14px 28px 20px", background: "#fff" }}>
+              <div style={{ padding: "16px 28px 24px", background: "#fff", flexShrink: 0 }}>
                 <button
                   onClick={async () => {
                     if (finishGuardRef.current) return;
