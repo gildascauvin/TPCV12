@@ -641,28 +641,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [path.length, stepIdx]);
 
   useEffect(() => {
-    if (initialRole) {
-      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
-      posthog.capture("onboarding_step_viewed", syntheticProps);
-      posthog.capture("onboarding_role_viewed", syntheticProps);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const props = {
-      step: currentStep,
-      step_index: stepIdx,
-      role: currentStep === "role" ? "selecting" : (role || "unknown"),
-      mode: isRegisterMode ? "register" : "auth",
-    };
-    posthog.capture("onboarding_step_viewed", props);
-    posthog.capture(`onboarding_${currentStep}_viewed`, props);
-    advancingRef.current = false;
-    finishGuardRef.current = false;
-  }, [currentStep]);
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const claimParam = params.get("claim");
     if (claimParam && !localStorage.getItem("claim_program_id")) {
@@ -687,6 +665,28 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (initialRole) {
+      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
+      posthog.capture("onboarding_step_viewed", syntheticProps);
+      posthog.capture("onboarding_role_viewed", syntheticProps);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const props = {
+      step: currentStep,
+      step_index: stepIdx,
+      role: currentStep === "role" ? "selecting" : (role || "unknown"),
+      mode: isRegisterMode ? "register" : "auth",
+    };
+    posthog.capture("onboarding_step_viewed", props);
+    posthog.capture(`onboarding_${currentStep}_viewed`, props);
+    advancingRef.current = false;
+    finishGuardRef.current = false;
+  }, [currentStep]);
 
   useEffect(() => {
     if (currentStep !== "value_slides") return;
