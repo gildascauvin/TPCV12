@@ -91,6 +91,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const weekAvgLoads = program.template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
   const maxAvgLoad = Math.max(...weekAvgLoads, 0.01);
   const week = program.template.weeks[weekIdx] ?? {};
+  const isLocked = weekIdx > 0 && userMode === null;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", display: "flex", flexDirection: "column" }}>
@@ -131,17 +132,21 @@ export default function PublicProgramView({ program, coachName }: Props) {
       </div>
 
       {/* 7-column grid — same layout as planning */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
       <div style={{
-        flex: 1,
         display: "grid",
         gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",
         overflowY: "auto",
+        height: "100%",
         padding: "14px 16px 18px",
         scrollSnapType: "x proximity",
         scrollbarWidth: "thin",
+        filter: isLocked ? "blur(7px)" : "none",
+        pointerEvents: isLocked ? "none" : "auto",
+        userSelect: isLocked ? "none" : "auto",
       }}>
         {DAYS.map((day, dayIdx) => {
           const daySessions = (week[day] ?? []) as SessionTemplate[];
@@ -186,6 +191,23 @@ export default function PublicProgramView({ program, coachName }: Props) {
             </div>
           );
         })}
+      </div>
+
+      {isLocked && (
+        <div style={{ position: "absolute", inset: 0, background: "rgba(241,240,238,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#fff", borderRadius: 22, padding: "22px 26px", maxWidth: 300, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.14)", border: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
+              Obtenir le programme complet et le personnaliser
+            </div>
+            <button
+              onClick={() => handleClaimGuest("use_program")}
+              style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+            >
+              Créer un compte
+            </button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Bottom CTA */}
