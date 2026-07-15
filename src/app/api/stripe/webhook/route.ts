@@ -66,6 +66,11 @@ export async function POST(request: Request) {
           .from("profiles")
           .update({ subscription_status: "expired" })
           .eq("user_id", userId);
+      } else if (userId && sub.status === "trialing" && sub.cancel_at_period_end) {
+        await supabase
+          .from("profiles")
+          .update({ subscription_status: "expired" })
+          .eq("user_id", userId);
       }
       break;
     }
