@@ -2175,6 +2175,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           allowDismiss={false}
           onSuccess={handleTrialSuccess}
           headline={hasClaimedProgram && claimedProgramName ? `Ton programme ${claimedProgramName} t'attend` : undefined}
+          abVariant={assignedVariant ?? "control"}
         />
       )}
     </OnboardingBackground>

@@ -19,6 +19,8 @@ interface PaywallModalProps {
   initialBilling?: "monthly" | "annual";
   /** Titre affiché sous l'eyebrow, au-dessus des cartes de prix. Défaut générique si absent. */
   headline?: string;
+  /** Tag l'event trial_started pour l'A/B test onboarding court — absent hors onboarding (gating in-app). */
+  abVariant?: string;
 }
 
 const PRICING = {
@@ -27,12 +29,13 @@ const PRICING = {
 };
 
 function CheckoutForm({
-  mode, billing, footerPortalNode, onSuccess,
+  mode, billing, footerPortalNode, onSuccess, abVariant,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
   footerPortalNode: HTMLDivElement | null;
   onSuccess: () => void;
+  abVariant?: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -67,7 +70,7 @@ function CheckoutForm({
         setLoading(false);
       } else {
         ev.complete("success");
-        posthog.capture("trial_started", { plan: mode, billing, method: "wallet" });
+        posthog.capture("trial_started", { plan: mode, billing, method: "wallet", ...(abVariant ? { ab_variant: abVariant } : {}) });
         onSuccess();
       }
     });
@@ -107,7 +110,7 @@ function CheckoutForm({
       return;
     }
 
-    posthog.capture("trial_started", { plan: mode, billing });
+    posthog.capture("trial_started", { plan: mode, billing, ...(abVariant ? { ab_variant: abVariant } : {}) });
     onSuccess();
   }
 
@@ -176,7 +179,7 @@ function CheckoutForm({
   );
 }
 
-export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling, headline }: PaywallModalProps) {
+export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling, headline, abVariant }: PaywallModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -310,7 +313,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
               appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } },
             }}
           >
-            <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} />
+            <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} />
           </Elements>
         )}
       </div>
