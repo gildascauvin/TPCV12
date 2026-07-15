@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import posthog from "posthog-js";
+import { useFeatureFlagVariantKey } from "posthog-js/react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
@@ -94,6 +95,12 @@ const PROGRAM_COACH_PATH: StepId[] = [
   "concept_autoreg",
   "profile_recap", "account", "invite_team", "celebration",
 ];
+
+/* A/B test "short-onboarding-signup" : rôle + compte, paywall immédiat après (pas de diagnostic/
+   personnalisation avant). Utilisé pour le trafic classique ET le trafic via programme claimé —
+   voir getPath(). */
+const SHORT_ATHLETE_PATH: StepId[] = ["role", "account"];
+const SHORT_COACH_PATH: StepId[]   = ["role", "account"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -545,6 +552,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const isRegisterMode = !userId;
   const [hasClaimedProgram, setHasClaimedProgram] = useState<boolean | null>(null);
 
+  /* A/B test "short-onboarding-signup" : bras "test" = SHORT_ATHLETE_PATH/SHORT_COACH_PATH,
+     paywall immédiat après le compte. `null` tant que non verrouillé — getPath() retombe alors
+     sur le comportement actuel (aucun risque de path indéterminé). Éligible dès qu'un nouveau
+     compte est en train d'être créé (register direct ou continuation Google via pendingData) ;
+     override dev/support via ?ab=test|control car posthog.init() est skip en dev (PostHogProvider.tsx). */
+  const rawVariant = useFeatureFlagVariantKey("short-onboarding-signup");
+  const [assignedVariant, setAssignedVariant] = useState<"control" | "test" | null>(null);
+  const abEligible = isRegisterMode || !!pendingData;
+  useEffect(() => {
+    if (assignedVariant || !abEligible) return;
+    const forced = new URLSearchParams(window.location.search).get("ab");
+    if (forced === "test" || forced === "control") { setAssignedVariant(forced); return; }
+    if (rawVariant === "test" || rawVariant === "control") setAssignedVariant(rawVariant);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawVariant, abEligible]);
+  useEffect(() => {
+    if (assignedVariant) posthog.setPersonProperties({ ab_variant: assignedVariant });
+  }, [assignedVariant]);
+
   const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
   const [roleChosen, setRoleChosen] = useState(!!(pendingData?.role || initialRole));
@@ -624,6 +650,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
 
   const getPath = (r: Role): StepId[] => {
+    if (assignedVariant === "test") return r === "coach" ? SHORT_COACH_PATH : SHORT_ATHLETE_PATH;
     if (hasClaimedProgram) return r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
     return r === "coach" ? COACH_PATH : ATHLETE_PATH;
   };
@@ -681,6 +708,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       step_index: stepIdx,
       role: currentStep === "role" ? "selecting" : (role || "unknown"),
       mode: isRegisterMode ? "register" : "auth",
+      ab_variant: assignedVariant ?? "pending",
     };
     posthog.capture("onboarding_step_viewed", props);
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
@@ -814,6 +842,36 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   }
 
+  /* Claim + assign du programme claimé, partagé entre le flow classique (wellnessAdjustment réel,
+     calculé à la fin de wellness_q) et le path court de l'A/B test (wellnessAdjustment=0, aucune
+     donnée wellness collectée dans ce path — voir handleFinish()). */
+  async function claimAndAssignProgram(uid: string, wellnessAdjustment: number) {
+    const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
+    if (!claimId) return;
+    try {
+      const claimRes = await fetch("/api/programs/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programId: claimId }),
+      });
+      if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
+      const { programId: copiedId } = await claimRes.json();
+      const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
+      });
+      if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
+    } catch (err: unknown) {
+      const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
+      if (status !== 409) {
+        await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
+      }
+    } finally {
+      localStorage.removeItem("claim_program_id");
+    }
+  }
+
   async function finishAthleteActivation(base_score: number, score: number) {
     const uid = userId || newUserId;
     if (uid) {
@@ -822,32 +880,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         { user_id: uid, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score },
         { onConflict: "user_id,date" }
       );
-      const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
-      if (claimId) {
-        try {
-          const claimRes = await fetch("/api/programs/claim", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ programId: claimId }),
-          });
-          if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
-          const { programId: copiedId } = await claimRes.json();
-          const wellnessAdjustment = score < 45 ? -1 : 0;
-          const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
-          });
-          if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
-        } catch (err: unknown) {
-          const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
-          if (status !== 409) {
-            await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
-          }
-        } finally {
-          localStorage.removeItem("claim_program_id");
-        }
-      }
+      const wellnessAdjustment = score < 45 ? -1 : 0;
+      await claimAndAssignProgram(uid, wellnessAdjustment);
     }
     next();
   }
@@ -871,7 +905,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         setNewUserId(uid);
         await saveData(uid);
         posthog.identify(uid, { email: email.trim(), role });
-        posthog.capture("account_created", { role });
+        posthog.capture("account_created", { role, ab_variant: assignedVariant ?? "control" });
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -895,16 +929,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           return;
         }
         if (role === "coach") await finishCoachClaim(uid);
+        if (role === "athlete" && assignedVariant === "test" && hasClaimedProgram) await claimAndAssignProgram(uid, 0);
         supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
         }).catch(() => {});
         setSaving(false);
-        goToActivationStep();
+        if (assignedVariant === "test") handleStartTrial(); else goToActivationStep();
       } else {
         await saveData(userId!);
         if (role === "coach") await finishCoachClaim(userId!);
         setSaving(false);
-        goToActivationStep();
+        if (assignedVariant === "test") handleStartTrial(); else goToActivationStep();
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -942,8 +977,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [showTrialPaywall, setShowTrialPaywall] = useState(false);
 
   function handleStartTrial() {
-    posthog.capture("celebration_cta_clicked", { role });
-    posthog.capture("paywall_priming_viewed", { plan: role, objective: goal });
+    posthog.capture("celebration_cta_clicked", { role, ab_variant: assignedVariant ?? "control" });
+    posthog.capture("paywall_priming_viewed", { plan: role, objective: goal, ab_variant: assignedVariant ?? "control" });
     setShowTrialPaywall(true);
   }
 
@@ -985,7 +1020,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         }
 
         posthog.identify(userId, { email: userEmail, role: pendingData.role });
-        posthog.capture("account_created", { role: pendingData.role, method: "google" });
+        posthog.capture("account_created", { role: pendingData.role, method: "google", ab_variant: assignedVariant ?? "control" });
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1010,7 +1045,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      deux comptes Google réels. Ce useEffect séparé, retriggé par un state, capture toujours un
      `path` à jour au moment où il s'exécute. */
   useEffect(() => {
-    if (googleInitDone) goToActivationStep();
+    if (googleInitDone) { if (assignedVariant === "test") handleStartTrial(); else goToActivationStep(); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleInitDone]);
 
@@ -1081,7 +1116,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement" },
                 { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs" },
               ].map(({ r, icon, label, sub }) => (
-                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); })}
+                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); if (abEligible && !assignedVariant) setAssignedVariant("control"); })}
                   style={{ cursor: "pointer", borderRadius: 16, padding: "24px 16px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 4 }}>{icon} {label}</div>
                   <div style={{ fontSize: 13, color: "#8a8f94" }}>{sub}</div>
@@ -2139,6 +2174,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           mode={role}
           allowDismiss={false}
           onSuccess={handleTrialSuccess}
+          headline={hasClaimedProgram && claimedProgramName ? `Ton programme ${claimedProgramName} t'attend` : undefined}
         />
       )}
     </OnboardingBackground>

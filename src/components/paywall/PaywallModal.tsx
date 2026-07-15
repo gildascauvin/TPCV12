@@ -17,6 +17,8 @@ interface PaywallModalProps {
   onClose?: () => void;
   onSuccess: () => void;
   initialBilling?: "monthly" | "annual";
+  /** Titre affiché sous l'eyebrow, au-dessus des cartes de prix. Défaut générique si absent. */
+  headline?: string;
 }
 
 const PRICING = {
@@ -174,7 +176,7 @@ function CheckoutForm({
   );
 }
 
-export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling }: PaywallModalProps) {
+export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling, headline }: PaywallModalProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -219,6 +221,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 14 }}>
             ThePerfClub — {planLabel}
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 16, color: "#171b1f" }}>
+            {headline || (mode === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend")}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
