@@ -353,6 +353,19 @@ src/hooks/
 **Flow paywall unifié** : `requireSubscription()` → `paywallStep = "priming"` → `PrimingJourneyModal` → CTA → `paywallStep = "paywall"` → `PaywallModal` → "← Retour" → `paywallStep = "priming"`.
 Le cadenas `.locked`/`.tour-lock` (cf. section Onboarding) est désormais permanent, plus lié à une session de tour.
 
+## Programmes publics partagés (`/p/[id]`)
+
+Page publique (`src/app/p/[id]/page.tsx` + `PublicProgramView.tsx`, client component) affichant un programme `is_public = true` en lecture, utilisée en iframe sur les pages WordPress (bibliothèque) et accessible en lien direct. `page.tsx` charge la ligne `programs` via `createAdminClient()` (bypass RLS, nécessaire pour un accès anonyme).
+
+- **Onglets de semaines** (S1…SN) : navigation libre, aucune restriction — `weekIdx` en state local, clic direct.
+- **Détection connecté/déconnecté** : `userMode` (state `"coach" | "athlete" | null`), résolu côté client via `supabase.auth.getUser()` + `profiles.mode` (`PublicProgramView.tsx`). `userMode === null` = visiteur non connecté.
+- **Verrouillage semaines 2+ pour les non-connectés (2026-07-15)** : décision de Gildas suite au constat que la page donnait tout le programme gratuitement via les iframes WP. À partir de la semaine 2 (`weekIdx > 0`), si `userMode === null` : la grille 7 jours reste rendue (même contenu réel) mais `filter: blur(7px)` + `pointerEvents: none` + `userSelect: none`, avec un overlay centré par-dessus (titre "Obtenir le programme complet et le personnaliser" + bouton "Créer un compte"). **Choix assumé 100% client-side** (pas de troncature des données côté serveur) — cohérent avec le reste de l'app où le paywall est volontairement client-only (cf. section Paywall, "limite assumée"). Les onglets de semaines eux-mêmes ne sont ni cachés ni cadenassés (demande explicite de Gildas : pas de modification des petites barres, juste le flou du contenu).
+- **CTA du panneau flouté** → `handleClaimGuest("use_program")`, même fonction et même tag PostHog que le bouton bas de page "👤 Utiliser ce programme" (choix de Gildas : réutiliser ce tag plutôt qu'en créer un nouveau, pour rester mesuré dans le même funnel).
+- **Claim programme** :
+  - Non connecté (`userMode === null`) : `handleClaimGuest(cta)` pose `claim_program_id` en localStorage et navigue vers `/register` (`window.open` si embarqué en iframe) — consommé ensuite par `OnboardingFlow.tsx` (`PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH`), alimente le funnel "programme claimé" (`program_onboarding_start` → funnels PostHog 4745753/4745754, cf. section Analytics).
+  - Connecté : `handleClaimConnected()` → `POST /api/programs/claim` (copie la ligne `programs` publique vers l'utilisateur courant via le client serveur authentifié), puis redirige vers `/today` ou `/coach/planning` selon `userMode`.
+- **Tracking** : `program_page_viewed` (montage), `program_cta_clicked` (`cta`: `add_to_library` | `create_account` | `use_program`, tous les CTA y compris le panneau flouté), `program_claimed` (succès du claim connecté).
+
 ## Analytics PostHog — tracking onboarding
 Provider : `src/providers/PostHogProvider.tsx`, clé : `NEXT_PUBLIC_POSTHOG_KEY`
 
