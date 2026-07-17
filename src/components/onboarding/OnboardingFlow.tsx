@@ -1107,19 +1107,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 1. ROLE ── */}
         {currentStep === "role" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Tu es ?</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Comment veux-tu utiliser ThePerfClub ?</div>
             <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
-              Cette réponse détermine ton parcours et les données préparées pour toi.
+              On personnalise ton expérience.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
               {[
-                { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement" },
-                { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs" },
-              ].map(({ r, icon, label, sub }) => (
+                { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
+                { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
+              ].map(({ r, icon, label, sub, badgeBg }) => (
                 <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); if (abEligible && !assignedVariant) setAssignedVariant("control"); })}
-                  style={{ cursor: "pointer", borderRadius: 16, padding: "24px 16px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.10)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: roleChosen && role === r ? "#d44000" : "#1f2428", marginBottom: 4 }}>{icon} {label}</div>
-                  <div style={{ fontSize: 13, color: "#8a8f94" }}>{sub}</div>
+                  style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "18px 18px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.08)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
+                  <div style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>{icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 900, letterSpacing: "-0.01em", color: roleChosen && role === r ? "#d44000" : "#171b1f", marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.4 }}>{sub}</div>
+                  </div>
+                  <div style={{ flexShrink: 0, color: "rgba(0,0,0,.20)", fontSize: 18 }}>→</div>
                 </div>
               ))}
             </div>
