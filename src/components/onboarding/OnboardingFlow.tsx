@@ -631,7 +631,11 @@ const FREQ_LABELS: Record<number, string>  = { 2: "1–2 séances/semaine", 3: "
 export default function OnboardingFlow({ userId, pendingData, initialRole }: Props) {
   const router   = useRouter();
   const supabase = createClient();
-  const isRegisterMode = !userId;
+  /* Une continuation Google (pendingData) a déjà un userId (compte créé), mais c'est toujours
+     une inscription en cours — pas un ancien compte incomplet qui revient plus tard. Sans ce
+     cas, ces sessions basculaient en "mode auth" (CTA explicite) sur les étapes de sélection
+     qui suivent, au lieu de l'auto-advance au tap attendu en inscription. */
+  const isRegisterMode = !userId || !!pendingData;
   const [hasClaimedProgram, setHasClaimedProgram] = useState<boolean | null>(null);
 
   /* A/B test "short-onboarding-signup" : bras "test" = SHORT_ATHLETE_PATH/SHORT_COACH_PATH,
@@ -641,7 +645,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      override dev/support via ?ab=test|control car posthog.init() est skip en dev (PostHogProvider.tsx). */
   const rawVariant = useFeatureFlagVariantKey("short-onboarding-signup");
   const [assignedVariant, setAssignedVariant] = useState<"control" | "test" | null>(null);
-  const abEligible = isRegisterMode || !!pendingData;
+  const abEligible = isRegisterMode;
   useEffect(() => {
     if (assignedVariant || !abEligible) return;
     const forced = new URLSearchParams(window.location.search).get("ab");
