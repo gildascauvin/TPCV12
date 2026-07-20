@@ -38,81 +38,85 @@ src/app/
   reset-password/ # Nouveau mot de passe (après lien email)
 ```
 
-## Onboarding — flows actuels (2026-07-12)
+## Onboarding — flows actuels (2026-07-20)
 
-Refonte tour→célébration livrée le 2026-07-11 (5 chantiers), puis convergence des 4 funnels + repositionnement de l'activation le 2026-07-12 : les paths `PROGRAM_*` gagnent le diagnostic complet (pain points + score d'autorégulation) qu'ils n'avaient jamais eu, `wellness_q` (sportif) et la nouvelle étape `invite_team` (coach) se déplacent entre `account` et `celebration` sur les 4 paths (au lieu d'avant `account` pour `wellness_q`, absent pour le coach), et `profile_recap` référence le programme claimé par son nom réel quand disponible. Détail complet et historique dans la mémoire Claude (`project_onboarding_celebration_screen.md`, `project_product_tour_paywall.md`, `project_analytics.md`) et le plan `/Users/Gildas/.claude/plans/je-vourdais-am-liorer-mes-rosy-ritchie.md`.
+**Refonte v2 déployée en prod le 2026-07-20** (branche `onboarding-v2-signup-variants`, commit `ac1bb21`) : remplace intégralement la structure du 2026-07-12 décrite plus bas dans ce fichier avant cette date. Six changements structurels :
+1. `value_intro` unifié (générique, position 0 dans tous les paths, avant `role`) — remplace `value_slides`/`value_program`/`value_program_coach`.
+2. Le Signup (`account`) devient **testé en A/B** via le flag PostHog `short-onboarding-signup` : variante **A** (`control`) juste après les pain points (comme avant) ; variante **B** (`test`) tout de suite après `role`, profil encore vide. Override dev/support : `?ab=test|control`.
+3. Paywall scindé en 2 écrans plein-page : `paywall_priming` (pricing mensuel/annuel + frise de réassurance 3 temps + témoignage) → `paywall_form` (Stripe uniquement, rappel prix compact).
+4. **Paywall → Célébration → Activation** (ordre inversé par rapport à avant) : le paywall précède désormais `celebration`, et l'activation (`wellness_q`/`wellness_reveal` sportif, `invite_team` coach) est insérée **dynamiquement après** `celebration`, uniquement si le paiement réussit (`paidExtras`, posé dans `handlePaymentSuccess()`) — plus dans le tableau statique du path.
+5. `handleFinish()` scindé en `createAccount(uid)` (léger, appelé au submit de `account`) + `completeProfile(uid)` (le reste : sport/niveau/objectif/jours, sessions, wellness baseline, démo coach — déclenché à l'entrée de `profile_recap`, puisque le Signup peut désormais arriver avant que ces données soient connues).
+6. `onboarding_done` posé uniquement au succès réel du paiement (`handlePaymentSuccess()`), plus dans `createAccount()`/`completeProfile()` — un abandon après compte créé mais avant paiement ne fuit plus vers un accès gratuit permanent.
 
-### Sportif — flux classique
+Historique complet du chantier (débats, wording, POC) : mémoire `project_onboarding_v2_proposal.md` et plan `/Users/Gildas/.claude/plans/sequential-percolating-dijkstra.md`. Structure pré-2026-07-20 (désormais obsolète) conservée dans l'historique git de ce fichier si besoin de contexte.
+
+### Sportif — flux classique (`ATHLETE_PATH` = variante A / `SHORT_ATHLETE_PATH` = variante B)
 ```
-role → value_slides (3 slides stats)
+value_intro → role
+── variante B (test) : SIGNUP ICI ──
 → frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
-→ autoreg_score  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
-→ concept_autoreg (slide dark, graphique SVG comparatif "Avec ThePerfClub" vs "Programme rigide" — la solution ensuite)
+── variante A (control) : SIGNUP ICI ──
+→ autoreg_score (dark card, score % + 3 jauges + persona comportemental révélé ici)
+→ concept_autoreg (solution ThePerfClub)
 → sport_2a → level_2a → goal_2a → days_2a
-→ profile_recap (phrase humaine + icône sport + carte persona, "Ton profil d'entraînement")
+→ profile_recap ("Ton programme d'entraînement" — qualités physiques par sport, plus de persona ici)
 → week_preview_2a (programme preview)
-→ account (email + mdp + prénom — création du compte, saveData() SANS le wellness_daily ni claim/assign)
-→ wellness_q (5 questions niveau de forme — après le compte, juste avant la célébration)
-→ celebration (recap profil + score wellness + upgrade pitch, CTA ouvre PaywallModal directement)
-→ succès/dismiss du paywall → redirect /today
+→ account (si pas déjà fait en variante B — email + prénom, pas de mot de passe)
+→ paywall_priming → paywall_form (Stripe — CB obligatoire, non contournable)
+→ celebration ("Bienvenue !")
+[paiement réussi → paidExtras = ["wellness_q","wellness_reveal"], insérés après celebration]
+→ wellness_q → wellness_reveal → redirect /today
 ```
 
-### Sportif — flux programme (PROGRAM_ATHLETE_PATH)
-Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`). Depuis 2026-07-12, gagne le diagnostic complet et perd `sport_2a`/`goal_2a`/`level_2a`/`days_2a` (déduits automatiquement du programme claimé).
+### Sportif — flux programme (`PROGRAM_ATHLETE_PATH` / `SHORT_PROGRAM_ATHLETE_PATH`)
+Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`). Garde le diagnostic complet, perd `sport_2a`/`goal_2a`/`level_2a`/`days_2a`/`week_preview_2a` (déduits du programme claimé).
 ```
-role → value_program (1 slide, transition iframe WP → onboarding)
-→ frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, [NOUVEAU 2026-07-12])
-→ autoreg_score [NOUVEAU]
-→ concept_autoreg
-→ profile_recap (nom réel du programme claimé + niveau — via GET /api/programs/[id], sport/level/name/weeks_count)
-→ account → wellness_q → celebration
-[claim+assign exécutés à la FIN de wellness_q, pas à la création du compte — voir finishAthleteActivation]
-→ claim programme → assign user_id + start_date = prochain lundi + wellnessAdjustment
-  (ajustement de target_difficulty semaine 1 basé sur computeWellnessScore, clampé 1-10)
+value_intro → role → [pain points] → account (position selon variante A/B, comme ci-dessus)
+→ autoreg_score → concept_autoreg
+→ profile_recap (nom réel du programme claimé — GET /api/programs/[id])
+→ paywall_priming ("Ton programme {nom} t'attend.") → paywall_form
+→ celebration → [wellness_q/wellness_reveal si paiement réussi]
 ```
-Pas de `week_preview_2a` dans ce path (l'user a déjà vu le programme sur la page WP).
+`claim`+`assign` exécutés à la fin de `completeProfile()` pour le compte créé en variante A (données déjà connues), ou dans `finishAthleteActivation()` à la fin de `wellness_q` avec le vrai `wellnessAdjustment` — voir `claimAndAssignProgram(uid, wellnessAdjustment)`.
 
-### Coach — flux classique
+### Coach — flux classique (`COACH_PATH` / `SHORT_COACH_PATH`)
 ```
-role → value_slides (3 slides stats)
-→ challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, auto-advance)
-→ autoreg_score_coach  [dark card : score % + 3 jauges animées — le diagnostic vient d'abord]
-→ concept_autoreg (donut CoachBlindSpotWheel — la solution ensuite)
-→ sport_2a → level_2a → goal_2a → days_2a  ← wording adapté "de tes sportifs"
-→ profile_recap → week_preview_2b (= WeekPreviewStep, preview du programme généré)
-→ account (création du compte + saveData() + finishCoachClaim si claim — voir plus bas)
-→ invite_team (lien d'invitation + email, skippable — [NOUVEAU 2026-07-12])
+value_intro → role
+── variante B (test) : SIGNUP ICI ──
+→ challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points)
+── variante A (control) : SIGNUP ICI ──
+→ autoreg_score_coach → concept_autoreg (donut CoachBlindSpotWheel)
+→ sport_2a → level_2a → goal_2a → days_2a  ← wording "de tes sportifs"
+→ profile_recap → week_preview_2b
+→ account
+→ paywall_priming → paywall_form
 → celebration
-[après compte créé → saveData() :]
-  - crée 5 sportifs démo (Thomas M., Emma L., Pierre D., Sofia R., Lucas B.)
-  - buildProgramTemplate(sport, level, days) → insère programme 4 semaines en DB, assigne à Thomas M.
-  - localStorage.setItem("program_start_date", nextMonday)
+[paiement réussi → paidExtras = ["invite_team"]]
+→ invite_team → redirect /coach
 ```
+`completeProfile()` (à l'entrée de `profile_recap`) : crée 5 sportifs démo (Thomas M./Emma L./Pierre D./Sofia R./Lucas B.), `buildProgramTemplate()` génère un programme 4 semaines assigné à Thomas M., `finishCoachClaim(uid)` exécute le claim/assign si programme claimé (ne dépend pas du wellness, contrairement au sportif).
 
-### Coach — flux programme (PROGRAM_COACH_PATH)
-Activé si `claim_program_id` en localStorage ET role=coach. Depuis 2026-07-12, gagne le diagnostic complet (comme le sportif) et perd `sport_2a`/`goal_2a` (déduits du programme claimé) — l'ajout `sport_2a`/`goal_2a` du 2026-07-11 est donc de nouveau retiré, remplacé par la déduction automatique.
-```
-role → value_program_coach
-→ challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points, [NOUVEAU 2026-07-12])
-→ autoreg_score_coach [NOUVEAU]
-→ concept_autoreg → profile_recap (nom réel du programme claimé)
-→ account (saveData() + finishCoachClaim(uid) — claim/assign immédiat, ne dépend pas du wellness)
-→ invite_team [NOUVEAU]
-→ celebration
-```
+### Coach — flux programme (`PROGRAM_COACH_PATH` / `SHORT_PROGRAM_COACH_PATH`)
+Même principe que le sportif via programme : garde le diagnostic, perd `sport_2a`/`level_2a`/`goal_2a`/`days_2a`/`week_preview_2b` (déduits du programme claimé). `finishCoachClaim(uid)` appelé depuis `completeProfile()`.
 
-### Étape `invite_team` (coach, nouveau 2026-07-12)
-Adaptée de `InviteModal.tsx` (`src/components/coach/InviteModal.tsx`) — lien d'invitation (`go.theperfclub.com/join/{code}` généré dans `saveData()`, capturé en state `inviteCode`) + copier + WhatsApp + formulaire email (`POST /api/invite/create`, ne envoie pas de vrai email — enregistre une invitation "pending" auto-liée à la prochaine inscription avec cet email). CTA "Continuer →" avance toujours vers `celebration`, jamais bloquant même sans email rempli.
-- **Rendu en carte flottante depuis le 2026-07-12** (pas plein-page) : `position:fixed; inset:0; zIndex:2147483100` + backdrop flou (`rgba(0,0,0,0.65)`, `backdropFilter:blur(16px)`) + carte blanche `borderRadius:30, padding:28, maxWidth:420, overflowY:auto` — même shell que `PaywallModal.tsx`/`WelcomeModal.tsx`. Décision : `celebration`/`invite_team` gagnent la sensation "produit réel" de la modale sans redirection vers `/today`/`/coach` réel (qui aurait exigé d'extraire ces steps hors du state machine `OnboardingFlow.tsx` — même complexité cross-page que le tour supprimé le 2026-07-11). `wellness_q` reste plein-page (vrai formulaire séquentiel, la modale n'apporte rien à une saisie).
-- **Lien "Passer" retiré, invitation multi-email ajoutée (2026-07-13)** : Gildas a jugé le lien "Passer" redondant avec "Continuer" (qui avance déjà sans bloquer si le champ email est vide) — supprimé, seul "🔔 Plus tard — me le rappeler" reste dans le footer. En contrepartie, ajout d'un lien "+ Inviter un autre sportif" sous le champ email qui ajoute dynamiquement des champs email supplémentaires (state `extraInviteEmails: string[]`, bouton ✕ par champ pour le retirer). `handleInviteSend()` envoie désormais tous les emails remplis en parallèle (`Promise.all` sur `/api/invite/create`, un appel par email — l'API ne supporte qu'un email par requête, pas de endpoint batch), et `inviteSentCount` pilote le pluriel de l'écran de confirmation ("Tes N sportifs rejoindront ton espace..." si N > 1).
+### Étape `invite_team` (coach) — désormais post-paiement uniquement
+Toujours adaptée de `InviteModal.tsx` (lien `go.theperfclub.com/join/{code}`, copier/WhatsApp, formulaire email multi-destinataires via `POST /api/invite/create`) — **mais n'est plus un step du path statique** : insérée dynamiquement après `celebration` seulement si `trial_started` réussit (voir `paidExtras` plus haut). CTA "Continuer →" termine l'onboarding (redirect `/coach`), jamais bloquant sans email rempli. "🔔 Plus tard — me le rappeler" reste le seul lien secondaire dans le footer (pas de "Passer", jugé redondant).
 
-### Auth mode (déjà connecté)
+### Auth mode (déjà connecté, onboarding non terminé)
 ```
-role → questions selon rôle → saveData() → transition vers "celebration" (plus de redirect direct)
+role → questions selon rôle → completeProfile()/createAccount() déjà faits → paywall_priming → paywall_form → celebration → activation
 ```
+`register/page.tsx` fait rentrer un user authentifié dont `onboarding_done` est encore `false` dans `OnboardingFlow` pour reprendre, plutôt que de forcer l'accès direct.
 
-### Scission `handleFinish()` en deux phases (2026-07-12)
-Pour les paths sportif : submit `account` → `saveData()` (profil, PAS le wellness_daily, PAS le claim/assign) → avance à `wellness_q` (via `goToActivationStep()`) → à la fin de `wellness_q`, `finishAthleteActivation()` calcule le score, upsert `wellness_daily`, PUIS exécute claim+assign avec le vrai `wellnessAdjustment` → avance à `celebration`. Pour les paths coach : `saveData()` inchangée, `finishCoachClaim(uid)` (claim+assign, ne dépend pas du wellness) reste appelée immédiatement dans `handleFinish()`, `invite_team` est un step purement additif sans dépendance en aval.
+### Continuation Google OAuth — 2 bugs trouvés et corrigés en prod le 2026-07-20 (soir)
+Le repositionnement de `account` (point 2 ci-dessus) a cassé la reprise après `signInWithOAuth("google")`, restée conçue pour l'ancien flow où `account` était en toute fin de path :
+1. **Atterrissage systématique sur `role`** (commit `7c573e5`) — le `useEffect` qui reprend le flow une fois le compte Google créé (`googleInitDone`) appelait `next()`, qui suppose `stepIdx` à sa valeur de montage (0) et avance d'une seule position. Avant ce chantier, l'index 0 était `role` lui-même, donc avancer de 1 tombait sans conséquence sur une slide de contenu. Depuis que `value_intro` occupe la position 0, ce même calcul tombe systématiquement sur `role` (index 1) — boucle observée en prod sur un vrai compte (`g.cauvin@tessan.io`, compte bien créé en base malgré la boucle UI). **Fix** : `setStepIdx(path.indexOf("account") + 1)` au lieu de `next()` — saute toujours juste après `account` dans le path réellement résolu (variante A/B, programme claimé ou non), quelle que soit sa position.
+2. **Étapes de sélection en mode "auth" au lieu de "register"** (commit `ced4281`) — une fois le premier bug corrigé, les étapes de sélection suivantes (`sport_2a`/`level_2a`/`goal_2a`/`frustration_2a`...) perdaient l'auto-advance au tap et affichaient un CTA sticky explicite : `isRegisterMode = !userId` passait à `false` dès le compte Google créé, traitant la session comme "ancien compte incomplet qui revient" plutôt que "inscription en cours" — invisible avant ce chantier car ces steps n'étaient jamais traversés en session Google continuée (`account` trop tardif). **Fix** : `isRegisterMode = !userId || !!pendingData`.
+
+Aucun des deux n'a été testé par Claude (pas d'accès à un vrai compte Google, règle de sécurité) — confirmés en prod par Gildas.
+
+### `createAccount()` / `completeProfile()` — scission du 2026-07-20 (remplace l'ancienne scission `saveData()`/`finishAthleteActivation()` du 2026-07-12)
+`createAccount(uid)` : léger, upsert `profiles` avec seulement ce qui est déjà connu au moment du submit d'`account` (nom, mode, frustration/coaching_challenge si déjà collectés). `completeProfile(uid)` : le reste — sport/niveau/objectif/jours, sessions, wellness baseline, démo coach + programme auto-généré, `finishCoachClaim` — déclenché une seule fois à l'entrée de `profile_recap` (`profileCompleteGuardRef`, même principe que `finishGuardRef` ci-dessous). Nécessaire car la position de `account` varie selon la variante A/B : en variante B, la plupart des données n'existent pas encore au moment du submit du compte.
 
 ### Garde anti-double-clic (`finishGuardRef`, 2026-07-12)
 `handleWellnessQuestions()`/`finishAthleteActivation()` (dernier "Voir mon score →" sur `wellness_q`) et le bouton "Continuer"/"Passer" d'`invite_team` n'avaient à l'origine aucune protection contre un double-clic. Un double-clic déclenchait `finishAthleteActivation`/le handler `next()` deux fois en parallèle → double claim+assign (programmes clonés en double en DB) ET `stepIdx` qui dépasse `path.length` (`next()` utilise `isLast` calculé au moment du clic, pas une valeur live) → écran totalement blanc, sans CTA, sans moyen d'avancer. **Fix** : `finishGuardRef` (`useRef`, réinitialisé à chaque changement de `currentStep` dans le même effet que `advancingRef`), posé en entrée de `finishAthleteActivation` et des deux handlers d'`invite_team` — même principe que `advancingRef` déjà utilisé pour l'auto-advance des pain points. **Règle : tout handler qui déclenche une écriture DB non-idempotente (claim/assign, upsert avec side-effects) suivie d'un `next()` doit avoir cette garde.**
@@ -123,26 +127,21 @@ Repéré via une investigation demandée par Gildas ("des inscrits qui vont pas 
 2. **Root cause identifiée pour le cas des comptes Google (`47bde10`)** : le `useEffect` qui finalise l'inscription via Google (`pendingData`+`userId`, deps `[]`) appelait `goToActivationStep()` directement depuis sa propre closure — figée au tout premier render, où `hasClaimedProgram` vaut encore `null` (sa résolution est asynchrone, dans un `useEffect` séparé qui se déclenche juste après le montage). Pour un user Google venant d'un programme claimé (`?claim=`), cette closure calculait donc l'index cible dans le mauvais `path` (classique, plus long) ; une fois les multiples appels réseau de l'init terminés (`getUser`, `saveData`, 2 `fetch`) et `goToActivationStep()` enfin exécuté, cet index dépassait la longueur du VRAI `path` (programme, plus court, une fois `hasClaimedProgram` réellement `true`). **Fix** : `goToActivationStep()` n'est plus appelé depuis la closure figée — un state `googleInitDone` déclenche un second `useEffect` séparé (deps `[googleInitDone]`), qui capture toujours un `path` à jour au moment où il s'exécute. **Règle : dans un `useEffect` à deps `[]` qui fait plusieurs `await` avant d'agir sur un state dérivé d'un autre state asynchrone (ici `hasClaimedProgram`), ne jamais appeler directement une fonction qui lit ce state dérivé depuis l'intérieur de la closure figée — déclencher via un state + un effect séparé pour garantir une closure fraîche.**
 **Méthode utile pour ce genre d'investigation** : interroger les events PostHog réels directement (HogQL sur `events`, filtré sur les `distinct_id` ayant un `account_created` récent) plutôt que de se fier uniquement à la config visuelle des funnels — c'est cette requête qui a révélé le symptôme exact.
 
-### Écran de célébration (remplace l'ancien tour produit + PrimingJourneyModal en fin de flow)
-- Composant `src/components/onboarding/CelebrationScreen.tsx`, dernier step de tous les paths.
-- **Rendu en carte flottante depuis le 2026-07-12** — même shell/raisonnement que `invite_team` ci-dessus (carte `#161616` en dégradé remplacé par un `background:"#161616"` solide, voir "Fix fond sticky" plus bas). Bonus : `celebration`-modale → `PaywallModal` (déjà une modale) devient une transition modale→modale cohérente au lieu du plein-page→modale d'avant.
-- Recap chips-free (sport/niveau/objectif si collectés dans le path courant via `path.includes(...)`).
-- **Score wellness (sportif)** : `<WellnessRing dark score={wScore} .../>` (composant `src/components/wellness/WellnessRing.tsx`, réutilisé depuis Today/Coach — nouveau prop `dark?: boolean` pour l'intégrer à la carte sombre) + un **tip personnalisé** (`wellnessTip`, calculé par `computeWellnessTip()` dans `OnboardingFlow.tsx` à la fin de `wellness_q`, à partir de `wSleep`/`wStress`/`wRecovery`/`score` — identifie la dimension la plus faible et donne un conseil dédié ; le cas `score < 45` est phrasé différemment selon `hasClaimedProgram` pour rester honnête, seul le programme claimé bénéficie réellement du `wellnessAdjustment`). Pas de réutilisation du moteur de corrélation `/conseils` — un compte neuf n'a pas l'historique J→J+1 nécessaire.
-- **Capacité illimitée (coach)** : remplace le slot vide qu'avait le coach (pas de wellness) — `<WellnessRing dark infinite score={null} .../>` (nouveau mode `infinite` sur `WellnessRing`, ring plein vert + label "∞"/"ILLIMITÉ", ignore `score`) + texte `COACH_LIBRARY_PITCH` (`primingCopy.ts`) : "Choisis parmi 40+ programmes prêts à l'emploi, ou génère le tien sur-mesure en quelques clics" — nombre et wording vérifiés sur le code (`/api/programs/generate` n'est pas de l'IA, template instantané, pas "en 1 minute").
-- **Programme claimé** : si `claimedProgramName` (state déjà existant, passé en prop), bloc dédié avec le nom réel + `claimedProgramWeeks`.
-- **Aperçus statiques personnalisés au sport** : les items `"Ton programme {sport}, semaine par semaine"` (sportif) / `"Un programme {sport} prêt à assigner"` (coach) interpolent le sport de l'user (`getAthletePreviews(sport)`/`getCoachPreviews(sport)`, fonctions au lieu de constantes).
-- Preuve sociale (avatars "+300 sportifs, coachs et clubs" + témoignage 5 étoiles, sportif/coach — `AVATARS`/`TESTIMONIALS` locaux), directement suivie du CTA.
-- **Bloc "pitch upgrade" supprimé (2026-07-13)** : le bandeau orange sous le témoignage (`getPrimingHeadline()`/`COACH_AUTOREG_HEADLINE` + `UNLIMITED_BULLET` de `primingCopy.ts`) jugé sans valeur ajoutée par Gildas — retiré, avec ses imports/variables locales (`headline`, `unlimitedBullet`) et le prop `frustration` (devenu inutile dans ce composant, retiré de `Props` et du call site dans `OnboardingFlow.tsx`). `getPrimingHeadline`/`UNLIMITED_BULLET`/`COACH_AUTOREG_HEADLINE` restent utilisés ailleurs (`PrimingJourneyModal.tsx`) — ne pas les supprimer de `primingCopy.ts`.
-- **CTA unique** (plus de "Accéder sans abonnement →", voir "Paywall obligatoire" plus bas) → ouvre `PaywallModal` directement dans `OnboardingFlow.tsx` (pas de redirect intermédiaire). `onSuccess` redirige enfin vers `/today` ou `/coach`.
-- **`ProductTourOverlay.tsx` et `WelcomeReveal.tsx` ont été supprimés** — ne pas les recréer, ni chercher `?welcome=1` (plumbing retirée de `TodayClient.tsx`/`CoachClient.tsx`).
-- **`PrimingJourneyModal.tsx` existe toujours** et reste utilisé par `usePaywall` dans les 5 pages client (`TodayClient`/`WeekClient`/`CoachClient`/`CoachPlanningClient`/`AthletesClient`) pour le gating in-app free/expired — ne pas le confondre avec `PrimingModal.tsx` (celui-là est mort, zéro import). Son contenu N'EST PAS affiché dans le chemin onboarding (celebration ouvre `PaywallModal` directement).
+### Écran de célébration — désormais APRÈS le paiement, plus avant (voir refonte 2026-07-20 en haut de cette section)
+- Composant `src/components/onboarding/CelebrationScreen.tsx`. Depuis le 2026-07-20, `paywall_priming`/`paywall_form` précèdent `celebration` — le CTA de célébration (`onNext`, prop renommée depuis `onStartTrial`) n'ouvre plus `PaywallModal`, il avance simplement vers l'activation post-paiement (`wellness_q`/`invite_team` insérés via `paidExtras`) ou vers `/today`/`/coach` si aucune activation ne suit. Label CTA : "Continuer →".
+- Rendu toujours en carte flottante (`#161616`, même shell que les autres modales de l'onboarding — voir "Footer non-scrollable des modales" plus bas).
+- Recap chips-free (sport/niveau/objectif si collectés dans le path courant).
+- **Score wellness (sportif)** / **Capacité illimitée (coach)** : inchangé (`WellnessRing dark`/`dark infinite`, `wellnessTip`/`COACH_LIBRARY_PITCH`) — voir description historique ci-dessous, toujours exacte fonctionnellement.
+- **Programme claimé** : bloc dédié si `claimedProgramName`.
+- **Aperçus statiques personnalisés au sport** (`getAthletePreviews(sport)`/`getCoachPreviews(sport)`).
+- **Preuve sociale retirée d'ici le 2026-07-19** : les avatars "+300 sportifs..." et le témoignage 5 étoiles (`AVATARS`/`TESTIMONIALS` locaux) ont été déplacés vers `paywall_priming` (`PAYWALL_AVATARS`/`PAYWALL_TESTIMONIALS` dans `OnboardingFlow.tsx`) — plus utiles comme réassurance avant paiement qu'en félicitations après coup. `CelebrationScreen.tsx` ne les contient plus.
+- **`ProductTourOverlay.tsx`/`WelcomeReveal.tsx`** : toujours supprimés, ne pas recréer.
+- **`PrimingJourneyModal.tsx`** : toujours utilisé par `usePaywall` (gating in-app free/expired) uniquement, pas dans le chemin onboarding.
 
-### Paywall obligatoire à la fin de l'onboarding (2026-07-12)
-Le paywall affiché juste après `celebration` ne peut plus être fermé ni contourné — décision explicite (nouveau compte = carte obligatoire pour accéder à l'app). **Scope : onboarding uniquement.** Le paywall in-app (`usePaywall`, essai/abonnement qui expire pour un user existant) garde son comportement actuel (rappel + fermeture possible selon `allowDismiss`/`hasCoach`).
-- `handleSkipCelebration()` (bouton "Accéder sans abonnement →") et le prop `onSkip` de `CelebrationScreen` ont été supprimés.
-- Call site onboarding de `<PaywallModal>` : `allowDismiss={false}`, pas de `onClose`.
-- **Fix de faille dans `PaywallModal.tsx`** : le clic sur le fond (`backdrop click`) appelait `onClose?.()` sans vérifier `allowDismiss` (contrairement au "×" et à "← Retour", eux bien gated) — corrigé pour respecter `allowDismiss` partout, bénéficie à tous les appelants existants (comportement enfin cohérent avec l'intention `allowDismiss={false}` déjà utilisée sur les pages coach).
-- **Limite assumée** : l'application reste 100% côté client (`requireSubscription()`), aucune vérification serveur/RLS sur `subscription_status`. Retirer les boutons de sortie UI empêche l'usage normal gratuit, pas un contournement technique délibéré — un verrou serveur serait un chantier séparé, plus large.
+### Paywall — désormais avant la célébration, toujours obligatoire (2 écrans depuis le 2026-07-20)
+`paywall_priming` (pricing + frise de réassurance + témoignage) → `paywall_form` (Stripe uniquement, rappel prix + petit bandeau avatars). Ni l'un ni l'autre ne peuvent être fermés/contournés — même principe que l'ancien paywall unique du 2026-07-12 (CB obligatoire pour tout nouveau compte), juste réparti sur 2 écrans plein-page au lieu d'une modale unique en fin de flow. `CheckoutForm`/`PRICING`/`stripePromise` exportés de `PaywallModal.tsx` et réutilisés tels quels (le composant `PaywallModal`/`PrimingJourneyModal` in-app reste intact, pour le gating post-onboarding uniquement).
+- **Limite assumée inchangée** : application 100% côté client (`requireSubscription()`), aucune vérification serveur/RLS sur `subscription_status` — un verrou serveur serait un chantier séparé.
+- **Stripe "Link" désactivé** (`src/app/api/stripe/setup-intent/route.ts`) : `payment_method_types: ["card"]` explicite au lieu de `automatic_payment_methods: { enabled: true }`, pour ne proposer que la carte bancaire sur le formulaire (bénéficie aussi au paywall in-app, route partagée).
 
 ### `PaywallModal.tsx` — choix mensuel/annuel + garanties restaurés (2026-07-12)
 Repéré en vérifiant le paywall obligatoire : le choix mensuel/annuel et le rappel des 3 garanties (accès immédiat, rappel avant prélèvement, résiliation sans condition) avaient disparu de l'onboarding quand celui-ci est passé de `PrimingJourneyModal` (3 steps, dont ce contenu au step 2) à `PaywallModal` direct le 2026-07-11 — `billing` était un `const` figé sur `initialBilling ?? "annual"`, jamais choisi par l'user.
@@ -177,16 +176,15 @@ Gildas : "les boutons sticky ne sont pas toujours en bas de l'écran". Reproduit
 
 ### Logique de conversion
 - **Step role** : aucune carte présélectionnée (`roleChosen` state), clic = `nextAfterChoice` → avance direct, pas de bouton "Continuer" (tous funnels)
-- **Value slides** : 3 slides dark photo avec stats (68% / 3× / −35%)
+- **`value_intro`** (depuis le 2026-07-20, remplace les 3 slides stats "Value slides") : parcours "user journey" générique à 3 temps forts, position 0 dans tous les paths (avant `role`) — 1) *La veille · Planification* (carte séance blanche : nom, conseil de charge, jauge de difficulté, exercices ; caption conditionnelle "Ton programme {nom} est prêt à personnaliser." si programme claimé) 2) *07h30 · Au réveil* (wellness ring + chips comportements) 3) *Après la séance · Analyse* (mini-widgets coût musculaire/récupération). Swipe horizontal entre les 3 cartes (`vSlideSwipeStartX`), le CTA avance toujours au step suivant (ne cycle plus les slides).
 - **Pain points** : 3 questions par rôle, auto-advance 300ms (register mode uniquement)
 - **Score d'autorégulation** : dark card juste après les pain points (diagnostic d'abord), score % + 3 jauges animées
 - **concept_autoreg** : vient après le score (la solution ThePerfClub, pas avant) — slide dark avec illustration **conditionnelle au rôle** :
   - Sportif : `ProgressComparisonChart` (SVG, 2 courbes animées) — "Avec ThePerfClub" nettement supérieure, "Programme rigide" progresse quand même mais moins (pas un plateau plat)
   - Coach : `CoachBlindSpotWheel` (SVG, donut 6 segments) — un seul segment orange "Entraînement" (= ce que le coach voit) contre 5 segments gris muet "Énergie/Sommeil/Diet/Émotions/Stress" (= ce que l'athlète vit) — illustre le blind spot du coach sur la récupération réelle de ses sportifs, plus parlant qu'une courbe abstraite pour ce rôle
-- **profile_recap** : composant `ProfileRecapStep` (extrait, pas une IIFE inline — nécessaire pour `useState`/`useEffect`) — titre **"Ton profil d'entraînement"** (pas "On a bien compris"), phrase humaine (pas de tags/chips) toujours visible immédiatement avec mots-clés en accent couleur inline + icône sport en grand format, puis **carte "profil comportemental"** (si le path inclut `autoreg_score`/`autoreg_score_coach` — absente en PROGRAM_PATH) : label "Ton profil d'autorégulation" + persona (titre + description, ex. "Battant instinctif", "Coach du volume") dérivé de la dimension la plus à risque parmi les 3 sous-indicateurs déjà calculés (`computeAthleteAutoregProfile`/`computeCoachAutoregProfile`, exportés depuis `AutoRegScoreStep.tsx`/`AutoRegScoreStepCoach.tsx`) + détail des 3 dimensions avec leur label de risque — remplace l'ancien badge "33% score d'autorégulation" (jugé trop plat, pas assez "profil"). Puis juste en dessous un loader "Génération de ton programme…" (~1.4s, pulsing dots) qui se transforme en CTA ("Voir mon programme →" si un `week_preview_*` suit dans le path, sinon "Continuer →") — augmente la qualité perçue sans retarder l'affichage du recap lui-même
-- **Paywall personnalisé** : headline via `src/lib/primingCopy.ts`
-  - Sportif : 16 headlines (frustration × objectif)
-  - Coach : basé sur `coachingChallenge` uniquement (4 variantes) + `COACH_AUTOREG_HEADLINE` pour la célébration
+- **Persona comportemental révélé sur `autoreg_score`/`autoreg_score_coach` (depuis le 2026-07-19/20)**, pas sur `profile_recap` : pill "🔥 Ton profil : {persona.title}" (ex. "Battant instinctif", "Coach data-driven") + description pure profil comportemental (2 phrases, plus aucune mention "ThePerfClub" — pitch produit retiré) juste sous les 3 jauges. `pickAthletePersona()`/`pickCoachPersona()` (dans `AutoRegScoreStep.tsx`/`AutoRegScoreStepCoach.tsx`) dérivent la persona de la dimension la plus à risque parmi les 3 sous-indicateurs.
+- **profile_recap** : composant `ProfileRecapStep` — titre **"Ton programme d'entraînement"** (pas "Ton profil d'entraînement"), phrase humaine avec mots-clés en accent couleur + icône sport en grand format, puis carte **"Ce que ce programme travaille"** : titre = `SPORT_QUALITIES[sport]` (qualités physiques par catégorie de sport), description = phrase jours/semaine + `SPORT_SESSION_TYPES[sport]` — contenu informatif générique sur le programme, plus de persona ici (remplace l'ancienne carte "profil comportemental", déplacée vers `autoreg_score` ci-dessus). **Wording rôle-aware depuis le 2026-07-20** : "une charge qui s'ajuste à ton niveau de forme" (sportif) vs "au niveau de forme de tes sportifs" (coach) — bug trouvé en testant le chemin coach (affichait "ton" à tort), corrigé le même soir. Puis loader "Génération de ton programme…" → CTA ("Voir mon programme →" ou "Continuer →").
+- **Paywall (`paywall_priming`)** : headline **statique** selon rôle (`"Améliore tes performances maintenant."` / `"Améliore ton coaching maintenant."`), avec override si programme claimé (`"Ton programme {nom} t'attend."`) — prioritaire sur le reste. **`src/lib/primingCopy.ts` (`getPrimingHeadline`, 16 combos frustration×objectif sportif / 4 combos coach) n'est PAS utilisé ici** — uniquement par `PrimingJourneyModal.tsx` (gating in-app), ne pas supposer que la personnalisation par frustration/objectif est branchée sur le paywall onboarding.
 - **CTA visible partout (2026-07-11, boutons retour supprimés le 2026-07-13, sticky abandonné le 2026-07-13 soir)** : sur tous les steps, le(s) bouton(s) restent visibles même si le contenu dépasse l'écran. Composant partagé `src/components/onboarding/Actions.tsx` (`variant: "light"|"dark"|"modal-light"|"modal-dark"`, pas de prop `onBack` — voir section "Suppression des boutons retour" plus bas) : `light`/`dark` en `position:fixed` (steps pleine page), `modal-light`/`modal-dark` sans position spéciale — juste un flex item non-scrollable dans une carte flex-column (voir "Footer non-scrollable des modales" plus bas). Fond **opaque simple** selon variante (`light`→`#f1f0ee`, `dark`→transparent, `modal-light`→`#fff`, `modal-dark`→`#161616`), jamais de gradient. Le CTA principal prend toute la largeur, aucune icône retour.
   - Cards `Choice` (et cards custom du step role) : padding remonté à `18px 16px` (`24px 16px` pour role) pour des cards plus hautes, plus faciles à taper au doigt.
 - **`coachingContext` supprimé** — remplacé par sport+goal dans tous les composants
@@ -201,7 +199,7 @@ Gildas : "les boutons sticky ne sont pas toujours en bas de l'écran". Reproduit
 
 **`days_2a` — sélecteur en colonne (2026-07-13)** : remplace la grille 7 colonnes (lettre + abrév. "L"/"Lun.") par une liste verticale de 7 lignes pleine-largeur, nom du jour en entier (Lundi, Mardi…), coche ronde à droite — plus lisible, utilise la hauteur d'écran disponible plutôt que de compresser 7 colonnes dans la largeur mobile. Même logique de sélection multiple sous-jacente (`trainingDays`, `setTrainingDays`, au moins 1 jour obligatoire), juste la présentation qui change.
 
-### saveData() — ce qui est créé à l'inscription
+### `completeProfile()` — ce qui est créé (renommé depuis `saveData()`, voir scission `createAccount()`/`completeProfile()` plus haut)
 
 **Sportif :** sessions 2 semaines + 4 semaines historique + wellness baseline
 **Coach :**
@@ -261,13 +259,13 @@ Placeholder coach : "Précise le sport de tes sportifs".
 ### Wellness athlète — mécanique
 - Les 5 questions (`wellness_q`) collectent sleep+bedtime, stress, recovery, behaviors, motivation
 - Score calculé en state via `computeWellnessScore()` à la fin de `wellness_q`
-- Sauvegarde dans `handleFinish()` via upsert sur `wellness_daily`
+- Sauvegarde dans `finishAthleteActivation()` via upsert sur `wellness_daily` (plus `handleFinish()` — `wellness_q` est désormais post-paiement, voir `paidExtras` plus haut)
 
-### StepIds complets
+### StepIds complets (2026-07-20)
 ```typescript
 type StepId =
   | "role"
-  | "value_slides"                                                           // POST_PROGRESS, DARK_STEPS
+  | "value_intro"                                                            // POST_PROGRESS, DARK_STEPS — position 0 dans tous les paths, remplace value_slides/value_program/value_program_coach
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"   // sportif ET coach
   | "overload_2a" | "planning_2a" | "fatigue_2a"                           // pain points sportif
   | "autoreg_score"                                                          // POST_PROGRESS, DARK_STEPS
@@ -275,20 +273,24 @@ type StepId =
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"                      // pain points coach
   | "autoreg_score_coach"                                                    // POST_PROGRESS, DARK_STEPS
   | "week_preview_2a" | "week_preview_2b"                                   // preview programme
-  | "wellness_q"                                                             // POST_PROGRESS
-  | "wellness_reveal"                                                        // POST_PROGRESS, DARK_STEPS — sportif uniquement, entre wellness_q et celebration
-  | "account"
-  | "celebration"                                                           // POST_PROGRESS, DARK_STEPS — dernier step de tous les paths
-  | "value_program" | "value_program_coach"                                 // POST_PROGRESS, DARK_STEPS — PROGRAM_PATH uniquement
+  | "wellness_q"                                                             // POST_PROGRESS — n'est plus dans le tableau statique, inséré via paidExtras après celebration si paiement réussi
+  | "wellness_reveal"                                                        // POST_PROGRESS, DARK_STEPS — idem, après wellness_q
+  | "account"                                                                // position variable selon variante A/B (voir plus haut)
+  | "celebration"                                                           // POST_PROGRESS, DARK_STEPS — ne suit plus directement account, précédée par paywall_priming/paywall_form
   | "concept_autoreg"                                                        // POST_PROGRESS, DARK_STEPS
   | "profile_recap"                                                         // POST_PROGRESS (light, pas dans DARK_STEPS)
-  | "invite_team";                                                          // POST_PROGRESS (light) — coach uniquement, entre account et celebration
+  | "invite_team"                                                           // POST_PROGRESS (light) — coach uniquement, inséré via paidExtras après celebration si paiement réussi
+  | "paywall_priming" | "paywall_form";                                     // POST_PROGRESS — nouveaux, précèdent désormais celebration
 ```
+`value_program`/`value_program_coach` supprimés du type (remplacés par `value_intro`, générique).
 
-`POST_PROGRESS` = `["value_slides", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"]`
-`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"]` — tout le reste (questions/formulaire, y compris `invite_team`) est en `variant="light"` (`#f1f0ee`).
+`POST_PROGRESS` = `["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"]`
+`DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"]` — `paywall_priming`/`paywall_form` sont en `variant="light"`, tout comme le reste des questions/formulaires.
 
 Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
+
+### Les 8 tableaux de paths (`OnboardingFlow.tsx:58-150`)
+`ATHLETE_PATH`/`COACH_PATH` (classique, variante A — signup après pain points), `SHORT_ATHLETE_PATH`/`SHORT_COACH_PATH` (classique, variante B — signup juste après `role`), `PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH` (programme claimé, variante A), `SHORT_PROGRAM_ATHLETE_PATH`/`SHORT_PROGRAM_COACH_PATH` (programme claimé, variante B). `getPath(role)` choisit le tableau selon `assignedVariant` (`"test"` = B) puis `hasClaimedProgram`, et splice `paidExtras` après `"celebration"` une fois `trial_started` réussi (voir `handlePaymentSuccess()`).
 
 ## Composants clés
 ```
@@ -424,6 +426,25 @@ Les funnels 4745753/4745754 ont été bumpés à `date_from: 2026-07-14` (déplo
 **Règle d'arrêt pré-enregistrée** (éviter le peeking) : ne pas conclure avant **à la fois** 3 semaines écoulées **et** ~150 `celebration_cta_clicked` accumulés côté bras test. Rollback = désactiver le flag (0%) dans PostHog, aucun revert de code nécessaire.
 
 **Note sur la fusion de personnes PostHog** : après `account_created`, `posthog.identify(uid, ...)` change le `distinct_id` (anonyme → uid réel). La fusion des deux identités (`person_distinct_id_overrides`) est asynchrone côté PostHog et peut prendre du temps à se propager — un funnel consulté trop tôt après une conversion peut afficher 0% à l'étape "Compte créé" même si les events bruts prouvent que la session a bien progressé (vérifié sur un cas réel le 2026-07-15 : `$identify` bien envoyé avec `$anon_distinct_id` correct, mais table de fusion encore vide plusieurs minutes après). Pas un bug applicatif — se vérifie en interrogeant les events bruts (HogQL) plutôt que le funnel si un chiffre semble incohérent juste après une conversion.
+
+### Pivot A/B du 2026-07-19 + rebuild PostHog du 2026-07-20 (LIVRÉ)
+Le design ci-dessus (`test` = parcours court avec paywall immédiat) a été **abandonné avant tout gros volume** : `test` enchaînait signup→paywall sans diagnostic, mesurant "signup tôt + paywall immédiat" plutôt que la longueur du diagnostic en tant que telle. Nouveau design (voir refonte v2 en tête de la section Onboarding) : `control` = **variante A** (signup après pain points), `test` = **variante B** (signup juste après `role`, diagnostic complet conservé) — isole la seule variable "position du Signup", sans le paywall immédiat qui brouillait la lecture. Flag `short-onboarding-signup` inchangé (même id, mêmes valeurs `control`/`test`), seule la signification du bras `test` change.
+
+**Mis à jour dans PostHog le 2026-07-20 (via API, clé personnelle)**, suite au déploiement de la refonte v2 :
+- **4 funnels historiques** (4403213/4403222/4745753/4745754) reconstruits avec la nouvelle séquence d'events (`value_intro`→`paywall_priming`→`paywall_form`→`trial_started`, sans plus l'ancien `celebration_cta_clicked`/`value_slides`). **`account_created` retiré des étapes ordonnées** (sa position diffère entre variante A et B — l'inclure dans un funnel séquentiel unique aurait fait apparaître une chute artificielle sur le bras dont l'ordre ne correspond pas à la position choisie ; il n'existe pas de conflit d'ordre pour les autres steps, identiques entre A et B une fois `account` retiré). Filtre `ab_variant is_not "test"` retiré (n'a plus de sens : les 2 bras sont désormais des flows v2 complets, plus un bras dégénéré à exclure). `date_from` bumpé au 2026-07-20.
+- **Insight "Vue d'ensemble (control vs test)"** (`nWK7DxIJ`, id 5003439) : structure préservée (`role → account_created → paywall → trial`, breakdown personne `ab_variant`) — ce funnel réduit n'a PAS le problème d'ordre ci-dessus (`account_created` reste toujours avant le paywall dans les 2 bras, quelle que soit sa position exacte). Seul `celebration_cta_clicked` remplacé par `paywall_priming_viewed` (event mort après le 07-20, célébration n'a plus de CTA paywall).
+- **Insight "Bras court, par origine"** (id 5003440) : supprimé — sa prémisse ("bras test = parcours court") n'existe plus depuis le pivot du 07-19.
+- **Expérience 86574** : renommée, primaire `paywall vu → essai` (event `paywall_priming_viewed`, custom sans préfixe — l'API expérience a un garde-fou qui bloque les events jamais ingérés, `onboarding_paywall_priming_viewed` étant tout neuf au moment du rebuild), secondaire `role → paywall vu` (`onboarding_role_viewed → paywall_priming_viewed`, la vraie question posée par cette expérience).
+- Les 4 funnels détaillés utilisent `onboarding_paywall_priming_viewed`/`onboarding_paywall_form_viewed` : normal qu'ils affichent 0 sur ces étapes tant que le trafic post-déploiement n'a pas encore convergé, pas un bug.
+
+### Test Stripe en local (mode test, sans toucher à la prod)
+Runbook utilisé le 2026-07-20 pour valider `paidExtras`/le webhook de bout en bout sans argent réel :
+1. Dashboard Stripe → toggle "Mode test" → Developers → API keys → copier `pk_test_`/`sk_test_`.
+2. Créer 4 Price test (mêmes montants que `PRICING` dans `PaywallModal.tsx` : sportif 9€/mois·59€/an, coach 49€/mois·179€/an) via `stripe prices create --api-key sk_test_...` (CLI officielle, `brew install stripe/stripe-cli/stripe`).
+3. `.env.local` : remplacer `STRIPE_SECRET_KEY`/`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`/les 4 `STRIPE_PRICE_*` par les valeurs test (garder les valeurs live commentées juste en dessous pour revert facile).
+4. `stripe listen --api-key sk_test_... --forward-to localhost:3000/api/stripe/webhook` (arrière-plan) → copier le `whsec_...` affiché dans `STRIPE_WEBHOOK_SECRET`.
+5. Redémarrer `npm run dev` (`.next` vidé), tester le flow réel jusqu'au paiement avec la carte `4242 4242 4242 4242`.
+6. **Revert impératif après test** : remettre les clés live + arrêter `stripe listen`, sinon le serveur local continue de parler à Stripe en mode test alors que la prod (Vercel) reste sur les clés live — pas de risque de mélange (`.env.local` n'affecte jamais Vercel), juste à ne pas oublier pour la suite du dev local.
 
 ## Règles de développement
 1. **Une seule jauge par carte de séance** — RPE si terminée, target_difficulty si planifiée. Pas de label.
