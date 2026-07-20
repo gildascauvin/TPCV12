@@ -1213,7 +1213,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      Ce useEffect séparé, retriggé par un state, capture toujours un `path` à jour au moment où il
      s'exécute. */
   useEffect(() => {
-    if (googleInitDone) next();
+    if (!googleInitDone) return;
+    /* next() suppose un stepIdx figé à 0 et avance d'une seule position — ça atterrissait
+       systématiquement sur "role" (juste après value_intro) depuis que "account" a été
+       repositionné plus tôt dans le path (variantes A/B, voir refonte onboarding v2). On saute
+       directement juste après "account" dans le path résolu, quelle que soit sa position réelle. */
+    const accountIdx = path.indexOf("account");
+    setStepIdx(accountIdx >= 0 ? accountIdx + 1 : path.length - 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleInitDone]);
 
