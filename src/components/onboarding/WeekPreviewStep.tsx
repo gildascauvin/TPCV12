@@ -143,67 +143,72 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
 
   return (
     <div>
-      <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4 }}>
-        {sportEmoji} {displayName ?? (programFlow ? "Chargement…" : "Ton programme de la semaine")}
-      </div>
-      <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.45, marginBottom: 16 }}>
-        {programFlow
-          ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
-          : "Généré selon ton niveau et tes jours d'entraînement. Personnalisable à tout moment."}
-      </div>
-
-      {/* S1-S4 charge progression */}
-      <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10 }}>
-          Charge sur {weekPhases.length} semaine{weekPhases.length > 1 ? "s" : ""}
+      {/* Plein écran (largeur + jusqu'en haut) : casse le maxWidth:560/padding-top:36 imposés par
+          OnboardingBackground, seul ce bloc doit déborder, pas le reste du step. */}
+      <div style={{
+        background: "#141414",
+        width: "100vw", position: "relative", left: "50%", right: "50%", marginLeft: "-50vw", marginRight: "-50vw",
+        marginTop: -36, paddingTop: 36, marginBottom: 20,
+      }}>
+        <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 20px 24px" }}>
+        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
+          {sportEmoji} {displayName ?? (programFlow ? "Chargement…" : "Ton programme de la semaine")}
         </div>
-        {(() => {
-          const maxDiff = Math.max(...weekPhases.map(p => p.diff), 0.01);
-          return (
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 6 }}>
-              {weekPhases.map(({ label, diff }, i) => {
-                const barH = Math.max(4, Math.round((diff / maxDiff) * 28));
-                return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-                    <div style={{ width: 18, height: barH, borderRadius: "2px 2px 0 0", background: loadBarColor(diff) }} />
-                    <span style={{ fontSize: 10, fontWeight: 800, color: "#171b1f" }}>S{i + 1}</span>
-                    {label && <span style={{ fontSize: 8, fontWeight: 600, color: "#8a8f94" }}>{label}</span>}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginBottom: 18 }}>
+          {programFlow
+            ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
+            : "Généré selon ton niveau et tes jours d'entraînement. Personnalisable à tout moment."}
+        </div>
 
-      {/* Mini-calendrier semaine */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 16 }}>
-        {DOW_LABELS.map((label, i) => {
-          const hasSession = displayDays.includes(i);
-          const isSelected = i === selectedDay;
-          return (
-            <div
-              key={i}
-              onClick={() => hasSession ? setSelectedDay(i) : undefined}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: hasSession ? "pointer" : "default" }}
-            >
-              <div style={{ fontSize: 8, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {label}
+        {/* Charge par semaine — exactement comme dans ProgramBuilderModal.tsx (barres 18px, coins
+            non arrondis en bas, hauteur+couleur = charge moyenne de la semaine) */}
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, marginBottom: 20 }}>
+          {(() => {
+            const maxDiff = Math.max(...weekPhases.map(p => p.diff), 0.01);
+            return weekPhases.map(({ diff }, i) => {
+              const selected = i === 0;
+              const barH = Math.max(4, Math.round((diff / maxDiff) * 26));
+              return (
+                <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                  <div style={{ width: 18, height: barH, borderRadius: "2px 2px 0 0", background: loadBarColor(diff), opacity: selected ? 1 : 0.55 }} />
+                  <span style={{ fontSize: 11, fontWeight: selected ? 800 : 500, color: selected ? "#fff" : "rgba(255,255,255,.45)", padding: "0 4px" }}>S{i + 1}</span>
+                </div>
+              );
+            });
+          })()}
+        </div>
+
+        {/* Sélecteur de jours — style app réelle (contour discret, rond blanc plein pour le
+            sélectionné), point sous le rond coloré par difficulté. Jour en texte dans le rond
+            (pas de quantième, gardé volontairement). */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+          {DOW_LABELS.map((label, i) => {
+            const hasSession = displayDays.includes(i);
+            const isSelected = i === selectedDay;
+            const dayDiff = sessionForDay[i]?.diff;
+            return (
+              <div
+                key={i}
+                onClick={() => hasSession ? setSelectedDay(i) : undefined}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: hasSession ? "pointer" : "default" }}
+              >
+                <div style={{
+                  width: 30, height: 30, borderRadius: "50%",
+                  background: isSelected ? "#fff" : "transparent",
+                  border: isSelected ? "none" : `1.5px solid ${hasSession ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "all 0.15s",
+                }}>
+                  <span style={{ fontSize: 9, fontWeight: 800, color: isSelected ? "#171b1f" : hasSession ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                    {label}
+                  </span>
+                </div>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", background: hasSession ? loadBarColor(dayDiff ?? 0) : "transparent" }} />
               </div>
-              <div style={{
-                width: "100%", aspectRatio: "1", borderRadius: 8,
-                background: hasSession ? (isSelected ? "#d44000" : "rgba(212,64,0,0.10)") : "rgba(0,0,0,0.04)",
-                border: hasSession ? (isSelected ? "none" : "1.5px solid rgba(212,64,0,0.25)") : "1px solid rgba(0,0,0,0.06)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: "all 0.15s",
-              }}>
-                {hasSession && (
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: isSelected ? "#fff" : "#d44000" }} />
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+        </div>
       </div>
 
       {/* Carte séance sélectionnée */}
@@ -227,8 +232,19 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
             <div style={{ marginBottom: 10 }}>
               <DiffGauge value={currentDiff} height={10} />
             </div>
+
+            <div style={{ padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)", marginBottom: shownSession.notes ? 10 : 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
+                <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
+                  {rule.tag}
+                </div>
+              </div>
+              <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
+            </div>
+
             {shownSession.notes && (
-              <div style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 12, overflow: "hidden", marginBottom: 10 }}>
+              <div style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 12, overflow: "hidden" }}>
                 {shownSession.notes.split("\n").filter(Boolean).map((ex, i) => (
                   <div key={i} style={{
                     padding: "8px 10px", fontSize: 12, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
@@ -239,16 +255,6 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
                 ))}
               </div>
             )}
-
-            <div style={{ padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
-                  {rule.tag}
-                </div>
-              </div>
-              <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-            </div>
           </div>
         </div>
       )}

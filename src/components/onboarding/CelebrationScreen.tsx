@@ -25,29 +25,6 @@ function getCoachPreviews(sport: string) {
   ];
 }
 
-const AVATARS = [
-  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
-];
-
-const TESTIMONIALS = {
-  athlete: {
-    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.",
-    name: "Franck G.",
-    role: "Sportif · Membre ThePerfClub",
-    photo: "https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png",
-  },
-  coach: {
-    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.",
-    name: "Killian Anno",
-    role: "Préparateur physique · Rugby Club d'Arcachon",
-    photo: "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-  },
-};
-
 interface Props {
   role: Role;
   name: string;
@@ -62,7 +39,10 @@ interface Props {
   showProfile: boolean;
   showWellness: boolean;
   saving: boolean;
-  onStartTrial: () => void;
+  /* Le paiement a déjà eu lieu avant cet écran (paywall_priming/paywall_form précèdent
+     désormais celebration) — ce CTA avance simplement vers l'activation, il ne déclenche plus
+     le paywall. */
+  onNext: () => void;
 }
 
 function Chip({ label }: { label: string }) {
@@ -80,7 +60,7 @@ function Chip({ label }: { label: string }) {
 export default function CelebrationScreen({
   role, name, sport, level, goal, coachingChallenge, wScore, wellnessTip,
   claimedProgramName, claimedProgramWeeks,
-  showProfile, showWellness, saving, onStartTrial,
+  showProfile, showWellness, saving, onNext,
 }: Props) {
   const previews = role === "coach" ? getCoachPreviews(sport) : getAthletePreviews(sport);
 
@@ -177,44 +157,11 @@ export default function CelebrationScreen({
             </div>
           </div>
 
-          {/* Preuve sociale */}
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10, padding: "12px 14px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16 }}>
-              <div style={{ display: "flex" }}>
-                {AVATARS.map((src, i) => (
-                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #161616", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,.45)", marginTop: 1 }}>font confiance à ThePerfClub</div>
-              </div>
-            </div>
-            <div style={{ padding: "14px 16px 12px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16 }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,.82)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
-                &ldquo;{TESTIMONIALS[role].quote}&rdquo;
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                  <img src={TESTIMONIALS[role].photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: "#fff" }}>{TESTIMONIALS[role].name}</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>{TESTIMONIALS[role].role}</div>
-                </div>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                  {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#ff8a4c", fontSize: 12 }}>★</span>)}
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
         {/* CTA */}
-        <Actions variant="modal-dark" onNext={onStartTrial} nextDisabled={saving} nextLabel="Commencer mon essai gratuit →" />
+        <Actions variant="modal-dark" onNext={onNext} nextDisabled={saving} nextLabel="Continuer →" />
       </div>
     </div>
   );

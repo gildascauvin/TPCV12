@@ -33,13 +33,6 @@ function globalColor(pct: number): string {
   return "#d44000";
 }
 
-function getBridgeMessage(pct: number): string {
-  if (pct >= 90) return "Tu maîtrises déjà bien ton équipe — ThePerfClub va te donner les données pour aller encore plus loin.";
-  if (pct >= 60) return "Bonne base de gestion. ThePerfClub va t'aider à affiner le suivi de chaque sportif.";
-  if (pct >= 35) return "Il y a de la marge pour optimiser le suivi. ThePerfClub te donne la visibilité pour prendre les bonnes décisions.";
-  return "C'est exactement pour ça que ThePerfClub existe — suivi en temps réel, moins de fatigue accumulée, plus d'efficacité.";
-}
-
 function DimensionBar({ label, risk, visible }: { label: string; risk: number; visible: boolean }) {
   const fillPct = Math.round((3 - risk) / 3 * 90 + 10);
   const color = riskColor(risk);
@@ -71,15 +64,15 @@ export interface AutoregProfile {
 function pickCoachPersona(overloadRisk: number, planningRisk: number, fatigueRisk: number): { title: string; description: string } {
   const maxRisk = Math.max(overloadRisk, planningRisk, fatigueRisk);
   if (maxRisk === 0) {
-    return { title: "Coach data-driven", description: "Tu suis déjà tes sportifs de près. ThePerfClub te donne encore plus de précision, séance après séance." };
+    return { title: "Coach data-driven", description: "Tu suis déjà tes sportifs de près et tu ajustes en fonction de ce que tu observes. Cette rigueur limite le risque de blessure et construit la confiance de ton groupe sur la durée." };
   }
   if (overloadRisk === maxRisk) {
-    return { title: "Coach du volume", description: "Tu pousses le collectif fort, quitte à ce que certains dépassent leurs limites sans que tu le voies venir. ThePerfClub te donne la visibilité qui manque." };
+    return { title: "Coach du volume", description: "Tu pousses le collectif fort, quitte à ce que certains dépassent leurs limites sans que tu le voies venir. Sans donnée individuelle, ce risque reste invisible jusqu'à ce qu'une blessure ou une contre-performance le révèle." };
   }
   if (fatigueRisk === maxRisk) {
-    return { title: "Coach exigeant", description: "Tu maintiens l'intensité même quand la fatigue s'accumule dans le groupe. ThePerfClub objective la récupération de chaque sportif." };
+    return { title: "Coach exigeant", description: "Tu maintiens l'intensité même quand la fatigue s'accumule dans le groupe. Cette exigence porte ses fruits à court terme, mais elle demande de savoir précisément qui récupère bien et qui commence à s'épuiser." };
   }
-  return { title: "Coach terrain", description: "Tu gères au feeling, séance après séance. ThePerfClub structure le suivi sans t'enlever la main sur le programme." };
+  return { title: "Coach terrain", description: "Tu gères au feeling, séance après séance, sans grille figée. Cette adaptabilité est une vraie qualité, mais elle rend difficile de repérer les tendances qui se jouent sur plusieurs semaines." };
 }
 
 export function computeCoachAutoregProfile(overloadCoachAns: string, planningCoachAns: string, fatigueCoachAns: string): AutoregProfile {
@@ -107,6 +100,7 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
   const totalRisk    = overloadRisk + planningRisk + fatigueRisk;
   const globalPct    = Math.round(((9 - totalRisk) / 9) * 100);
   const gColor       = globalColor(globalPct);
+  const persona      = pickCoachPersona(overloadRisk, planningRisk, fatigueRisk);
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("reveal"), 1500);
@@ -159,6 +153,15 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
             </div>
           </div>
 
+          {/* Profil comportemental */}
+          <div style={{
+            opacity: scoreVisible ? 1 : 0, transition: "opacity 0.4s ease 0.15s", marginBottom: 20,
+          }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,157,110,.14)", border: "1px solid rgba(255,157,110,.3)", color: "#ff9d6e", fontSize: 13, fontWeight: 800, padding: "8px 16px", borderRadius: 999 }}>
+              🔥 Ton profil : {persona.title}
+            </span>
+          </div>
+
           {/* Dimensions */}
           <div style={{ marginBottom: 18 }}>
             <DimensionBar label="Maîtrise de l'intensité" risk={overloadRisk} visible={visibleBars >= 1} />
@@ -166,13 +169,13 @@ export default function AutoRegScoreStepCoach({ overloadCoachAns, planningCoachA
             <DimensionBar label="Gestion de la fatigue"   risk={fatigueRisk}  visible={visibleBars >= 3} />
           </div>
 
-          {/* Message-pont */}
+          {/* Description du profil d'autorégulation */}
           <div style={{
             background: "rgba(255,255,255,.07)", borderRadius: 14, padding: "14px 16px",
             marginBottom: 18, fontSize: 13, color: "rgba(255,255,255,.8)", lineHeight: 1.55, fontWeight: 500,
             opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.5s ease 0.3s",
           }}>
-            {getBridgeMessage(globalPct)}
+            {persona.description}
           </div>
 
           <div style={{ opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.4s ease 0.5s" }}>

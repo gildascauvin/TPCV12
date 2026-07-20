@@ -353,6 +353,15 @@ src/hooks/
 **Flow paywall unifié** : `requireSubscription()` → `paywallStep = "priming"` → `PrimingJourneyModal` → CTA → `paywallStep = "paywall"` → `PaywallModal` → "← Retour" → `paywallStep = "priming"`.
 Le cadenas `.locked`/`.tour-lock` (cf. section Onboarding) est désormais permanent, plus lié à une session de tour.
 
+## Webhook Stripe & statuts d'abonnement (`src/app/api/stripe/webhook/route.ts`)
+
+`profiles.subscription_status` a 4 valeurs possibles : `free` | `athlete` | `coach` | `expired`. `athlete`/`coach` servent à la fois de "rôle" et de "statut payant" (pas de valeur `trialing` séparée — un essai en cours est stocké comme `athlete`/`coach`, comme un abonnement payant actif). `isActive` (`src/app/(app)/layout.tsx`, `usePaywall.ts`) : `true` si `athlete`/`coach`, ou si `free` + lié à un coach (`hasCoach`) ; sinon `.locked` + paywall.
+
+Le endpoint webhook écoute 3 events : `checkout.session.completed`, `customer.subscription.created`/`updated` (même handler), `customer.subscription.deleted`. Aucune vérification serveur/RLS sur `subscription_status` ailleurs — seule source de vérité DB, alimentée uniquement par ce webhook + l'update optimiste dans `stripe/subscribe/route.ts`.
+
+**Fix résiliation pendant l'essai gratuit (2026-07-15)** — repéré par Gildas sur 2 comptes réels (`yanoutkast@live.fr`, `pgueny1@gmai.com`) restés `subscription_status = "athlete"` alors que ni payants ni en essai côté Stripe. Root cause : quand un user résilie pendant son essai, Stripe met `cancel_at_period_end = true` mais garde `status = "trialing"` jusqu'à la fin de la période — ce cas ne matchait ni la branche "actif" (exige `!cancel_at_period_end`) ni la branche "expiré" (`past_due`/`canceled`/`unpaid`), donc le handler `customer.subscription.updated` ne faisait rien : l'accès restait ouvert jusqu'à `customer.subscription.deleted` (potentiellement des jours plus tard, ou jamais si l'event est manqué). **Fix** : nouvelle branche `else if (sub.status === "trialing" && sub.cancel_at_period_end)` → `subscription_status = "expired"` immédiatement, dès la résiliation (pas d'attente de la fin de l'essai). **Choix assumé** : ne concerne que la résiliation pendant l'essai — un client payant qui résilie garde l'accès jusqu'à la fin de sa période payée (comportement standard inchangé), seul `customer.subscription.deleted` le repasse à `expired`. Pas de table d'historique des events Stripe en DB (`profiles.stripe_customer_id` seul, pas de log) — impossible de retracer après coup pourquoi un compte a divergé, seul `profiles.updated_at` donne un indice de timing.
+Les 2 comptes identifiés ont été corrigés manuellement en DB (`subscription_status = "expired"`) — pas d'outil admin dans le repo, `UPDATE` SQL direct via Supabase.
+
 ## Programmes publics partagés (`/p/[id]`)
 
 Page publique (`src/app/p/[id]/page.tsx` + `PublicProgramView.tsx`, client component) affichant un programme `is_public = true` en lecture, utilisée en iframe sur les pages WordPress (bibliothèque) et accessible en lien direct. `page.tsx` charge la ligne `programs` via `createAdminClient()` (bypass RLS, nécessaire pour un accès anonyme).

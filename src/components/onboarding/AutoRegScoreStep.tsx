@@ -34,13 +34,6 @@ function globalColor(pct: number): string {
   return "#d44000";
 }
 
-function getBridgeMessage(pct: number): string {
-  if (pct >= 90) return "Tu pilotes déjà au ressenti — ThePerfClub va te donner les données pour aller encore plus loin.";
-  if (pct >= 60) return "Bonne base d'autorégulation. ThePerfClub va t'aider à affiner pour progresser sans à-coups.";
-  if (pct >= 35) return "Il y a de la marge pour optimiser. ThePerfClub va t'aider à calibrer ta charge au bon moment.";
-  return "C'est exactement pour ça que ThePerfClub existe — maîtrise ta charge, progresse sans te blesser.";
-}
-
 function DimensionBar({ label, risk, visible }: { label: string; risk: number; visible: boolean }) {
   const fillPct = Math.round((3 - risk) / 3 * 90 + 10);
   const color = riskColor(risk);
@@ -72,15 +65,15 @@ export interface AutoregProfile {
 function pickAthletePersona(overloadRisk: number, planningRisk: number, fatigueRisk: number): { title: string; description: string } {
   const maxRisk = Math.max(overloadRisk, planningRisk, fatigueRisk);
   if (maxRisk === 0) {
-    return { title: "Autorégulé confirmé", description: "Tu sais déjà lire ton corps. ThePerfClub objective ce que tu sens déjà, pour affiner encore la précision." };
+    return { title: "Autorégulé confirmé", description: "Tu sais déjà lire ton corps et ajuster tes séances en conséquence. Cette discipline te protège des blessures et te permet de progresser sur la durée, sans à-coups." };
   }
   if (overloadRisk === maxRisk) {
-    return { title: "Battant instinctif", description: "Tu avances à l'instinct et tu ne recules devant rien. ThePerfClub calibre cette énergie à ta récupération réelle, pour progresser sans te griller." };
+    return { title: "Battant instinctif", description: "Tu avances à l'instinct et tu ne recules devant rien. Cette énergie est une vraie force, mais sans repère extérieur, elle peut te pousser à dépasser ta capacité de récupération réelle sans t'en rendre compte." };
   }
   if (fatigueRisk === maxRisk) {
-    return { title: "Volontaire du dépassement", description: "Tu tiens le cap même fatigué. ThePerfClub repère les signaux avant qu'ils ne deviennent des blessures." };
+    return { title: "Volontaire du dépassement", description: "Tu tiens le cap même fatigué, quitte à ignorer les signaux d'alerte de ton corps. Cette ténacité paie à court terme, mais elle use la récupération sur la durée si elle n'est jamais réévaluée." };
   }
-  return { title: "Improvisateur engagé", description: "Tu t'entraînes sérieusement mais sans structure fixe. ThePerfClub cadre ta charge semaine après semaine, sans t'enfermer." };
+  return { title: "Improvisateur engagé", description: "Tu t'entraînes sérieusement mais sans structure fixe, au feeling du jour. Cette souplesse te va bien, mais elle rend difficile de savoir si ta charge progresse vraiment d'une semaine à l'autre." };
 }
 
 export function computeAthleteAutoregProfile(overloadAns: string, planningAns: string, fatigueAns: string): AutoregProfile {
@@ -108,6 +101,7 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
   const totalRisk    = overloadRisk + planningRisk + fatigueRisk;
   const globalPct    = Math.round(((9 - totalRisk) / 9) * 100);
   const gColor       = globalColor(globalPct);
+  const persona      = pickAthletePersona(overloadRisk, planningRisk, fatigueRisk);
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("reveal"), 1500);
@@ -160,6 +154,15 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
             </div>
           </div>
 
+          {/* Profil comportemental */}
+          <div style={{
+            opacity: scoreVisible ? 1 : 0, transition: "opacity 0.4s ease 0.15s", marginBottom: 20,
+          }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,157,110,.14)", border: "1px solid rgba(255,157,110,.3)", color: "#ff9d6e", fontSize: 13, fontWeight: 800, padding: "8px 16px", borderRadius: 999 }}>
+              🔥 Ton profil : {persona.title}
+            </span>
+          </div>
+
           {/* Dimensions */}
           <div style={{ marginBottom: 18 }}>
             <DimensionBar label="Gestion de l'intensité"    risk={overloadRisk} visible={visibleBars >= 1} />
@@ -167,13 +170,13 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
             <DimensionBar label="Récupération"               risk={fatigueRisk}  visible={visibleBars >= 3} />
           </div>
 
-          {/* Message-pont */}
+          {/* Description du profil d'autorégulation */}
           <div style={{
             background: "rgba(255,255,255,.07)", borderRadius: 14, padding: "14px 16px",
             marginBottom: 18, fontSize: 13, color: "rgba(255,255,255,.8)", lineHeight: 1.55, fontWeight: 500,
             opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.5s ease 0.3s",
           }}>
-            {getBridgeMessage(globalPct)}
+            {persona.description}
           </div>
 
           <div style={{ opacity: visibleBars >= 3 ? 1 : 0, transition: "opacity 0.4s ease 0.5s" }}>

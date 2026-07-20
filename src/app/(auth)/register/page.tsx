@@ -23,15 +23,17 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     if (pendingData) {
       return <OnboardingFlow userId={user.id} pendingData={pendingData} />;
     }
-    /* User connecté sans pendingData → rediriger vers son espace.
-       Force onboarding_done=true pour éviter une boucle middleware si nécessaire. */
+    /* User connecté sans pendingData : si l'onboarding n'est pas vraiment fini
+       (paywall jamais atteint), on le fait rentrer à nouveau dans le flow plutôt que
+       de forcer onboarding_done=true — sinon un compte créé mais jamais payé bascule
+       en accès gratuit permanent sans jamais voir le paywall obligatoire. */
     const { data: profile } = await supabase
       .from("profiles")
       .select("mode, onboarding_done")
       .eq("user_id", user.id)
       .single();
     if (!profile?.onboarding_done) {
-      await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", user.id);
+      return <OnboardingFlow userId={user.id} />;
     }
     redirect(profile?.mode === "coach" ? "/coach" : "/today");
   }

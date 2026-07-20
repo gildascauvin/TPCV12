@@ -11,10 +11,11 @@ import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
-import AutoRegScoreStep, { computeAthleteAutoregProfile, AutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
-import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
+import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
+import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
-import PaywallModal from "@/components/paywall/PaywallModal";
+import { CheckoutForm, PRICING, stripePromise, type Billing } from "@/components/paywall/PaywallModal";
+import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { subscribeToPush, needsInstallForPush } from "@/lib/push";
@@ -24,7 +25,7 @@ type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
 type StepId =
   | "role"
-  | "value_slides"
+  | "value_intro"
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"
   | "overload_2a" | "planning_2a" | "fatigue_2a"
   | "autoreg_score"
@@ -36,9 +37,9 @@ type StepId =
   | "wellness_reveal"
   | "account"
   | "celebration"
-  | "value_program" | "value_program_coach"
   | "concept_autoreg" | "profile_recap"
-  | "invite_team";
+  | "invite_team"
+  | "paywall_priming" | "paywall_form";
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level;
@@ -49,8 +50,65 @@ type PendingData = {
 };
 interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role }
 
+/* Variante A : Signup juste après les pain points, avant le Score (voir plan onboarding v2). */
+/* Paywall (2 écrans) → Célébration → Activation, identique dans toutes les variantes/paths
+   (2026-07-19) : wellness_q/wellness_reveal (sportif) et invite_team (coach) ne sont plus dans
+   les tableaux statiques ci-dessous — ce sont des étapes "payeurs seulement", insérées
+   dynamiquement après celebration une fois trial_started réussi (voir getPath()/paidExtras). */
 const ATHLETE_PATH: StepId[] = [
-  "role", "value_slides",
+  "value_intro", "role",
+  "frustration_2a",
+  "overload_2a", "planning_2a", "fatigue_2a",
+  "account",
+  "autoreg_score",
+  "concept_autoreg",
+  "sport_2a", "level_2a", "goal_2a", "days_2a",
+  "profile_recap",
+  "week_preview_2a",
+  "paywall_priming", "paywall_form",
+  "celebration",
+];
+const COACH_PATH: StepId[] = [
+  "value_intro", "role",
+  "challenge_2b",
+  "overload_2b", "planning_time_2b", "fatigue_2b",
+  "account",
+  "autoreg_score_coach",
+  "concept_autoreg",
+  "sport_2a", "level_2a", "goal_2a", "days_2a",
+  "profile_recap",
+  "week_preview_2b",
+  "paywall_priming", "paywall_form",
+  "celebration",
+];
+
+const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
+
+const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
+
+/* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH. */
+const PROGRAM_ATHLETE_PATH: StepId[] = [
+  "value_intro", "role",
+  "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
+  "account",
+  "autoreg_score",
+  "concept_autoreg",
+  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+];
+const PROGRAM_COACH_PATH: StepId[] = [
+  "value_intro", "role",
+  "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
+  "account",
+  "autoreg_score_coach",
+  "concept_autoreg",
+  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+];
+
+/* Variante B (bras "test" de l'A/B short-onboarding-signup) : Signup dès le tout début, juste
+   après Rôle — profil encore vide à ce stade. Garde ensuite le diagnostic complet (contrairement
+   à l'ancien bras test qui sautait direct au paywall) : voir plan onboarding v2, "Pivot A/B". */
+const SHORT_ATHLETE_PATH: StepId[] = [
+  "value_intro", "role", "account",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
@@ -58,13 +116,11 @@ const ATHLETE_PATH: StepId[] = [
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "profile_recap",
   "week_preview_2a",
-  "account",
-  "wellness_q",
-  "wellness_reveal",
+  "paywall_priming", "paywall_form",
   "celebration",
 ];
-const COACH_PATH: StepId[] = [
-  "role", "value_slides",
+const SHORT_COACH_PATH: StepId[] = [
+  "value_intro", "role", "account",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
@@ -72,35 +128,26 @@ const COACH_PATH: StepId[] = [
   "sport_2a", "level_2a", "goal_2a", "days_2a",
   "profile_recap",
   "week_preview_2b",
-  "account",
-  "invite_team",
+  "paywall_priming", "paywall_form",
   "celebration",
 ];
-
-const POST_PROGRESS: StepId[] = ["value_slides", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "value_program", "value_program_coach", "concept_autoreg", "profile_recap", "invite_team"];
-
-const DARK_STEPS: StepId[] = ["value_slides", "value_program", "value_program_coach", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
-
-const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "role", "value_program",
+/* Variante B + programme claimé : mêmes steps que PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH
+   (sport/niveau/objectif/jours déjà déduits du programme, donc absents), Signup déplacé juste
+   après Rôle comme les paths courts ci-dessus. */
+const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
+  "value_intro", "role", "account",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
-  "profile_recap", "account", "wellness_q", "wellness_reveal", "celebration",
+  "profile_recap", "paywall_priming", "paywall_form", "celebration",
 ];
-const PROGRAM_COACH_PATH: StepId[] = [
-  "role", "value_program_coach",
+const SHORT_PROGRAM_COACH_PATH: StepId[] = [
+  "value_intro", "role", "account",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
   "concept_autoreg",
-  "profile_recap", "account", "invite_team", "celebration",
+  "profile_recap", "paywall_priming", "paywall_form", "celebration",
 ];
-
-/* A/B test "short-onboarding-signup" : rôle + compte, paywall immédiat après (pas de diagnostic/
-   personnalisation avant). Utilisé pour le trafic classique ET le trafic via programme claimé —
-   voir getPath(). */
-const SHORT_ATHLETE_PATH: StepId[] = ["role", "account"];
-const SHORT_COACH_PATH: StepId[]   = ["role", "account"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -173,6 +220,49 @@ const SPORT_CATEGORIES = [
   { id: "Arts martiaux & combat", icon: "🥋", sub: "Judo, MMA, boxe…" },
   { id: "Autre",                  icon: "⚡", sub: "Autre discipline" },
 ];
+
+const SPORT_QUALITIES: Record<string, string> = {
+  "Force & puissance":      "Force maximale, puissance explosive, technique de charge",
+  "Athlétisme & vitesse":   "Vitesse, explosivité, technique de course",
+  "Sports collectifs":      "Répétition d'efforts, agilité, puissance",
+  "Endurance":               "Endurance aérobie, gestion du seuil, récupération active",
+  "Arts martiaux & combat": "Endurance spécifique combat, explosivité, mobilité articulaire",
+  "Autre":                   "Qualités physiques adaptées à ta discipline",
+};
+
+const SPORT_SESSION_TYPES: Record<string, string> = {
+  "Force & puissance":      "Alternance de séances de charge lourde et de séances techniques ou explosives.",
+  "Athlétisme & vitesse":   "Séances de vitesse pure, travail technique de course, et fond léger en complément.",
+  "Sports collectifs":      "Séances à intensité variable : répétition d'efforts, agilité, et récupération active.",
+  "Endurance":               "Alternance de sorties longues à allure modérée et de séances de fractionné plus intense.",
+  "Arts martiaux & combat": "Séances techniques, travail au sac, et rounds à intensité croissante.",
+  "Autre":                   "Séances variées, adaptées à ta discipline et à ton objectif.",
+};
+
+/* Preuve sociale — déplacée de CelebrationScreen vers paywall_priming (2026-07-19) : plus utile
+   comme réassurance avant le paiement qu'en félicitations après coup. */
+const PAYWALL_AVATARS = [
+  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
+  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
+];
+
+const PAYWALL_TESTIMONIALS = {
+  athlete: {
+    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.",
+    name: "Franck G.",
+    role: "Sportif · Membre ThePerfClub",
+    photo: "https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png",
+  },
+  coach: {
+    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.",
+    name: "Killian Anno",
+    role: "Préparateur physique · Rugby Club d'Arcachon",
+    photo: "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
+  },
+};
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -360,10 +450,10 @@ function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: 
 }
 
 function ProfileRecapStep({
-  role, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, autoregProfile, claimedProgramName, hasPreviewNext, onNext,
+  role, sport, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, claimedProgramName, hasPreviewNext, onNext,
 }: {
-  role: Role; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
-  showDays: boolean; trainingDays: number[]; autoregProfile: AutoregProfile | null; claimedProgramName?: string | null;
+  role: Role; sport: string; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
+  showDays: boolean; trainingDays: number[]; claimedProgramName?: string | null;
   hasPreviewNext: boolean; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
@@ -372,12 +462,14 @@ function ProfileRecapStep({
     return () => clearTimeout(t);
   }, []);
   const accent: React.CSSProperties = { color: "#d44000", fontWeight: 800 };
+  const qualities = SPORT_QUALITIES[sport] || SPORT_QUALITIES["Autre"];
+  const sessionTypes = SPORT_SESSION_TYPES[sport] || SPORT_SESSION_TYPES["Autre"];
 
   return (
     <div>
       <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
-      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>Ton profil d&apos;entraînement</div>
-      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: autoregProfile ? 20 : 28 }}>
+      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>Ton programme d&apos;entraînement</div>
+      <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 20 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
         <span style={accent}>{claimedProgramName || sportLabel}</span>
         {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
@@ -385,27 +477,17 @@ function ProfileRecapStep({
         {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
         .
       </div>
-      {autoregProfile && (
-        <div style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 16px", border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 2px 12px rgba(0,0,0,.04)", marginBottom: 28, textAlign: "left" }}>
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", color: "#d44000", textTransform: "uppercase", marginBottom: 8 }}>
-            Ton profil d&apos;autorégulation
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428", marginBottom: 8 }}>
-            {autoregProfile.persona.title}
-          </div>
-          <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55, marginBottom: 14 }}>
-            {autoregProfile.persona.description}
-          </div>
-          <div>
-            {autoregProfile.dimensions.map((d, i) => (
-              <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.05)" : "none" }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#3a3f44" }}>{d.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: d.color }}>{d.riskLabel}</span>
-              </div>
-            ))}
-          </div>
+      <div style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 16px", border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 2px 12px rgba(0,0,0,.04)", marginBottom: 28, textAlign: "left" }}>
+        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", color: "#d44000", textTransform: "uppercase", marginBottom: 8 }}>
+          Ce que ce programme travaille
         </div>
-      )}
+        <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428", marginBottom: 8 }}>
+          {qualities}
+        </div>
+        <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>
+          Réparti sur {trainingDays.length || 4} jour{(trainingDays.length || 4) > 1 ? "s" : ""} par semaine, avec une charge qui s&apos;ajuste {role === "coach" ? "au niveau de forme de tes sportifs" : "à ton niveau de forme"} au fil des séances. {sessionTypes}
+        </div>
+      </div>
       {phase === "loading" ? (
         <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>
@@ -571,7 +653,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (assignedVariant) posthog.setPersonProperties({ ab_variant: assignedVariant });
   }, [assignedVariant]);
 
-  const [stepIdx, setStepIdx] = useState(initialRole ? 1 : 0);
+  /* value_intro est désormais toujours l'étape 0 (avant role, étape 1) dans tous les paths —
+     un ?role= prefill doit sauter le step Rôle (index 1) mais pas le pitch value (index 0). */
+  /* ?dbgstep=N (outil de dev/support, comme ?ab=test|control) : démarre directement à l'index N
+     du path courant plutôt que de rejouer tout le flow — pratique pour cibler un écran précis en
+     local. Index = position dans le tableau du path actif (variante A/B, claimed ou non). */
+  const [stepIdx, setStepIdx] = useState(() => {
+    if (typeof window !== "undefined") {
+      const dbg = new URLSearchParams(window.location.search).get("dbgstep");
+      if (dbg) return parseInt(dbg, 10);
+    }
+    return initialRole ? 2 : 0;
+  });
+  /* Posé une seule fois, au succès de trial_started dans paywall_form — insère l'activation
+     (wellness_q/wellness_reveal ou invite_team) après celebration, voir getPath(). */
+  const [paidExtras, setPaidExtras] = useState<StepId[] | null>(null);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
   const [roleChosen, setRoleChosen] = useState(!!(pendingData?.role || initialRole));
   const [newUserId, setNewUserId] = useState<string | null>(null);
@@ -608,6 +704,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* value_slides */
   const [vSlide, setVSlide] = useState(0);
+  const vSlideSwipeStartX = useRef<number | null>(null);
 
   /* pain point answers — athlete */
   const [overloadAns, setOverloadAns] = useState("");
@@ -644,15 +741,29 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const advancingRef = useRef(false);
   /* guard contre double-clic sur les CTA de fin de step (finishAthleteActivation / invite_team) — évite un double claim+assign et un stepIdx qui dépasse path.length (écran blanc) */
   const finishGuardRef = useRef(false);
+  /* guard contre un double déclenchement de completeProfile()/finishCoachClaim() à l'entrée de profile_recap (voir effet dédié plus bas) */
+  const profileCompleteGuardRef = useRef(false);
 
   function toggleBehavior(key: string) {
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   }
 
   const getPath = (r: Role): StepId[] => {
-    if (assignedVariant === "test") return r === "coach" ? SHORT_COACH_PATH : SHORT_ATHLETE_PATH;
-    if (hasClaimedProgram) return r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
-    return r === "coach" ? COACH_PATH : ATHLETE_PATH;
+    let base: StepId[];
+    if (assignedVariant === "test") {
+      base = hasClaimedProgram ? (r === "coach" ? SHORT_PROGRAM_COACH_PATH : SHORT_PROGRAM_ATHLETE_PATH) : (r === "coach" ? SHORT_COACH_PATH : SHORT_ATHLETE_PATH);
+    } else if (hasClaimedProgram) {
+      base = r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
+    } else {
+      base = r === "coach" ? COACH_PATH : ATHLETE_PATH;
+    }
+    /* Activation (wellness_q/wellness_reveal sportif, invite_team coach) réservée aux payeurs :
+       insérée après "celebration" seulement une fois trial_started réussi (voir paidExtras,
+       posé dans paywall_form au succès du paiement). */
+    if (!paidExtras) return base;
+    const celebIdx = base.indexOf("celebration");
+    if (celebIdx === -1) return base;
+    return [...base.slice(0, celebIdx + 1), ...paidExtras];
   };
   const path         = getPath(role);
   /* Filet de sécurité : si stepIdx dépasse jamais path.length (double-invocation d'un handler,
@@ -717,11 +828,34 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [currentStep]);
 
   useEffect(() => {
-    if (currentStep !== "value_slides") return;
-    posthog.capture("onboarding_value_slide_viewed", { role, slide: vSlide });
+    if (currentStep !== "value_intro") return;
+    /* role pas encore connu à ce step (value_intro précède désormais role) — pas taggé ici. */
+    posthog.capture("onboarding_value_intro_slide_viewed", { slide: vSlide });
   }, [vSlide, currentStep]);
 
-  function next() { if (!isLast) setStepIdx(i => i + 1); }
+  /* Le Signup (step "account") arrive désormais avant la fin du diagnostic dans les 2 variantes —
+     sport/niveau/objectif/jours ne sont connus qu'à l'entrée de profile_recap. C'est ici que le
+     profil est complété (sessions, wellness baseline, démo coach) et que finishCoachClaim() peut
+     enfin trouver un coach_athlete à assigner (créés par completeProfile() juste avant). */
+  useEffect(() => {
+    if (currentStep !== "profile_recap" || profileCompleteGuardRef.current) return;
+    profileCompleteGuardRef.current = true;
+    const uid = userId || newUserId;
+    if (!uid) return;
+    (async () => {
+      await completeProfile(uid);
+      if (role === "coach") await finishCoachClaim(uid);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
+
+  /* Depuis le réordonnancement Paywall → Célébration → Activation, la dernière étape du path
+     est désormais wellness_q/wellness_reveal (sportif) ou invite_team (coach) — plus celebration.
+     Un appel à next() une fois sur cette dernière étape termine donc réellement l'onboarding. */
+  function next() {
+    if (!isLast) { setStepIdx(i => i + 1); return; }
+    window.location.href = role === "coach" ? "/coach" : "/today";
+  }
 
   function nextAfterChoice(setter: () => void) {
     if (advancingRef.current) return;
@@ -730,12 +864,26 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     setTimeout(() => next(), 300);
   }
 
-  async function saveData(uid: string) {
-    const sportValue = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
+  /* Compte créé au step "account" — désormais positionné avant la fin du diagnostic dans les
+     2 variantes (juste après les pain points en A, juste après Rôle en B) : sport/niveau/objectif/
+     jours ne sont pas encore connus à ce moment-là. N'upsert que ce qui est déjà collecté ;
+     complete Profile() referme le reste une fois le diagnostic terminé (déclenché à l'entrée de
+     profile_recap, voir l'effet dédié plus bas). */
+  async function createAccount(uid: string) {
     await supabase.from("profiles").upsert({
       user_id: uid,
       ...(name.trim() ? { name: name.trim() } : {}),
-      sport: sportValue, mode: role, onboarding_done: true,
+      mode: role,
+      frustration:        role === "athlete" ? (frustration || null) : null,
+      coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
+    }, { onConflict: "user_id" });
+  }
+
+  async function completeProfile(uid: string) {
+    const sportValue = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
+    await supabase.from("profiles").upsert({
+      user_id: uid,
+      sport: sportValue, mode: role,
       freq_target:        trainingDays.length || null,
       training_days:      trainingDays.length ? trainingDays : null,
       objective:          goal || null,
@@ -806,12 +954,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         }
       }
     }
-  }
-
-  function goToActivationStep() {
-    const target: StepId = role === "coach" ? "invite_team" : "wellness_q";
-    const idx = path.indexOf(target);
-    setStepIdx(idx >= 0 ? idx : path.length - 1);
   }
 
   async function finishCoachClaim(uid: string) {
@@ -903,7 +1045,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         const uid = data.user?.id;
         if (!uid) { setError("Erreur lors de la création du compte."); setSaving(false); return; }
         setNewUserId(uid);
-        await saveData(uid);
+        await createAccount(uid);
         posthog.identify(uid, { email: email.trim(), role });
         posthog.capture("account_created", { role, ab_variant: assignedVariant ?? "control" });
         fetch("/api/brevo/contact", {
@@ -928,18 +1070,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           setSaving(false);
           return;
         }
-        if (role === "coach") await finishCoachClaim(uid);
-        if (role === "athlete" && assignedVariant === "test" && hasClaimedProgram) await claimAndAssignProgram(uid, 0);
         supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
         }).catch(() => {});
         setSaving(false);
-        if (assignedVariant === "test") handleStartTrial(); else goToActivationStep();
+        next();
       } else {
-        await saveData(userId!);
-        if (role === "coach") await finishCoachClaim(userId!);
+        await createAccount(userId!);
         setSaving(false);
-        if (assignedVariant === "test") handleStartTrial(); else goToActivationStep();
+        next();
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -974,16 +1113,45 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (sent.length) setInviteResult(sent.some(r => r.linked) ? "linked" : "pending");
   }
 
-  const [showTrialPaywall, setShowTrialPaywall] = useState(false);
+  /* Paywall scindé en 2 écrans plein-page, dans le path comme tout le reste — plus un modal
+     déclenché manuellement (voir Pivot A/B, "Réordonnancement Paywall → Célébration → Activation"). */
+  const [billing, setBilling] = useState<Billing>("annual");
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [loadingIntent, setLoadingIntent] = useState(true);
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
-  function handleStartTrial() {
-    posthog.capture("celebration_cta_clicked", { role, ab_variant: assignedVariant ?? "control" });
+  useEffect(() => {
+    if (currentStep !== "paywall_priming") return;
+    /* Remplace l'ancien handleStartTrial() : la vue "priming" est désormais une entrée de path
+       normale (voir onboarding_step_viewed émis par ailleurs), on garde cet event nommé pour la
+       continuité analytique. celebration_cta_clicked n'a plus de sens (celebration ne mène plus
+       au paywall) — abandonné, pas renommé pour ne pas laisser un event trompeur. */
     posthog.capture("paywall_priming_viewed", { plan: role, objective: goal, ab_variant: assignedVariant ?? "control" });
-    setShowTrialPaywall(true);
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
-  function handleTrialSuccess() {
-    window.location.href = role === "coach" ? "/coach" : "/today";
+  useEffect(() => {
+    if (currentStep !== "paywall_form" || clientSecret || setupError) return;
+    fetch("/api/stripe/setup-intent", { method: "POST" })
+      .then(r => r.json())
+      .then((json) => {
+        if (json.error) { setSetupError(`Erreur: ${json.error}`); setLoadingIntent(false); return; }
+        setClientSecret(json.clientSecret);
+        setLoadingIntent(false);
+      })
+      .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
+
+  /* Paiement confirmé (trial_started, capturé dans CheckoutForm) : c'est ici, et seulement ici,
+     que onboarding_done passe à true — payer est le vrai jalon qui débloque l'app, l'activation
+     (wellness_q/invite_team) qui suit n'est pas bloquante si abandonnée après coup. */
+  async function handlePaymentSuccess() {
+    const uid = userId || newUserId;
+    if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    setPaidExtras(role === "coach" ? ["invite_team"] : ["wellness_q", "wellness_reveal"]);
+    next();
   }
 
   async function handleGoogleRegister() {
@@ -1012,7 +1180,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         /* Injecte le nom dans le state pour que saveData le prenne */
         if (finalName) setName(finalName);
 
-        await saveData(userId);
+        await createAccount(userId);
 
         /* Si le nom venait de Google, on force une mise à jour du profil */
         if (!pendingData.name?.trim() && finalName) {
@@ -1037,15 +1205,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* `init()` ci-dessus est figé au premier render (deps []) — s'il appelait goToActivationStep()
-     directement, il utiliserait un `path` calculé AVANT que hasClaimedProgram (qui se résout de
-     façon asynchrone juste après le montage) n'ait sa valeur finale. Pour un compte Google venant
-     d'un programme claimé, ça pointait vers l'index de wellness_q dans le MAUVAIS path (plus long),
-     donnant un stepIdx hors limites du VRAI path → écran blanc. Confirmé en prod via PostHog sur
-     deux comptes Google réels. Ce useEffect séparé, retriggé par un state, capture toujours un
-     `path` à jour au moment où il s'exécute. */
+  /* `init()` ci-dessus est figé au premier render (deps []) — s'il appelait next() directement, il
+     utiliserait un `isLast`/`path` calculé AVANT que hasClaimedProgram (qui se résout de façon
+     asynchrone juste après le montage) n'ait sa valeur finale. Pour un compte Google venant d'un
+     programme claimé, ça pouvait avancer sur le MAUVAIS path (plus long), donnant un stepIdx hors
+     limites du VRAI path → écran blanc. Confirmé en prod via PostHog sur deux comptes Google réels.
+     Ce useEffect séparé, retriggé par un state, capture toujours un `path` à jour au moment où il
+     s'exécute. */
   useEffect(() => {
-    if (googleInitDone) { if (assignedVariant === "test") handleStartTrial(); else goToActivationStep(); }
+    if (googleInitDone) next();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleInitDone]);
 
@@ -1091,11 +1259,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       <div>
 
         {showProgress && (
-          <div style={{ display: "inline-flex", marginBottom: 10, padding: "6px 10px", borderRadius: 999, background: "rgba(212,64,0,.08)", color: "#d44000", fontSize: 10, fontWeight: 950, textTransform: "uppercase", letterSpacing: "0.10em" }}>
-            Configuration
-          </div>
-        )}
-        {showProgress && (
           <div style={{ display: "flex", gap: 4, marginBottom: 18 }}>
             {progressSteps.map((_, i) => (
               <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= progressIdx ? "#d44000" : "rgba(0,0,0,.10)", transition: "background .3s" }} />
@@ -1107,7 +1270,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── 1. ROLE ── */}
         {currentStep === "role" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Comment veux-tu utiliser ThePerfClub ?</div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Essayer ThePerfClub en tant que</div>
             <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
               On personnalise ton expérience.
             </div>
@@ -1130,169 +1293,117 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── VALUE SLIDES ── */}
-        {currentStep === "value_slides" && (() => {
-          const cardAdaptatif = (
-            <div style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", width: 160, boxShadow: "0 8px 24px rgba(0,0,0,.28)", border: "1px solid rgba(212,64,0,.12)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4, marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 900, color: "#171b1f", lineHeight: 1.2 }}>Séance dure isolée</span>
-                <span style={{ fontSize: 7, fontWeight: 900, background: "rgba(212,64,0,.10)", color: "#d44000", padding: "2px 5px", borderRadius: 999, whiteSpace: "nowrap" }}>CHARGE HAUTE</span>
-              </div>
-              <div style={{ fontSize: 10, color: "#62686e", lineHeight: 1.45 }}>OK si elle reste isolée : garde la variation autour pour préserver la récupération.</div>
-            </div>
-          );
-          const cardBlessures = (
-            <div style={{ borderRadius: 12, width: 155, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,.38)" }}>
-              <div style={{ background: "#1e1e1e", padding: "9px 11px" }}>
-                <div style={{ fontSize: 8, fontWeight: 900, color: "rgba(255,255,255,.45)", letterSpacing: "0.12em", marginBottom: 3 }}>🌙 SOMMEIL</div>
-                <div style={{ fontSize: 10, color: "#fff", lineHeight: 1.4 }}>Couche-toi avant 22h30. Vise 8h minimum.</div>
-              </div>
-              <div style={{ background: "#161616", padding: "9px 11px" }}>
-                <div style={{ fontSize: 8, fontWeight: 900, color: "rgba(255,255,255,.45)", letterSpacing: "0.12em", marginBottom: 3 }}>💧 HYDRATATION</div>
-                <div style={{ fontSize: 10, color: "#fff", lineHeight: 1.4 }}>×1.5 ta norme. 500ml dès le réveil.</div>
-              </div>
-            </div>
-          );
-          const cardProgression = (
-            <div style={{ background: "#fff", borderRadius: 12, padding: "10px 12px", width: 160, boxShadow: "0 8px 24px rgba(0,0,0,.28)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 900, color: "#171b1f" }}>Squat + tirages</span>
-                <span style={{ fontSize: 7, fontWeight: 900, background: "rgba(47,158,68,.10)", color: "#2f9e44", padding: "2px 5px", borderRadius: 999 }}>Terminé ✓</span>
-              </div>
-              <div style={{ height: 5, borderRadius: 999, background: "#e7e4df", overflow: "hidden", marginBottom: 7 }}>
-                <div style={{ height: "100%", width: "75%", background: "linear-gradient(90deg,#ffb5a7,#d44000)", borderRadius: 999 }} />
-              </div>
-              {["Back squat — 5×5", "Snatch pull — 4×3", "Gainage — 8 min"].map((ex, i) => (
-                <div key={i} style={{ fontSize: 9, color: "#2c3236", padding: "4px 7px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "rgba(0,0,0,.025)" }}>{ex}</div>
-              ))}
-            </div>
-          );
-          const cardCoach = (
-            <div style={{ background: "linear-gradient(180deg,#fff,#fff5ef)", border: "1.5px solid rgba(212,64,0,.40)", borderRadius: 13, padding: "10px 11px", width: 170, boxShadow: "0 10px 24px rgba(212,64,0,.18)", position: "relative" }}>
-              <div style={{ position: "absolute", top: 8, right: 10, width: 7, height: 7, borderRadius: "50%", background: "#d44000" }} />
-              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                {/* mini wellness ring — score 88, size 36 */}
-                <div style={{ position: "relative", flexShrink: 0, width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(145deg,#171717,#2f2f2f)" }}>
-                  <svg width={36} height={36} viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)", display: "block" }}>
-                    <circle cx={18} cy={18} r={15} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={3} />
-                    <circle cx={18} cy={18} r={15} fill="none" stroke="#2f9e44" strokeWidth={3} strokeDasharray={94.2} strokeDashoffset={11.3} strokeLinecap="round" />
-                  </svg>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 10, fontWeight: 1000, color: "#2f9e44" }}>88</span>
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 950, color: "#1f2428", marginBottom: 3 }}>Thomas M.</div>
-                  <span style={{ fontSize: 7, fontWeight: 900, background: "#d44000", color: "#fff", padding: "2px 5px", borderRadius: 999 }}>ATTENTION REQUISE</span>
-                </div>
-              </div>
-              <div style={{ fontSize: 9, color: "#444", lineHeight: 1.4 }}>Séance dure prévue : vérifier qu'il n'enchaîne pas dur.</div>
-            </div>
-          );
-
-          const athleteSlides = [
-            { img: "https://www.theperfclub.com/wp-content/uploads/2023/03/massage-et-recuperation.jpeg",          category: "ENTRAÎNEMENT ADAPTATIF", title: "Entraînement adaptatif intelligent",   stat: "68%",  desc: "des sportifs s'entraînent trop fort les mauvais jours. ThePerfClub ajuste chaque séance à ton état du jour.", card: cardAdaptatif },
-            { img: "https://www.theperfclub.com/wp-content/uploads/2025/03/prevenir-et-guerir-dune-tendinite-au-genou-scaled.avif", category: "PRÉVENTION BLESSURES",    title: "Réduire les blessures",              stat: "3×",   desc: "plus de risque de blessure quand la charge dépasse la récupération réelle.", card: cardBlessures },
-            { img: "https://www.theperfclub.com/wp-content/uploads/2022/06/lathle%CC%80te-scaled.jpg",             category: "PROGRESSION",              title: "Optimiser la progression",           stat: "−35%", desc: "de performance quand on ignore les signaux de fatigue. Sache quand pousser et quand récupérer.", card: cardProgression },
+        {/* ── VALUE INTRO (générique, avant le Rôle) ── */}
+        {currentStep === "value_intro" && (() => {
+          const journey = [
+            {
+              time: "La veille",
+              img: "https://www.theperfclub.com/wp-content/uploads/2022/06/lathle%CC%80te-scaled.jpg",
+              caption: hasClaimedProgram && claimedProgramName
+                ? `Ton programme ${claimedProgramName} est prêt à personnaliser.`
+                : "Crée ton programme simplement, ou choisis parmi 40+ modèles, tous sports.",
+            },
+            {
+              time: "07h30",
+              img: "https://www.theperfclub.com/wp-content/uploads/2023/03/massage-et-recuperation.jpeg",
+              caption: "Le niveau de forme du jour ajuste la séance, avant même l'échauffement.",
+            },
+            {
+              time: "Après la séance",
+              img: "https://www.theperfclub.com/wp-content/uploads/2025/03/prevenir-et-guerir-dune-tendinite-au-genou-scaled.avif",
+              caption: "Entraînement, habitudes de vie : sache ce qui impacte les performances.",
+            },
           ];
-          const coachSlides = [
-            { img: "https://www.theperfclub.com/wp-content/uploads/2026/06/Capture-decran-2026-06-02-a-3.40.48-PM.jpg", category: "COACHING PERSONNALISÉ",   title: "Séances personnalisées à l'échelle", stat: "68%",  desc: "des séances dépassent l'intensité prévue faute de données de forme. Adaptez chaque programme au signal du jour.", card: cardCoach },
-            { img: "https://www.theperfclub.com/wp-content/uploads/2025/03/prevenir-et-guerir-dune-tendinite-au-genou-scaled.avif", category: "PRÉVENTION BLESSURES",    title: "Réduire les blessures",              stat: "3×",   desc: "plus de blessures quand la fatigue collective n'est pas détectée avant la séance.", card: cardBlessures },
-            { img: "https://www.theperfclub.com/wp-content/uploads/2022/06/lathle%CC%80te-scaled.jpg",              category: "PROGRESSION",              title: "Optimiser la progression",           stat: "−35%", desc: "de progression perdue quand la charge n'est pas ajustée au signal du jour.", card: cardProgression },
-          ];
-          const slides = role === "athlete" ? athleteSlides : coachSlides;
-          const slide = slides[vSlide];
+          const j = journey[vSlide];
           return (
-            <div style={{ borderRadius: 24, overflow: "hidden", background: "#fff", boxShadow: "0 30px 70px rgba(0,0,0,.45)" }}>
-              {/* Photo */}
-              <div
-                onClick={() => { if (vSlide < 2) setVSlide(v => v + 1); }}
-                style={{ position: "relative", height: 270, cursor: vSlide < 2 ? "pointer" : "default", overflow: "hidden", userSelect: "none" }}>
-                <img src={slide.img} alt={slide.title} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                {/* top nav */}
-                <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "flex-end", alignItems: "center", zIndex: 4 }}>
-                  <div style={{ display: "flex", gap: 5 }}>
+            <div>
+              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8, color: "#fff" }}>Un programme figé est déjà dépassé.</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", lineHeight: 1.55, marginBottom: 22 }}>ThePerfClub ajuste les séances au niveau de forme, chaque jour.</div>
+              <div style={{ borderRadius: 26, overflow: "hidden", boxShadow: "0 30px 70px rgba(0,0,0,.45)" }}>
+                <div
+                  onPointerDown={(e) => { vSlideSwipeStartX.current = e.clientX; }}
+                  onPointerUp={(e) => {
+                    const startX = vSlideSwipeStartX.current;
+                    vSlideSwipeStartX.current = null;
+                    if (startX === null) return;
+                    const delta = e.clientX - startX;
+                    if (Math.abs(delta) > 30) {
+                      if (delta < 0) setVSlide(v => Math.min(2, v + 1));
+                      else setVSlide(v => Math.max(0, v - 1));
+                    } else if (vSlide < 2) {
+                      setVSlide(v => v + 1);
+                    }
+                  }}
+                  style={{ position: "relative", height: "clamp(240px, calc(100vh - 330px), 600px)", cursor: "grab", overflow: "hidden", userSelect: "none", touchAction: "pan-y" }}>
+                  <img src={j.img} alt={j.time} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "flex-end", gap: 6, zIndex: 4 }}>
                     {[0, 1, 2].map(i => (
-                      <div key={i} style={{ height: 3, borderRadius: 2, background: i === vSlide ? "#fff" : "rgba(255,255,255,0.40)", width: i === vSlide ? 20 : 6, transition: "all 0.2s" }} />
+                      <div key={i} style={{ height: 4, borderRadius: 2, background: i === vSlide ? "#fff" : "rgba(255,255,255,0.40)", width: i === vSlide ? 26 : 8, transition: "all 0.2s" }} />
                     ))}
                   </div>
-                </div>
-                {/* floating card - middle right */}
-                <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", zIndex: 3 }}>
-                  {slide.card}
-                </div>
-                {/* bottom overlay */}
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "52px 16px 14px", background: "linear-gradient(transparent,rgba(0,0,0,0.86))", zIndex: 2 }}>
-                  <div style={{ fontSize: 9, fontWeight: 900, color: "#f04a08", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 4 }}>
-                    THEPERFCLUB · {slide.category}
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", lineHeight: 1.15, letterSpacing: "-0.03em" }}>
-                    {slide.title}
-                  </div>
+                  {vSlide === 0 && (
+                    <div style={{ position: "absolute", right: 16, bottom: 16, width: "54%", background: "#fff", borderRadius: 16, padding: "16px 17px", boxShadow: "0 12px 30px rgba(0,0,0,.35)" }}>
+                      <div style={{ fontSize: 19, fontWeight: 950, color: "#171b1f", marginBottom: 10 }}>Renfo</div>
+                      <div style={{ background: "rgba(0,0,0,.04)", borderRadius: 11, padding: "10px 12px", marginBottom: 12 }}>
+                        <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>Montée d&apos;intensité bien placée. Récupère bien ce soir.</div>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 999, background: "#e7e4df", overflow: "hidden", marginBottom: 11 }}>
+                        <div style={{ height: "100%", width: "62%", background: "linear-gradient(90deg,#ffb5a7,#d44000)", borderRadius: 999 }} />
+                      </div>
+                      {["Back squat — 5×5", "Snatch pull — 4×3", "Gainage — 8 min"].map((ex, i) => (
+                        <div key={i} style={{ fontSize: 13, color: "#2c3236", fontWeight: 600, padding: "7px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
+                      ))}
+                    </div>
+                  )}
+                  {vSlide === 1 && (
+                    <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "rgba(10,10,10,.75)", backdropFilter: "blur(8px)", borderRadius: 18, padding: "18px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+                        <div style={{ position: "relative", flexShrink: 0, width: 62, height: 62 }}>
+                          <svg width={62} height={62} viewBox="0 0 62 62" style={{ transform: "rotate(-90deg)", display: "block" }}>
+                            <circle cx={31} cy={31} r={26} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={5} />
+                            <circle cx={31} cy={31} r={26} fill="none" stroke="#2f9e44" strokeWidth={5} strokeDasharray={163.4} strokeDashoffset={31} strokeLinecap="round" />
+                          </svg>
+                          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ fontSize: 18, fontWeight: 1000, color: "#fff", lineHeight: 1 }}>81</span>
+                            <span style={{ fontSize: 6.5, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em" }}>WELLNESS</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 900, color: "#ff8a55", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>Score &amp; conseils</div>
+                          <div style={{ fontSize: 22, fontWeight: 950, color: "#fff", letterSpacing: "-0.02em" }}>Zone stable</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 14, color: "rgba(255,255,255,.72)", lineHeight: 1.5, marginBottom: 14 }}>Signaux stables. Bon entraînement possible.</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {["🌙 Couché tardif", "📱 Écran tard", "🧘 Stretching"].map(c => (
+                          <span key={c} style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.10)", borderRadius: 999, padding: "6px 13px" }}>{c}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {vSlide === 2 && (
+                    <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "rgba(10,10,10,.75)", backdropFilter: "blur(8px)", borderRadius: 18, padding: "18px 20px" }}>
+                      <div style={{ fontSize: 11, fontWeight: 900, color: "#ff8a55", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>ThePerfClub · Conseils</div>
+                      <div style={{ fontSize: 20, fontWeight: 950, color: "#fff", letterSpacing: "-0.02em", marginBottom: 14 }}>Charge &amp; récupération</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>💪 Coût musculaire</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 30, marginBottom: 16 }}>
+                        {[40, 65, 30, 80, 50, 35, 60].map((h, i) => (
+                          <div key={i} style={{ flex: 1, height: `${h}%`, background: "#f04a08", borderRadius: 3 }} />
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>🌿 Récupération</div>
+                      <svg width="100%" height={26} viewBox="0 0 100 26" preserveAspectRatio="none">
+                        <polyline points="0,21 15,12 30,16 45,7 60,10 75,5 100,4" fill="none" stroke="#2f9e44" strokeWidth={2.5} />
+                      </svg>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Text section */}
-              <div style={{ padding: "16px 18px 20px" }}>
-                <div style={{ fontSize: 46, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.04em", lineHeight: 1, marginBottom: 6 }}>
-                  {slide.stat}
-                </div>
-                <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.65, marginBottom: 16 }}>
-                  {slide.desc}
-                </div>
-                {vSlide < 2 ? (
-                  <button
-                    onClick={e => { e.stopPropagation(); setVSlide(v => v + 1); }}
-                    style={{ width: "100%", height: 44, borderRadius: 12, border: "1.5px solid rgba(212,64,0,.35)", background: "rgba(212,64,0,.06)", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-                    Continuer →
-                  </button>
-                ) : (
-                  <button onClick={next} style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-                    C'est parti →
-                  </button>
-                )}
-              </div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", lineHeight: 1.4, letterSpacing: "-0.01em", margin: "22px 0 8px" }}>{j.caption}</div>
+              <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
             </div>
           );
         })()}
-
-        {/* ── VALUE PROGRAM (PROGRAM_ATHLETE_PATH) ── */}
-        {currentStep === "value_program" && (
-          <div style={{ position: "relative", padding: "12px 4px" }}>
-            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
-            <div style={{ position: "relative", zIndex: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
-                ✦ ThePerfClub
-              </div>
-              <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
-                Ton programme s&apos;adapte à toi
-              </div>
-              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
-                Le même programme ne convient pas à tout le monde, ni même à toi tous les jours. On ajuste l&apos;intensité de tes séances selon ta récupération réelle, pas un plan figé à l&apos;avance. C&apos;est pour ça qu&apos;on va te poser quelques questions rapides sur ton sport et ta forme du jour.
-              </div>
-            </div>
-            <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
-          </div>
-        )}
-
-        {/* ── VALUE PROGRAM COACH (PROGRAM_COACH_PATH) ── */}
-        {currentStep === "value_program_coach" && (
-          <div style={{ position: "relative", padding: "12px 4px" }}>
-            <div style={{ position: "absolute", right: "-10%", top: "-10%", width: 260, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(36px)", pointerEvents: "none" }} />
-            <div style={{ position: "relative", zIndex: 2 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.18em", color: "#ff6b2b", textTransform: "uppercase", marginBottom: 16 }}>
-                ✦ ThePerfClub
-              </div>
-              <div style={{ fontSize: 30, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1.15, marginBottom: 18 }}>
-                Un programme qui s&apos;adapte à chaque sportif
-              </div>
-              <div style={{ fontSize: 15, color: "rgba(255,255,255,.68)", lineHeight: 1.7, marginBottom: 32 }}>
-                Un programme figé ignore l&apos;état réel de tes sportifs. ThePerfClub ajuste chaque séance selon leur récupération, pas seulement leur plan initial. Crée ton compte pour commencer.
-              </div>
-            </div>
-            <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
-          </div>
-        )}
 
         {/* ── 2A-1. SPORT ── */}
         {currentStep === "sport_2a" && (
@@ -1748,10 +1859,22 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         )}
 
         {/* ── 3. ACCOUNT ── */}
-        {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (
+        {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (() => {
+          /* Variante B (bras test) : Signup arrive juste après Rôle, profil encore vide — pas de
+             "bilan" à promettre. Variante A : Signup arrive après les pain points, le bilan
+             (Score/Concept) suit juste après — cadrage "débloque ton bilan" légitime ici. */
+          const isVariantB = assignedVariant === "test";
+          return (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>{role === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend"}</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 20 }}>Crée ton compte pour y accéder.</div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+              {isVariantB ? "Ton compte" : "Ton bilan est prêt"}
+            </div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
+              Améliore {role === "coach" ? "ton coaching" : "tes performances"}.
+            </div>
+            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 20 }}>
+              Débloque ton profil d&apos;autorégulation et construis ton programme adaptatif personnalisé.
+            </div>
             {error && (
               <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                 {error}{" "}
@@ -1779,18 +1902,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
             <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 8 }} />
-            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 16 }}>Tu recevras un email pour créer ton mot de passe.</div>
-            <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
+            <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : (isVariantB ? "Créer mon compte →" : "Recevoir mon bilan →")} nextDisabled={saving || !name.trim() || !email.trim()} />
             <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
           </div>
-        ))}
+          ); })()
+        )}
 
         {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
         {currentStep === "profile_recap" && (
           <ProfileRecapStep
             role={role}
+            sport={sport}
             sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
             sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
             showLevel={path.includes("level_2a") || (hasClaimedProgram === true && !!level)}
@@ -1799,11 +1923,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             showDays={path.includes("days_2a")}
             trainingDays={trainingDays}
             claimedProgramName={claimedProgramName}
-            autoregProfile={
-              path.includes("autoreg_score") ? computeAthleteAutoregProfile(overloadAns, planningAns, fatigueAns)
-              : path.includes("autoreg_score_coach") ? computeCoachAutoregProfile(overloadCoachAns, planningCoachAns, fatigueCoachAns)
-              : null
-            }
             hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
             onNext={next}
           />
@@ -2151,6 +2270,138 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
+        {/* ── PAYWALL PRIMING (pricing + réassurance) ── */}
+        {currentStep === "paywall_priming" && (() => {
+          const p = PRICING[role === "coach" ? "coach" : "athlete"];
+          const savings = p.monthly * 12 - p.annual;
+          const headline = hasClaimedProgram && claimedProgramName
+            ? `Ton programme ${claimedProgramName} t'attend.`
+            : (role === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
+          return (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+                🔒 Essai 7j gratuit
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 8 }}>{headline}</div>
+              <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Aucun prélèvement avant la fin de l&apos;essai.</div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 26 }}>
+                <div onClick={() => setBilling("monthly")} style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "monthly" ? "#171b1f" : "#fff" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "monthly" ? "rgba(255,255,255,.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Mensuel</div>
+                  <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.monthly}€</div>
+                  <div style={{ fontSize: 11, color: billing === "monthly" ? "rgba(255,255,255,.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
+                </div>
+                <div style={{ position: "relative" }}>
+                  <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", zIndex: 1 }}>ÉCONOMISEZ {savings}€</div>
+                  <div onClick={() => setBilling("annual")} style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", height: "100%", boxSizing: "border-box" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: billing === "annual" ? "rgba(255,255,255,.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Annuel</div>
+                    <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "annual" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.annualMonthly}€</div>
+                    <div style={{ fontSize: 11, color: billing === "annual" ? "rgba(255,255,255,.45)" : "#8a8f94", marginTop: 3 }}>/mois · {p.annual}€/an</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ position: "relative", paddingLeft: 32, marginBottom: 26 }}>
+                <div style={{ position: "absolute", left: 9, top: 10, bottom: 10, width: 2, background: "rgba(212,64,0,0.20)", borderRadius: 1 }} />
+                {[
+                  { title: "Compte créé", sub: "Il ne reste qu'à démarrer ton essai gratuit.", done: true },
+                  { title: "Rappel 2 jours avant la fin de l'essai", sub: "On te préviendra avant tout prélèvement.", done: false },
+                  { title: "Annule à tout moment, sans condition", sub: "Pas d'engagement, pas de frais cachés.", done: false },
+                ].map((node, i, arr) => (
+                  <div key={node.title} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: i < arr.length - 1 ? 16 : 0 }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                      background: node.done ? "#2f9e44" : "rgba(212,64,0,0.10)",
+                      border: node.done ? "none" : "1.5px solid #d44000",
+                    }}>
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke={node.done ? "#fff" : "#d44000"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1f2428", lineHeight: 1.3 }}>{node.title}</div>
+                      <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.4, marginTop: 2 }}>{node.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Preuve sociale — le grand témoignage reste ici, le petit bandeau avatars est sur paywall_form */}
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+                  <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
+                    &ldquo;{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].quote}&rdquo;
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                      <img src={PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].name}</div>
+                      <div style={{ fontSize: 11, color: "#8a8f94" }}>{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].role}</div>
+                    </div>
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                      {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#f28a00", fontSize: 12 }}>★</span>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Actions onNext={next} nextLabel="Continuer →" />
+            </div>
+          );
+        })()}
+
+        {/* ── PAYWALL FORM (carte Stripe, plein écran) ── */}
+        {currentStep === "paywall_form" && (() => {
+          const p = PRICING[role === "coach" ? "coach" : "athlete"];
+          const isMonthly = billing === "monthly";
+          return (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+                🔒 Essai 7j gratuit
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Démarre ton essai gratuit</div>
+              <div
+                onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
+                <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{isMonthly ? "Facturé mensuellement" : "Facturé annuellement"}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{isMonthly ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+                <div style={{ display: "flex" }}>
+                  {PAYWALL_AVATARS.map((src, i) => (
+                    <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
+                  <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+                </div>
+              </div>
+
+              {loadingIntent && <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement du formulaire...</div>}
+              {setupError && <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
+              {clientSecret && (
+                <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
+                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} />
+                </Elements>
+              )}
+              {/* Portail : le bouton submit Stripe doit rester lié au <form> (CheckoutForm) tout en
+                  étant ancré au bas du viewport comme le footer de tous les autres steps — même
+                  largeur de contenu que Actions.tsx "light" (maxWidth 560, centré), pas pleine
+                  largeur de la page. */}
+              <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff" }}>
+                <div ref={setFooterPortalNode} style={{ maxWidth: 560, margin: "0 auto" }} />
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── CÉLÉBRATION + UPGRADE PITCH ── */}
         {currentStep === "celebration" && (
           <CelebrationScreen
@@ -2167,21 +2418,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             showProfile={path.includes("sport_2a")}
             showWellness={path.includes("wellness_q")}
             saving={saving}
-            onStartTrial={handleStartTrial}
+            onNext={next}
           />
         )}
 
         </div>
       </div>
-      {showTrialPaywall && (
-        <PaywallModal
-          mode={role}
-          allowDismiss={false}
-          onSuccess={handleTrialSuccess}
-          headline={hasClaimedProgram && claimedProgramName ? `Ton programme ${claimedProgramName} t'attend` : undefined}
-          abVariant={assignedVariant ?? "control"}
-        />
-      )}
     </OnboardingBackground>
   );
 }

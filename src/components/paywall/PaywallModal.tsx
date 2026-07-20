@@ -7,9 +7,9 @@ import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useEl
 import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+export const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
-type Billing = "monthly" | "annual";
+export type Billing = "monthly" | "annual";
 
 interface PaywallModalProps {
   mode: "athlete" | "coach";
@@ -23,12 +23,14 @@ interface PaywallModalProps {
   abVariant?: string;
 }
 
-const PRICING = {
+export const PRICING = {
   athlete: { monthly: 9,  annual: 59,  annualMonthly: 4.92 },
   coach:   { monthly: 49, annual: 179, annualMonthly: 14.92 },
 };
 
-function CheckoutForm({
+/* Exporté pour réutilisation par les 2 écrans plein-page de l'onboarding (paywall_priming/
+   paywall_form dans OnboardingFlow.tsx) — même logique Stripe, pas de duplication. */
+export function CheckoutForm({
   mode, billing, footerPortalNode, onSuccess, abVariant,
 }: {
   mode: "athlete" | "coach";
