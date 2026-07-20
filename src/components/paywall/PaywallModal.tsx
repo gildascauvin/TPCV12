@@ -28,6 +28,31 @@ export const PRICING = {
   coach:   { monthly: 49, annual: 179, annualMonthly: 14.92 },
 };
 
+/* Preuve sociale — partagée entre l'onboarding (paywall_form) et le paywall in-app
+   (usePaywall/PrimingJourneyModal), pour rester "exactement les mêmes écrans". */
+export const PAYWALL_AVATARS = [
+  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
+  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
+  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
+];
+
+export const PAYWALL_TESTIMONIALS = {
+  athlete: {
+    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.",
+    name: "Franck G.",
+    role: "Sportif · Membre ThePerfClub",
+    photo: "https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png",
+  },
+  coach: {
+    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.",
+    name: "Killian Anno",
+    role: "Préparateur physique · Rugby Club d'Arcachon",
+    photo: "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
+  },
+};
+
 /* Exporté pour réutilisation par les 2 écrans plein-page de l'onboarding (paywall_priming/
    paywall_form dans OnboardingFlow.tsx) — même logique Stripe, pas de duplication. */
 export function CheckoutForm({
@@ -184,7 +209,6 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
   const [billing, setBilling] = useState<Billing>(initialBilling ?? "annual");
-  const annualSavings = PRICING[mode].monthly * 12 - PRICING[mode].annual;
 
   useEffect(() => {
     fetch("/api/stripe/setup-intent", { method: "POST" })
@@ -198,7 +222,6 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   }, []);
 
   const p = PRICING[mode];
-  const planLabel = mode === "coach" ? "Plan Coach" : "Plan Sportif";
 
   return (
     <div onClick={(e) => { if (allowDismiss && e.target === e.currentTarget) onClose?.(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
@@ -218,78 +241,35 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
           </button>
         )}
 
-        {/* Header */}
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 14 }}>
-            ThePerfClub — {planLabel}
-          </div>
-          <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 16, color: "#171b1f" }}>
-            {headline || (mode === "coach" ? "Tes sportifs t'attendent" : "Ton programme personnalisé t'attend")}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-            <div style={{ position: "relative" }}>
-              <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#171b1f", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
-                ESSAI 7J GRATUITS
-              </div>
-              <div onClick={() => setBilling("monthly")}
-                style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "monthly" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "monthly" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Mensuel</div>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${billing === "monthly" ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {billing === "monthly" && <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#fff" }} />}
-                  </div>
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.monthly}€</div>
-                <div style={{ fontSize: 11, color: billing === "monthly" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
-              </div>
-            </div>
-
-            <div style={{ position: "relative" }}>
-              <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", letterSpacing: "0.06em", zIndex: 1 }}>
-                ÉCONOMISEZ {annualSavings}€
-              </div>
-              <div onClick={() => setBilling("annual")}
-                style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", transition: "all .15s", height: "100%", boxSizing: "border-box" as const }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "annual" ? "rgba(255,255,255,0.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annuel</div>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", background: billing === "annual" ? "#d44000" : "transparent", border: `1.5px solid ${billing === "annual" ? "#d44000" : "rgba(0,0,0,.25)"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {billing === "annual" && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                        <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </div>
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "annual" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.annualMonthly}€</div>
-                <div style={{ fontSize: 11, color: billing === "annual" ? "rgba(255,255,255,0.45)" : "#8a8f94", marginTop: 3 }}>/mois · {p.annual}€/an</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ position: "relative", paddingLeft: 32 }}>
-            <div style={{ position: "absolute", left: 9, top: 10, bottom: 10, width: 2, background: "rgba(212,64,0,0.20)", borderRadius: 1 }} />
-            {[
-              { title: "Accès complet dès le premier jour", sub: "Toutes les fonctionnalités débloquées immédiatement." },
-              { title: "Rappel 2 jours avant la fin de l'essai", sub: "On te préviendra avant tout prélèvement." },
-              { title: "Annule à tout moment, sans condition", sub: "Pas d'engagement, pas de frais cachés." },
-            ].map((node, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: i < 2 ? 16 : 0 }}>
-                <div style={{ width: 20, height: 20, borderRadius: "50%", flexShrink: 0, background: "rgba(212,64,0,0.10)", border: "1.5px solid #d44000", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                    <path d="M1 4L3.5 6.5L9 1" stroke="#d44000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: "#1f2428", lineHeight: 1.3 }}>{node.title}</div>
-                  <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.4, marginTop: 2 }}>{node.sub}</div>
-                </div>
-              </div>
-            ))}
+        {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
+            badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+          🔒 Essai 7j gratuit
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Démarre ton essai gratuit"}</div>
+        <div
+          onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
+          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
+          <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{billing === "monthly" ? "Facturé mensuellement" : "Facturé annuellement"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{billing === "monthly" ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
           </div>
         </div>
 
-        <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", marginBottom: 18 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+          <div style={{ display: "flex" }}>
+            {PAYWALL_AVATARS.map((src, i) => (
+              <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
+            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+          </div>
+        </div>
 
         {loadingIntent && (
           <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>

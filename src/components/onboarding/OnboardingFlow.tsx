@@ -14,7 +14,7 @@ import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
-import { CheckoutForm, PRICING, stripePromise, type Billing } from "@/components/paywall/PaywallModal";
+import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, stripePromise, type Billing } from "@/components/paywall/PaywallModal";
 import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -237,31 +237,6 @@ const SPORT_SESSION_TYPES: Record<string, string> = {
   "Endurance":               "Alternance de sorties longues à allure modérée et de séances de fractionné plus intense.",
   "Arts martiaux & combat": "Séances techniques, travail au sac, et rounds à intensité croissante.",
   "Autre":                   "Séances variées, adaptées à ta discipline et à ton objectif.",
-};
-
-/* Preuve sociale — déplacée de CelebrationScreen vers paywall_priming (2026-07-19) : plus utile
-   comme réassurance avant le paiement qu'en félicitations après coup. */
-const PAYWALL_AVATARS = [
-  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
-];
-
-const PAYWALL_TESTIMONIALS = {
-  athlete: {
-    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.",
-    name: "Franck G.",
-    role: "Sportif · Membre ThePerfClub",
-    photo: "https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png",
-  },
-  coach: {
-    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.",
-    name: "Killian Anno",
-    role: "Préparateur physique · Rugby Club d'Arcachon",
-    photo: "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-  },
 };
 
 const BEDTIME_OPTIONS = [
