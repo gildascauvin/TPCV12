@@ -2401,6 +2401,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} />
                 </Elements>
               )}
+              {/* Le footer sticky de CheckoutForm (récap + bouton + mention sécurité) est plus haut
+                  que le footer 1-bouton standard des autres steps — le padding-bottom global de
+                  OnboardingBackground (120px) ne suffit pas à empêcher le footer fixed de recouvrir
+                  le texte légal Stripe juste au-dessus. Espace réservé en plus, propre à ce step. */}
+              <div style={{ height: 80 }} />
               {/* Portail : le bouton submit Stripe doit rester lié au <form> (CheckoutForm) tout en
                   étant ancré au bas du viewport comme le footer de tous les autres steps — même
                   largeur de contenu que Actions.tsx "light" (maxWidth 560, centré), pas pleine
