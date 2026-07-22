@@ -81,17 +81,11 @@ function computeBehaviorCorrelations(wellness: WellnessDaily[]): BehaviorCorrela
   for (const key of allKeys) {
     const daysWith: number[] = [];
     const daysWithout: number[] = [];
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const dayD  = sorted[i];
-      const dayD1 = sorted[i + 1];
-      const diffDays = Math.round(
-        (new Date(dayD1.date + "T12:00:00").getTime() - new Date(dayD.date + "T12:00:00").getTime()) / 86400000
-      );
-      if (diffDays !== 1) continue;
-      const nextScore = dayD1.score ?? dayD1.base_score;
-      if (nextScore === null || nextScore === undefined) continue;
-      if ((dayD.behaviors || []).includes(key)) daysWith.push(nextScore);
-      else daysWithout.push(nextScore);
+    for (const day of sorted) {
+      const dayScore = day.score ?? day.base_score;
+      if (dayScore === null || dayScore === undefined) continue;
+      if ((day.behaviors || []).includes(key)) daysWith.push(dayScore);
+      else daysWithout.push(dayScore);
     }
     if (daysWith.length < 2 || daysWithout.length < 2) continue;
     const avgWith    = daysWith.reduce((a, b) => a + b, 0) / daysWith.length;
@@ -170,7 +164,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
           <div>
             <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
             <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet sur ton wellness du lendemain</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet des comportements de la veille sur ton wellness</div>
           </div>
           <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
         </div>
@@ -220,7 +214,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
                 <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
-                {" "}améliore ton wellness du lendemain de{" "}
+                {" "}améliore ton wellness de{" "}
                 <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
               </div>
             )}
@@ -228,14 +222,14 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
                 <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
-                {" "}pénalise ton wellness du lendemain de{" "}
+                {" "}pénalise ton wellness de{" "}
                 <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
               </div>
             )}
           </div>
         )}
 
-        <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · corrélation J→J+1</div>
+        <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · veille → jour même</div>
       </div>
     </div>
   );
