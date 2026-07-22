@@ -476,6 +476,16 @@ Chantier lancé après évaluation d'opportunité (l'app est déjà une PWA fonc
 - **Vérification bout-en-bout tentée en local, non concluante** : abonnement réel créé, FCM répond systématiquement 201 (accepté), mais aucune notification n'apparaît sur macOS malgré permissions/réglages vérifiés (macOS notif Chrome, style d'alerte, `chrome://settings/content/notifications`) et un test de démo externe (gauntface.com) qui fonctionne sur la même machine — donc pas un blocage réseau/OS général. Clés VAPID vérifiées cryptographiquement correctes (dérivation de la clé publique depuis la privée = clé stockée). Cause probable : fiabilité connue de la livraison push sur `http://localhost`, à re-tester une fois en prod sur `go.theperfclub.com` (HTTPS réel).
 - Plan complet : `/Users/Gildas/.claude/plans/evalue-l-opportunit-de-mettre-fuzzy-fiddle.md`.
 
+## Page Conseils (`/conseils`) — carte "Impact comportements"
+
+`src/app/(app)/conseils/page.tsx` — `computeBehaviorCorrelations()` calcule, pour chaque comportement (`alcohol`, `hydration`...), son impact moyen sur le score wellness (`BehaviorImpactCard`).
+
+**Sémantique de `wellness_daily.behaviors`** : le formulaire (`WellnessModal.tsx` step 3, et l'équivalent onboarding `wellness_q`) demande "🔍 Comportements d'hier" — les comportements enregistrés dans la ligne du jour J représentent les actions réelles du jour **J-1** (la veille), pas celles du jour J. Le score de la ligne J (`computeWellnessScore()` dans `src/lib/wellness.ts`) intègre déjà directement ces comportements : `score = base_score − pénalité(comportements) + bonus(comportements)` (pénalité −3pts/comportement négatif plafonnée à −15, bonus +2pts/positif plafonné à +10). Donc une seule ligne `wellness_daily` encode déjà toute la relation "comportements de la veille → score du jour" — pas besoin de décalage d'index entre deux lignes.
+
+**Fix corrélation "J→J+1" → "veille→jour même" (2026-07-22)** — repéré par Gildas sur son propre compte (`cauvingildas@gmail.com`) : la carte attribuait un mauvais score à l'hydratation (positive) au lieu des vrais responsables (alcool/sommeil tardif/sortie sociale). Root cause : `computeBehaviorCorrelations()` comparait `dayD.behaviors` (= actions réelles de J-1) au score de la ligne **suivante** `dayD+1.score` (qui intègre lui-même les actions de J) — un décalage total de 2 jours, pas 1, malgré le libellé "corrélation J→J+1". **Fix** : comparaison sur la même ligne (`day.behaviors` vs `day.score`), plus de recherche de paires consécutives ni de vérification `diffDays`. Libellés UI corrigés en conséquence (suppression de toute référence à "du lendemain"/"J→J+1").
+
+**Seuil d'affichage par comportement (préexistant, pas changé par ce fix)** : un comportement n'apparaît dans la carte que s'il a été loggé au moins 2 fois sur la période (`daysWith.length < 2` → exclu silencieusement, pas de "pas assez de données" affiché). Sur un compte avec peu d'historique, ça peut donner l'impression que certains comportements évidents (ex. alcool coché une seule fois) sont ignorés — c'est le seuil statistique minimal, pas un bug.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
