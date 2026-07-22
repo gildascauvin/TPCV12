@@ -486,6 +486,18 @@ Chantier lancé après évaluation d'opportunité (l'app est déjà une PWA fonc
 
 **Seuil d'affichage par comportement (préexistant, pas changé par ce fix)** : un comportement n'apparaît dans la carte que s'il a été loggé au moins 2 fois sur la période (`daysWith.length < 2` → exclu silencieusement, pas de "pas assez de données" affiché). Sur un compte avec peu d'historique, ça peut donner l'impression que certains comportements évidents (ex. alcool coché une seule fois) sont ignorés — c'est le seuil statistique minimal, pas un bug.
 
+## Score wellness post-séance sur `/today` (2026-07-22)
+
+La carte "Score & conseils" de `src/app/(app)/today/TodayClient.tsx` affichait jusque-là uniquement le score wellness du matin, même après qu'une séance réelle (RPE + durée saisis via `CompleteModal.tsx`) ait été terminée — le bloc "Conseils" du bas de carte (`getAdvice()`) réagissait déjà aux séances faites, mais le ring/zone/commentaire du haut (`getContextualInsight()`) restait figé sur les 4 signaux du matin (sommeil/stress/récup/motivation), pouvant afficher "Tous les signaux au vert — fenêtre idéale pour t'entraîner" juste au-dessus d'un conseil parlant d'une séance déjà terminée.
+
+**Fonctions déjà présentes mais mortes, désormais branchées** : `computeFatigueImpact(rpe, durationMinutes)` (impact = `min(round(rpe×durée/60), 25)`) et `computeDisplayScore(wellnessScore, dailyImpacts[])` existaient dans `src/lib/wellness.ts` sans aucun appelant — `CompleteModal.tsx` réimplémentait la même formule en dur (ligne 23) juste pour son propre bandeau "🔥 Impact fatigue estimé", jamais persisté ni réutilisé ailleurs. Pas de nouveau modèle inventé, juste le câblage de l'existant.
+
+- **`TodayClient.tsx`** : `displayScore` (utilisé partout dans la carte — ring, `zoneLabel`, lignes d'alerte) intègre désormais l'impact des séances terminées du jour (`todaySessions.filter(s => s.done && s.rpe && s.duration)`), recalculé côté client à chaque rendu — **rien n'est écrit en base**. `wellness_daily.score` reste le score du matin brut, inchangé, puisque c'est lui qu'utilise la corrélation "Impact comportements" de `/conseils` (qui doit rester un pur reflet du check-in matinal, indépendant de la charge d'entraînement qui arrive après — voir section précédente).
+- **Badge visuel** : pill rouge `📉 {score matin} → {score réduit} (−X)` ajoutée à côté du badge "Autorégulation active", même vocabulaire "+/− X pts" que la carte Impact comportements et le bandeau de `CompleteModal.tsx`.
+- **`getContextualInsight()`** : nouveau paramètre optionnel `postSession?: { displayScore, totalImpact }` — si présent et `totalImpact > 0`, remplace entièrement les messages "signaux du matin" par un des 3 messages post-séance (seuils alignés sur `zoneLabel()` : ≥65/≥45/en dessous). Signature rétrocompatible : l'autre appelant (`OnboardingFlow.tsx`, écran `wellness_reveal`, jamais de séance à ce stade) continue de fonctionner sans changement.
+- **`CompleteModal.tsx`** : `impact` importe désormais `computeFatigueImpact` au lieu de dupliquer la formule.
+- Testé en local par Gildas avant déploiement.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
