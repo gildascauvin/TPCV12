@@ -10,7 +10,8 @@ import WellnessModal from "@/components/wellness/WellnessModal";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, getContextualInsight, getAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
+import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
+import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -344,7 +345,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const totalImpact = impacts.reduce((a, b) => a + b, 0);
   const displayScore = wellnessFilledToday && score !== null ? computeDisplayScore(score, impacts) : null;
   const displayWellness = wellnessFilledToday ? wellness : null;
-  const advice = getAdvice(displayWellness, todaySessions);
+  const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
+  const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
+  const yesterdaySessions = allSessions.filter(s => s.date === yesterdayDate);
+  const tomorrowSessions = allSessions.filter(s => s.date === tomorrowDate);
+  const loadCtx: LoadContext = {
+    prevMax: yesterdaySessions.length ? Math.max(...yesterdaySessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+    nextMax: tomorrowSessions.length ? Math.max(...tomorrowSessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+  };
+  const rule = loadRule(todaySessions, loadCtx);
+  const advice = {
+    training: `${rule.title}. ${rule.text}`,
+    recovery: getRecoveryAdvice(displayWellness, rule.cls, displayScore !== null ? { totalImpact } : undefined),
+  };
   const dotMap = buildDotMap(allSessions, selectedDate);
 
   useEffect(() => {
@@ -517,11 +530,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
                   {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
-                  {wellnessFilledToday && wellness
-                    ? getContextualInsight(wellness, displayScore !== null ? { displayScore, totalImpact } : undefined)
-                    : "Non renseigné · Appuie pour remplir"}
-                </div>
                 {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
                     {wellness.behaviors.map((b) => (
@@ -529,16 +537,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     ))}
                   </div>
                 )}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
-                    ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
-                  </span>
-                  {totalImpact > 0 && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(209,0,0,.28)", background: "rgba(209,0,0,.14)", color: "#ffb3b3", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
-                      📉 {score} → {displayScore} <span style={{ opacity: .75 }}>(−{totalImpact})</span>
-                    </span>
-                  )}
-                </div>
               </div>
             </div>
 

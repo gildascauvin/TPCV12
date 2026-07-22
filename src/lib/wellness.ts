@@ -71,49 +71,115 @@ export function getContextualInsight(
   return "Signaux stables — bon entraînement possible";
 }
 
-export function getAdvice(wellness: Pick<WellnessDaily, "score"> | null, sessions: Session[]): { training: string; recovery: string } {
-  const done = sessions.filter((s) => s.done && s.rpe && s.duration);
-  const planned = sessions.filter((s) => !s.done && s.target_difficulty);
-  const score = wellness?.score ?? null;
-  const plannedDiff = planned.length ? Math.max(...planned.map(s => s.target_difficulty!)) : null;
+function yesterdayNote(doneYesterday: Session[]): string {
+  if (!doneYesterday.length) return "Hier : repos.";
+  const maxRpe = Math.max(...doneYesterday.map(s => s.rpe!));
+  return `Hier : séance à ${maxRpe}/10.`;
+}
 
-  if (!wellness && !done.length) {
-    return {
-      training: "Remplis ton wellness pour obtenir tes recommandations.",
-      recovery: "Les conseils apparaîtront ici.",
-    };
+function trainingChainAdvice(doneToday: Session[], plannedToday: Session[], doneYesterday: Session[]): string {
+  const note = yesterdayNote(doneYesterday);
+  if (doneToday.length) {
+    const avgRpe = +(doneToday.reduce((a, s) => a + s.rpe!, 0) / doneToday.length).toFixed(1);
+    const mins = doneToday.reduce((a, s) => a + s.duration!, 0);
+    return `${doneToday.length} séance${doneToday.length > 1 ? "s" : ""} terminée${doneToday.length > 1 ? "s" : ""} · Effort moy. ${avgRpe}/10 · ${mins} min. ${note}`;
   }
-  if (done.length) {
-    const load = done.reduce((a, s) => a + s.rpe! * s.duration!, 0);
-    const avgRpe = +(done.reduce((a, s) => a + s.rpe!, 0) / done.length).toFixed(1);
-    const mins = done.reduce((a, s) => a + s.duration!, 0);
-    return {
-      training: `${done.length} séance${done.length > 1 ? "s" : ""} terminée${done.length > 1 ? "s" : ""} · Effort moy. ${avgRpe}/10 · ${mins} min. ${load > 600 ? "Charge haute : récupération prioritaire." : load > 300 ? "Charge modérée : évite d'ajouter de l'intensité." : "Charge légère : progression possible."}`,
-      recovery: load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce." : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier." : "Routine simple : hydratation, marche légère et sommeil stable.",
-    };
+  if (plannedToday.length) {
+    const diff = Math.max(...plannedToday.map(s => s.target_difficulty!));
+    return `Séance à ${diff}/10 prévue aujourd'hui. ${note}`;
   }
-  if (score !== null && plannedDiff !== null) {
-    const diff = plannedDiff;
-    const expectedScore = (diff / 10) * 100;
-    if (plannedDiff >= 8 && score < 65) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score aujourd'hui ${score} — allège à 6/10 ou reporte si possible.`,
-      recovery: "Wellness bas + séance intense : priorité hydratation, sommeil avant 23h, pas d'effort max.",
-    };
-    if (plannedDiff >= 8 && score >= 80) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score excellent (${score}) — fenêtre idéale, vas-y !`,
-      recovery: "Maintiens les bons signaux : hydratation, protéines et coucher régulier.",
-    };
-    if (plannedDiff >= 8) return {
-      training: `Séance dure prévue (${plannedDiff}/10) · Score ${score} — reste attentif à ta récupération après.`,
-      recovery: "Post-séance intense : protéines 1,6–2g/kg/j et coucher avant 23h.",
-    };
-    if (Math.abs(score - expectedScore) <= 15) return {
-      training: `Séance à ${diff}/10 · Cohérent avec ton score du jour (${score}) — go !`,
-      recovery: score >= 75 ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier." : "Hydrate-toi bien et vise un coucher avant 23h.",
-    };
+  return `Aucune séance prévue aujourd'hui. ${note}`;
+}
+
+function recoveryAdvice(
+  wellness: Pick<WellnessDaily, "score" | "sleep" | "stress" | "recovery" | "motivation"> | null,
+  doneToday: Session[],
+  postSession?: { totalImpact: number }
+): string {
+  if (!wellness) return "Remplis ton wellness pour voir ton état de récupération.";
+  const score = wellness.score ?? 0;
+
+  if (doneToday.length && postSession && postSession.totalImpact > 0) {
+    const load = doneToday.reduce((a, s) => a + s.rpe! * s.duration!, 0);
+    const loadTip = load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce."
+      : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier."
+      : "Routine simple : hydratation, marche légère et sommeil stable.";
+    return `Wellness −${postSession.totalImpact} pts après l'effort. ${loadTip}`;
   }
+
+  const { sleep, stress, recovery, motivation } = wellness;
+  const signals = [
+    { value: sleep, low: sleep < 5, msg: "Sommeil court", tip: "vise un coucher avant 23h ce soir" },
+    { value: 10 - stress, low: stress > 6, msg: "Stress élevé", tip: "priorise la récupération aujourd'hui" },
+    { value: recovery, low: recovery < 5, msg: "Récupération insuffisante", tip: "mobilité douce et hydratation prioritaires" },
+    { value: motivation, low: motivation < 5, msg: "Motivation en berne", tip: "sommeil et charge mentale à surveiller" },
+  ];
+  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
+  if (weakest) return `${weakest.msg} (${score}/100) — ${weakest.tip}.`;
+
+  if (score >= 82) return `Tous les signaux au vert (${score}/100) — hydratation et sommeil réguliers suffisent.`;
+  if (score >= 65) return `Signaux stables (${score}/100) — routine simple : hydratation, sommeil régulier.`;
+  if (score >= 45) return `Récupération prudente (${score}/100) — priorise hydratation et sommeil ce soir.`;
+  return `Récupération fragile (${score}/100) — sommeil, nutrition simple, pas d'effort intense.`;
+}
+
+export function getAdvice(
+  wellness: Pick<WellnessDaily, "score" | "sleep" | "stress" | "recovery" | "motivation"> | null,
+  todaySessions: Session[],
+  yesterdaySessions: Session[] = [],
+  postSession?: { displayScore: number; totalImpact: number }
+): { training: string; recovery: string } {
+  const doneToday = todaySessions.filter(s => s.done && s.rpe && s.duration);
+  const plannedToday = todaySessions.filter(s => !s.done && s.target_difficulty);
+  const doneYesterday = yesterdaySessions.filter(s => s.done && s.rpe && s.duration);
   return {
-    training: score! >= 80 ? `Score excellent (${score}/100). Fenêtre idéale pour une séance qualitative.` : score! >= 65 ? `Forme correcte (${score}/100). Intensité normale.` : score! >= 45 ? `Fatigue modérée (${score}/100). Allège légèrement l'intensité.` : `Score bas (${score}/100). Réduis l'intensité de 20–30%.`,
-    recovery: score! >= 75 ? "Maintiens les bons signaux : hydratation, protéines et coucher régulier." : score! >= 55 ? "Priorise hydratation 35ml/kg, protéines 1,6–2g/kg/j et coucher avant 23h." : "Récupération prioritaire : sommeil, nutrition simple, pas d'effort max.",
+    training: trainingChainAdvice(doneToday, plannedToday, doneYesterday),
+    recovery: recoveryAdvice(wellness, doneToday, postSession),
   };
+}
+
+const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
+  alcohol:       { label: "Alcool hier soir",     tip: "hydrate-toi bien, évite d'en reprendre ce soir" },
+  late_sleep:    { label: "Couché tard hier",     tip: "vise un coucher avant 23h ce soir" },
+  tobacco:       { label: "Tabac hier",           tip: "espace les prochaines prises, ça pèse sur ta récup" },
+  screen_late:   { label: "Écrans tard hier",     tip: "coupe les écrans 30 min avant de dormir ce soir" },
+  heavy_meal:    { label: "Repas lourd hier",     tip: "privilégie un dîner léger ce soir" },
+  caffeine_late: { label: "Caféine tardive hier", tip: "évite la caféine après 14h aujourd'hui" },
+  social_out:    { label: "Sortie tardive hier",  tip: "priorise un coucher tôt ce soir pour compenser" },
+  travel:        { label: "Voyage hier",          tip: "hydrate-toi bien, les trajets fatiguent plus qu'il n'y paraît" },
+};
+
+export function getRecoveryAdvice(
+  wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "behaviors"> | null,
+  loadCls: "hard" | "moderate" | "easy" | "rest",
+  postSession?: { totalImpact: number }
+): string {
+  if (!wellness) return "Remplis ton wellness pour voir ton état de récupération.";
+  const { sleep, stress, recovery, motivation, behaviors } = wellness;
+
+  const charge = postSession && postSession.totalImpact > 0
+    ? `charge élevée aujourd'hui (−${postSession.totalImpact} pts sur ton wellness)`
+    : loadCls === "hard" ? "charge élevée en ce moment"
+    : loadCls === "moderate" ? "charge modérée en ce moment"
+    : "charge légère en ce moment";
+  const isDemanding = loadCls === "hard" || (postSession?.totalImpact ?? 0) > 0;
+
+  const negBehavior = behaviors.map(b => NEGATIVE_BEHAVIOR_TIPS[b]).find(Boolean);
+  if (negBehavior) {
+    return isDemanding
+      ? `${negBehavior.label} — ${negBehavior.tip}. Avec une ${charge}, priorise le repos ce soir.`
+      : `${negBehavior.label} — ${negBehavior.tip}.`;
+  }
+
+  const signals = [
+    { value: sleep, low: sleep < 5, label: "Sommeil court" },
+    { value: 10 - stress, low: stress > 6, label: "Stress élevé" },
+    { value: recovery, low: recovery < 5, label: "Récupération musculaire insuffisante" },
+    { value: motivation, low: motivation < 5, label: "Motivation en berne" },
+  ];
+  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
+  if (weakest) return `${weakest.label}, avec une ${charge} — hydratation et sommeil avant tout ce soir.`;
+
+  if (isDemanding) return `Bons signaux, mais ${charge} — hydratation, protéines et sommeil pour bien récupérer.`;
+  return `Bons signaux, ${charge} — routine simple : hydratation et sommeil réguliers.`;
 }
