@@ -48,7 +48,16 @@ export function zoneLabel(score: number | null): string {
   return "Zone récupération";
 }
 
-export function getContextualInsight(wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "score">): string {
+export function getContextualInsight(
+  wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "score">,
+  postSession?: { displayScore: number; totalImpact: number }
+): string {
+  if (postSession && postSession.totalImpact > 0) {
+    const { displayScore, totalImpact } = postSession;
+    if (displayScore >= 65) return `Séance encaissée (−${totalImpact} pts) — récupération encore confortable`;
+    if (displayScore >= 45) return `Séance qui pèse (−${totalImpact} pts) — hydratation et sommeil ce soir`;
+    return `Charge élevée aujourd'hui (−${totalImpact} pts) — récupération prioritaire ce soir`;
+  }
   const { sleep, stress, recovery, motivation } = wellness;
   const signals = [
     { value: sleep, low: sleep < 5, msg: "Sommeil court — intensité réduite recommandée" },

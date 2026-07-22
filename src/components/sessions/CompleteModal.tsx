@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Session } from "@/types";
+import { computeFatigueImpact } from "@/lib/wellness";
 
 interface CompleteModalProps {
   session: Session;
@@ -20,7 +21,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     setSaving(false);
   }
 
-  const impact = Math.min(Math.round((rpe * duration) / 60), 25);
+  const impact = computeFatigueImpact(rpe, duration);
   const rpeCls = rpe >= 8 ? "hard" : rpe >= 5 ? "moderate" : "easy";
   const rpeColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[rpeCls];
 

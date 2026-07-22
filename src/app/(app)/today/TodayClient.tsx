@@ -10,7 +10,7 @@ import WellnessModal from "@/components/wellness/WellnessModal";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
+import { computeWellnessScore, zoneLabel as formLabel, getContextualInsight, getAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -339,7 +339,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const weekSessions = allSessions.filter(s => s.date >= weekStart && s.date <= weekEnd);
   const score = wellness?.score ?? null;
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
-  const displayScore = wellnessFilledToday ? score : null;
+  const doneToday = todaySessions.filter(s => s.done && s.rpe && s.duration);
+  const impacts = doneToday.map(s => computeFatigueImpact(s.rpe!, s.duration!));
+  const totalImpact = impacts.reduce((a, b) => a + b, 0);
+  const displayScore = wellnessFilledToday && score !== null ? computeDisplayScore(score, impacts) : null;
   const displayWellness = wellnessFilledToday ? wellness : null;
   const advice = getAdvice(displayWellness, todaySessions);
   const dotMap = buildDotMap(allSessions, selectedDate);
@@ -515,7 +518,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.45, color: "rgba(255,255,255,0.76)" }}>
-                  {wellnessFilledToday && wellness ? getContextualInsight(wellness) : "Non renseigné · Appuie pour remplir"}
+                  {wellnessFilledToday && wellness
+                    ? getContextualInsight(wellness, displayScore !== null ? { displayScore, totalImpact } : undefined)
+                    : "Non renseigné · Appuie pour remplir"}
                 </div>
                 {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
@@ -528,6 +533,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(255,255,255,.13)", background: "rgba(255,255,255,.07)", color: "#fff", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
                     ✓ <strong style={{ color: "#ff8a55" }}>Autorégulation</strong> active
                   </span>
+                  {totalImpact > 0 && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1px solid rgba(209,0,0,.28)", background: "rgba(209,0,0,.14)", color: "#ffb3b3", borderRadius: 999, padding: "6px 10px", fontSize: 11, fontWeight: 900 }}>
+                      📉 {score} → {displayScore} <span style={{ opacity: .75 }}>(−{totalImpact})</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
