@@ -34,12 +34,12 @@ function dayWellness(
   dateStr: string,
   wellnessMap: Record<string, Record<string, number>>
 ): number | null {
-  if (athlete.user_id && wellnessMap[athlete.user_id]?.[dateStr] !== undefined) {
-    return wellnessMap[athlete.user_id][dateStr];
+  if (athlete.user_id) {
+    // Vrai sportif : uniquement la ligne wellness_daily réelle de ce jour, jamais de repli
+    // sur athlete.wellness_score (denormalisé, peut dater de plusieurs jours).
+    return wellnessMap[athlete.user_id]?.[dateStr] ?? null;
   }
-  const todayStr = new Date().toISOString().split("T")[0];
-  if (dateStr > todayStr) return null;
-  return athlete.wellness_score;
+  return athlete.wellness_score; // démo : score fixe, pas de notion de jour
 }
 
 
