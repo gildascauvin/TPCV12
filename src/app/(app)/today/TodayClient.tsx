@@ -19,17 +19,7 @@ import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
-
-const BEHAVIOR_LABELS: Record<string, string> = {
-  alcohol: "🍷 Alcool",
-  late_sleep: "🌙 Couché tardif",
-  tobacco: "🚬 Tabac",
-  screen_late: "📱 Écran tard",
-  heavy_meal: "🍔 Repas lourd",
-  caffeine_late: "☕ Caféine tard",
-  social_out: "🎉 Sortie sociale",
-  travel: "✈️ Voyage",
-};
+import { BEHAVIOR_META } from "@/lib/behaviors";
 
 /* ─── helpers ─── */
 function greeting() {
@@ -254,6 +244,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   });
 
   const prevWeekRef = useRef("");
+
+  // Rattrape une invitation coach en attente pour un compte déjà inscrit (créée après
+  // l'onboarding, jamais consommée sinon — /api/invite/link n'était appelé qu'à l'inscription)
+  useEffect(() => {
+    if (hasCoach) return;
+    fetch("/api/invite/link", { method: "POST" })
+      .then(r => r.json())
+      .then(d => { if (d.ok) router.refresh(); })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recharge wellness + sessions quand on change de semaine
   useEffect(() => {
@@ -533,7 +533,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
                     {wellness.behaviors.map((b) => (
-                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_LABELS[b] || b}</span>
+                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
                     ))}
                   </div>
                 )}

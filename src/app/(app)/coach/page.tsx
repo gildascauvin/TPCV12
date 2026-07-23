@@ -45,8 +45,8 @@ export default async function CoachPage() {
 
   const [liveWellnessRes, realSessionsRes, demoSessionsRes] = await Promise.all([
     realUserIds.length
-      ? admin.from("wellness_daily").select("user_id, score").in("user_id", realUserIds).order("date", { ascending: false })
-      : Promise.resolve({ data: [] as { user_id: string; score: number | null }[] }),
+      ? admin.from("wellness_daily").select("user_id, score, behaviors").in("user_id", realUserIds).eq("date", today)
+      : Promise.resolve({ data: [] as { user_id: string; score: number | null; behaviors: string[] | null }[] }),
     realUserIds.length
       ? admin.from("sessions").select("*").in("user_id", realUserIds).eq("date", today)
       : Promise.resolve({ data: [] as Session[] }),
@@ -55,16 +55,18 @@ export default async function CoachPage() {
       : Promise.resolve({ data: [] as CoachSession[] }),
   ]);
 
-  const wellnessLatest = new Map<string, number>();
+  const wellnessToday = new Map<string, { score: number; behaviors: string[] }>();
   (liveWellnessRes.data || []).forEach(w => {
-    if (!wellnessLatest.has(w.user_id)) wellnessLatest.set(w.user_id, w.score ?? 70);
+    wellnessToday.set(w.user_id, { score: w.score ?? 70, behaviors: w.behaviors ?? [] });
   });
 
-  const updatedAthletes = athletes.map(a =>
-    a.user_id && wellnessLatest.has(a.user_id)
-      ? { ...a, wellness_score: wellnessLatest.get(a.user_id)! }
-      : a
-  );
+  const updatedAthletes = athletes.map(a => {
+    if (!a.user_id) return { ...a, wellnessFilledToday: true }; // démo : score fixe, pas de notion de jour
+    const w = wellnessToday.get(a.user_id);
+    return w
+      ? { ...a, wellness_score: w.score, behaviors: w.behaviors, wellnessFilledToday: true }
+      : { ...a, wellnessFilledToday: false };
+  });
 
   const todaySessions: CoachViewSession[] = [
     ...(realSessionsRes.data || []).map(s => realToView(s as Session, athletes)),

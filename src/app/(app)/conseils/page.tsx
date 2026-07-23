@@ -3,23 +3,7 @@ export const dynamic = "force-dynamic";
 import { createClient } from "@/lib/supabase/server";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import SparkLineClient from "@/components/conseils/SparkLineClient";
-
-const BEHAVIOR_META: Record<string, { emoji: string; label: string; positive: boolean }> = {
-  alcohol:       { emoji: "🍷", label: "Alcool",            positive: false },
-  late_sleep:    { emoji: "🌙", label: "Couché tardif",     positive: false },
-  tobacco:       { emoji: "🚬", label: "Tabac",             positive: false },
-  screen_late:   { emoji: "📱", label: "Écran tard",        positive: false },
-  heavy_meal:    { emoji: "🍔", label: "Repas lourd",       positive: false },
-  caffeine_late: { emoji: "☕", label: "Caféine tard",      positive: false },
-  social_out:    { emoji: "🎉", label: "Sortie sociale",    positive: false },
-  travel:        { emoji: "✈️", label: "Voyage",            positive: false },
-  stretching:    { emoji: "🧘", label: "Stretching",        positive: true  },
-  cold_shower:   { emoji: "🧊", label: "Douche froide",     positive: true  },
-  reading:       { emoji: "📖", label: "Lecture",           positive: true  },
-  meditation:    { emoji: "🧘‍♂️", label: "Méditation",       positive: true  },
-  hydration:     { emoji: "💧", label: "Bonne hydratation", positive: true  },
-  walk:          { emoji: "🚶", label: "Marche détente",    positive: true  },
-};
+import { BEHAVIOR_META } from "@/lib/behaviors";
 
 const OBJECTIVE_LABELS: Record<string, string> = {
   performance:  "Performance",

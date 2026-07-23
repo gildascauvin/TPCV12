@@ -33,13 +33,10 @@ export async function POST(req: Request) {
 
   const email = athleteEmail.trim().toLowerCase();
 
-  // Vérifie si un compte existe déjà
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
-    { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}` } }
-  );
-  const { users } = await res.json();
-  const existing = users?.find((u: { email: string }) => u.email === email);
+  // Vérifie si un compte existe déjà — l'API admin Supabase ne supporte pas de filtre ?email=
+  // côté serveur (renvoie juste la 1ère page, 50 users par défaut), d'où un listUsers explicite.
+  const { data: { users } } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  const existing = users.find(u => u.email?.toLowerCase() === email);
 
   if (existing) {
     const { data: profile } = await admin.from("profiles").select("invited_by_coach_id").eq("user_id", existing.id).single();

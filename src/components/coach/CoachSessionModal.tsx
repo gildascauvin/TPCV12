@@ -9,7 +9,7 @@ interface Exercise {
 }
 
 export interface ReviewContext {
-  wellness: number;
+  wellness: number | null;
   maxDiff: number;
   queueCurrent: number;
   queueTotal: number;
@@ -27,8 +27,12 @@ interface Props {
   onClose: () => void;
 }
 
-function buildAttentionPoints(wellness: number, maxDiff: number): string[] {
+function buildAttentionPoints(wellness: number | null, maxDiff: number): string[] {
   const points: string[] = [];
+  if (wellness === null) {
+    if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — wellness non renseigné aujourd'hui, vérifier avec lui.`);
+    return points;
+  }
   if (wellness < 55) {
     points.push(`Wellness critique (${wellness}/100) — récupération insuffisante.`);
   } else if (wellness < 65) {
@@ -154,14 +158,13 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
 
         {/* Wellness + attention block (combined) */}
         {reviewContext && (() => {
-          const wColor = reviewContext.wellness >= 70 ? "#78bf13" : reviewContext.wellness >= 45 ? "#f28a00" : "#d10000";
-          const wBg = reviewContext.wellness >= 70 ? "rgba(120,191,19,0.07)" : reviewContext.wellness >= 45 ? "rgba(242,138,0,0.07)" : "rgba(209,0,0,0.07)";
-          const wBorder = reviewContext.wellness >= 70 ? "rgba(120,191,19,0.26)" : reviewContext.wellness >= 45 ? "rgba(242,138,0,0.26)" : "rgba(209,0,0,0.26)";
-          const wLabel = reviewContext.wellness >= 82 ? "Zone optimale" : reviewContext.wellness >= 65 ? "Zone stable" : reviewContext.wellness >= 45 ? "Zone prudente" : "Zone récupération";
+          const w = reviewContext.wellness;
+          const wColor = w === null ? "rgba(0,0,0,0.22)" : w >= 70 ? "#78bf13" : w >= 45 ? "#f28a00" : "#d10000";
+          const wBg = w === null ? "rgba(0,0,0,0.03)" : w >= 70 ? "rgba(120,191,19,0.07)" : w >= 45 ? "rgba(242,138,0,0.07)" : "rgba(209,0,0,0.07)";
+          const wBorder = w === null ? "rgba(0,0,0,0.10)" : w >= 70 ? "rgba(120,191,19,0.26)" : w >= 45 ? "rgba(242,138,0,0.26)" : "rgba(209,0,0,0.26)";
+          const wLabel = w === null ? "Non renseigné" : w >= 82 ? "Zone optimale" : w >= 65 ? "Zone stable" : w >= 45 ? "Zone prudente" : "Zone récupération";
           const dColor = reviewContext.maxDiff >= 8 ? "#d44000" : reviewContext.maxDiff >= 5 ? "#b96500" : "#2f9e44";
-          const circ = +(2 * Math.PI * 21).toFixed(1);
-          const offset = +(circ * (1 - reviewContext.wellness / 100)).toFixed(1);
-          const points = buildAttentionPoints(reviewContext.wellness, reviewContext.maxDiff);
+          const points = buildAttentionPoints(w, reviewContext.maxDiff);
           return (
             <div style={{ background: wBg, border: `1px solid ${wBorder}`, borderRadius: 16, padding: "13px 16px", marginBottom: 18 }}>
               {/* Gauge row */}
@@ -171,17 +174,17 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
                     <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
                     <circle cx="32" cy="32" r="27" fill="none" stroke={wColor} strokeWidth="5" strokeLinecap="round"
                       strokeDasharray={String(+(2 * Math.PI * 27).toFixed(1))}
-                      strokeDashoffset={String(+(2 * Math.PI * 27 * (1 - reviewContext.wellness / 100)).toFixed(1))} />
+                      strokeDashoffset={String(+(2 * Math.PI * 27 * (1 - (w ?? 0) / 100)).toFixed(1))} />
                   </svg>
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{reviewContext.wellness}</span>
+                    <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{w !== null ? w : "—"}</span>
                     <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 900, color: wColor, letterSpacing: "-0.01em" }}>{wLabel}</div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>
-                    Wellness <span style={{ fontWeight: 800 }}>{reviewContext.wellness}/100</span>
+                    {w !== null ? <>Wellness <span style={{ fontWeight: 800 }}>{w}/100</span></> : "Wellness non renseigné aujourd'hui"}
                     {reviewContext.maxDiff > 0 && (
                       <> · Difficulté prévue <span style={{ fontWeight: 800, color: dColor }}>{reviewContext.maxDiff}/10</span></>
                     )}

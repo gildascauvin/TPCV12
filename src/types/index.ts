@@ -60,6 +60,8 @@ export interface CoachAthlete {
   name: string;
   sport: string | null;
   wellness_score: number;
+  behaviors?: string[]; // comportements wellness du jour consulté — absent/[] si pas de ligne wellness_daily (démo, ou pas encore rempli)
+  wellnessFilledToday?: boolean; // true si une ligne wellness_daily existe pour le jour consulté (toujours true pour les démo, sans notion de jour)
   user_id: string | null; // null = démo ou invite pending, string = vrai sportif lié
   invite_email: string | null; // non-null = invitation pending (sportif pas encore inscrit)
   created_at: string;

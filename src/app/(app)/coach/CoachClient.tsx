@@ -14,6 +14,8 @@ import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import DiffGauge from "@/components/calendar/DiffGauge";
+import { zoneLabel } from "@/lib/wellness";
+import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
@@ -26,7 +28,7 @@ interface Props {
   inviteCode: string | null;
 }
 
-function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+function scoreColor(s: number | null) { return s === null ? "rgba(255,255,255,0.18)" : s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
 function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], avgWellness: number, avgDifficulty: number | null): string {
@@ -38,9 +40,9 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   }
   function verb(list: CoachAthlete[], sing: string, plur: string) { return list.length > 1 ? plur : sing; }
 
-  const inRed = athletes.filter(a => a.wellness_score < 55);
+  const inRed = athletes.filter(a => a.wellnessFilledToday !== false && a.wellness_score < 55);
   const withHard = athletes.filter(a => sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
-  const critical = athletes.filter(a => a.wellness_score < 55 && sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
+  const critical = athletes.filter(a => a.wellnessFilledToday !== false && a.wellness_score < 55 && sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
 
   if (critical.length > 0)
     return `${names(critical)} ${verb(critical, "est dans le rouge", "sont dans le rouge")} avec une séance difficile prévue. Allège ou reporte avant ${verb(critical, "qu'il", "qu'ils")} s'entraîne${verb(critical, "", "nt")}.`;
@@ -61,10 +63,11 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
 }
 
-function WellnessRing({ score, size = 72 }: { score: number; size?: number }) {
+function WellnessRing({ score, size = 72 }: { score: number | null; size?: number }) {
   const r = Math.round(size * 0.423);
   const circ = +(2 * Math.PI * r).toFixed(1);
-  const offset = +(circ * (1 - Math.max(0, Math.min(100, score)) / 100)).toFixed(1);
+  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
+  const offset = +(circ * (1 - pct / 100)).toFixed(1);
   const sw = Math.round(size * 0.077);
   const color = scoreColor(score);
   return (
@@ -76,7 +79,7 @@ function WellnessRing({ score, size = 72 }: { score: number; size?: number }) {
           style={{ transition: "stroke-dashoffset 0.5s ease" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score}</span>
+        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score !== null ? score : "—"}</span>
         <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
       </div>
     </div>
@@ -89,6 +92,7 @@ function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
 }
 
 function attention(a: CoachAthlete, maxDiff: number) {
+  if (a.wellnessFilledToday === false) return maxDiff >= 8; // pas de wellness du jour : seule une séance dure prévue justifie une alerte
   return a.wellness_score < 55 ||
     (a.wellness_score < 65 && maxDiff >= 5) ||
     maxDiff >= 8;
@@ -96,14 +100,20 @@ function attention(a: CoachAthlete, maxDiff: number) {
 
 function riskScore(a: CoachAthlete, maxDiff: number): number {
   let score = 0;
-  if (a.wellness_score < 55) score += 4;
-  else if (a.wellness_score < 65) score += 2;
+  if (a.wellnessFilledToday !== false) {
+    if (a.wellness_score < 55) score += 4;
+    else if (a.wellness_score < 65) score += 2;
+  }
   if (maxDiff >= 8) score += 3;
   else if (maxDiff >= 6) score += 1;
   return score;
 }
 
 function decisionText(a: CoachAthlete, maxDiff: number) {
+  if (a.wellnessFilledToday === false) {
+    if (maxDiff >= 8) return "Wellness non renseigné aujourd'hui + séance dure prévue : vérifier avec lui avant.";
+    return "Wellness non renseigné aujourd'hui.";
+  }
   if (a.wellness_score < 55 && maxDiff >= 7) return "Wellness bas + séance difficile : alléger maintenant.";
   if (maxDiff >= 8) return "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
   if (a.wellness_score < 65 && maxDiff <= 4) return "Wellness légèrement bas, séance légère : rien à changer, surveiller demain.";
@@ -121,31 +131,24 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
+  const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+  const extraSessions = todaySessions.length - (topSession ? 1 : 0);
   const decision = decisionText(athlete, maxDiff);
   const showBadge = isPriority && !isReviewed;
   const showReviewed = isPriority && isReviewed;
-
-  let cardBg = "#fff";
-  let cardBorder = "1px solid rgba(0,0,0,.08)";
-  let cardShadow = "0 14px 36px rgba(0,0,0,.065)";
-
-  if (showBadge) {
-    cardBg = "linear-gradient(180deg,#fff,#fff5ef)";
-    cardBorder = "1.5px solid rgba(212,64,0,.45)";
-    cardShadow = "0 18px 46px rgba(212,64,0,.13)";
-  } else if (showReviewed) {
-    cardBg = "linear-gradient(180deg,#fff,#f4fbf6)";
-    cardBorder = "1.5px solid rgba(47,158,68,.30)";
-    cardShadow = "0 14px 36px rgba(47,158,68,.07)";
-  }
+  const behaviors = athlete.behaviors ?? [];
+  const firstName = athlete.name.split(" ")[0];
+  const displayScore = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
 
   return (
     <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
-      display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 12, alignItems: "center",
-      background: cardBg, border: cardBorder, borderRadius: 26, padding: 18,
-      boxShadow: cardShadow,
+      background: "linear-gradient(145deg,#1a1a1a,#282828)",
+      border: showBadge ? "1.5px solid rgba(212,64,0,.45)" : showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
+      borderRadius: 26, padding: 18,
+      boxShadow: showBadge ? "0 18px 46px rgba(212,64,0,.18)" : "0 14px 36px rgba(0,0,0,.28)",
       transition: "border 0.3s ease, box-shadow 0.3s ease",
+      color: "#fff",
     }}>
       {/* Pulsing badge top-right */}
       {showBadge && (
@@ -164,70 +167,61 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
         </>
       )}
 
-      <WellnessRing score={athlete.wellness_score} size={72} />
-
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 18, fontWeight: 950, color: "#1f2428", letterSpacing: "-0.02em" }}>{athlete.name}</div>
-          {showBadge && (
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
-              Attention requise
-            </div>
-          )}
-          {showReviewed && (
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#eef8f1", color: "#166534", border: "1px solid rgba(47,158,68,.22)", borderRadius: 999, padding: "3px 8px" }}>
-              Traité ✓
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize: 11, color: "#6b7277", marginTop: 2 }}>
-          {athlete.sport} · {todaySessions.length} séance{todaySessions.length !== 1 ? "s" : ""}
-        </div>
-        {todaySessions.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-            {todaySessions.map(s => {
-              const exercises = s.notes ? s.notes.split("\n").filter(Boolean) : [];
-              const extra = exercises.length - 3;
-              return (
-                <div key={s.id}>
-                  <div style={{ marginBottom: exercises.length ? 4 : 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#2c3236", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em", marginBottom: s.target_difficulty != null ? 4 : 0 }}>
-                      {s.name}
-                    </div>
-                    {s.target_difficulty != null && <DiffGauge value={s.target_difficulty} height={6} />}
-                  </div>
-                  {exercises.length > 0 && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
-                      {exercises.slice(0, 3).map((ex, i) => (
-                        <div key={i} style={{ fontSize: 11, color: "#4a5057", fontWeight: 500 }}>· {ex}</div>
-                      ))}
-                      {extra > 0 && (
-                        <div style={{ fontSize: 11, color: "#8a8f94" }}>+{extra} autre{extra > 1 ? "s" : ""}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+      {/* Ring + zone + prénom */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+        <WellnessRing score={displayScore} size={72} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
+            {zoneLabel(displayScore)}
           </div>
-        )}
-        <div style={{
-          marginTop: 8, padding: "8px 12px", borderRadius: 12,
-          background: isPriority ? "#fff0e9" : "#eef8f1",
-          border: `1px solid ${isPriority ? "rgba(212,64,0,.18)" : "rgba(47,158,68,.22)"}`,
-          fontSize: 12, fontWeight: 600, lineHeight: 1.4,
-          color: isPriority ? "#d44000" : "#166534",
-        }}>
-          {decision}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.03em" }}>{firstName}</div>
+            {showBadge && (
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
+                Attention requise
+              </div>
+            )}
+            {showReviewed && (
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(47,158,68,.18)", color: "#bfeec8", border: "1px solid rgba(47,158,68,.35)", borderRadius: 999, padding: "3px 8px" }}>
+                Traité ✓
+              </div>
+            )}
+          </div>
+          {behaviors.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              {behaviors.map(b => {
+                const meta = BEHAVIOR_META[b];
+                if (!meta) return null;
+                return (
+                  <span key={b} style={{
+                    fontSize: 9, padding: "2px 6px", borderRadius: 999,
+                    background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
+                    color: meta.positive ? "#bfeec8" : "#ffd2bf",
+                  }}>
+                    {meta.emoji} {meta.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}>
+      {/* Encart décision */}
+      <div style={{
+        padding: "12px 14px", borderRadius: 16,
+        background: isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
+        border: `1px solid ${isPriority ? "rgba(212,64,0,.30)" : "rgba(47,158,68,.30)"}`,
+        marginBottom: todaySessions.length > 0 ? 12 : 0,
+      }}>
+        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", marginBottom: 10 }}>
+          {isPriority ? "💛" : "✅"} {decision}
+        </div>
         <button
           data-tour={tourId ? "decider-btn" : undefined}
           onClick={onDecide}
           style={{
-            height: 36, paddingLeft: 14, paddingRight: 14, borderRadius: 12,
+            height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10,
             background: showReviewed
               ? "linear-gradient(180deg,#2f9e44,#166534)"
               : "linear-gradient(180deg,#f04a08,#d44000)",
@@ -237,9 +231,38 @@ function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId
             whiteSpace: "nowrap",
           }}
         >
-          {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"}<span className="tour-lock">🔒</span>
+          {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
         </button>
       </div>
+
+      {/* Carte séance imbriquée */}
+      {topSession && (
+        <div style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
+              {topSession.name}
+            </div>
+            <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)", color: topSession.done ? "#2f9e44" : "#d44000" }}>
+              {topSession.done ? "Terminé" : "Prévu"}
+            </span>
+          </div>
+          {(topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
+            <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
+          )}
+          {topSession.notes && (
+            <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
+              {topSession.notes.split("\n").filter(Boolean).map((ex, i) => (
+                <div key={i} style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                  {ex}
+                </div>
+              ))}
+            </div>
+          )}
+          {extraSessions > 0 && (
+            <div style={{ fontSize: 10, color: "#8a8f94", marginTop: 7 }}>+{extraSessions} autre{extraSessions > 1 ? "s" : ""} séance{extraSessions > 1 ? "s" : ""}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -305,9 +328,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${a.user_id}` },
           (payload) => {
             const row = payload.new as any;
-            if (row?.score != null) {
+            if (row?.score != null && row?.date === today) {
               setAthletes(prev => prev.map(x =>
-                x.user_id === a.user_id ? { ...x, wellness_score: row.score } : x
+                x.user_id === a.user_id ? { ...x, wellness_score: row.score, behaviors: row.behaviors ?? [], wellnessFilledToday: true } : x
               ));
             }
           })
@@ -323,13 +346,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
     const demoAthleteIds = athletes.filter(a => !a.user_id).map(a => a.id);
 
-    const [realRes, demoRes] = await Promise.all([
+    const [realRes, demoRes, wellnessRes] = await Promise.all([
       realUserIds.length
         ? supabase.from("sessions").select("*").in("user_id", realUserIds).eq("date", date)
         : Promise.resolve({ data: [] }),
       demoAthleteIds.length
         ? supabase.from("coach_sessions").select("*").eq("coach_id", userId).in("athlete_id", demoAthleteIds).eq("date", date)
         : Promise.resolve({ data: [] }),
+      fetch(`/api/coach/wellness?date=${date}`).then(r => r.json()).catch(() => ({ wellness: [] })),
     ]);
 
     const unified: CoachViewSession[] = [
@@ -337,6 +361,18 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       ...(demoRes.data || []).map(s => demoToView(s as CoachSession)),
     ];
     setSessions(unified);
+
+    const wellnessByUser = new Map<string, { score: number; behaviors: string[] }>();
+    (wellnessRes.wellness || []).forEach((w: { user_id: string; score: number | null; behaviors: string[] | null }) => {
+      wellnessByUser.set(w.user_id, { score: w.score ?? 70, behaviors: w.behaviors ?? [] });
+    });
+    setAthletes(prev => prev.map(a => {
+      if (!a.user_id) return a; // démo : pas de notion de jour, wellnessFilledToday déjà true
+      const w = wellnessByUser.get(a.user_id);
+      return w
+        ? { ...a, wellness_score: w.score, behaviors: w.behaviors, wellnessFilledToday: true }
+        : { ...a, wellnessFilledToday: false };
+    }));
   }, [supabase, userId, athletes]);
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
@@ -383,8 +419,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     riskScore(b, maxDiffToday(b.id, sessions)) - riskScore(a, maxDiffToday(a.id, sessions))
   );
 
-  const avgWellness = athletes.length
-    ? Math.round(athletes.reduce((s, a) => s + a.wellness_score, 0) / athletes.length)
+  const filledAthletes = athletes.filter(a => a.wellnessFilledToday !== false);
+  const avgWellness = filledAthletes.length
+    ? Math.round(filledAthletes.reduce((s, a) => s + a.wellness_score, 0) / filledAthletes.length)
     : 0;
   const sessionsWithDiff = sessions.filter(s => s.target_difficulty != null);
   const avgDifficulty = sessionsWithDiff.length
@@ -717,7 +754,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
           reviewContext={{
-            wellness: reviewAthlete.wellness_score,
+            wellness: reviewAthlete.wellnessFilledToday === false ? null : reviewAthlete.wellness_score,
             maxDiff: maxDiffToday(reviewAthlete.id, sessions),
             queueCurrent: reviewedPriorityCount,
             queueTotal: sortedPriority.length,
