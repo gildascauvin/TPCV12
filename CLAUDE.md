@@ -509,6 +509,43 @@ Repéré par Gildas : le commentaire du haut de carte (`getContextualInsight`) e
 - **Duplication assumée** : la détection de signal faible existe maintenant à deux endroits proches (`getAdvice`/onboarding vs `getRecoveryAdvice`/`today`) — pas de fusion pour l'instant, les contextes diffèrent trop (charge/veille/lendemain absents en onboarding) pour qu'une abstraction commune vaille le risque.
 - Vérifié à chaque étape sur données réelles (`cauvingildas@gmail.com`, requêtes SQL directes) avant test visuel local, puis déployé en prod.
 
+## Coach Control (`/coach`) — carte dark + wellness du jour actif fiable (2026-07-23)
+
+Capitalise sur le chantier `/today` ci-dessus (comportements, `loadRule`), appliqué au dashboard coach.
+
+### `CoachCard` — refonte visuelle (`src/app/(app)/coach/CoachClient.tsx`)
+Passe d'un layout 3-colonnes clair (ring | contenu | bouton) à une carte dark empilée verticalement, inspirée d'une maquette fournie par Gildas :
+- Fond `linear-gradient(145deg,#1a1a1a,#282828)` — même dégradé que le widget "Lecture d'équipe" déjà présent sur cette page (pas une nouvelle couleur inventée).
+- Ligne du haut : `WellnessRing` + `zoneLabel()` (texte "ZONE X", `src/lib/wellness.ts`) + **prénom seul** (`athlete.name.split(" ")[0]`) + badge "Attention requise"/"Traité ✓".
+- **Chips comportements directement sous le prénom** (pas de ligne "{sport} · N séances" — retirée à la demande de Gildas, cet emplacement est réservé aux chips) — `BEHAVIOR_META` (voir plus bas), rouge/orange pour négatif, vert pour positif.
+- Encart décision (`decisionText()`, inchangée) avec émoji (💛 attention / ✅ stable) et bouton d'action désormais **à l'intérieur** de l'encart (Décider/Revoir/Voir — libellés conservés, pas renommés en "Ajuster" uniforme : la distinction reviewed/non-reviewed porte une info réelle que la maquette ne montrait pas).
+- Carte blanche imbriquée pour la séance la plus dure du jour (`getTopSession()`-like, réutilise le pattern déjà écrit dans `CoachPlanningClient.tsx` : nom, badge Terminé/Prévu, `DiffGauge`, liste d'exercices) — une seule séance affichée, `+N autres séances` en petit texte si plusieurs.
+- Les deux badges pill précédents ("✓ Autorégulation active" statique, "📉 score→score") ne sont pas repris ici (spécifiques à `/today`, pas demandés sur cette carte).
+
+### `src/lib/behaviors.ts` — nouveau module partagé
+`BEHAVIOR_META` (emoji + label + `positive`, 14 clés) extrait de `conseils/page.tsx` (dupliqué une 2e fois dans `today/TodayClient.tsx` sous le nom `BEHAVIOR_LABELS`, format différent) — les deux fichiers importent désormais depuis ce module, `CoachClient.tsx` aussi. Un seul point de vérité pour l'emoji/label de chaque comportement.
+
+### Bug corrigé : le score wellness affiché ne correspondait pas toujours au jour actif
+**Root cause** : `coach_athletes.wellness_score` est une colonne dénormalisée qui garde la dernière valeur écrite, sans lien garanti avec le jour affiché. La requête initiale (`page.tsx`) prenait "la ligne `wellness_daily` la plus récente toutes dates confondues" au lieu du jour actif, et `handleDateChange` (`CoachClient.tsx`) ne rafraîchissait jamais le wellness au changement de date (seulement les séances) — un score pouvait être périmé de plusieurs jours sans que rien ne l'indique. Repéré par Gildas sur son propre compte (`Gildas`, auto-lié coach+sportif) : deux `coach_athletes.wellness_score` différents (56 et 85) pour la même personne selon la relation coach consultée, aucun des deux ne correspondant au jour réel (pas encore rempli).
+
+**Fix — nouveau champ `CoachAthlete.wellnessFilledToday?: boolean`** :
+- `page.tsx` : requête wellness filtrée `.eq("date", today)` (comme la requête sessions juste à côté) au lieu de "la plus récente" ; `behaviors` sélectionné en même temps (même ligne, jamais désynchronisé du score).
+- `handleDateChange` : nouvelle route **`GET /api/coach/wellness?date=...`** (le client Supabase normal ne peut pas lire le `wellness_daily` d'un autre `user_id` — RLS `auth.uid() = user_id`, aucune exception coach — même pattern que `/api/coach/session` déjà existant : vérifie que le coach possède bien ces sportifs via le client normal, puis lit via le client admin) appelée en parallèle du fetch sessions, met à jour `wellness_score`/`behaviors`/`wellnessFilledToday` pour tous les vrais sportifs (pas seulement ceux avec une ligne trouvée — sinon l'absence de mise à jour laissait les valeurs de la date précédente affichées).
+- Souscription temps réel (`postgres_changes` sur `wellness_daily`) étendue pour patcher aussi `behaviors`/`wellnessFilledToday` (ne mettait à jour que `wellness_score` avant), filtrée sur `row.date === today` (le vrai jour calendaire, pas `selectedDate` — nuance acceptée, cas rare de navigation de date + événement temps réel simultané).
+- Quand `wellnessFilledToday === false` : `WellnessRing`/`scoreColor` (widened en `number | null`) affichent "—" au lieu d'un chiffre trompeur ; `decisionText`/`attention`/`riskScore` ignorent le score non rempli (seule une séance dure prévue peut encore déclencher une alerte) ; la moyenne wellness d'équipe (`avgWellness`) exclut ces sportifs. Sportifs démo (`user_id === null`) : toujours `wellnessFilledToday: true`, pas de notion de jour pour eux.
+- Même correction dans **`CoachSessionModal.tsx`** (`ReviewContext.wellness` devient `number | null`) — la modale ouverte au clic "Décider" utilisait le même chiffre périmé pour construire ses "points d'attention" (`buildAttentionPoints`).
+
+**Deuxième occurrence trouvée par Gildas juste après, sur `/coach/planning`** (`CoachPlanningClient.tsx`, `dayWellness()`) : cette fonction avait déjà un `wellnessMap` correct par date (requête sur la vraie plage affichée), mais retombait aussi sur `athlete.wellness_score` dès qu'aucune ligne n'existait pour le jour consulté — y compris pour de vrais sportifs. **Fix** : le repli sur `wellness_score` ne s'applique plus qu'aux sportifs démo ; pour un vrai sportif, absence de ligne = `null` (déjà bien géré par `scoreColor`/`formLabel` du même fichier, seul le fallback était fautif). Retenir : tout endroit qui affiche `CoachAthlete.wellness_score` doit distinguer "vrai sportif sans donnée du jour" (→ `null`/"non renseigné") de "sportif démo" (→ toujours la valeur fixe) — ne pas supposer que la présence d'un `user_id` suffit à garantir une donnée à jour.
+
+## Invitation coach → sportif — deux bugs bloquants corrigés (2026-07-23)
+
+Repéré par Gildas en essayant de lier `cauvingildas@gmail.com` (compte sportif déjà existant) à `contact@theperfclub.com` (coach) :
+
+1. **`POST /api/invite/create`** vérifiait l'existence d'un compte via `fetch(".../auth/v1/admin/users?email=...")` — ce paramètre `?email=` n'est pas un filtre supporté par l'API admin Supabase (confirmé via la doc officielle : `listUsers()` n'accepte que `page`/`perPage`, pas de filtre email), l'appel renvoyait donc juste la 1ère page (50 users par défaut). Sur 84 users au total, le compte cherché n'y était pas forcément → traité à tort comme "pas encore inscrit", créant une invitation en attente (`coach_invites`) au lieu de lier directement. **Fix** : `admin.auth.admin.listUsers({ page: 1, perPage: 1000 })` (méthode du SDK, pas de fetch brut).
+2. **Aucun mécanisme pour qu'un compte déjà inscrit rattrape une invitation en attente** : `POST /api/invite/link` (consomme une ligne `coach_invites` pending et lie le sportif) n'était appelé que dans `OnboardingFlow.tsx`, à la création du compte — jamais pour quelqu'un qui se connecte normalement après coup. **Fix** : `TodayClient.tsx` appelle `/api/invite/link` au montage si `!hasCoach`, en silence (pas de toast, juste `router.refresh()` si `ok`).
+
+Confirmé en base sur le cas réel de Gildas : la ligne `coach_invites` est passée de `pending` à `accepted` et `coach_athletes.user_id` a été rempli automatiquement dès le rechargement de `/today` en local, sans intervention manuelle.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
