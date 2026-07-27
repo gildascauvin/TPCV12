@@ -138,6 +138,24 @@ Repéré via une investigation demandée par Gildas ("des inscrits qui vont pas 
 - **`ProductTourOverlay.tsx`/`WelcomeReveal.tsx`** : toujours supprimés, ne pas recréer.
 - **`PrimingJourneyModal.tsx`** : toujours utilisé par `usePaywall` (gating in-app free/expired) uniquement, pas dans le chemin onboarding.
 
+### Frise de progression 3 phases + refonte `week_preview` (2026-07-27)
+Suite à plusieurs itérations sur un artifact de mockup (POC comparatif du paywall), 2 des idées validées en variante A3 implémentées en réel :
+
+**Frise Profil/Programme/Formule** (remplace l'ancienne barre plate masquée sur `autoreg_score`/`profile_recap`/`week_preview`/`paywall_*` via `POST_PROGRESS` — ce tableau est désormais mort, laissé en place mais plus lu par rien) :
+- `PHASE_1_STEPS`/`PHASE_2_STEPS`/`PHASE_3_STEPS` (`OnboardingFlow.tsx`) regroupent les `StepId` réels par phase ; filtrés par le `path` actif à chaque render (`frisePhases`), donc cohérents avec les variantes courtes/programme claimé qui sautent des steps — pas de nombre codé en dur.
+- `friseCurrentPhase`/`frisePct` : phase courante = `(index+1)/length` dans le path filtré, phases précédentes = 100%, suivantes = 0%.
+- Rendu extrait en composant `ProgressFrise({ currentPhase, pct, dark })`, réutilisable hors de sa position par défaut.
+- **Persistante sur tous les steps sauf `value_intro`/`celebration`** (`HIDE_FRISE_STEPS`) — visible désormais sur les écrans qui n'avaient jusque-là aucun indicateur de progression.
+- **Cas `week_preview_2a`/`week_preview_2b`** (`FRISE_INLINE_STEPS`) : la frise par défaut est masquée (`showFrise` l'exclut) et injectée à la place **à l'intérieur du héros sombre** de `WeekPreviewStep.tsx` via une prop `frise: React.ReactNode` (passée `dark` en dur, header toujours sombre) — demandé par Gildas pour que la frise partage le même fond que le header au lieu du fond clair de page. Le héros garde son `marginTop: -36` (annule le padding-top de `OnboardingBackground`) : sûr désormais que la frise est rendue *dans* ce bloc et non plus au-dessus par le parent (l'ancienne version de ce commentaire avertissait du contraire — piège déjà rencontré : ce négatif masquait la frise quand elle vivait encore dans `OnboardingFlow`).
+
+**`week_preview_2a`/`2b` — titre/sous-titre orientés valeur** : nouvelles props `role`/`goalLower` (même pattern que `ProfileRecapStep`) → `"Voici comment ThePerfClub {t'aide / aide tes sportifs} à {goalLower}."` + sous-titre fixe par rôle. Bandeau "Charge par semaine" (barres S1-S4) retiré à la demande de Gildas (jugé peu lisible / pas assez motivé côté valeur perçue).
+
+**Aperçu wellness (sportif)** — carte "Score & conseils" réutilisant la vraie structure de `TodayClient.tsx` (ring copié en `WellnessRingPreview`, `zoneLabel()`, tags `BEHAVIOR_META`, encart "🌿 Récupération" via `getRecoveryAdvice()` — les mêmes fonctions qu'en prod, pas de texte réinventé). Score/comportements dérivés de la difficulté réelle de la séance du jour sélectionné (`wellnessPreviewFor(diff)`, 4 paliers) : sleep/stress/recovery/motivation restent à des valeurs neutres "bonnes" car aucun vrai check-in n'existe à ce stade — c'est le comportement négatif du palier (s'il y en a un) qui pilote alors le texte, exactement comme en prod. Étiquette "Aperçu" overlay en haut à droite de la carte (jamais confondue avec un vrai calcul), légende au-dessus : *"Ton analyse réelle s'appuierait sur tes données d'entraînement."*
+
+**Aperçu Coach Control (coach)** — **réutilise le vrai `CoachCard`** au lieu d'une maquette : `CoachCard`/`WellnessRing`/`scoreColor`/`maxDiffToday`/`attention`/`riskScore`/`decisionText` extraits de `CoachClient.tsx` vers `src/components/coach/CoachAthleteCard.tsx` (nouveau module partagé, `CoachClient.tsx` importe désormais depuis là plutôt que de dupliquer — un seul point de vérité, aucun risque de drift entre l'aperçu onboarding et le vrai Coach Control). Le sportif "démo" de l'aperçu porte le prénom du coach lui-même (`coachFirstName` = state `name` d'`OnboardingFlow`, unique donnée réelle disponible à ce stade), avec des tags de comportements illustratifs et `isPriority` calculé via la vraie fonction `attention()` — varie donc aussi selon le jour sélectionné (ex. lundi séance dure → "Attention requise" + "Décider →" ; mercredi séance légère → "Voir →"). Badge "Aperçu" overlay en haut à droite de la carte (décalé de la pastille pulsante propre à `CoachCard` pour ne pas se chevaucher), légende au-dessus : *"Ton analyse réelle s'appuierait sur les données d'entraînement de tes sportifs."*, ligne sous la carte : *"Tes autres sportifs apparaîtront plus bas, dans ton Coach Control complet."*
+
+Déployé en prod le 2026-07-27 (commit `dc2aafb`).
+
 ### Paywall — désormais avant la célébration, toujours obligatoire (2 écrans depuis le 2026-07-20)
 `paywall_priming` (pricing + frise de réassurance + témoignage) → `paywall_form` (Stripe uniquement, rappel prix + petit bandeau avatars). Ni l'un ni l'autre ne peuvent être fermés/contournés — même principe que l'ancien paywall unique du 2026-07-12 (CB obligatoire pour tout nouveau compte), juste réparti sur 2 écrans plein-page au lieu d'une modale unique en fin de flow. `CheckoutForm`/`PRICING`/`stripePromise` exportés de `PaywallModal.tsx` et réutilisés tels quels (le composant `PaywallModal`/`PrimingJourneyModal` in-app reste intact, pour le gating post-onboarding uniquement).
 - **Limite assumée inchangée** : application 100% côté client (`requireSubscription()`), aucune vérification serveur/RLS sur `subscription_status` — un verrou serveur serait un chantier séparé.
@@ -513,7 +531,10 @@ Repéré par Gildas : le commentaire du haut de carte (`getContextualInsight`) e
 
 Capitalise sur le chantier `/today` ci-dessus (comportements, `loadRule`), appliqué au dashboard coach.
 
-### `CoachCard` — refonte visuelle (`src/app/(app)/coach/CoachClient.tsx`)
+### `CoachCard` — extrait dans `src/components/coach/CoachAthleteCard.tsx` (2026-07-27)
+`CoachCard`/`WellnessRing`/`scoreColor`/`maxDiffToday`/`attention`/`riskScore`/`decisionText` ne vivent plus dans `CoachClient.tsx` — déplacés dans ce module partagé pour être réutilisés par l'aperçu Coach Control de l'onboarding (`week_preview_2b`, voir section Onboarding plus haut) sans dupliquer la logique. `CoachClient.tsx` importe désormais tout depuis là ; `DiffGauge` reste importé localement dans `CoachClient.tsx` (utilisé aussi ailleurs sur la page, hors `CoachCard`).
+
+### `CoachCard` — refonte visuelle (description ci-dessous inchangée, juste déplacée de fichier)
 Passe d'un layout 3-colonnes clair (ring | contenu | bouton) à une carte dark empilée verticalement, inspirée d'une maquette fournie par Gildas :
 - Fond `linear-gradient(145deg,#1a1a1a,#282828)` — même dégradé que le widget "Lecture d'équipe" déjà présent sur cette page (pas une nouvelle couleur inventée).
 - Ligne du haut : `WellnessRing` + `zoneLabel()` (texte "ZONE X", `src/lib/wellness.ts`) + **prénom seul** (`athlete.name.split(" ")[0]`) + badge "Attention requise"/"Traité ✓".
