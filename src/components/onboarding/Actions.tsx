@@ -1,5 +1,7 @@
 "use client";
 
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+
 type Variant = "light" | "dark" | "modal-light" | "modal-dark";
 
 interface Props {
@@ -9,6 +11,7 @@ interface Props {
   nextDisabled?: boolean;
   onSkip?: () => void;
   skipLabel?: string;
+  caption?: string;
 }
 
 const PAGE_VARIANTS: Variant[] = ["light", "dark"];
@@ -20,9 +23,11 @@ const RECIPES: Record<Variant, React.CSSProperties> = {
   "modal-dark":  { padding: "20px 28px 20px", background: "#161616", flexShrink: 0 },
 };
 
-export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel }: Props) {
+export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel, caption }: Props) {
   const isDark = variant === "dark" || variant === "modal-dark";
   const isPage = PAGE_VARIANTS.includes(variant);
+  const { isMd, isLg } = useBreakpoint();
+  const maxWidth = isLg ? 720 : isMd ? 640 : 560;
 
   const button = (
     <button
@@ -32,6 +37,12 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
     >
       {nextLabel}
     </button>
+  );
+
+  const captionEl = caption && (
+    <div style={{ textAlign: "center", fontSize: 11.5, color: isDark ? "rgba(255,255,255,.45)" : "#8a8f94", fontWeight: 600, padding: "9px 0 0" }}>
+      {caption}
+    </div>
   );
 
   const skip = onSkip && (
@@ -49,8 +60,9 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
        réserve le padding-bottom nécessaire pour que ce footer ne masque jamais la fin du contenu défilant. */
     return (
       <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, ...RECIPES[variant] }}>
-        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+        <div style={{ maxWidth, margin: "0 auto" }}>
           {button}
+          {captionEl}
           {skip}
         </div>
       </div>
@@ -60,6 +72,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
   return (
     <div style={{ ...RECIPES[variant] }}>
       {button}
+      {captionEl}
       {skip}
     </div>
   );

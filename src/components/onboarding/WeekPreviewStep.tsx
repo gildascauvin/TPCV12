@@ -8,6 +8,7 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { CoachCard, attention } from "@/components/coach/CoachAthleteCard";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { ProgramTemplate, CoachAthlete, CoachViewSession } from "@/types";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -116,6 +117,8 @@ interface Props {
 }
 
 export default function WeekPreviewStep({ sport, level, trainingDays, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+  const { isMd, isLg } = useBreakpoint();
+  const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
 
   useEffect(() => {
@@ -220,16 +223,18 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
 
   return (
     <div>
-      {/* Plein écran (largeur + jusqu'en haut) : casse le maxWidth:560/padding-top:36 imposés par
-          OnboardingBackground. Sûr d'annuler ce padding ici car la frise est désormais rendue à
-          l'intérieur de ce bloc (juste en dessous, via {frise}) et non plus au-dessus par
-          OnboardingFlow — plus de risque de la faire disparaître sous ce bloc. */}
+      {/* Plein écran (largeur + jusqu'en haut) : casse le maxWidth (responsive, voir
+          OnboardingBackground.tsx)/padding-top:36 imposés par OnboardingBackground. Sûr d'annuler
+          ce padding ici car la frise est désormais rendue à l'intérieur de ce bloc (juste en
+          dessous, via {frise}) et non plus au-dessus par OnboardingFlow — plus de risque de la
+          faire disparaître sous ce bloc. Même formule de largeur que OnboardingBackground.tsx/
+          Actions.tsx pour rester aligné avec le reste de la page sur desktop/tablette. */}
       <div style={{
         background: "#141414",
         width: "100vw", position: "relative", left: "50%", right: "50%", marginLeft: "-50vw", marginRight: "-50vw",
         marginTop: -36, paddingTop: 24, marginBottom: 20,
       }}>
-        <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 20px 24px" }}>
+        <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px 24px" }}>
         {frise}
         <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
           {sportEmoji} {headerTitle}

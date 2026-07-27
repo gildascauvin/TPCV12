@@ -18,6 +18,7 @@ import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, stripePro
 import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { subscribeToPush, needsInstallForPush } from "@/lib/push";
 import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
 
@@ -638,6 +639,48 @@ function EmailSentScreen({ email }: { email: string }) {
 const LEVEL_LABELS: Record<Level, string> = { beginner: "Débutant", intermediate: "Intermédiaire", elite: "Compétiteur" };
 const FREQ_LABELS: Record<number, string>  = { 2: "1–2 séances/semaine", 3: "3–4 séances/semaine", 5: "5–6 séances/semaine", 7: "7 séances ou plus/semaine" };
 
+/* Insights du comparatif paywall_priming (2026-07-27) — la colonne "avant" affichait le texte
+   littéral des options de questionnaire (ex. "Non, je maîtrise toujours mon intensité"), qui n'a
+   plus de sens hors du contexte de la question d'origine. Ces tables reformulent chaque réponse
+   possible en une phrase d'insight autonome, compréhensible sans connaître la question posée. */
+const FRUSTRATION_INSIGHTS: Record<string, string> = {
+  "Les programmes sont trop rigides, pas adaptés à mon état du jour": "Tes programmes actuels restent rigides, sans s'adapter à ta forme du jour.",
+  "Je ne sais pas quand forcer et quand récupérer": "Tu manques de repères clairs pour savoir quand pousser et quand récupérer.",
+  "Je manque de structure et de suivi": "Ton entraînement manque de structure et de suivi dans la durée.",
+  "Je perds du temps sans progresser vraiment": "Tu investis du temps à l'entraînement sans progression réelle à la clé.",
+};
+const OVERLOAD_INSIGHTS: Record<string, string> = {
+  "Non, je maîtrise toujours mon intensité": "Tu gères ton intensité au feeling, sans donnée objective pour la confirmer.",
+  "Parfois, mais je sais m'arrêter": "Il t'arrive de pousser au-delà du prévu, sans toujours mesurer l'écart.",
+  "Souvent, je pousse quand j'y suis": "Tu pousses souvent plus fort que prévu, porté par le moment.",
+  "Tout le temps, j'envoie tout à chaque fois": "Tu donnes tout à chaque séance, sans jauge pour savoir si c'est utile ou excessif.",
+};
+const FATIGUE_INSIGHTS: Record<string, string> = {
+  "Non, je sais récupérer quand il le faut": "Tu sais lever le pied, mais sans repère objectif pour valider ce choix.",
+  "Parfois, si la séance est importante": "Face à une séance importante, tu passes outre la fatigue sans mesurer l'impact réel.",
+  "Souvent, la fatigue ne change pas mon plan": "La fatigue change rarement ton plan d'entraînement, même quand elle s'accumule.",
+  "Tout le temps, je pousse quoi qu'il arrive": "Tu pousses systématiquement, quelle que soit ta fatigue du moment.",
+};
+const COACHING_CHALLENGE_INSIGHTS: Record<string, string> = {
+  "Suivre la charge collective de mes sportifs": "Suivre la charge de chacun de tes sportifs au quotidien prend un temps que tu n'as pas toujours.",
+  "Personnaliser l'entraînement par sportif": "Personnaliser vraiment l'entraînement de chaque sportif reste chronophage au quotidien.",
+  "Créer des programmes facilement": "Construire des programmes sur mesure pour chaque sportif prend plus de temps que tu ne voudrais.",
+  "Communiquer efficacement avec mes sportifs": "Communiquer efficacement avec chacun de tes sportifs, individuellement, reste difficile à tenir dans la durée.",
+  "Trop d'outils différents, pas assez de temps": "Jongler entre plusieurs outils différents te fait perdre un temps précieux.",
+};
+const OVERLOAD_COACH_INSIGHTS: Record<string, string> = {
+  "Rarement, ils respectent bien la charge prévue": "Tes sportifs respectent globalement la charge prévue, mais sans donnée pour le confirmer objectivement.",
+  "Parfois, quelques cas isolés": "Quelques sportifs dépassent parfois la charge prévue, sans que tu le voies venir à chaque fois.",
+  "Souvent, le RPE réel dépasse régulièrement": "Le RPE réel de tes sportifs dépasse régulièrement ce qui était prévu, souvent sans que tu le saches sur le moment.",
+  "Très souvent, c'est un problème récurrent": "Le dépassement de charge est un problème récurrent chez tes sportifs, difficile à anticiper.",
+};
+const FATIGUE_COACH_INSIGHTS: Record<string, string> = {
+  "Non, je m'adapte toujours au ressenti": "Tu t'adaptes déjà au ressenti de tes sportifs, mais sans données de récupération pour objectiver tes ajustements.",
+  "Parfois, selon la période du cycle": "Selon la période du cycle, tu ajustes au ressenti, sans toujours voir la fatigue venir à temps.",
+  "Souvent, difficile de modifier le plan en cours": "Modifier le plan en cours de cycle reste souvent difficile, faute de signal clair de fatigue.",
+  "Oui, je préfère maintenir le programme prévu": "Tu préfères maintenir le programme prévu, même quand la fatigue d'un sportif mériterait un ajustement.",
+};
+
 /* ── main ── */
 export default function OnboardingFlow({ userId, pendingData, initialRole }: Props) {
   const router   = useRouter();
@@ -647,6 +690,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      cas, ces sessions basculaient en "mode auth" (CTA explicite) sur les étapes de sélection
      qui suivent, au lieu de l'auto-advance au tap attendu en inscription. */
   const isRegisterMode = !userId || !!pendingData;
+  /* Largeur de colonne responsive (2026-07-27) — même formule que OnboardingBackground.tsx/
+     Actions.tsx, pour que les 2 footers fixed rendus directement ici (wellness_q, paywall_form)
+     restent alignés avec le contenu au lieu de rester figés à 560px pendant que la page
+     s'élargit sur desktop/tablette. */
+  const { isMd: colIsMd, isLg: colIsLg } = useBreakpoint();
+  const colMaxWidth = colIsLg ? 720 : colIsMd ? 640 : 560;
   const [hasClaimedProgram, setHasClaimedProgram] = useState<boolean | null>(null);
 
   /* A/B test "short-onboarding-signup" : bras "test" = SHORT_ATHLETE_PATH/SHORT_COACH_PATH,
@@ -2071,7 +2120,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             )}
 
             <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#f1f0ee" }}>
-              <div style={{ display: "flex", gap: 8, maxWidth: 560, margin: "0 auto" }}>
+              <div style={{ display: "flex", gap: 8, maxWidth: colMaxWidth, margin: "0 auto" }}>
                 {wStep > 0 && (
                   <button onClick={() => setWStep(s => s - 1)} aria-label="Question précédente"
                     style={{ width: 52, height: 52, flexShrink: 0, borderRadius: 14, background: "#fff", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 17, fontWeight: 700, cursor: "pointer" }}>
@@ -2296,59 +2345,147 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── PAYWALL PRIMING (pricing + réassurance) ── */}
         {currentStep === "paywall_priming" && (() => {
           const p = PRICING[role === "coach" ? "coach" : "athlete"];
-          const savings = p.monthly * 12 - p.annual;
-          const headline = hasClaimedProgram && claimedProgramName
+          const isClaimed = !!(hasClaimedProgram && claimedProgramName);
+          const headline = isClaimed
             ? `Ton programme ${claimedProgramName} t'attend.`
-            : (role === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
+            : (role === "coach"
+                ? "Le manque de visibilité sur la récupération de tes sportifs freine leur progression."
+                : "Ta charge d'entraînement irrégulière limite ta progression en endurance.");
+          const sub = isClaimed ? "Aucun prélèvement avant la fin de l'essai." : null;
+          const isMonthly = billing === "monthly";
+          const perDay = (p.monthly / 30).toFixed(2).replace(".", ",");
+          const annualSavings = p.monthly * 12 - p.annual;
+          const faqItems = [
+            { q: "Suis-je prélevé pendant l'essai gratuit ?", a: "Non. Aucun prélèvement avant la fin des 7 jours d'essai. En formule annuelle, on te prévient 2 jours avant la fin de l'essai." },
+            { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
+            { q: "Puis-je changer de formule après ?", a: "Oui, tu peux basculer entre mensuel et annuel à tout moment depuis ton profil." },
+            role === "coach"
+              ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
+              : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté automatiquement selon ton wellness." },
+          ];
+          const anchor = role === "coach"
+            ? "Moins cher qu'un mois de logiciel de coaching classique — pour un nombre de sportifs illimités, ajoutés sans surcoût."
+            : "Moins cher qu'une séance avec un coach particulier — pour un an de programme sur mesure avec 40+ modèles de programmes personnalisables.";
+          /* Comparatif personnalisé (2026-07-27) — la colonne "avant" reformule en insight la
+             réponse réelle donnée par l'utilisateur sur frustration_2a/challenge_2b, overload_2a/2b
+             et fatigue_2a/2b (via les tables *_INSIGHTS ci-dessus, pas le texte littéral de l'option
+             — hors contexte, la phrase brute du questionnaire ne se lit plus comme un constat).
+             La colonne "après" répond au thème de cette même question. Fallback générique si une
+             réponse manque ou n'est pas reconnue (ex. saut direct via ?dbgstep= en dev, ou path
+             programme qui saute ces steps). */
+          const compareRows = role === "coach"
+            ? [
+                {
+                  before: COACHING_CHALLENGE_INSIGHTS[coachingChallenge] || "Tu manques de visibilité sur tes sportifs au quotidien.",
+                  after: "ThePerfClub identifie précisément ce qui freine chacun de tes sportifs, sportif par sportif.",
+                },
+                {
+                  before: OVERLOAD_COACH_INSIGHTS[overloadCoachAns] || "Tes sportifs poussent parfois plus dur que prévu, sans que tu le voies venir.",
+                  after: "Le RPE réel de chaque sportif est comparé à la charge prévue, automatiquement.",
+                },
+                {
+                  before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.",
+                  after: "Les alertes wellness te préviennent avant qu'un sportif fatigué n'enchaîne une séance dure.",
+                },
+              ]
+            : [
+                {
+                  before: FRUSTRATION_INSIGHTS[frustration] || "Tu manques de visibilité sur ta propre progression.",
+                  after: "ThePerfClub analyse précisément ce qui freine ta progression, séance après séance.",
+                },
+                {
+                  before: OVERLOAD_INSIGHTS[overloadAns] || "Tu pousses parfois plus dur que prévu, sans savoir si ça sert vraiment ta progression.",
+                  after: "Ta charge réelle est suivie et comparée à ce qui est prévu, séance après séance.",
+                },
+                {
+                  before: FATIGUE_INSIGHTS[fatigueAns] || "Difficile de savoir si pousser malgré la fatigue t'aide ou te freine.",
+                  after: "Ton wellness est pris en compte pour ajuster tes séances à ta vraie récupération.",
+                },
+              ];
           return (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-                🔒 Essai 7j gratuit
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#d44000", marginBottom: 10 }}>
+                🎯 Ta formule
               </div>
-              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 8 }}>{headline}</div>
-              <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>Aucun prélèvement avant la fin de l&apos;essai.</div>
+              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10, lineHeight: 1.2 }}>{headline}</div>
+              {sub && <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>{sub}</div>}
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 26 }}>
-                <div onClick={() => setBilling("monthly")} style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "monthly" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "monthly" ? "#171b1f" : "#fff" }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: billing === "monthly" ? "rgba(255,255,255,.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Mensuel</div>
-                  <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "monthly" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.monthly}€</div>
-                  <div style={{ fontSize: 11, color: billing === "monthly" ? "rgba(255,255,255,.45)" : "#8a8f94", marginTop: 3 }}>/mois</div>
+              {/* Hero offer — TEST fond sombre (2026-07-27, à comparer avec la version claire) —
+                  même dégradé que les autres cartes "hero" de l'app (WeekPreviewStep, WellnessCard). */}
+              <div style={{
+                position: "relative", overflow: "hidden",
+                background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
+                border: "1px solid rgba(255,255,255,.13)", borderRadius: 16, padding: "18px 18px 16px",
+                marginBottom: 22, marginTop: sub ? 0 : 18, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
+              }}>
+                <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#ff8a55", background: "rgba(255,107,43,.18)", padding: "5px 10px", borderRadius: 999 }}>
+                  ✓ Essai 7j
                 </div>
-                <div style={{ position: "relative" }}>
-                  <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", zIndex: 1 }}>ÉCONOMISEZ {savings}€</div>
-                  <div onClick={() => setBilling("annual")} style={{ borderRadius: 16, padding: "14px 12px", cursor: "pointer", border: billing === "annual" ? "2px solid #171b1f" : "1.5px solid rgba(0,0,0,.12)", background: billing === "annual" ? "#171b1f" : "#fff", height: "100%", boxSizing: "border-box" }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: billing === "annual" ? "rgba(255,255,255,.6)" : "#8a8f94", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Annuel</div>
-                    <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em", color: billing === "annual" ? "#fff" : "#171b1f", lineHeight: 1 }}>{p.annualMonthly}€</div>
-                    <div style={{ fontSize: 11, color: billing === "annual" ? "rgba(255,255,255,.45)" : "#8a8f94", marginTop: 3 }}>/mois · {p.annual}€/an</div>
-                  </div>
+                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 12, paddingRight: 100 }}>
+                  Basé sur ton objectif
+                </div>
+                <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>
+                  {isMonthly ? p.monthly : p.annualMonthly}€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>/mois</span>
+                </div>
+                <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
+                  {isMonthly
+                    ? `Facturé mensuellement · soit ${perDay}€/jour`
+                    : `Facturé annuellement · ${p.annual}€/an · Soit ${annualSavings}€ d'économie`}
+                </div>
+                <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
+                  <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Annuel</button>
+                  <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
+                </div>
+                <div style={{ fontSize: 14.5, color: "#fff", fontWeight: 700, fontStyle: "italic", marginTop: 13, lineHeight: 1.5 }}>
+                  {anchor}
                 </div>
               </div>
 
-              <div style={{ position: "relative", paddingLeft: 32, marginBottom: 26 }}>
-                <div style={{ position: "absolute", left: 9, top: 10, bottom: 10, width: 2, background: "rgba(212,64,0,0.20)", borderRadius: 1 }} />
-                {[
-                  { title: "Compte créé", sub: "Il ne reste qu'à démarrer ton essai gratuit.", done: true },
-                  { title: "Rappel 2 jours avant la fin de l'essai", sub: "On te préviendra avant tout prélèvement.", done: false },
-                  { title: "Annule à tout moment, sans condition", sub: "Pas d'engagement, pas de frais cachés.", done: false },
-                ].map((node, i, arr) => (
-                  <div key={node.title} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: i < arr.length - 1 ? 16 : 0 }}>
-                    <div style={{
-                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                      background: node.done ? "#2f9e44" : "rgba(212,64,0,0.10)",
-                      border: node.done ? "none" : "1.5px solid #d44000",
+              {/* Comparatif "Où tu en es / Ce que ThePerfClub change" — cartes (fond blanc, bordure)
+                  dans les 2 cas ; sur desktop (≥640px) avant → après côte à côte (inspiré de la
+                  section "Where Levels takes you" de Levels), sur mobile empilé dans la même carte
+                  (une carte horizontale y serait trop étroite pour les 2 colonnes de texte). */}
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
+                  <span>Où tu en es</span>
+                  <span style={{ color: "#d44000" }}>Ce que ThePerfClub change</span>
+                </div>
+                {colIsMd ? (
+                  compareRows.map((row, i) => (
+                    <div key={i} style={{
+                      display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16,
+                      background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 20px",
+                      marginBottom: i < compareRows.length - 1 ? 12 : 0,
                     }}>
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke={node.done ? "#fff" : "#d44000"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,.06)", color: "#8a8f94", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>{i + 1}</span>
+                        <span style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5 }}>{row.before}</span>
+                      </div>
+                      <span style={{ color: "#d44000", fontSize: 18 }}>→</span>
+                      <span style={{ fontSize: 14, color: "#1f2428", fontWeight: 600, lineHeight: 1.5 }}>{row.after}</span>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1f2428", lineHeight: 1.3 }}>{node.title}</div>
-                      <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.4, marginTop: 2 }}>{node.sub}</div>
+                  ))
+                ) : (
+                  compareRows.map((row, i) => (
+                    <div key={i} style={{
+                      background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "14px 16px",
+                      marginBottom: i < compareRows.length - 1 ? 12 : 0,
+                    }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                        <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.06)", color: "#8a8f94", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+                        <span style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5 }}>{row.before}</span>
+                      </div>
+                      <div style={{ fontSize: 14, color: "#1f2428", fontWeight: 600, lineHeight: 1.5, paddingLeft: 28 }}>{row.after}</div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
-              {/* Preuve sociale — le grand témoignage reste ici, le petit bandeau avatars est sur paywall_form */}
+              {/* Témoignage */}
               <div style={{ marginBottom: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
+                  Ce que disent des {role === "coach" ? "coachs" : "sportifs"} comme vous
+                </div>
                 <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
                   <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
                     &ldquo;{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].quote}&rdquo;
@@ -2368,7 +2505,39 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
               </div>
 
-              <Actions onNext={next} nextLabel="Continuer →" />
+              {/* Bande de confiance "+600" — anciennement dans paywall_form (bloc "+300"), déplacée
+                  ici et le chiffre remonté à jour (2026-07-27) : plus utile comme réassurance
+                  pendant la décision du prix que sur l'écran de paiement, qu'on simplifie au max. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+                <div style={{ display: "flex" }}>
+                  {PAYWALL_AVATARS.map((src, i) => (
+                    <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+                  <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+                </div>
+              </div>
+
+              {/* FAQ */}
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
+                  Questions fréquentes
+                </div>
+                <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, padding: "4px 16px" }}>
+                  {faqItems.map((item, i) => (
+                    <div key={i} style={{ padding: "14px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1f2428", marginBottom: 6 }}>{item.q}</div>
+                      <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>{item.a}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Actions onNext={next} nextLabel="Continuer →" caption="Résiliable à tout moment." />
             </div>
           );
         })()}
@@ -2383,9 +2552,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 🔒 Essai 7j gratuit
               </div>
               <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Démarre ton essai gratuit</div>
+
+              {/* Formulaire simplifié au max (2026-07-27) : bloc "+300" retiré (la réassurance
+                  sociale vit désormais sur paywall_priming, cf. bande "+600" plus haut dans le
+                  funnel) — remplacé par un rappel que le compte est déjà prêt, pour ne laisser
+                  que ce qui reste vraiment à faire ici : le paiement. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "12px 14px", background: "rgba(212,64,0,.08)", border: "1px solid rgba(212,64,0,.18)", borderRadius: 14 }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>⚡</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#171b1f", lineHeight: 1.4 }}>Ton compte est prêt.</span>
+              </div>
+
               <div
                 onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 12, cursor: "pointer" }}>
                 <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{isMonthly ? "Facturé mensuellement" : "Facturé annuellement"}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{isMonthly ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
@@ -2393,18 +2572,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-                <div style={{ display: "flex" }}>
-                  {PAYWALL_AVATARS.map((src, i) => (
-                    <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
-                  <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-                </div>
+              <div style={{ fontSize: 12, color: "#8a8f94", textAlign: "center", marginBottom: 20 }}>
+                {isMonthly ? "Annulation possible à tout moment, sans justification." : "On te prévient 2 jours avant la fin de l'essai."}
               </div>
 
               {loadingIntent && <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement du formulaire...</div>}
@@ -2424,7 +2593,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   largeur de contenu que Actions.tsx "light" (maxWidth 560, centré), pas pleine
                   largeur de la page. */}
               <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff" }}>
-                <div ref={setFooterPortalNode} style={{ maxWidth: 560, margin: "0 auto" }} />
+                <div ref={setFooterPortalNode} style={{ maxWidth: colMaxWidth, margin: "0 auto" }} />
               </div>
             </div>
           );
