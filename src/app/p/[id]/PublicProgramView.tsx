@@ -74,18 +74,20 @@ export default function PublicProgramView({ program, coachName }: Props) {
     }
   }
 
-  function handleClaimGuest(cta: "create_account" | "use_program") {
+  function handleClaimGuest(role: "athlete" | "coach") {
     posthog.capture("program_cta_clicked", {
       program_id: program.id,
       program_name: program.name,
-      cta,
+      cta: role === "coach" ? "use_as_coach" : "use_as_athlete",
+      role,
       is_embedded: isEmbedded,
     });
     if (typeof window !== "undefined") {
       localStorage.setItem("claim_program_id", program.id);
     }
-    if (isEmbedded) window.open("/register", "_blank");
-    else window.location.href = "/register";
+    const dest = `/register?role=${role}`;
+    if (isEmbedded) window.open(dest, "_blank");
+    else window.location.href = dest;
   }
 
   const weekAvgLoads = program.template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
@@ -199,12 +201,20 @@ export default function PublicProgramView({ program, coachName }: Props) {
             <div style={{ fontSize: 16, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
               Obtenir le programme complet et le personnaliser
             </div>
-            <button
-              onClick={() => handleClaimGuest("use_program")}
-              style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
-            >
-              Créer un compte
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button
+                onClick={() => handleClaimGuest("athlete")}
+                style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+              >
+                Utiliser en tant que sportif →
+              </button>
+              <button
+                onClick={() => handleClaimGuest("coach")}
+                style={{ width: "100%", padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+              >
+                Utiliser en tant que coach →
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -227,16 +237,16 @@ export default function PublicProgramView({ program, coachName }: Props) {
         ) : (
           <>
             <button
-              onClick={() => handleClaimGuest("create_account")}
+              onClick={() => handleClaimGuest("coach")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
             >
-              Créer un compte →
+              Utiliser en tant que coach →
             </button>
             <button
-              onClick={() => handleClaimGuest("use_program")}
+              onClick={() => handleClaimGuest("athlete")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
-              👤 Utiliser ce programme →
+              Utiliser en tant que sportif →
             </button>
           </>
         )}
