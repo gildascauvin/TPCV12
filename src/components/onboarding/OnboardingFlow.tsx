@@ -85,6 +85,42 @@ const COACH_PATH: StepId[] = [
 const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
 
 const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
+/* week_preview_2a/2b restent en fond clair (page) : leur héros sombre est géré localement par
+   WeekPreviewStep, qui reçoit aussi la frise en prop pour l'afficher dans ce même bloc sombre. */
+const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b"];
+
+/* Frise 3 étapes (Profil/Programme/Formule) — regroupe les steps réels par phase pour calculer
+   une progression persistante même sur les écrans historiquement masqués par POST_PROGRESS
+   (autoreg_score, profile_recap, week_preview, paywall_*). Filtré par le `path` actif pour rester
+   cohérent avec les variantes (programme claimé, A/B court, etc.) qui sautent certains steps. */
+const PHASE_1_STEPS: StepId[] = ["role", "frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
+const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "goal_2a", "days_2a", "profile_recap", "week_preview_2a", "week_preview_2b"];
+const PHASE_3_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
+const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration"];
+
+/* Rendu de la frise, extrait en composant pour pouvoir être affiché soit à sa position par défaut
+   (au-dessus du step), soit injecté par WeekPreviewStep dans son propre héros sombre. */
+function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct: number[]; dark: boolean }) {
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+      {["Profil", "Programme", "Formule"].map((label, i) => (
+        <div key={label} style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 8, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 5,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            color: i === currentPhase ? (dark ? "#ff8a55" : "#d44000") : (dark ? "rgba(255,255,255,.5)" : "rgba(0,0,0,.35)"),
+            opacity: i < currentPhase ? (dark ? 0.85 : 0.55) : 1,
+          }}>
+            {i + 1} · {label}
+          </div>
+          <div style={{ height: 3, borderRadius: 2, background: dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)", overflow: "hidden" }}>
+            <div style={{ height: "100%", borderRadius: 2, background: "#d44000", width: `${Math.round(pct[i] * 100)}%`, transition: "width .3s" }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 /* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
@@ -1208,9 +1244,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
 
   const sessionCount  = trainingDays.length + (trainingDays.length < 6 ? 1 : 0);
-  const progressSteps = path.filter(s => !POST_PROGRESS.includes(s));
-  const progressIdx   = progressSteps.indexOf(currentStep);
-  const showProgress  = !POST_PROGRESS.includes(currentStep);
+  const showFrise = !HIDE_FRISE_STEPS.includes(currentStep) && !FRISE_INLINE_STEPS.includes(currentStep);
+  const frisePhases = [PHASE_1_STEPS, PHASE_2_STEPS, PHASE_3_STEPS].map(phaseSteps => path.filter(s => phaseSteps.includes(s)));
+  const friseCurrentPhase = frisePhases.findIndex(steps => steps.includes(currentStep));
+  const frisePct = frisePhases.map((steps, i) => {
+    if (i < friseCurrentPhase) return 1;
+    if (i > friseCurrentPhase) return 0;
+    const idx = steps.indexOf(currentStep);
+    return steps.length ? (idx + 1) / steps.length : 0;
+  });
 
   const ctaBtn: React.CSSProperties = {
     width: "100%", height: 50, borderRadius: 14, border: "none",
@@ -1239,17 +1281,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     );
   }
 
+  const isDarkStep = DARK_STEPS.includes(currentStep);
+
   return (
-    <OnboardingBackground variant={DARK_STEPS.includes(currentStep) ? "dark" : "light"}>
+    <OnboardingBackground variant={isDarkStep ? "dark" : "light"}>
       <div>
 
-        {showProgress && (
-          <div style={{ display: "flex", gap: 4, marginBottom: 18 }}>
-            {progressSteps.map((_, i) => (
-              <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= progressIdx ? "#d44000" : "rgba(0,0,0,.10)", transition: "background .3s" }} />
-            ))}
-          </div>
-        )}
+        {showFrise && <ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark={isDarkStep} />}
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
         {/* ── 1. ROLE ── */}
@@ -1915,12 +1953,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} programFlow={hasClaimedProgram} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} role={role} goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
         {currentStep === "week_preview_2b" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} onNext={next} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} role={role} goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
