@@ -140,22 +140,22 @@ select:focus {
   }
 }
 
-/* ─── Signature / panel 3-col — wraps to 1-col on narrow ─── */
+/* ─── Signature / panel 3-col — colonnes espacées sur desktop, empilées sur mobile ─── */
 .sig-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 24px;
 }
 @media (max-width: 480px) {
   .sig-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 16px;
   }
 }
 @media (min-width: 481px) and (max-width: 680px) {
   .sig-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 16px;
   }
   .sig-grid > :last-child {
     grid-column: 1 / -1;

@@ -7,9 +7,95 @@ import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
+import { sigDimInfo, type AthleteSignature } from "@/lib/fatigueSignature";
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 function statusLabel(s: number) { return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller"; }
+
+// Mini-sparkline condensée : même style que le vrai graphe /conseils (SparkLineClient) — aire
+// remplie + trait 2px + point plein pour les lignes, colonnes arrondies pour les barres — mais
+// sans le tooltip au survol, et en ne reliant que les jours renseignés (pas d'axe temporel avec
+// trous visibles) pour rester lisible en liste dense.
+function MiniSpark({ points, color, type = "line" }: { points: (number | null)[]; color: string; type?: "line" | "bars" }) {
+  const known = points.filter((p): p is number => p !== null);
+  if (known.length < 2) return null;
+  const w = 148, h = 30, pad = 4;
+  const min = type === "bars" ? 0 : Math.min(...known);
+  const max = Math.max(...known, min + 1);
+  const range = Math.max(1, max - min);
+  const step = (w - pad * 2) / (known.length - 1);
+  const toXY = (v: number, i: number): [number, number] => [pad + i * step, pad + (1 - (v - min) / range) * (h - pad * 2)];
+  const baseline = h - pad;
+
+  if (type === "bars") {
+    const barW = Math.max(3, step * 0.55);
+    return (
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", marginBottom: 2 }}>
+        {known.map((v, i) => {
+          if (v === 0) return null;
+          const [x, y] = toXY(v, i);
+          return <rect key={i} x={x - barW / 2} y={y} width={barW} height={Math.max(0, baseline - y)} rx={1.5} fill={color} fillOpacity={0.75} />;
+        })}
+      </svg>
+    );
+  }
+
+  const coords = known.map((v, i) => toXY(v, i));
+  const path = coords.map(c => c.join(",")).join(" ");
+  const fillD = `M ${coords[0][0]},${baseline} L ${coords.map(c => c.join(",")).join(" L ")} L ${coords[coords.length - 1][0]},${baseline} Z`;
+  const [lx, ly] = coords[coords.length - 1];
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", marginBottom: 2 }}>
+      <path d={fillD} fill={color} fillOpacity={0.12} />
+      <polyline points={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={lx} cy={ly} r={3.5} fill={color} stroke="rgba(0,0,0,.4)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+// Condensé de la signature de fatigue (/conseils) par sportif : coût nerveux, coût musculaire,
+// récupération. Plus de libellé "COÛT ÉLEVÉ" à côté de chaque courbe — la couleur et la forme
+// suffisent. Colonnes étroites + .sig-grid (globals.css) : espacées sur desktop, empilées sur mobile.
+function AthleteSignatureBlock({ signature }: { signature: AthleteSignature }) {
+  if (signature.kind === "manual") {
+    return (
+      <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
+        Forme non renseignée — pas de signature de fatigue ni de récupération à afficher.
+      </div>
+    );
+  }
+  if (signature.kind === "no_data") {
+    return (
+      <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13 }}>
+        🕳️ Pas de wellness renseigné ces 10 derniers jours — pas de signature de fatigue à afficher.
+      </div>
+    );
+  }
+
+  // Mêmes couleurs que SparkLineClient/conseils/page.tsx : nerveux et musculaire ont une teinte
+  // fixe (identité de la métrique), seule la récupération suit le statut dynamique (sigDimInfo).
+  const knownRecovery = signature.recovery.filter((v): v is number => v !== null);
+  const lastRecovery = knownRecovery[knownRecovery.length - 1];
+  const recoveryColor = lastRecovery !== undefined ? sigDimInfo("recovery", lastRecovery).color : "#8a8f94";
+
+  const sigs: Array<{ key: string; icon: string; label: string; points: (number | null)[]; footer: string; type: "line" | "bars"; color: string }> = [
+    { key: "nervous", icon: "⚡", label: "Coût nerveux", points: signature.nervous, footer: "intensité, 10 derniers jours", type: "line", color: "#f04a08" },
+    { key: "muscular", icon: "💪", label: "Coût musculaire", points: signature.muscular, footer: "volume, 10 derniers jours", type: "bars", color: "#f28a00" },
+    { key: "recovery", icon: "🌿", label: "Récupération", points: signature.recovery, footer: "wellness quotidien", type: "line", color: recoveryColor },
+  ];
+
+  return (
+    <div className="sig-grid" style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)" }}>
+      {sigs.map(s => (
+        <div key={s.key}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: "#62686e", marginBottom: 4, whiteSpace: "nowrap" }}>{s.icon} {s.label}</div>
+          <MiniSpark points={s.points} color={s.color} type={s.type} />
+          <div style={{ fontSize: 10.5, color: "#8a8f94" }}>{s.footer}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function AthleteRing({ score }: { score: number }) {
   const r = 20;
@@ -33,11 +119,12 @@ function AthleteRing({ score }: { score: number }) {
 interface Props {
   userId: string;
   initialAthletes: CoachAthlete[];
+  signatures: Record<string, AthleteSignature>;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
 }
 
-export default function AthletesClient({ userId, initialAthletes, subscriptionStatus, inviteCode }: Props) {
+export default function AthletesClient({ userId, initialAthletes, signatures, subscriptionStatus, inviteCode }: Props) {
   const router = useRouter();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
@@ -94,7 +181,7 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
             </button>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {athletes.map(a => {
               const isPending = !a.user_id && !!a.invite_email;
               return (
@@ -104,9 +191,9 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
                 borderRadius: 26, padding: 18,
                 boxShadow: a.user_id ? "0 8px 24px rgba(47,158,68,.07)" : "0 12px 32px rgba(32,59,43,.08)",
               }}>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
                   <AthleteRing score={a.wellness_score} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428" }}>{a.name}</div>
                       {a.user_id && (
@@ -123,24 +210,27 @@ export default function AthletesClient({ userId, initialAthletes, subscriptionSt
                       }
                     </div>
                   </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <button
+                      data-tour="voir-planning-btn"
+                      onClick={() => router.push(`/coach/planning?athlete=${a.id}`)}
+                      style={{ height: 34, paddingLeft: 13, paddingRight: 13, borderRadius: 10, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", whiteSpace: "nowrap" }}
+                    >
+                      Voir planning<span className="tour-lock">🔒</span>
+                    </button>
+                    <button
+                      data-tour="supprimer-btn"
+                      onClick={() => handleDelete(a)}
+                      style={{ height: 34, paddingLeft: 12, paddingRight: 12, borderRadius: 10, background: "#fff8f8", border: "1px solid rgba(200,30,30,.20)", color: "#c81e1e", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deleting === a.id ? 0.5 : 1, whiteSpace: "nowrap" }}
+                    >
+                      {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    data-tour="voir-planning-btn"
-                    onClick={() => router.push(`/coach/planning?athlete=${a.id}`)}
-                    style={{ flex: 1, height: 38, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
-                  >
-                    Voir planning<span className="tour-lock">🔒</span>
-                  </button>
-                  <button
-                    data-tour="supprimer-btn"
-                    onClick={() => handleDelete(a)}
-                    style={{ height: 38, paddingLeft: 12, paddingRight: 12, borderRadius: 11, background: "#fff8f8", border: "1px solid rgba(200,30,30,.20)", color: "#c81e1e", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deleting === a.id ? 0.5 : 1 }}
-                  >
-                    {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
-                  </button>
-                </div>
+                {!isPending && (
+                  <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} />
+                )}
               </div>
               );
             })}

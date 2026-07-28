@@ -10,28 +10,40 @@ interface Props {
 
 export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
   const [email, setEmail] = useState("");
+  const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<"linked" | "pending" | null>(null);
+  const [sentCount, setSentCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   async function handleInvite() {
-    if (!email.trim()) return;
+    const emails = [email, ...extraEmails].map(e => e.trim()).filter(Boolean);
+    if (!emails.length) return;
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/invite/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ athleteEmail: email.trim() }),
-    });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error || "Une erreur est survenue.");
-    } else {
-      setResult(json.linked ? "linked" : "pending");
-      if (json.linked) onLinked();
-    }
+    const results = await Promise.all(emails.map(async athleteEmail => {
+      const res = await fetch("/api/invite/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteEmail }),
+      });
+      const json = await res.json().catch(() => ({}));
+      return { ok: res.ok, linked: json.linked as boolean | undefined, error: json.error as string | undefined };
+    }));
     setSaving(false);
+    const sent = results.filter(r => r.ok);
+    const failed = results.filter(r => !r.ok);
+    setSentCount(sent.length);
+    if (sent.length) {
+      setResult(sent.some(r => r.linked) ? "linked" : "pending");
+      if (sent.some(r => r.linked)) onLinked();
+    }
+    if (failed.length && !sent.length) {
+      setError(failed[0].error || "Une erreur est survenue.");
+    } else if (failed.length) {
+      setError(`${failed.length} invitation${failed.length > 1 ? "s" : ""} sur ${emails.length} n'${failed.length > 1 ? "ont" : "a"} pas pu être envoyée${failed.length > 1 ? "s" : ""}.`);
+    }
   }
 
   return (
@@ -39,16 +51,18 @@ export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
 
         {result ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 44, marginBottom: 14 }}>{result === "linked" ? "🔗" : "✅"}</div>
             <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 8 }}>
-              {result === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
+              {sentCount > 1 ? "Invitations enregistrées !" : result === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.6, marginBottom: 24 }}>
-              {result === "linked"
+              {sentCount > 1
+                ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> rejoindront ton espace dès qu&apos;ils créeront leur compte.</>
+                : result === "linked"
                 ? <><strong style={{ color: "#171b1f" }}>{email}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
                 : <>Dès que <strong style={{ color: "#171b1f" }}>{email}</strong> créera son compte sur ThePerfClub, il sera automatiquement lié à ton espace.</>
               }
@@ -119,8 +133,34 @@ export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
               onKeyDown={e => e.key === "Enter" && email.trim() && handleInvite()}
               placeholder="sportif@exemple.com"
               autoFocus
-              style={{ width: "100%", boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 12 }}
+              style={{ width: "100%", boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 10 }}
             />
+
+            {extraEmails.map((extraEmail, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input
+                  type="email"
+                  value={extraEmail}
+                  onChange={e => setExtraEmails(arr => arr.map((v, idx) => idx === i ? e.target.value : v))}
+                  onKeyDown={e => e.key === "Enter" && email.trim() && handleInvite()}
+                  placeholder="sportif@exemple.com"
+                  style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                />
+                <button
+                  onClick={() => setExtraEmails(arr => arr.filter((_, idx) => idx !== i))}
+                  style={{ width: 44, flexShrink: 0, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={() => setExtraEmails(arr => [...arr, ""])}
+              style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, marginBottom: 16 }}
+            >
+              + Inviter un autre sportif
+            </button>
 
             <button
               onClick={handleInvite}
