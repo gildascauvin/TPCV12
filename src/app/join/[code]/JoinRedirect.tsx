@@ -8,7 +8,7 @@ export default function JoinRedirect({ code, coachName }: { code: string; coachN
 
   useEffect(() => {
     localStorage.setItem("coach_invite_code", code);
-    router.replace("/register");
+    router.replace("/register?role=athlete");
   }, [code, router]);
 
   return (

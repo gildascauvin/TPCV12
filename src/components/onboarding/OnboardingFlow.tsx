@@ -186,6 +186,14 @@ const SHORT_PROGRAM_COACH_PATH: StepId[] = [
   "profile_recap", "paywall_priming", "paywall_form", "celebration",
 ];
 
+/* Sportif invité par un coach (coach_invite_code en localStorage, posé par /join/[code]) : le lien
+   coach→sportif est confirmé au submit d'"account" via /api/invite/join (voir handleFinish()), donc
+   ni diagnostic ni paywall n'ont de sens ici — l'accès est gratuit tant que le lien tient, même
+   logique que hasCoach dans usePaywall.ts/(app)/layout.tsx. Priorité absolue sur assignedVariant ET
+   hasClaimedProgram dans getPath() : une invitation coach est plus spécifique qu'un bras A/B ou un
+   programme claimé. */
+const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "role", "account", "celebration"];
+
 function getNextMonday(): string {
   const today = new Date();
   const dow = today.getDay();
@@ -697,6 +705,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const { isMd: colIsMd, isLg: colIsLg } = useBreakpoint();
   const colMaxWidth = colIsLg ? 720 : colIsMd ? 640 : 560;
   const [hasClaimedProgram, setHasClaimedProgram] = useState<boolean | null>(null);
+  /* Sportif invité par un coach via /join/[code] (voir INVITE_ATHLETE_PATH). `coachInviteCode`
+     reste la source de vérité pour l'appel à /api/invite/join dans handleFinish() ; `hasCoachInvite`
+     peut être rétrogradé à false si /api/invite/validate juge le code invalide, ou si /api/invite/join
+     échoue au moment de la soumission (voir inviteJoinFailed). */
+  const [hasCoachInvite, setHasCoachInvite] = useState<boolean | null>(null);
+  const [coachInviteCode, setCoachInviteCode] = useState<string | null>(null);
+  const [inviteJoinFailed, setInviteJoinFailed] = useState(false);
 
   /* A/B test "short-onboarding-signup" : bras "test" = SHORT_ATHLETE_PATH/SHORT_COACH_PATH,
      paywall immédiat après le compte. `null` tant que non verrouillé — getPath() retombe alors
@@ -814,7 +829,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   const getPath = (r: Role): StepId[] => {
     let base: StepId[];
-    if (assignedVariant === "test") {
+    if (hasCoachInvite && r === "athlete") {
+      base = INVITE_ATHLETE_PATH;
+    } else if (assignedVariant === "test") {
       base = hasClaimedProgram ? (r === "coach" ? SHORT_PROGRAM_COACH_PATH : SHORT_PROGRAM_ATHLETE_PATH) : (r === "coach" ? SHORT_COACH_PATH : SHORT_ATHLETE_PATH);
     } else if (hasClaimedProgram) {
       base = r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
@@ -843,6 +860,26 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [path.length, stepIdx]);
 
   useEffect(() => {
+    const code = localStorage.getItem("coach_invite_code");
+    setHasCoachInvite(!!code);
+    if (code) {
+      setCoachInviteCode(code);
+      posthog.setPersonProperties({ onboarding_source: "coach_invite" });
+      posthog.capture("coach_invite_onboarding_start", { invite_code: code });
+      fetch(`/api/invite/validate?code=${encodeURIComponent(code)}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (!data?.valid) {
+            /* Code invalide/supprimé entre l'ouverture du lien et le montage du flow — retombe
+               sur le funnel standard plutôt que de bloquer sur un path qui promet un accès gratuit
+               qui n'aura jamais lieu. */
+            localStorage.removeItem("coach_invite_code");
+            setHasCoachInvite(false);
+          }
+        })
+        .catch(() => {});
+    }
+
     const params = new URLSearchParams(window.location.search);
     const claimParam = params.get("claim");
     if (claimParam && !localStorage.getItem("claim_program_id")) {
@@ -1118,15 +1155,35 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
-        if (role === "athlete") {
-          const storedCode = typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null;
+        if (role === "athlete" && hasCoachInvite) {
+          const storedCode = coachInviteCode ?? (typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null);
+          let joinedCoach = false;
           if (storedCode) {
-            await fetch("/api/invite/join", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ invite_code: storedCode }),
-            });
+            try {
+              const joinRes = await fetch("/api/invite/join", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ invite_code: storedCode }),
+              });
+              const joinJson = await joinRes.json().catch(() => ({}));
+              joinedCoach = joinRes.ok && joinJson.ok === true;
+            } catch { joinedCoach = false; }
             localStorage.removeItem("coach_invite_code");
+          }
+          if (joinedCoach) {
+            await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+            posthog.capture("coach_invite_joined", { role });
+          } else {
+            /* Code invalidé entre l'ouverture du lien et la soumission du formulaire — ne pas
+               marquer onboarding_done : on bascule sur le funnel payant standard plutôt que de
+               laisser un compte gratuit non lié en accès permanent sans détection. Le compte
+               "account" créé ci-dessus reste valide, seul le path change (voir effet dédié sur
+               inviteJoinFailed). */
+            posthog.capture("coach_invite_join_failed", { role });
+            setHasCoachInvite(false);
+            setInviteJoinFailed(true);
+            setSaving(false);
+            return;
           }
         }
         if (!data.session) {
@@ -1149,6 +1206,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       setSaving(false);
     }
   }
+
+  /* Rattrapage après un échec de /api/invite/join en cours de handleFinish() : `path` est ici
+     recalculé par le render qui suit setHasCoachInvite(false), pas la closure figée de
+     handleFinish(). Ne jamais utiliser next() ici — "account" n'est pas au même index dans
+     ATHLETE_PATH/SHORT_ATHLETE_PATH (après les pain points) que dans INVITE_ATHLETE_PATH (juste
+     après "role") ; c'est la même classe de bug que "atterrissage systématique sur role" déjà
+     rencontrée sur la continuation Google OAuth. */
+  useEffect(() => {
+    if (!inviteJoinFailed) return;
+    const idx = path.indexOf("account");
+    setStepIdx(idx >= 0 ? idx + 1 : 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteJoinFailed]);
 
   function handleWellnessQuestions() {
     if (wStep < WQ_TOTAL - 1) { setWStep(s => s + 1); return; }
@@ -1259,6 +1329,34 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free" }),
         });
         await fetch("/api/invite/link", { method: "POST" });
+
+        if (pendingData.role === "athlete" && hasCoachInvite) {
+          const storedCode = coachInviteCode ?? (typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null);
+          let joinedCoach = false;
+          if (storedCode) {
+            try {
+              const joinRes = await fetch("/api/invite/join", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ invite_code: storedCode }),
+              });
+              const joinJson = await joinRes.json().catch(() => ({}));
+              joinedCoach = joinRes.ok && joinJson.ok === true;
+            } catch { joinedCoach = false; }
+            localStorage.removeItem("coach_invite_code");
+          }
+          if (joinedCoach) {
+            await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", userId);
+            posthog.capture("coach_invite_joined", { role: pendingData.role, method: "google" });
+          } else {
+            /* Le useEffect [googleInitDone] plus bas recalcule path/accountIdx à partir de la
+               valeur à jour de hasCoachInvite au moment où il s'exécute — pas besoin d'un effet
+               dédié supplémentaire ici, contrairement au cas register mode (voir inviteJoinFailed). */
+            posthog.capture("coach_invite_join_failed", { role: pendingData.role, method: "google" });
+            setHasCoachInvite(false);
+          }
+        }
+
         setInitializing(false);
         setGoogleInitDone(true);
       } catch {
@@ -1314,7 +1412,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
-  if (hasClaimedProgram === null) {
+  if (hasClaimedProgram === null || hasCoachInvite === null) {
     return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
   }
 

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { sendCoachInviteEmail } from "@/lib/email/inviteEmail";
 
 async function linkAthleteToCoach(admin: ReturnType<typeof createAdminClient>, coachId: string, athleteUserId: string) {
   const [{ data: athleteProfile }, { data: wellness }] = await Promise.all([
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  const { data: coach } = await supabase.from("profiles").select("mode").eq("user_id", user.id).single();
+  const { data: coach } = await supabase.from("profiles").select("mode, name, invite_code").eq("user_id", user.id).single();
   if (!coach || coach.mode !== "coach") return Response.json({ error: "Accès réservé aux coachs" }, { status: 403 });
 
   const email = athleteEmail.trim().toLowerCase();
@@ -62,6 +63,14 @@ export async function POST(req: Request) {
     wellness_score: 0,
     invite_email: email,
   });
+
+  if (coach.invite_code) {
+    try {
+      await sendCoachInviteEmail(email, coach.name || "Ton coach", coach.invite_code);
+    } catch (err) {
+      console.error("[invite/create] envoi email échoué", err);
+    }
+  }
 
   return Response.json({ ok: true, linked: false });
 }
