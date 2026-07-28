@@ -91,19 +91,24 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
       background: "linear-gradient(145deg,#1a1a1a,#282828)",
-      border: showBadge ? "1.5px solid rgba(212,64,0,.45)" : showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
+      border: showBadge ? "3px solid rgba(212,64,0,.55)" : showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
       borderRadius: 26, padding: 18,
-      boxShadow: showBadge ? "0 18px 46px rgba(212,64,0,.18)" : "0 14px 36px rgba(0,0,0,.28)",
+      boxShadow: showBadge ? "0 0 0 0 rgba(212,64,0,0), 0 18px 46px rgba(212,64,0,.18)" : "0 14px 36px rgba(0,0,0,.28)",
       transition: "border 0.3s ease, box-shadow 0.3s ease",
+      animation: showBadge ? "perf-border-pulse 1.8s ease-in-out infinite" : undefined,
       color: "#fff",
     }}>
-      {/* Pulsing badge top-right */}
+      {/* Pulsing badge top-right + bordure + halo clignotants, même rythme, pour les sportifs "attention requise" */}
       {showBadge && (
         <>
           <style>{`
             @keyframes perf-pulse {
               0%, 100% { opacity: 1; transform: scale(1); }
               50% { opacity: 0.55; transform: scale(1.35); }
+            }
+            @keyframes perf-border-pulse {
+              0%, 100% { border-color: rgba(212,64,0,.4); box-shadow: 0 0 0 0 rgba(212,64,0,0), 0 18px 46px rgba(212,64,0,.18); }
+              50% { border-color: rgba(212,64,0,1); box-shadow: 0 0 16px 3px rgba(212,64,0,.55), 0 18px 46px rgba(212,64,0,.4); }
             }
           `}</style>
           <div style={{
