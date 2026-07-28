@@ -15,6 +15,7 @@ import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
+import InviteModal from "@/components/coach/InviteModal";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
@@ -520,7 +521,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         <div data-tour="invite-section" style={{ marginTop: 16 }}>
           <button
             data-tour="invite-btn"
-            onClick={() => requireSubscription(() => { setInviteEmail(""); setInviteStatus("idle"); setInviteError(""); setShowInviteModal(true); })}
+            onClick={() => requireSubscription(() => setShowInviteModal(true))}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
           >
             + Inviter des sportifs<span className="tour-lock">🔒</span>
@@ -563,40 +564,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       )}
 
       {showInviteModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.48)", zIndex: 2147483100, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: "0 0 24px" }}
-          onClick={e => { if (e.target === e.currentTarget) setShowInviteModal(false); }}>
-          <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 480, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>Inviter un sportif</div>
-              <button onClick={() => setShowInviteModal(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#8a8f94", lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 16 }}>
-              Entre l'email de ton sportif. S'il a déjà un compte, il sera lié immédiatement. Sinon, il recevra une invitation.
-            </div>
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={e => { setInviteEmail(e.target.value); setInviteError(""); setInviteStatus("idle"); }}
-              placeholder="athlete@email.com"
-              style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", padding: "0 16px", fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
-            />
-            {inviteStatus === "sent" && (
-              <div style={{ color: "#2f9e44", fontSize: 13, fontWeight: 700, marginBottom: 10 }}>✅ Invitation envoyée à {inviteEmail} !</div>
-            )}
-            {inviteError && (
-              <div style={{ color: "#d44000", fontSize: 13, marginBottom: 10 }}>{inviteError}</div>
-            )}
-            <div style={{ position: "sticky", bottom: 0, margin: "16px -28px 0", padding: "14px 28px 20px", background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)" }}>
-              <button
-                onClick={handleEmptyInvite}
-                disabled={inviteStatus === "loading" || !inviteEmail.trim()}
-                style={{ width: "100%", height: 48, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 800, cursor: inviteStatus === "loading" || !inviteEmail.trim() ? "not-allowed" : "pointer", opacity: !inviteEmail.trim() ? 0.6 : 1, boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
-              >
-                {inviteStatus === "loading" ? "Envoi en cours..." : "Envoyer l'invitation →"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <InviteModal
+          onClose={() => setShowInviteModal(false)}
+          onLinked={() => router.refresh()}
+          inviteCode={inviteCode}
+        />
       )}
       {paywallStep === "priming" && (
         <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
