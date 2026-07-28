@@ -1,15 +1,21 @@
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { Program } from "@/types";
 import PublicProgramView from "./PublicProgramView";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+
+const getProgram = cache(async (id: string) => {
+  const admin = createAdminClient();
+  const { data } = await admin.from("programs").select("*").eq("id", id).eq("is_public", true).maybeSingle();
+  return data as Program | null;
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const admin = createAdminClient();
-  const { data } = await admin.from("programs").select("name, sport, level, weeks_count").eq("id", id).eq("is_public", true).maybeSingle();
+  const data = await getProgram(id);
   if (!data) return { title: "Programme — ThePerfClub" };
   const desc = [data.sport, data.weeks_count ? `${data.weeks_count} semaines` : null].filter(Boolean).join(" · ");
   return {
@@ -23,12 +29,7 @@ export default async function PublicProgramPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const admin = createAdminClient();
 
-  const { data: program } = await admin
-    .from("programs")
-    .select("*")
-    .eq("id", id)
-    .eq("is_public", true)
-    .maybeSingle();
+  const program = await getProgram(id);
 
   if (!program) notFound();
 

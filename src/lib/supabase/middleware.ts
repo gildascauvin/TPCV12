@@ -2,6 +2,14 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  /* /p/* est public et à fort trafic anonyme (iframe WP + liens directs) — aucun besoin
+     de résoudre l'utilisateur ni de rafraîchir son cookie de session pour cette route,
+     l'aller-retour Auth Supabase pesait directement sur le TTFB/LCP (mesuré jusqu'à 18s
+     mobile p90). Restreint à /p/ (pas tous les publicPaths) pour limiter le risque. */
+  if (request.nextUrl.pathname.startsWith("/p/")) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
