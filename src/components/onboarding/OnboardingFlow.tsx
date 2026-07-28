@@ -929,6 +929,28 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [currentStep]);
 
   useEffect(() => {
+    if (pendingData?.role && !initialRole) {
+      /* Continuation Google (pendingData) : ce montage démarre à stepIdx=0, donc value_intro se
+         déclenche normalement (effet ci-dessus) — mais l'effet plus bas (deps [googleInitDone])
+         saute directement après "account" sans jamais re-render "role"/"account" sur cette passe,
+         puisque ces réponses sont déjà connues. Résultat : le funnel ordonné value_intro→Rôle→
+         Formulaire compte→Compte créé ne peut jamais se chaîner pour ces sessions (repéré sur un
+         coach payant réel, mezghadsport@gmail.com, 2026-07-28 — reproductible pour toute
+         inscription via Google qui redémarre après le redirect OAuth). Même principe que le
+         synthétique ?role= plus haut : on rejoue les 2 events manqués juste après value_intro,
+         avant que account_created (async, ~800ms plus tard dans l'effet pendingData/userId) ne
+         parte. */
+      const roleProps = { step: "role", step_index: 0, role: pendingData.role, mode: isRegisterMode ? "register" : "auth" };
+      const accountProps = { step: "account", step_index: 0, role: pendingData.role, mode: isRegisterMode ? "register" : "auth" };
+      posthog.capture("onboarding_step_viewed", roleProps);
+      posthog.capture("onboarding_role_viewed", roleProps);
+      posthog.capture("onboarding_step_viewed", accountProps);
+      posthog.capture("onboarding_account_viewed", accountProps);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (currentStep !== "value_intro") return;
     /* role pas encore connu à ce step (value_intro précède désormais role) — pas taggé ici. */
     posthog.capture("onboarding_value_intro_slide_viewed", { slide: vSlide });
