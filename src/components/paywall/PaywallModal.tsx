@@ -7,7 +7,11 @@ import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useEl
 import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 
-export const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+let _stripePromise: ReturnType<typeof loadStripe> | null = null;
+export function getStripePromise() {
+  if (!_stripePromise) _stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+  return _stripePromise;
+}
 
 export type Billing = "monthly" | "annual";
 
@@ -285,7 +289,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
         {clientSecret && (
           <Elements
-            stripe={stripePromise}
+            stripe={getStripePromise()}
             options={{
               clientSecret,
               appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } },

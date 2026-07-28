@@ -21,7 +21,7 @@ const config: Config = {
         "cal-dark": "#0d0d0d",
       },
       fontFamily: {
-        sans: ["DM Sans", "Helvetica Neue", "sans-serif"],
+        sans: ["var(--font-dm-sans)", "Helvetica Neue", "sans-serif"],
       },
       borderRadius: {
         card: "12px",

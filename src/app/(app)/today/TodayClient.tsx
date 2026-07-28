@@ -1,25 +1,27 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import WellnessModal from "@/components/wellness/WellnessModal";
-import AddSessionModal from "@/components/sessions/AddSessionModal";
-import CompleteModal from "@/components/sessions/CompleteModal";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+
+const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
+const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
+const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 
 /* ─── helpers ─── */
 function greeting() {

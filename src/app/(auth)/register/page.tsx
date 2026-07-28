@@ -39,5 +39,18 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   }
 
   /* User non connecté → flow d'inscription complet */
-  return <OnboardingFlow initialRole={params?.role === "coach" ? "coach" : params?.role === "athlete" ? "athlete" : undefined} />;
+  const initialRole = params?.role === "coach" ? "coach" : params?.role === "athlete" ? "athlete" : undefined;
+  return (
+    <>
+      {!initialRole && (
+        <link
+          rel="preload"
+          as="image"
+          href="https://www.theperfclub.com/wp-content/uploads/2022/06/lathle%CC%80te-scaled.jpg"
+          {...{ fetchpriority: "high" }}
+        />
+      )}
+      <OnboardingFlow initialRole={initialRole} />
+    </>
+  );
 }

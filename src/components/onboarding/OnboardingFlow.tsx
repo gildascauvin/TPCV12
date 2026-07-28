@@ -14,7 +14,7 @@ import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
-import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, stripePromise, type Billing } from "@/components/paywall/PaywallModal";
+import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
 import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -1505,7 +1505,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     }
                   }}
                   style={{ position: "relative", height: "clamp(240px, calc(100vh - 330px), 600px)", cursor: "grab", overflow: "hidden", userSelect: "none", touchAction: "pan-y" }}>
-                  <img src={j.img} alt={j.time} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  <img
+                    src={j.img}
+                    alt={j.time}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    {...(vSlide === 0 ? { loading: "eager", fetchpriority: "high" } : { loading: "lazy" })}
+                  />
                   <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "flex-end", gap: 6, zIndex: 4 }}>
                     {[0, 1, 2].map(i => (
                       <div key={i} style={{ height: 4, borderRadius: 2, background: i === vSlide ? "#fff" : "rgba(255,255,255,0.40)", width: i === vSlide ? 26 : 8, transition: "all 0.2s" }} />
@@ -2677,7 +2682,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               {loadingIntent && <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement du formulaire...</div>}
               {setupError && <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
               {clientSecret && (
-                <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
+                <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
                   <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} />
                 </Elements>
               )}
