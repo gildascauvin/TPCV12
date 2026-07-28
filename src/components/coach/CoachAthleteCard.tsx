@@ -165,15 +165,16 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         background: isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
         border: `1px solid ${isPriority ? "rgba(212,64,0,.30)" : "rgba(47,158,68,.30)"}`,
         marginBottom: todaySessions.length > 0 ? 12 : 0,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", flex: 1, minWidth: 0 }}>
           {isPriority ? "💛" : "✅"} {decision}
         </div>
         <button
           data-tour={tourId ? "decider-btn" : undefined}
           onClick={onDecide}
           style={{
-            height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10,
+            height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, flexShrink: 0,
             background: showReviewed
               ? "linear-gradient(180deg,#2f9e44,#166534)"
               : "linear-gradient(180deg,#f04a08,#d44000)",
