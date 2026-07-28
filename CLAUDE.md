@@ -619,7 +619,7 @@ Remonté par un client payant réel (`mezghadsport@gmail.com`) : impossible d'aj
 
 **Isolation analytics (action manuelle, dashboard PostHog)** : comme pour le trafic "programme claimé", ajouter le filtre personne `onboarding_source is_not "coach_invite"` aux funnels existants (4403213/4403222/4745753/4745754) une fois déployé, sinon ce nouveau trafic (qui ne passe jamais par `frustration_2a`/`profile_recap`/`paywall_*`) gonfle artificiellement leur taux de chute après "Rôle".
 
-Vérifié par `tsc --noEmit` + `npm run build` (succès). **Non testé en conditions réelles par Claude** (règle du projet : jamais d'emails factices, Supabase a déjà flaggé le projet pour bounces) — à valider par Gildas avec une vraie adresse `+alias` Gmail avant de considérer le chantier LIVRÉ.
+**LIVRÉ 2026-07-28** — vérifié par `tsc --noEmit` + `npm run build`, commité (`5f083c5`) et déployé en prod (push `main`, Vercel auto-deploy), testé par Gildas directement en prod et confirmé fonctionnel.
 
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
