@@ -78,6 +78,7 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [paymentRequest, setPaymentRequest] = useState<PaymentRequest | null>(null);
+  const [elementReady, setElementReady] = useState(false);
 
   const p = PRICING[mode];
 
@@ -119,35 +120,40 @@ export function CheckoutForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!stripe || !elements) return;
+    if (!stripe || !elements || !elementReady) return;
     setLoading(true);
     setError(null);
 
-    const { error: confirmError, setupIntent } = await stripe.confirmSetup({
-      elements,
-      redirect: "if_required",
-    });
+    try {
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+      });
 
-    if (confirmError) {
-      setError(confirmError.message ?? "Erreur de paiement");
+      if (confirmError) {
+        setError(confirmError.message ?? "Erreur de paiement");
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch("/api/stripe/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ setupIntentId: setupIntent?.id, plan: mode, billing }),
+      });
+
+      if (!res.ok) {
+        setError("Erreur lors de la création de l'abonnement. Réessaie.");
+        setLoading(false);
+        return;
+      }
+
+      posthog.capture("trial_started", { plan: mode, billing, ...(abVariant ? { ab_variant: abVariant } : {}) });
+      onSuccess();
+    } catch {
+      setError("Le formulaire de paiement n'est pas encore prêt. Réessaie dans un instant.");
       setLoading(false);
-      return;
     }
-
-    const res = await fetch("/api/stripe/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setupIntentId: setupIntent?.id, plan: mode, billing }),
-    });
-
-    if (!res.ok) {
-      setError("Erreur lors de la création de l'abonnement. Réessaie.");
-      setLoading(false);
-      return;
-    }
-
-    posthog.capture("trial_started", { plan: mode, billing, ...(abVariant ? { ab_variant: abVariant } : {}) });
-    onSuccess();
   }
 
   return (
@@ -168,7 +174,10 @@ export function CheckoutForm({
             </div>
           </>
         )}
-        <PaymentElement options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }} />
+        <PaymentElement
+          options={{ layout: "tabs", wallets: { applePay: "never", googlePay: "never" } }}
+          onReady={() => setElementReady(true)}
+        />
 
         {error && (
           <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>
@@ -188,7 +197,7 @@ export function CheckoutForm({
           <button
             type="submit"
             form="checkout-form"
-            disabled={!stripe || loading}
+            disabled={!stripe || !elementReady || loading}
             style={{
               width: "100%", height: 50, borderRadius: 14, border: "none",
               background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
