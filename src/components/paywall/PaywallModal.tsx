@@ -60,13 +60,18 @@ export const PAYWALL_TESTIMONIALS = {
 /* Exporté pour réutilisation par les 2 écrans plein-page de l'onboarding (paywall_priming/
    paywall_form dans OnboardingFlow.tsx) — même logique Stripe, pas de duplication. */
 export function CheckoutForm({
-  mode, billing, footerPortalNode, onSuccess, abVariant,
+  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel = "Commencer gratuitement", showTrialLegal = true,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
   footerPortalNode: HTMLDivElement | null;
   onSuccess: () => void;
   abVariant?: string;
+  /** Libellé du CTA — défaut inchangé pour PaywallModal in-app, "Essayer gratuitement 7 jours" sur l'onboarding. */
+  ctaLabel?: string;
+  /** Désactivé sur l'onboarding (2026-07-30) : le récap "Dû aujourd'hui / À partir du..." rendu juste au-dessus
+      (OnboardingFlow.tsx) dit déjà tout ça, plus précisément — répéter la phrase ici ferait doublon. */
+  showTrialLegal?: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -174,9 +179,11 @@ export function CheckoutForm({
 
       {footerPortalNode && createPortal(
         <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
-          <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-            Essai gratuit jusqu'au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
-          </div>
+          {showTrialLegal && (
+            <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
+              Essai gratuit jusqu&apos;au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
+            </div>
+          )}
 
           <button
             type="submit"
@@ -189,15 +196,15 @@ export function CheckoutForm({
               letterSpacing: "-0.01em",
             }}
           >
-            {loading ? "Traitement..." : "Commencer gratuitement"}
+            {loading ? "Traitement..." : ctaLabel}
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: showTrialLegal ? 4 : 0 }}>
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
               <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
               <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
-            <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé</span>
+            <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé{!showTrialLegal && " · Résiliable à tout moment"}</span>
           </div>
         </div>,
         footerPortalNode

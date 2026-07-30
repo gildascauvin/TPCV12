@@ -2478,8 +2478,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 : "Ta charge d'entraînement irrégulière limite ta progression en endurance.");
           const sub = isClaimed ? "Aucun prélèvement avant la fin de l'essai." : null;
           const isMonthly = billing === "monthly";
-          const perDay = (p.monthly / 30).toFixed(2).replace(".", ",");
           const annualSavings = p.monthly * 12 - p.annual;
+          const annualSavingsPct = Math.round((annualSavings / (p.monthly * 12)) * 100);
           const faqItems = [
             { q: "Suis-je prélevé pendant l'essai gratuit ?", a: "Non. Aucun prélèvement avant la fin des 7 jours d'essai. En formule annuelle, on te prévient 2 jours avant la fin de l'essai." },
             { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
@@ -2546,19 +2546,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#ff8a55", background: "rgba(255,107,43,.18)", padding: "5px 10px", borderRadius: 999 }}>
                   ✓ Essai 7j
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 12, paddingRight: 100 }}>
-                  Basé sur ton objectif
-                </div>
-                <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>
-                  {isMonthly ? p.monthly : p.annualMonthly}€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>/mois</span>
+                <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
+                  0€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>aujourd&apos;hui</span>
                 </div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
                   {isMonthly
-                    ? `Facturé mensuellement · soit ${perDay}€/jour`
-                    : `Facturé annuellement · ${p.annual}€/an · Soit ${annualSavings}€ d'économie`}
+                    ? `${p.monthly}€/mois après l'essai`
+                    : `${p.annual}€/an (${p.annualMonthly}€/mois) après l'essai`}
                 </div>
                 <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
-                  <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Annuel</button>
+                  <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
+                    Annuel<span style={{ marginLeft: 5, fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
+                  </button>
                   <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
                 </div>
                 <div style={{ fontSize: 14.5, color: "#fff", fontWeight: 700, fontStyle: "italic", marginTop: 13, lineHeight: 1.5 }}>
@@ -2662,7 +2661,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
               </div>
 
-              <Actions onNext={next} nextLabel="Continuer →" caption="Résiliable à tout moment." />
+              <Actions onNext={next} nextLabel="Essayer gratuitement 7 jours" caption="Résiliable à tout moment" />
             </div>
           );
         })()}
@@ -2671,41 +2670,44 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "paywall_form" && (() => {
           const p = PRICING[role === "coach" ? "coach" : "athlete"];
           const isMonthly = billing === "monthly";
+          const trialEnd = new Date();
+          trialEnd.setDate(trialEnd.getDate() + 7);
+          const trialEndStr = trialEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
           return (
             <div>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
                 🔒 Essai 7j gratuit
               </div>
-              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Démarre ton essai gratuit</div>
+              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Passe au niveau supérieur.</div>
 
-              {/* Formulaire simplifié au max (2026-07-27) : bloc "+300" retiré (la réassurance
-                  sociale vit désormais sur paywall_priming, cf. bande "+600" plus haut dans le
-                  funnel) — remplacé par un rappel que le compte est déjà prêt, pour ne laisser
-                  que ce qui reste vraiment à faire ici : le paiement. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "12px 14px", background: "rgba(212,64,0,.08)", border: "1px solid rgba(212,64,0,.18)", borderRadius: 14 }}>
-                <span style={{ fontSize: 18, lineHeight: 1 }}>⚡</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#171b1f", lineHeight: 1.4 }}>Ton compte est prêt.</span>
-              </div>
-
-              <div
-                onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 12, cursor: "pointer" }}>
-                <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{isMonthly ? "Facturé mensuellement" : "Facturé annuellement"}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{isMonthly ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
+              {/* Reçu (2026-07-30) — remplace l'ancien bandeau "Facturé..." + la phrase de
+                  réassurance séparée par un seul bloc façon reçu (Dû aujourd'hui / rappel / à
+                  partir du...), même structure que le POC A3 validé. */}
+              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "16px 17px", marginBottom: 20 }}>
+                <div
+                  onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,.07)", paddingBottom: 12, marginBottom: 12, cursor: "pointer" }}>
+                  <span style={{ fontSize: 13, color: "#8a8f94", fontWeight: 700 }}>{isMonthly ? "Facturé mensuellement" : "Facturé annuellement"}</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
                 </div>
-              </div>
-
-              <div style={{ fontSize: 12, color: "#8a8f94", textAlign: "center", marginBottom: 20 }}>
-                {isMonthly ? "Annulation possible à tout moment, sans justification." : "On te prévient 2 jours avant la fin de l'essai."}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontWeight: 900, fontSize: 15 }}>
+                  <span>Dû aujourd&apos;hui</span>
+                  <span style={{ fontSize: 22, fontWeight: 1000, color: "#d44000" }}>0€</span>
+                </div>
+                <div style={{ fontSize: 13, color: "#8a8f94", padding: "4px 0 6px", lineHeight: 1.5 }}>
+                  🔔 Rappel 2 jours avant la fin de l&apos;essai.
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13, color: "#8a8f94", paddingTop: 2 }}>
+                  <span>À partir du {trialEndStr}</span>
+                  <span>{isMonthly ? `${p.monthly}€/mois` : `${p.annual}€/an (${p.annualMonthly}€/mois)`}</span>
+                </div>
               </div>
 
               {loadingIntent && <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement du formulaire...</div>}
               {setupError && <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
               {clientSecret && (
                 <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
-                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} />
+                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} ctaLabel="Essayer gratuitement 7 jours" showTrialLegal={false} />
                 </Elements>
               )}
               {/* Le footer sticky de CheckoutForm (récap + bouton + mention sécurité) est plus haut
