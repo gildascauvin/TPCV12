@@ -25,7 +25,6 @@ import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
 type StepId =
-  | "role"
   | "value_intro"
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"
   | "overload_2a" | "planning_2a" | "fatigue_2a"
@@ -57,7 +56,7 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    les tableaux statiques ci-dessous — ce sont des étapes "payeurs seulement", insérées
    dynamiquement après celebration une fois trial_started réussi (voir getPath()/paidExtras). */
 const ATHLETE_PATH: StepId[] = [
-  "value_intro", "role",
+  "value_intro",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "account",
@@ -70,7 +69,7 @@ const ATHLETE_PATH: StepId[] = [
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
-  "value_intro", "role",
+  "value_intro",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "account",
@@ -94,7 +93,7 @@ const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b"];
    une progression persistante même sur les écrans historiquement masqués par POST_PROGRESS
    (autoreg_score, profile_recap, week_preview, paywall_*). Filtré par le `path` actif pour rester
    cohérent avec les variantes (programme claimé, A/B court, etc.) qui sautent certains steps. */
-const PHASE_1_STEPS: StepId[] = ["role", "frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
+const PHASE_1_STEPS: StepId[] = ["frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
 const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "goal_2a", "days_2a", "profile_recap", "week_preview_2a", "week_preview_2b"];
 const PHASE_3_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
 const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration"];
@@ -125,7 +124,7 @@ function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct:
 
 /* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role",
+  "value_intro",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "account",
   "autoreg_score",
@@ -133,7 +132,7 @@ const PROGRAM_ATHLETE_PATH: StepId[] = [
   "profile_recap", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "role",
+  "value_intro",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "account",
   "autoreg_score_coach",
@@ -145,7 +144,7 @@ const PROGRAM_COACH_PATH: StepId[] = [
    après Rôle — profil encore vide à ce stade. Garde ensuite le diagnostic complet (contrairement
    à l'ancien bras test qui sautait direct au paywall) : voir plan onboarding v2, "Pivot A/B". */
 const SHORT_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro", "account",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
@@ -157,7 +156,7 @@ const SHORT_ATHLETE_PATH: StepId[] = [
   "celebration",
 ];
 const SHORT_COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro", "account",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
@@ -172,14 +171,14 @@ const SHORT_COACH_PATH: StepId[] = [
    (sport/niveau/objectif/jours déjà déduits du programme, donc absents), Signup déplacé juste
    après Rôle comme les paths courts ci-dessus. */
 const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro", "account",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
   "profile_recap", "paywall_priming", "paywall_form", "celebration",
 ];
 const SHORT_PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro", "account",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
   "concept_autoreg",
@@ -192,7 +191,7 @@ const SHORT_PROGRAM_COACH_PATH: StepId[] = [
    logique que hasCoach dans usePaywall.ts/(app)/layout.tsx. Priorité absolue sur assignedVariant ET
    hasClaimedProgram dans getPath() : une invitation coach est plus spécifique qu'un bras A/B ou un
    programme claimé. */
-const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "role", "account", "celebration"];
+const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account", "celebration"];
 
 function getNextMonday(): string {
   const today = new Date();
@@ -732,8 +731,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (assignedVariant) posthog.setPersonProperties({ ab_variant: assignedVariant });
   }, [assignedVariant]);
 
-  /* value_intro est désormais toujours l'étape 0 (avant role, étape 1) dans tous les paths —
-     un ?role= prefill doit sauter le step Rôle (index 1) mais pas le pitch value (index 0). */
+  /* value_intro est désormais toujours l'étape 0 dans tous les paths, pour tout le monde — "role"
+     n'existe plus comme step séparé (fusionné dans le CTA de value_intro, voir plus bas). Un
+     ?role= prefill n'a donc plus besoin de sauter d'index : value_intro s'affiche normalement
+     (avec un wording déjà personnalisé), seul son CTA change (bouton unique au lieu du choix). */
   /* ?dbgstep=N (outil de dev/support, comme ?ab=test|control) : démarre directement à l'index N
      du path courant plutôt que de rejouer tout le flow — pratique pour cibler un écran précis en
      local. Index = position dans le tableau du path actif (variante A/B, claimed ou non). */
@@ -742,7 +743,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       const dbg = new URLSearchParams(window.location.search).get("dbgstep");
       if (dbg) return parseInt(dbg, 10);
     }
-    return initialRole ? 2 : 0;
+    return 0;
   });
   /* Posé une seule fois, au succès de trial_started dans paywall_form — insère l'activation
      (wellness_q/wellness_reveal ou invite_team) après celebration, voir getPath(). */
@@ -780,10 +781,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [emailSent, setEmailSent]   = useState(false);
-
-  /* value_slides */
-  const [vSlide, setVSlide] = useState(0);
-  const vSlideSwipeStartX = useRef<number | null>(null);
 
   /* pain point answers — athlete */
   const [overloadAns, setOverloadAns] = useState("");
@@ -918,7 +915,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const props = {
       step: currentStep,
       step_index: stepIdx,
-      role: currentStep === "role" ? "selecting" : (role || "unknown"),
+      role: (currentStep === "value_intro" && !roleChosen) ? "selecting" : (role || "unknown"),
       mode: isRegisterMode ? "register" : "auth",
       ab_variant: assignedVariant ?? "pending",
     };
@@ -950,11 +947,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (currentStep !== "value_intro") return;
-    /* role pas encore connu à ce step (value_intro précède désormais role) — pas taggé ici. */
-    posthog.capture("onboarding_value_intro_slide_viewed", { slide: vSlide });
-  }, [vSlide, currentStep]);
 
   /* Le Signup (step "account") arrive désormais avant la fin du diagnostic dans les 2 variantes —
      sport/niveau/objectif/jours ne sont connus qu'à l'entrée de profile_recap. C'est ici que le
@@ -1459,145 +1451,161 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {showFrise && <ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark={isDarkStep} />}
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
-        {/* ── 1. ROLE ── */}
-        {currentStep === "role" && (
-          <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Essayer ThePerfClub en tant que</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
-              On personnalise ton expérience.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
-              {[
-                { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
-                { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
-              ].map(({ r, icon, label, sub, badgeBg }) => (
-                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); if (abEligible && !assignedVariant) setAssignedVariant("control"); })}
-                  style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "18px 18px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.08)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
-                  <div style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>{icon}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 17, fontWeight: 900, letterSpacing: "-0.01em", color: roleChosen && role === r ? "#d44000" : "#171b1f", marginBottom: 2 }}>{label}</div>
-                    <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.4 }}>{sub}</div>
-                  </div>
-                  <div style={{ flexShrink: 0, color: "rgba(0,0,0,.20)", fontSize: 18 }}>→</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── VALUE INTRO (générique, avant le Rôle) ── */}
+        {/* ── VALUE INTRO — fusionné avec le choix du rôle (le CTA EST le choix de rôle tant
+            qu'il n'est pas encore connu ; sinon CTA unique, role-aware). Photo en fond plein
+            viewport (comme validé sur le POC) plutôt qu'une carte encadrée + carrousel. "role"
+            n'est plus un step séparé dans aucun path — voir StepId/tableaux de path plus haut. */}
         {currentStep === "value_intro" && (() => {
-          const journey = [
-            {
-              time: "La veille",
-              img: "https://www.theperfclub.com/wp-content/uploads/2022/06/lathle%CC%80te-scaled.jpg",
-              caption: hasClaimedProgram && claimedProgramName
-                ? `Ton programme ${claimedProgramName} est prêt à personnaliser.`
-                : "Crée ton programme simplement, ou choisis parmi 40+ modèles, tous sports.",
-            },
-            {
-              time: "07h30",
-              img: "https://www.theperfclub.com/wp-content/uploads/2023/03/massage-et-recuperation.jpeg",
-              caption: "Le niveau de forme du jour ajuste la séance, avant même l'échauffement.",
-            },
-            {
-              time: "Après la séance",
-              img: "https://www.theperfclub.com/wp-content/uploads/2025/03/prevenir-et-guerir-dune-tendinite-au-genou-scaled.avif",
-              caption: "Entraînement, habitudes de vie : sache ce qui impacte les performances.",
-            },
-          ];
-          const j = journey[vSlide];
+          const isClaimed = !!(hasClaimedProgram && claimedProgramName);
+          const isCoachRole = roleChosen && role === "coach";
+          const isAthleteRole = roleChosen && role === "athlete";
+
+          const headline = isClaimed
+            ? (isCoachRole
+                ? <>Le programme <em>{claimedProgramName}</em> est prêt à s&apos;adapter à tes sportifs.</>
+                : <>Ton programme <em>{claimedProgramName}</em> est prêt à s&apos;adapter à toi.</>)
+            : isCoachRole
+              ? "Des séances qui s'adaptent enfin à tes sportifs, pas l'inverse."
+              : isAthleteRole
+                ? "Des séances qui s'adaptent enfin à toi, pas l'inverse."
+                : "Des séances qui s'adaptent enfin aux sportifs, pas l'inverse.";
+
+          const subhead = isCoachRole
+            ? "ThePerfClub ajuste les programmes de tes sportifs à leur forme du jour. Plus de progrès, moins de blessures."
+            : isAthleteRole
+              ? "ThePerfClub ajuste ton programme à ta forme du jour. Plus de progrès, moins de blessures."
+              : "ThePerfClub ajuste les programmes selon la forme du jour. Plus de progrès, moins de blessures.";
+
+          const steps = isCoachRole
+            ? [
+                { title: "Comprends le profil de tes sportifs", sub: "Leurs préférences d'entraînement et leurs habitudes de récupération." },
+                { title: isClaimed ? "Personnalise leur programme" : "Ajuste leurs programmes", sub: isClaimed ? `${claimedProgramName} s'ajuste à la forme du jour de tes sportifs.` : "Chaque séance évolue selon la forme du jour de tes sportifs." },
+                { title: "Fais progresser tes sportifs durablement", sub: "Des recommandations quotidiennes pour optimiser leur performance et récupération." },
+              ]
+            : isAthleteRole
+              ? [
+                  { title: "Comprends ton profil", sub: "Tes préférences d'entraînement et tes habitudes de récupération." },
+                  { title: isClaimed ? "Personnalise ton programme" : "Ajuste ton programme", sub: isClaimed ? `${claimedProgramName} s'ajuste à ta forme du jour.` : "Chaque séance évolue selon ta forme du jour." },
+                  { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
+                ]
+              : [
+                  { title: "Comprends ton profil", sub: "Tes préférences d'entraînement, habitudes de récupération ou celles de tes sportifs." },
+                  { title: "Ajuste ton programme", sub: "Chaque séance évolue selon ta forme du jour ou celle de tes sportifs." },
+                  { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
+                ];
+
+          const handleRoleClick = (r: Role) => nextAfterChoice(() => {
+            setRole(r); setRoleChosen(true);
+            posthog.setPersonProperties({ role: r });
+            if (abEligible && !assignedVariant) setAssignedVariant("control");
+            const roleProps = { step: "role", step_index: stepIdx, role: r, mode: isRegisterMode ? "register" : "auth" };
+            posthog.capture("onboarding_step_viewed", roleProps);
+            posthog.capture("onboarding_role_viewed", roleProps);
+          });
+
           return (
             <div>
-              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8, color: "#fff" }}>Un programme figé est déjà dépassé.</div>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,.6)", lineHeight: 1.55, marginBottom: 22 }}>ThePerfClub ajuste les séances au niveau de forme, chaque jour.</div>
-              <div style={{ borderRadius: 26, overflow: "hidden", boxShadow: "0 30px 70px rgba(0,0,0,.45)" }}>
-                <div
-                  onPointerDown={(e) => { vSlideSwipeStartX.current = e.clientX; }}
-                  onPointerUp={(e) => {
-                    const startX = vSlideSwipeStartX.current;
-                    vSlideSwipeStartX.current = null;
-                    if (startX === null) return;
-                    const delta = e.clientX - startX;
-                    if (Math.abs(delta) > 30) {
-                      if (delta < 0) setVSlide(v => Math.min(2, v + 1));
-                      else setVSlide(v => Math.max(0, v - 1));
-                    } else if (vSlide < 2) {
-                      setVSlide(v => v + 1);
-                    }
-                  }}
-                  style={{ position: "relative", height: "clamp(240px, calc(100vh - 330px), 600px)", cursor: "grab", overflow: "hidden", userSelect: "none", touchAction: "pan-y" }}>
-                  <img
-                    src={j.img}
-                    alt={j.time}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    {...(vSlide === 0 ? { loading: "eager", fetchpriority: "high" } : { loading: "lazy" })}
-                  />
-                  <div style={{ position: "absolute", top: 14, left: 14, right: 14, display: "flex", justifyContent: "flex-end", gap: 6, zIndex: 4 }}>
-                    {[0, 1, 2].map(i => (
-                      <div key={i} style={{ height: 4, borderRadius: 2, background: i === vSlide ? "#fff" : "rgba(255,255,255,0.40)", width: i === vSlide ? 26 : 8, transition: "all 0.2s" }} />
-                    ))}
-                  </div>
-                  {vSlide === 0 && (
-                    <div style={{ position: "absolute", right: 16, bottom: 16, width: "54%", background: "#fff", borderRadius: 16, padding: "16px 17px", boxShadow: "0 12px 30px rgba(0,0,0,.35)" }}>
-                      <div style={{ fontSize: 19, fontWeight: 950, color: "#171b1f", marginBottom: 10 }}>Renfo</div>
-                      <div style={{ background: "rgba(0,0,0,.04)", borderRadius: 11, padding: "10px 12px", marginBottom: 12 }}>
-                        <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>Montée d&apos;intensité bien placée. Récupère bien ce soir.</div>
+              {/* Fond photo plein viewport, cadré haut (comme le POC : background-position center top)
+                  pour garder la tête du sportif visible plutôt que le centre géométrique de la photo. */}
+              <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
+                <img
+                  src="https://www.theperfclub.com/wp-content/uploads/2026/07/value-intro-BG.jpeg"
+                  alt=""
+                  loading="eager"
+                  fetchPriority="high"
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 35%", display: "block" }}
+                />
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,10,10,.6) 0%, rgba(10,10,10,.75) 40%, rgba(8,8,8,.95) 85%)" }} />
+              </div>
+
+              <div style={{ position: "relative", zIndex: 1 }}>
+                <div style={{ fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 14, color: "#fff", textAlign: "center" }}>{headline}</div>
+                <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, margin: "0 auto 28px", textAlign: "center" }}>{subhead}</div>
+
+                <div style={{
+                  background: "radial-gradient(circle at 87% 5%, rgba(212,64,0,.32), transparent 30%), linear-gradient(135deg,#1d1d1d 0%,#2b2b2b 54%,#161616 100%)",
+                  border: "1px solid rgba(255,255,255,.06)", borderRadius: 22, padding: "22px 22px 20px", marginBottom: 22,
+                }}>
+                  {steps.map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "13px 0", borderTop: i > 0 ? "1px solid rgba(255,255,255,.08)" : "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
+                        <div style={{ flexShrink: 0, width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.75)" }}>{i + 1}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 3, color: "#fff" }}>{s.title}</div>
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", lineHeight: 1.45 }}>{s.sub}</div>
+                        </div>
                       </div>
-                      <div style={{ height: 7, borderRadius: 999, background: "#e7e4df", overflow: "hidden", marginBottom: 11 }}>
-                        <div style={{ height: "100%", width: "62%", background: "linear-gradient(90deg,#ffb5a7,#d44000)", borderRadius: 999 }} />
-                      </div>
-                      {["Back squat — 5×5", "Snatch pull — 4×3", "Gainage — 8 min"].map((ex, i) => (
-                        <div key={i} style={{ fontSize: 13, color: "#2c3236", fontWeight: 600, padding: "7px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
-                      ))}
-                    </div>
-                  )}
-                  {vSlide === 1 && (
-                    <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "rgba(10,10,10,.75)", backdropFilter: "blur(8px)", borderRadius: 18, padding: "18px 20px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-                        <div style={{ position: "relative", flexShrink: 0, width: 62, height: 62 }}>
-                          <svg width={62} height={62} viewBox="0 0 62 62" style={{ transform: "rotate(-90deg)", display: "block" }}>
-                            <circle cx={31} cy={31} r={26} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={5} />
-                            <circle cx={31} cy={31} r={26} fill="none" stroke="#2f9e44" strokeWidth={5} strokeDasharray={163.4} strokeDashoffset={31} strokeLinecap="round" />
-                          </svg>
-                          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                            <span style={{ fontSize: 18, fontWeight: 1000, color: "#fff", lineHeight: 1 }}>81</span>
-                            <span style={{ fontSize: 6.5, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em" }}>WELLNESS</span>
+                      {i === 0 && (
+                        <div style={{ flexShrink: 0, width: 104, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "9px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ position: "relative", width: 26, height: 26, flexShrink: 0 }}>
+                              <svg viewBox="0 0 44 44" width="26" height="26">
+                                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth={6} />
+                                <circle cx="22" cy="22" r="18" fill="none" stroke="#f28a00" strokeWidth={6} strokeDasharray="113.1" strokeDashoffset="19" strokeLinecap="round" transform="rotate(-90 22 22)" />
+                              </svg>
+                              <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 1000, color: "#fff" }}>73</span>
+                            </div>
+                            <div style={{ fontSize: 8, fontWeight: 800, color: "#fff" }}>Zone stable</div>
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{ fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>🌙 Couché tardif</span>
+                            <span style={{ fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>📱 Écran tard</span>
                           </div>
                         </div>
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: "#ff8a55", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>Score &amp; conseils</div>
-                          <div style={{ fontSize: 22, fontWeight: 950, color: "#fff", letterSpacing: "-0.02em" }}>Zone stable</div>
+                      )}
+                      {i === 1 && (
+                        <div style={{ flexShrink: 0, width: 104, background: "#fff", borderRadius: 12, padding: "9px 9px" }}>
+                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#171b1f", marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Circuit modéré</div>
+                          <div style={{ height: 4, borderRadius: 999, background: "#e7e4df", overflow: "hidden", marginBottom: 6 }}>
+                            <div style={{ height: "100%", width: "55%", background: "linear-gradient(90deg,#ffe0a0,#f28a00)", borderRadius: 999 }} />
+                          </div>
+                          <div style={{ fontSize: 6.5, color: "#8a8f94", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>AMRAP 15min : wall balls...</div>
+                          <div style={{ fontSize: 6.5, color: "#8a8f94", lineHeight: 1.3, marginTop: 2 }}>Mobilité épaules : 5 min</div>
                         </div>
-                      </div>
-                      <div style={{ fontSize: 14, color: "rgba(255,255,255,.72)", lineHeight: 1.5, marginBottom: 14 }}>Signaux stables. Bon entraînement possible.</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {["🌙 Couché tardif", "📱 Écran tard", "🧘 Stretching"].map(c => (
-                          <span key={c} style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,.85)", background: "rgba(255,255,255,.10)", borderRadius: 999, padding: "6px 13px" }}>{c}</span>
-                        ))}
-                      </div>
+                      )}
+                      {i === 2 && (
+                        <div style={{ flexShrink: 0, width: 104, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "9px 10px" }}>
+                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#ffb37a" }}>⚡ Entraîn.</div>
+                          <div style={{ fontSize: 6.5, color: "rgba(255,255,255,.5)", lineHeight: 1.3, marginBottom: 5 }}>Séance dure avant modérée...</div>
+                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#b9e0a5" }}>🌿 Récup.</div>
+                          <div style={{ fontSize: 6.5, color: "rgba(255,255,255,.5)", lineHeight: 1.3 }}>Charge élevée aujourd&apos;hui...</div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {vSlide === 2 && (
-                    <div style={{ position: "absolute", left: 16, right: 16, bottom: 16, background: "rgba(10,10,10,.75)", backdropFilter: "blur(8px)", borderRadius: 18, padding: "18px 20px" }}>
-                      <div style={{ fontSize: 11, fontWeight: 900, color: "#ff8a55", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>ThePerfClub · Conseils</div>
-                      <div style={{ fontSize: 20, fontWeight: 950, color: "#fff", letterSpacing: "-0.02em", marginBottom: 14 }}>Charge &amp; récupération</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>💪 Coût musculaire</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 30, marginBottom: 16 }}>
-                        {[40, 65, 30, 80, 50, 35, 60].map((h, i) => (
-                          <div key={i} style={{ flex: 1, height: `${h}%`, background: "#f04a08", borderRadius: 3 }} />
-                        ))}
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
+                  <div style={{ display: "flex" }}>
+                    {PAYWALL_AVATARS.map((src, i) => (
+                      <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #232323", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                        <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                       </div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>🌿 Récupération</div>
-                      <svg width="100%" height={26} viewBox="0 0 100 26" preserveAspectRatio="none">
-                        <polyline points="0,21 15,12 30,16 45,7 60,10 75,5 100,4" fill="none" stroke="#2f9e44" strokeWidth={2.5} />
-                      </svg>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", lineHeight: 1.25 }}>+600 sportifs, coachs et clubs</div>
+                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.5)", marginTop: 1 }}>font confiance à ThePerfClub</div>
+                  </div>
                 </div>
               </div>
-              <div style={{ fontSize: 19, fontWeight: 800, color: "#fff", lineHeight: 1.4, letterSpacing: "-0.01em", margin: "22px 0 8px" }}>{j.caption}</div>
-              <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
+
+              {roleChosen ? (
+                <Actions variant="dark" onNext={next} nextLabel={isCoachRole ? "Configurer mon espace coach →" : "Créer mon profil →"} />
+              ) : (
+                <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#161616", padding: "14px 20px 24px" }}>
+                  <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>
+                    <button onClick={() => handleRoleClick("athlete")}
+                      style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
+                      Je suis sportif →
+                    </button>
+                    <button onClick={() => handleRoleClick("coach")}
+                      style={{ flex: 1, height: 52, borderRadius: 14, background: "#2a2a2a", color: "#fff", border: "1.5px solid rgba(255,255,255,.22)", fontSize: 14, fontWeight: 900, cursor: "pointer" }}>
+                      Je suis coach →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
