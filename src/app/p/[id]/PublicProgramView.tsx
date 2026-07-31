@@ -85,7 +85,12 @@ export default function PublicProgramView({ program, coachName }: Props) {
     if (typeof window !== "undefined") {
       localStorage.setItem("claim_program_id", program.id);
     }
-    const dest = `/register?role=${role}`;
+    /* claim aussi passé en query param (pas seulement localStorage) : quand isEmbedded ouvre la
+       destination dans un nouvel onglet (window.open), ce nouvel onglet est un contexte de storage
+       potentiellement différent (repéré sur Safari iOS via une iframe WordPress) — le localStorage
+       posé ci-dessus peut ne jamais y être visible. OnboardingFlow.tsx lit déjà ?claim= en priorité
+       (même mécanisme que le CTA flottant WP) et le reporte lui-même en localStorage une fois là. */
+    const dest = `/register?role=${role}&claim=${encodeURIComponent(program.id)}`;
     if (isEmbedded) window.open(dest, "_blank");
     else window.location.href = dest;
   }

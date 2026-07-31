@@ -754,6 +754,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [claimedProgramName, setClaimedProgramName] = useState<string | null>(null);
   const [claimedProgramWeeks, setClaimedProgramWeeks] = useState<number | null>(null);
+  /* Sur réseau mobile réel, le fetch /api/programs/[id] (qui pose claimedProgramName) peut prendre
+     assez longtemps pour que value_intro affiche d'abord le wording générique puis se corrige sous
+     les yeux de l'utilisateur — invisible sur un réseau rapide (dev, wifi), repéré par Gildas
+     uniquement sur téléphone réel. Attend la résolution avant de peindre value_intro, borné par un
+     timeout pour ne jamais bloquer indéfiniment si l'API échoue ou si le programme a été supprimé. */
+  const [claimedNameResolved, setClaimedNameResolved] = useState(false);
+  useEffect(() => {
+    if (hasClaimedProgram === null) return; // pas encore résolu (localStorage) — attendre
+    if (!hasClaimedProgram || claimedProgramName) { setClaimedNameResolved(true); return; }
+    const t = setTimeout(() => setClaimedNameResolved(true), 2500);
+    return () => clearTimeout(t);
+  }, [hasClaimedProgram, claimedProgramName]);
 
   /* invite_team */
   const [inviteEmail, setInviteEmail] = useState("");
@@ -1426,7 +1438,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
-  if (hasClaimedProgram === null || hasCoachInvite === null) {
+  if (hasClaimedProgram === null || hasCoachInvite === null || !claimedNameResolved) {
     return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
   }
 
