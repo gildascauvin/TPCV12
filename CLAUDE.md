@@ -51,8 +51,9 @@ src/app/
 Historique complet du chantier (débats, wording, POC) : mémoire `project_onboarding_v2_proposal.md` et plan `/Users/Gildas/.claude/plans/sequential-percolating-dijkstra.md`. Structure pré-2026-07-20 (désormais obsolète) conservée dans l'historique git de ce fichier si besoin de contexte.
 
 ### Sportif — flux classique (`ATHLETE_PATH` = variante A / `SHORT_ATHLETE_PATH` = variante B)
+`"role"` n'est plus un step séparé depuis le 2026-07-31 (voir section dédiée plus bas) — le choix du rôle est désormais le CTA de `value_intro` lui-même.
 ```
-value_intro → role
+value_intro (rôle choisi ici)
 ── variante B (test) : SIGNUP ICI ──
 → frustration_2a → overload_2a → planning_2a → fatigue_2a (pain points, auto-advance)
 ── variante A (control) : SIGNUP ICI ──
@@ -71,7 +72,7 @@ value_intro → role
 ### Sportif — flux programme (`PROGRAM_ATHLETE_PATH` / `SHORT_PROGRAM_ATHLETE_PATH`)
 Activé si `claim_program_id` en localStorage (user venant d'une page WP via `?claim=[id]`). Garde le diagnostic complet, perd `sport_2a`/`goal_2a`/`level_2a`/`days_2a`/`week_preview_2a` (déduits du programme claimé).
 ```
-value_intro → role → [pain points] → account (position selon variante A/B, comme ci-dessus)
+value_intro (rôle choisi ici) → [pain points] → account (position selon variante A/B, comme ci-dessus)
 → autoreg_score → concept_autoreg
 → profile_recap (nom réel du programme claimé — GET /api/programs/[id])
 → paywall_priming ("Ton programme {nom} t'attend.") → paywall_form
@@ -81,7 +82,7 @@ value_intro → role → [pain points] → account (position selon variante A/B,
 
 ### Coach — flux classique (`COACH_PATH` / `SHORT_COACH_PATH`)
 ```
-value_intro → role
+value_intro (rôle choisi ici)
 ── variante B (test) : SIGNUP ICI ──
 → challenge_2b → overload_2b → planning_time_2b → fatigue_2b (pain points)
 ── variante A (control) : SIGNUP ICI ──
@@ -104,7 +105,7 @@ Toujours adaptée de `InviteModal.tsx` (lien `go.theperfclub.com/join/{code}`, c
 
 ### Auth mode (déjà connecté, onboarding non terminé)
 ```
-role → questions selon rôle → completeProfile()/createAccount() déjà faits → paywall_priming → paywall_form → celebration → activation
+value_intro (rôle choisi ici) → questions selon rôle → completeProfile()/createAccount() déjà faits → paywall_priming → paywall_form → celebration → activation
 ```
 `register/page.tsx` fait rentrer un user authentifié dont `onboarding_done` est encore `false` dans `OnboardingFlow` pour reprendre, plutôt que de forcer l'accès direct.
 
@@ -208,6 +209,23 @@ Repéré en investiguant un cas concret signalé par Gildas via l'enregistrement
 **Non résolu / limite connue** : la cause exacte du "not ready" n'est pas formellement isolée (clic trop rapide vs bloqueur de pub/extension retardant l'iframe Stripe — les deux produisent le même message d'erreur). Le fix couvre les deux cas en pratique (bouton inerte tant que non prêt, erreur visible sinon rattrapée en silence), mais si un navigateur bloque carrément l'iframe Stripe, un nouvel essai échouerait probablement encore — avec un message d'erreur visible cette fois, au lieu d'un plantage muet.
 
 Déployé en prod le 2026-07-30 (commit `c130207`, push direct sur `main`). Non testé avec un vrai paiement par Claude (règle de sécurité permanente : jamais d'informations de carte bancaire saisies, même en test) — un test manuel de Gildas juste après le fix a réussi, cohérent avec le diagnostic (une saisie manuelle laisse largement le temps au `PaymentElement` de devenir `ready` avant le submit, contrairement au clic immédiat de ce cas).
+
+### Fusion `value_intro`/`role` + nouveau design photo plein fond (2026-07-31)
+Point de départ : un POC (`theperfclub_poc_v62_value_intro_proposal.html`, inspiré de future.co) itéré avec Gildas pendant toute une session — photo en fond plein viewport (pas de carte encadrée/carrousel), carte process à 3 étapes (icônes fidèles aux vrais composants : ring wellness, carte séance, carte conseils), wording adapté par rôle et par source d'entrée. Une fois validé, portage en une seule passe dans le vrai code (`OnboardingFlow.tsx`), demandé explicitement par Gildas plutôt qu'en 2 phases séparées.
+
+**Bug pré-existant trouvé en lisant le code réel (pas anticipé au départ)** : `initialRole ? 2 : 0` au montage sautait `value_intro` entièrement pour tout trafic `?role=`/programme claimé (`handleClaimGuest()` dans `PublicProgramView.tsx` pose toujours `?role=`) — ce trafic n'avait donc **jamais** vu `value_intro` depuis son introduction le 2026-07-20, la légende conditionnelle programme claimé déjà présente dans le code étant de fait morte pour la quasi-totalité de ce segment.
+
+**Fusion** : `"role"` retiré du type `StepId` et des 9 tableaux de path (`ATHLETE_PATH`/`COACH_PATH`/`SHORT_*`/`PROGRAM_*`/`INVITE_ATHLETE_PATH`) — plus jamais un step séparé, pour personne. `value_intro` devient le seul écran : CTA unique role-aware ("Créer mon profil →"/"Configurer mon espace coach →") si le rôle est déjà connu (`?role=`, programme claimé, reprise Google OAuth), sinon les 2 cartes de choix ("Je suis sportif →"/"Je suis coach →") deviennent le CTA principal de l'écran lui-même — plus d'écran intermédiaire. `stepIdx` initial simplifié à `0` dans tous les cas (l'ancien `initialRole ? 2 : 0` disparaît avec le step qu'il sautait).
+
+**Aucun changement nécessaire côté position-dépendante** : `path.indexOf("account")` (reprise Google OAuth, `useEffect [googleInitDone]`) et les gardes équivalentes (`inviteJoinFailed`) recalculent déjà dynamiquement l'index d'`"account"` plutôt que de supposer une position fixe — confirmé par lecture de code, aucune régression sur ces chemins malgré le retrait de `"role"` en amont.
+
+**Event PostHog `onboarding_role_viewed` préservé** : au clic sur un rôle, un event synthétique est émis (`onboarding_step_viewed` + `onboarding_role_viewed`, `step_index` = `stepIdx` courant) — même pattern déjà utilisé pour `?role=` et la continuation Google OAuth ("l'utilisateur atteint ce step conceptuel sans qu'il soit rendu à l'écran"). Nécessaire car **les 4 funnels principaux (sportif 4403213, coach 4403222, programme sportif 4745753, programme coach 4745754) ont bien `"role"` comme étape ordonnée** (vérifié après coup sur un vrai funnel : ~33% de perte entre `value_intro`→`role`, 6s d'écart — la friction que cette fusion visait justement à supprimer). `"role"` était à l'index 1 dans les 9 tableaux de path avant la fusion, systématiquement juste après `value_intro`, sans exception (contrairement à `"account"`, position variable selon variante A/B — c'est pour ça que lui seul avait été exclu des funnels lors du rebuild du 2026-07-20). **Effet attendu à partir du 2026-07-31** : cette étape va passer à ~100% de conversion quasi instantanée sur les 4 funnels (voir/choisir un rôle sont désormais le même clic, structurellement impossible de déclencher l'un sans l'autre) — pas un bug, la preuve avant/après de la fusion. Décision de Gildas : garder l'étape quelques jours/semaines pour capter cette rupture nette avant de la retirer des funnels.
+
+**Design** : fond photo (`value-intro-BG.jpeg`, hébergée sur theperfclub.com/wp-content) en `position:fixed`, `objectFit:cover`, voile dégradé sombre par-dessus. Piège rencontré : la 1ère version de l'image (`value-intro-BG-scaled.jpeg`) ne faisait que 560×700px (bien trop petite pour un fond plein viewport, d'où un flou visible à l'agrandissement) — remplacée par le vrai original `value-intro-BG.jpeg` (3550×4438px) trouvé en testant les URLs WordPress voisines sans le suffixe `-scaled`. `objectPosition: "center 35%"` calibré pour garder la tête du sportif visible au-dessus de la carte process malgré la hauteur variable du titre (2 lignes rôle connu vs 3 lignes programme claimé) — aucune position n'élimine totalement le chevauchement titre/tête sur la variante 3 lignes, accepté comme compromis (chevauchement léger sur le logo du t-shirt, jamais sur le visage).
+
+**Vérification** : `tsc --noEmit` + `npm run build` propres. Testé en local puis en prod (après déploiement) sur : `/register` (rôle inconnu), `?role=athlete`/`?role=coach`, programme claimé via `/p/[id]` (vrai programme public, DB prod), invitation coach→sportif via `/join/[code]` (vrai code coach, DB prod), variante courte A/B via `?ab=test`. Continuation Google OAuth vérifiée par lecture de code (jamais testée en direct par Claude, règle de sécurité permanente) **puis confirmée en conditions réelles par Gildas lui-même** (son propre compte, `mode`/`onboarding_done`/`invite_code` vérifiés en base juste après — flow complet jusqu'à `trial_started` sans écran blanc ni erreur).
+
+Déployé en prod le 2026-07-31 (commit `1cf1e2a`, push direct sur `main`).
 
 ### Largeur de colonne responsive dans l'onboarding (2026-07-27)
 Repéré en travaillant sur `paywall_priming` : la colonne de contenu restait figée à `maxWidth: 560` partout dans l'onboarding, quel que soit le viewport — aucune logique responsive n'existait dans aucun de ces fichiers avant ce chantier (confirmé par grep sur `560` avant modification). Résultat : sur desktop/tablette, beaucoup d'espace vide de chaque côté, jamais utilisé.
@@ -360,6 +378,7 @@ type StepId =
   | "paywall_priming" | "paywall_form";                                     // POST_PROGRESS — nouveaux, précèdent désormais celebration
 ```
 `value_program`/`value_program_coach` supprimés du type (remplacés par `value_intro`, générique).
+`"role"` retiré du type le 2026-07-31 — fusionné dans `value_intro` (voir section dédiée plus bas), n'est plus jamais un step rendu séparément.
 
 `POST_PROGRESS` = `["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"]`
 `DARK_STEPS` (fond `OnboardingBackground variant="dark"`) = `["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"]` — `paywall_priming`/`paywall_form` sont en `variant="light"`, tout comme le reste des questions/formulaires.
@@ -367,7 +386,7 @@ type StepId =
 Note : `context_2b`, `sport_2b`, `count_2b`, `tool_2b` sont dans le type StepId mais hors de tout path actif (dead code conservé pour compatibilité auth mode).
 
 ### Les 8 tableaux de paths (`OnboardingFlow.tsx:58-150`)
-`ATHLETE_PATH`/`COACH_PATH` (classique, variante A — signup après pain points), `SHORT_ATHLETE_PATH`/`SHORT_COACH_PATH` (classique, variante B — signup juste après `role`), `PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH` (programme claimé, variante A), `SHORT_PROGRAM_ATHLETE_PATH`/`SHORT_PROGRAM_COACH_PATH` (programme claimé, variante B). `getPath(role)` choisit le tableau selon `assignedVariant` (`"test"` = B) puis `hasClaimedProgram`, et splice `paidExtras` après `"celebration"` une fois `trial_started` réussi (voir `handlePaymentSuccess()`).
+`ATHLETE_PATH`/`COACH_PATH` (classique, variante A — signup après pain points), `SHORT_ATHLETE_PATH`/`SHORT_COACH_PATH` (classique, variante B — signup juste après `value_intro`, rôle choisi sur cet écran depuis le 2026-07-31), `PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH` (programme claimé, variante A), `SHORT_PROGRAM_ATHLETE_PATH`/`SHORT_PROGRAM_COACH_PATH` (programme claimé, variante B). `getPath(role)` choisit le tableau selon `assignedVariant` (`"test"` = B) puis `hasClaimedProgram`, et splice `paidExtras` après `"celebration"` une fois `trial_started` réussi (voir `handlePaymentSuccess()`).
 
 ## Composants clés
 ```
@@ -683,7 +702,7 @@ Remonté par un client payant réel (`mezghadsport@gmail.com`) : impossible d'aj
 3. **Le paywall Stripe obligatoire bloquait tout nouveau sportif, invité ou non** — sans rapport avec le statut d'abonnement du coach lui-même (mur inconditionnel pour tout compte "athlete" créé). L'app gère pourtant déjà un accès gratuit via coach (`usePaywall.ts`/`(app)/layout.tsx` : `isActive = ... || (subscription_status==="free" && hasCoach)`), mais l'onboarding ignorait cette règle. Confirmé en base : zéro sportif n'avait jamais été lié à ce coach.
 
 **Fix des causes 2 et 3, un seul mécanisme** (`src/components/onboarding/OnboardingFlow.tsx`) :
-- Nouveau tableau `INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "role", "account", "celebration"]` — aucun nouveau `StepId`, réutilise 4 steps existants, n'inclut ni diagnostic ni `paywall_priming`/`paywall_form` : le sportif atterrit sur `/today` avec `subscription_status="free"` + `hasCoach=true` sans jamais voir de mur de paiement.
+- Nouveau tableau `INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "role", "account", "celebration"]` (mis à jour 2026-07-31 : `"role"` retiré, devenu `["value_intro", "account", "celebration"]` — voir section dédiée plus bas) — aucun nouveau `StepId`, réutilise les steps existants, n'inclut ni diagnostic ni `paywall_priming`/`paywall_form` : le sportif atterrit sur `/today` avec `subscription_status="free"` + `hasCoach=true` sans jamais voir de mur de paiement.
 - États `hasCoachInvite`/`coachInviteCode`/`inviteJoinFailed`. Résolution de `coach_invite_code` (localStorage) dans le **même** `useEffect` que `claim_program_id` (ordre de déclaration important, cf. bug déjà documenté plus haut sur l'ordre des effets) — validation asynchrone via une nouvelle route publique **`GET /api/invite/validate?code=...`** (même pattern que `GET /api/programs/[id]`), qui peut rétrograder `hasCoachInvite` à `false` si le code est invalide.
 - `getPath()` : `hasCoachInvite` a priorité absolue sur `assignedVariant` (bras A/B) et `hasClaimedProgram` — une invitation coach est plus spécifique.
 - `handleFinish()` : après l'appel existant à `/api/invite/link`, si `role==="athlete" && hasCoachInvite`, appelle `/api/invite/join` et **vérifie le résultat** avant de marquer `profiles.onboarding_done = true` (auparavant l'appel n'était jamais vérifié). En cas d'échec (code invalidé entre l'ouverture du lien et la soumission), bascule `hasCoachInvite=false` — retombe sur le funnel payant standard plutôt que de laisser un compte gratuit non lié en accès permanent non détecté. Nouvel effet dédié (`inviteJoinFailed`) recalcule `stepIdx` via `path.indexOf("account") + 1`, jamais `next()` — même règle que le bug déjà documenté sur la continuation Google OAuth (avancer d'un cran sur un ancien index tombe au mauvais endroit après un changement de path).
