@@ -62,6 +62,16 @@ export interface AutoregProfile {
   dimensions: { label: string; riskLabel: string; color: string }[];
 }
 
+/* Emoji du badge flottant sur la jauge (2026-07-31, cf. POC restructuration funnel) — un par
+   persona, pas par score : le persona est ce qui donne du caractère à l'écran, le score seul
+   ("58%") ne suffit pas à le distinguer. */
+const PERSONA_EMOJI: Record<string, string> = {
+  "Autorégulé confirmé": "🧘",
+  "Battant instinctif": "🔥",
+  "Volontaire du dépassement": "💪",
+  "Improvisateur engagé": "🎲",
+};
+
 function pickAthletePersona(overloadRisk: number, planningRisk: number, fatigueRisk: number): { title: string; description: string } {
   const maxRisk = Math.max(overloadRisk, planningRisk, fatigueRisk);
   if (maxRisk === 0) {
@@ -139,27 +149,38 @@ export default function AutoRegScoreStep({ overloadAns, planningAns, fatigueAns,
         </div>
       ) : (
         <>
-          {/* Score global */}
+          {/* Jauge circulaire + emoji persona (2026-07-31, remplace le score plat + badge fixe) */}
           <div style={{
-            textAlign: "center", marginBottom: 22,
+            display: "flex", justifyContent: "center", marginBottom: 18,
             opacity: scoreVisible ? 1 : 0,
             transform: scoreVisible ? "scale(1)" : "scale(0.8)",
             transition: "all 0.45s cubic-bezier(0.2,0,0,1)",
           }}>
-            <div style={{ fontSize: 64, fontWeight: 950, letterSpacing: "-0.04em", color: gColor, lineHeight: 1 }}>
-              {globalPct}%
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.5)", marginTop: 4, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              Score d'autorégulation
+            <div style={{ position: "relative", width: 168, height: 168 }}>
+              <svg width={168} height={168} viewBox="0 0 168 168" style={{ transform: "rotate(-90deg)" }}>
+                <circle cx={84} cy={84} r={72} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth={14} />
+                <circle
+                  cx={84} cy={84} r={72} fill="none" stroke={gColor} strokeWidth={14} strokeLinecap="round"
+                  strokeDasharray={452.4} strokeDashoffset={452.4 * (1 - globalPct / 100)}
+                  style={{ transition: "stroke-dashoffset 0.6s cubic-bezier(0.2,0,0,1)" }}
+                />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: 42, fontWeight: 950, letterSpacing: "-0.04em", color: gColor, lineHeight: 1 }}>{globalPct}%</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,.5)", marginTop: 3, letterSpacing: "0.1em", textTransform: "uppercase" }}>Autorégulation</div>
+              </div>
+              <div style={{ position: "absolute", top: -6, right: -6, width: 46, height: 46, borderRadius: "50%", background: "#1c1c1c", border: "3px solid #111", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, boxShadow: "0 4px 10px rgba(0,0,0,.35)" }}>
+                {PERSONA_EMOJI[persona.title] || "⚡"}
+              </div>
             </div>
           </div>
 
           {/* Profil comportemental */}
           <div style={{
-            opacity: scoreVisible ? 1 : 0, transition: "opacity 0.4s ease 0.15s", marginBottom: 20,
+            textAlign: "center", opacity: scoreVisible ? 1 : 0, transition: "opacity 0.4s ease 0.15s", marginBottom: 20,
           }}>
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,157,110,.14)", border: "1px solid rgba(255,157,110,.3)", color: "#ff9d6e", fontSize: 13, fontWeight: 800, padding: "8px 16px", borderRadius: 999 }}>
-              🔥 Ton profil : {persona.title}
+              Ton profil : {persona.title}
             </span>
           </div>
 

@@ -11,8 +11,8 @@ import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
-import AutoRegScoreStep from "@/components/onboarding/AutoRegScoreStep";
-import AutoRegScoreStepCoach from "@/components/onboarding/AutoRegScoreStepCoach";
+import AutoRegScoreStep, { computeAthleteAutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
+import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
 import { Elements } from "@stripe/react-stripe-js";
@@ -129,7 +129,7 @@ const PROGRAM_ATHLETE_PATH: StepId[] = [
   "account",
   "autoreg_score",
   "concept_autoreg",
-  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+  "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
@@ -137,7 +137,7 @@ const PROGRAM_COACH_PATH: StepId[] = [
   "account",
   "autoreg_score_coach",
   "concept_autoreg",
-  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+  "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
 ];
 
 /* Variante B (bras "test" de l'A/B short-onboarding-signup) : Signup dès le tout début, juste
@@ -175,14 +175,14 @@ const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
-  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+  "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const SHORT_PROGRAM_COACH_PATH: StepId[] = [
   "value_intro", "account",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
   "concept_autoreg",
-  "profile_recap", "paywall_priming", "paywall_form", "celebration",
+  "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
 ];
 
 /* Sportif invité par un coach (coach_invite_code en localStorage, posé par /join/[code]) : le lien
@@ -272,15 +272,6 @@ const SPORT_QUALITIES: Record<string, string> = {
   "Endurance":               "Endurance aérobie, gestion du seuil, récupération active",
   "Arts martiaux & combat": "Endurance spécifique combat, explosivité, mobilité articulaire",
   "Autre":                   "Qualités physiques adaptées à ta discipline",
-};
-
-const SPORT_SESSION_TYPES: Record<string, string> = {
-  "Force & puissance":      "Alternance de séances de charge lourde et de séances techniques ou explosives.",
-  "Athlétisme & vitesse":   "Séances de vitesse pure, travail technique de course, et fond léger en complément.",
-  "Sports collectifs":      "Séances à intensité variable : répétition d'efforts, agilité, et récupération active.",
-  "Endurance":               "Alternance de sorties longues à allure modérée et de séances de fractionné plus intense.",
-  "Arts martiaux & combat": "Séances techniques, travail au sac, et rounds à intensité croissante.",
-  "Autre":                   "Séances variées, adaptées à ta discipline et à ton objectif.",
 };
 
 const BEDTIME_OPTIONS = [
@@ -469,11 +460,11 @@ function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: 
 }
 
 function ProfileRecapStep({
-  role, sport, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, claimedProgramName, hasPreviewNext, onNext,
+  role, sport, sportLabel, sportIcon, showLevel, level, goalLower, showDays, trainingDays, claimedProgramName, hasPreviewNext, personaTitle, compareRows, onNext,
 }: {
   role: Role; sport: string; sportLabel: string; sportIcon: string; showLevel: boolean; level: Level; goalLower: string;
   showDays: boolean; trainingDays: number[]; claimedProgramName?: string | null;
-  hasPreviewNext: boolean; onNext: () => void;
+  hasPreviewNext: boolean; personaTitle: string; compareRows: { before: string; after: string }[]; onNext: () => void;
 }) {
   const [phase, setPhase] = useState<"loading" | "reveal">("loading");
   useEffect(() => {
@@ -482,31 +473,51 @@ function ProfileRecapStep({
   }, []);
   const accent: React.CSSProperties = { color: "#d44000", fontWeight: 800 };
   const qualities = SPORT_QUALITIES[sport] || SPORT_QUALITIES["Autre"];
-  const sessionTypes = SPORT_SESSION_TYPES[sport] || SPORT_SESSION_TYPES["Autre"];
+  const shortTags = role === "coach" ? RECAP_SHORT_TAGS_COACH : RECAP_SHORT_TAGS_ATHLETE;
 
   return (
     <div>
       <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 16 }}>{sportIcon}</div>
       <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16 }}>Ton programme d&apos;entraînement</div>
+      {/* Paragraphe fusionné (2026-07-31) : reprenait avant un 2e paragraphe + une carte "Ce que ce
+          programme travaille" séparée, qui faisaient doublon sur le nombre de jours par semaine —
+          condensé en un seul paragraphe, qualités du sport incluses. */}
       <div style={{ fontSize: 16, color: "#3a3f44", lineHeight: 1.65, marginBottom: 20 }}>
         {role === "coach" ? "On prépare un premier programme " : "On prépare ton programme "}
         <span style={accent}>{claimedProgramName || sportLabel}</span>
         {showLevel && <>, niveau <span style={accent}>{LEVEL_LABELS[level]}</span></>}
         {goalLower && <>, pour <span style={accent}>{goalLower}</span></>}
-        {showDays && <> — à raison de <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
-        .
+        {" : "}{qualities}
+        {showDays && <>, réparti sur <span style={accent}>{trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} par semaine</span></>}
+        {" avec une charge qui s'ajuste "}{role === "coach" ? "à la forme du jour de chacun" : "à ta forme du jour"}.
       </div>
-      <div style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 16px", border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 2px 12px rgba(0,0,0,.04)", marginBottom: 28, textAlign: "left" }}>
-        <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", color: "#d44000", textTransform: "uppercase", marginBottom: 8 }}>
-          Ce que ce programme travaille
+
+      {/* Carte empilée façon Superpower (2026-07-31) : carte grisée = écho du persona déjà révélé
+          sur autoreg_score(_coach), tags courts génériques par dimension (pas de personnalisation
+          ici, volontairement — la vraie personnalisation vit dans la carte du dessus via les
+          tables *_INSIGHTS, cf. compareRows). */}
+      <div style={{ position: "relative", marginTop: 14, marginBottom: 26, paddingTop: 14 }}>
+        <div style={{ background: "#ececea", borderRadius: 18, padding: "16px 18px 26px", margin: "0 14px", opacity: 0.9 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#9a9d9c", marginBottom: 11 }}>Ton profil : {personaTitle}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {shortTags.map((t, i) => (
+              <span key={i} style={{ fontSize: 11, fontWeight: 500, color: "#9a9d9c", background: "#dedcd9", padding: "6px 11px", borderRadius: 999, display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>{t}</span>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428", marginBottom: 8 }}>
-          {qualities}
-        </div>
-        <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>
-          Réparti sur {trainingDays.length || 4} jour{(trainingDays.length || 4) > 1 ? "s" : ""} par semaine, avec une charge qui s&apos;ajuste {role === "coach" ? "au niveau de forme de tes sportifs" : "à ton niveau de forme"} au fil des séances. {sessionTypes}
+        <div style={{ position: "relative", background: "#fff", borderRadius: 20, padding: "18px 20px 20px", marginTop: -10, boxShadow: "0 16px 34px rgba(0,0,0,.10)", border: "1px solid rgba(0,0,0,.05)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+            <div style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>Avec ThePerfClub</div>
+            <div style={{ fontSize: 12.5, fontWeight: 800, color: "#d44000" }}>{compareRows.length} leviers activés</div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+            {compareRows.map((row, i) => (
+              <span key={i} style={{ fontSize: 11.5, fontWeight: 700, color: "#b83600", background: "rgba(212,64,0,.10)", borderRadius: 14, padding: "7px 12px", lineHeight: 1.35 }}>{row.after}</span>
+            ))}
+          </div>
         </div>
       </div>
+
       {phase === "loading" ? (
         <div style={{ textAlign: "center", padding: "10px 0 6px" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#62686e" }}>
@@ -687,6 +698,27 @@ const FATIGUE_COACH_INSIGHTS: Record<string, string> = {
   "Souvent, difficile de modifier le plan en cours": "Modifier le plan en cours de cycle reste souvent difficile, faute de signal clair de fatigue.",
   "Oui, je préfère maintenir le programme prévu": "Tu préfères maintenir le programme prévu, même quand la fatigue d'un sportif mériterait un ajustement.",
 };
+/* Ajoutées le 2026-07-31 : la planification (planning_2a/planning_time_2b) était collectée et
+   servait déjà à la jauge "Planification de la charge" d'autoreg_score, mais n'avait jamais son
+   propre insight dans le comparatif — seules 3 des 4 questions du diagnostic y apparaissaient. */
+const PLANNING_INSIGHTS: Record<string, string> = {
+  "Non, j'ai un plan clair que je respecte": "Tu suis un plan clair, mais sans qu'il s'ajuste vraiment à ta forme du jour.",
+  "Un peu, je m'adapte souvent au ressenti": "Tu ajustes souvent au ressenti, sans donnée pour confirmer ces choix.",
+  "Souvent, c'est flou d'une semaine à l'autre": "Ta charge reste floue d'une semaine à l'autre, difficile à structurer seul.",
+  "Complètement, je fais entièrement au feeling": "Tu avances entièrement au feeling, sans plan de charge pour te guider.",
+};
+const PLANNING_TIME_COACH_INSIGHTS: Record<string, string> = {
+  "Non, j'ai un process bien rodé": "Ton process est rodé, mais construit à la main, sportif par sportif.",
+  "Un peu, mais ça reste gérable": "C'est gérable aujourd'hui, mais ça prend du temps que tu pourrais utiliser ailleurs.",
+  "Oui, c'est souvent chronophage": "Planifier la charge de chaque sportif te prend souvent trop de temps.",
+  "Oui, c'est le principal frein de ma semaine": "La planification de la charge est le principal frein de ta semaine.",
+};
+/* Tags courts de la carte grisée "Ton profil : {persona}" (profile_recap) — un par dimension du
+   diagnostic, pas par réponse individuelle (contrairement aux tables ci-dessus) : cette carte est
+   volontairement générique/rapide à lire, la personnalisation réelle vit dans la carte "Avec
+   ThePerfClub" juste en dessous (via les tables *_INSIGHTS). */
+const RECAP_SHORT_TAGS_ATHLETE = ["Tu ignores ce qui freine", "Tu pousses à l'aveugle", "Ta charge, au feeling", "Ta fatigue, jamais écoutée"];
+const RECAP_SHORT_TAGS_COACH = ["Tes sportifs peu visibles", "Le RPE t'échappe", "Planifié au feeling", "Fatigue jamais repérée"];
 
 /* ── main ── */
 export default function OnboardingFlow({ userId, pendingData, initialRole }: Props) {
@@ -2128,22 +2160,49 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         )}
 
         {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
-        {currentStep === "profile_recap" && (
-          <ProfileRecapStep
-            role={role}
-            sport={sport}
-            sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
-            sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
-            showLevel={path.includes("level_2a") || (hasClaimedProgram === true && !!level)}
-            level={level}
-            goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
-            showDays={path.includes("days_2a")}
-            trainingDays={trainingDays}
-            claimedProgramName={claimedProgramName}
-            hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
-            onNext={next}
-          />
-        )}
+        {currentStep === "profile_recap" && (() => {
+          /* Persona + comparatif (2026-07-31) : la carte grisée de ce step reprend mot pour mot
+             le persona déjà révélé sur autoreg_score(_coach) — recalculé ici via les fonctions
+             pures exportées plutôt que de faire remonter un state depuis ces composants. */
+          const persona = role === "coach"
+            ? computeCoachAutoregProfile(overloadCoachAns, planningCoachAns, fatigueCoachAns).persona
+            : computeAthleteAutoregProfile(overloadAns, planningAns, fatigueAns).persona;
+          /* "before" gardé (calculé à partir des vraies réponses via les tables *_INSIGHTS
+             ci-dessus) même s'il n'est plus affiché nulle part depuis le passage aux tags courts
+             ci-dessous — pas supprimé au cas où la personnalisation reviendrait sur cette carte,
+             mais actuellement mort côté rendu, seul "after" est utilisé. */
+          const compareRows = role === "coach"
+            ? [
+                { before: COACHING_CHALLENGE_INSIGHTS[coachingChallenge] || "Tu manques de visibilité sur tes sportifs au quotidien.", after: "Suivi individualisé par sportif." },
+                { before: OVERLOAD_COACH_INSIGHTS[overloadCoachAns] || "Tes sportifs poussent parfois plus dur que prévu, sans que tu le voies venir.", after: "Le RPE réel est comparé au prévu." },
+                { before: PLANNING_TIME_COACH_INSIGHTS[planningCoachAns] || "La planification de la charge de tes sportifs se fait au feeling.", after: "Un plan de charge généré par sportif." },
+                { before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.", after: "Alertes wellness avant la blessure." },
+              ]
+            : [
+                { before: FRUSTRATION_INSIGHTS[frustration] || "Tu manques de visibilité sur ta propre progression.", after: "Ta progression est analysée." },
+                { before: OVERLOAD_INSIGHTS[overloadAns] || "Tu pousses parfois plus dur que prévu, sans savoir si ça sert vraiment ta progression.", after: "Ta charge réelle est comparée au prévu." },
+                { before: PLANNING_INSIGHTS[planningAns] || "Ta charge est planifiée au feeling.", after: "Un plan de charge généré pour toi." },
+                { before: FATIGUE_INSIGHTS[fatigueAns] || "Difficile de savoir si pousser malgré la fatigue t'aide ou te freine.", after: "Tes séances s'ajustent à ta récupération." },
+              ];
+          return (
+            <ProfileRecapStep
+              role={role}
+              sport={sport}
+              sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
+              sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
+              showLevel={path.includes("level_2a") || (hasClaimedProgram === true && !!level)}
+              level={level}
+              goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
+              showDays={path.includes("days_2a")}
+              trainingDays={trainingDays}
+              claimedProgramName={claimedProgramName}
+              hasPreviewNext={path.includes("week_preview_2a") || path.includes("week_preview_2b")}
+              personaTitle={persona.title}
+              compareRows={compareRows}
+              onNext={next}
+            />
+          );
+        })()}
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
@@ -2511,41 +2570,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           const anchor = role === "coach"
             ? "Moins cher qu'un mois de logiciel de coaching classique — pour un nombre de sportifs illimités, ajoutés sans surcoût."
             : "Moins cher qu'une séance avec un coach particulier — pour un an de programme sur mesure avec 40+ modèles de programmes personnalisables.";
-          /* Comparatif personnalisé (2026-07-27) — la colonne "avant" reformule en insight la
-             réponse réelle donnée par l'utilisateur sur frustration_2a/challenge_2b, overload_2a/2b
-             et fatigue_2a/2b (via les tables *_INSIGHTS ci-dessus, pas le texte littéral de l'option
-             — hors contexte, la phrase brute du questionnaire ne se lit plus comme un constat).
-             La colonne "après" répond au thème de cette même question. Fallback générique si une
-             réponse manque ou n'est pas reconnue (ex. saut direct via ?dbgstep= en dev, ou path
-             programme qui saute ces steps). */
-          const compareRows = role === "coach"
+          /* Frise "chemin dans le temps" (2026-07-31, remplace le comparatif avant/après déplacé sur
+             profile_recap) — répond à une objection différente : pas "est-ce que l'app comprend mon
+             problème" (déjà réglé plus tôt dans le funnel) mais "est-ce que ça va vraiment marcher,
+             et quand", juste avant l'engagement financier. Goal-aware via goalLower (comme
+             WeekPreviewStep), pas hardcodé sur un objectif précis — seul le titre référence
+             l'objectif, les 3 étapes restent volontairement génériques pour rester vraies quel que
+             soit l'objectif choisi. */
+          const goalLower = goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "";
+          const friseTitle = `Le chemin pour enfin ${goalLower || "progresser"}, sans deviner.`;
+          const friseSteps = role === "coach"
             ? [
-                {
-                  before: COACHING_CHALLENGE_INSIGHTS[coachingChallenge] || "Tu manques de visibilité sur tes sportifs au quotidien.",
-                  after: "ThePerfClub identifie précisément ce qui freine chacun de tes sportifs, sportif par sportif.",
-                },
-                {
-                  before: OVERLOAD_COACH_INSIGHTS[overloadCoachAns] || "Tes sportifs poussent parfois plus dur que prévu, sans que tu le voies venir.",
-                  after: "Le RPE réel de chaque sportif est comparé à la charge prévue, automatiquement.",
-                },
-                {
-                  before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.",
-                  after: "Les alertes wellness te préviennent avant qu'un sportif fatigué n'enchaîne une séance dure.",
-                },
+                { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre les séances et le ressenti de tes sportifs pendant 2 semaines — ThePerfClub identifie déjà ce qui joue sur leur récupération." },
+                { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur la forme de chacun — leur charge s'ajuste automatiquement à leur vraie récupération." },
+                { title: "Progresse", period: "Mois 2+", text: "Le profil d'autorégulation de chaque sportif prend forme — tu sais enfin ce qui les freine et ce qui les fait vraiment avancer." },
               ]
             : [
-                {
-                  before: FRUSTRATION_INSIGHTS[frustration] || "Tu manques de visibilité sur ta propre progression.",
-                  after: "ThePerfClub analyse précisément ce qui freine ta progression, séance après séance.",
-                },
-                {
-                  before: OVERLOAD_INSIGHTS[overloadAns] || "Tu pousses parfois plus dur que prévu, sans savoir si ça sert vraiment ta progression.",
-                  after: "Ta charge réelle est suivie et comparée à ce qui est prévu, séance après séance.",
-                },
-                {
-                  before: FATIGUE_INSIGHTS[fatigueAns] || "Difficile de savoir si pousser malgré la fatigue t'aide ou te freine.",
-                  after: "Ton wellness est pris en compte pour ajuster tes séances à ta vraie récupération.",
-                },
+                { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre tes séances et ton ressenti pendant 2 semaines — ThePerfClub identifie déjà ce qui joue sur ta récupération et ta forme." },
+                { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur ta forme — ta charge s'ajuste automatiquement à ta vraie récupération." },
+                { title: "Progresse", period: "Mois 2+", text: "Ton profil d'autorégulation prend forme — tu sais enfin ce qui te freine et ce qui te fait vraiment avancer." },
               ];
           return (
             <div>
@@ -2585,44 +2628,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
               </div>
 
-              {/* Comparatif "Où tu en es / Ce que ThePerfClub change" — cartes (fond blanc, bordure)
-                  dans les 2 cas ; sur desktop (≥640px) avant → après côte à côte (inspiré de la
-                  section "Where Levels takes you" de Levels), sur mobile empilé dans la même carte
-                  (une carte horizontale y serait trop étroite pour les 2 colonnes de texte). */}
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
-                  <span>Où tu en es</span>
-                  <span style={{ color: "#d44000" }}>Ce que ThePerfClub change</span>
-                </div>
-                {colIsMd ? (
-                  compareRows.map((row, i) => (
-                    <div key={i} style={{
-                      display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16,
-                      background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 20px",
-                      marginBottom: i < compareRows.length - 1 ? 12 : 0,
-                    }}>
-                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "rgba(0,0,0,.06)", color: "#8a8f94", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 1 }}>{i + 1}</span>
-                        <span style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5 }}>{row.before}</span>
+              {/* Frise "chemin dans le temps" — remplace le comparatif avant/après (déplacé sur
+                  profile_recap), désamorce l'objection "est-ce que ça marche vraiment" juste avant
+                  le prix. */}
+              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.02em", color: "#1f2428", marginBottom: 14 }}>
+                {friseTitle}
+              </div>
+              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "6px 18px", marginBottom: 22 }}>
+                {friseSteps.map((s, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14, padding: "16px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                    <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "rgba(212,64,0,.09)", color: "#d44000", fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>{s.title}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.period}</span>
                       </div>
-                      <span style={{ color: "#d44000", fontSize: 18 }}>→</span>
-                      <span style={{ fontSize: 14, color: "#1f2428", fontWeight: 600, lineHeight: 1.5 }}>{row.after}</span>
+                      <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5 }}>{s.text}</div>
                     </div>
-                  ))
-                ) : (
-                  compareRows.map((row, i) => (
-                    <div key={i} style={{
-                      background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "14px 16px",
-                      marginBottom: i < compareRows.length - 1 ? 12 : 0,
-                    }}>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                        <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", background: "rgba(0,0,0,.06)", color: "#8a8f94", fontSize: 12, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
-                        <span style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5 }}>{row.before}</span>
-                      </div>
-                      <div style={{ fontSize: 14, color: "#1f2428", fontWeight: 600, lineHeight: 1.5, paddingLeft: 28 }}>{row.after}</div>
-                    </div>
-                  ))
-                )}
+                  </div>
+                ))}
               </div>
 
               {/* Témoignage */}
