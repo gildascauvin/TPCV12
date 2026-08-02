@@ -947,15 +947,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, []);
 
   useEffect(() => {
-    if (initialRole) {
-      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
-      posthog.capture("onboarding_step_viewed", syntheticProps);
-      posthog.capture("onboarding_role_viewed", syntheticProps);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     const props = {
       step: currentStep,
       step_index: stepIdx,
@@ -968,6 +959,24 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     advancingRef.current = false;
     finishGuardRef.current = false;
   }, [currentStep]);
+
+  /* Déclaré APRÈS l'effet générique ci-dessus (2026-08-02, bug trouvé via HogQL sur données prod
+     réelles) : au montage, React exécute les effets dans leur ordre de déclaration textuelle — cet
+     effet émettait auparavant onboarding_role_viewed AVANT que l'effet générique n'émette
+     onboarding_value_intro_viewed, pour tout trafic ?role=/programme claimé/invitation (initialRole).
+     Confirmé sur 19/19 sessions réelles depuis le déploiement de la fusion value_intro/role
+     (2026-07-31) : role_viewed antérieur ou égal à value_intro_viewed dans 100% des cas, rendant ce
+     segment invisible dans un funnel ordonné value_intro→role alors qu'il convertit en réalité à
+     100% (même clic). Même classe de bug que le fix program_onboarding_start/onboarding_role_viewed
+     du 2026-07-14/15 — un effet à deps [] déclaré avant l'effet générique de vue d'étape. */
+  useEffect(() => {
+    if (initialRole) {
+      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
+      posthog.capture("onboarding_step_viewed", syntheticProps);
+      posthog.capture("onboarding_role_viewed", syntheticProps);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (pendingData?.role && !initialRole) {
