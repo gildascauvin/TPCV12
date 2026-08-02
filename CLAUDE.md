@@ -261,6 +261,10 @@ En parallèle, la population qui voit encore les 2 boutons (rôle inconnu au mon
 
 Déployé en prod le 2026-08-02 (commit `a945496`, push direct sur `main`).
 
+**Piège à anticiper en lisant les prochains chiffres de funnel (2026-08-02)** : ne pas s'attendre à ce que la population "rôle déjà connu" (`?role=`) convertisse mieux que la population "sélection" (2 boutons) une fois ce fix propagé — elle a le même point de friction réel, juste déplacé d'un cran :
+- Population "sélection" : `role_viewed` ne part qu'au clic réel sur une carte (`nextAfterChoice`, qui programme aussi l'avancée 300ms après) — donc `value_intro→role` reflète la vraie friction (~62-65%), et `role→step suivant` tend vers 100% (même action).
+- Population "rôle connu" : `role_viewed` est **synthétique**, émis automatiquement au montage, indépendamment de tout clic — donc `value_intro→role` va tendre vers 100% (rien de réel n'est mesuré ici), mais le vrai clic ("Créer mon profil →") reste un point de friction séparé et réel, qui se manifestera sur la transition **suivante** (`role→step suivant`, ex. `role→account` en variante courte). Ce n'est pas cette transition-là qui devrait tendre vers 100% pour cette population — elle n'a jamais été garantie automatique, contrairement à la population "sélection".
+
 ### Largeur de colonne responsive dans l'onboarding (2026-07-27)
 Repéré en travaillant sur `paywall_priming` : la colonne de contenu restait figée à `maxWidth: 560` partout dans l'onboarding, quel que soit le viewport — aucune logique responsive n'existait dans aucun de ces fichiers avant ce chantier (confirmé par grep sur `560` avant modification). Résultat : sur desktop/tablette, beaucoup d'espace vide de chaque côté, jamais utilisé.
 - **Formule partagée** : `isLg ? 720 : isMd ? 640 : 560` (`useBreakpoint()`, `src/hooks/useBreakpoint.ts` — `isMd: w>=640`, `isLg: w>=1024`, déjà utilisé ailleurs dans l'app, ex. `CoachClient.tsx`). Élargissement progressif plutôt qu'un zoom uniforme de tout le funnel — le mobile (où sont la plupart des vrais utilisateurs) est déjà bien calibré et n'a pas besoin d'y toucher.
