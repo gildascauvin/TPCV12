@@ -755,6 +755,47 @@ Remonté par un client payant réel (`mezghadsport@gmail.com`) : impossible d'aj
 
 **LIVRÉ 2026-07-28** — vérifié par `tsc --noEmit` + `npm run build`, commité (`5f083c5`) et déployé en prod (push `main`, Vercel auto-deploy), testé par Gildas directement en prod et confirmé fonctionnel.
 
+## Générateur de programmes — périodisation réelle par blocs (2026-08-03)
+
+Point de départ : le générateur in-app (`src/app/api/programs/generate/route.ts`, utilisé par `ProgramCriteriaModal.tsx` → `POST /api/programs/generate`, en prod depuis avant ce chantier) reposait sur `LOAD_PATTERNS`, une courbe de charge plate indexée par durée totale — `target_difficulty` était identique pour toutes les séances d'une même semaine quel que soit leur type, et aucune vraie logique d'entraînement (périodisation, surcharge progressive) n'existait. Objectif du chantier : crédibiliser la valeur réelle du programme généré (cf. discussion sur le retrait du free trial et le positionnement "programme sur mesure").
+
+### Périodisation par blocs de 4 semaines
+`LOAD_PATTERNS` remplacée par une vraie logique MEV → Surcharge → MRV → Deload (terminologie RP), 4 phases par bloc de 4 semaines (`PHASE_LOAD`, `SHAPE_OFFSETS`) :
+- **Durée limitée à 4/8/12 semaines** (retrait de 6, incompatible avec des blocs de 4) — `ProgramCriteriaModal.tsx` (`DURATIONS`, défaut passé de 6 à 8) et validation serveur (`duration % 4 !== 0` → 400).
+- **Forme du bloc selon l'objectif** (`shapeForCycle`) : `intensite`→ramp marqué partout ; `competition`→accumulation classique sauf le **dernier** bloc, toujours en tapering (deload final plus profond) ; `mixte`→alterne accumulation/intensification d'un bloc à l'autre ; `volume`/`technique`/`combat`/`autre`→accumulation par défaut.
+- **Progressive overload d'un bloc à l'autre** : `cycleBase = baseDiff + c` (+1 par bloc).
+- **Test forcé à chaque semaine MRV** (pas seulement en toute fin de programme) : dernier jour calendaire de la semaine MRV forcé en `type: "test"`.
+
+### Prescriptions dynamiques (séries/reps/%), pas juste un chiffre de difficulté
+Sur demande explicite de Gildas ("le nombre d'exercices reste le même, on surcharge via le nombre d'efforts et l'intensité, pas le nombre d'exercices") : les séances `volume`/`intensite` affichent une prescription calculée type `"Back squat — 5×5@75%"` au lieu d'un texte figé.
+- `parseExercise()` reconnaît les formats déjà présents dans `EXERCISES` (SxR, SxR à P%, durée, reps/tours/séries/rounds, avec suffixes du type "(récup 90s)"/"par jambe" préservés tels quels) — repli en texte **statique** (inchangé) pour les formats irréguliers (plages "50-80 min", pyramides) plutôt qu'un résultat faux. Couverture mesurée : ~87% des lignes volume/intensite reformatées sur un échantillon de 7 catégories.
+- `formatPrescription()` applique `PRESCRIPTION_SHAPE` (multiplicateurs sets/qty/intensité par phase et par forme de bloc) à une **ancre** = la valeur déjà écrite dans `EXERCISES` (= prescription MRV d'un bloc volume). Calibré pour reproduire exactement les 2 exemples de référence donnés par Gildas : bloc volume MRV = `5×5@75%`, bloc intensité MRV = `5×3@85%`.
+- **Durées/distances (min/s/m) arrondies au multiple de 5** le plus proche (jamais "22m"/"32s") ; **reps/tours/séries/rounds restent de petits entiers naturels non arrondis à 5** (5×3 ne doit jamais devenir 5×5) ; **% d'intensité arrondi à 5** aussi. `wordUnit` (flag sur `ParsedExercise`) distingue les unités mots ("4 tours", pluriel correct, pas de préfixe "N×" artificiel) des unités collées ("3×45s").
+- **Même sélection d'exercices sur les 4 semaines d'un bloc** : rotation dans `buildNotes()` ancrée sur `cycleIndex` (le bloc), pas sur la semaine — seule la prescription progresse semaine après semaine, pas le mouvement lui-même.
+- Séances `technique`/`recuperation`/`test` : texte **statique**, jamais reformaté (pas de notion de surcharge progressive pour une récup ou un test).
+
+### 2 bugs de cohérence trouvés en relisant la sortie réelle (pas anticipés au départ)
+1. **Type de séance non ancré sur le bloc** : `typeIdx` utilisait la semaine globale (`w`) au lieu du bloc (`c`) — "Lundi" pouvait être `volume` en semaine 1 puis `intensite` en semaine 2 du même bloc, donnant l'impression que les exercices changeaient de façon incohérente. Fix : `typeIdx = (c * days.length + dayIdx) % focusDist.length`.
+2. **Récupération sans plafond absolu** : `target_difficulty` pour `recuperation` n'avait qu'un décalage *relatif* (-2) — pendant une semaine MRV à charge 10, une "Récupération active" affichait encore 7-8/10. Fix : plafond absolu `Math.max(1, Math.min(3, weekDiff - 3))`, indépendant de la charge de la semaine.
+3. **Deux jours calendairement consécutifs pouvaient être tous les deux intensité/test** (notamment le test forcé de fin de semaine MRV tombant juste après un jour déjà intensité par la rotation) — nouvelle passe de lissage après calcul des types de la semaine (`HARD = ["intensite","test"]`), ne rétrograde jamais un test forcé (délibéré), rétrograde l'autre jour de la paire à la place. Nécessite un tri calendaire des jours (`DAY_ORDER`, `sortedDays`) pour distinguer jours réellement consécutifs (repos entre les deux ou non).
+
+### Régénération de la bibliothèque publique (`scripts/regenerate-library-periodization.mjs`)
+27 des 49 programmes publics (`is_public=true`) dont la durée est un multiple de 4 (4/8/12/16) régénérés avec cette logique — **les 22 programmes en 6 semaines volontairement exclus** (incompatibles avec des blocs de 4, décision explicite de ne pas y toucher). Script one-off, porte fidèlement la logique de `generate/route.ts` (pas d'import dynamique, à garder en synchro manuellement si le fichier source évolue) :
+- **Différence avec le générateur live** : 48 des 49 programmes de la bibliothèque n'ont jamais eu de `focus` renseigné en base. `universalShapeForCycle()` remplace `shapeForCycle()` : blocs non-terminaux alternent volume/intensité, dernier bloc toujours en tapering, indépendant de la durée totale.
+- `sport`/`level`/`weeks_count` lus depuis les colonnes stables du programme ; `days` dérivé des clés de jour déjà présentes dans le template existant (triées calendairement).
+- C'est une **régénération complète** du template (pas un patch de champ) — sauvegarde des templates d'origine écrite avant chaque écriture (`scripts/library-templates-backup-periodization-*.json`, gitignored). Exécuté 3 fois au total (une fois par vague de correctifs), toujours en dry-run d'abord.
+- **Incident en cours de session** (patch précédent, différent de celui-ci) : une commande de vérification a relancé `patch-library-difficulty.mjs --apply` une deuxième fois par erreur sur des données déjà patchées (le script recalculait à partir de la valeur *actuellement stockée*, donc non idempotent) — repéré immédiatement, corrigé via `scripts/restore-from-backup.mjs` et vérifié par comparaison exhaustive avant tout commit. Garde-fou ajouté (`scripts/.library-difficulty-patched`, bloque un `--apply` répété).
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres à chaque étape. Testé en local sur plusieurs combinaisons (12 sem/mixte/intermédiaire, 4 sem/volume/débutant/2j, 12 sem/compétition/débutant, 8 sem/technique/élite/6j) — alternance de forme, tapering différé au dernier bloc pour "compétition", test forcé à chaque semaine MRV, aucun écrasement anormal au plancher de difficulté, 0 violation de jours consécutifs difficiles sur le cas le plus dense (6 jours/semaine). Vérifié sur les 27 programmes régénérés en base (pas juste en local) : 0 incohérence jour→type au sein d'un bloc, récup jamais >3/10, 0 violation de consécutivité.
+
+Déployé en 4 commits séparés sur `main` (`f95b967` périodisation de base, `80b0791` prescriptions dynamiques, `67ec817` régénération bibliothèque, `8ff489e` cohérence jour/type + plafond récup, `4bfc03c` anti-consécutifs + arrondi + pluriel).
+
+### Pas fait, décisions explicites
+- **Type de séance "Endurance"** demandé par Gildas (un 6e `SessionType` à côté de technique/volume/intensite/recuperation/test, avec sa propre banque d'exercices sur les 12 catégories de sport) — pas encore construit, chantier de contenu à part entière, prochaine étape identifiée.
+- **Individualisation jour-à-jour via le wellness score** — le générateur reste une fonction pure sans connaissance de la forme réelle de l'utilisateur au-delà d'un ajustement ponctuel semaine 1 (`wellnessAdjustment` dans `/assign/route.ts`, jamais reconduit les semaines suivantes) et du texte consultatif de `loadRule.ts`/`getRecoveryAdvice()` sur `/today` (qui commente la séance déjà fixée, ne l'ajuste jamais). **Décision explicite de Gildas (2026-08-03) : reste en édition manuelle pour l'instant, automatisation prévue plus tard** — pas un oubli, un chantier futur distinct (adaptation continue à partir de données réelles, pas un ajustement d'algorithme de génération).
+- **Chantier d'unification onboarding ↔ générateur in-app** (onboarding utilise toujours son propre générateur plus faible, `buildProgramTemplate()` dans `OnboardingFlow.tsx`, voir plus haut dans ce fichier) — planifié (`/Users/Gildas/.claude/plans/reactive-coalescing-pretzel.md`) mais pas commencé, ce chantier a porté uniquement sur le générateur in-app (`/api/programs/generate`, `ProgramCriteriaModal`), pas sur l'onboarding.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
