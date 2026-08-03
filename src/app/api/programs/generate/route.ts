@@ -19,6 +19,17 @@ function shapeForCycle(focus: ProgramFocus, cycleIndex: number, isLastCycle: boo
   return "volume"; // volume, technique, combat, autre — accumulation par défaut
 }
 
+// Modèle spécifique pour une durée de 6 semaines — ne se découpe pas en blocs de 4, donc pas de
+// mesocycle au sens standard. Séquence demandée explicitement : MEV → Surcharge → MRV → Deload →
+// Surcharge → MRV, un seul bloc de 6 semaines qui se termine sur un pic (pas de deload final,
+// contrairement au modèle par blocs de 4 — assumé tel quel, correspond à un programme conçu pour
+// culminer juste avant une échéance plutôt qu'à redescendre en douceur).
+// Réutilise SHAPE_OFFSETS/PRESCRIPTION_SHAPE (longueur 4 : MEV/Surcharge/MRV/Deload) via une table
+// d'indices plutôt que dupliquer des tableaux à 6 valeurs — Surcharge/MRV de la 2e vague pointent
+// vers les mêmes index que la 1ère (1 et 2), la surcharge progressive vient de `cycleBaseMap`.
+const SIX_WEEK_PHASE_INDEX = [0, 1, 2, 3, 1, 2]; // MEV,Surcharge,MRV,Deload,Surcharge,MRV
+const SIX_WEEK_CYCLE_BASE = [0, 0, 0, 0, 1, 1]; // la 2e vague (Surcharge+MRV) repart d'une base +1
+
 // Prescription par exercice (séries/répétitions/%intensité), dérivée de la forme du bloc —
 // jamais le nombre d'exercices. Les valeurs écrites dans EXERCISES servent d'ancre = la
 // prescription "MRV d'un bloc volume" (phase 2, forme "volume" = multiplicateur 1.0/1.0/+0
@@ -56,9 +67,13 @@ function parseExercise(raw: string): ParsedExercise {
   const intensityPct = mIntensity ? Number(mIntensity[2]) : null;
   if (!rest) return base;
 
-  // "5×5" / "3×45s" / "6×20m" — sets × qty avec unité optionnelle collée
+  // "5×5" / "3×45s" / "6×20m" / "5×3@78%" — sets × qty avec unité optionnelle collée, et/ou
+  // intensité collée directement après (convention des banques d'archétypes)
   let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct, suffix: m[4].trim() };
+  if (m) {
+    const { pct: inlinePct, suffix } = extractInlinePct(m[4]);
+    return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct ?? inlinePct, suffix };
+  }
 
   // "6×3 min" — sets × durée en minutes
   m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
@@ -81,6 +96,18 @@ function parseExercise(raw: string): ParsedExercise {
 
 function roundTo5(n: number): number {
   return Math.round(n / 5) * 5;
+}
+
+// Les banques d'archétypes (haltérophilie/powerlifting/sprint renfo) écrivent l'intensité
+// collée à la fin ("5×3@78%") plutôt qu'en préfixe ("... à 78% — 5×3") comme l'ancienne
+// banque EXERCISES générique — les deux conventions coexistent dans les données. Sans ce
+// second point d'extraction, le "@78%" atterrit tel quel dans `suffix` (jamais interprété
+// comme intensité) et se retrouve dupliqué à côté du pourcentage recalculé par
+// formatPrescription (ex. "5×3@70% @78%").
+function extractInlinePct(suffixRaw: string): { pct: number | null; suffix: string } {
+  const m = suffixRaw.match(/^@(\d+)%\s*(.*)$/);
+  if (m) return { pct: Number(m[1]), suffix: m[2].trim() };
+  return { pct: null, suffix: suffixRaw.trim() };
 }
 
 function pluralize(word: string, n: number): string {
@@ -159,11 +186,15 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
   test:        ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
-type SportCategory = "halterophilie" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
+type SportCategory = "halterophilie" | "powerlifting" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
 
 function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
-  if (s.includes("halt") || s.includes("power") || s.includes("force") || s.includes("muscu")) return "halterophilie";
+  // Haltérophilie (arraché/épaulé-jeté olympique) ≠ Powerlifting (squat/bench/deadlift) —
+  // avant ce fix, "Force/Powerlifting" et "Haltérophilie" tombaient dans le même seau, mélangeant
+  // les deux banques d'exercices (un "Force/Powerlifting" recevait des séances d'arraché).
+  if (s.includes("halt") || s.includes("olympique") || s.includes("snatch") || s.includes("arraché")) return "halterophilie";
+  if (s.includes("power") || s.includes("force") || s.includes("muscu")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
   if (s.includes("fitness") || s.includes("cross") || s.includes("condition") || s.includes("forme") || s.includes("wod")) return "fitness";
@@ -210,6 +241,38 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Arraché : tentative de maximum",
       "Épaulé-jeté : tentative de maximum",
       "Squat avant : max du cycle",
+      "Bilan technique (vidéo)",
+    ],
+  },
+
+  powerlifting: {
+    technique: [
+      "Squat pause — 4×3",
+      "Bench pause 2s — 4×3",
+      "Deadlift déficit — 4×3",
+      "Mobilité hanches et épaules — 10 min",
+    ],
+    volume: [
+      "Back squat — 5×5",
+      "Développé couché — 5×5",
+      "Soulevé de terre — 4×5",
+      "Gainage anti-rotation — 3×40s",
+    ],
+    intensite: [
+      "Squat lourd — 5×3",
+      "Développé couché lourd — 5×3",
+      "Deadlift lourd — 4×2",
+    ],
+    recuperation: [
+      "Mobilité hanches et chevilles — 15 min",
+      "Foam rolling dos et jambes",
+      "Stretching actif épaules — 10 min",
+      "Marche active — 20 min",
+    ],
+    test: [
+      "Squat : tentative de maximum",
+      "Développé couché : tentative de maximum",
+      "Deadlift : tentative de maximum",
       "Bilan technique (vidéo)",
     ],
   },
@@ -585,25 +648,225 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   },
 };
 
-function buildNotes(category: SportCategory, type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
-  // Rotation ancrée sur le bloc (cycleIndex), pas sur la semaine — les 4 semaines d'un même
-  // bloc montrent toujours les mêmes exercices, seule leur prescription (séries/reps/%) change
-  // semaine après semaine. Nombre d'exercices toujours constant, jamais tronqué.
-  const bank = EXERCISES[category][type];
+// Rotation ancrée sur cycleIndex (pas la semaine) — les semaines d'un même bloc/rotationAnchor
+// montrent toujours les mêmes exercices, seule leur prescription (séries/reps/%) change semaine
+// après semaine. Nombre d'exercices toujours constant, jamais tronqué. Prescription dynamique
+// (séries/répétitions/%intensité) uniquement pour "volume"/"intensite" — c'est là que la
+// surcharge progressive a un sens réel ; technique/récupération/test restent du texte statique.
+function buildNotesFromBank(bank: string[], type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
   const offset = (cycleIndex * 2) % bank.length;
   const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
-
-  // Prescription dynamique (séries/répétitions/%intensité) uniquement pour les séances
-  // "volume"/"intensite" — c'est là que la surcharge progressive a un sens réel. Les banques
-  // technique/récupération/test restent du texte statique, non reformaté (une récup ne "monte
-  // pas en charge", un test est un événement, pas une prescription qui progresse).
   if (type !== "volume" && type !== "intensite") return rotated.join("\n");
   return rotated.map(line => formatPrescription(parseExercise(line), shape, phase)).join("\n");
 }
 
+function buildNotes(category: SportCategory, type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
+  return buildNotesFromBank(EXERCISES[category][type], type, cycleIndex, shape, phase);
+}
+
+// ====================================================================================
+// Curriculum sportif — remplace la rotation générique FOCUS_DIST pour les sports où de vraies
+// séances "phares" et nommées existent (demandé explicitement, avec des règles précises par
+// sport plutôt qu'un système générique technique/volume/intensite/recuperation/test appliqué
+// uniformément). Les catégories sans entrée ici gardent le système générique FOCUS_DIST.
+// ====================================================================================
+
+interface Archetype {
+  name: string;
+  type: SessionType; // pilote le palier RPE / sessionDifficulty / prescription — pas le nom
+  exercises: string[]; // banque propre à l'archétype (remplace EXERCISES[category][type] générique)
+}
+
+// ---- Endurance : priorité décroissante, on prend les N premiers selon le nombre de jours,
+// on boucle si N dépasse la liste (rare, 6 archétypes couvrent déjà une grosse semaine).
+const ENDURANCE_ARCHETYPES: Archetype[] = [
+  { name: "Endurance fondamentale", type: "volume", exercises: [
+    "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+  ]},
+  { name: "Seuil", type: "intensite", exercises: [
+    "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
+  ]},
+  { name: "Sortie longue", type: "volume", exercises: [
+    "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
+  ]},
+  { name: "Fractionné", type: "intensite", exercises: [
+    "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
+  ]},
+  { name: "Renfo", type: "technique", exercises: [
+    "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
+  ]},
+  { name: "Récupération active", type: "recuperation", exercises: [
+    "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
+  ]},
+];
+function selectEndurance(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
+}
+
+// ---- Sprint : priorité + règles explicites — plyométrie systématiquement intégrée après les
+// séances de vitesse pure (Accélération/Vitesse max, directement dans leur banque d'exercices),
+// et au moins une séance de renfo réservée quel que soit le nombre de jours.
+const SPRINT_MAIN: Archetype[] = [
+  { name: "Accélération", type: "intensite", exercises: [
+    "Départs blocs — 6×20m (récup 4 min)", "Pliométrie : bondissements — 4×20m", "Squat jump — 4×6",
+  ]},
+  { name: "Vitesse max", type: "intensite", exercises: [
+    "Sprint 60m à 95% — 5 reps (récup 5 min)", "Pliométrie : sauts horizontaux — 3×6", "Sprint 30m lancé — 4 reps (récup 4 min)",
+  ]},
+  { name: "Endurance de vitesse", type: "volume", exercises: [
+    "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
+  ]},
+  { name: "Tempo", type: "volume", exercises: [
+    "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
+  ]},
+  { name: "Circuit", type: "technique", exercises: [
+    "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
+  ]},
+];
+const SPRINT_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
+  "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
+]};
+function selectSprint(n: number): Archetype[] {
+  if (n <= 1) return [SPRINT_MAIN[0]];
+  const mainSlots = n - 1; // 1 slot toujours réservé au renfo
+  const main = Array.from({ length: mainSlots }, (_, i) => SPRINT_MAIN[i % SPRINT_MAIN.length]);
+  return [...main, SPRINT_RENFO];
+}
+
+// ---- Haltérophilie (arraché/épaulé-jeté olympique) : modèle par palier de jours demandé
+// explicitement, pas une simple liste de priorité — la structure elle-même change selon N.
+const HA_SNATCH: Archetype = { name: "Focus Arraché", type: "intensite", exercises: [
+  "Arraché — 5×2@75%", "Arraché puissance — 4×3@70%", "Arraché debout — 4×2@75%",
+]};
+const HA_CLEAN_JERK: Archetype = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
+  "Épaulé-jeté — 5×2@75%", "Épaulé-jeté complexe — 4×3@70%",
+]};
+const HA_CLEAN: Archetype = { name: "Focus Épaulé", type: "intensite", exercises: [
+  "Épaulé — 5×2@75%", "Épaulé puissance — 4×3@70%", "Épaulé debout — 4×3@72%",
+]};
+const HA_JERK: Archetype = { name: "Focus Jeté", type: "intensite", exercises: [
+  "Jeté — 5×2@75%", "Jeté depuis blocs — 4×3@72%", "Push press — 4×3@70%",
+]};
+const HA_TOTAL: Archetype = { name: "Focus Total", type: "test", exercises: [
+  "Complexe arraché + épaulé-jeté — 4×1@80%", "Simulation total : arraché puis épaulé-jeté",
+]};
+const HA_LIGHT: Archetype = { name: "Séance légère variantes", type: "technique", exercises: [
+  "Arraché variantes légères — 4×3@60%", "Épaulé-jeté variantes techniques — 4×3@60%", "Squat léger + mobilité — 3×5",
+]};
+function selectHalterophilie(n: number): Archetype[] {
+  if (n <= 2) return [HA_SNATCH, HA_CLEAN_JERK].slice(0, n);
+  if (n === 3) return [HA_SNATCH, HA_CLEAN_JERK, HA_TOTAL];
+  if (n === 4) return [HA_SNATCH, HA_CLEAN, HA_JERK, HA_TOTAL];
+  const base = [HA_SNATCH, HA_CLEAN, HA_JERK, HA_TOTAL, HA_LIGHT];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
+// ---- Powerlifting (squat/bench/deadlift) : rotation round-robin des 3 lifts, mais le deadlift
+// ne dépasse jamais 2 séances/semaine (fatigue lombaire/SNC) — squat et bench peuvent aller
+// jusqu'à 3. Pas de liste de priorité fixe ici, une contrainte de fréquence à respecter.
+const PL_SQUAT: Archetype = { name: "Focus Squat", type: "intensite", exercises: [
+  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%",
+]};
+const PL_BENCH: Archetype = { name: "Focus Bench", type: "intensite", exercises: [
+  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%",
+]};
+const PL_DEADLIFT: Archetype = { name: "Focus Deadlift", type: "intensite", exercises: [
+  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%",
+]};
+function selectPowerlifting(n: number): Archetype[] {
+  const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];
+  const counts = { squat: 0, bench: 0, deadlift: 0 };
+  const result: Archetype[] = [];
+  let i = 0;
+  while (result.length < n && i < n * 4) { // garde-fou anti-boucle infinie, jamais atteint en pratique
+    const candidate = rotation[i % 3];
+    if (candidate === PL_DEADLIFT && counts.deadlift >= 2) { i++; continue; }
+    result.push(candidate);
+    if (candidate === PL_SQUAT) counts.squat++;
+    else if (candidate === PL_BENCH) counts.bench++;
+    else counts.deadlift++;
+    i++;
+  }
+  return result;
+}
+
+// ---- Sports collectifs : au moins 2 techniques, 1 endurance, 1 vitesse, 1 renfo — technique en
+// tête (double priorité), on boucle sur cette base de 5 si plus de jours disponibles.
+const COLLECTIF_TECHNIQUE: Archetype = { name: "Technique", type: "technique", exercises: [
+  "Exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Travail défensif en situation réduite — 20 min",
+]};
+const COLLECTIF_ENDURANCE: Archetype = { name: "Endurance", type: "volume", exercises: [
+  "Circuit cardio : navettes + sauts + sprint — 4 tours", "Balle à intensité soutenue — 20 min",
+]};
+const COLLECTIF_VITESSE: Archetype = { name: "Vitesse", type: "intensite", exercises: [
+  "Accélérations + changements de direction — 6×20m", "Intervalles : 8×15s effort (récup 45s)",
+]};
+const COLLECTIF_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement bas du corps — 4×10", "Gainage et proprioception — 3×45s",
+]};
+const COLLECTIF_BASE: Archetype[] = [COLLECTIF_TECHNIQUE, COLLECTIF_TECHNIQUE, COLLECTIF_ENDURANCE, COLLECTIF_VITESSE, COLLECTIF_RENFO];
+function selectCollectif(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => COLLECTIF_BASE[i % COLLECTIF_BASE.length]);
+}
+
+const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Archetype[]>> = {
+  endurance: selectEndurance,
+  sprint: selectSprint,
+  halterophilie: selectHalterophilie,
+  powerlifting: selectPowerlifting,
+  collectif: selectCollectif,
+};
+
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {
   const names = SESSION_NAMES[type];
   return names[(weekIdx + dayIdx) % names.length];
+}
+
+interface WeekSpec {
+  weekDiff: number;
+  weekLoad: SessionLoad;
+  isMrvWeek: boolean;
+  rotationAnchor: number; // ancre de rotation des exercices dans buildNotes (mêmes exercices tant que l'ancre ne change pas)
+  shape: Shape;
+  prescriptionPhase: number; // index dans PRESCRIPTION_SHAPE (0-3)
+}
+
+// Calcule la séquence de semaines pour toute la durée du programme — gère les deux modèles
+// (blocs de 4 semaines standard, ou le modèle spécifique à 6 semaines) derrière une interface
+// commune, pour que le reste de la génération (Phases A/A2/B/C) n'ait pas à savoir lequel est actif.
+function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus): WeekSpec[] {
+  if (duration === 6) {
+    const shape = shapeForCycle(focus, 0, true);
+    const offsets = SHAPE_OFFSETS[shape];
+    return SIX_WEEK_PHASE_INDEX.map((pIdx, i) => ({
+      weekDiff: Math.max(1, Math.min(10, baseDiff + SIX_WEEK_CYCLE_BASE[i] + offsets[pIdx])),
+      weekLoad: PHASE_LOAD[pIdx],
+      isMrvWeek: pIdx === 2,
+      rotationAnchor: 0, // même sélection d'exercices sur les 6 semaines — un seul bloc, pas deux
+      shape,
+      prescriptionPhase: pIdx,
+    }));
+  }
+
+  const mesocycles = duration / 4;
+  const specs: WeekSpec[] = [];
+  for (let c = 0; c < mesocycles; c++) {
+    const cycleBase = baseDiff + c;
+    const isLastCycle = c === mesocycles - 1;
+    const shape = shapeForCycle(focus, c, isLastCycle);
+    const offsets = SHAPE_OFFSETS[shape];
+    for (let phase = 0; phase < 4; phase++) {
+      specs.push({
+        weekDiff: Math.max(1, Math.min(10, cycleBase + offsets[phase])),
+        weekLoad: PHASE_LOAD[phase],
+        isMrvWeek: phase === 2,
+        rotationAnchor: c,
+        shape,
+        prescriptionPhase: phase,
+      });
+    }
+  }
+  return specs;
 }
 
 export async function POST(req: Request) {
@@ -612,123 +875,152 @@ export async function POST(req: Request) {
     sport: string;
     level: ProgramLevel;
     days: string[];
-    duration: 4 | 8 | 12;
+    duration: 4 | 6 | 8 | 12 | 16;
     focus: ProgramFocus;
   };
 
-  if (!level || !days?.length || !duration || !focus || duration % 4 !== 0) {
-    return Response.json({ error: "Paramètres manquants ou durée invalide (multiple de 4 semaines requis)" }, { status: 400 });
+  const validDuration = duration === 6 || (duration > 0 && duration % 4 === 0);
+  if (!level || !days?.length || !duration || !focus || !validDuration) {
+    return Response.json({ error: "Paramètres manquants ou durée invalide (6 semaines, ou un multiple de 4)" }, { status: 400 });
   }
 
   const category = getSportCategory(sport ?? "");
   const focusDist = FOCUS_DIST[focus] ?? FOCUS_DIST.autre;
   const baseDiff = LEVEL_BASE_DIFF[level] ?? 6;
-  const mesocycles = duration / 4;
   // Tri calendaire — nécessaire pour détecter des jours réellement consécutifs (ex. Lun+Mar)
   // plutôt que des jours simplement proches dans le tableau soumis par l'appelant.
   const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+  const weekSpecs = buildWeekSpecs(duration, baseDiff, focus);
 
   const weeks: WeekTemplate[] = [];
 
-  for (let c = 0; c < mesocycles; c++) {
-    const cycleBase = baseDiff + c; // progressive overload d'un bloc de 4 semaines à l'autre
-    const isLastCycle = c === mesocycles - 1;
-    const shape = shapeForCycle(focus, c, isLastCycle);
-    const offsets = SHAPE_OFFSETS[shape];
+  weekSpecs.forEach((spec, w) => {
+    const { weekDiff, weekLoad, isMrvWeek, rotationAnchor, shape, prescriptionPhase } = spec;
+    const week: WeekTemplate = {};
 
-    for (let phase = 0; phase < 4; phase++) {
-      const w = c * 4 + phase; // index de semaine global (0-based)
-      const isMrvWeek = phase === 2;
-      const weekDiff = Math.max(1, Math.min(10, cycleBase + offsets[phase]));
-      const weekLoad = PHASE_LOAD[phase];
+    // Phase A — type de chaque jour. Deux sources possibles :
+    // 1. Curriculum sportif (SPORT_CURRICULUM) si le sport en a un — séances nommées et
+    //    priorisées selon le nombre de jours (ex. haltérophilie : Arraché/Épaulé/Jeté/Total),
+    //    remplace la rotation générique FOCUS_DIST pour ces sports précis.
+    // 2. Sinon, rotation FOCUS_DIST générique ancrée sur rotationAnchor — comportement inchangé.
+    // Dans les deux cas, le test forcé de fin de semaine MRV reste une règle universelle (pas
+    // seulement la toute dernière séance du programme) — un jour forcé perd son éventuel
+    // archétype/banque dédiée, retombe sur la banque générique "test" du sport.
+    const curriculumSelector = SPORT_CURRICULUM[category];
+    const archetypes = curriculumSelector?.(sortedDays.length);
+    const dayPlans = sortedDays.map((day, dayIdx) => {
+      const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
+      const forced = isMrvWeek && isLastDayOfWeek;
+      let type: SessionType;
+      let archetypeName: string | undefined;
+      let exercises: string[] | undefined;
+      if (forced) {
+        type = "test";
+      } else if (archetypes) {
+        const archetype = archetypes[dayIdx];
+        type = archetype.type;
+        archetypeName = archetype.name;
+        exercises = archetype.exercises;
+      } else {
+        const typeIdx = (rotationAnchor * sortedDays.length + dayIdx) % focusDist.length;
+        type = focusDist[typeIdx];
+      }
+      return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises };
+    });
 
-      const week: WeekTemplate = {};
+    const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
+      recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+    };
 
-      // Phase A — type de chaque jour (rotation ancrée sur le bloc + test forcé). Avant ce fix,
-      // "Lundi" pouvait être volume en S1 puis intensité en S2 : les exercices semblaient changer
-      // de façon incohérente alors que c'était le type lui-même qui changeait sous la rotation.
-      const dayPlans = sortedDays.map((day, dayIdx) => {
-        const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
-        const forced = isMrvWeek && isLastDayOfWeek; // chaque semaine MRV se termine par un test, pas seulement la toute dernière séance du programme
-        const typeIdx = (c * sortedDays.length + dayIdx) % focusDist.length;
-        const type: SessionType = forced ? "test" : focusDist[typeIdx];
-        return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
-      });
+    // Phase A2 — le premier jour d'entraînement de la semaine (le plus frais, juste après le
+    // repos) ne doit jamais être facile/technique : optimiser le stimulus veut qu'on ouvre la
+    // semaine sur quelque chose de substantiel, pas qu'on "gaspille" la fraîcheur sur un jour
+    // léger. Passe avant le lissage de la Phase B pour que celle-ci absorbe les collisions
+    // éventuellement introduites par ce changement. S'applique aussi aux sports à curriculum :
+    // les règles d'enchaînement RPE sont des principes universels de programmation, pas une
+    // particularité du système générique — un curriculum sportif propose un contenu, il ne
+    // s'exempte pas de ces règles.
+    if (dayPlans.length > 0 && !dayPlans[0].forced && RPE_BUCKET[dayPlans[0].type] === "easy") {
+      dayPlans[0].type = "intensite";
+      // Le type corrigé ne correspond plus à l'archétype/banque d'origine (si curriculum
+      // sportif) — repli sur la banque générique du sport pour ce jour précis.
+      dayPlans[0].archetypeName = undefined;
+      dayPlans[0].exercises = undefined;
+    }
 
-      const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
-        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+    // Phase B — principe de variation : jamais deux jours calendairement consécutifs (aucun
+    // jour de repos entre les deux) dans le même palier de RPE (facile/modéré/dur), peu importe
+    // le type exact — pas seulement "pas 2 durs d'affilée", aussi "pas 2 faciles d'affilée" ni
+    // "pas 2 modérés d'affilée". Règle universelle, appliquée à tous les sports y compris ceux
+    // pilotés par un curriculum (haltérophilie, sprint, powerlifting, collectif) : si le
+    // curriculum propose deux jours "durs" consécutifs (ex. Arraché puis Épaulé-Jeté), cette
+    // phase corrige quand même — le jour corrigé perd son nom/contenu d'archétype et retombe
+    // sur la banque générique du sport (voir plus bas), c'est le compromis attendu entre
+    // fidélité au curriculum et respect des principes universels d'enchaînement.
+    // Certains FOCUS_DIST ont même des types identiques déjà adjacents dans leur définition
+    // (ex. "volume" commence par ["volume","volume",...]) — invisible avec peu de jours/semaine
+    // (tableau échantillonné en creux), exposé dès que tous les jours sont sélectionnés (tableau
+    // lu intégralement).
+    // Ne rétrograde jamais un test forcé (fin de semaine MRV, délibéré) — corrige l'autre jour
+    // de la paire à la place. Répété jusqu'à stabilisation (pas une seule passe) : corriger un
+    // jour pour résoudre une collision peut en créer une nouvelle avec son AUTRE voisin (ex.
+    // Samedi rétrogradé en récupération à cause du test forcé de Dimanche, mais Vendredi était
+    // déjà récupération — d'où le choix du remplacement qui évite explicitement les deux
+    // voisins, pas juste celui qui posait initialement problème).
+    for (let pass = 0; pass < 5; pass++) {
+      let changed = false;
+      for (let i = 1; i < dayPlans.length; i++) {
+        const prev = dayPlans[i - 1];
+        const cur = dayPlans[i];
+        if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
+        if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue; // paliers différents, rien à corriger
+
+        const targetIdx = cur.forced ? i - 1 : i;
+        const keep = cur.forced ? cur : prev; // le jour de la paire qu'on ne change pas
+        const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1]; // l'autre voisin du jour qu'on va changer
+        const keepBucket = RPE_BUCKET[keep.type];
+        const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+        // "volume" (modéré) évité autant que possible — on privilégie l'alternance franche
+        // facile/dur (bascule directement vers le palier opposé de celui qu'on corrige), et on
+        // ne se rabat sur "volume" qu'en tout dernier recours si les deux autres paliers sont
+        // déjà pris par les voisins.
+        const orderedCandidates: SessionType[] =
+          keepBucket === "hard" ? ["recuperation", "technique", "volume"]
+          : keepBucket === "easy" ? ["intensite", "test", "volume"]
+          : ["recuperation", "technique", "intensite", "test", "volume"];
+        const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
+
+        if (dayPlans[targetIdx].type !== replacement) {
+          dayPlans[targetIdx].type = replacement;
+          // Le type corrigé ne correspond plus à l'archétype d'origine (si curriculum sportif) —
+          // repli sur la banque générique du sport pour ce jour précis, seule exception au
+          // curriculum, plutôt que d'afficher un nom de séance qui ne correspond plus au contenu.
+          dayPlans[targetIdx].archetypeName = undefined;
+          dayPlans[targetIdx].exercises = undefined;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
+    dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
+      const target_difficulty = sessionDifficulty(type, weekDiff);
+      const session: SessionTemplate = {
+        name: archetypeName ?? sessionName(type, w, dayIdx),
+        notes: exercises
+          ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+          : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase),
+        target_difficulty,
+        load: weekLoad,
+        type,
       };
 
-      // Phase A2 — le premier jour d'entraînement de la semaine (le plus frais, juste après le
-      // repos) ne doit jamais être facile/technique : optimiser le stimulus veut qu'on ouvre la
-      // semaine sur quelque chose de substantiel, pas qu'on "gaspille" la fraîcheur sur un jour
-      // léger. Passe avant le lissage de la Phase B pour que celle-ci absorbe les collisions
-      // éventuellement introduites par ce changement.
-      if (dayPlans.length > 0 && !dayPlans[0].forced && RPE_BUCKET[dayPlans[0].type] === "easy") {
-        dayPlans[0].type = "intensite";
-      }
+      week[day] = [session];
+    });
 
-      // Phase B — principe de variation : jamais deux jours calendairement consécutifs (aucun
-      // jour de repos entre les deux) dans le même palier de RPE (facile/modéré/dur), peu importe
-      // le type exact — pas seulement "pas 2 durs d'affilée", aussi "pas 2 faciles d'affilée" ni
-      // "pas 2 modérés d'affilée". Certains FOCUS_DIST ont même des types identiques déjà
-      // adjacents dans leur définition (ex. "volume" commence par ["volume","volume",...]) —
-      // invisible avec peu de jours/semaine (tableau échantillonné en creux), exposé dès que tous
-      // les jours sont sélectionnés (tableau lu intégralement).
-      // Ne rétrograde jamais un test forcé (fin de semaine MRV, délibéré) — corrige l'autre jour
-      // de la paire à la place. Répété jusqu'à stabilisation (pas une seule passe) : corriger un
-      // jour pour résoudre une collision peut en créer une nouvelle avec son AUTRE voisin (ex.
-      // Samedi rétrogradé en récupération à cause du test forcé de Dimanche, mais Vendredi était
-      // déjà récupération — d'où le choix du remplacement qui évite explicitement les deux
-      // voisins, pas juste celui qui posait initialement problème).
-      for (let pass = 0; pass < 5; pass++) {
-        let changed = false;
-        for (let i = 1; i < dayPlans.length; i++) {
-          const prev = dayPlans[i - 1];
-          const cur = dayPlans[i];
-          if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
-          if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue; // paliers différents, rien à corriger
-
-          const targetIdx = cur.forced ? i - 1 : i;
-          const keep = cur.forced ? cur : prev; // le jour de la paire qu'on ne change pas
-          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1]; // l'autre voisin du jour qu'on va changer
-          const keepBucket = RPE_BUCKET[keep.type];
-          const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
-          // "volume" (modéré) évité autant que possible — on privilégie l'alternance franche
-          // facile/dur (bascule directement vers le palier opposé de celui qu'on corrige), et on
-          // ne se rabat sur "volume" qu'en tout dernier recours si les deux autres paliers sont
-          // déjà pris par les voisins.
-          const orderedCandidates: SessionType[] =
-            keepBucket === "hard" ? ["recuperation", "technique", "volume"]
-            : keepBucket === "easy" ? ["intensite", "test", "volume"]
-            : ["recuperation", "technique", "intensite", "test", "volume"];
-          const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
-
-          if (dayPlans[targetIdx].type !== replacement) {
-            dayPlans[targetIdx].type = replacement;
-            changed = true;
-          }
-        }
-        if (!changed) break;
-      }
-
-      // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
-      dayPlans.forEach(({ day, dayIdx, type }) => {
-        const target_difficulty = sessionDifficulty(type, weekDiff);
-        const session: SessionTemplate = {
-          name: sessionName(type, w, dayIdx),
-          notes: buildNotes(category, type, c, shape, phase),
-          target_difficulty,
-          load: weekLoad,
-          type,
-        };
-
-        week[day] = [session];
-      });
-
-      weeks.push(week);
-    }
-  }
+    weeks.push(week);
+  });
 
   const template: ProgramTemplate = { weeks };
   return Response.json({ template });

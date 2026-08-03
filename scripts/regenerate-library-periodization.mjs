@@ -1,22 +1,24 @@
-// One-off : régénère intégralement programs.template pour les programmes publics de la
-// bibliothèque dont la durée est un multiple de 4 semaines (4/8/12/16 — exclut volontairement
-// les 22 programmes en 6 semaines, incompatibles avec des blocs de 4). Porte fidèlement la
-// logique de src/app/api/programs/generate/route.ts (périodisation par blocs MEV/Surcharge/
-// MRV/Deload, prescriptions dynamiques séries/reps/%, test forcé en fin de semaine MRV) — à
-// garder en synchro si le fichier source évolue, cette copie n'est PAS importée dynamiquement.
+// One-off : régénère intégralement programs.template pour TOUS les programmes publics de la
+// bibliothèque — durée multiple de 4 semaines (4/8/12/16, blocs MEV/Surcharge/MRV/Deload) OU
+// durée de 6 semaines (modèle spécifique MEV/Surcharge/MRV/Deload/Surcharge/MRV). Porte
+// fidèlement la logique de src/app/api/programs/generate/route.ts (prescriptions dynamiques
+// séries/reps/%, test forcé en fin de semaine MRV, curriculum sportif par archétypes nommés
+// pour endurance/sprint/haltérophilie/powerlifting/collectif, règles universelles d'enchaînement
+// RPE qui s'appliquent même quand un curriculum est actif) — à garder en synchro si le fichier
+// source évolue, cette copie n'est PAS importée dynamiquement.
 //
 // Différence avec le générateur live : `focus` est manquant sur 48/49 programmes de la
 // bibliothèque (colonne jamais renseignée à leur création) — au lieu d'un focus par programme,
 // une forme "universelle" est appliquée : les blocs non-terminaux alternent volume/intensité,
-// le dernier bloc est toujours en tapering/peak, indépendamment de la durée totale.
+// le dernier bloc (ou l'unique "bloc" du modèle à 6 semaines) est toujours en tapering/peak,
+// indépendamment de la durée totale.
 //
 // `sport`/`level`/`weeks_count` sont lus depuis les colonnes du programme (stables, jamais
 // modifiées par ce script) ; `days` est dérivé des clés de jour déjà présentes dans le template
-// existant (triées dans l'ordre calendaire). Contrairement au précédent script de patch
-// (offset de difficulté), c'est une régénération complète du template — noms de séances,
-// exercices sélectionnés et leur prescription, tout est recalculé. Aucune édition manuelle
-// éventuelle (via ProgramBuilderModal) ne serait préservée ; en l'absence de session avec
-// `type` manquant sur les 49 programmes lors du précédent patch, tout indique que ces
+// existant (triées dans l'ordre calendaire). C'est une régénération complète du template — noms
+// de séances, exercices sélectionnés et leur prescription, tout est recalculé. Aucune édition
+// manuelle éventuelle (via ProgramBuilderModal) ne serait préservée ; en l'absence de session
+// avec `type` manquant sur les 49 programmes lors du précédent patch, tout indique que ces
 // programmes reflètent une sortie brute du générateur, pas un contenu retouché à la main.
 //
 // Usage :
@@ -46,6 +48,10 @@ function universalShapeForCycle(cycleIndex, isLastCycle) {
   return cycleIndex % 2 === 0 ? "volume" : "intensity";
 }
 
+// Modèle spécifique 6 semaines — voir generate/route.ts pour le détail du raisonnement.
+const SIX_WEEK_PHASE_INDEX = [0, 1, 2, 3, 1, 2]; // MEV,Surcharge,MRV,Deload,Surcharge,MRV
+const SIX_WEEK_CYCLE_BASE = [0, 0, 0, 0, 1, 1];
+
 const PRESCRIPTION_SHAPE = {
   volume:    { sets: [0.8, 1.0, 1.0, 0.6], qty: [0.8, 1.0, 1.0, 0.6], intensity: [-10, -5, 0, -15] },
   intensity: { sets: [1.0, 1.0, 1.0, 0.6], qty: [1.0, 0.8, 0.6, 0.4], intensity: [-5, 2, 10, -10] },
@@ -64,7 +70,10 @@ function parseExercise(raw) {
   if (!rest) return base;
 
   let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct, suffix: m[4].trim() };
+  if (m) {
+    const { pct: inlinePct, suffix } = extractInlinePct(m[4]);
+    return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct ?? inlinePct, suffix };
+  }
 
   m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
   if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[3].trim() };
@@ -85,6 +94,15 @@ function roundTo5(n) {
   return Math.round(n / 5) * 5;
 }
 
+// Les banques d'archétypes (haltérophilie/powerlifting/sprint renfo) écrivent l'intensité
+// collée à la fin ("5×3@78%") plutôt qu'en préfixe comme l'ancienne banque EXERCISES —
+// voir generate/route.ts pour le détail du bug que ceci corrige.
+function extractInlinePct(suffixRaw) {
+  const m = suffixRaw.match(/^@(\d+)%\s*(.*)$/);
+  if (m) return { pct: Number(m[1]), suffix: m[2].trim() };
+  return { pct: null, suffix: suffixRaw.trim() };
+}
+
 function pluralize(word, n) {
   return n === 1 ? word : `${word}s`;
 }
@@ -94,8 +112,6 @@ function formatPrescription(spec, shape, phase) {
   const mult = PRESCRIPTION_SHAPE[shape];
   const sets = Math.max(1, Math.round(spec.baseSets * mult.sets[phase]));
 
-  // Durées/distances (min/s/m) arrondies au multiple de 5 — reps/tours/séries restent de
-  // petits entiers naturels (un arrondi à 5 dénaturerait "5×3" en "5×5").
   const rawQty = spec.baseQty * mult.qty[phase];
   const isDurationLike = spec.mode === "duration" || spec.unit === "s" || spec.unit === "m";
   const qty = isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
@@ -137,9 +153,12 @@ const SESSION_NAMES = {
   test:         ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
+// Haltérophilie (arraché/épaulé-jeté olympique) ≠ Powerlifting (squat/bench/deadlift) — deux
+// catégories distinctes depuis la correction du 2026-08-03 (avant, mélangées sous "halterophilie").
 function getSportCategory(sport) {
   const s = (sport ?? "").toLowerCase();
-  if (s.includes("halt") || s.includes("power") || s.includes("force") || s.includes("muscu")) return "halterophilie";
+  if (s.includes("halt") || s.includes("olympique") || s.includes("snatch") || s.includes("arraché")) return "halterophilie";
+  if (s.includes("power") || s.includes("force") || s.includes("muscu")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
   if (s.includes("fitness") || s.includes("cross") || s.includes("condition") || s.includes("forme") || s.includes("wod")) return "fitness";
@@ -160,6 +179,13 @@ const EXERCISES = {
     intensite: ["Arraché compétition à 90%+ — 5×1", "Épaulé-jeté max effort — 5×1", "Squat avant lourd — 4×2", "Tirage haltère à 100%+ — 4×2"],
     recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling chaîne postérieure", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Arraché : tentative de maximum", "Épaulé-jeté : tentative de maximum", "Squat avant : max du cycle", "Bilan technique (vidéo)"],
+  },
+  powerlifting: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
   },
   sprint: {
     technique: ["Drills : montées de genoux — 4×30m", "Talons-fesses — 4×30m", "Foulées bondissantes — 4×30m", "Skipping A/B/C — 3×20m chaque", "Gamme complète sprint — 3 séries"],
@@ -240,103 +266,283 @@ const EXERCISES = {
   },
 };
 
-function buildNotes(category, type, cycleIndex, shape, phase) {
-  const bank = EXERCISES[category][type];
+function buildNotesFromBank(bank, type, cycleIndex, shape, phase) {
   const offset = (cycleIndex * 2) % bank.length;
   const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
   if (type !== "volume" && type !== "intensite") return rotated.join("\n");
   return rotated.map(line => formatPrescription(parseExercise(line), shape, phase)).join("\n");
 }
 
+function buildNotes(category, type, cycleIndex, shape, phase) {
+  return buildNotesFromBank(EXERCISES[category][type], type, cycleIndex, shape, phase);
+}
+
+// ====================================================================================
+// Curriculum sportif — voir generate/route.ts pour le raisonnement détaillé de chaque règle.
+// ====================================================================================
+
+const ENDURANCE_ARCHETYPES = [
+  { name: "Endurance fondamentale", type: "volume", exercises: [
+    "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+  ]},
+  { name: "Seuil", type: "intensite", exercises: [
+    "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
+  ]},
+  { name: "Sortie longue", type: "volume", exercises: [
+    "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
+  ]},
+  { name: "Fractionné", type: "intensite", exercises: [
+    "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
+  ]},
+  { name: "Renfo", type: "technique", exercises: [
+    "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
+  ]},
+  { name: "Récupération active", type: "recuperation", exercises: [
+    "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
+  ]},
+];
+function selectEndurance(n) {
+  return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
+}
+
+const SPRINT_MAIN = [
+  { name: "Accélération", type: "intensite", exercises: [
+    "Départs blocs — 6×20m (récup 4 min)", "Pliométrie : bondissements — 4×20m", "Squat jump — 4×6",
+  ]},
+  { name: "Vitesse max", type: "intensite", exercises: [
+    "Sprint 60m à 95% — 5 reps (récup 5 min)", "Pliométrie : sauts horizontaux — 3×6", "Sprint 30m lancé — 4 reps (récup 4 min)",
+  ]},
+  { name: "Endurance de vitesse", type: "volume", exercises: [
+    "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
+  ]},
+  { name: "Tempo", type: "volume", exercises: [
+    "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
+  ]},
+  { name: "Circuit", type: "technique", exercises: [
+    "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
+  ]},
+];
+const SPRINT_RENFO = { name: "Renfo", type: "technique", exercises: [
+  "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
+]};
+function selectSprint(n) {
+  if (n <= 1) return [SPRINT_MAIN[0]];
+  const mainSlots = n - 1;
+  const main = Array.from({ length: mainSlots }, (_, i) => SPRINT_MAIN[i % SPRINT_MAIN.length]);
+  return [...main, SPRINT_RENFO];
+}
+
+const HA_SNATCH = { name: "Focus Arraché", type: "intensite", exercises: [
+  "Arraché — 5×2@75%", "Arraché puissance — 4×3@70%", "Arraché debout — 4×2@75%",
+]};
+const HA_CLEAN_JERK = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
+  "Épaulé-jeté — 5×2@75%", "Épaulé-jeté complexe — 4×3@70%",
+]};
+const HA_CLEAN = { name: "Focus Épaulé", type: "intensite", exercises: [
+  "Épaulé — 5×2@75%", "Épaulé puissance — 4×3@70%", "Épaulé debout — 4×3@72%",
+]};
+const HA_JERK = { name: "Focus Jeté", type: "intensite", exercises: [
+  "Jeté — 5×2@75%", "Jeté depuis blocs — 4×3@72%", "Push press — 4×3@70%",
+]};
+const HA_TOTAL = { name: "Focus Total", type: "test", exercises: [
+  "Complexe arraché + épaulé-jeté — 4×1@80%", "Simulation total : arraché puis épaulé-jeté",
+]};
+const HA_LIGHT = { name: "Séance légère variantes", type: "technique", exercises: [
+  "Arraché variantes légères — 4×3@60%", "Épaulé-jeté variantes techniques — 4×3@60%", "Squat léger + mobilité — 3×5",
+]};
+function selectHalterophilie(n) {
+  if (n <= 2) return [HA_SNATCH, HA_CLEAN_JERK].slice(0, n);
+  if (n === 3) return [HA_SNATCH, HA_CLEAN_JERK, HA_TOTAL];
+  if (n === 4) return [HA_SNATCH, HA_CLEAN, HA_JERK, HA_TOTAL];
+  const base = [HA_SNATCH, HA_CLEAN, HA_JERK, HA_TOTAL, HA_LIGHT];
+  return Array.from({ length: n }, (_, i) => base[i % base.length]);
+}
+
+const PL_SQUAT = { name: "Focus Squat", type: "intensite", exercises: [
+  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%",
+]};
+const PL_BENCH = { name: "Focus Bench", type: "intensite", exercises: [
+  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%",
+]};
+const PL_DEADLIFT = { name: "Focus Deadlift", type: "intensite", exercises: [
+  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%",
+]};
+function selectPowerlifting(n) {
+  const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];
+  const counts = { squat: 0, bench: 0, deadlift: 0 };
+  const result = [];
+  let i = 0;
+  while (result.length < n && i < n * 4) {
+    const candidate = rotation[i % 3];
+    if (candidate === PL_DEADLIFT && counts.deadlift >= 2) { i++; continue; }
+    result.push(candidate);
+    if (candidate === PL_SQUAT) counts.squat++;
+    else if (candidate === PL_BENCH) counts.bench++;
+    else counts.deadlift++;
+    i++;
+  }
+  return result;
+}
+
+const COLLECTIF_TECHNIQUE = { name: "Technique", type: "technique", exercises: [
+  "Exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Travail défensif en situation réduite — 20 min",
+]};
+const COLLECTIF_ENDURANCE = { name: "Endurance", type: "volume", exercises: [
+  "Circuit cardio : navettes + sauts + sprint — 4 tours", "Balle à intensité soutenue — 20 min",
+]};
+const COLLECTIF_VITESSE = { name: "Vitesse", type: "intensite", exercises: [
+  "Accélérations + changements de direction — 6×20m", "Intervalles : 8×15s effort (récup 45s)",
+]};
+const COLLECTIF_RENFO = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement bas du corps — 4×10", "Gainage et proprioception — 3×45s",
+]};
+const COLLECTIF_BASE = [COLLECTIF_TECHNIQUE, COLLECTIF_TECHNIQUE, COLLECTIF_ENDURANCE, COLLECTIF_VITESSE, COLLECTIF_RENFO];
+function selectCollectif(n) {
+  return Array.from({ length: n }, (_, i) => COLLECTIF_BASE[i % COLLECTIF_BASE.length]);
+}
+
+const SPORT_CURRICULUM = {
+  endurance: selectEndurance,
+  sprint: selectSprint,
+  halterophilie: selectHalterophilie,
+  powerlifting: selectPowerlifting,
+  collectif: selectCollectif,
+};
+
 function sessionName(type, weekIdx, dayIdx) {
   const names = SESSION_NAMES[type];
   return names[(weekIdx + dayIdx) % names.length];
+}
+
+const RPE_BUCKET = {
+  recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+};
+
+// Calcule la séquence de semaines — gère les deux modèles (blocs de 4, ou le modèle spécifique
+// à 6 semaines) derrière une interface commune. `focus` toujours absent ici (voir en-tête) —
+// shape "universelle" plutôt que shapeForCycle(focus, ...) du générateur live.
+function buildWeekSpecs(duration) {
+  if (duration === 6) {
+    const shape = universalShapeForCycle(0, true); // "taper" — modèle à 6 semaines = un seul bloc, toujours traité comme final
+    const offsets = SHAPE_OFFSETS[shape];
+    return SIX_WEEK_PHASE_INDEX.map((pIdx, i) => ({
+      weekDiffOffset: SIX_WEEK_CYCLE_BASE[i] + offsets[pIdx],
+      weekLoad: PHASE_LOAD[pIdx],
+      isMrvWeek: pIdx === 2,
+      rotationAnchor: 0,
+      shape,
+      prescriptionPhase: pIdx,
+    }));
+  }
+
+  const mesocycles = duration / 4;
+  const specs = [];
+  for (let c = 0; c < mesocycles; c++) {
+    const isLastCycle = c === mesocycles - 1;
+    const shape = universalShapeForCycle(c, isLastCycle);
+    const offsets = SHAPE_OFFSETS[shape];
+    for (let phase = 0; phase < 4; phase++) {
+      specs.push({
+        weekDiffOffset: c + offsets[phase],
+        weekLoad: PHASE_LOAD[phase],
+        isMrvWeek: phase === 2,
+        rotationAnchor: c,
+        shape,
+        prescriptionPhase: phase,
+      });
+    }
+  }
+  return specs;
 }
 
 function generateTemplate({ sport, level, days, duration }) {
   const category = getSportCategory(sport ?? "");
   const focusDist = FOCUS_DIST_MIXTE; // approximation universelle (pas de focus par programme)
   const baseDiff = LEVEL_BASE_DIFF[level] ?? 6;
-  const mesocycles = duration / 4;
+  const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+  const weekSpecs = buildWeekSpecs(duration);
   const weeks = [];
 
-  for (let c = 0; c < mesocycles; c++) {
-    const cycleBase = baseDiff + c;
-    const isLastCycle = c === mesocycles - 1;
-    const shape = universalShapeForCycle(c, isLastCycle);
-    const offsets = SHAPE_OFFSETS[shape];
+  weekSpecs.forEach((spec, w) => {
+    const { weekDiffOffset, weekLoad, isMrvWeek, rotationAnchor, shape, prescriptionPhase } = spec;
+    const weekDiff = Math.max(1, Math.min(10, baseDiff + weekDiffOffset));
+    const week = {};
 
-    for (let phase = 0; phase < 4; phase++) {
-      const w = c * 4 + phase;
-      const isMrvWeek = phase === 2;
-      const weekDiff = Math.max(1, Math.min(10, cycleBase + offsets[phase]));
-      const weekLoad = PHASE_LOAD[phase];
-      const week = {};
-
-      // Phase A — type de chaque jour (days déjà trié calendairement par l'appelant, voir main())
-      const dayPlans = days.map((day, dayIdx) => {
-        const isLastDayOfWeek = dayIdx === days.length - 1;
-        const forced = isMrvWeek && isLastDayOfWeek;
-        const typeIdx = (c * days.length + dayIdx) % focusDist.length; // ancré sur le bloc, pas la semaine globale — voir generate/route.ts
-        const type = forced ? "test" : focusDist[typeIdx];
-        return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
-      });
-
-      const RPE_BUCKET = {
-        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
-      };
-
-      // Phase A2 — le premier jour d'entraînement de la semaine ne doit jamais être facile/technique
-      if (dayPlans.length > 0 && !dayPlans[0].forced && RPE_BUCKET[dayPlans[0].type] === "easy") {
-        dayPlans[0].type = "intensite";
+    // Phase A — curriculum sportif si dispo pour cette catégorie, sinon rotation FOCUS_DIST générique.
+    const curriculumSelector = SPORT_CURRICULUM[category];
+    const archetypes = curriculumSelector?.(sortedDays.length);
+    const dayPlans = sortedDays.map((day, dayIdx) => {
+      const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
+      const forced = isMrvWeek && isLastDayOfWeek;
+      let type, archetypeName, exercises;
+      if (forced) {
+        type = "test";
+      } else if (archetypes) {
+        const archetype = archetypes[dayIdx];
+        type = archetype.type;
+        archetypeName = archetype.name;
+        exercises = archetype.exercises;
+      } else {
+        const typeIdx = (rotationAnchor * sortedDays.length + dayIdx) % focusDist.length;
+        type = focusDist[typeIdx];
       }
+      return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises };
+    });
 
-      // Phase B — principe de variation : jamais deux jours calendairement consécutifs dans le
-      // même palier de RPE (facile/modéré/dur), peu importe le type exact — voir generate/route.ts
-      // pour le détail complet du raisonnement. Répété jusqu'à stabilisation.
-      for (let pass = 0; pass < 5; pass++) {
-        let changed = false;
-        for (let i = 1; i < dayPlans.length; i++) {
-          const prev = dayPlans[i - 1];
-          const cur = dayPlans[i];
-          if (cur.calIdx - prev.calIdx !== 1) continue;
-          if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue;
-
-          const targetIdx = cur.forced ? i - 1 : i;
-          const keep = cur.forced ? cur : prev;
-          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
-          const keepBucket = RPE_BUCKET[keep.type];
-          const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
-          const orderedCandidates =
-            keepBucket === "hard" ? ["recuperation", "technique", "volume"]
-            : keepBucket === "easy" ? ["intensite", "test", "volume"]
-            : ["recuperation", "technique", "intensite", "test", "volume"];
-          const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
-
-          if (dayPlans[targetIdx].type !== replacement) {
-            dayPlans[targetIdx].type = replacement;
-            changed = true;
-          }
-        }
-        if (!changed) break;
-      }
-
-      // Phase C — construire les séances
-      dayPlans.forEach(({ day, dayIdx, type }) => {
-        const target_difficulty = sessionDifficulty(type, weekDiff);
-
-        week[day] = [{
-          name: sessionName(type, w, dayIdx),
-          notes: buildNotes(category, type, c, shape, phase),
-          target_difficulty,
-          load: weekLoad,
-          type,
-        }];
-      });
-
-      weeks.push(week);
+    // Phase A2 — règle universelle, s'applique aussi aux sports à curriculum (voir generate/route.ts).
+    if (dayPlans.length > 0 && !dayPlans[0].forced && RPE_BUCKET[dayPlans[0].type] === "easy") {
+      dayPlans[0].type = "intensite";
+      dayPlans[0].archetypeName = undefined;
+      dayPlans[0].exercises = undefined;
     }
-  }
+
+    // Phase B — règle universelle d'alternance des paliers RPE, s'applique aussi aux sports à
+    // curriculum. Voir generate/route.ts pour le détail complet du raisonnement.
+    for (let pass = 0; pass < 5; pass++) {
+      let changed = false;
+      for (let i = 1; i < dayPlans.length; i++) {
+        const prev = dayPlans[i - 1];
+        const cur = dayPlans[i];
+        if (cur.calIdx - prev.calIdx !== 1) continue;
+        if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue;
+
+        const targetIdx = cur.forced ? i - 1 : i;
+        const keep = cur.forced ? cur : prev;
+        const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
+        const keepBucket = RPE_BUCKET[keep.type];
+        const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+        const orderedCandidates =
+          keepBucket === "hard" ? ["recuperation", "technique", "volume"]
+          : keepBucket === "easy" ? ["intensite", "test", "volume"]
+          : ["recuperation", "technique", "intensite", "test", "volume"];
+        const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
+
+        if (dayPlans[targetIdx].type !== replacement) {
+          dayPlans[targetIdx].type = replacement;
+          dayPlans[targetIdx].archetypeName = undefined;
+          dayPlans[targetIdx].exercises = undefined;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    // Phase C — construire les séances
+    dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
+      const target_difficulty = sessionDifficulty(type, weekDiff);
+      week[day] = [{
+        name: archetypeName ?? sessionName(type, w, dayIdx),
+        notes: exercises
+          ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+          : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase),
+        target_difficulty,
+        load: weekLoad,
+        type,
+      }];
+    });
+
+    weeks.push(week);
+  });
 
   return { weeks };
 }
@@ -359,7 +565,7 @@ async function fetchEligiblePrograms() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/programs?is_public=eq.true&select=id,name,sport,level,weeks_count,template`, { headers: restHeaders });
   if (!res.ok) throw new Error(`Lecture échouée (${res.status}) : ${await res.text()}`);
   const all = await res.json();
-  return all.filter(p => p.weeks_count && p.weeks_count % 4 === 0);
+  return all.filter(p => p.weeks_count && (p.weeks_count === 6 || p.weeks_count % 4 === 0));
 }
 
 async function updateProgramTemplate(id, template) {
@@ -373,7 +579,7 @@ async function updateProgramTemplate(id, template) {
 
 async function main() {
   const programs = await fetchEligiblePrograms();
-  console.log(`${programs.length} programme(s) éligible(s) (durée multiple de 4). Mode : ${APPLY ? "APPLY (écriture réelle en base)" : "DRY-RUN (aucune écriture)"}\n`);
+  console.log(`${programs.length} programme(s) éligible(s) (durée = 6, ou multiple de 4). Mode : ${APPLY ? "APPLY (écriture réelle en base)" : "DRY-RUN (aucune écriture)"}\n`);
 
   const backup = programs.map(p => ({ id: p.id, name: p.name, template: p.template }));
   const backupFile = `scripts/library-templates-backup-periodization-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
@@ -388,8 +594,8 @@ async function main() {
     }
 
     const newTemplate = generateTemplate({ sport: p.sport, level: p.level, days, duration: p.weeks_count });
-    const mesocycles = p.weeks_count / 4;
-    console.log(`- ${p.name} (${p.id}) : ${p.weeks_count} sem. (${mesocycles} bloc${mesocycles > 1 ? "s" : ""}), jours=${days.join("/")}, niveau=${p.level}`);
+    const blockDesc = p.weeks_count === 6 ? "modèle 6 sem." : `${p.weeks_count / 4} bloc${p.weeks_count / 4 > 1 ? "s" : ""}`;
+    console.log(`- ${p.name} (${p.id}) : ${p.weeks_count} sem. (${blockDesc}), jours=${days.join("/")}, niveau=${p.level}, sport=${p.sport}`);
 
     if (APPLY) {
       try {
@@ -405,4 +611,6 @@ async function main() {
   if (!APPLY) console.log("Relance avec --apply pour écrire réellement en base.");
 }
 
-main();
+export { generateTemplate };
+
+if (process.env.SKIP_MAIN !== "1") main();
