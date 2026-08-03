@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 
-const SPORTS = ["Haltérophilie", "Sprint/Athlétisme", "Force/Powerlifting", "Sports collectifs", "Fitness/Forme", "Combat/Arts martiaux", "Autre"];
+const SPORTS = ["Haltérophilie", "Sprint/Athlétisme", "Force/Powerlifting", "Course à pied/Endurance", "Sports collectifs", "Fitness/Forme", "Combat/Arts martiaux", "Autre"];
 const FOCUSES: { value: ProgramFocus; label: string }[] = [
   { value: "mixte", label: "Mixte équilibré" },
   { value: "technique", label: "Développement technique" },

@@ -305,44 +305,46 @@ function selectEndurance(n) {
   return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
 }
 
-const SPRINT_MAIN = [
-  { name: "Accélération", type: "intensite", exercises: [
-    "Départs blocs — 6×20m (récup 4 min)", "Pliométrie : bondissements — 4×20m", "Squat jump — 4×6",
-  ]},
-  { name: "Vitesse max", type: "intensite", exercises: [
-    "Sprint 60m à 95% — 5 reps (récup 5 min)", "Pliométrie : sauts horizontaux — 3×6", "Sprint 30m lancé — 4 reps (récup 4 min)",
-  ]},
-  { name: "Endurance de vitesse", type: "volume", exercises: [
-    "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
-  ]},
-  { name: "Tempo", type: "volume", exercises: [
-    "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
-  ]},
-  { name: "Circuit", type: "technique", exercises: [
-    "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
-  ]},
-];
+const SPRINT_ACCELERATION = { name: "Accélération", type: "intensite", exercises: [
+  "Gammes techniques : montées de genoux + talons-fesses — 3×20m",
+  "Départs blocs — 6×20m (récup 4 min)",
+  "Pliométrie : bondissements — 4×20m",
+  "Squat jump — 4×6",
+]};
+const SPRINT_VITESSE_MAX = { name: "Vitesse max", type: "intensite", exercises: [
+  "Gammes techniques : foulées bondissantes — 3×20m",
+  "Sprint 60m à 95% — 5 reps (récup 5 min)",
+  "Sprint 30m lancé — 4 reps (récup 4 min)",
+  "Pliométrie : sauts horizontaux — 3×6",
+]};
 const SPRINT_RENFO = { name: "Renfo", type: "technique", exercises: [
   "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
 ]};
+const SPRINT_ENDURANCE_VITESSE = { name: "Endurance de vitesse", type: "volume", exercises: [
+  "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
+]};
+const SPRINT_TEMPO = { name: "Tempo", type: "volume", exercises: [
+  "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
+]};
+const SPRINT_CIRCUIT = { name: "Circuit", type: "technique", exercises: [
+  "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
+]};
+const SPRINT_PRIORITY = [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX, SPRINT_RENFO, SPRINT_ENDURANCE_VITESSE, SPRINT_TEMPO, SPRINT_CIRCUIT];
 function selectSprint(n) {
-  if (n <= 1) return [SPRINT_MAIN[0]];
-  const mainSlots = n - 1;
-  const main = Array.from({ length: mainSlots }, (_, i) => SPRINT_MAIN[i % SPRINT_MAIN.length]);
-  return [...main, SPRINT_RENFO];
+  return Array.from({ length: n }, (_, i) => SPRINT_PRIORITY[i % SPRINT_PRIORITY.length]);
 }
 
 const HA_SNATCH = { name: "Focus Arraché", type: "intensite", exercises: [
-  "Arraché — 5×2@75%", "Arraché puissance — 4×3@70%", "Arraché debout — 4×2@75%",
+  "Arraché — 5×2@75%", "Tirage arraché — 4×3@80%", "Squat arraché — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_CLEAN_JERK = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
-  "Épaulé-jeté — 5×2@75%", "Épaulé-jeté complexe — 4×3@70%",
+  "Épaulé-jeté — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_CLEAN = { name: "Focus Épaulé", type: "intensite", exercises: [
-  "Épaulé — 5×2@75%", "Épaulé puissance — 4×3@70%", "Épaulé debout — 4×3@72%",
+  "Épaulé — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_JERK = { name: "Focus Jeté", type: "intensite", exercises: [
-  "Jeté — 5×2@75%", "Jeté depuis blocs — 4×3@72%", "Push press — 4×3@70%",
+  "Jeté — 5×2@75%", "Tirage épaulé — 4×3@78%", "Squat avant — 4×3@70%", "Développé militaire — 3×8@65%",
 ]};
 const HA_TOTAL = { name: "Focus Total", type: "test", exercises: [
   "Complexe arraché + épaulé-jeté — 4×1@80%", "Simulation total : arraché puis épaulé-jeté",
@@ -359,13 +361,13 @@ function selectHalterophilie(n) {
 }
 
 const PL_SQUAT = { name: "Focus Squat", type: "intensite", exercises: [
-  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%",
+  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const PL_BENCH = { name: "Focus Bench", type: "intensite", exercises: [
-  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%",
+  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%", "Tirage horizontal — 3×10@65%",
 ]};
 const PL_DEADLIFT = { name: "Focus Deadlift", type: "intensite", exercises: [
-  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%",
+  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%", "Gainage anti-extension — 3×40s",
 ]};
 function selectPowerlifting(n) {
   const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];

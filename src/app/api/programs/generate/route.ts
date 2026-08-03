@@ -703,49 +703,56 @@ function selectEndurance(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
 }
 
-// ---- Sprint : priorité + règles explicites — plyométrie systématiquement intégrée après les
-// séances de vitesse pure (Accélération/Vitesse max, directement dans leur banque d'exercices),
-// et au moins une séance de renfo réservée quel que soit le nombre de jours.
-const SPRINT_MAIN: Archetype[] = [
-  { name: "Accélération", type: "intensite", exercises: [
-    "Départs blocs — 6×20m (récup 4 min)", "Pliométrie : bondissements — 4×20m", "Squat jump — 4×6",
-  ]},
-  { name: "Vitesse max", type: "intensite", exercises: [
-    "Sprint 60m à 95% — 5 reps (récup 5 min)", "Pliométrie : sauts horizontaux — 3×6", "Sprint 30m lancé — 4 reps (récup 4 min)",
-  ]},
-  { name: "Endurance de vitesse", type: "volume", exercises: [
-    "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
-  ]},
-  { name: "Tempo", type: "volume", exercises: [
-    "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
-  ]},
-  { name: "Circuit", type: "technique", exercises: [
-    "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
-  ]},
-];
+// ---- Sprint : priorité explicite — Accélération, Vitesse max et Renfo ("gym") sont les 3
+// piliers non-négociables (occupent toujours les 3 premiers jours disponibles) ; Endurance de
+// vitesse et Tempo ne viennent qu'ensuite, en complément si plus de jours sont disponibles.
+// Ordre interne à chaque séance de vitesse pure (Accélération/Vitesse max) : gammes techniques
+// en ouverture, sprints au milieu (le vrai travail), pliométrie systématiquement en fin de
+// séance (fraîcheur maximale requise, mais après l'activation/l'échauffement spécifique).
+const SPRINT_ACCELERATION: Archetype = { name: "Accélération", type: "intensite", exercises: [
+  "Gammes techniques : montées de genoux + talons-fesses — 3×20m",
+  "Départs blocs — 6×20m (récup 4 min)",
+  "Pliométrie : bondissements — 4×20m",
+  "Squat jump — 4×6",
+]};
+const SPRINT_VITESSE_MAX: Archetype = { name: "Vitesse max", type: "intensite", exercises: [
+  "Gammes techniques : foulées bondissantes — 3×20m",
+  "Sprint 60m à 95% — 5 reps (récup 5 min)",
+  "Sprint 30m lancé — 4 reps (récup 4 min)",
+  "Pliométrie : sauts horizontaux — 3×6",
+]};
 const SPRINT_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
   "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
 ]};
+const SPRINT_ENDURANCE_VITESSE: Archetype = { name: "Endurance de vitesse", type: "volume", exercises: [
+  "Sprint 150m à 85% — 6 reps (récup 4 min)", "Sprint 120m à 85% — 5 reps (récup 3 min)",
+]};
+const SPRINT_TEMPO: Archetype = { name: "Tempo", type: "volume", exercises: [
+  "Tempo run 200m — 8 reps (récup 90s)", "Fartlek tempo — 25 min",
+]};
+const SPRINT_CIRCUIT: Archetype = { name: "Circuit", type: "technique", exercises: [
+  "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
+]};
+const SPRINT_PRIORITY: Archetype[] = [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX, SPRINT_RENFO, SPRINT_ENDURANCE_VITESSE, SPRINT_TEMPO, SPRINT_CIRCUIT];
 function selectSprint(n: number): Archetype[] {
-  if (n <= 1) return [SPRINT_MAIN[0]];
-  const mainSlots = n - 1; // 1 slot toujours réservé au renfo
-  const main = Array.from({ length: mainSlots }, (_, i) => SPRINT_MAIN[i % SPRINT_MAIN.length]);
-  return [...main, SPRINT_RENFO];
+  return Array.from({ length: n }, (_, i) => SPRINT_PRIORITY[i % SPRINT_PRIORITY.length]);
 }
 
 // ---- Haltérophilie (arraché/épaulé-jeté olympique) : modèle par palier de jours demandé
 // explicitement, pas une simple liste de priorité — la structure elle-même change selon N.
+// Ordre interne à chaque séance, demandé explicitement : mouvement technique ou semi-technique
+// (le geste complet du jour), puis tirages (pulls), puis squats, puis renfo en fin de séance.
 const HA_SNATCH: Archetype = { name: "Focus Arraché", type: "intensite", exercises: [
-  "Arraché — 5×2@75%", "Arraché puissance — 4×3@70%", "Arraché debout — 4×2@75%",
+  "Arraché — 5×2@75%", "Tirage arraché — 4×3@80%", "Squat arraché — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_CLEAN_JERK: Archetype = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
-  "Épaulé-jeté — 5×2@75%", "Épaulé-jeté complexe — 4×3@70%",
+  "Épaulé-jeté — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_CLEAN: Archetype = { name: "Focus Épaulé", type: "intensite", exercises: [
-  "Épaulé — 5×2@75%", "Épaulé puissance — 4×3@70%", "Épaulé debout — 4×3@72%",
+  "Épaulé — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const HA_JERK: Archetype = { name: "Focus Jeté", type: "intensite", exercises: [
-  "Jeté — 5×2@75%", "Jeté depuis blocs — 4×3@72%", "Push press — 4×3@70%",
+  "Jeté — 5×2@75%", "Tirage épaulé — 4×3@78%", "Squat avant — 4×3@70%", "Développé militaire — 3×8@65%",
 ]};
 const HA_TOTAL: Archetype = { name: "Focus Total", type: "test", exercises: [
   "Complexe arraché + épaulé-jeté — 4×1@80%", "Simulation total : arraché puis épaulé-jeté",
@@ -764,14 +771,17 @@ function selectHalterophilie(n: number): Archetype[] {
 // ---- Powerlifting (squat/bench/deadlift) : rotation round-robin des 3 lifts, mais le deadlift
 // ne dépasse jamais 2 séances/semaine (fatigue lombaire/SNC) — squat et bench peuvent aller
 // jusqu'à 3. Pas de liste de priorité fixe ici, une contrainte de fréquence à respecter.
+// Ordre interne à chaque séance, demandé explicitement : mouvement technique (le lift lui-même),
+// puis assistance (variantes du lift : pause, prise, déficit...), puis renfo général en fin de
+// séance (accessoire, pas spécifique au lift du jour).
 const PL_SQUAT: Archetype = { name: "Focus Squat", type: "intensite", exercises: [
-  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%",
+  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%", "Gainage anti-rotation — 3×40s",
 ]};
 const PL_BENCH: Archetype = { name: "Focus Bench", type: "intensite", exercises: [
-  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%",
+  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%", "Tirage horizontal — 3×10@65%",
 ]};
 const PL_DEADLIFT: Archetype = { name: "Focus Deadlift", type: "intensite", exercises: [
-  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%",
+  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%", "Gainage anti-extension — 3×40s",
 ]};
 function selectPowerlifting(n: number): Archetype[] {
   const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];
