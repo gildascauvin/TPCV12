@@ -162,6 +162,12 @@ function getSportCategory(sport) {
   // powerlifting), donnant des séances Focus Squat/Bench/Deadlift à des programmes génériques de
   // musculation/hypertrophie. "hypertroph" ne collisionne avec aucun autre mot-clé.
   if (s.includes("hypertroph")) return "musculation";
+  if (s.includes("explosiv")) return "puissance";
+  if (s.includes("perte de poids") || s.includes("perte-de-poids")) return "perte_de_poids";
+  if (s.includes("squat")) return "powerlifting_squat";
+  if (s.includes("bench")) return "powerlifting_bench";
+  if (s.includes("deadlift")) return "powerlifting_deadlift";
+  if (s.includes("spécialisation") && (s.includes("arrach") || s.includes("snatch"))) return "halterophilie_snatch";
   if (s.includes("halt") || s.includes("olympique") || s.includes("snatch") || s.includes("arraché")) return "halterophilie";
   if (s.includes("power") || s.includes("force")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
@@ -198,6 +204,48 @@ const EXERCISES = {
     intensite: ["Presse à cuisses lourde — 4×6", "Tractions lestées — 4×6", "Développé couché lourd — 4×6", "Extension triceps poulie lourde — 3×8"],
     recuperation: ["Vélo ou marche légère — 20 min", "Stretching global — 15 min", "Foam rolling dos et jambes", "Respiration et mobilité active"],
     test: ["Test : squat 5RM", "Test : développé couché 5RM", "Test : tractions strictes max", "Tour de taille / mensurations"],
+  },
+  powerlifting_squat: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  powerlifting_bench: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  powerlifting_deadlift: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  halterophilie_snatch: {
+    technique: ["Arraché technique à 60% — 6×2", "Épaulé à genoux + montée (drill) — 5×3", "Tirage arraché lent — 4×4", "Squat avant pause basse — 4×3", "Mobilité chevilles et hanches — 10 min"],
+    volume: ["Back squat — 5×5", "Épaulé-jeté à 70% — 5×3", "Soulevé de terre roumain — 4×8", "Développé militaire — 4×8", "Fentes marchées — 3×12", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Arraché compétition à 90%+ — 5×1", "Épaulé-jeté max effort — 5×1", "Squat avant lourd — 4×2", "Tirage haltère à 100%+ — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling chaîne postérieure", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Arraché : tentative de maximum", "Épaulé-jeté : tentative de maximum", "Squat avant : max du cycle", "Bilan technique (vidéo)"],
+  },
+  puissance: {
+    technique: ["Squat gobelet technique — 4×5", "Épaulé technique léger — 4×3", "Skipping + gammes — 3×20m", "Mobilité hanches et chevilles — 10 min"],
+    volume: ["Squat — 4×6", "Fentes sautées — 3×10", "Tirage vertical — 3×10", "Gainage complet — 3×40s"],
+    intensite: ["Box jump — 4×5", "Épaulé puissance — 4×3", "Squat jump chargé — 4×5", "Sprints courts en côte — 5×20m"],
+    recuperation: ["Mobilité complète — 15 min", "Foam rolling jambes et dos", "Marche active — 20 min", "Stretching global — 15 min"],
+    test: ["Test : squat jump hauteur", "Test : épaulé max", "Sprint 30m chronométré", "Bilan explosivité vidéo"],
+  },
+  perte_de_poids: {
+    technique: ["Squat gobelet technique — 4×8", "Fentes marchées technique — 3×10 par jambe", "Rowing haltère technique — 4×8", "Mobilité globale — 10 min"],
+    volume: ["Circuit full-body : squat + pompes + rowing — 4 tours", "Vélo ou rameur continu — 30 min", "Gainage complet — 3×40s"],
+    intensite: ["Circuit cardio : burpees + jumping jacks + mountain climbers — 6 rounds", "Tabata vélo/rameur — 8×20s effort/10s récup", "Corde à sauter intervalles — 8×1 min"],
+    recuperation: ["Marche active — 30 min", "Stretching global — 15 min", "Mobilité douce — 15 min", "Respiration et relaxation — 10 min"],
+    test: ["Test : Cooper 12 min", "Tour de taille / mensurations", "Test : squat max reps 2 min", "Bilan poids/composition corporelle"],
   },
   sprint: {
     technique: ["Drills : montées de genoux — 4×30m", "Talons-fesses — 4×30m", "Foulées bondissantes — 4×30m", "Skipping A/B/C — 3×20m chaque", "Gamme complète sprint — 3 séries"],
@@ -329,7 +377,7 @@ const SPRINT_VITESSE_MAX = { name: "Vitesse max", type: "intensite", exercises: 
   "Sprint 30m lancé — 4 reps (récup 4 min)",
   "Pliométrie : sauts horizontaux — 3×6",
 ]};
-const SPRINT_RENFO = { name: "Renfo", type: "technique", exercises: [
+const SPRINT_RENFO = { name: "Renfo", type: "volume", exercises: [
   "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
 ]};
 const SPRINT_ENDURANCE_VITESSE = { name: "Endurance de vitesse", type: "volume", exercises: [
@@ -341,8 +389,15 @@ const SPRINT_TEMPO = { name: "Tempo", type: "volume", exercises: [
 const SPRINT_CIRCUIT = { name: "Circuit", type: "technique", exercises: [
   "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
 ]};
-const SPRINT_PRIORITY = [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX, SPRINT_RENFO, SPRINT_ENDURANCE_VITESSE, SPRINT_TEMPO, SPRINT_CIRCUIT];
+// Ordre volontairement PAS [Accélération, Vitesse max, ...] : les deux sont "intensite" (palier
+// dur), adjacentes en positions 0/1 elles entrent systématiquement en collision dès que les jours
+// choisis incluent 2 jours calendairement consécutifs (Lun+Mar, très courant) — trouvé en prod,
+// "Vitesse max" n'apparaissait plus jamais sur un programme réel. Renfo (palier modéré) intercalé
+// entre les deux évite la collision par construction ; même logique pour Circuit entre Endurance
+// de vitesse et Tempo (tous deux palier modéré).
+const SPRINT_PRIORITY = [SPRINT_ACCELERATION, SPRINT_RENFO, SPRINT_VITESSE_MAX, SPRINT_ENDURANCE_VITESSE, SPRINT_CIRCUIT, SPRINT_TEMPO];
 function selectSprint(n) {
+  if (n === 2) return [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX];
   return Array.from({ length: n }, (_, i) => SPRINT_PRIORITY[i % SPRINT_PRIORITY.length]);
 }
 
@@ -435,13 +490,64 @@ function selectMusculation(n) {
   return Array.from({ length: n }, (_, i) => MUSCU_BASE[i % MUSCU_BASE.length]);
 }
 
+const SQUAT_SPEC_PATTERN = [PL_SQUAT, PL_SQUAT, PL_BENCH, PL_SQUAT, PL_DEADLIFT, PL_SQUAT];
+function selectSquatSpecialization(n) {
+  return Array.from({ length: n }, (_, i) => SQUAT_SPEC_PATTERN[i % SQUAT_SPEC_PATTERN.length]);
+}
+const BENCH_SPEC_PATTERN = [PL_BENCH, PL_BENCH, PL_SQUAT, PL_BENCH, PL_DEADLIFT, PL_BENCH];
+function selectBenchSpecialization(n) {
+  return Array.from({ length: n }, (_, i) => BENCH_SPEC_PATTERN[i % BENCH_SPEC_PATTERN.length]);
+}
+const DEADLIFT_SPEC_PATTERN = [PL_DEADLIFT, PL_DEADLIFT, PL_SQUAT, PL_DEADLIFT, PL_BENCH, PL_DEADLIFT];
+function selectDeadliftSpecialization(n) {
+  return Array.from({ length: n }, (_, i) => DEADLIFT_SPEC_PATTERN[i % DEADLIFT_SPEC_PATTERN.length]);
+}
+const SNATCH_SPEC_PATTERN = [HA_SNATCH, HA_SNATCH, HA_CLEAN_JERK, HA_SNATCH, HA_LIGHT];
+function selectSnatchSpecialization(n) {
+  return Array.from({ length: n }, (_, i) => SNATCH_SPEC_PATTERN[i % SNATCH_SPEC_PATTERN.length]);
+}
+
+const PUISSANCE_FORCE = { name: "Force", type: "intensite", exercises: [
+  "Back squat — 5×3@80%", "Développé couché — 5×3@80%", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PUISSANCE = { name: "Puissance", type: "intensite", exercises: [
+  "Épaulé — 4×3@70%", "Arraché puissance — 4×3@65%", "Push press — 4×4@65%", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PLYO = { name: "Pliométrie", type: "intensite", exercises: [
+  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Bondissements — 4×20m", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_SPRINT = { name: "Sprint", type: "intensite", exercises: [
+  "Départs blocs — 6×20m (récup 4 min)", "Sprint 30m — 5 reps", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PRIORITY = [PUISSANCE_FORCE, PUISSANCE_PUISSANCE, PUISSANCE_PLYO, PUISSANCE_PLYO, PUISSANCE_SPRINT];
+function selectPuissanceExplosivite(n) {
+  return Array.from({ length: n }, (_, i) => PUISSANCE_PRIORITY[i % PUISSANCE_PRIORITY.length]);
+}
+
+const PDP_MUSCU = { name: "Musculation full-body", type: "volume", exercises: [
+  "Squat — 4×10@65%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10@65%", "Gainage complet — 3×40s",
+]};
+const PDP_CARDIO = { name: "Cardio", type: "intensite", exercises: [
+  "Vélo ou rameur fractionné — 8×2 min effort / 1 min récup", "Circuit cardio : burpees + jumping jacks + mountain climbers — 4 tours",
+]};
+const PDP_PRIORITY = [PDP_MUSCU, PDP_CARDIO, PDP_MUSCU, PDP_CARDIO];
+function selectPertePoids(n) {
+  return Array.from({ length: n }, (_, i) => PDP_PRIORITY[i % PDP_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM = {
   endurance: selectEndurance,
   sprint: selectSprint,
   halterophilie: selectHalterophilie,
+  halterophilie_snatch: selectSnatchSpecialization,
   powerlifting: selectPowerlifting,
+  powerlifting_squat: selectSquatSpecialization,
+  powerlifting_bench: selectBenchSpecialization,
+  powerlifting_deadlift: selectDeadliftSpecialization,
   collectif: selectCollectif,
   musculation: selectMusculation,
+  puissance: selectPuissanceExplosivite,
+  perte_de_poids: selectPertePoids,
 };
 
 function sessionName(type, weekIdx, dayIdx) {
@@ -497,6 +603,9 @@ function generateTemplate({ sport, level, days, duration }) {
   const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
   const weekSpecs = buildWeekSpecs(duration);
   const weeks = [];
+  // Dernier jour d'entraînement de la semaine précédente — voir generate/route.ts, "Phase B
+  // inter-semaines" : sans ça, Phase A2/B ne comparent les jours qu'au sein d'une même semaine.
+  let previousWeekLastDay = null;
 
   weekSpecs.forEach((spec, w) => {
     const { weekDiffOffset, weekLoad, isMrvWeek, rotationAnchor, shape, prescriptionPhase } = spec;
@@ -561,6 +670,28 @@ function generateTemplate({ sport, level, days, duration }) {
       }
       if (!changed) break;
     }
+
+    // Phase B inter-semaines — voir generate/route.ts pour le raisonnement complet. Ne se
+    // déclenche que si Dimanche (calIdx 6) était un jour d'entraînement de la semaine précédente
+    // ET que Lundi (calIdx 0) l'est aussi cette semaine-ci — les deux seuls jours réellement
+    // consécutifs à travers une frontière de semaine.
+    if (previousWeekLastDay && previousWeekLastDay.calIdx === 6 && dayPlans[0]?.calIdx === 0 &&
+        RPE_BUCKET[previousWeekLastDay.type] === RPE_BUCKET[dayPlans[0].type]) {
+      const keepBucket = RPE_BUCKET[previousWeekLastDay.type];
+      const otherNeighbor = dayPlans[1];
+      const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+      const orderedCandidates =
+        keepBucket === "hard" ? ["recuperation", "technique", "volume"]
+        : keepBucket === "easy" ? ["intensite", "test", "volume"]
+        : ["recuperation", "technique", "intensite", "test", "volume"];
+      const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
+      dayPlans[0].type = replacement;
+      dayPlans[0].archetypeName = undefined;
+      dayPlans[0].exercises = undefined;
+    }
+    previousWeekLastDay = dayPlans.length > 0
+      ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
+      : null;
 
     // Phase C — construire les séances
     dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {

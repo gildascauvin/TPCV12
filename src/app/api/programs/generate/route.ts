@@ -186,7 +186,7 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
   test:        ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
-type SportCategory = "halterophilie" | "powerlifting" | "musculation" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
+type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
 
 function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
@@ -196,6 +196,17 @@ function getSportCategory(sport: string): SportCategory {
   // programmes génériques de musculation/hypertrophie qui n'ont rien d'un powerlifting. Vérifié
   // AVANT ce check spécifique (le mot "hypertroph" ne collisionne avec aucun autre mot-clé).
   if (s.includes("hypertroph")) return "musculation";
+  if (s.includes("explosiv")) return "puissance";
+  if (s.includes("perte de poids") || s.includes("perte-de-poids")) return "perte_de_poids";
+  // Spécialisation par lift (bibliothèque publique, sport-field relabellisé pour ces programmes
+  // précis, ex. "Powerlifting — Spécialisation Squat") — vérifiées AVANT les checks génériques
+  // halterophilie/powerlifting ci-dessous, sinon "squat"/"bench"/"deadlift" ne seraient jamais
+  // atteints (le générique matcherait déjà sur "power"). "snatch"/"arraché" seuls sont déjà pris
+  // par le générique halterophilie plus bas, d'où le "spécialisation" combiné pour ce cas précis.
+  if (s.includes("squat")) return "powerlifting_squat";
+  if (s.includes("bench")) return "powerlifting_bench";
+  if (s.includes("deadlift")) return "powerlifting_deadlift";
+  if (s.includes("spécialisation") && (s.includes("arrach") || s.includes("snatch"))) return "halterophilie_snatch";
   // Haltérophilie (arraché/épaulé-jeté olympique) ≠ Powerlifting (squat/bench/deadlift) —
   // avant ce fix, "Force/Powerlifting" et "Haltérophilie" tombaient dans le même seau, mélangeant
   // les deux banques d'exercices (un "Force/Powerlifting" recevait des séances d'arraché).
@@ -315,6 +326,53 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Test : tractions strictes max",
       "Tour de taille / mensurations",
     ],
+  },
+
+  // Spécialisations powerlifting/haltérophilie (bibliothèque publique, sport-field relabellisé) —
+  // banques identiques aux catégories génériques correspondantes (le mouvement/vocabulaire ne
+  // change pas, seule la FRÉQUENCE hebdomadaire par lift change, voir le curriculum dédié).
+  powerlifting_squat: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  powerlifting_bench: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  powerlifting_deadlift: {
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  halterophilie_snatch: {
+    technique: ["Arraché technique à 60% — 6×2", "Épaulé à genoux + montée (drill) — 5×3", "Tirage arraché lent — 4×4", "Squat avant pause basse — 4×3", "Mobilité chevilles et hanches — 10 min"],
+    volume: ["Back squat — 5×5", "Épaulé-jeté à 70% — 5×3", "Soulevé de terre roumain — 4×8", "Développé militaire — 4×8", "Fentes marchées — 3×12", "Gainage anti-rotation — 3×40s"],
+    intensite: ["Arraché compétition à 90%+ — 5×1", "Épaulé-jeté max effort — 5×1", "Squat avant lourd — 4×2", "Tirage haltère à 100%+ — 4×2"],
+    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling chaîne postérieure", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    test: ["Arraché : tentative de maximum", "Épaulé-jeté : tentative de maximum", "Squat avant : max du cycle", "Bilan technique (vidéo)"],
+  },
+
+  puissance: {
+    technique: ["Squat gobelet technique — 4×5", "Épaulé technique léger — 4×3", "Skipping + gammes — 3×20m", "Mobilité hanches et chevilles — 10 min"],
+    volume: ["Squat — 4×6", "Fentes sautées — 3×10", "Tirage vertical — 3×10", "Gainage complet — 3×40s"],
+    intensite: ["Box jump — 4×5", "Épaulé puissance — 4×3", "Squat jump chargé — 4×5", "Sprints courts en côte — 5×20m"],
+    recuperation: ["Mobilité complète — 15 min", "Foam rolling jambes et dos", "Marche active — 20 min", "Stretching global — 15 min"],
+    test: ["Test : squat jump hauteur", "Test : épaulé max", "Sprint 30m chronométré", "Bilan explosivité vidéo"],
+  },
+  perte_de_poids: {
+    technique: ["Squat gobelet technique — 4×8", "Fentes marchées technique — 3×10 par jambe", "Rowing haltère technique — 4×8", "Mobilité globale — 10 min"],
+    volume: ["Circuit full-body : squat + pompes + rowing — 4 tours", "Vélo ou rameur continu — 30 min", "Gainage complet — 3×40s"],
+    intensite: ["Circuit cardio : burpees + jumping jacks + mountain climbers — 6 rounds", "Tabata vélo/rameur — 8×20s effort/10s récup", "Corde à sauter intervalles — 8×1 min"],
+    recuperation: ["Marche active — 30 min", "Stretching global — 15 min", "Mobilité douce — 15 min", "Respiration et relaxation — 10 min"],
+    test: ["Test : Cooper 12 min", "Tour de taille / mensurations", "Test : squat max reps 2 min", "Bilan poids/composition corporelle"],
   },
 
   sprint: {
@@ -761,7 +819,7 @@ const SPRINT_VITESSE_MAX: Archetype = { name: "Vitesse max", type: "intensite", 
   "Sprint 30m lancé — 4 reps (récup 4 min)",
   "Pliométrie : sauts horizontaux — 3×6",
 ]};
-const SPRINT_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
+const SPRINT_RENFO: Archetype = { name: "Renfo", type: "volume", exercises: [
   "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
 ]};
 const SPRINT_ENDURANCE_VITESSE: Archetype = { name: "Endurance de vitesse", type: "volume", exercises: [
@@ -773,8 +831,20 @@ const SPRINT_TEMPO: Archetype = { name: "Tempo", type: "volume", exercises: [
 const SPRINT_CIRCUIT: Archetype = { name: "Circuit", type: "technique", exercises: [
   "Circuit vitesse : gammes + starts + accélérations — 4 tours", "Gamme complète sprint — 3 séries",
 ]};
-const SPRINT_PRIORITY: Archetype[] = [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX, SPRINT_RENFO, SPRINT_ENDURANCE_VITESSE, SPRINT_TEMPO, SPRINT_CIRCUIT];
+// Ordre volontairement PAS [Accélération, Vitesse max, Renfo, ...] : Accélération et Vitesse max
+// sont toutes les deux "intensite" (palier dur) — les mettre en positions 0/1 consécutives les
+// fait systématiquement entrer en collision dès que les jours choisis incluent deux jours
+// calendairement consécutifs (ex. Lun+Mar, très courant), et la Phase B de lissage efface alors
+// "Vitesse max" au profit d'une séance générique — trouvé en prod sur un programme réel (Lun/Mar/
+// Mer/Ven/Sam) où "Vitesse max" n'apparaissait plus jamais. Intercaler Renfo (palier facile) entre
+// les deux évite la collision par construction plutôt que de compter sur le lissage pour rattraper
+// le coup — même logique pour Circuit (facile) entre Endurance de vitesse et Tempo (tous deux
+// palier modéré, même collision possible en fin de semaine).
+const SPRINT_PRIORITY: Archetype[] = [SPRINT_ACCELERATION, SPRINT_RENFO, SPRINT_VITESSE_MAX, SPRINT_ENDURANCE_VITESSE, SPRINT_CIRCUIT, SPRINT_TEMPO];
 function selectSprint(n: number): Archetype[] {
+  // Cas n=2 à part : Accélération ET Vitesse max sont "absolument" requises même à seulement 2
+  // jours/semaine (pas de place pour intercaler Renfo sans en sacrifier une des deux).
+  if (n === 2) return [SPRINT_ACCELERATION, SPRINT_VITESSE_MAX];
   return Array.from({ length: n }, (_, i) => SPRINT_PRIORITY[i % SPRINT_PRIORITY.length]);
 }
 
@@ -883,13 +953,80 @@ function selectMusculation(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => MUSCU_BASE[i % MUSCU_BASE.length]);
 }
 
+// ---- Spécialisations powerlifting/haltérophilie : même vocabulaire d'exercices que la catégorie
+// générique (PL_SQUAT/PL_BENCH/PL_DEADLIFT/HA_SNATCH/... déjà définis plus haut), mais une
+// fréquence hebdomadaire clairement orientée vers le lift du titre du programme, plutôt que la
+// rotation équilibrée générique — sinon un programme "Deadlift — Spécialisation" n'a jamais plus
+// d'une séance de deadlift que n'importe quel autre programme powerlifting générique.
+const SQUAT_SPEC_PATTERN: Archetype[] = [PL_SQUAT, PL_SQUAT, PL_BENCH, PL_SQUAT, PL_DEADLIFT, PL_SQUAT];
+function selectSquatSpecialization(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => SQUAT_SPEC_PATTERN[i % SQUAT_SPEC_PATTERN.length]);
+}
+const BENCH_SPEC_PATTERN: Archetype[] = [PL_BENCH, PL_BENCH, PL_SQUAT, PL_BENCH, PL_DEADLIFT, PL_BENCH];
+function selectBenchSpecialization(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => BENCH_SPEC_PATTERN[i % BENCH_SPEC_PATTERN.length]);
+}
+// Le plafond "deadlift ≤2/semaine" de la catégorie générique powerlifting (fatigue lombaire/SNC)
+// ne s'applique volontairement pas ici : le principe même d'un bloc de spécialisation est
+// d'augmenter délibérément la fréquence sur le lift en retard pendant quelques semaines
+// (protocoles de spécialisation par fréquence, pratique connue) — la variation d'exercice
+// (déficit, roumain, prise classique) gère la fatigue plutôt qu'un plafond de fréquence strict.
+const DEADLIFT_SPEC_PATTERN: Archetype[] = [PL_DEADLIFT, PL_DEADLIFT, PL_SQUAT, PL_DEADLIFT, PL_BENCH, PL_DEADLIFT];
+function selectDeadliftSpecialization(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => DEADLIFT_SPEC_PATTERN[i % DEADLIFT_SPEC_PATTERN.length]);
+}
+const SNATCH_SPEC_PATTERN: Archetype[] = [HA_SNATCH, HA_SNATCH, HA_CLEAN_JERK, HA_SNATCH, HA_LIGHT];
+function selectSnatchSpecialization(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => SNATCH_SPEC_PATTERN[i % SNATCH_SPEC_PATTERN.length]);
+}
+
+// ---- Puissance & Explosivité : 1 séance Force, 1 séance Puissance (haltéro olympique dérivés :
+// épaulé, arraché puissance, push press — pas les lifts complets de compétition), 2 séances
+// Pliométrie, 1 séance Sprint — dans cet ordre de priorité décroissante. Renfo systématiquement
+// en fin de chaque séance (baked dans chaque banque d'exercices, pas une séance à part).
+const PUISSANCE_FORCE: Archetype = { name: "Force", type: "intensite", exercises: [
+  "Back squat — 5×3@80%", "Développé couché — 5×3@80%", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PUISSANCE: Archetype = { name: "Puissance", type: "intensite", exercises: [
+  "Épaulé — 4×3@70%", "Arraché puissance — 4×3@65%", "Push press — 4×4@65%", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PLYO: Archetype = { name: "Pliométrie", type: "intensite", exercises: [
+  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Bondissements — 4×20m", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_SPRINT: Archetype = { name: "Sprint", type: "intensite", exercises: [
+  "Départs blocs — 6×20m (récup 4 min)", "Sprint 30m — 5 reps", "Gainage complet — 3×40s",
+]};
+const PUISSANCE_PRIORITY: Archetype[] = [PUISSANCE_FORCE, PUISSANCE_PUISSANCE, PUISSANCE_PLYO, PUISSANCE_PLYO, PUISSANCE_SPRINT];
+function selectPuissanceExplosivite(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => PUISSANCE_PRIORITY[i % PUISSANCE_PRIORITY.length]);
+}
+
+// ---- Perte de poids : varié plutôt que mono-modal — musculation (préserve la masse musculaire
+// en déficit calorique) et cardio en alternance, 1 à 2× chacun selon le nombre de jours.
+const PDP_MUSCU: Archetype = { name: "Musculation full-body", type: "volume", exercises: [
+  "Squat — 4×10@65%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10@65%", "Gainage complet — 3×40s",
+]};
+const PDP_CARDIO: Archetype = { name: "Cardio", type: "intensite", exercises: [
+  "Vélo ou rameur fractionné — 8×2 min effort / 1 min récup", "Circuit cardio : burpees + jumping jacks + mountain climbers — 4 tours",
+]};
+const PDP_PRIORITY: Archetype[] = [PDP_MUSCU, PDP_CARDIO, PDP_MUSCU, PDP_CARDIO];
+function selectPertePoids(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => PDP_PRIORITY[i % PDP_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Archetype[]>> = {
   endurance: selectEndurance,
   sprint: selectSprint,
   halterophilie: selectHalterophilie,
+  halterophilie_snatch: selectSnatchSpecialization,
   powerlifting: selectPowerlifting,
+  powerlifting_squat: selectSquatSpecialization,
+  powerlifting_bench: selectBenchSpecialization,
+  powerlifting_deadlift: selectDeadliftSpecialization,
   collectif: selectCollectif,
   musculation: selectMusculation,
+  puissance: selectPuissanceExplosivite,
+  perte_de_poids: selectPertePoids,
 };
 
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {
@@ -968,6 +1105,11 @@ export async function POST(req: Request) {
   const weekSpecs = buildWeekSpecs(duration, baseDiff, focus);
 
   const weeks: WeekTemplate[] = [];
+  // Dernier jour d'entraînement de la semaine précédente — nécessaire pour la Phase B
+  // inter-semaines (voir plus bas) : sans ça, Phase A2/B ne comparent les jours qu'AU SEIN d'une
+  // même semaine, jamais à la frontière entre deux semaines (ex. Dimanche de la semaine N et
+  // Lundi de la semaine N+1, réellement consécutifs si Dimanche est un jour d'entraînement).
+  let previousWeekLastDay: { type: SessionType; calIdx: number } | null = null;
 
   weekSpecs.forEach((spec, w) => {
     const { weekDiff, weekLoad, isMrvWeek, rotationAnchor, shape, prescriptionPhase } = spec;
@@ -1077,6 +1219,34 @@ export async function POST(req: Request) {
       }
       if (!changed) break;
     }
+
+    // Phase B inter-semaines — même règle universelle que la Phase B ci-dessus, mais appliquée à
+    // la frontière entre deux semaines plutôt qu'à l'intérieur d'une seule. Ne se déclenche que
+    // si Dimanche (dernier jour possible, calIdx 6) était un jour d'entraînement de la semaine
+    // précédente ET que Lundi (calIdx 0) l'est aussi cette semaine-ci — les deux seuls jours
+    // réellement consécutifs à travers une frontière de semaine. Cas concret trouvé en prod : fin
+    // de semaine MRV forcée en "test" (Dimanche) suivie du premier jour de la semaine Deload
+    // suivante, forcé "non-facile" par la Phase A2 — les deux jours atterrissent dans le palier
+    // "dur", jamais comparés l'un à l'autre puisque chaque semaine était traitée isolément.
+    // Ne touche jamais le dernier jour de la semaine précédente (déjà finalisé, potentiellement
+    // un test forcé délibéré) — corrige uniquement le premier jour de la semaine courante.
+    if (previousWeekLastDay && previousWeekLastDay.calIdx === 6 && dayPlans[0]?.calIdx === 0 &&
+        RPE_BUCKET[previousWeekLastDay.type] === RPE_BUCKET[dayPlans[0].type]) {
+      const keepBucket = RPE_BUCKET[previousWeekLastDay.type];
+      const otherNeighbor = dayPlans[1];
+      const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+      const orderedCandidates: SessionType[] =
+        keepBucket === "hard" ? ["recuperation", "technique", "volume"]
+        : keepBucket === "easy" ? ["intensite", "test", "volume"]
+        : ["recuperation", "technique", "intensite", "test", "volume"];
+      const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
+      dayPlans[0].type = replacement;
+      dayPlans[0].archetypeName = undefined;
+      dayPlans[0].exercises = undefined;
+    }
+    previousWeekLastDay = dayPlans.length > 0
+      ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
+      : null;
 
     // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
     dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
