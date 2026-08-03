@@ -282,27 +282,28 @@ function generateTemplate({ sport, level, days, duration }) {
         return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
       });
 
-      // Phase B — jamais deux jours calendairement consécutifs tous les deux en intensité/test,
-      // ni deux jours consécutifs du même type (certains FOCUS_DIST ont des doublons adjacents
-      // déjà dans leur définition d'origine, invisible avec peu de jours/semaine).
-      // Répété jusqu'à stabilisation — voir generate/route.ts pour le pourquoi (une seule passe
-      // peut créer une nouvelle collision en en résolvant une autre).
-      const HARD = ["intensite", "test"];
-      const REPLACEMENT_CANDIDATES = ["recuperation", "technique"];
+      // Phase B — principe de variation : jamais deux jours calendairement consécutifs dans le
+      // même palier de RPE (facile/modéré/dur), peu importe le type exact — voir generate/route.ts
+      // pour le détail complet du raisonnement. Répété jusqu'à stabilisation.
+      const RPE_BUCKET = {
+        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+      };
       for (let pass = 0; pass < 5; pass++) {
         let changed = false;
         for (let i = 1; i < dayPlans.length; i++) {
           const prev = dayPlans[i - 1];
           const cur = dayPlans[i];
           if (cur.calIdx - prev.calIdx !== 1) continue;
-          const bothHard = HARD.includes(prev.type) && HARD.includes(cur.type);
-          const sameType = cur.type === prev.type;
-          if (!bothHard && !sameType) continue;
+          if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue;
 
           const targetIdx = cur.forced ? i - 1 : i;
+          const keep = cur.forced ? cur : prev;
           const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
-          const avoid = new Set([cur.forced ? cur.type : prev.type, otherNeighbor?.type].filter(Boolean));
-          const replacement = REPLACEMENT_CANDIDATES.find(t => !avoid.has(t)) ?? "recuperation";
+          const avoidBuckets = new Set([RPE_BUCKET[keep.type], otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+          const orderedCandidates = RPE_BUCKET[keep.type] === "moderate"
+            ? ["recuperation", "technique", "intensite", "test"]
+            : ["volume", "recuperation", "technique", "intensite", "test"];
+          const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
 
           if (dayPlans[targetIdx].type !== replacement) {
             dayPlans[targetIdx].type = replacement;

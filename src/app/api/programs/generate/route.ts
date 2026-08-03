@@ -655,35 +655,40 @@ export async function POST(req: Request) {
         return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
       });
 
-      // Phase B — jamais deux jours calendairement consécutifs (aucun jour de repos entre les
-      // deux) tous les deux en intensité/test, NI deux jours consécutifs du même type (certains
-      // FOCUS_DIST ont des types identiques déjà adjacents dans leur définition, ex. "volume"
-      // commence par ["volume","volume",...] — invisible avec peu de jours/semaine car le tableau
-      // est échantillonné en creux, mais expose des séances quasi-identiques dos à dos dès que
-      // tous les jours de la semaine sont sélectionnés et que le tableau est lu intégralement).
-      // Ne rétrograde jamais un test forcé (fin de semaine MRV, délibéré) — rétrograde l'autre
-      // jour de la paire à la place.
-      // Répété jusqu'à stabilisation (pas une seule passe) : rétrograder un jour pour résoudre
-      // une collision peut en créer une nouvelle avec son AUTRE voisin (ex. Samedi rétrogradé en
-      // récupération à cause du test forcé de Dimanche, mais Vendredi était déjà récupération —
-      // d'où le choix du remplacement qui évite explicitement les deux voisins, pas juste celui
-      // qui posait initialement problème).
-      const HARD: SessionType[] = ["intensite", "test"];
-      const REPLACEMENT_CANDIDATES: SessionType[] = ["recuperation", "technique"];
+      // Phase B — principe de variation : jamais deux jours calendairement consécutifs (aucun
+      // jour de repos entre les deux) dans le même palier de RPE (facile/modéré/dur), peu importe
+      // le type exact — pas seulement "pas 2 durs d'affilée", aussi "pas 2 faciles d'affilée" ni
+      // "pas 2 modérés d'affilée". Certains FOCUS_DIST ont même des types identiques déjà
+      // adjacents dans leur définition (ex. "volume" commence par ["volume","volume",...]) —
+      // invisible avec peu de jours/semaine (tableau échantillonné en creux), exposé dès que tous
+      // les jours sont sélectionnés (tableau lu intégralement).
+      // Ne rétrograde jamais un test forcé (fin de semaine MRV, délibéré) — corrige l'autre jour
+      // de la paire à la place. Répété jusqu'à stabilisation (pas une seule passe) : corriger un
+      // jour pour résoudre une collision peut en créer une nouvelle avec son AUTRE voisin (ex.
+      // Samedi rétrogradé en récupération à cause du test forcé de Dimanche, mais Vendredi était
+      // déjà récupération — d'où le choix du remplacement qui évite explicitement les deux
+      // voisins, pas juste celui qui posait initialement problème).
+      const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
+        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+      };
       for (let pass = 0; pass < 5; pass++) {
         let changed = false;
         for (let i = 1; i < dayPlans.length; i++) {
           const prev = dayPlans[i - 1];
           const cur = dayPlans[i];
           if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
-          const bothHard = HARD.includes(prev.type) && HARD.includes(cur.type);
-          const sameType = cur.type === prev.type;
-          if (!bothHard && !sameType) continue;
+          if (RPE_BUCKET[prev.type] !== RPE_BUCKET[cur.type]) continue; // paliers différents, rien à corriger
 
           const targetIdx = cur.forced ? i - 1 : i;
-          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
-          const avoid = new Set([cur.forced ? cur.type : prev.type, otherNeighbor?.type].filter(Boolean));
-          const replacement = REPLACEMENT_CANDIDATES.find(t => !avoid.has(t)) ?? "recuperation";
+          const keep = cur.forced ? cur : prev; // le jour de la paire qu'on ne change pas
+          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1]; // l'autre voisin du jour qu'on va changer
+          const avoidBuckets = new Set([RPE_BUCKET[keep.type], otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+          // "volume" (modéré) est l'échappatoire la plus sûre en premier choix, sauf si le palier
+          // à casser est déjà modéré (auquel cas on part directement vers facile ou dur).
+          const orderedCandidates: SessionType[] = RPE_BUCKET[keep.type] === "moderate"
+            ? ["recuperation", "technique", "intensite", "test"]
+            : ["volume", "recuperation", "technique", "intensite", "test"];
+          const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
 
           if (dayPlans[targetIdx].type !== replacement) {
             dayPlans[targetIdx].type = replacement;
