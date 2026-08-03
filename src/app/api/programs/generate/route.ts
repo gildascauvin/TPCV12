@@ -10,11 +10,89 @@ const SHAPE_OFFSETS: Record<"volume" | "intensity" | "taper", number[]> = {
   intensity: [-2, 1, 3, -3], // ramp plus marqué — objectif "intensité"
   taper:     [-1, 0, 2, -4], // dernier bloc d'un objectif "compétition" — deload final plus profond
 };
-function shapeForCycle(focus: ProgramFocus, cycleIndex: number, isLastCycle: boolean): "volume" | "intensity" | "taper" {
+type Shape = "volume" | "intensity" | "taper";
+
+function shapeForCycle(focus: ProgramFocus, cycleIndex: number, isLastCycle: boolean): Shape {
   if (focus === "intensite") return "intensity";
   if (focus === "competition") return isLastCycle ? "taper" : "volume";
   if (focus === "mixte") return cycleIndex % 2 === 0 ? "volume" : "intensity";
   return "volume"; // volume, technique, combat, autre — accumulation par défaut
+}
+
+// Prescription par exercice (séries/répétitions/%intensité), dérivée de la forme du bloc —
+// jamais le nombre d'exercices. Les valeurs écrites dans EXERCISES servent d'ancre = la
+// prescription "MRV d'un bloc volume" (phase 2, forme "volume" = multiplicateur 1.0/1.0/+0
+// partout). Les autres phases/formes sont dérivées de cette même ancre par multiplicateur —
+// pas besoin de ré-écrire une valeur différente à la main pour chaque case.
+// Phase 0=MEV / 1=Surcharge / 2=MRV / 3=Deload.
+const PRESCRIPTION_SHAPE: Record<Shape, { sets: number[]; qty: number[]; intensity: number[] }> = {
+  volume:    { sets: [0.8, 1.0, 1.0, 0.6], qty: [0.8, 1.0, 1.0, 0.6], intensity: [-10, -5, 0, -15] },
+  intensity: { sets: [1.0, 1.0, 1.0, 0.6], qty: [1.0, 0.8, 0.6, 0.4], intensity: [-5, 2, 10, -10] },
+  taper:     { sets: [1.0, 1.0, 1.0, 0.5], qty: [1.0, 0.8, 0.5, 0.3], intensity: [-5, 3, 12, -15] },
+};
+const DEFAULT_INTENSITY_PCT = 75; // ancre par défaut pour un exercice "load" sans % déjà écrit dans le texte
+
+interface ParsedExercise {
+  name: string;
+  mode: "load" | "duration" | "static";
+  baseSets: number;
+  baseQty: number;
+  unit: string; // "" (reps), "min", "s", "m", "tour", "série", "round"
+  baseIntensityPct: number | null;
+  suffix: string; // texte accessoire préservé tel quel (ex. "(récup 90s)", "par jambe")
+}
+
+// Essaie une série de formats reconnus dans EXERCISES (le format n'a jamais été standardisé
+// à l'écriture, donc plusieurs variantes coexistent) — repli sur "static" (texte inchangé,
+// jamais reformaté) si aucun ne correspond, plutôt que de forcer un résultat probablement faux.
+function parseExercise(raw: string): ParsedExercise {
+  const base = { name: raw, mode: "static" as const, baseSets: 0, baseQty: 0, unit: "", baseIntensityPct: null, suffix: "" };
+
+  const intensityPrefix = /^(.+?)\s+à\s+(\d+)%\+?(?:\s+\S+)?\s*—\s*(.+)$/;
+  const mIntensity = raw.match(intensityPrefix);
+  const name = mIntensity ? mIntensity[1] : raw.match(/^(.+?)\s*—\s*(.+)$/)?.[1] ?? raw;
+  const rest = mIntensity ? mIntensity[3] : raw.match(/^(.+?)\s*—\s*(.+)$/)?.[2];
+  const intensityPct = mIntensity ? Number(mIntensity[2]) : null;
+  if (!rest) return base;
+
+  // "5×5" / "3×45s" / "6×20m" — sets × qty avec unité optionnelle collée
+  let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
+  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", baseIntensityPct: intensityPct, suffix: m[4].trim() };
+
+  // "6×3 min" — sets × durée en minutes
+  m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
+  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", baseIntensityPct: null, suffix: m[3].trim() };
+
+  // "8 reps" / "4 tours" / "5 séries" / "8 rounds"
+  m = rest.match(/^(\d+)\s*(reps?|tours?|séries?|rounds?)\b(.*)$/);
+  if (m) return { name, mode: "load", baseSets: 1, baseQty: +m[1], unit: m[2].replace(/s$/, ""), baseIntensityPct: intensityPct, suffix: m[3].trim() };
+
+  // "20 min" — durée seule
+  m = rest.match(/^(\d+)\s*min\b(.*)$/);
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "min", baseIntensityPct: null, suffix: m[2].trim() };
+
+  // "1000m" / "50m" — distance seule, pas de série
+  m = rest.match(/^(\d+)\s*m\b(.*)$/);
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "m", baseIntensityPct: null, suffix: m[2].trim() };
+
+  return base; // plages ("50-80 min"), pyramides, formats composés — laissés statiques
+}
+
+function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): string {
+  if (spec.mode === "static") return spec.name;
+  const mult = PRESCRIPTION_SHAPE[shape];
+  const sets = Math.max(1, Math.round(spec.baseSets * mult.sets[phase]));
+  const qty = Math.max(1, Math.round(spec.baseQty * mult.qty[phase]));
+  const suffix = spec.suffix ? ` ${spec.suffix}` : "";
+
+  if (spec.mode === "duration") {
+    const core = sets > 1 ? `${sets}×${qty}${spec.unit === "min" ? " min" : spec.unit}` : `${qty}${spec.unit === "min" ? " min" : spec.unit}`;
+    return `${spec.name} — ${core}${suffix}`;
+  }
+
+  const core = `${sets}×${qty}${spec.unit}`;
+  const pct = Math.max(40, Math.min(100, (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase]));
+  return `${spec.name} — ${core}@${pct}%${suffix}`;
 }
 
 const FOCUS_DIST: Record<string, SessionType[]> = {
@@ -480,15 +558,20 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   },
 };
 
-function buildNotes(category: SportCategory, type: SessionType, weekIdx: number): string {
-  // Nombre d'exercices toujours constant (rotation de la banque, jamais tronquée) — seule la
-  // difficulté (target_difficulty) varie selon la phase et le type de séance, pas le volume
-  // d'exercices listés. La vraie notion de volume (sets/reps) et d'intensité (%) n'est pas
-  // modélisée ici, seul le curseur de difficulté 1-10 l'est.
+function buildNotes(category: SportCategory, type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
+  // Rotation ancrée sur le bloc (cycleIndex), pas sur la semaine — les 4 semaines d'un même
+  // bloc montrent toujours les mêmes exercices, seule leur prescription (séries/reps/%) change
+  // semaine après semaine. Nombre d'exercices toujours constant, jamais tronqué.
   const bank = EXERCISES[category][type];
-  const offset = (weekIdx * 2) % bank.length;
+  const offset = (cycleIndex * 2) % bank.length;
   const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
-  return rotated.join("\n");
+
+  // Prescription dynamique (séries/répétitions/%intensité) uniquement pour les séances
+  // "volume"/"intensite" — c'est là que la surcharge progressive a un sens réel. Les banques
+  // technique/récupération/test restent du texte statique, non reformaté (une récup ne "monte
+  // pas en charge", un test est un événement, pas une prescription qui progresse).
+  if (type !== "volume" && type !== "intensite") return rotated.join("\n");
+  return rotated.map(line => formatPrescription(parseExercise(line), shape, phase)).join("\n");
 }
 
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {
@@ -520,7 +603,8 @@ export async function POST(req: Request) {
   for (let c = 0; c < mesocycles; c++) {
     const cycleBase = baseDiff + c; // progressive overload d'un bloc de 4 semaines à l'autre
     const isLastCycle = c === mesocycles - 1;
-    const offsets = SHAPE_OFFSETS[shapeForCycle(focus, c, isLastCycle)];
+    const shape = shapeForCycle(focus, c, isLastCycle);
+    const offsets = SHAPE_OFFSETS[shape];
 
     for (let phase = 0; phase < 4; phase++) {
       const w = c * 4 + phase; // index de semaine global (0-based)
@@ -539,7 +623,7 @@ export async function POST(req: Request) {
         const target_difficulty = Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
         const session: SessionTemplate = {
           name: sessionName(type, w, dayIdx),
-          notes: buildNotes(category, type, w),
+          notes: buildNotes(category, type, c, shape, phase),
           target_difficulty,
           load: weekLoad,
           type,
