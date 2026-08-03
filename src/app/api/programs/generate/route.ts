@@ -655,6 +655,19 @@ export async function POST(req: Request) {
         return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
       });
 
+      const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
+        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
+      };
+
+      // Phase A2 — le premier jour d'entraînement de la semaine (le plus frais, juste après le
+      // repos) ne doit jamais être facile/technique : optimiser le stimulus veut qu'on ouvre la
+      // semaine sur quelque chose de substantiel, pas qu'on "gaspille" la fraîcheur sur un jour
+      // léger. Passe avant le lissage de la Phase B pour que celle-ci absorbe les collisions
+      // éventuellement introduites par ce changement.
+      if (dayPlans.length > 0 && !dayPlans[0].forced && RPE_BUCKET[dayPlans[0].type] === "easy") {
+        dayPlans[0].type = "intensite";
+      }
+
       // Phase B — principe de variation : jamais deux jours calendairement consécutifs (aucun
       // jour de repos entre les deux) dans le même palier de RPE (facile/modéré/dur), peu importe
       // le type exact — pas seulement "pas 2 durs d'affilée", aussi "pas 2 faciles d'affilée" ni
@@ -668,9 +681,6 @@ export async function POST(req: Request) {
       // Samedi rétrogradé en récupération à cause du test forcé de Dimanche, mais Vendredi était
       // déjà récupération — d'où le choix du remplacement qui évite explicitement les deux
       // voisins, pas juste celui qui posait initialement problème).
-      const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
-        recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
-      };
       for (let pass = 0; pass < 5; pass++) {
         let changed = false;
         for (let i = 1; i < dayPlans.length; i++) {
@@ -682,12 +692,16 @@ export async function POST(req: Request) {
           const targetIdx = cur.forced ? i - 1 : i;
           const keep = cur.forced ? cur : prev; // le jour de la paire qu'on ne change pas
           const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1]; // l'autre voisin du jour qu'on va changer
-          const avoidBuckets = new Set([RPE_BUCKET[keep.type], otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
-          // "volume" (modéré) est l'échappatoire la plus sûre en premier choix, sauf si le palier
-          // à casser est déjà modéré (auquel cas on part directement vers facile ou dur).
-          const orderedCandidates: SessionType[] = RPE_BUCKET[keep.type] === "moderate"
-            ? ["recuperation", "technique", "intensite", "test"]
-            : ["volume", "recuperation", "technique", "intensite", "test"];
+          const keepBucket = RPE_BUCKET[keep.type];
+          const avoidBuckets = new Set([keepBucket, otherNeighbor ? RPE_BUCKET[otherNeighbor.type] : null].filter(Boolean));
+          // "volume" (modéré) évité autant que possible — on privilégie l'alternance franche
+          // facile/dur (bascule directement vers le palier opposé de celui qu'on corrige), et on
+          // ne se rabat sur "volume" qu'en tout dernier recours si les deux autres paliers sont
+          // déjà pris par les voisins.
+          const orderedCandidates: SessionType[] =
+            keepBucket === "hard" ? ["recuperation", "technique", "volume"]
+            : keepBucket === "easy" ? ["intensite", "test", "volume"]
+            : ["recuperation", "technique", "intensite", "test", "volume"];
           const replacement = orderedCandidates.find(t => !avoidBuckets.has(RPE_BUCKET[t])) ?? "volume";
 
           if (dayPlans[targetIdx].type !== replacement) {
