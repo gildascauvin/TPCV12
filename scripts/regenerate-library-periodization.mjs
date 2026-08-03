@@ -251,9 +251,11 @@ function generateTemplate({ sport, level, days, duration }) {
       days.forEach((day, dayIdx) => {
         const isLastDayOfWeek = dayIdx === days.length - 1;
         const forceTest = isMrvWeek && isLastDayOfWeek;
-        const typeIdx = (w * days.length + dayIdx) % focusDist.length;
+        const typeIdx = (c * days.length + dayIdx) % focusDist.length; // ancré sur le bloc, pas la semaine globale — voir generate/route.ts
         const type = forceTest ? "test" : focusDist[typeIdx];
-        const target_difficulty = Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
+        const target_difficulty = type === "recuperation"
+          ? Math.max(1, Math.min(3, weekDiff - 3))
+          : Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
 
         week[day] = [{
           name: sessionName(type, w, dayIdx),

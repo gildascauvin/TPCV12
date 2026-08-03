@@ -617,10 +617,19 @@ export async function POST(req: Request) {
       days.forEach((day, dayIdx) => {
         const isLastDayOfWeek = dayIdx === days.length - 1;
         const forceTest = isMrvWeek && isLastDayOfWeek; // chaque semaine MRV se termine par un test, pas seulement la toute dernière séance du programme
-        const typeIdx = (w * days.length + dayIdx) % focusDist.length;
+        // Ancré sur le bloc (c), pas la semaine globale (w) — un jour donné (ex. "Lundi") garde
+        // le même type de séance sur les 4 semaines du bloc, seule sa prescription progresse.
+        // Avant ce fix, "Lundi" pouvait être volume en S1 puis intensité en S2 : les exercices
+        // semblaient changer de façon incohérente alors que c'était le type lui-même qui changeait.
+        const typeIdx = (c * days.length + dayIdx) % focusDist.length;
         const type: SessionType = forceTest ? "test" : focusDist[typeIdx];
 
-        const target_difficulty = Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
+        // Plafond absolu pour "récupération" (pas juste un décalage relatif) : sinon une semaine
+        // MRV à charge de base 10 laisse quand même une "Récupération active" à 8/10 — plus basse
+        // que le reste de la semaine, mais pas du tout "légère" pour qui regarde juste la jauge.
+        const target_difficulty = type === "recuperation"
+          ? Math.max(1, Math.min(3, weekDiff - 3))
+          : Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
         const session: SessionTemplate = {
           name: sessionName(type, w, dayIdx),
           notes: buildNotes(category, type, c, shape, phase),
