@@ -135,17 +135,21 @@ const LEVEL_BASE_DIFF: Record<ProgramLevel, number> = {
   elite: 8,
 };
 
-// Écart de difficulté par type de séance, relatif à la difficulté de base de la semaine —
-// avant ce correctif, target_difficulty était identique pour toutes les séances d'une même
-// semaine quel que soit leur type (une "Récupération" affichait la même jauge qu'une "Séance
-// intensive" le même cycle).
-const TYPE_DIFF_OFFSET: Record<SessionType, number> = {
-  recuperation: -2,
-  technique: -1,
-  volume: 0,
-  intensite: 1,
-  test: 1,
-};
+// Difficulté par type de séance — plafonds/formules explicites, pas de simple décalage relatif.
+// Un décalage relatif (-1/-2) ne suffit pas quand weekDiff est déjà proche de 10 (semaine MRV,
+// blocs avancés) : tout restait collé au plafond, "technique" et "volume" lisaient aussi "durs"
+// que "intensite" — un utilisateur sélectionnant tous les jours de la semaine se retrouvait avec
+// une semaine entièrement dure, une seule vraie récup. `intensite`/`test` restent volontairement
+// non plafonnés (leur rôle est justement d'être la partie la plus dure du cycle).
+function sessionDifficulty(type: SessionType, weekDiff: number): number {
+  switch (type) {
+    case "recuperation": return Math.max(1, Math.min(3, weekDiff - 3));
+    case "technique":    return Math.max(2, Math.min(4, Math.round(weekDiff / 3))); // jamais "Modérée" (5+), toujours "Facile"
+    case "volume":       return Math.max(3, Math.min(7, weekDiff - 1));
+    case "intensite":    return Math.max(1, Math.min(10, weekDiff + 1));
+    case "test":         return Math.max(1, Math.min(10, weekDiff + 2));
+  }
+}
 
 const SESSION_NAMES: Record<SessionType, string[]> = {
   technique:   ["Séance technique", "Travail technique", "Affûtage technique"],
@@ -652,26 +656,46 @@ export async function POST(req: Request) {
       });
 
       // Phase B — jamais deux jours calendairement consécutifs (aucun jour de repos entre les
-      // deux) tous les deux en intensité/test. Ne rétrograde jamais un test forcé (fin de semaine
-      // MRV, delibéré) — rétrograde l'autre jour de la paire à la place.
+      // deux) tous les deux en intensité/test, NI deux jours consécutifs du même type (certains
+      // FOCUS_DIST ont des types identiques déjà adjacents dans leur définition, ex. "volume"
+      // commence par ["volume","volume",...] — invisible avec peu de jours/semaine car le tableau
+      // est échantillonné en creux, mais expose des séances quasi-identiques dos à dos dès que
+      // tous les jours de la semaine sont sélectionnés et que le tableau est lu intégralement).
+      // Ne rétrograde jamais un test forcé (fin de semaine MRV, délibéré) — rétrograde l'autre
+      // jour de la paire à la place.
+      // Répété jusqu'à stabilisation (pas une seule passe) : rétrograder un jour pour résoudre
+      // une collision peut en créer une nouvelle avec son AUTRE voisin (ex. Samedi rétrogradé en
+      // récupération à cause du test forcé de Dimanche, mais Vendredi était déjà récupération —
+      // d'où le choix du remplacement qui évite explicitement les deux voisins, pas juste celui
+      // qui posait initialement problème).
       const HARD: SessionType[] = ["intensite", "test"];
-      for (let i = 1; i < dayPlans.length; i++) {
-        const prev = dayPlans[i - 1];
-        const cur = dayPlans[i];
-        if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
-        if (!HARD.includes(prev.type) || !HARD.includes(cur.type)) continue;
-        if (cur.forced) prev.type = "recuperation";
-        else cur.type = "recuperation";
+      const REPLACEMENT_CANDIDATES: SessionType[] = ["recuperation", "technique"];
+      for (let pass = 0; pass < 5; pass++) {
+        let changed = false;
+        for (let i = 1; i < dayPlans.length; i++) {
+          const prev = dayPlans[i - 1];
+          const cur = dayPlans[i];
+          if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
+          const bothHard = HARD.includes(prev.type) && HARD.includes(cur.type);
+          const sameType = cur.type === prev.type;
+          if (!bothHard && !sameType) continue;
+
+          const targetIdx = cur.forced ? i - 1 : i;
+          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
+          const avoid = new Set([cur.forced ? cur.type : prev.type, otherNeighbor?.type].filter(Boolean));
+          const replacement = REPLACEMENT_CANDIDATES.find(t => !avoid.has(t)) ?? "recuperation";
+
+          if (dayPlans[targetIdx].type !== replacement) {
+            dayPlans[targetIdx].type = replacement;
+            changed = true;
+          }
+        }
+        if (!changed) break;
       }
 
       // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
       dayPlans.forEach(({ day, dayIdx, type }) => {
-        // Plafond absolu pour "récupération" (pas juste un décalage relatif) : sinon une semaine
-        // MRV à charge de base 10 laisse quand même une "Récupération active" à 8/10 — plus basse
-        // que le reste de la semaine, mais pas du tout "légère" pour qui regarde juste la jauge.
-        const target_difficulty = type === "recuperation"
-          ? Math.max(1, Math.min(3, weekDiff - 3))
-          : Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
+        const target_difficulty = sessionDifficulty(type, weekDiff);
         const session: SessionTemplate = {
           name: sessionName(type, w, dayIdx),
           notes: buildNotes(category, type, c, shape, phase),

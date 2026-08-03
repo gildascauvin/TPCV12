@@ -119,7 +119,15 @@ const FOCUS_DIST_MIXTE = ["technique", "volume", "intensite", "volume", "recuper
 
 const LEVEL_BASE_DIFF = { debutant: 5, intermediaire: 6, avance: 7, elite: 8 };
 
-const TYPE_DIFF_OFFSET = { recuperation: -2, technique: -1, volume: 0, intensite: 1, test: 1 };
+function sessionDifficulty(type, weekDiff) {
+  switch (type) {
+    case "recuperation": return Math.max(1, Math.min(3, weekDiff - 3));
+    case "technique":    return Math.max(2, Math.min(4, Math.round(weekDiff / 3))); // jamais "Modérée" (5+), toujours "Facile"
+    case "volume":       return Math.max(3, Math.min(7, weekDiff - 1));
+    case "intensite":    return Math.max(1, Math.min(10, weekDiff + 1));
+    case "test":         return Math.max(1, Math.min(10, weekDiff + 2));
+  }
+}
 
 const SESSION_NAMES = {
   technique:    ["Séance technique", "Travail technique", "Affûtage technique"],
@@ -274,22 +282,39 @@ function generateTemplate({ sport, level, days, duration }) {
         return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
       });
 
-      // Phase B — jamais deux jours calendairement consécutifs tous les deux en intensité/test
+      // Phase B — jamais deux jours calendairement consécutifs tous les deux en intensité/test,
+      // ni deux jours consécutifs du même type (certains FOCUS_DIST ont des doublons adjacents
+      // déjà dans leur définition d'origine, invisible avec peu de jours/semaine).
+      // Répété jusqu'à stabilisation — voir generate/route.ts pour le pourquoi (une seule passe
+      // peut créer une nouvelle collision en en résolvant une autre).
       const HARD = ["intensite", "test"];
-      for (let i = 1; i < dayPlans.length; i++) {
-        const prev = dayPlans[i - 1];
-        const cur = dayPlans[i];
-        if (cur.calIdx - prev.calIdx !== 1) continue;
-        if (!HARD.includes(prev.type) || !HARD.includes(cur.type)) continue;
-        if (cur.forced) prev.type = "recuperation";
-        else cur.type = "recuperation";
+      const REPLACEMENT_CANDIDATES = ["recuperation", "technique"];
+      for (let pass = 0; pass < 5; pass++) {
+        let changed = false;
+        for (let i = 1; i < dayPlans.length; i++) {
+          const prev = dayPlans[i - 1];
+          const cur = dayPlans[i];
+          if (cur.calIdx - prev.calIdx !== 1) continue;
+          const bothHard = HARD.includes(prev.type) && HARD.includes(cur.type);
+          const sameType = cur.type === prev.type;
+          if (!bothHard && !sameType) continue;
+
+          const targetIdx = cur.forced ? i - 1 : i;
+          const otherNeighbor = cur.forced ? dayPlans[i - 2] : dayPlans[i + 1];
+          const avoid = new Set([cur.forced ? cur.type : prev.type, otherNeighbor?.type].filter(Boolean));
+          const replacement = REPLACEMENT_CANDIDATES.find(t => !avoid.has(t)) ?? "recuperation";
+
+          if (dayPlans[targetIdx].type !== replacement) {
+            dayPlans[targetIdx].type = replacement;
+            changed = true;
+          }
+        }
+        if (!changed) break;
       }
 
       // Phase C — construire les séances
       dayPlans.forEach(({ day, dayIdx, type }) => {
-        const target_difficulty = type === "recuperation"
-          ? Math.max(1, Math.min(3, weekDiff - 3))
-          : Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
+        const target_difficulty = sessionDifficulty(type, weekDiff);
 
         week[day] = [{
           name: sessionName(type, w, dayIdx),
