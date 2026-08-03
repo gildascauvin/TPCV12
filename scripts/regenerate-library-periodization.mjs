@@ -179,7 +179,7 @@ function getSportCategory(sport) {
   if (s.includes("ski") || s.includes("snowboard")) return "ski";
   if (s.includes("aviron") || s.includes("rowing") || s.includes("rameur")) return "aviron";
   if (s.includes("gym") || s.includes("agrès") || s.includes("agres")) return "gymnastique";
-  if (s.includes("run") || s.includes("marathon") || s.includes("trail") || s.includes("course") || s.includes("fond")) return "endurance";
+  if (s.includes("run") || s.includes("marathon") || s.includes("trail") || s.includes("course") || s.includes("fond") || s.includes("endur")) return "endurance";
   return "autre";
 }
 

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
-import type { ProgramTemplate, WeekTemplate, SessionTemplate } from "@/types";
+import type { ProgramTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
@@ -202,27 +202,66 @@ function getNextMonday(): string {
   return monday.toISOString().split("T")[0];
 }
 
-const LEVEL_DIFF_ADJ: Record<Level, number> = { beginner: -2, intermediate: 0, elite: 1 };
 const LEVEL_TO_DB: Record<Level, string> = { beginner: "debutant", intermediate: "intermediaire", elite: "elite" };
 const DB_TO_LEVEL: Record<string, Level> = { debutant: "beginner", intermediaire: "intermediate", avance: "elite", elite: "elite" };
 const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
-function buildProgramTemplate(sport: string, level: Level, days: number[]): ProgramTemplate {
-  const templates = getSessionTemplates(sport);
-  const adj = LEVEL_DIFF_ADJ[level];
-  const weeks: WeekTemplate[] = [0, 1, 2, 3].map(w => {
-    const week: WeekTemplate = {};
-    days.forEach((d, i) => {
-      const tpl = templates[i % templates.length];
-      const diff = Math.max(1, Math.min(10, tpl[2] + adj + (w === 3 ? -1 : w)));
-      const dayName = DOW_NAMES[d] ?? "Lun";
-      if (!week[dayName]) week[dayName] = [];
-      const session: SessionTemplate = { name: tpl[0], notes: tpl[1], target_difficulty: diff, load: 2, type: "volume" };
-      week[dayName].push(session);
+// Remplace l'ancien buildProgramTemplate() (banque statique getSessionTemplates(), 4 semaines
+// fixes, target_difficulty par simple décalage, type "volume" partout) — appelle désormais le
+// vrai générateur (/api/programs/generate, périodisation par blocs MEV/Surcharge/MRV/Deload,
+// curriculum sportif par archétypes) plutôt que de dupliquer sa logique. duration/focus figés
+// (4 semaines, "mixte") faute d'un champ dédié dans l'onboarding — reste identique au comportement
+// actuel (déjà toujours 4 semaines) côté durée ; "mixte" est le même repli "focus inconnu" déjà
+// utilisé pour les 48 programmes de bibliothèque sans focus renseigné.
+// Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
+async function generateAndAssignProgram(
+  uid: string,
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number }
+): Promise<boolean> {
+  try {
+    const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
+    if (!dayStrings.length) return false;
+
+    const genRes = await fetch("/api/programs/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration: 4, focus: "mixte" }),
     });
-    return week;
-  });
-  return { weeks };
+    if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
+    const { template } = await genRes.json() as { template: ProgramTemplate };
+
+    const progRes = await fetch("/api/programs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `Programme ${opts.sport} — 4 semaines`,
+        sport: opts.sport,
+        level: LEVEL_TO_DB[opts.level],
+        focus: "mixte",
+        weeks_count: 4,
+        sessions_per_week: opts.days.length,
+        template,
+      }),
+    });
+    if (!progRes.ok) throw new Error(`programs ${progRes.status}`);
+    const { program } = await progRes.json() as { program: { id: string } };
+
+    const assignBody: Record<string, unknown> = {
+      start_date: getNextMonday(),
+      ...("athlete_id" in opts.target ? { athlete_id: opts.target.athlete_id } : { user_id: opts.target.user_id }),
+      ...(typeof opts.wellnessAdjustment === "number" ? { wellnessAdjustment: opts.wellnessAdjustment } : {}),
+    };
+    const assignRes = await fetch(`/api/programs/${program.id}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(assignBody),
+    });
+    if (!assignRes.ok) throw new Error(`assign ${assignRes.status}`);
+    return true;
+  } catch (err) {
+    console.error(`[onboarding] generateAndAssignProgram failed for ${uid}:`, err);
+    return false;
+  }
 }
 
 function computeWellnessTip(sleep: number, stress: number, recovery: number, score: number, claimed: boolean): string {
@@ -1062,7 +1101,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
       await Promise.all([
-        ...(!hasClaimedProgram ? [supabase.from("sessions").insert(buildAthleteSessions(uid, sportValue, level, trainingDays))] : []),
+        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid } })] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -1096,30 +1135,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       // Auto-generate a program and assign to first demo athlete
       const firstAthleteId = demoAthleteIds[0];
       if (firstAthleteId && trainingDays.length > 0) {
-        const template = buildProgramTemplate(sportValue, level, trainingDays);
-        const { data: program } = await supabase
-          .from("programs")
-          .insert({
-            owner_id: uid,
-            name: `Programme ${sportValue} — 4 semaines`,
-            sport: sportValue,
-            level: LEVEL_TO_DB[level],
-            weeks_count: 4,
-            sessions_per_week: trainingDays.length,
-            is_public: false,
-            template,
-          })
-          .select("id")
-          .single();
-        if (program?.id) {
-          await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
-          await fetch(`/api/programs/${program.id}/assign`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthleteId }),
-          });
-          localStorage.setItem("program_start_date", getNextMonday());
-        }
+        await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
+        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId } });
+        if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
     }
   }
