@@ -1,11 +1,21 @@
 import type { ProgramTemplate, WeekTemplate, SessionTemplate, ProgramLevel, ProgramFocus, SessionLoad, SessionType } from "@/types";
 
-const LOAD_PATTERNS: Record<number, number[]> = {
-  4:  [2, 3, 3, 1],
-  6:  [2, 3, 2, 3, 3, 1],
-  8:  [2, 3, 2, 3, 3, 3, 2, 1],
-  12: [2, 3, 2, 3, 3, 2, 3, 3, 3, 2, 3, 1],
+// Périodisation par blocs de 4 semaines (MEV → Surcharge → MRV → Deload, terminologie RP) —
+// remplace l'ancienne LOAD_PATTERNS (courbe plate indexée par durée totale, aucune notion de
+// bloc). `duration` doit désormais être un multiple de 4 pour que chaque bloc soit complet.
+// Phase 0=MEV / 1=Surcharge / 2=MRV / 3=Deload.
+const PHASE_LOAD: SessionLoad[] = [1, 2, 3, 1];
+const SHAPE_OFFSETS: Record<"volume" | "intensity" | "taper", number[]> = {
+  volume:    [-1, 0, 2, -3], // accumulation régulière — objectif "volume" et repli par défaut
+  intensity: [-2, 1, 3, -3], // ramp plus marqué — objectif "intensité"
+  taper:     [-1, 0, 2, -4], // dernier bloc d'un objectif "compétition" — deload final plus profond
 };
+function shapeForCycle(focus: ProgramFocus, cycleIndex: number, isLastCycle: boolean): "volume" | "intensity" | "taper" {
+  if (focus === "intensite") return "intensity";
+  if (focus === "competition") return isLastCycle ? "taper" : "volume";
+  if (focus === "mixte") return cycleIndex % 2 === 0 ? "volume" : "intensity";
+  return "volume"; // volume, technique, combat, autre — accumulation par défaut
+}
 
 const FOCUS_DIST: Record<string, SessionType[]> = {
   mixte:      ["technique", "volume", "intensite", "volume", "recuperation", "intensite", "volume"],
@@ -22,6 +32,18 @@ const LEVEL_BASE_DIFF: Record<ProgramLevel, number> = {
   intermediaire: 6,
   avance: 7,
   elite: 8,
+};
+
+// Écart de difficulté par type de séance, relatif à la difficulté de base de la semaine —
+// avant ce correctif, target_difficulty était identique pour toutes les séances d'une même
+// semaine quel que soit leur type (une "Récupération" affichait la même jauge qu'une "Séance
+// intensive" le même cycle).
+const TYPE_DIFF_OFFSET: Record<SessionType, number> = {
+  recuperation: -2,
+  technique: -1,
+  volume: 0,
+  intensite: 1,
+  test: 1,
 };
 
 const SESSION_NAMES: Record<SessionType, string[]> = {
@@ -458,12 +480,15 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   },
 };
 
-function buildNotes(category: SportCategory, type: SessionType, weekLoad: SessionLoad, weekIdx: number): string {
+function buildNotes(category: SportCategory, type: SessionType, weekIdx: number): string {
+  // Nombre d'exercices toujours constant (rotation de la banque, jamais tronquée) — seule la
+  // difficulté (target_difficulty) varie selon la phase et le type de séance, pas le volume
+  // d'exercices listés. La vraie notion de volume (sets/reps) et d'intensité (%) n'est pas
+  // modélisée ici, seul le curseur de difficulté 1-10 l'est.
   const bank = EXERCISES[category][type];
   const offset = (weekIdx * 2) % bank.length;
   const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
-  const count = weekLoad === 1 ? Math.min(3, rotated.length) : rotated.length;
-  return rotated.slice(0, count).join("\n");
+  return rotated.join("\n");
 }
 
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {
@@ -477,46 +502,54 @@ export async function POST(req: Request) {
     sport: string;
     level: ProgramLevel;
     days: string[];
-    duration: 4 | 6 | 8 | 12;
+    duration: 4 | 8 | 12;
     focus: ProgramFocus;
   };
 
-  if (!level || !days?.length || !duration || !focus) {
-    return Response.json({ error: "Paramètres manquants" }, { status: 400 });
+  if (!level || !days?.length || !duration || !focus || duration % 4 !== 0) {
+    return Response.json({ error: "Paramètres manquants ou durée invalide (multiple de 4 semaines requis)" }, { status: 400 });
   }
 
   const category = getSportCategory(sport ?? "");
-  const pattern = LOAD_PATTERNS[duration] ?? LOAD_PATTERNS[6];
   const focusDist = FOCUS_DIST[focus] ?? FOCUS_DIST.autre;
   const baseDiff = LEVEL_BASE_DIFF[level] ?? 6;
-  const totalWeeks = duration;
+  const mesocycles = duration / 4;
 
   const weeks: WeekTemplate[] = [];
 
-  for (let w = 0; w < totalWeeks; w++) {
-    const weekLoad = pattern[w] as SessionLoad;
-    const diffOffset = weekLoad === 3 ? 1 : weekLoad === 1 ? -1 : 0;
-    const weekDiff = Math.max(1, Math.min(10, baseDiff + diffOffset));
+  for (let c = 0; c < mesocycles; c++) {
+    const cycleBase = baseDiff + c; // progressive overload d'un bloc de 4 semaines à l'autre
+    const isLastCycle = c === mesocycles - 1;
+    const offsets = SHAPE_OFFSETS[shapeForCycle(focus, c, isLastCycle)];
 
-    const week: WeekTemplate = {};
+    for (let phase = 0; phase < 4; phase++) {
+      const w = c * 4 + phase; // index de semaine global (0-based)
+      const isMrvWeek = phase === 2;
+      const weekDiff = Math.max(1, Math.min(10, cycleBase + offsets[phase]));
+      const weekLoad = PHASE_LOAD[phase];
 
-    days.forEach((day, dayIdx) => {
-      const isLastSession = w === totalWeeks - 1 && dayIdx === days.length - 1;
-      const typeIdx = (w * days.length + dayIdx) % focusDist.length;
-      const type: SessionType = isLastSession ? "test" : focusDist[typeIdx];
+      const week: WeekTemplate = {};
 
-      const session: SessionTemplate = {
-        name: sessionName(type, w, dayIdx),
-        notes: buildNotes(category, type, weekLoad, w),
-        target_difficulty: weekDiff,
-        load: weekLoad,
-        type,
-      };
+      days.forEach((day, dayIdx) => {
+        const isLastDayOfWeek = dayIdx === days.length - 1;
+        const forceTest = isMrvWeek && isLastDayOfWeek; // chaque semaine MRV se termine par un test, pas seulement la toute dernière séance du programme
+        const typeIdx = (w * days.length + dayIdx) % focusDist.length;
+        const type: SessionType = forceTest ? "test" : focusDist[typeIdx];
 
-      week[day] = [session];
-    });
+        const target_difficulty = Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));
+        const session: SessionTemplate = {
+          name: sessionName(type, w, dayIdx),
+          notes: buildNotes(category, type, w),
+          target_difficulty,
+          load: weekLoad,
+          type,
+        };
 
-    weeks.push(week);
+        week[day] = [session];
+      });
+
+      weeks.push(week);
+    }
   }
 
   const template: ProgramTemplate = { weeks };

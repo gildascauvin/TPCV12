@@ -21,3 +21,6 @@ tsconfig.tsbuildinfo
 # misc
 .DS_Store
 *.pem
+
+# backups one-off scripts
+scripts/library-templates-backup-*.json

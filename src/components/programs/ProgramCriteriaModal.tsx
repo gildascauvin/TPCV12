@@ -20,14 +20,16 @@ const LEVELS: { value: ProgramLevel; label: string; sub: string; icon: string }[
   { value: "elite", label: "Élite", sub: "Compétiteur", icon: "🏆" },
 ];
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const DURATIONS = [4, 6, 8, 12] as const;
+// Toujours un multiple de 4 semaines — aligné sur les blocs de périodisation
+// MEV/Surcharge/MRV/Deload du générateur (voir generate/route.ts).
+const DURATIONS = [4, 8, 12] as const;
 
 export interface ProgramMeta {
   sport: string;
   level: ProgramLevel;
   focus: ProgramFocus;
   days: string[];
-  duration: 4 | 6 | 8 | 12;
+  duration: 4 | 8 | 12;
 }
 
 interface Props {
@@ -40,7 +42,7 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
   const [focus, setFocus] = useState<ProgramFocus | "">("");
   const [level, setLevel] = useState<ProgramLevel | "">("");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
-  const [duration, setDuration] = useState<4 | 6 | 8 | 12>(6);
+  const [duration, setDuration] = useState<4 | 8 | 12>(8);
   const [loading, setLoading] = useState(false);
 
   function toggleDay(d: string) {
