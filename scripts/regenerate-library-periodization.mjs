@@ -54,7 +54,7 @@ const PRESCRIPTION_SHAPE = {
 const DEFAULT_INTENSITY_PCT = 75;
 
 function parseExercise(raw) {
-  const base = { name: raw, mode: "static", baseSets: 0, baseQty: 0, unit: "", baseIntensityPct: null, suffix: "" };
+  const base = { name: raw, mode: "static", baseSets: 0, baseQty: 0, unit: "", wordUnit: false, baseIntensityPct: null, suffix: "" };
 
   const intensityPrefix = /^(.+?)\s+à\s+(\d+)%\+?(?:\s+\S+)?\s*—\s*(.+)$/;
   const mIntensity = raw.match(intensityPrefix);
@@ -64,37 +64,54 @@ function parseExercise(raw) {
   if (!rest) return base;
 
   let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", baseIntensityPct: intensityPct, suffix: m[4].trim() };
+  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct, suffix: m[4].trim() };
 
   m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", baseIntensityPct: null, suffix: m[3].trim() };
+  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[3].trim() };
 
   m = rest.match(/^(\d+)\s*(reps?|tours?|séries?|rounds?)\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: 1, baseQty: +m[1], unit: m[2].replace(/s$/, ""), baseIntensityPct: intensityPct, suffix: m[3].trim() };
+  if (m) return { name, mode: "load", baseSets: 1, baseQty: +m[1], unit: m[2].replace(/s$/, ""), wordUnit: true, baseIntensityPct: intensityPct, suffix: m[3].trim() };
 
   m = rest.match(/^(\d+)\s*min\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "min", baseIntensityPct: null, suffix: m[2].trim() };
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[2].trim() };
 
   m = rest.match(/^(\d+)\s*m\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "m", baseIntensityPct: null, suffix: m[2].trim() };
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "m", wordUnit: false, baseIntensityPct: null, suffix: m[2].trim() };
 
   return base;
+}
+
+function roundTo5(n) {
+  return Math.round(n / 5) * 5;
+}
+
+function pluralize(word, n) {
+  return n === 1 ? word : `${word}s`;
 }
 
 function formatPrescription(spec, shape, phase) {
   if (spec.mode === "static") return spec.name;
   const mult = PRESCRIPTION_SHAPE[shape];
   const sets = Math.max(1, Math.round(spec.baseSets * mult.sets[phase]));
-  const qty = Math.max(1, Math.round(spec.baseQty * mult.qty[phase]));
+
+  // Durées/distances (min/s/m) arrondies au multiple de 5 — reps/tours/séries restent de
+  // petits entiers naturels (un arrondi à 5 dénaturerait "5×3" en "5×5").
+  const rawQty = spec.baseQty * mult.qty[phase];
+  const isDurationLike = spec.mode === "duration" || spec.unit === "s" || spec.unit === "m";
+  const qty = isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
   const suffix = spec.suffix ? ` ${spec.suffix}` : "";
 
   if (spec.mode === "duration") {
-    const core = sets > 1 ? `${sets}×${qty}${spec.unit === "min" ? " min" : spec.unit}` : `${qty}${spec.unit === "min" ? " min" : spec.unit}`;
+    const unitLabel = spec.unit === "min" ? " min" : spec.unit;
+    const core = sets > 1 ? `${sets}×${qty}${unitLabel}` : `${qty}${unitLabel}`;
     return `${spec.name} — ${core}${suffix}`;
   }
 
-  const core = `${sets}×${qty}${spec.unit}`;
-  const pct = Math.max(40, Math.min(100, (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase]));
+  const core = spec.wordUnit
+    ? `${qty} ${pluralize(spec.unit, qty)}`
+    : sets > 1 ? `${sets}×${qty}${spec.unit}` : `${qty}${spec.unit}`;
+  const rawPct = (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase];
+  const pct = Math.max(40, Math.min(100, roundTo5(rawPct)));
   return `${spec.name} — ${core}@${pct}%${suffix}`;
 }
 
@@ -248,11 +265,28 @@ function generateTemplate({ sport, level, days, duration }) {
       const weekLoad = PHASE_LOAD[phase];
       const week = {};
 
-      days.forEach((day, dayIdx) => {
+      // Phase A — type de chaque jour (days déjà trié calendairement par l'appelant, voir main())
+      const dayPlans = days.map((day, dayIdx) => {
         const isLastDayOfWeek = dayIdx === days.length - 1;
-        const forceTest = isMrvWeek && isLastDayOfWeek;
+        const forced = isMrvWeek && isLastDayOfWeek;
         const typeIdx = (c * days.length + dayIdx) % focusDist.length; // ancré sur le bloc, pas la semaine globale — voir generate/route.ts
-        const type = forceTest ? "test" : focusDist[typeIdx];
+        const type = forced ? "test" : focusDist[typeIdx];
+        return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
+      });
+
+      // Phase B — jamais deux jours calendairement consécutifs tous les deux en intensité/test
+      const HARD = ["intensite", "test"];
+      for (let i = 1; i < dayPlans.length; i++) {
+        const prev = dayPlans[i - 1];
+        const cur = dayPlans[i];
+        if (cur.calIdx - prev.calIdx !== 1) continue;
+        if (!HARD.includes(prev.type) || !HARD.includes(cur.type)) continue;
+        if (cur.forced) prev.type = "recuperation";
+        else cur.type = "recuperation";
+      }
+
+      // Phase C — construire les séances
+      dayPlans.forEach(({ day, dayIdx, type }) => {
         const target_difficulty = type === "recuperation"
           ? Math.max(1, Math.min(3, weekDiff - 3))
           : Math.max(1, Math.min(10, weekDiff + TYPE_DIFF_OFFSET[type]));

@@ -37,7 +37,8 @@ interface ParsedExercise {
   mode: "load" | "duration" | "static";
   baseSets: number;
   baseQty: number;
-  unit: string; // "" (reps), "min", "s", "m", "tour", "série", "round"
+  unit: string; // "" (reps), "min", "s", "m" (unités collées : "45s") ou "tour"/"série"/"round" (mots, espace + pluriel à l'affichage)
+  wordUnit: boolean; // true pour tour/série/round — affichage "4 tours" et non "4tour" ni "1×4tour"
   baseIntensityPct: number | null;
   suffix: string; // texte accessoire préservé tel quel (ex. "(récup 90s)", "par jambe")
 }
@@ -46,7 +47,7 @@ interface ParsedExercise {
 // à l'écriture, donc plusieurs variantes coexistent) — repli sur "static" (texte inchangé,
 // jamais reformaté) si aucun ne correspond, plutôt que de forcer un résultat probablement faux.
 function parseExercise(raw: string): ParsedExercise {
-  const base = { name: raw, mode: "static" as const, baseSets: 0, baseQty: 0, unit: "", baseIntensityPct: null, suffix: "" };
+  const base = { name: raw, mode: "static" as const, baseSets: 0, baseQty: 0, unit: "", wordUnit: false, baseIntensityPct: null, suffix: "" };
 
   const intensityPrefix = /^(.+?)\s+à\s+(\d+)%\+?(?:\s+\S+)?\s*—\s*(.+)$/;
   const mIntensity = raw.match(intensityPrefix);
@@ -57,41 +58,61 @@ function parseExercise(raw: string): ParsedExercise {
 
   // "5×5" / "3×45s" / "6×20m" — sets × qty avec unité optionnelle collée
   let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", baseIntensityPct: intensityPct, suffix: m[4].trim() };
+  if (m) return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct, suffix: m[4].trim() };
 
   // "6×3 min" — sets × durée en minutes
   m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", baseIntensityPct: null, suffix: m[3].trim() };
+  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[3].trim() };
 
-  // "8 reps" / "4 tours" / "5 séries" / "8 rounds"
+  // "8 reps" / "4 tours" / "5 séries" / "8 rounds" — mot, pas d'unité collée, pas de vrai "sets"
   m = rest.match(/^(\d+)\s*(reps?|tours?|séries?|rounds?)\b(.*)$/);
-  if (m) return { name, mode: "load", baseSets: 1, baseQty: +m[1], unit: m[2].replace(/s$/, ""), baseIntensityPct: intensityPct, suffix: m[3].trim() };
+  if (m) return { name, mode: "load", baseSets: 1, baseQty: +m[1], unit: m[2].replace(/s$/, ""), wordUnit: true, baseIntensityPct: intensityPct, suffix: m[3].trim() };
 
   // "20 min" — durée seule
   m = rest.match(/^(\d+)\s*min\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "min", baseIntensityPct: null, suffix: m[2].trim() };
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[2].trim() };
 
   // "1000m" / "50m" — distance seule, pas de série
   m = rest.match(/^(\d+)\s*m\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "m", baseIntensityPct: null, suffix: m[2].trim() };
+  if (m) return { name, mode: "duration", baseSets: 1, baseQty: +m[1], unit: "m", wordUnit: false, baseIntensityPct: null, suffix: m[2].trim() };
 
   return base; // plages ("50-80 min"), pyramides, formats composés — laissés statiques
+}
+
+function roundTo5(n: number): number {
+  return Math.round(n / 5) * 5;
+}
+
+function pluralize(word: string, n: number): string {
+  return n === 1 ? word : `${word}s`;
 }
 
 function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): string {
   if (spec.mode === "static") return spec.name;
   const mult = PRESCRIPTION_SHAPE[shape];
   const sets = Math.max(1, Math.round(spec.baseSets * mult.sets[phase]));
-  const qty = Math.max(1, Math.round(spec.baseQty * mult.qty[phase]));
+
+  // Durées/distances (min/s/m) arrondies au multiple de 5 le plus proche ("20 min", "25m",
+  // jamais "22m" ou "32s") — les reps/tours/séries restent de petits entiers naturels, un
+  // arrondi à 5 les dénaturerait (5×3 ne doit jamais devenir 5×5).
+  const rawQty = spec.baseQty * mult.qty[phase];
+  const isDurationLike = spec.mode === "duration" || spec.unit === "s" || spec.unit === "m";
+  const qty = isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
   const suffix = spec.suffix ? ` ${spec.suffix}` : "";
 
   if (spec.mode === "duration") {
-    const core = sets > 1 ? `${sets}×${qty}${spec.unit === "min" ? " min" : spec.unit}` : `${qty}${spec.unit === "min" ? " min" : spec.unit}`;
+    const unitLabel = spec.unit === "min" ? " min" : spec.unit;
+    const core = sets > 1 ? `${sets}×${qty}${unitLabel}` : `${qty}${unitLabel}`;
     return `${spec.name} — ${core}${suffix}`;
   }
 
-  const core = `${sets}×${qty}${spec.unit}`;
-  const pct = Math.max(40, Math.min(100, (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase]));
+  // mode === "load" — "tour"/"série"/"round" sont des mots (espace + pluriel, pas de "N×"
+  // artificiel : "4 tours", jamais "1×4tour") ; "s"/"m"/"" restent collés à la valeur ("3×45s").
+  const core = spec.wordUnit
+    ? `${qty} ${pluralize(spec.unit, qty)}`
+    : sets > 1 ? `${sets}×${qty}${spec.unit}` : `${qty}${spec.unit}`;
+  const rawPct = (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase];
+  const pct = Math.max(40, Math.min(100, roundTo5(rawPct)));
   return `${spec.name} — ${core}@${pct}%${suffix}`;
 }
 
@@ -104,6 +125,8 @@ const FOCUS_DIST: Record<string, SessionType[]> = {
   combat:     ["technique", "volume", "intensite", "technique", "recuperation", "intensite", "volume"],
   autre:      ["technique", "volume", "intensite", "volume", "recuperation", "intensite", "volume"],
 };
+
+const DAY_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 const LEVEL_BASE_DIFF: Record<ProgramLevel, number> = {
   debutant: 5,
@@ -597,6 +620,9 @@ export async function POST(req: Request) {
   const focusDist = FOCUS_DIST[focus] ?? FOCUS_DIST.autre;
   const baseDiff = LEVEL_BASE_DIFF[level] ?? 6;
   const mesocycles = duration / 4;
+  // Tri calendaire — nécessaire pour détecter des jours réellement consécutifs (ex. Lun+Mar)
+  // plutôt que des jours simplement proches dans le tableau soumis par l'appelant.
+  const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
 
   const weeks: WeekTemplate[] = [];
 
@@ -614,16 +640,32 @@ export async function POST(req: Request) {
 
       const week: WeekTemplate = {};
 
-      days.forEach((day, dayIdx) => {
-        const isLastDayOfWeek = dayIdx === days.length - 1;
-        const forceTest = isMrvWeek && isLastDayOfWeek; // chaque semaine MRV se termine par un test, pas seulement la toute dernière séance du programme
-        // Ancré sur le bloc (c), pas la semaine globale (w) — un jour donné (ex. "Lundi") garde
-        // le même type de séance sur les 4 semaines du bloc, seule sa prescription progresse.
-        // Avant ce fix, "Lundi" pouvait être volume en S1 puis intensité en S2 : les exercices
-        // semblaient changer de façon incohérente alors que c'était le type lui-même qui changeait.
-        const typeIdx = (c * days.length + dayIdx) % focusDist.length;
-        const type: SessionType = forceTest ? "test" : focusDist[typeIdx];
+      // Phase A — type de chaque jour (rotation ancrée sur le bloc + test forcé). Avant ce fix,
+      // "Lundi" pouvait être volume en S1 puis intensité en S2 : les exercices semblaient changer
+      // de façon incohérente alors que c'était le type lui-même qui changeait sous la rotation.
+      const dayPlans = sortedDays.map((day, dayIdx) => {
+        const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
+        const forced = isMrvWeek && isLastDayOfWeek; // chaque semaine MRV se termine par un test, pas seulement la toute dernière séance du programme
+        const typeIdx = (c * sortedDays.length + dayIdx) % focusDist.length;
+        const type: SessionType = forced ? "test" : focusDist[typeIdx];
+        return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced };
+      });
 
+      // Phase B — jamais deux jours calendairement consécutifs (aucun jour de repos entre les
+      // deux) tous les deux en intensité/test. Ne rétrograde jamais un test forcé (fin de semaine
+      // MRV, delibéré) — rétrograde l'autre jour de la paire à la place.
+      const HARD: SessionType[] = ["intensite", "test"];
+      for (let i = 1; i < dayPlans.length; i++) {
+        const prev = dayPlans[i - 1];
+        const cur = dayPlans[i];
+        if (cur.calIdx - prev.calIdx !== 1) continue; // pas réellement consécutifs (repos entre les deux)
+        if (!HARD.includes(prev.type) || !HARD.includes(cur.type)) continue;
+        if (cur.forced) prev.type = "recuperation";
+        else cur.type = "recuperation";
+      }
+
+      // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
+      dayPlans.forEach(({ day, dayIdx, type }) => {
         // Plafond absolu pour "récupération" (pas juste un décalage relatif) : sinon une semaine
         // MRV à charge de base 10 laisse quand même une "Récupération active" à 8/10 — plus basse
         // que le reste de la semaine, mais pas du tout "légère" pour qui regarde juste la jauge.
