@@ -157,8 +157,13 @@ const SESSION_NAMES = {
 // catégories distinctes depuis la correction du 2026-08-03 (avant, mélangées sous "halterophilie").
 function getSportCategory(sport) {
   const s = (sport ?? "").toLowerCase();
+  // Musculation/Hypertrophie (split par groupe musculaire) ≠ Powerlifting — "musculation" avait
+  // le même sort que "power"/"force" avant ce fix (mélangés dans le "muscu" détecté comme
+  // powerlifting), donnant des séances Focus Squat/Bench/Deadlift à des programmes génériques de
+  // musculation/hypertrophie. "hypertroph" ne collisionne avec aucun autre mot-clé.
+  if (s.includes("hypertroph")) return "musculation";
   if (s.includes("halt") || s.includes("olympique") || s.includes("snatch") || s.includes("arraché")) return "halterophilie";
-  if (s.includes("power") || s.includes("force") || s.includes("muscu")) return "powerlifting";
+  if (s.includes("power") || s.includes("force")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
   if (s.includes("fitness") || s.includes("cross") || s.includes("condition") || s.includes("forme") || s.includes("wod")) return "fitness";
@@ -186,6 +191,13 @@ const EXERCISES = {
     intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
     recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
+  },
+  musculation: {
+    technique: ["Squat gobelet technique — 4×8", "Rowing haltère un bras focus posture — 4×8 par côté", "Développé incliné technique — 4×8", "Mobilité épaules et hanches — 10 min"],
+    volume: ["Squat — 4×10", "Tirage horizontal — 4×10", "Développé couché — 4×10", "Développé militaire — 3×12", "Curl biceps barre — 3×12"],
+    intensite: ["Presse à cuisses lourde — 4×6", "Tractions lestées — 4×6", "Développé couché lourd — 4×6", "Extension triceps poulie lourde — 3×8"],
+    recuperation: ["Vélo ou marche légère — 20 min", "Stretching global — 15 min", "Foam rolling dos et jambes", "Respiration et mobilité active"],
+    test: ["Test : squat 5RM", "Test : développé couché 5RM", "Test : tractions strictes max", "Tour de taille / mensurations"],
   },
   sprint: {
     technique: ["Drills : montées de genoux — 4×30m", "Talons-fesses — 4×30m", "Foulées bondissantes — 4×30m", "Skipping A/B/C — 3×20m chaque", "Gamme complète sprint — 3 séries"],
@@ -403,12 +415,33 @@ function selectCollectif(n) {
   return Array.from({ length: n }, (_, i) => COLLECTIF_BASE[i % COLLECTIF_BASE.length]);
 }
 
+const MUSCU_JAMBES = { name: "Jambes", type: "volume", exercises: [
+  "Squat — 4×8@70%", "Presse à cuisses — 3×12@65%", "Leg curl — 3×12@60%", "Mollets debout — 3×15@60%",
+]};
+const MUSCU_DOS = { name: "Dos", type: "volume", exercises: [
+  "Tirage horizontal — 4×8@70%", "Tirage vertical — 3×12@65%", "Curl biceps barre — 3×12@60%", "Curl marteau — 3×12@60%",
+]};
+const MUSCU_PECTORAUX = { name: "Pectoraux", type: "volume", exercises: [
+  "Développé couché — 4×8@70%", "Développé incliné haltères — 3×10@65%", "Écarté couché — 3×12@60%", "Dips — 3×10@60%",
+]};
+const MUSCU_EPAULES = { name: "Épaules", type: "volume", exercises: [
+  "Développé militaire — 4×8@70%", "Élévations latérales — 3×15@55%", "Oiseau — 3×15@55%", "Shrugs — 3×12@65%",
+]};
+const MUSCU_BRAS = { name: "Bras", type: "volume", exercises: [
+  "Développé prise serrée — 4×8@70%", "Extension triceps poulie — 3×12@60%", "Curl barre — 3×12@60%", "Curl marteau — 3×12@60%",
+]};
+const MUSCU_BASE = [MUSCU_JAMBES, MUSCU_DOS, MUSCU_PECTORAUX, MUSCU_EPAULES, MUSCU_BRAS];
+function selectMusculation(n) {
+  return Array.from({ length: n }, (_, i) => MUSCU_BASE[i % MUSCU_BASE.length]);
+}
+
 const SPORT_CURRICULUM = {
   endurance: selectEndurance,
   sprint: selectSprint,
   halterophilie: selectHalterophilie,
   powerlifting: selectPowerlifting,
   collectif: selectCollectif,
+  musculation: selectMusculation,
 };
 
 function sessionName(type, weekIdx, dayIdx) {
