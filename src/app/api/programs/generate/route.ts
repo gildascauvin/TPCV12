@@ -1408,28 +1408,48 @@ interface Archetype {
 
 // ---- Endurance : priorité décroissante, on prend les N premiers selon le nombre de jours,
 // on boucle si N dépasse la liste (rare, 6 archétypes couvrent déjà une grosse semaine).
-const ENDURANCE_ARCHETYPES: Archetype[] = [
-  { name: "Endurance fondamentale", type: "volume", exercises: [
-    "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
-  ]},
-  { name: "Seuil", type: "intensite", exercises: [
-    "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
-  ]},
-  { name: "Sortie longue", type: "volume", exercises: [
-    "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
-  ]},
-  { name: "Fractionné", type: "intensite", exercises: [
-    "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
-  ]},
-  { name: "Renfo", type: "technique", exercises: [
-    "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
-  ]},
-  { name: "Récupération active", type: "recuperation", exercises: [
-    "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
-  ]},
-];
+// "Renfo" en fin de séance plutôt qu'en archétype dédié : à la fréquence typique de ces
+// programmes (3-4 jours/semaine, cf. pages WordPress), un archétype dédié en position 5/6 sur 6
+// n'apparaît quasiment jamais (la liste tronque avant de l'atteindre) — le circuit de renfo
+// n'était donc en pratique jamais vu. Appendu aux 2 dernières lignes d'"Endurance fondamentale"
+// (position 0, apparaît systématiquement quel que soit le nombre de jours) pour garantir au
+// moins une fois par semaine, sans consommer un jour d'entraînement dédié.
+// Renfo : dédié à partir de 4 jours/semaine (assez de place pour un jour à part), appendu en fin
+// de séance "Endurance fondamentale" en dessous (≤3 jours) — règle donnée explicitement par
+// Gildas plutôt que le premier essai (archétype dédié en position 5/6, qui n'apparaissait
+// quasiment jamais aux fréquences réelles de ces programmes, 3-4 jours/semaine).
+const ENDURANCE_FONDAMENTALE: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [
+  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+]};
+const ENDURANCE_FONDAMENTALE_RENFO: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [
+  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s",
+]};
+const ENDURANCE_SEUIL: Archetype = { name: "Seuil", type: "intensite", exercises: [
+  "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
+]};
+const ENDURANCE_SORTIE_LONGUE: Archetype = { name: "Sortie longue", type: "volume", exercises: [
+  "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
+]};
+const ENDURANCE_FRACTIONNE: Archetype = { name: "Fractionné", type: "intensite", exercises: [
+  "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
+]};
+const ENDURANCE_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
+]};
+const ENDURANCE_RECUPERATION: Archetype = { name: "Récupération active", type: "recuperation", exercises: [
+  "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
+]};
+const ENDURANCE_LOW_FREQ: Archetype[] = [ENDURANCE_FONDAMENTALE_RENFO, ENDURANCE_SEUIL, ENDURANCE_SORTIE_LONGUE];
+// Renfo positionné à l'index 3 (pas 4) — la sélection par cycle modulo (Array.from({length:n}))
+// ne dépasse jamais l'index n-1 : dans un premier essai avec Renfo en position 4 d'une liste de
+// 6, il n'apparaissait donc JAMAIS pour n=4 (exactement le seuil "dédié" annoncé), le cycle
+// s'arrêtant à l'index 3 avant de l'atteindre — bug trouvé en vérifiant directement les
+// templates régénérés en base, pas juste en supposant que le code faisait ce qui était voulu.
+const ENDURANCE_HIGH_FREQ: Archetype[] = [ENDURANCE_FONDAMENTALE, ENDURANCE_SEUIL, ENDURANCE_SORTIE_LONGUE, ENDURANCE_RENFO, ENDURANCE_FRACTIONNE, ENDURANCE_RECUPERATION];
 function selectEndurance(n: number): Archetype[] {
-  return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
+  const list = n <= 3 ? ENDURANCE_LOW_FREQ : ENDURANCE_HIGH_FREQ;
+  return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
 // ---- Sprint : priorité explicite — Accélération, Vitesse max et Renfo ("gym") sont les 3
@@ -1773,33 +1793,57 @@ const TRI_NATATION: Archetype = { name: "Natation", type: "volume", exercises: [
 const TRI_VELO: Archetype = { name: "Vélo", type: "volume", exercises: [
   "Sortie vélo endurance Z2 — 60-90 min", "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)",
 ]};
+// 2 versions de "Course à pied" : avec renfo appendu (≤4 jours — les 4 slots Natation/Vélo/Course/
+// Brick sont déjà tous pris par le squelette documenté sur la page WordPress, pas de place pour
+// un 5e archétype dédié sans sacrifier une discipline) et sans (≥5 jours, où un vrai jour Renfo
+// devient possible). Seuil différent de la règle générale (≤3/≥4) donnée par Gildas car le
+// triathlon a déjà 4 slots "core" occupés — adaptation délibérée, pas un oubli de la règle.
 const TRI_COURSE: Archetype = { name: "Course à pied", type: "volume", exercises: [
   "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+]};
+const TRI_COURSE_RENFO: Archetype = { name: "Course à pied", type: "volume", exercises: [
+  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+  "Renforcement général : squat + gainage + tirage — 3×10",
 ]};
 const TRI_BRICK: Archetype = { name: "Brick (vélo + course)", type: "intensite", exercises: [
   "Brick : vélo 30 min + course 15 min enchaînés",
 ]};
-const TRI_PRIORITY: Archetype[] = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK];
+const TRI_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement général : squat + gainage + tirage — 3×10", "Gainage complet — 3×40s",
+]};
+const TRI_LOW_FREQ: Archetype[] = [TRI_NATATION, TRI_VELO, TRI_COURSE_RENFO, TRI_BRICK];
+const TRI_HIGH_FREQ: Archetype[] = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK, TRI_RENFO];
 function selectTriathlon(n: number): Archetype[] {
-  return Array.from({ length: n }, (_, i) => TRI_PRIORITY[i % TRI_PRIORITY.length]);
+  const list = n <= 4 ? TRI_LOW_FREQ : TRI_HIGH_FREQ;
+  return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
-// ---- Calisthenics : tractions priorisées (double poids dans la rotation, même mécanisme que
-// COLLECTIF_BASE pour "au moins 2 technique/semaine") — demande explicite "plus de tractions et
-// du sans poids", jamais de charge externe dans les banques d'exercices.
-const CALI_TRACTIONS: Archetype = { name: "Tractions", type: "volume", exercises: [
-  "Tractions strictes — 5×6", "Tirage vertical progression (bande ou négatives) — 5×4", "Tractions explosives (vers barre haute) — 4×4",
+// ---- Calisthenics : reconstruit sur les 3 patterns fondamentaux explicitement cités par la
+// page WordPress ("Pousser, tirer, porter — les patterns fondamentaux qui rendaient les athlètes
+// antiques extraordinaires") plutôt qu'un doublage artificiel de Tractions (1er essai — provoquait
+// des remplacements par la Phase B dès que Lundi+Mardi étaient calendairement consécutifs,
+// "Tractions x2" collisionnant avec elle-même). Gainage intégré à CHAQUE séance ("le gainage est
+// intégré à chaque séance car c'est la base de toutes les progressions avancées"), plus de séance
+// "Gainage" à part. Pas de 4e archétype "Skill" séparé : le seul programme réel de la bibliothèque
+// tourne à 3 jours/semaine (Lun/Mer/Sam), donc un 4e archétype en position 3 d'une liste de 4
+// n'aurait jamais été atteint par la sélection modulo (même bug de fond que le seuil renfo
+// endurance ci-dessus) — la promesse "prémices du muscle-up" de la page WordPress n'aurait jamais
+// été tenue par le programme réellement livré. Muscle-up/tractions lestées repliés dans Tirer et
+// dips en anneau dans Pousser à la place : présents dans CHAQUE programme quelle que soit la
+// fréquence, cohérent avec "la progression repose sur 3 leviers" appliqués aux 3 patterns de base,
+// pas sur une 4e catégorie de séance. Les 3 leviers (répétitions/repos/variations plus difficiles)
+// sont de toute façon déjà portés par le mécanisme de prescription dynamique existant
+// (PRESCRIPTION_SHAPE), pas besoin d'un mécanisme séparé.
+const CALI_TIRER: Archetype = { name: "Tirer", type: "volume", exercises: [
+  "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 4×3", "Gainage en suspension (hollow body) — 3×20s",
 ]};
-const CALI_POUSSEE: Archetype = { name: "Poussée", type: "volume", exercises: [
-  "Dips — 5×8", "Pompes archer (unilatérales) — 4×6 par côté", "Pompes plyométriques (décollé) — 4×6",
+const CALI_POUSSER: Archetype = { name: "Pousser", type: "volume", exercises: [
+  "Dips — 5×8", "Dips en anneau (progression) — 4×6", "Pompes archer (unilatérales) — 4×6 par côté", "Gainage : planche — 3×30s",
 ]};
-const CALI_CORE: Archetype = { name: "Gainage avancé", type: "technique", exercises: [
-  "Alignement gainage en suspension (hollow body) — 4×20s", "Squat pistol assisté — 3×6 par jambe",
+const CALI_PORTER: Archetype = { name: "Porter", type: "technique", exercises: [
+  "L-sit ou tuck-sit tenu — 4×15-20s", "Squat pistol assisté — 3×6 par jambe", "Gainage latéral — 3×25s par côté",
 ]};
-const CALI_SKILL: Archetype = { name: "Skills", type: "intensite", exercises: [
-  "Muscle-up ou progression muscle-up — 5×3", "Front lever tenu (progression) — 4×10s",
-]};
-const CALI_PRIORITY: Archetype[] = [CALI_TRACTIONS, CALI_TRACTIONS, CALI_POUSSEE, CALI_CORE, CALI_SKILL];
+const CALI_PRIORITY: Archetype[] = [CALI_TIRER, CALI_POUSSER, CALI_PORTER];
 function selectCalisthenics(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => CALI_PRIORITY[i % CALI_PRIORITY.length]);
 }
@@ -1827,26 +1871,43 @@ function selectGymnastique(n: number): Archetype[] {
 // la distance cible), avec les jours et durées de sortie longue donnés par les pages WordPress
 // respectives (10k : 35→55 min ; semi : 35-50 min Z2, sortie longue 50-100 min ; marathon :
 // 40-60 min Z2, sortie longue 70-150 min, 5 séances/semaine).
-function buildDistanceEnduranceArchetypes(bank: Record<SessionType, string[]>): Archetype[] {
-  return [
-    { name: "Endurance fondamentale", type: "volume", exercises: bank.volume.slice(0, 1) }, // index 0 : Zone 2 quotidien
+// Même règle que la catégorie "endurance" générique : Renfo dédié à partir de 4 jours/semaine,
+// appendu en fin de séance "Endurance fondamentale" en dessous (≤3 jours, la fréquence typique
+// de ces programmes selon les pages WordPress : 4 séances/semaine pour 10k/semi, 5 pour marathon
+// — donc la plupart des sélections utilisateur réelles restent sous le seuil "dédié").
+const DISTANCE_RENFO_LINES = ["Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s"];
+// Le squelette WordPress de ces programmes (10k/semi : Zone2/Seuil/Récup/Sortie longue, 4
+// séances ; marathon : +1 Zone2 plus long) occupe déjà 4 slots sans laisser de place pour un 5e
+// archétype Renfo dédié tant qu'on veut rester fidèle à ce squelette documenté — même contrainte
+// structurelle que le triathlon (4 slots "core" déjà pris). Seuil aligné sur celui du triathlon :
+// Renfo appendu à "Endurance fondamentale" pour n≤4, dédié seulement à partir de n≥5 (où il
+// devient reachable par le cycle modulo sans écarter une des 4 séances du squelette WP).
+function buildDistanceEnduranceArchetypes(bank: Record<SessionType, string[]>, n: number): Archetype[] {
+  const fondamentale: Archetype = n <= 4
+    ? { name: "Endurance fondamentale", type: "volume", exercises: [...bank.volume.slice(0, 1), ...DISTANCE_RENFO_LINES] }
+    : { name: "Endurance fondamentale", type: "volume", exercises: bank.volume.slice(0, 1) };
+  const list: Archetype[] = [
+    fondamentale,
     { name: "Seuil", type: "intensite", exercises: bank.intensite.slice(2, 4) },
-    { name: "Sortie longue", type: "volume", exercises: bank.volume.slice(1, 2) }, // index 1 : la longue, distincte du Z2 quotidien
-    { name: "Fractionné", type: "intensite", exercises: bank.intensite.slice(0, 2) },
-    { name: "Renfo", type: "technique", exercises: bank.technique.slice(2, 4) },
     { name: "Récupération active", type: "recuperation", exercises: bank.recuperation },
+    { name: "Sortie longue", type: "volume", exercises: bank.volume.slice(1, 2) }, // index 1 : la longue, distincte du Z2 quotidien
   ];
+  if (n > 4) {
+    list.push({ name: "Renfo", type: "technique", exercises: DISTANCE_RENFO_LINES });
+    list.push({ name: "Fractionné", type: "intensite", exercises: bank.intensite.slice(0, 2) });
+  }
+  return list;
 }
 function selectEndurance10k(n: number): Archetype[] {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_10k);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_10k, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 function selectEnduranceSemi(n: number): Archetype[] {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_semi);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_semi, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 function selectEnduranceMarathon(n: number): Archetype[] {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_marathon);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_marathon, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 

@@ -486,28 +486,33 @@ function buildNotes(category, type, cycleIndex, shape, phase) {
 // Curriculum sportif — voir generate/route.ts pour le raisonnement détaillé de chaque règle.
 // ====================================================================================
 
-const ENDURANCE_ARCHETYPES = [
-  { name: "Endurance fondamentale", type: "volume", exercises: [
-    "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
-  ]},
-  { name: "Seuil", type: "intensite", exercises: [
-    "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
-  ]},
-  { name: "Sortie longue", type: "volume", exercises: [
-    "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
-  ]},
-  { name: "Fractionné", type: "intensite", exercises: [
-    "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
-  ]},
-  { name: "Renfo", type: "technique", exercises: [
-    "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
-  ]},
-  { name: "Récupération active", type: "recuperation", exercises: [
-    "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
-  ]},
-];
+const ENDURANCE_FONDAMENTALE = { name: "Endurance fondamentale", type: "volume", exercises: [
+  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+]};
+const ENDURANCE_FONDAMENTALE_RENFO = { name: "Endurance fondamentale", type: "volume", exercises: [
+  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s",
+]};
+const ENDURANCE_SEUIL = { name: "Seuil", type: "intensite", exercises: [
+  "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
+]};
+const ENDURANCE_SORTIE_LONGUE = { name: "Sortie longue", type: "volume", exercises: [
+  "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
+]};
+const ENDURANCE_FRACTIONNE = { name: "Fractionné", type: "intensite", exercises: [
+  "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
+]};
+const ENDURANCE_RENFO = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
+]};
+const ENDURANCE_RECUPERATION = { name: "Récupération active", type: "recuperation", exercises: [
+  "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
+]};
+const ENDURANCE_LOW_FREQ = [ENDURANCE_FONDAMENTALE_RENFO, ENDURANCE_SEUIL, ENDURANCE_SORTIE_LONGUE];
+const ENDURANCE_HIGH_FREQ = [ENDURANCE_FONDAMENTALE, ENDURANCE_SEUIL, ENDURANCE_SORTIE_LONGUE, ENDURANCE_RENFO, ENDURANCE_FRACTIONNE, ENDURANCE_RECUPERATION];
 function selectEndurance(n) {
-  return Array.from({ length: n }, (_, i) => ENDURANCE_ARCHETYPES[i % ENDURANCE_ARCHETYPES.length]);
+  const list = n <= 3 ? ENDURANCE_LOW_FREQ : ENDURANCE_HIGH_FREQ;
+  return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
 const SPRINT_ACCELERATION = { name: "Accélération", type: "intensite", exercises: [
@@ -781,30 +786,38 @@ const TRI_VELO = { name: "Vélo", type: "volume", exercises: [
 const TRI_COURSE = { name: "Course à pied", type: "volume", exercises: [
   "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
 ]};
+const TRI_COURSE_RENFO = { name: "Course à pied", type: "volume", exercises: [
+  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+  "Renforcement général : squat + gainage + tirage — 3×10",
+]};
 const TRI_BRICK = { name: "Brick (vélo + course)", type: "intensite", exercises: [
   "Brick : vélo 30 min + course 15 min enchaînés",
 ]};
-const TRI_PRIORITY = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK];
+const TRI_RENFO = { name: "Renfo", type: "technique", exercises: [
+  "Renforcement général : squat + gainage + tirage — 3×10", "Gainage complet — 3×40s",
+]};
+const TRI_LOW_FREQ = [TRI_NATATION, TRI_VELO, TRI_COURSE_RENFO, TRI_BRICK];
+const TRI_HIGH_FREQ = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK, TRI_RENFO];
 function selectTriathlon(n) {
-  return Array.from({ length: n }, (_, i) => TRI_PRIORITY[i % TRI_PRIORITY.length]);
+  const list = n <= 4 ? TRI_LOW_FREQ : TRI_HIGH_FREQ;
+  return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
-// ---- Calisthenics : tractions priorisées (double poids dans la rotation, même mécanisme que
-// COLLECTIF_BASE pour "au moins 2 technique/semaine") — demande explicite "plus de tractions et
-// du sans poids", jamais de charge externe dans les banques d'exercices.
-const CALI_TRACTIONS = { name: "Tractions", type: "volume", exercises: [
-  "Tractions strictes — 5×6", "Tirage vertical progression (bande ou négatives) — 5×4", "Tractions explosives (vers barre haute) — 4×4",
+// ---- Calisthenics : 3 patterns fondamentaux (Pousser/Tirer/Porter, page WordPress), gainage
+// intégré à chaque séance. Pas de 4e archétype "Skill" — voir generate/route.ts pour le
+// raisonnement complet (le seul programme réel de la bibliothèque est à 3 jours/semaine, un 4e
+// archétype n'y serait jamais atteint par la sélection modulo). Muscle-up/tractions lestées
+// repliés dans Tirer, dips en anneau dans Pousser.
+const CALI_TIRER = { name: "Tirer", type: "volume", exercises: [
+  "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 4×3", "Gainage en suspension (hollow body) — 3×20s",
 ]};
-const CALI_POUSSEE = { name: "Poussée", type: "volume", exercises: [
-  "Dips — 5×8", "Pompes archer (unilatérales) — 4×6 par côté", "Pompes plyométriques (décollé) — 4×6",
+const CALI_POUSSER = { name: "Pousser", type: "volume", exercises: [
+  "Dips — 5×8", "Dips en anneau (progression) — 4×6", "Pompes archer (unilatérales) — 4×6 par côté", "Gainage : planche — 3×30s",
 ]};
-const CALI_CORE = { name: "Gainage avancé", type: "technique", exercises: [
-  "Alignement gainage en suspension (hollow body) — 4×20s", "Squat pistol assisté — 3×6 par jambe",
+const CALI_PORTER = { name: "Porter", type: "technique", exercises: [
+  "L-sit ou tuck-sit tenu — 4×15-20s", "Squat pistol assisté — 3×6 par jambe", "Gainage latéral — 3×25s par côté",
 ]};
-const CALI_SKILL = { name: "Skills", type: "intensite", exercises: [
-  "Muscle-up ou progression muscle-up — 5×3", "Front lever tenu (progression) — 4×10s",
-]};
-const CALI_PRIORITY = [CALI_TRACTIONS, CALI_TRACTIONS, CALI_POUSSEE, CALI_CORE, CALI_SKILL];
+const CALI_PRIORITY = [CALI_TIRER, CALI_POUSSER, CALI_PORTER];
 function selectCalisthenics(n) {
   return Array.from({ length: n }, (_, i) => CALI_PRIORITY[i % CALI_PRIORITY.length]);
 }
@@ -832,26 +845,33 @@ function selectGymnastique(n) {
 // la distance cible), avec les jours et durées de sortie longue donnés par les pages WordPress
 // respectives (10k : 35→55 min ; semi : 35-50 min Z2, sortie longue 50-100 min ; marathon :
 // 40-60 min Z2, sortie longue 70-150 min, 5 séances/semaine).
-function buildDistanceEnduranceArchetypes(bank) {
-  return [
-    { name: "Endurance fondamentale", type: "volume", exercises: bank.volume.slice(0, 1) }, // index 0 : Zone 2 quotidien
+const DISTANCE_RENFO_LINES = ["Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s"];
+function buildDistanceEnduranceArchetypes(bank, n) {
+  const fondamentale = n <= 4
+    ? { name: "Endurance fondamentale", type: "volume", exercises: [...bank.volume.slice(0, 1), ...DISTANCE_RENFO_LINES] }
+    : { name: "Endurance fondamentale", type: "volume", exercises: bank.volume.slice(0, 1) };
+  const list = [
+    fondamentale,
     { name: "Seuil", type: "intensite", exercises: bank.intensite.slice(2, 4) },
-    { name: "Sortie longue", type: "volume", exercises: bank.volume.slice(1, 2) }, // index 1 : la longue, distincte du Z2 quotidien
-    { name: "Fractionné", type: "intensite", exercises: bank.intensite.slice(0, 2) },
-    { name: "Renfo", type: "technique", exercises: bank.technique.slice(2, 4) },
     { name: "Récupération active", type: "recuperation", exercises: bank.recuperation },
+    { name: "Sortie longue", type: "volume", exercises: bank.volume.slice(1, 2) },
   ];
+  if (n > 4) {
+    list.push({ name: "Renfo", type: "technique", exercises: DISTANCE_RENFO_LINES });
+    list.push({ name: "Fractionné", type: "intensite", exercises: bank.intensite.slice(0, 2) });
+  }
+  return list;
 }
 function selectEndurance10k(n) {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_10k);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_10k, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 function selectEnduranceSemi(n) {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_semi);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_semi, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 function selectEnduranceMarathon(n) {
-  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_marathon);
+  const list = buildDistanceEnduranceArchetypes(EXERCISES.endurance_marathon, n);
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
