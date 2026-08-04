@@ -186,7 +186,7 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
   test:        ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
-type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "combat" | "fitness" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
+type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "combat" | "fitness" | "hyrox" | "collectif" | "endurance" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "autre";
 
 function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
@@ -214,6 +214,9 @@ function getSportCategory(sport: string): SportCategory {
   if (s.includes("power") || s.includes("force")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
+  // Hyrox : format de course spécifique (8km course + 8 stations) — vérifié AVANT le générique
+  // "fitness" (le sport-field "Fitness/Hyrox" contient les deux mots-clés).
+  if (s.includes("hyrox")) return "hyrox";
   if (s.includes("fitness") || s.includes("cross") || s.includes("condition") || s.includes("forme") || s.includes("wod")) return "fitness";
   if (s.includes("collectif") || s.includes("foot") || s.includes("basket") || s.includes("rugby") || s.includes("handball") || s.includes("volley")) return "collectif";
   if (s.includes("nata") || s.includes("aqua") || s.includes("swim")) return "natation";
@@ -476,6 +479,37 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Benchmark WOD : Cindy (AMRAP 20 min : 5 tractions + 10 pompes + 15 squats)",
       "Benchmark WOD : Murph (1 mile course + 100 tractions + 200 pompes + 300 squats + 1 mile course)",
       "Benchmark WOD : Grace (30 épaulé-jeté for time)",
+    ],
+  },
+
+  hyrox: {
+    technique: [
+      "Technique sled push/pull — 4×15m",
+      "Technique wall balls — 4×15",
+      "Technique burpee broad jump — 4×10m",
+      "Mobilité hanches et chevilles — 10 min",
+    ],
+    volume: [
+      "Endurance fondamentale course — 40 min",
+      "Circuit stations légères : sled + wall balls + farmers carry — 3 tours",
+      "Rameur continu — 20 min",
+    ],
+    intensite: [
+      "SkiErg — 5×500m (récup 90s)",
+      "Fractionné course 1km — 5 reps (récup 3 min)",
+      "Circuit stations intense : sled + burpees + lunges — 4 tours",
+    ],
+    recuperation: [
+      "Marche active — 25 min",
+      "Stretching global — 15 min",
+      "Mobilité chevilles et hanches — 10 min",
+      "Foam rolling jambes",
+    ],
+    test: [
+      "Simulation Hyrox complète : 8km course + 8 stations",
+      "Test : 1km course chronométré",
+      "Test : sled push 50m chronométré",
+      "Bilan forme physique",
     ],
   },
 
@@ -1064,6 +1098,30 @@ function selectCombat(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => COMBAT_PRIORITY[i % COMBAT_PRIORITY.length]);
 }
 
+// ---- Hyrox : distinct de "fitness"/CrossFit générique — format de course fixe (8km course + 8
+// stations : SkiErg, sled push/pull, burpee broad jumps, row, farmers carry, sandbag lunges,
+// wall balls). 4 jours demandés explicitement : 2 cardio (course + machines, pour varier les
+// modalités et couvrir 2 des 8 stations directement), 1 renfo spécifique aux stations, 1
+// simulation de course. "Renfo Stations" classé "volume" (pas "intensite", travail de stations à
+// effort géré, pas un 1RM) pour éviter que Cardio Machines et Renfo soient tous les deux au
+// palier dur et adjacents dans la rotation.
+const HYROX_CARDIO_COURSE: Archetype = { name: "Cardio Course", type: "volume", exercises: [
+  "Endurance fondamentale course — 40 min", "Fractionné 1km allure course — 5×1km (récup 3 min)",
+]};
+const HYROX_CARDIO_MACHINES: Archetype = { name: "Cardio Machines", type: "intensite", exercises: [
+  "SkiErg — 5×500m (récup 90s)", "Rameur — 5×500m (récup 90s)",
+]};
+const HYROX_RENFO_STATIONS: Archetype = { name: "Renfo Stations", type: "volume", exercises: [
+  "Sled push — 4×20m", "Sled pull — 4×20m", "Farmers carry — 4×50m", "Wall balls — 4×20", "Burpee broad jumps — 4×15m",
+]};
+const HYROX_SIMULATION: Archetype = { name: "Simulation de course", type: "test", exercises: [
+  "Simulation Hyrox : 1km course + 1 station (rotation) — 4 tours", "Simulation Hyrox courte : 2×(1km course + wall balls + sled push)",
+]};
+const HYROX_PRIORITY: Archetype[] = [HYROX_CARDIO_COURSE, HYROX_CARDIO_MACHINES, HYROX_RENFO_STATIONS, HYROX_SIMULATION];
+function selectHyrox(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => HYROX_PRIORITY[i % HYROX_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Archetype[]>> = {
   endurance: selectEndurance,
   sprint: selectSprint,
@@ -1078,6 +1136,7 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
   puissance: selectPuissanceExplosivite,
   perte_de_poids: selectPertePoids,
   fitness: selectFitness,
+  hyrox: selectHyrox,
   combat: selectCombat,
 };
 

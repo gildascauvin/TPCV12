@@ -172,6 +172,7 @@ function getSportCategory(sport) {
   if (s.includes("power") || s.includes("force")) return "powerlifting";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé") || s.includes("saut")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
+  if (s.includes("hyrox")) return "hyrox";
   if (s.includes("fitness") || s.includes("cross") || s.includes("condition") || s.includes("forme") || s.includes("wod")) return "fitness";
   if (s.includes("collectif") || s.includes("foot") || s.includes("basket") || s.includes("rugby") || s.includes("handball") || s.includes("volley")) return "collectif";
   if (s.includes("nata") || s.includes("aqua") || s.includes("swim")) return "natation";
@@ -267,6 +268,13 @@ const EXERCISES = {
     intensite: ["AMRAP 15 min : 5 tractions + 10 pompes + 15 squats", "Tabata : burpees + kettlebell swings — 8 rounds", "Complex barbell : épaulé + squat + militaire — 5 séries", "Sprints rowing ou vélo : 6×250m effort max"],
     recuperation: ["Vélo ou marche légère — 20 min", "Stretching global — 15 min", "Foam rolling dos et jambes", "Respiration et mobilité active"],
     test: ["Benchmark WOD : Fran (21-15-9 thrusters + tractions, for time)", "Benchmark WOD : Cindy (AMRAP 20 min : 5 tractions + 10 pompes + 15 squats)", "Benchmark WOD : Murph (1 mile course + 100 tractions + 200 pompes + 300 squats + 1 mile course)", "Benchmark WOD : Grace (30 épaulé-jeté for time)"],
+  },
+  hyrox: {
+    technique: ["Technique sled push/pull — 4×15m", "Technique wall balls — 4×15", "Technique burpee broad jump — 4×10m", "Mobilité hanches et chevilles — 10 min"],
+    volume: ["Endurance fondamentale course — 40 min", "Circuit stations légères : sled + wall balls + farmers carry — 3 tours", "Rameur continu — 20 min"],
+    intensite: ["SkiErg — 5×500m (récup 90s)", "Fractionné course 1km — 5 reps (récup 3 min)", "Circuit stations intense : sled + burpees + lunges — 4 tours"],
+    recuperation: ["Marche active — 25 min", "Stretching global — 15 min", "Mobilité chevilles et hanches — 10 min", "Foam rolling jambes"],
+    test: ["Simulation Hyrox complète : 8km course + 8 stations", "Test : 1km course chronométré", "Test : sled push 50m chronométré", "Bilan forme physique"],
   },
   collectif: {
     technique: ["Exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Travail défensif en situation réduite", "Prise d'information et placement — 15 min"],
@@ -569,6 +577,23 @@ function selectCombat(n) {
   return Array.from({ length: n }, (_, i) => COMBAT_PRIORITY[i % COMBAT_PRIORITY.length]);
 }
 
+const HYROX_CARDIO_COURSE = { name: "Cardio Course", type: "volume", exercises: [
+  "Endurance fondamentale course — 40 min", "Fractionné 1km allure course — 5×1km (récup 3 min)",
+]};
+const HYROX_CARDIO_MACHINES = { name: "Cardio Machines", type: "intensite", exercises: [
+  "SkiErg — 5×500m (récup 90s)", "Rameur — 5×500m (récup 90s)",
+]};
+const HYROX_RENFO_STATIONS = { name: "Renfo Stations", type: "volume", exercises: [
+  "Sled push — 4×20m", "Sled pull — 4×20m", "Farmers carry — 4×50m", "Wall balls — 4×20", "Burpee broad jumps — 4×15m",
+]};
+const HYROX_SIMULATION = { name: "Simulation de course", type: "test", exercises: [
+  "Simulation Hyrox : 1km course + 1 station (rotation) — 4 tours", "Simulation Hyrox courte : 2×(1km course + wall balls + sled push)",
+]};
+const HYROX_PRIORITY = [HYROX_CARDIO_COURSE, HYROX_CARDIO_MACHINES, HYROX_RENFO_STATIONS, HYROX_SIMULATION];
+function selectHyrox(n) {
+  return Array.from({ length: n }, (_, i) => HYROX_PRIORITY[i % HYROX_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM = {
   endurance: selectEndurance,
   sprint: selectSprint,
@@ -583,6 +608,7 @@ const SPORT_CURRICULUM = {
   puissance: selectPuissanceExplosivite,
   perte_de_poids: selectPertePoids,
   fitness: selectFitness,
+  hyrox: selectHyrox,
   combat: selectCombat,
 };
 
