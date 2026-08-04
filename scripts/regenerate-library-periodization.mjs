@@ -803,11 +803,10 @@ function selectTriathlon(n) {
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
-// ---- Calisthenics : 3 patterns fondamentaux (Pousser/Tirer/Porter, page WordPress), gainage
-// intégré à chaque séance. Pas de 4e archétype "Skill" — voir generate/route.ts pour le
-// raisonnement complet (le seul programme réel de la bibliothèque est à 3 jours/semaine, un 4e
-// archétype n'y serait jamais atteint par la sélection modulo). Muscle-up/tractions lestées
-// repliés dans Tirer, dips en anneau dans Pousser.
+// ---- Calisthenics : 4 archétypes — la page WP promet explicitement "4 séances/sem", pas
+// seulement les 3 patterns Pousser/Tirer/Porter cités dans le texte. Voir generate/route.ts pour
+// le raisonnement complet (Skill/muscle-up est le 4e archétype voulu, réellement atteint une fois
+// le champ `days` du programme bibliothèque corrigé à 4 jours). Gainage intégré à chaque séance.
 const CALI_TIRER = { name: "Tirer", type: "volume", exercises: [
   "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 4×3", "Gainage en suspension (hollow body) — 3×20s",
 ]};
@@ -817,7 +816,10 @@ const CALI_POUSSER = { name: "Pousser", type: "volume", exercises: [
 const CALI_PORTER = { name: "Porter", type: "technique", exercises: [
   "L-sit ou tuck-sit tenu — 4×15-20s", "Squat pistol assisté — 3×6 par jambe", "Gainage latéral — 3×25s par côté",
 ]};
-const CALI_PRIORITY = [CALI_TIRER, CALI_POUSSER, CALI_PORTER];
+const CALI_SKILL = { name: "Skill", type: "intensite", exercises: [
+  "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 5×3", "Front lever tenu (progression) — 4×10s", "Gainage complet — 3×30s",
+]};
+const CALI_PRIORITY = [CALI_TIRER, CALI_POUSSER, CALI_PORTER, CALI_SKILL];
 function selectCalisthenics(n) {
   return Array.from({ length: n }, (_, i) => CALI_PRIORITY[i % CALI_PRIORITY.length]);
 }

@@ -1818,22 +1818,23 @@ function selectTriathlon(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
 
-// ---- Calisthenics : reconstruit sur les 3 patterns fondamentaux explicitement cités par la
-// page WordPress ("Pousser, tirer, porter — les patterns fondamentaux qui rendaient les athlètes
-// antiques extraordinaires") plutôt qu'un doublage artificiel de Tractions (1er essai — provoquait
-// des remplacements par la Phase B dès que Lundi+Mardi étaient calendairement consécutifs,
-// "Tractions x2" collisionnant avec elle-même). Gainage intégré à CHAQUE séance ("le gainage est
-// intégré à chaque séance car c'est la base de toutes les progressions avancées"), plus de séance
-// "Gainage" à part. Pas de 4e archétype "Skill" séparé : le seul programme réel de la bibliothèque
-// tourne à 3 jours/semaine (Lun/Mer/Sam), donc un 4e archétype en position 3 d'une liste de 4
-// n'aurait jamais été atteint par la sélection modulo (même bug de fond que le seuil renfo
-// endurance ci-dessus) — la promesse "prémices du muscle-up" de la page WordPress n'aurait jamais
-// été tenue par le programme réellement livré. Muscle-up/tractions lestées repliés dans Tirer et
-// dips en anneau dans Pousser à la place : présents dans CHAQUE programme quelle que soit la
-// fréquence, cohérent avec "la progression repose sur 3 leviers" appliqués aux 3 patterns de base,
-// pas sur une 4e catégorie de séance. Les 3 leviers (répétitions/repos/variations plus difficiles)
-// sont de toute façon déjà portés par le mécanisme de prescription dynamique existant
-// (PRESCRIPTION_SHAPE), pas besoin d'un mécanisme séparé.
+// ---- Calisthenics : 4 archétypes, correspondant exactement à la page WordPress — badge "4
+// séances/sem" + stat "4 Séances par semaine" EXPLICITES, en plus des 3 patterns fondamentaux
+// cités dans le texte ("Pousser, tirer, porter — les patterns fondamentaux") et de la progression
+// muscle-up mise en avant dans une FAQ dédiée ("Peut-on apprendre le muscle-up en 8 semaines ?").
+// Skill (muscle-up/front lever) est donc bien le 4e archétype voulu, pas un ajout arbitraire.
+// Gainage intégré à CHAQUE séance ("le gainage est la base de toutes les progressions avancées"),
+// jamais de séance "Gainage" à part. Pas de doublage artificiel de Tractions (1er essai —
+// provoquait des remplacements Phase B dès que Lundi+Mardi étaient calendairement consécutifs).
+// Muscle-up/tractions lestées gardés dans Tirer AUSSI (pas seulement Skill) : garantit une trace
+// de la progression muscle-up même pour un utilisateur in-app qui choisirait moins de 4 jours,
+// où Skill (position 3 d'une liste de 4) ne serait pas atteint par la sélection modulo.
+// ATTENTION reachability : Skill n'est réellement affiché que si le programme utilise bien 4 jours
+// (ou plus) — voir le fix du jeu de données ci-dessous, le vrai bug n'était pas dans cette liste
+// mais dans le champ `days` du programme "Calisthenics — Tractions et Force 8 Semaines" en base
+// (3 jours, Lun/Mer/Sam, alors que la page WP en promet 4) : un précédent essai avait supprimé
+// Skill au lieu de corriger `days`, sur la base d'une hypothèse fausse (le nombre de jours en base
+// faisait foi) jamais vérifiée contre la page WordPress elle-même — trouvé par Gildas.
 const CALI_TIRER: Archetype = { name: "Tirer", type: "volume", exercises: [
   "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 4×3", "Gainage en suspension (hollow body) — 3×20s",
 ]};
@@ -1843,7 +1844,10 @@ const CALI_POUSSER: Archetype = { name: "Pousser", type: "volume", exercises: [
 const CALI_PORTER: Archetype = { name: "Porter", type: "technique", exercises: [
   "L-sit ou tuck-sit tenu — 4×15-20s", "Squat pistol assisté — 3×6 par jambe", "Gainage latéral — 3×25s par côté",
 ]};
-const CALI_PRIORITY: Archetype[] = [CALI_TIRER, CALI_POUSSER, CALI_PORTER];
+const CALI_SKILL: Archetype = { name: "Skill", type: "intensite", exercises: [
+  "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 5×3", "Front lever tenu (progression) — 4×10s", "Gainage complet — 3×30s",
+]};
+const CALI_PRIORITY: Archetype[] = [CALI_TIRER, CALI_POUSSER, CALI_PORTER, CALI_SKILL];
 function selectCalisthenics(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => CALI_PRIORITY[i % CALI_PRIORITY.length]);
 }
