@@ -472,10 +472,10 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Respiration et mobilité active",
     ],
     test: [
-      "Test : max tractions strictes",
-      "Test : squat 5RM",
-      "Benchmark WOD",
-      "VO2max indirect : test de Cooper",
+      "Benchmark WOD : Fran (21-15-9 thrusters + tractions, for time)",
+      "Benchmark WOD : Cindy (AMRAP 20 min : 5 tractions + 10 pompes + 15 squats)",
+      "Benchmark WOD : Murph (1 mile course + 100 tractions + 200 pompes + 300 squats + 1 mile course)",
+      "Benchmark WOD : Grace (30 épaulé-jeté for time)",
     ],
   },
 
@@ -1014,6 +1014,56 @@ function selectPertePoids(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => PDP_PRIORITY[i % PDP_PRIORITY.length]);
 }
 
+// ---- Fitness/CrossFit : un seul curriculum unifié (pas de split), priorité décroissante Force >
+// Metcon/WOD > Gymnastique/Skill > Monostructural. Ordre interne à chaque séance (hors
+// Monostructural, pur cardio) : force/skill en ouverture (fraîcheur), WOD/metcon en fin de
+// séance (fatigue accumulée volontaire, comme un vrai cours CrossFit) — chaque archétype est
+// donc un mini-format hybride, pas des jours "100% force" vs "100% metcon" séparés. Le "benchmark
+// WOD" (Fran/Cindy/Murph/Grace) n'est pas un archétype à part — c'est le test forcé de fin de
+// semaine MRV (voir EXERCISES.fitness.test), même mécanisme que le test forcé partout ailleurs.
+const FITNESS_FORCE: Archetype = { name: "Force", type: "intensite", exercises: [
+  "Back squat — 5×5@75%", "Développé militaire — 4×5@70%", "WOD finisher : 10-8-6-4-2 burpees + kettlebell swings",
+]};
+const FITNESS_METCON: Archetype = { name: "Metcon / WOD", type: "intensite", exercises: [
+  "Gammes + activation — 10 min", "WOD For Time : 21-15-9 thrusters + tractions", "AMRAP 15 min : 5 pompes + 10 squats + 15 mountain climbers",
+]};
+const FITNESS_GYMNASTIQUE: Archetype = { name: "Gymnastique / Skill", type: "technique", exercises: [
+  "Muscle-up progression : négatives + tirage — 5×3", "Handstand hold contre mur — 4×20s", "EMOM 10 min : 5 tractions strictes + 10 pompes",
+]};
+const FITNESS_MONOSTRUCTURAL: Archetype = { name: "Monostructural", type: "volume", exercises: [
+  "Rameur continu — 30 min endurance", "Bike ou course fractionné — 10×1 min effort / 1 min récup",
+]};
+const FITNESS_PRIORITY: Archetype[] = [FITNESS_FORCE, FITNESS_METCON, FITNESS_GYMNASTIQUE, FITNESS_MONOSTRUCTURAL];
+function selectFitness(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => FITNESS_PRIORITY[i % FITNESS_PRIORITY.length]);
+}
+
+// ---- Arts martiaux & combat : un seul curriculum unifié (pas de split par famille striking/
+// grappling/mixte), priorité décroissante Technique > Sparring/Randori > Conditionnement > Force
+// & Explosivité. Ordre interne à chaque séance de Sparring : technique/échauffement d'abord (la
+// précision demande de la fraîcheur), sparring ensuite. Pas de plafond de fréquence sur le
+// sparring (contrairement au deadlift powerlifting) — la fréquence suit naturellement le nombre
+// de jours choisis (2 à 5/semaine en pratique), pas de contrainte artificielle à coder.
+const COMBAT_TECHNIQUE: Archetype = { name: "Technique", type: "technique", exercises: [
+  "Shadow boxing technique — 4×3 min", "Enchaînements techniques au sac — 5×3 min", "Travail au sol / projections technique (partenaire) — 20 min",
+]};
+const COMBAT_SPARRING: Archetype = { name: "Sparring / Randori", type: "intensite", exercises: [
+  "Échauffement technique — 10 min", "Sparring / randori — 5×3 min (récup 1 min)", "Retour au calme + mobilité — 10 min",
+]};
+const COMBAT_CONDITIONNEMENT: Archetype = { name: "Conditionnement", type: "intensite", exercises: [
+  "HIIT corde à sauter — 10×30s effort / 30s récup", "Circuit combat : sac + pompes + squats — 4 tours", "Sprints courts — 6×20m",
+]};
+// "volume" (pas "intensite") — force/explosivité générale (pas un lift de compétition, cf.
+// convention MUSCU_* de la catégorie musculation) : évite aussi que 3 des 4 archétypes combat
+// soient tous "durs" (voir sprint plus haut pour le bug que ça cause si adjacents).
+const COMBAT_FORCE: Archetype = { name: "Force & Explosivité", type: "volume", exercises: [
+  "Développé couché — 4×5@75%", "Squat ou fentes sautées — 4×6", "Médecine ball throws (puissance) — 4×8",
+]};
+const COMBAT_PRIORITY: Archetype[] = [COMBAT_TECHNIQUE, COMBAT_SPARRING, COMBAT_CONDITIONNEMENT, COMBAT_FORCE];
+function selectCombat(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => COMBAT_PRIORITY[i % COMBAT_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Archetype[]>> = {
   endurance: selectEndurance,
   sprint: selectSprint,
@@ -1027,6 +1077,8 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
   musculation: selectMusculation,
   puissance: selectPuissanceExplosivite,
   perte_de_poids: selectPertePoids,
+  fitness: selectFitness,
+  combat: selectCombat,
 };
 
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {

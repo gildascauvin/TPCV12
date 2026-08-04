@@ -266,7 +266,7 @@ const EXERCISES = {
     volume: ["Back squat — 4×10", "Développé couché — 4×10", "Tractions lestées — 4×8", "Fentes marchées — 3×12", "Ab wheel ou planche — 3×45s"],
     intensite: ["AMRAP 15 min : 5 tractions + 10 pompes + 15 squats", "Tabata : burpees + kettlebell swings — 8 rounds", "Complex barbell : épaulé + squat + militaire — 5 séries", "Sprints rowing ou vélo : 6×250m effort max"],
     recuperation: ["Vélo ou marche légère — 20 min", "Stretching global — 15 min", "Foam rolling dos et jambes", "Respiration et mobilité active"],
-    test: ["Test : max tractions strictes", "Test : squat 5RM", "Benchmark WOD", "VO2max indirect : test de Cooper"],
+    test: ["Benchmark WOD : Fran (21-15-9 thrusters + tractions, for time)", "Benchmark WOD : Cindy (AMRAP 20 min : 5 tractions + 10 pompes + 15 squats)", "Benchmark WOD : Murph (1 mile course + 100 tractions + 200 pompes + 300 squats + 1 mile course)", "Benchmark WOD : Grace (30 épaulé-jeté for time)"],
   },
   collectif: {
     technique: ["Exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Travail défensif en situation réduite", "Prise d'information et placement — 15 min"],
@@ -535,6 +535,40 @@ function selectPertePoids(n) {
   return Array.from({ length: n }, (_, i) => PDP_PRIORITY[i % PDP_PRIORITY.length]);
 }
 
+const FITNESS_FORCE = { name: "Force", type: "intensite", exercises: [
+  "Back squat — 5×5@75%", "Développé militaire — 4×5@70%", "WOD finisher : 10-8-6-4-2 burpees + kettlebell swings",
+]};
+const FITNESS_METCON = { name: "Metcon / WOD", type: "intensite", exercises: [
+  "Gammes + activation — 10 min", "WOD For Time : 21-15-9 thrusters + tractions", "AMRAP 15 min : 5 pompes + 10 squats + 15 mountain climbers",
+]};
+const FITNESS_GYMNASTIQUE = { name: "Gymnastique / Skill", type: "technique", exercises: [
+  "Muscle-up progression : négatives + tirage — 5×3", "Handstand hold contre mur — 4×20s", "EMOM 10 min : 5 tractions strictes + 10 pompes",
+]};
+const FITNESS_MONOSTRUCTURAL = { name: "Monostructural", type: "volume", exercises: [
+  "Rameur continu — 30 min endurance", "Bike ou course fractionné — 10×1 min effort / 1 min récup",
+]};
+const FITNESS_PRIORITY = [FITNESS_FORCE, FITNESS_METCON, FITNESS_GYMNASTIQUE, FITNESS_MONOSTRUCTURAL];
+function selectFitness(n) {
+  return Array.from({ length: n }, (_, i) => FITNESS_PRIORITY[i % FITNESS_PRIORITY.length]);
+}
+
+const COMBAT_TECHNIQUE = { name: "Technique", type: "technique", exercises: [
+  "Shadow boxing technique — 4×3 min", "Enchaînements techniques au sac — 5×3 min", "Travail au sol / projections technique (partenaire) — 20 min",
+]};
+const COMBAT_SPARRING = { name: "Sparring / Randori", type: "intensite", exercises: [
+  "Échauffement technique — 10 min", "Sparring / randori — 5×3 min (récup 1 min)", "Retour au calme + mobilité — 10 min",
+]};
+const COMBAT_CONDITIONNEMENT = { name: "Conditionnement", type: "intensite", exercises: [
+  "HIIT corde à sauter — 10×30s effort / 30s récup", "Circuit combat : sac + pompes + squats — 4 tours", "Sprints courts — 6×20m",
+]};
+const COMBAT_FORCE = { name: "Force & Explosivité", type: "volume", exercises: [
+  "Développé couché — 4×5@75%", "Squat ou fentes sautées — 4×6", "Médecine ball throws (puissance) — 4×8",
+]};
+const COMBAT_PRIORITY = [COMBAT_TECHNIQUE, COMBAT_SPARRING, COMBAT_CONDITIONNEMENT, COMBAT_FORCE];
+function selectCombat(n) {
+  return Array.from({ length: n }, (_, i) => COMBAT_PRIORITY[i % COMBAT_PRIORITY.length]);
+}
+
 const SPORT_CURRICULUM = {
   endurance: selectEndurance,
   sprint: selectSprint,
@@ -548,6 +582,8 @@ const SPORT_CURRICULUM = {
   musculation: selectMusculation,
   puissance: selectPuissanceExplosivite,
   perte_de_poids: selectPertePoids,
+  fitness: selectFitness,
+  combat: selectCombat,
 };
 
 function sessionName(type, weekIdx, dayIdx) {
