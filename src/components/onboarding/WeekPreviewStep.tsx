@@ -9,7 +9,7 @@ import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { CoachCard, attention } from "@/components/coach/CoachAthleteCard";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import type { ProgramTemplate, CoachAthlete, CoachViewSession } from "@/types";
+import type { ProgramTemplate, ProgramFocus, CoachAthlete, CoachViewSession } from "@/types";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -104,10 +104,15 @@ interface FetchedProgram {
   template: ProgramTemplate;
 }
 
+const LEVEL_TO_DB: Record<Level, string> = { beginner: "debutant", intermediate: "intermediaire", elite: "elite" };
+const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"]; // même convention que generateAndAssignProgram() dans OnboardingFlow.tsx (index = JS getDay())
+
 interface Props {
   sport: string;
   level: Level;
   trainingDays: number[];
+  focus?: ProgramFocus;
+  weaknesses?: string[];
   programFlow?: boolean;
   role: Role;
   goalLower: string;
@@ -116,10 +121,11 @@ interface Props {
   onNext: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
+  const [generatedTemplate, setGeneratedTemplate] = useState<ProgramTemplate | null>(null);
 
   useEffect(() => {
     if (!programFlow) return;
@@ -132,8 +138,36 @@ export default function WeekPreviewStep({ sport, level, trainingDays, programFlo
       });
   }, [programFlow]);
 
-  // When we have the real program template, use its week 1 sessions
-  const week1 = fetchedProgram?.template?.weeks?.[0] ?? null;
+  // Chemin classique (pas de programme claimé) : aperçu généré par le VRAI générateur
+  // (/api/programs/generate, pur/déterministe) avec les choix réels déjà faits par l'utilisateur —
+  // remplace l'ancien aperçu générique getSessionTemplates() qui ne reflétait pas sport/faiblesses/
+  // objectif du bloc, trouvé en décalage par Gildas après le portage de ces champs dans l'onboarding
+  // (2026-08-05). Même appel que generateAndAssignProgram() : le programme réellement créé plus
+  // tard dans le flow sera donc identique à cet aperçu.
+  useEffect(() => {
+    if (programFlow) return;
+    if (!trainingDays.length) return;
+    const dayStrings = trainingDays.map(d => DOW_NAMES[d]).filter(Boolean);
+    if (!dayStrings.length) return;
+    let cancelled = false;
+    fetch("/api/programs/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [] }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { template: ProgramTemplate } | null) => {
+        if (!cancelled && data?.template) setGeneratedTemplate(data.template);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programFlow, sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses)]);
+
+  // When we have the real program template (claimed OU généré en direct), use its week 1 sessions
+  const week1 = programFlow
+    ? (fetchedProgram?.template?.weeks?.[0] ?? null)
+    : (generatedTemplate?.weeks?.[0] ?? null);
 
   const displaySport = fetchedProgram?.sport ?? sport;
   const displayLevel = fetchedProgram?.level ?? level;

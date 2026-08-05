@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
-import type { ProgramTemplate } from "@/types";
+import type { ProgramTemplate, ProgramFocus } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
@@ -42,7 +42,7 @@ type StepId =
   | "paywall_priming" | "paywall_form";
 
 type PendingData = {
-  role: Role; sport: string; sportPrecision: string; level: Level;
+  role: Role; sport: string; sportPrecision: string; level: Level; weaknesses: string[];
   goal: string; frustration: string; trainingDays: number[];
   coachingContext: string; athleteCount: string; coachingChallenge: string; currentTool: string;
   name: string; wSleep: number; wBedtime: string; wStress: number; wRecovery: number;
@@ -216,16 +216,17 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[] }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
     if (!dayStrings.length) return false;
+    const focus = opts.focus ?? "mixte";
 
     const genRes = await fetch("/api/programs/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration: 4, focus: "mixte" }),
+      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration: 4, focus, weaknesses: opts.weaknesses ?? [] }),
     });
     if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
     const { template } = await genRes.json() as { template: ProgramTemplate };
@@ -237,7 +238,7 @@ async function generateAndAssignProgram(
         name: `Programme ${opts.sport} — 4 semaines`,
         sport: opts.sport,
         level: LEVEL_TO_DB[opts.level],
-        focus: "mixte",
+        focus,
         weeks_count: 4,
         sessions_per_week: opts.days.length,
         template,
@@ -295,23 +296,116 @@ function nextSessionDayLabel(trainingDays: number[]): string | null {
   return DOW_FULL[target.getDay()];
 }
 
+// Mêmes 9 sports, mêmes labels/icônes que ProgramCriteriaModal.tsx (in-app) — garantit le même
+// routage getSportCategory(). Remplace l'ancien bucket générique "Force & puissance" qui matchait
+// toujours le mot-clé power/force, impossible d'atteindre le curriculum haltérophilie/musculation
+// depuis l'onboarding (même bug déjà corrigé côté in-app le 2026-08-05).
 const SPORT_CATEGORIES = [
-  { id: "Force & puissance",      icon: "💪", sub: "Haltérophilie, powerlifting, CrossFit…" },
-  { id: "Athlétisme & vitesse",   icon: "🏃", sub: "Sprint, saut, lancer…" },
-  { id: "Sports collectifs",      icon: "🏉", sub: "Rugby, handball, basket, foot…" },
-  { id: "Endurance",              icon: "🚴", sub: "Course, cyclisme, natation…" },
-  { id: "Arts martiaux & combat", icon: "🥋", sub: "Judo, MMA, boxe…" },
-  { id: "Autre",                  icon: "⚡", sub: "Autre discipline" },
+  { id: "Haltérophilie",              icon: "🏋️", sub: "Arraché, épaulé-jeté" },
+  { id: "Powerlifting",               icon: "🦍", sub: "Squat, développé couché, soulevé de terre" },
+  { id: "Musculation / Hypertrophie", icon: "💪", sub: "Prise de masse, split par groupe musculaire" },
+  { id: "Fitness / CrossFit",         icon: "🔥", sub: "Conditionnement croisé" },
+  { id: "Athlétisme & vitesse",       icon: "🏃", sub: "Sprint, saut, lancer…" },
+  { id: "Sports collectifs",          icon: "⚽", sub: "Rugby, handball, basket, foot…" },
+  { id: "Endurance",                  icon: "🏊", sub: "Course, cyclisme, natation…" },
+  { id: "Arts martiaux & combat",     icon: "🥋", sub: "Judo, MMA, boxe…" },
+  { id: "Autre",                      icon: "✨", sub: "Autre discipline" },
 ];
 
 const SPORT_QUALITIES: Record<string, string> = {
-  "Force & puissance":      "Force maximale, puissance explosive, technique de charge",
-  "Athlétisme & vitesse":   "Vitesse, explosivité, technique de course",
-  "Sports collectifs":      "Répétition d'efforts, agilité, puissance",
-  "Endurance":               "Endurance aérobie, gestion du seuil, récupération active",
-  "Arts martiaux & combat": "Endurance spécifique combat, explosivité, mobilité articulaire",
-  "Autre":                   "Qualités physiques adaptées à ta discipline",
+  "Haltérophilie":              "Explosivité, technique de mouvement, mobilité",
+  "Powerlifting":                "Force maximale, technique de charge, récupération",
+  "Musculation / Hypertrophie": "Volume d'entraînement, tension musculaire, progression continue",
+  "Fitness / CrossFit":         "Conditionnement croisé, force générale, endurance",
+  "Athlétisme & vitesse":       "Vitesse, explosivité, technique de course",
+  "Sports collectifs":          "Répétition d'efforts, agilité, puissance",
+  "Endurance":                   "Endurance aérobie, gestion du seuil, récupération active",
+  "Arts martiaux & combat":     "Endurance spécifique combat, explosivité, mobilité articulaire",
+  "Autre":                       "Qualités physiques adaptées à ta discipline",
 };
+
+// Clés/labels identiques à WEAKNESSES_BY_SPORT dans ProgramCriteriaModal.tsx (in-app) — même table
+// pas partagée entre les 2 fichiers (choix déjà fait pour SPORTS/FOCUSES avant ce chantier), mais
+// gardée synchronisée manuellement. Biaise réellement la génération via generate/route.ts (2 niveaux
+// : fréquence pour powerlifting/musculation/halterophilie, ligne ajoutée pour tous les sports).
+const WEAKNESSES_BY_SPORT: Record<string, { key: string; label: string }[]> = {
+  "Haltérophilie": [
+    { key: "arrache", label: "Technique arraché" },
+    { key: "epaule_jete", label: "Technique épaulé-jeté" },
+    { key: "mobilite", label: "Mobilité hanches/chevilles" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Powerlifting": [
+    { key: "jambes", label: "Jambes" },
+    { key: "dos_bras", label: "Dos & bras" },
+    { key: "pecs_epaules", label: "Pectoraux & épaules" },
+    { key: "technique", label: "Technique de mouvement" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Musculation / Hypertrophie": [
+    { key: "jambes", label: "Jambes" },
+    { key: "dos", label: "Dos" },
+    { key: "pectoraux", label: "Pectoraux" },
+    { key: "epaules", label: "Épaules" },
+    { key: "bras", label: "Bras" },
+  ],
+  "Athlétisme & vitesse": [
+    { key: "vitesse", label: "Vitesse pure" },
+    { key: "endurance_vitesse", label: "Endurance de vitesse" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "technique_course", label: "Technique de course" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Endurance": [
+    { key: "vitesse", label: "Vitesse" },
+    { key: "endurance_fond", label: "Endurance de fond" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "technique_course", label: "Technique de course" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Sports collectifs": [
+    { key: "puissance", label: "Puissance" },
+    { key: "vitesse", label: "Vitesse" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "gainage", label: "Gainage / contact" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Fitness / CrossFit": [
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "force_generale", label: "Force générale" },
+    { key: "technique", label: "Technique des mouvements" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Arts martiaux & combat": [
+    { key: "frappe", label: "Puissance de frappe" },
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "gainage", label: "Gainage" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Autre": [
+    { key: "force_generale", label: "Force générale" },
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "technique", label: "Technique" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+};
+
+// 4 options réelles qui pilotent ProgramFocus (remplace les 4 anciennes options narratives qui
+// n'alimentaient que profiles.objective, jamais la génération) — wording/icônes identiques à
+// ProgramCriteriaModal.tsx/POC. `lower` sert aux phrases interpolées (goalLower) : la dérivation
+// mécanique (.charAt(0).toLowerCase()+slice(1)) donnait des phrases bancales pour "mixte" ("pour
+// un peu de tout, rester régulier" après un "pour" déjà présent dans la phrase).
+const GOAL_META: { label: string; icon: string; focus: ProgramFocus; lower: string }[] = [
+  { label: "Augmenter mon volume d'entraînement", icon: "📈", focus: "volume",      lower: "augmenter ton volume d'entraînement" },
+  { label: "Progresser en intensité",             icon: "🔥", focus: "intensite",   lower: "progresser en intensité" },
+  { label: "Préparer une échéance précise",       icon: "🎯", focus: "competition", lower: "préparer ton échéance" },
+  { label: "Un peu de tout, rester régulier",     icon: "⚖️", focus: "mixte",       lower: "rester régulier" },
+];
+const GOAL_TO_FOCUS: Record<string, ProgramFocus> = Object.fromEntries(GOAL_META.map(g => [g.label, g.focus]));
+const GOAL_TO_LOWER: Record<string, string> = Object.fromEntries(GOAL_META.map(g => [g.label, g.lower]));
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -495,6 +589,27 @@ function Choice({ icon, title, sub, selected, onClick }: { icon: string; title: 
       </div>
       {sub && <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45 }}>{sub}</div>}
     </div>
+  );
+}
+
+// Badge compact (POC + ProgramCriteriaModal.tsx "Pill") — pour les sélecteurs qui prennent trop de
+// place en cartes hautes (Choice) : sport (single-select) et faiblesses (multi-select, checkmark).
+function Chip({ icon, label, selected, checkmark, title, onClick }: { icon?: string; label: string; selected: boolean; checkmark?: boolean; title?: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      padding: "10px 15px", borderRadius: 999, cursor: "pointer",
+      border: selected ? "1.5px solid #d44000" : "1.5px solid rgba(0,0,0,.10)",
+      background: selected ? "rgba(212,64,0,.06)" : "#fff",
+      color: selected ? "#d44000" : "#3a3f44",
+      fontWeight: 700, fontSize: 13, fontFamily: "inherit",
+      display: "inline-flex", alignItems: "center", gap: 6,
+    }}>
+      {checkmark && selected && (
+        <span style={{ width: 15, height: 15, borderRadius: "50%", background: "#d44000", color: "#fff", fontSize: 9, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✓</span>
+      )}
+      {icon && <span>{icon}</span>}
+      {label}
+    </button>
   );
 }
 
@@ -847,9 +962,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   /* questionnaire */
-  const [sport, setSport]                         = useState(pendingData?.sport || "Force & puissance");
+  const [sport, setSport]                         = useState(pendingData?.sport || "Autre");
   const [sportPrecision, setSportPrecision]       = useState(pendingData?.sportPrecision || "");
+  // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses, voir plus bas) —
+  // `level`/`setLevel` restent réels (pas une constante) car `setLevel` est encore utilisé pour le
+  // chemin "programme claimé" (ligne ~979, infère le niveau du programme réellement claimé, sans
+  // rapport avec ce chantier). Pour le chemin classique, reste à sa valeur par défaut neutre.
   const [level, setLevel]                         = useState<Level>(pendingData?.level || "intermediate");
+  const [weaknesses, setWeaknesses]               = useState<string[]>(pendingData?.weaknesses ?? []);
   const [goal, setGoal]                           = useState(pendingData?.goal || "");
   const [frustration, setFrustration]             = useState(pendingData?.frustration || "");
   const [trainingDays, setTrainingDays]           = useState<number[]>(pendingData?.trainingDays ?? [1, 3, 5]);
@@ -1101,7 +1221,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
       await Promise.all([
-        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid } })] : []),
+        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses })] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -1136,7 +1256,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       const firstAthleteId = demoAthleteIds[0];
       if (firstAthleteId && trainingDays.length > 0) {
         await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
-        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId } });
+        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses });
         if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
     }
@@ -1375,7 +1495,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   async function handleGoogleRegister() {
     const pending: PendingData = {
-      role, sport, sportPrecision, level, goal, frustration, trainingDays,
+      role, sport, sportPrecision, level, weaknesses, goal, frustration, trainingDays,
       coachingContext, athleteCount, coachingChallenge, currentTool, name,
       wSleep, wBedtime, wStress, wRecovery, wBehaviors, wMotivation, wScore,
     };
@@ -1690,9 +1810,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
               {role === "coach" ? "On génère les séances de ton premier programme." : "On génère des séances adaptées à ta discipline."}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14, maxHeight: "42vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
-                <Choice key={s.id} icon={s.icon} title={s.id} sub={s.sub} selected={sport === s.id}
+                <Chip key={s.id} icon={s.icon} label={s.id} title={s.sub} selected={sport === s.id}
                   onClick={() => {
                     setSport(s.id);
                     if (s.id !== "Autre" && isRegisterMode) nextAfterChoice(() => {});
@@ -1717,47 +1837,43 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── 2A-2. LEVEL ── */}
+        {/* ── 2A-2. FAIBLESSES (remplace l'ancien step "niveau" — même step ID level_2a, contenu
+             différent, pour ne pas perturber le funnel PostHog historique) ── */}
         {currentStep === "level_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Niveau de tes sportifs ?" : "Ton niveau actuel ?"}
+              {role === "coach" ? "Les points à travailler en priorité de tes sportifs ?" : "Tes points à travailler en priorité ?"}
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              {role === "coach" ? "L'intensité du programme s'ajuste en conséquence." : "Cela ajuste l'intensité des séances générées."}
+              {role === "coach" ? "On biaise la sélection d'exercices vers ce qui compte le plus pour eux." : "On biaise la sélection d'exercices de ton programme vers ce qui compte le plus pour toi."}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
-              {([
-                { key: "beginner" as Level, icon: "🌱", title: "Débutant",       subAthlete: "Je structure mon entraînement",    subCoach: "Bases sportives, progression douce" },
-                { key: "intermediate" as Level, icon: "📈", title: "Intermédiaire", subAthlete: "J'ai une pratique régulière",      subCoach: "Pratique régulière, objectifs précis" },
-                { key: "elite" as Level, icon: "🏆", title: "Compétiteur",    subAthlete: "Je prépare des compétitions",      subCoach: "Préparation compétitions, haute intensité" },
-              ] as const).map(l => (
-                <Choice key={l.key} icon={l.icon} title={l.title} sub={role === "coach" ? l.subCoach : l.subAthlete} selected={level === l.key}
-                  onClick={() => isRegisterMode ? nextAfterChoice(() => setLevel(l.key)) : setLevel(l.key)} />
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              {(WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
+                <Chip key={w.key} label={w.label} checkmark selected={weaknesses.includes(w.key)}
+                  onClick={() => setWeaknesses(prev =>
+                    prev.includes(w.key) ? prev.filter(k => k !== w.key) : prev.length >= 2 ? prev : [...prev, w.key]
+                  )} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" />}
+            <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14 }}>Jusqu&apos;à 2 priorités — optionnel.</div>
+            <Actions onNext={next} nextLabel="Suivant →" />
           </div>
         )}
 
-        {/* ── 2A-3. GOAL ── */}
+        {/* ── 2A-3. OBJECTIF DU BLOC (4 options réelles, pilotent ProgramFocus — remplace les 4
+             options narratives qui n'alimentaient que profiles.objective) ── */}
         {currentStep === "goal_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "L'objectif de tes sportifs ?" : "Ton objectif principal ?"}
+              {role === "coach" ? "L'objectif de ce bloc pour tes sportifs ?" : "L'objectif de ce bloc ?"}
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              {role === "coach" ? "Le programme sera orienté autour de cet objectif." : "ThePerfClub adapte son suivi à ce qui compte pour toi."}
+              {role === "coach" ? "Change vraiment la façon dont leur programme est construit." : "Change vraiment la façon dont ton programme est construit."}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
-              {[
-                { id: "Progresser en performance",             icon: "🎯" },
-                { id: "Éviter le surmenage et les blessures",  icon: "😴" },
-                { id: "Mieux récupérer entre les séances",     icon: "🔄" },
-                { id: "Structurer et suivre mon entraînement", icon: "📊" },
-              ].map(o => (
-                <Choice key={o.id} icon={o.icon} title={o.id} sub="" selected={goal === o.id}
-                  onClick={() => isRegisterMode ? nextAfterChoice(() => setGoal(o.id)) : setGoal(o.id)} />
+              {GOAL_META.map(o => (
+                <Choice key={o.label} icon={o.icon} title={o.label} sub="" selected={goal === o.label}
+                  onClick={() => isRegisterMode ? nextAfterChoice(() => setGoal(o.label)) : setGoal(o.label)} />
               ))}
             </div>
             {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />}
@@ -1936,9 +2052,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Ton sport principal ?</div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On paramètre les modèles de séances proposés.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14, maxHeight: "42vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
-                <Choice key={s.id} icon={s.icon} title={s.id} sub={s.sub} selected={sport === s.id}
+                <Chip key={s.id} icon={s.icon} label={s.id} title={s.sub} selected={sport === s.id}
                   onClick={() => {
                     setSport(s.id);
                     if (s.id !== "Autre" && isRegisterMode) nextAfterChoice(() => {});
@@ -2217,9 +2333,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               sport={sport}
               sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
               sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
-              showLevel={path.includes("level_2a") || (hasClaimedProgram === true && !!level)}
+              // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses) — ne
+              // jamais prétendre qu'un niveau a été choisi sur ce chemin. Reste vrai uniquement
+              // pour le programme claimé, où le niveau est réellement inféré du programme.
+              showLevel={hasClaimedProgram === true && !!level}
               level={level}
-              goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""}
+              goalLower={GOAL_TO_LOWER[goal] ?? ""}
               showDays={path.includes("days_2a")}
               trainingDays={trainingDays}
               claimedProgramName={claimedProgramName}
@@ -2233,12 +2352,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} role={role} goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
         {currentStep === "week_preview_2b" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} role={role} goalLower={goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
@@ -2604,7 +2723,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              WeekPreviewStep), pas hardcodé sur un objectif précis — seul le titre référence
              l'objectif, les 3 étapes restent volontairement génériques pour rester vraies quel que
              soit l'objectif choisi. */
-          const goalLower = goal ? goal.charAt(0).toLowerCase() + goal.slice(1) : "";
+          const goalLower = GOAL_TO_LOWER[goal] ?? "";
           const friseTitle = `Le chemin pour enfin ${goalLower || "progresser"}, sans deviner.`;
           const friseSteps = role === "coach"
             ? [
