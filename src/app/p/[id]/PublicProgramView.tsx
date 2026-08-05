@@ -211,13 +211,13 @@ export default function PublicProgramView({ program, coachName }: Props) {
                 onClick={() => handleClaimGuest("athlete")}
                 style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
               >
-                Utiliser en tant que sportif →
+                Personnaliser en tant que sportif →
               </button>
               <button
                 onClick={() => handleClaimGuest("coach")}
                 style={{ width: "100%", padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
               >
-                Utiliser en tant que coach →
+                Personnaliser en tant que coach →
               </button>
             </div>
           </div>
@@ -245,13 +245,13 @@ export default function PublicProgramView({ program, coachName }: Props) {
               onClick={() => handleClaimGuest("coach")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
             >
-              Utiliser en tant que coach →
+              Personnaliser en tant que coach →
             </button>
             <button
               onClick={() => handleClaimGuest("athlete")}
               style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
-              Utiliser en tant que sportif →
+              Personnaliser en tant que sportif →
             </button>
           </>
         )}

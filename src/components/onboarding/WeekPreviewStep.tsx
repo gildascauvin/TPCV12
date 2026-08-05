@@ -113,6 +113,7 @@ interface Props {
   trainingDays: number[];
   focus?: ProgramFocus;
   weaknesses?: string[];
+  duration?: 4 | 6 | 8 | 12 | 16;
   programFlow?: boolean;
   role: Role;
   goalLower: string;
@@ -121,12 +122,19 @@ interface Props {
   onNext: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
   const [generatedTemplate, setGeneratedTemplate] = useState<ProgramTemplate | null>(null);
 
+  // Chemin "programme claimé" : ce fetch ne sert plus qu'à afficher le NOM du programme claimé
+  // (displayName, dans headerTitle/headerSub) — le contenu réel des séances (week1) vient
+  // désormais toujours de generatedTemplate ci-dessous, personnalisé selon faiblesses/objectif/
+  // jours (2026-08-05, chantier "personnaliser les programmes claimed"). Avant ce chantier, ce
+  // fetch fournissait aussi le contenu (copie statique du template public, invariant aux choix
+  // faits sur les nouveaux écrans) — remplacé pour la même raison que le fix du chemin classique
+  // juste en dessous : l'aperçu doit refléter les vrais choix, pas un template figé.
   useEffect(() => {
     if (!programFlow) return;
     const claimId = localStorage.getItem("claim_program_id");
@@ -134,18 +142,18 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     fetch(`/api/programs/${claimId}`)
       .then(r => r.ok ? r.json() : null)
       .then((data: FetchedProgram | null) => {
-        if (data?.name && data?.template) setFetchedProgram(data);
+        if (data?.name) setFetchedProgram(data);
       });
   }, [programFlow]);
 
-  // Chemin classique (pas de programme claimé) : aperçu généré par le VRAI générateur
-  // (/api/programs/generate, pur/déterministe) avec les choix réels déjà faits par l'utilisateur —
-  // remplace l'ancien aperçu générique getSessionTemplates() qui ne reflétait pas sport/faiblesses/
-  // objectif du bloc, trouvé en décalage par Gildas après le portage de ces champs dans l'onboarding
-  // (2026-08-05). Même appel que generateAndAssignProgram() : le programme réellement créé plus
-  // tard dans le flow sera donc identique à cet aperçu.
+  // Aperçu généré par le VRAI générateur (/api/programs/generate, pur/déterministe) avec les choix
+  // réels déjà faits par l'utilisateur — tourne pour les 2 chemins (classique ET programme claimé
+  // personnalisé, sport/niveau déjà déduits du claim dans ce cas). Remplace l'ancien aperçu
+  // générique getSessionTemplates() qui ne reflétait pas sport/faiblesses/objectif du bloc, trouvé
+  // en décalage par Gildas après le portage de ces champs dans l'onboarding (2026-08-05). Même
+  // appel que generateAndAssignProgram() (mêmes sport/level/days/focus/weaknesses/duration) : le
+  // programme réellement créé plus tard dans le flow sera donc identique à cet aperçu.
   useEffect(() => {
-    if (programFlow) return;
     if (!trainingDays.length) return;
     const dayStrings = trainingDays.map(d => DOW_NAMES[d]).filter(Boolean);
     if (!dayStrings.length) return;
@@ -153,7 +161,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     fetch("/api/programs/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [] }),
+      body: JSON.stringify({ sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: duration ?? 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [] }),
     })
       .then(r => r.ok ? r.json() : null)
       .then((data: { template: ProgramTemplate } | null) => {
@@ -162,15 +170,13 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
       .catch(() => {});
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programFlow, sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses)]);
+  }, [sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses), duration]);
 
-  // When we have the real program template (claimed OU généré en direct), use its week 1 sessions
-  const week1 = programFlow
-    ? (fetchedProgram?.template?.weeks?.[0] ?? null)
-    : (generatedTemplate?.weeks?.[0] ?? null);
+  // Contenu réel des séances : toujours le template généré en direct (jamais une copie statique).
+  const week1 = generatedTemplate?.weeks?.[0] ?? null;
 
-  const displaySport = fetchedProgram?.sport ?? sport;
-  const displayLevel = fetchedProgram?.level ?? level;
+  const displaySport = sport;
+  const displayLevel = level;
   const displayName  = fetchedProgram?.name;
   const sportEmoji   = getSportEmoji(displaySport);
 

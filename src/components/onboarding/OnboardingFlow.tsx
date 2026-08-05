@@ -122,13 +122,18 @@ function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct:
   );
 }
 
-/* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH. */
+/* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH.
+   "level_2a"(faiblesses)/"goal_2a"/"days_2a" ajoutés (2026-08-05) — sport reste déduit du
+   programme claimé (pas de "sport_2a" ici), mais faiblesses/objectif/jours sont maintenant
+   collectés pour personnaliser réellement le programme au lieu de copier le template public tel
+   quel (voir claimAndAssignProgram()/completeProfile() branche coach). */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "account",
   "autoreg_score",
   "concept_autoreg",
+  "level_2a", "goal_2a", "days_2a",
   "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
@@ -137,6 +142,7 @@ const PROGRAM_COACH_PATH: StepId[] = [
   "account",
   "autoreg_score_coach",
   "concept_autoreg",
+  "level_2a", "goal_2a", "days_2a",
   "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
 ];
 
@@ -168,13 +174,15 @@ const SHORT_COACH_PATH: StepId[] = [
   "celebration",
 ];
 /* Variante B + programme claimé : mêmes steps que PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH
-   (sport/niveau/objectif/jours déjà déduits du programme, donc absents), Signup déplacé juste
-   après Rôle comme les paths courts ci-dessus. */
+   (sport déjà déduit du programme, donc "sport_2a" absent — mais faiblesses/objectif/jours
+   collectés comme PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH, voir commentaire ci-dessus), Signup
+   déplacé juste après Rôle comme les paths courts ci-dessus. */
 const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro", "account",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
+  "level_2a", "goal_2a", "days_2a",
   "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const SHORT_PROGRAM_COACH_PATH: StepId[] = [
@@ -182,6 +190,7 @@ const SHORT_PROGRAM_COACH_PATH: StepId[] = [
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
   "concept_autoreg",
+  "level_2a", "goal_2a", "days_2a",
   "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
 ];
 
@@ -216,17 +225,21 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[] }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16 }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
     if (!dayStrings.length) return false;
     const focus = opts.focus ?? "mixte";
+    // Durée dynamique (2026-08-05) : le chemin "programme claimé" personnalisé passe la vraie
+    // durée du programme claimé (claimedProgramWeeks) plutôt que de la tronquer silencieusement à
+    // 4 semaines — le chemin classique reste sur 4 (opts.duration jamais fourni dans ce cas).
+    const duration = opts.duration ?? 4;
 
     const genRes = await fetch("/api/programs/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration: 4, focus, weaknesses: opts.weaknesses ?? [] }),
+      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [] }),
     });
     if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
     const { template } = await genRes.json() as { template: ProgramTemplate };
@@ -235,11 +248,11 @@ async function generateAndAssignProgram(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: `Programme ${opts.sport} — 4 semaines`,
+        name: `Programme ${opts.sport} — ${duration} semaines`,
         sport: opts.sport,
         level: LEVEL_TO_DB[opts.level],
         focus,
-        weeks_count: 4,
+        weeks_count: duration,
         sessions_per_week: opts.days.length,
         template,
       }),
@@ -1020,7 +1033,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const advancingRef = useRef(false);
   /* guard contre double-clic sur les CTA de fin de step (finishAthleteActivation / invite_team) — évite un double claim+assign et un stepIdx qui dépasse path.length (écran blanc) */
   const finishGuardRef = useRef(false);
-  /* guard contre un double déclenchement de completeProfile()/finishCoachClaim() à l'entrée de profile_recap (voir effet dédié plus bas) */
+  /* guard contre un double déclenchement de completeProfile() à l'entrée de profile_recap (voir effet dédié plus bas) */
   const profileCompleteGuardRef = useRef(false);
 
   function toggleBehavior(key: string) {
@@ -1162,8 +1175,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* Le Signup (step "account") arrive désormais avant la fin du diagnostic dans les 2 variantes —
      sport/niveau/objectif/jours ne sont connus qu'à l'entrée de profile_recap. C'est ici que le
-     profil est complété (sessions, wellness baseline, démo coach) et que finishCoachClaim() peut
-     enfin trouver un coach_athlete à assigner (créés par completeProfile() juste avant). */
+     profil est complété (sessions, wellness baseline, démo coach). Pour le rôle coach, la branche
+     coach de completeProfile() gère déjà le cas "programme claimé" (sport/niveau déduits du claim,
+     objectif/faiblesses/jours collectés via les nouveaux écrans) — finishCoachClaim() (copie brute
+     du template public, écrasait ce travail juste après) est devenu redondant et a été supprimé
+     le 2026-08-05. */
   useEffect(() => {
     if (currentStep !== "profile_recap" || profileCompleteGuardRef.current) return;
     profileCompleteGuardRef.current = true;
@@ -1171,7 +1187,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (!uid) return;
     (async () => {
       await completeProfile(uid);
-      if (role === "coach") await finishCoachClaim(uid);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
@@ -1221,7 +1236,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
       await Promise.all([
-        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses })] : []),
+        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16 })] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -1252,69 +1267,40 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         }
       }
 
-      // Auto-generate a program and assign to first demo athlete
+      // Auto-generate a program and assign to first demo athlete — même appel pour un programme
+      // claimé (sport/niveau/duration déjà déduits) ou non (duration retombe sur 4 par défaut).
       const firstAthleteId = demoAthleteIds[0];
       if (firstAthleteId && trainingDays.length > 0) {
         await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
-        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses });
+        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16 });
         if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
-    }
-  }
-
-  async function finishCoachClaim(uid: string) {
-    const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
-    if (!claimId) return;
-    try {
-      const claimRes = await fetch("/api/programs/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ programId: claimId }),
-      });
-      if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
-      const { programId: copiedId } = await claimRes.json();
-      const { data: firstAthlete } = await supabase.from("coach_athletes").select("id").eq("coach_id", uid).limit(1).maybeSingle();
-      if (firstAthlete?.id) {
-        await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthlete.id);
-        await fetch(`/api/programs/${copiedId}/assign`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start_date: getNextMonday(), athlete_id: firstAthlete.id }),
-        });
-        localStorage.setItem("program_start_date", getNextMonday());
-      }
-    } catch {
-      /* coach a déjà un programme démo généré dans saveData(), pas de fallback nécessaire */
-    } finally {
-      localStorage.removeItem("claim_program_id");
+      if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
     }
   }
 
   /* Claim + assign du programme claimé, partagé entre le flow classique (wellnessAdjustment réel,
      calculé à la fin de wellness_q) et le path court de l'A/B test (wellnessAdjustment=0, aucune
      donnée wellness collectée dans ce path — voir handleFinish()). */
+  /* Copie brute du template public → génération personnalisée (2026-08-05) : le programme claimé
+     n'est plus recopié tel quel, il sert de seed (sport/niveau déjà déduits, voir l'effet qui lit
+     ?claim=) — faiblesses/objectif/jours collectés via les nouveaux écrans (PROGRAM_ATHLETE_PATH
+     etc.) pilotent une vraie régénération via generateAndAssignProgram(), exactement le même
+     pipeline que le chemin non-claimé. Reste le point d'appel dédié (après wellness_q) plutôt que
+     déplacé dans completeProfile() : c'est le seul chemin qui applique un vrai wellnessAdjustment
+     (le chemin non-claimé ne l'a jamais fait, comportement existant non touché ici). */
   async function claimAndAssignProgram(uid: string, wellnessAdjustment: number) {
     const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
     if (!claimId) return;
     try {
-      const claimRes = await fetch("/api/programs/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ programId: claimId }),
+      const ok = await generateAndAssignProgram(uid, {
+        sport, level, days: trainingDays, target: { user_id: uid },
+        focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, wellnessAdjustment,
+        duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
       });
-      if (!claimRes.ok) throw Object.assign(new Error("claim"), { status: claimRes.status });
-      const { programId: copiedId } = await claimRes.json();
-      const assignRes = await fetch(`/api/programs/${copiedId}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ start_date: getNextMonday(), user_id: uid, wellnessAdjustment }),
-      });
-      if (!assignRes.ok) throw Object.assign(new Error("assign"), { status: assignRes.status });
-    } catch (err: unknown) {
-      const status = err instanceof Error && "status" in err ? (err as { status: number }).status : 0;
-      if (status !== 409) {
-        await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
-      }
+      if (!ok) throw new Error("generate");
+    } catch {
+      await supabase.from("sessions").insert(buildAthleteSessions(uid, sport, level, trainingDays));
     } finally {
       localStorage.removeItem("claim_program_id");
     }
@@ -2352,12 +2338,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
         {currentStep === "week_preview_2b" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
