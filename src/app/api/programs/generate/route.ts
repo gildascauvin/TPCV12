@@ -2081,6 +2081,66 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
   reeducation_periostite: selectReeducationPeriostite,
 };
 
+// ---- Faiblesses : biais de génération sur 2 niveaux (2026-08-05).
+// Niveau 2 (universel, tous les sports) : une ligne d'exercice supplémentaire ajoutée à LA séance
+// de la semaine dont le type correspond le mieux à la faiblesse (typeHints, liste ordonnée de
+// types acceptables plutôt qu'un seul) — sûr par construction, ne modifie jamais l'équilibre des
+// jours choisis par l'utilisateur, marche même sans curriculum.
+// BUG TROUVÉ ET CORRIGÉ (typeHint unique au lieu d'une liste) : avec la config par défaut de la
+// modale (3 jours, curriculum) les types de la semaine sont presque toujours technique/volume/
+// intensite — "recuperation" en particulier n'apparaît quasiment jamais à ces fréquences (c'est un
+// type de remplissage FOCUS_DIST, pas un type que les curriculums sportifs programment à 3
+// jours/semaine). Un typeHint unique = "recuperation" ne trouvait donc JAMAIS de jour à modifier
+// pour n'importe quelle faiblesse de récupération, quel que soit le sport — silencieusement aucun
+// effet visible, trouvé en testant les 5 combos les plus probables (config par défaut de la
+// modale) plutôt qu'en supposant que "ça doit marcher". Remplacé par une liste de types acceptables
+// par ordre de préférence, avec un dernier repli garanti (le 1er jour non forcé de la semaine) si
+// aucun des types préférés n'est présent — un effet imparfaitement placé reste toujours préférable
+// à aucun effet du tout.
+// Niveau 1 (sports à curriculum splitté par groupe musculaire/mouvement — powerlifting/musculation/
+// halterophilie uniquement, pas leurs spécialisations par titre qui skewent déjà volontairement
+// vers un lift) : bump de fréquence RÉEL, mais seulement sur un "slot de répétition" (tout index
+// où l'archétype cyclé est un doublon d'un archétype déjà apparu plus tôt dans la semaine) — jamais
+// sur le premier passage de chaque archétype, pour ne jamais faire disparaître un mouvement
+// essentiel (ex. impossible de faire disparaître Deadlift d'un programme powerlifting à 3 jours,
+// où chaque lift n'apparaît qu'une fois). Si aucun slot de répétition n'existe (peu de jours
+// choisis), le niveau 1 ne s'applique simplement pas cette semaine-là — dégradation naturelle vers
+// le niveau 2 seul, aucun cas particulier à coder par nombre de jours. Les collisions RPE
+// éventuellement introduites par ce remplacement sont absorbées par les Phases A2/B universelles
+// exactement comme pour n'importe quel autre archétype de curriculum.
+interface WeaknessMeta { extraLine: string; typeHints: SessionType[] }
+const WEAKNESS_META: Record<string, WeaknessMeta> = {
+  jambes:            { extraLine: "Renfo ciblé jambes : squat gobelet + fentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos_bras:          { extraLine: "Renfo ciblé dos/bras : tirage horizontal + curl — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  pecs_epaules:      { extraLine: "Renfo ciblé pecs/épaules : développé incliné + élévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos:               { extraLine: "Renfo ciblé dos : tirage vertical + rowing — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  pectoraux:         { extraLine: "Renfo ciblé pectoraux : développé couché + écartés — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  epaules:           { extraLine: "Renfo ciblé épaules : développé militaire + élévations — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  bras:              { extraLine: "Renfo ciblé bras : curl + extensions triceps — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  arrache:           { extraLine: "Travail technique arraché : position réceptrice + tirages — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  epaule_jete:       { extraLine: "Travail technique épaulé-jeté : réception + jeté sous barre — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  mobilite:          { extraLine: "Mobilité ciblée hanches/chevilles — 10 min", typeHints: ["technique", "recuperation", "volume"] },
+  vitesse:           { extraLine: "Sprints courts : 4×20m départ arrêté (récup complète)", typeHints: ["intensite", "volume"] },
+  endurance_vitesse: { extraLine: "Répétitions longues : 4×150m allure soutenue", typeHints: ["volume", "intensite"] },
+  endurance_fond:    { extraLine: "Extension endurance fondamentale : +10 min à allure facile", typeHints: ["volume", "recuperation"] },
+  explosivite:       { extraLine: "Pliométrie : squats sautés — 4×6", typeHints: ["intensite", "volume"] },
+  technique:         { extraLine: "Travail technique ciblé (vidéo/feedback) — 15 min", typeHints: ["technique", "volume", "recuperation"] },
+  technique_course:  { extraLine: "Éducatifs de course : montées de genoux + talons-fesses — 4×20m", typeHints: ["technique", "volume", "recuperation"] },
+  recuperation:      { extraLine: "Récupération active ciblée : mobilité + étirements — 15 min", typeHints: ["recuperation", "technique", "volume"] },
+  cardio:            { extraLine: "Finisher cardio : 10 min zone modérée", typeHints: ["volume", "intensite"] },
+  force_generale:    { extraLine: "Renfo général : squat + tirage + gainage — 3×10", typeHints: ["volume", "intensite", "technique"] },
+  puissance:         { extraLine: "Puissance : sauts + lancers médecine-ball — 4×5", typeHints: ["intensite", "volume"] },
+  gainage:           { extraLine: "Gainage renforcé : planche + rotation — 3×40s", typeHints: ["technique", "volume", "recuperation"] },
+  frappe:            { extraLine: "Sac lourd : 5×10 frappes puissance maximale", typeHints: ["intensite", "volume"] },
+};
+
+const WEAKNESS_ARCHETYPE_L1: Partial<Record<SportCategory, Record<string, Archetype>>> = {
+  powerlifting: { jambes: PL_SQUAT, dos_bras: PL_DEADLIFT, pecs_epaules: PL_BENCH },
+  musculation: { jambes: MUSCU_JAMBES, dos: MUSCU_DOS, pectoraux: MUSCU_PECTORAUX, epaules: MUSCU_EPAULES, bras: MUSCU_BRAS },
+  halterophilie: { arrache: HA_SNATCH, epaule_jete: HA_CLEAN_JERK },
+};
+
+
 function sessionName(type: SessionType, weekIdx: number, dayIdx: number): string {
   const names = SESSION_NAMES[type];
   return names[(weekIdx + dayIdx) % names.length];
@@ -2135,18 +2195,20 @@ function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus)
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { sport, level, days, duration, focus } = body as {
+  const { sport, level, days, duration, focus, weaknesses } = body as {
     sport: string;
     level: ProgramLevel;
     days: string[];
     duration: 4 | 6 | 8 | 12 | 16;
     focus: ProgramFocus;
+    weaknesses?: string[];
   };
 
   const validDuration = duration === 6 || (duration > 0 && duration % 4 === 0);
   if (!level || !days?.length || !duration || !focus || !validDuration) {
     return Response.json({ error: "Paramètres manquants ou durée invalide (6 semaines, ou un multiple de 4)" }, { status: 400 });
   }
+  const selectedWeaknesses = (weaknesses ?? []).slice(0, 2); // max 2 côté UI, plafonné aussi ici
 
   const category = getSportCategory(sport ?? "");
   const moderateOnly = category.startsWith("reeducation_");
@@ -2197,6 +2259,45 @@ export async function POST(req: Request) {
       }
       return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises };
     });
+
+    // Faiblesses, niveau 1 — appliqué ICI (sur dayPlans, après avoir calculé calIdx), pas sur le
+    // tableau abstrait d'archétypes. RAISON : pour powerlifting/musculation/halterophilie, TOUS
+    // les archétypes d'un même sport partagent le même SessionType (ex. Squat/Bench/Deadlift sont
+    // tous "intensite") — donc qu'un jour soit écrasé par la Phase B (collision RPE) ne dépend QUE
+    // de son adjacence calendaire à un autre jour sélectionné, jamais de quel archétype précis y
+    // est assigné. Appliquer le biais sur le premier "slot de répétition" trouvé dans l'ordre du
+    // tableau (comme le 1er essai) revenait à un choix arbitraire de jour, potentiellement déjà
+    // condamné à être écrasé quel que soit son contenu — invisible pour l'utilisateur, bug réel
+    // trouvé en testant plusieurs configurations de jours réalistes (pas juste celle qui marchait).
+    // Fix : ne cible plus le 1er slot de répétition trouvé, mais le 1er slot de répétition dont le
+    // jour calendaire n'est adjacent à AUCUN autre jour sélectionné — garantit que la Phase B qui
+    // suit ne l'écrasera jamais. Si aucun slot de répétition n'est à la fois libre ET calendairement
+    // isolé, le niveau 1 ne s'applique simplement pas cette semaine — dégradation gracieuse vers le
+    // niveau 2 seul, plutôt qu'un biais appliqué en pure perte.
+    if (selectedWeaknesses.length) {
+      const l1Table = WEAKNESS_ARCHETYPE_L1[category];
+      if (l1Table) {
+        // Vrai seulement si ce jour précis est la toute première apparition de son archétype dans
+        // dayPlans — les occurrences suivantes du même nom restent réassignables sans jamais faire
+        // disparaître le tout premier passage d'un mouvement essentiel.
+        const isFirstOccurrence = (d: (typeof dayPlans)[number]) =>
+          dayPlans.findIndex(x => x.archetypeName === d.archetypeName) === dayPlans.indexOf(d);
+        for (const key of selectedWeaknesses) {
+          const target = l1Table[key];
+          if (!target) continue;
+          const currentCount = dayPlans.filter(d => d.archetypeName === target.name).length;
+          if (currentCount >= 2) continue;
+          const candidate = dayPlans.find(d =>
+            !d.forced && d.archetypeName && !isFirstOccurrence(d) &&
+            !dayPlans.some(other => other !== d && Math.abs(other.calIdx - d.calIdx) === 1)
+          );
+          if (!candidate) continue;
+          candidate.type = target.type;
+          candidate.archetypeName = target.name;
+          candidate.exercises = target.exercises;
+        }
+      }
+    }
 
     const RPE_BUCKET: Record<SessionType, "easy" | "moderate" | "hard"> = {
       recuperation: "easy", technique: "easy", volume: "moderate", intensite: "hard", test: "hard",
@@ -2308,14 +2409,32 @@ export async function POST(req: Request) {
       ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
       : null;
 
+    // Faiblesses, niveau 2 — une ligne d'exercice ajoutée à la 1re séance de la semaine dont le
+    // type correspond le mieux à chaque faiblesse choisie, en essayant chaque type de typeHints
+    // dans l'ordre. Garantie d'effet visible : si aucun des types préférés n'est présent cette
+    // semaine-là, repli sur le 1er jour non forcé plutôt qu'aucun ajout — un effet imparfaitement
+    // placé reste préférable à un effet invisible pour l'utilisateur qui vient de faire un choix.
+    const weaknessDayIdx = new Map<string, number>();
+    for (const key of selectedWeaknesses) {
+      const meta = WEAKNESS_META[key];
+      if (!meta) continue;
+      const candidates = dayPlans.filter(d => !d.forced);
+      const match = meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ?? candidates[0];
+      if (match) weaknessDayIdx.set(key, match.dayIdx);
+    }
+
     // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
     dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
+      let notes = exercises
+        ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+        : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
+      Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
+        if (idx === dayIdx) notes += "\n" + WEAKNESS_META[key].extraLine;
+      });
       const session: SessionTemplate = {
         name: archetypeName ?? sessionName(type, w, dayIdx),
-        notes: exercises
-          ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
-          : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase),
+        notes,
         target_difficulty,
         load: weekLoad,
         type,

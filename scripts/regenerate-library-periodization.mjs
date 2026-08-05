@@ -1009,6 +1009,40 @@ function selectReeducationPeriostite(n) {
   return Array.from({ length: n }, (_, i) => PERIOSTITE_PRIORITY[i % PERIOSTITE_PRIORITY.length]);
 }
 
+// ---- Faiblesses — voir generate/route.ts pour le raisonnement complet (2 niveaux : append
+// universel niveau 2, bump de fréquence niveau 1 pour powerlifting/musculation/halterophilie
+// seulement). Jamais utilisé par ce script (la bibliothèque publique ne passe pas `weaknesses`),
+// porté ici uniquement pour garder generateTemplate() en synchro avec le vrai générateur.
+const WEAKNESS_META = {
+  jambes:            { extraLine: "Renfo ciblé jambes : squat gobelet + fentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos_bras:          { extraLine: "Renfo ciblé dos/bras : tirage horizontal + curl — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  pecs_epaules:      { extraLine: "Renfo ciblé pecs/épaules : développé incliné + élévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos:               { extraLine: "Renfo ciblé dos : tirage vertical + rowing — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  pectoraux:         { extraLine: "Renfo ciblé pectoraux : développé couché + écartés — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  epaules:           { extraLine: "Renfo ciblé épaules : développé militaire + élévations — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  bras:              { extraLine: "Renfo ciblé bras : curl + extensions triceps — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  arrache:           { extraLine: "Travail technique arraché : position réceptrice + tirages — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  epaule_jete:       { extraLine: "Travail technique épaulé-jeté : réception + jeté sous barre — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  mobilite:          { extraLine: "Mobilité ciblée hanches/chevilles — 10 min", typeHints: ["technique", "recuperation", "volume"] },
+  vitesse:           { extraLine: "Sprints courts : 4×20m départ arrêté (récup complète)", typeHints: ["intensite", "volume"] },
+  endurance_vitesse: { extraLine: "Répétitions longues : 4×150m allure soutenue", typeHints: ["volume", "intensite"] },
+  endurance_fond:    { extraLine: "Extension endurance fondamentale : +10 min à allure facile", typeHints: ["volume", "recuperation"] },
+  explosivite:       { extraLine: "Pliométrie : squats sautés — 4×6", typeHints: ["intensite", "volume"] },
+  technique:         { extraLine: "Travail technique ciblé (vidéo/feedback) — 15 min", typeHints: ["technique", "volume", "recuperation"] },
+  technique_course:  { extraLine: "Éducatifs de course : montées de genoux + talons-fesses — 4×20m", typeHints: ["technique", "volume", "recuperation"] },
+  recuperation:      { extraLine: "Récupération active ciblée : mobilité + étirements — 15 min", typeHints: ["recuperation", "technique", "volume"] },
+  cardio:            { extraLine: "Finisher cardio : 10 min zone modérée", typeHints: ["volume", "intensite"] },
+  force_generale:    { extraLine: "Renfo général : squat + tirage + gainage — 3×10", typeHints: ["volume", "intensite", "technique"] },
+  puissance:         { extraLine: "Puissance : sauts + lancers médecine-ball — 4×5", typeHints: ["intensite", "volume"] },
+  gainage:           { extraLine: "Gainage renforcé : planche + rotation — 3×40s", typeHints: ["technique", "volume", "recuperation"] },
+  frappe:            { extraLine: "Sac lourd : 5×10 frappes puissance maximale", typeHints: ["intensite", "volume"] },
+};
+
+const WEAKNESS_ARCHETYPE_L1 = {
+  powerlifting: { jambes: PL_SQUAT, dos_bras: PL_DEADLIFT, pecs_epaules: PL_BENCH },
+  musculation: { jambes: MUSCU_JAMBES, dos: MUSCU_DOS, pectoraux: MUSCU_PECTORAUX, epaules: MUSCU_EPAULES, bras: MUSCU_BRAS },
+  halterophilie: { arrache: HA_SNATCH, epaule_jete: HA_CLEAN_JERK },
+};
 
 const SPORT_CURRICULUM = {
   endurance: selectEndurance,
@@ -1090,11 +1124,12 @@ function buildWeekSpecs(duration) {
   return specs;
 }
 
-function generateTemplate({ sport, level, days, duration }) {
+function generateTemplate({ sport, level, days, duration, weaknesses }) {
   const category = getSportCategory(sport ?? "");
   const moderateOnly = category.startsWith("reeducation_");
   const focusDist = moderateOnly ? FOCUS_DIST_REEDUCATION : FOCUS_DIST_MIXTE; // approximation universelle (pas de focus par programme)
   const baseDiff = LEVEL_BASE_DIFF[level] ?? 6;
+  const selectedWeaknesses = (weaknesses ?? []).slice(0, 2);
   const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
   const weekSpecs = buildWeekSpecs(duration);
   const weeks = [];
@@ -1127,6 +1162,32 @@ function generateTemplate({ sport, level, days, duration }) {
       }
       return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises };
     });
+
+    // Faiblesses, niveau 1 — voir generate/route.ts pour le raisonnement complet (biais calendaire,
+    // pas juste "1er slot de répétition" : pour ces sports tous les archétypes partagent le même
+    // SessionType, donc l'écrasement par la Phase B dépend uniquement de l'adjacence calendaire,
+    // jamais du contenu — cibler un slot non-isolé serait invisible, écrasé quel que soit le choix).
+    if (selectedWeaknesses.length) {
+      const l1Table = WEAKNESS_ARCHETYPE_L1[category];
+      if (l1Table) {
+        const isFirstOccurrence = d =>
+          dayPlans.findIndex(x => x.archetypeName === d.archetypeName) === dayPlans.indexOf(d);
+        for (const key of selectedWeaknesses) {
+          const target = l1Table[key];
+          if (!target) continue;
+          const currentCount = dayPlans.filter(d => d.archetypeName === target.name).length;
+          if (currentCount >= 2) continue;
+          const candidate = dayPlans.find(d =>
+            !d.forced && d.archetypeName && !isFirstOccurrence(d) &&
+            !dayPlans.some(other => other !== d && Math.abs(other.calIdx - d.calIdx) === 1)
+          );
+          if (!candidate) continue;
+          candidate.type = target.type;
+          candidate.archetypeName = target.name;
+          candidate.exercises = target.exercises;
+        }
+      }
+    }
 
     // Phase A2 — règle universelle, s'applique aussi aux sports à curriculum (voir generate/route.ts).
     // moderateOnly (rééducation) : désactivée — "ouvrir la semaine sur quelque chose de
@@ -1192,14 +1253,29 @@ function generateTemplate({ sport, level, days, duration }) {
       ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
       : null;
 
+    // Faiblesses, niveau 2 — voir generate/route.ts pour le raisonnement complet (liste de types
+    // acceptables + repli garanti sur le 1er jour non forcé, pas un typeHint unique).
+    const weaknessDayIdx = new Map();
+    for (const key of selectedWeaknesses) {
+      const meta = WEAKNESS_META[key];
+      if (!meta) continue;
+      const candidates = dayPlans.filter(d => !d.forced);
+      const match = meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ?? candidates[0];
+      if (match) weaknessDayIdx.set(key, match.dayIdx);
+    }
+
     // Phase C — construire les séances
     dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
+      let notes = exercises
+        ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+        : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
+      Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
+        if (idx === dayIdx) notes += "\n" + WEAKNESS_META[key].extraLine;
+      });
       week[day] = [{
         name: archetypeName ?? sessionName(type, w, dayIdx),
-        notes: exercises
-          ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
-          : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase),
+        notes,
         target_difficulty,
         load: weekLoad,
         type,

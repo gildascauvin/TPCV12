@@ -3,22 +3,108 @@
 import { useState } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 
-const SPORTS = ["Haltérophilie", "Sprint/Athlétisme", "Force/Powerlifting", "Musculation/Hypertrophie", "Course à pied/Endurance", "Sports collectifs", "Fitness/Forme", "Combat/Arts martiaux", "Autre"];
-const FOCUSES: { value: ProgramFocus; label: string }[] = [
-  { value: "mixte", label: "Mixte équilibré" },
-  { value: "technique", label: "Développement technique" },
-  { value: "volume", label: "Construction volume" },
-  { value: "intensite", label: "Pic d'intensité" },
-  { value: "competition", label: "Prépa compétition" },
-  { value: "combat", label: "Prépa combat" },
-  { value: "autre", label: "Autre" },
+// Wording/icônes repris du POC (theperfclub_poc_onboarding_program_fields_v1.html, SPORT_META) —
+// "Musculation / Force" du POC reste ici volontairement splitté en 2 cartes (Powerlifting +
+// Musculation/Hypertrophie) plutôt que fusionné à l'identique : la fusion du POC route TOUJOURS
+// vers powerlifting côté backend (getSportCategory() vérifie "hypertroph" AVANT "power"/"force",
+// mais "Musculation / Force" ne contient pas "hypertroph") — fusionner ferait perdre l'accès au
+// curriculum musculation (split Jambes/Dos/Pectoraux/Épaules/Bras) depuis cet écran, une
+// régression sur un fix explicite fait plus tôt dans ce même chantier (le curriculum musculation
+// était "invisible/impossible à tester depuis l'UI in-app" avant d'avoir sa propre entrée ici).
+const SPORT_META: { value: string; icon: string; label: string; sub: string }[] = [
+  { value: "Haltérophilie", icon: "🏋️", label: "Haltérophilie", sub: "Arraché, épaulé-jeté" },
+  { value: "Powerlifting", icon: "🦍", label: "Powerlifting", sub: "Squat, développé couché, soulevé de terre" },
+  { value: "Musculation / Hypertrophie", icon: "💪", label: "Musculation / Hypertrophie", sub: "Prise de masse, split par groupe musculaire" },
+  { value: "Fitness / CrossFit", icon: "🔥", label: "Fitness / CrossFit", sub: "Conditionnement croisé" },
+  { value: "Athlétisme & vitesse", icon: "🏃", label: "Athlétisme & vitesse", sub: "Sprint, demi-fond…" },
+  { value: "Sports collectifs", icon: "⚽", label: "Sports collectifs", sub: "Foot, rugby, hand…" },
+  { value: "Endurance", icon: "🏊", label: "Endurance", sub: "Course, trail, natation, vélo…" },
+  { value: "Arts martiaux & combat", icon: "🥋", label: "Arts martiaux & combat", sub: "MMA, boxe, judo…" },
+  { value: "Autre", icon: "✨", label: "Autre", sub: "Précise ton sport" },
 ];
-const LEVELS: { value: ProgramLevel; label: string; sub: string; icon: string }[] = [
-  { value: "debutant", label: "Débutant", sub: "< 1 an", icon: "🌱" },
-  { value: "intermediaire", label: "Intermédiaire", sub: "1–3 ans", icon: "⚡" },
-  { value: "avance", label: "Avancé", sub: "3–6 ans", icon: "🔥" },
-  { value: "elite", label: "Élite", sub: "Compétiteur", icon: "🏆" },
+
+// Clés partagées avec WEAKNESS_META/WEAKNESS_ARCHETYPE_L1 côté generate/route.ts — biaise la
+// génération sur 2 niveaux (voir route.ts pour le détail) : jamais juste décoratif.
+const WEAKNESSES_BY_SPORT: Record<string, { key: string; label: string }[]> = {
+  "Haltérophilie": [
+    { key: "arrache", label: "Technique arraché" },
+    { key: "epaule_jete", label: "Technique épaulé-jeté" },
+    { key: "mobilite", label: "Mobilité hanches/chevilles" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Powerlifting": [
+    { key: "jambes", label: "Jambes" },
+    { key: "dos_bras", label: "Dos & bras" },
+    { key: "pecs_epaules", label: "Pectoraux & épaules" },
+    { key: "technique", label: "Technique de mouvement" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Musculation / Hypertrophie": [
+    { key: "jambes", label: "Jambes" },
+    { key: "dos", label: "Dos" },
+    { key: "pectoraux", label: "Pectoraux" },
+    { key: "epaules", label: "Épaules" },
+    { key: "bras", label: "Bras" },
+  ],
+  "Athlétisme & vitesse": [
+    { key: "vitesse", label: "Vitesse pure" },
+    { key: "endurance_vitesse", label: "Endurance de vitesse" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "technique_course", label: "Technique de course" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Endurance": [
+    { key: "vitesse", label: "Vitesse" },
+    { key: "endurance_fond", label: "Endurance de fond" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "technique_course", label: "Technique de course" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Sports collectifs": [
+    { key: "puissance", label: "Puissance" },
+    { key: "vitesse", label: "Vitesse" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "gainage", label: "Gainage / contact" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Fitness / CrossFit": [
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "force_generale", label: "Force générale" },
+    { key: "technique", label: "Technique des mouvements" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Arts martiaux & combat": [
+    { key: "frappe", label: "Puissance de frappe" },
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "explosivite", label: "Explosivité" },
+    { key: "gainage", label: "Gainage" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+  "Autre": [
+    { key: "force_generale", label: "Force générale" },
+    { key: "cardio", label: "Endurance cardio" },
+    { key: "technique", label: "Technique" },
+    { key: "recuperation", label: "Récupération" },
+  ],
+};
+
+// Wording/icônes repris du POC (FOCUS_META) — pilote réellement ProgramFocus (shapeForCycle),
+// pas juste une étiquette narrative. "technique"/"combat"/"autre" (ProgramFocus valides mais pas
+// exposés ici) restent accessibles uniquement en modifiant le state directement si besoin futur.
+const FOCUS_META: { value: ProgramFocus; icon: string; label: string }[] = [
+  { value: "volume", icon: "📈", label: "Augmenter mon volume d'entraînement" },
+  { value: "intensite", icon: "🔥", label: "Progresser en intensité" },
+  { value: "competition", icon: "🎯", label: "Préparer une échéance précise" },
+  { value: "mixte", icon: "⚖️", label: "Un peu de tout, rester régulier" },
 ];
+
+// Niveau retiré (2026-08-05, même décision que le POC) : `baseDiff` démarre sur une ancre neutre
+// fixe (6/10 = "intermédiaire") pour tout le monde plutôt qu'un niveau auto-déclaré peu fiable —
+// l'ajustement individuel réel viendrait de l'autorégulation/wellness, pas d'une étiquette.
+const NEUTRAL_LEVEL: ProgramLevel = "intermediaire";
+
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 // Toujours un multiple de 4 semaines — aligné sur les blocs de périodisation
 // MEV/Surcharge/MRV/Deload du générateur (voir generate/route.ts).
@@ -40,16 +126,28 @@ interface Props {
 export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
   const [sport, setSport] = useState("");
   const [focus, setFocus] = useState<ProgramFocus | "">("");
-  const [level, setLevel] = useState<ProgramLevel | "">("");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
   const [duration, setDuration] = useState<4 | 8 | 12>(8);
+  const [weaknesses, setWeaknesses] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  function selectSport(s: string) {
+    const next = s === sport ? "" : s;
+    setSport(next);
+    setWeaknesses([]); // les clés de faiblesses sont spécifiques au sport précédent, plus valides
+  }
+
+  function toggleWeakness(key: string) {
+    setWeaknesses(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : prev.length >= 2 ? prev : [...prev, key]
+    );
+  }
 
   function toggleDay(d: string) {
     setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   }
 
-  const canSubmit = focus && level && days.length > 0;
+  const canSubmit = focus && days.length > 0;
 
   async function handleGenerate() {
     if (!canSubmit) return;
@@ -58,11 +156,11 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
       const res = await fetch("/api/programs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sport, level, days, duration, focus }),
+        body: JSON.stringify({ sport, level: NEUTRAL_LEVEL, days, duration, focus, weaknesses }),
       });
       if (!res.ok) return;
       const { template } = await res.json();
-      const meta: ProgramMeta = { sport, level: level as ProgramLevel, focus: focus as ProgramFocus, days, duration };
+      const meta: ProgramMeta = { sport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration };
       onGenerate(template, meta);
     } finally {
       setLoading(false);
@@ -95,41 +193,34 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
         </div>
 
         <div style={{ overflowY: "auto", flex: 1, paddingBottom: 8 }}>
-          {/* Sport */}
+          {/* Sport — chips compactes comme le POC (icône inline, pas de carte haute) */}
           <Section label="🏋️ Sport">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SPORTS.map(s => (
-                <Pill key={s} active={sport === s} onClick={() => setSport(s === sport ? "" : s)}>{s}</Pill>
+              {SPORT_META.map(s => (
+                <Pill key={s.value} active={sport === s.value} onClick={() => selectSport(s.value)} title={s.sub}>
+                  {s.icon} {s.label}
+                </Pill>
               ))}
             </div>
           </Section>
 
-          {/* Objectif */}
-          <Section label="🎯 Objectif principal">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {FOCUSES.map(f => (
-                <Pill key={f.value} active={focus === f.value} onClick={() => setFocus(focus === f.value ? "" : f.value)}>{f.label}</Pill>
-              ))}
-            </div>
-          </Section>
+          {/* Faiblesses — biaise réellement la génération, voir generate/route.ts */}
+          {sport && (
+            <Section label="🎯 Points à travailler en priorité">
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                {WEAKNESSES_BY_SPORT[sport].map(w => (
+                  <Pill key={w.key} active={weaknesses.includes(w.key)} onClick={() => toggleWeakness(w.key)}>{w.label}</Pill>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: "#8a8f94" }}>Jusqu&apos;à 2 priorités — optionnel.</p>
+            </Section>
+          )}
 
-          {/* Niveau */}
-          <Section label="📊 Niveau">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 7 }}>
-              {LEVELS.map(l => (
-                <button
-                  key={l.value}
-                  onClick={() => setLevel(level === l.value ? "" : l.value)}
-                  style={{
-                    padding: "12px 5px", borderRadius: 13, cursor: "pointer", textAlign: "center",
-                    border: level === l.value ? "2px solid #d44000" : "2px solid rgba(0,0,0,0.08)",
-                    background: level === l.value ? "rgba(212,64,0,0.10)" : "#fff",
-                  }}
-                >
-                  <div style={{ fontSize: 18, marginBottom: 4 }}>{l.icon}</div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: level === l.value ? "#d44000" : "#8a8f94" }}>{l.label}</div>
-                  <div style={{ fontSize: 10, color: "#8a8f94", marginTop: 1 }}>{l.sub}</div>
-                </button>
+          {/* Objectif du bloc */}
+          <Section label="🎯 Objectif du bloc">
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {FOCUS_META.map(f => (
+                <FocusCard key={f.value} active={focus === f.value} icon={f.icon} label={f.label} onClick={() => setFocus(focus === f.value ? "" : f.value)} />
               ))}
             </div>
           </Section>
@@ -203,10 +294,11 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Pill({ active, onClick, title, children }: { active: boolean; onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
+      title={title}
       style={{
         padding: "7px 14px", borderRadius: 20, cursor: "pointer",
         border: active ? "2px solid #d44000" : "2px solid rgba(0,0,0,0.08)",
@@ -216,6 +308,23 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
       }}
     >
       {children}
+    </button>
+  );
+}
+
+function FocusCard({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10, textAlign: "left",
+        padding: "12px 14px", borderRadius: 14, cursor: "pointer",
+        border: active ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)",
+        background: active ? "rgba(212,64,0,.05)" : "#fff",
+      }}
+    >
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 800, color: active ? "#d44000" : "#1f2428" }}>{label}</span>
     </button>
   );
 }
