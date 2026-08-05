@@ -1254,14 +1254,20 @@ function generateTemplate({ sport, level, days, duration, weaknesses }) {
       : null;
 
     // Faiblesses, niveau 2 — voir generate/route.ts pour le raisonnement complet (liste de types
-    // acceptables + repli garanti sur le 1er jour non forcé, pas un typeHint unique).
+    // acceptables + repli garanti + dispatch sur des jours différents entre plusieurs faiblesses).
     const weaknessDayIdx = new Map();
+    const usedDayIdx = new Set();
     for (const key of selectedWeaknesses) {
       const meta = WEAKNESS_META[key];
       if (!meta) continue;
       const candidates = dayPlans.filter(d => !d.forced);
-      const match = meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ?? candidates[0];
-      if (match) weaknessDayIdx.set(key, match.dayIdx);
+      const unused = d => !usedDayIdx.has(d.dayIdx);
+      const match =
+        meta.typeHints.map(t => candidates.find(d => d.type === t && unused(d))).find(Boolean) ??
+        meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ??
+        candidates.find(unused) ??
+        candidates[0];
+      if (match) { weaknessDayIdx.set(key, match.dayIdx); usedDayIdx.add(match.dayIdx); }
     }
 
     // Phase C — construire les séances

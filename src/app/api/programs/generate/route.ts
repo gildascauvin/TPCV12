@@ -2409,18 +2409,29 @@ export async function POST(req: Request) {
       ? { type: dayPlans[dayPlans.length - 1].type, calIdx: dayPlans[dayPlans.length - 1].calIdx }
       : null;
 
-    // Faiblesses, niveau 2 — une ligne d'exercice ajoutée à la 1re séance de la semaine dont le
-    // type correspond le mieux à chaque faiblesse choisie, en essayant chaque type de typeHints
-    // dans l'ordre. Garantie d'effet visible : si aucun des types préférés n'est présent cette
+    // Faiblesses, niveau 2 — une ligne d'exercice ajoutée à la séance de la semaine dont le type
+    // correspond le mieux à chaque faiblesse choisie, en essayant chaque type de typeHints dans
+    // l'ordre. Garantie d'effet visible : si aucun des types préférés n'est présent cette
     // semaine-là, repli sur le 1er jour non forcé plutôt qu'aucun ajout — un effet imparfaitement
     // placé reste préférable à un effet invisible pour l'utilisateur qui vient de faire un choix.
+    // Dispatch sur des jours différents (max 2 faiblesses) : sans ça, 2 faiblesses aux typeHints
+    // proches (ex. toutes deux "volume" en 1re préférence) atterrissent sur LE MÊME jour — repéré
+    // par Gildas ("il faudrait dispatch les exos en plus dans les jours") après avoir testé 2
+    // faiblesses ensemble. Priorité à un jour pas encore utilisé par une faiblesse précédente ;
+    // empiler sur un jour déjà utilisé reste le dernier recours plutôt que de ne rien ajouter.
     const weaknessDayIdx = new Map<string, number>();
+    const usedDayIdx = new Set<number>();
     for (const key of selectedWeaknesses) {
       const meta = WEAKNESS_META[key];
       if (!meta) continue;
       const candidates = dayPlans.filter(d => !d.forced);
-      const match = meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ?? candidates[0];
-      if (match) weaknessDayIdx.set(key, match.dayIdx);
+      const unused = (d: (typeof candidates)[number]) => !usedDayIdx.has(d.dayIdx);
+      const match =
+        meta.typeHints.map(t => candidates.find(d => d.type === t && unused(d))).find(Boolean) ??
+        meta.typeHints.map(t => candidates.find(d => d.type === t)).find(Boolean) ??
+        candidates.find(unused) ??
+        candidates[0];
+      if (match) { weaknessDayIdx.set(key, match.dayIdx); usedDayIdx.add(match.dayIdx); }
     }
 
     // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
