@@ -67,9 +67,16 @@ export async function POST(req: Request) {
   // de formatage inhérent au texte libre, pas un problème de contenu. Le tool-use fait porter la
   // conformité au schéma par l'API elle-même (message.content[].input est déjà un objet structuré,
   // aucun parsing manuel), nettement plus robuste pour une sortie structurée.
-  const SUBMIT_TOOL = {
-    name: "soumettre_contenu_sport",
-    description: "Soumet le contenu généré (faiblesses + banque d'exercices) pour le sport décrit.",
+  //
+  // 2 appels Haiku en parallèle plutôt qu'un seul (2026-08-06, retour de Gildas "encore plus
+  // court ?") : faiblesses et exercices sont deux contenus indépendants — les séparer permet de
+  // lancer les deux générations en même temps (Promise.all) au lieu de les générer l'une après
+  // l'autre dans un seul appel. Le temps total se rapproche du plus long des deux au lieu de la
+  // somme des deux. Léger surcoût (system prompt dupliqué sur 2 appels) mais négligeable au vu du
+  // coût déjà minime de Haiku.
+  const WEAKNESS_TOOL = {
+    name: "soumettre_faiblesses",
+    description: "Soumet le menu de faiblesses/points à travailler pour le sport décrit.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -92,6 +99,17 @@ export async function POST(req: Request) {
             required: ["key", "label", "extraLine", "typeHints"],
           },
         },
+      },
+      required: ["weaknesses"],
+    },
+  };
+
+  const EXERCISES_TOOL = {
+    name: "soumettre_exercices",
+    description: "Soumet la banque d'exercices pour le sport décrit.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
         exercises: {
           type: "object" as const,
           properties: {
@@ -104,42 +122,46 @@ export async function POST(req: Request) {
           required: SESSION_TYPES,
         },
       },
-      required: ["weaknesses", "exercises"],
+      required: ["exercises"],
     },
   };
 
-  try {
-    // Haiku plutôt que Sonnet (2026-08-06, retour de Gildas "c'est long à générer") : la tâche est
-    // de la nomenclature spécifique à un sport (vocabulaire d'exercices, libellés de faiblesses),
-    // pas du raisonnement complexe — Haiku est nettement plus rapide pour ce type de génération
-    // structurée courte, sans perte de qualité attendue sur ce cas d'usage.
+  const BASE_SYSTEM = `Tu es le générateur de contenu sportif de ThePerfClub. Un utilisateur décrit un sport absent de nos 31 catégories pré-construites. Génère un contenu adapté à ce sport précis, à intégrer dans un moteur de périodisation existant (blocs MEV/Surcharge/MRV/Deload) qui gère déjà toute la structure — tu fournis UNIQUEMENT le vocabulaire d'exercices et les priorités de faiblesses, jamais de structure de programme, jamais de nombre de semaines ou de séances.
+
+Vocabulaire réellement spécifique au sport décrit (mouvements, équipement, gestes propres à cette discipline) — jamais de mouvement générique interchangeable ("squat", "gainage", "course") sauf s'il est authentiquement central à ce sport précis.`;
+
+  const userMessage = `Sport décrit par l'utilisateur : "${description}"`;
+
+  async function callTool(tool: typeof WEAKNESS_TOOL | typeof EXERCISES_TOOL, extraRules: string) {
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1536,
-      system: `Tu es le générateur de contenu sportif de ThePerfClub. Un utilisateur décrit un sport absent de nos 31 catégories pré-construites. Génère un contenu adapté à ce sport précis, à intégrer dans un moteur de périodisation existant (blocs MEV/Surcharge/MRV/Deload) qui gère déjà toute la structure — tu fournis UNIQUEMENT le vocabulaire d'exercices et les priorités de faiblesses, jamais de structure de programme, jamais de nombre de semaines ou de séances.
-
-Règles strictes :
-- 4 à 5 entrées dans "weaknesses", clés courtes en snake_case sans accents.
-- Exactement 4 exercices par catégorie dans "exercises".
-- Format des exercices "technique"/"volume"/"intensite" : "Nom de l'exercice — Sx R" (ex. "Pompes lestées — 4×8"), jamais de fourchette approximative.
-- "recuperation"/"test" : texte libre plus descriptif accepté.
-- Vocabulaire réellement spécifique au sport décrit (mouvements, équipement, gestes propres à cette discipline) — jamais de mouvement générique interchangeable ("squat", "gainage", "course") sauf s'il est authentiquement central à ce sport précis.`,
-      messages: [{ role: "user", content: `Sport décrit par l'utilisateur : "${description}"` }],
-      tools: [SUBMIT_TOOL],
-      tool_choice: { type: "tool", name: "soumettre_contenu_sport" },
+      max_tokens: 1024,
+      system: `${BASE_SYSTEM}\n\n${extraRules}`,
+      messages: [{ role: "user", content: userMessage }],
+      tools: [tool],
+      tool_choice: { type: "tool", name: tool.name },
     });
-
     const toolUse = message.content.find(b => b.type === "tool_use");
-    if (!toolUse || toolUse.type !== "tool_use") throw new Error("Claude n'a pas appelé l'outil attendu");
-    const parsed = toolUse.input as { weaknesses?: unknown; exercises?: unknown };
+    if (!toolUse || toolUse.type !== "tool_use") throw new Error(`Claude n'a pas appelé l'outil ${tool.name}`);
+    return toolUse.input as Record<string, unknown>;
+  }
 
-    if (!isValidExercises(parsed.exercises) || !isValidWeaknesses(parsed.weaknesses)) {
-      throw new Error("Forme d'outil invalide : " + JSON.stringify(parsed));
+  try {
+    const [weaknessResult, exercisesResult] = await Promise.all([
+      callTool(WEAKNESS_TOOL, `Règles strictes :\n- 4 à 5 entrées dans "weaknesses", clés courtes en snake_case sans accents.`),
+      callTool(EXERCISES_TOOL, `Règles strictes :\n- Exactement 4 exercices par catégorie dans "exercises".\n- Format des exercices "technique"/"volume"/"intensite" : "Nom de l'exercice — Sx R" (ex. "Pompes lestées — 4×8"), jamais de fourchette approximative.\n- "recuperation"/"test" : texte libre plus descriptif accepté.`),
+    ]);
+
+    const weaknesses = weaknessResult.weaknesses;
+    const exercises = exercisesResult.exercises;
+
+    if (!isValidExercises(exercises) || !isValidWeaknesses(weaknesses)) {
+      throw new Error("Forme d'outil invalide : " + JSON.stringify({ weaknesses, exercises }));
     }
 
     const weaknessMeta: Record<string, WeaknessMeta> = {};
     const weaknessOptions: { key: string; label: string }[] = [];
-    for (const w of parsed.weaknesses as CustomWeakness[]) {
+    for (const w of weaknesses as CustomWeakness[]) {
       weaknessMeta[w.key] = { extraLine: w.extraLine, typeHints: w.typeHints };
       weaknessOptions.push({ key: w.key, label: w.label });
     }
@@ -147,7 +169,7 @@ Règles strictes :
     return NextResponse.json({
       matched: false,
       sportLabel: description,
-      exercises: parsed.exercises as CustomExercises,
+      exercises: exercises as CustomExercises,
       weaknessOptions,
       weaknessMeta,
     });
