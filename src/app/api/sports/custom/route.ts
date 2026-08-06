@@ -109,8 +109,12 @@ export async function POST(req: Request) {
   };
 
   try {
+    // Haiku plutôt que Sonnet (2026-08-06, retour de Gildas "c'est long à générer") : la tâche est
+    // de la nomenclature spécifique à un sport (vocabulaire d'exercices, libellés de faiblesses),
+    // pas du raisonnement complexe — Haiku est nettement plus rapide pour ce type de génération
+    // structurée courte, sans perte de qualité attendue sur ce cas d'usage.
     const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1536,
       system: `Tu es le générateur de contenu sportif de ThePerfClub. Un utilisateur décrit un sport absent de nos 31 catégories pré-construites. Génère un contenu adapté à ce sport précis, à intégrer dans un moteur de périodisation existant (blocs MEV/Surcharge/MRV/Deload) qui gère déjà toute la structure — tu fournis UNIQUEMENT le vocabulaire d'exercices et les priorités de faiblesses, jamais de structure de programme, jamais de nombre de semaines ou de séances.
 
