@@ -114,9 +114,10 @@ Règles strictes :
       weaknessOptions,
       weaknessMeta,
     });
-  } catch {
+  } catch (err) {
     // Repli explicite — le front retombe sur le contenu générique "Autre" existant, jamais
     // d'écran cassé sur un échec Claude (parsing, timeout, forme inattendue).
+    console.error("[api/sports/custom] échec génération Claude:", err);
     return NextResponse.json({ matched: false, sportLabel: description, exercises: null, weaknessOptions: null, weaknessMeta: null });
   }
 }
