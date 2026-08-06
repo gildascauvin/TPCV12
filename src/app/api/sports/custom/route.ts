@@ -61,6 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ matched: true, category, sportLabel: description });
   }
 
+  let rawText = "";
   try {
     const message = await client.messages.create({
       model: "claude-sonnet-4-6",
@@ -92,6 +93,7 @@ Règles strictes :
     });
 
     const text = message.content[0].type === "text" ? message.content[0].text : "";
+    rawText = text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("Réponse Claude sans JSON exploitable");
     const parsed = JSON.parse(jsonMatch[0]);
@@ -117,7 +119,7 @@ Règles strictes :
   } catch (err) {
     // Repli explicite — le front retombe sur le contenu générique "Autre" existant, jamais
     // d'écran cassé sur un échec Claude (parsing, timeout, forme inattendue).
-    console.error("[api/sports/custom] échec génération Claude:", err);
+    console.error("[api/sports/custom] échec génération Claude:", err, "\n--- réponse brute ---\n", rawText);
     return NextResponse.json({ matched: false, sportLabel: description, exercises: null, weaknessOptions: null, weaknessMeta: null });
   }
 }
