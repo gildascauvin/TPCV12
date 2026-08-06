@@ -25,6 +25,7 @@ import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
 type StepId =
+  | "role"
   | "value_intro"
   | "sport_2a" | "level_2a" | "goal_2a" | "frustration_2a" | "days_2a"
   | "overload_2a" | "planning_2a" | "fatigue_2a"
@@ -56,7 +57,7 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    les tableaux statiques ci-dessous — ce sont des étapes "payeurs seulement", insérées
    dynamiquement après celebration une fois trial_started réussi (voir getPath()/paidExtras). */
 const ATHLETE_PATH: StepId[] = [
-  "value_intro",
+  "value_intro", "role",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "account",
@@ -69,7 +70,7 @@ const ATHLETE_PATH: StepId[] = [
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
-  "value_intro",
+  "value_intro", "role",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "account",
@@ -93,7 +94,7 @@ const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b"];
    une progression persistante même sur les écrans historiquement masqués par POST_PROGRESS
    (autoreg_score, profile_recap, week_preview, paywall_*). Filtré par le `path` actif pour rester
    cohérent avec les variantes (programme claimé, A/B court, etc.) qui sautent certains steps. */
-const PHASE_1_STEPS: StepId[] = ["frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
+const PHASE_1_STEPS: StepId[] = ["role", "frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
 const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "goal_2a", "days_2a", "profile_recap", "week_preview_2a", "week_preview_2b"];
 const PHASE_3_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
 const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration"];
@@ -128,7 +129,7 @@ function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct:
    collectés pour personnaliser réellement le programme au lieu de copier le template public tel
    quel (voir claimAndAssignProgram()/completeProfile() branche coach). */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro",
+  "value_intro", "role",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "account",
   "autoreg_score",
@@ -137,7 +138,7 @@ const PROGRAM_ATHLETE_PATH: StepId[] = [
   "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro",
+  "value_intro", "role",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "account",
   "autoreg_score_coach",
@@ -150,7 +151,7 @@ const PROGRAM_COACH_PATH: StepId[] = [
    après Rôle — profil encore vide à ce stade. Garde ensuite le diagnostic complet (contrairement
    à l'ancien bras test qui sautait direct au paywall) : voir plan onboarding v2, "Pivot A/B". */
 const SHORT_ATHLETE_PATH: StepId[] = [
-  "value_intro", "account",
+  "value_intro", "role", "account",
   "frustration_2a",
   "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
@@ -162,7 +163,7 @@ const SHORT_ATHLETE_PATH: StepId[] = [
   "celebration",
 ];
 const SHORT_COACH_PATH: StepId[] = [
-  "value_intro", "account",
+  "value_intro", "role", "account",
   "challenge_2b",
   "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
@@ -178,7 +179,7 @@ const SHORT_COACH_PATH: StepId[] = [
    collectés comme PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH, voir commentaire ci-dessus), Signup
    déplacé juste après Rôle comme les paths courts ci-dessus. */
 const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "account",
+  "value_intro", "role", "account",
   "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
   "autoreg_score",
   "concept_autoreg",
@@ -186,7 +187,7 @@ const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
   "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const SHORT_PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "account",
+  "value_intro", "role", "account",
   "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
   "autoreg_score_coach",
   "concept_autoreg",
@@ -950,7 +951,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      (wellness_q/wellness_reveal ou invite_team) après celebration, voir getPath(). */
   const [paidExtras, setPaidExtras] = useState<StepId[] | null>(null);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
-  const [roleChosen, setRoleChosen] = useState(!!(pendingData?.role || initialRole));
+  /* roleChosen ne dérive plus de initialRole (2026-08-06) : le rôle pré-rempli par un ?role= dans
+     l'URL (iframes programme, landing pages) mesurait nettement moins bien que le demander sur un
+     vrai écran de choix (34,6% vs 65,0%, même canal, même semaine) — voir la restauration du step
+     "role" ci-dessous. Seule une continuation Google (pendingData.role) reste un vrai choix déjà
+     fait dans CETTE session (avant le redirect OAuth), donc reste dispensée de le refaire. */
+  const [roleChosen, setRoleChosen] = useState(!!pendingData?.role);
   const [newUserId, setNewUserId] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [claimedProgramName, setClaimedProgramName] = useState<string | null>(null);
@@ -1136,7 +1142,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const props = {
       step: currentStep,
       step_index: stepIdx,
-      role: (currentStep === "value_intro" && !roleChosen) ? "selecting" : (role || "unknown"),
+      role: currentStep === "role" ? "selecting" : (role || "unknown"),
       mode: isRegisterMode ? "register" : "auth",
       ab_variant: assignedVariant ?? "pending",
     };
@@ -1146,23 +1152,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     finishGuardRef.current = false;
   }, [currentStep]);
 
-  /* Déclaré APRÈS l'effet générique ci-dessus (2026-08-02, bug trouvé via HogQL sur données prod
-     réelles) : au montage, React exécute les effets dans leur ordre de déclaration textuelle — cet
-     effet émettait auparavant onboarding_role_viewed AVANT que l'effet générique n'émette
-     onboarding_value_intro_viewed, pour tout trafic ?role=/programme claimé/invitation (initialRole).
-     Confirmé sur 19/19 sessions réelles depuis le déploiement de la fusion value_intro/role
-     (2026-07-31) : role_viewed antérieur ou égal à value_intro_viewed dans 100% des cas, rendant ce
-     segment invisible dans un funnel ordonné value_intro→role alors qu'il convertit en réalité à
-     100% (même clic). Même classe de bug que le fix program_onboarding_start/onboarding_role_viewed
-     du 2026-07-14/15 — un effet à deps [] déclaré avant l'effet générique de vue d'étape. */
-  useEffect(() => {
-    if (initialRole) {
-      const syntheticProps = { step: "role", step_index: 0, role: initialRole, mode: isRegisterMode ? "register" : "auth" };
-      posthog.capture("onboarding_step_viewed", syntheticProps);
-      posthog.capture("onboarding_role_viewed", syntheticProps);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* Ancien effet synthétique "?role= saute le step role" supprimé le 2026-08-06 : "role" redevient
+     un vrai step rendu (voir plus bas) et roleChosen ne dérive plus de initialRole (voir plus haut)
+     — plus personne ne saute ce step via un simple ?role= dans l'URL, donc plus besoin de rejouer
+     un event synthétique pour préserver la continuité du funnel. Seule l'invitation coach (
+     INVITE_ATHLETE_PATH, qui exclut "role" de son tableau) saute encore réellement ce step, mais ce
+     trafic est déjà filtré hors des funnels historiques (onboarding_source is_not "coach_invite") —
+     pas besoin d'un synthétique dédié pour lui. */
 
   useEffect(() => {
     if (pendingData?.role && !initialRole) {
@@ -1696,57 +1692,57 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {showFrise && <ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark={isDarkStep} />}
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
-        {/* ── VALUE INTRO — fusionné avec le choix du rôle (le CTA EST le choix de rôle tant
-            qu'il n'est pas encore connu ; sinon CTA unique, role-aware). Photo en fond plein
-            viewport (comme validé sur le POC) plutôt qu'une carte encadrée + carrousel. "role"
-            n'est plus un step séparé dans aucun path — voir StepId/tableaux de path plus haut. */}
+        {/* ── ROLE — restauré le 2026-08-06 (supprimé le 31/07, fusionné dans value_intro).
+            Écran séparé, style d'origine (cartes) restauré tel quel : mesuré à 63-68% de
+            clic-through avant sa suppression, contre 55-56% pour le CTA fusionné à 2 cartes sur
+            value_intro — et surtout, un rôle demandé ici convertit nettement mieux qu'un rôle
+            pré-rempli silencieusement via ?role= (65,0% vs 34,6%, même canal programme claimé,
+            même semaine). Ne s'affiche que si roleChosen est encore faux à ce stade (une
+            continuation Google avec pendingData.role saute ce step normalement, puisqu'il est
+            absent de son path effectif à ce point — voir googleInitDone plus bas). */}
+        {currentStep === "role" && (
+          <div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Essayer ThePerfClub en tant que</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
+              On personnalise ton expérience.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+              {[
+                { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
+                { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
+              ].map(({ r, icon, label, sub, badgeBg }) => (
+                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); if (abEligible && !assignedVariant) setAssignedVariant("control"); })}
+                  style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "18px 18px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.08)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
+                  <div style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>{icon}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 17, fontWeight: 900, letterSpacing: "-0.01em", color: roleChosen && role === r ? "#d44000" : "#171b1f", marginBottom: 2 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.4 }}>{sub}</div>
+                  </div>
+                  <div style={{ flexShrink: 0, color: "rgba(0,0,0,.20)", fontSize: 18 }}>→</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── VALUE INTRO — CTA générique unique (2026-08-06) : le choix du rôle vit à nouveau sur
+            son propre step juste après (voir ci-dessus), value_intro ne le devine plus jamais via
+            roleChosen/initialRole. Photo en fond plein viewport (POC v62), contenu neutre (pas de
+            branche par rôle, puisque le rôle n'est plus connu ici pour un visiteur frais). */}
         {currentStep === "value_intro" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
-          const isCoachRole = roleChosen && role === "coach";
-          const isAthleteRole = roleChosen && role === "athlete";
 
           const headline = isClaimed
-            ? (isCoachRole
-                ? <>Le programme <em>{claimedProgramName}</em> est prêt à s&apos;adapter à tes sportifs.</>
-                : <>Ton programme <em>{claimedProgramName}</em> est prêt à s&apos;adapter à toi.</>)
-            : isCoachRole
-              ? "Des séances qui s'adaptent enfin à tes sportifs, pas l'inverse."
-              : isAthleteRole
-                ? "Des séances qui s'adaptent enfin à toi, pas l'inverse."
-                : "Des séances qui s'adaptent enfin aux sportifs, pas l'inverse.";
+            ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
+            : "Des séances qui s'adaptent enfin aux sportifs, pas l'inverse.";
 
-          const subhead = isCoachRole
-            ? "ThePerfClub ajuste les programmes de tes sportifs à leur forme du jour. Plus de progrès, moins de blessures."
-            : isAthleteRole
-              ? "ThePerfClub ajuste ton programme à ta forme du jour. Plus de progrès, moins de blessures."
-              : "ThePerfClub ajuste les programmes selon la forme du jour. Plus de progrès, moins de blessures.";
+          const subhead = "ThePerfClub ajuste les programmes selon la forme du jour. Plus de progrès, moins de blessures.";
 
-          const steps = isCoachRole
-            ? [
-                { title: "Comprends le profil de tes sportifs", sub: "Leurs préférences d'entraînement et leurs habitudes de récupération." },
-                { title: isClaimed ? "Personnalise leur programme" : "Ajuste leurs programmes", sub: isClaimed ? `${claimedProgramName} s'ajuste à la forme du jour de tes sportifs.` : "Chaque séance évolue selon la forme du jour de tes sportifs." },
-                { title: "Fais progresser tes sportifs durablement", sub: "Des recommandations quotidiennes pour optimiser leur performance et récupération." },
-              ]
-            : isAthleteRole
-              ? [
-                  { title: "Comprends ton profil", sub: "Tes préférences d'entraînement et tes habitudes de récupération." },
-                  { title: isClaimed ? "Personnalise ton programme" : "Ajuste ton programme", sub: isClaimed ? `${claimedProgramName} s'ajuste à ta forme du jour.` : "Chaque séance évolue selon ta forme du jour." },
-                  { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
-                ]
-              : [
-                  { title: "Comprends ton profil", sub: "Tes préférences d'entraînement, habitudes de récupération ou celles de tes sportifs." },
-                  { title: "Ajuste ton programme", sub: "Chaque séance évolue selon ta forme du jour ou celle de tes sportifs." },
-                  { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
-                ];
-
-          const handleRoleClick = (r: Role) => nextAfterChoice(() => {
-            setRole(r); setRoleChosen(true);
-            posthog.setPersonProperties({ role: r });
-            if (abEligible && !assignedVariant) setAssignedVariant("control");
-            const roleProps = { step: "role", step_index: stepIdx, role: r, mode: isRegisterMode ? "register" : "auth" };
-            posthog.capture("onboarding_step_viewed", roleProps);
-            posthog.capture("onboarding_role_viewed", roleProps);
-          });
+          const steps = [
+            { title: "Comprends ton profil", sub: "Tes préférences d'entraînement, habitudes de récupération ou celles de tes sportifs." },
+            { title: isClaimed ? "Personnalise ton programme" : "Ajuste ton programme", sub: isClaimed ? `${claimedProgramName} s'ajuste à ta forme du jour.` : "Chaque séance évolue selon ta forme du jour ou celle de tes sportifs." },
+            { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
+          ];
 
           return (
             <div>
@@ -1835,22 +1831,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
               </div>
 
-              {roleChosen ? (
-                <Actions variant="dark" onNext={next} nextLabel={isCoachRole ? "Configurer mon espace coach →" : "Créer mon profil →"} />
-              ) : (
-                <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#161616", padding: "14px 20px 24px" }}>
-                  <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>
-                    <button onClick={() => handleRoleClick("athlete")}
-                      style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}>
-                      Je suis sportif →
-                    </button>
-                    <button onClick={() => handleRoleClick("coach")}
-                      style={{ flex: 1, height: 52, borderRadius: 14, background: "#2a2a2a", color: "#fff", border: "1.5px solid rgba(255,255,255,.22)", fontSize: 14, fontWeight: 900, cursor: "pointer" }}>
-                      Je suis coach →
-                    </button>
-                  </div>
-                </div>
-              )}
+              <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
             </div>
           );
         })()}

@@ -74,12 +74,11 @@ export default function PublicProgramView({ program, coachName }: Props) {
     }
   }
 
-  function handleClaimGuest(role: "athlete" | "coach") {
+  function handleClaimGuest() {
     posthog.capture("program_cta_clicked", {
       program_id: program.id,
       program_name: program.name,
-      cta: role === "coach" ? "use_as_coach" : "use_as_athlete",
-      role,
+      cta: "personalize",
       is_embedded: isEmbedded,
     });
     if (typeof window !== "undefined") {
@@ -89,8 +88,11 @@ export default function PublicProgramView({ program, coachName }: Props) {
        destination dans un nouvel onglet (window.open), ce nouvel onglet est un contexte de storage
        potentiellement différent (repéré sur Safari iOS via une iframe WordPress) — le localStorage
        posé ci-dessus peut ne jamais y être visible. OnboardingFlow.tsx lit déjà ?claim= en priorité
-       (même mécanisme que le CTA flottant WP) et le reporte lui-même en localStorage une fois là. */
-    const dest = `/register?role=${role}&claim=${encodeURIComponent(program.id)}`;
+       (même mécanisme que le CTA flottant WP) et le reporte lui-même en localStorage une fois là.
+       Plus de ?role= : le choix du rôle se fait désormais sur l'écran dédié de l'onboarding
+       (voir OnboardingFlow.tsx) — le pré-remplir depuis ce lien convertissait nettement moins bien
+       que le demander explicitement, mesuré sur ce même canal (34,6% vs 65,0%). */
+    const dest = `/register?claim=${encodeURIComponent(program.id)}`;
     if (isEmbedded) window.open(dest, "_blank");
     else window.location.href = dest;
   }
@@ -208,16 +210,10 @@ export default function PublicProgramView({ program, coachName }: Props) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <button
-                onClick={() => handleClaimGuest("athlete")}
+                onClick={() => handleClaimGuest()}
                 style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
               >
-                Personnaliser en tant que sportif →
-              </button>
-              <button
-                onClick={() => handleClaimGuest("coach")}
-                style={{ width: "100%", padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-              >
-                Personnaliser en tant que coach →
+                Personnaliser ce programme →
               </button>
             </div>
           </div>
@@ -240,20 +236,12 @@ export default function PublicProgramView({ program, coachName }: Props) {
             {claiming ? "Ajout en cours…" : "📚 Ajouter à ma bibliothèque →"}
           </button>
         ) : (
-          <>
-            <button
-              onClick={() => handleClaimGuest("coach")}
-              style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", background: "#faf9f7", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
-            >
-              Personnaliser en tant que coach →
-            </button>
-            <button
-              onClick={() => handleClaimGuest("athlete")}
-              style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
-            >
-              Personnaliser en tant que sportif →
-            </button>
-          </>
+          <button
+            onClick={() => handleClaimGuest()}
+            style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+          >
+            Personnaliser ce programme →
+          </button>
         )}
       </div>
     </div>
