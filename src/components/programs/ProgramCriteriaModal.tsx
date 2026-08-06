@@ -118,6 +118,16 @@ export interface ProgramMeta {
   duration: 4 | 8 | 12;
 }
 
+// Sport libre non couvert par les 9 cartes ci-dessus (2026-08-06, carte "Autre") — /api/sports/custom
+// vérifie d'abord si le texte matche déjà un des 31 curriculums existants (aucune génération dans
+// ce cas), sinon appelle Claude pour un contenu adapté (exercices + menu de faiblesses), injecté
+// dans /api/programs/generate via customExercises/customWeaknessMeta. "failed" = repli silencieux
+// sur le contenu générique "Autre" déjà existant, jamais d'écran cassé.
+type CustomSportState =
+  | { status: "matched"; sportLabel: string }
+  | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }> }
+  | { status: "failed" };
+
 interface Props {
   onClose: () => void;
   onGenerate: (template: ProgramTemplate, meta: ProgramMeta) => void;
@@ -130,11 +140,42 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
   const [duration, setDuration] = useState<4 | 8 | 12>(8);
   const [weaknesses, setWeaknesses] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sportDescription, setSportDescription] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [customSport, setCustomSport] = useState<CustomSportState | null>(null);
 
   function selectSport(s: string) {
     const next = s === sport ? "" : s;
     setSport(next);
     setWeaknesses([]); // les clés de faiblesses sont spécifiques au sport précédent, plus valides
+    setSportDescription("");
+    setCustomSport(null);
+  }
+
+  async function analyzeSport() {
+    const description = sportDescription.trim();
+    if (!description || analyzing) return;
+    setAnalyzing(true);
+    setWeaknesses([]);
+    try {
+      const res = await fetch("/api/sports/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      const data = res.ok ? await res.json() : null;
+      if (data?.matched) {
+        setCustomSport({ status: "matched", sportLabel: data.sportLabel });
+      } else if (data?.exercises) {
+        setCustomSport({ status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta });
+      } else {
+        setCustomSport({ status: "failed" });
+      }
+    } catch {
+      setCustomSport({ status: "failed" });
+    } finally {
+      setAnalyzing(false);
+    }
   }
 
   function toggleWeakness(key: string) {
@@ -153,14 +194,21 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
     if (!canSubmit) return;
     setLoading(true);
     try {
+      // Sport libre analysé (matché ou généré) : utilise la description réelle plutôt que le
+      // littéral "Autre" — un nom de programme plus parlant, et getSportCategory() la résout de
+      // toute façon exactement pareil (déjà vérifié par /api/sports/custom).
+      const effectiveSport = customSport?.status === "failed" || !customSport ? sport : customSport.sportLabel;
       const res = await fetch("/api/programs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sport, level: NEUTRAL_LEVEL, days, duration, focus, weaknesses }),
+        body: JSON.stringify({
+          sport: effectiveSport, level: NEUTRAL_LEVEL, days, duration, focus, weaknesses,
+          ...(customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+        }),
       });
       if (!res.ok) return;
       const { template } = await res.json();
-      const meta: ProgramMeta = { sport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration };
+      const meta: ProgramMeta = { sport: effectiveSport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration };
       onGenerate(template, meta);
     } finally {
       setLoading(false);
@@ -202,13 +250,55 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
                 </Pill>
               ))}
             </div>
+
+            {/* Sport libre (2026-08-06) — "Autre" ne route plus systématiquement vers le contenu
+                générique : getSportCategory() vérifie d'abord si le texte matche déjà un
+                curriculum existant, sinon Claude génère exercices + faiblesses adaptés (façon
+                Levels "Or describe your meal here…" — texte libre, bouton explicite, l'analyse
+                prend quelques secondes contrairement au reste de l'écran, jamais silencieuse). */}
+            {sport === "Autre" && (
+              <div style={{ marginTop: 12 }}>
+                <textarea
+                  value={sportDescription}
+                  onChange={e => { setSportDescription(e.target.value); setCustomSport(null); }}
+                  placeholder="Décris ton sport (ex. escalade en salle, kite-surf, cirque…)"
+                  rows={2}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", fontFamily: "inherit", fontSize: 13, resize: "vertical", marginBottom: 8, outline: "none" }}
+                />
+                <button
+                  onClick={analyzeSport}
+                  disabled={!sportDescription.trim() || analyzing}
+                  style={{
+                    padding: "9px 16px", borderRadius: 10, border: "none",
+                    cursor: sportDescription.trim() && !analyzing ? "pointer" : "not-allowed",
+                    background: sportDescription.trim() && !analyzing ? "#171b1f" : "#e8e4df",
+                    color: sportDescription.trim() && !analyzing ? "#fff" : "#aaa",
+                    fontWeight: 800, fontSize: 12.5,
+                  }}
+                >
+                  {analyzing ? "Analyse en cours…" : "Analyser mon sport →"}
+                </button>
+                {customSport?.status === "matched" && (
+                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour "{customSport.sportLabel}".</p>
+                )}
+                {customSport?.status === "generated" && (
+                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour "{customSport.sportLabel}".</p>
+                )}
+                {customSport?.status === "failed" && (
+                  <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
+                )}
+              </div>
+            )}
           </Section>
 
-          {/* Faiblesses — biaise réellement la génération, voir generate/route.ts */}
+          {/* Faiblesses — biaise réellement la génération, voir generate/route.ts. Pour un sport
+              libre "matched" (reconnu comme un curriculum existant sans correspondre à une des 9
+              cartes), pas de menu taillé disponible côté frontend — repli sur le menu générique
+              "Autre" plutôt que masquer la section entière. */}
           {sport && (
             <Section label="🎯 Points à travailler en priorité">
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-                {WEAKNESSES_BY_SPORT[sport].map(w => (
+                {(customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
                   <Pill key={w.key} active={weaknesses.includes(w.key)} onClick={() => toggleWeakness(w.key)}>{w.label}</Pill>
                 ))}
               </div>

@@ -200,9 +200,11 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
   test:        ["Test & évaluation", "Bilan de cycle", "Séance test"],
 };
 
-type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "autre";
+// Exportés (2026-08-06) pour réutilisation par /api/sports/custom/route.ts — évite de dupliquer
+// le routage par mots-clés pour décider si un sport libre matche déjà un curriculum existant.
+export type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "autre";
 
-function getSportCategory(sport: string): SportCategory {
+export function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
   // Musculation/Hypertrophie (split par groupe musculaire) ≠ Powerlifting (squat/bench/deadlift) —
   // "musculation" avait le même sort que "power"/"force" avant ce fix (mélangés dans le même seau
@@ -2108,7 +2110,7 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
 // le niveau 2 seul, aucun cas particulier à coder par nombre de jours. Les collisions RPE
 // éventuellement introduites par ce remplacement sont absorbées par les Phases A2/B universelles
 // exactement comme pour n'importe quel autre archétype de curriculum.
-interface WeaknessMeta { extraLine: string; typeHints: SessionType[] }
+export interface WeaknessMeta { extraLine: string; typeHints: SessionType[] }
 const WEAKNESS_META: Record<string, WeaknessMeta> = {
   jambes:            { extraLine: "Renfo ciblé jambes : squat gobelet + fentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
   dos_bras:          { extraLine: "Renfo ciblé dos/bras : tirage horizontal + curl — 3×12", typeHints: ["volume", "intensite", "technique"] },
@@ -2195,13 +2197,19 @@ function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus)
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { sport, level, days, duration, focus, weaknesses } = body as {
+  const { sport, level, days, duration, focus, weaknesses, customExercises, customWeaknessMeta } = body as {
     sport: string;
     level: ProgramLevel;
     days: string[];
     duration: 4 | 6 | 8 | 12 | 16;
     focus: ProgramFocus;
     weaknesses?: string[];
+    // Sport libre non couvert par un curriculum (2026-08-06, /api/sports/custom) — vocabulaire
+    // généré par Claude pour ce sport précis, injecté à la place de EXERCISES.autre/WEAKNESS_META
+    // pour cette seule requête. Le moteur de périodisation (blocs, plafonds RPE, Phase A2/B) ne
+    // change jamais — voir buildNotes()/Phase C plus bas pour le point d'injection exact.
+    customExercises?: Record<SessionType, string[]>;
+    customWeaknessMeta?: Record<string, WeaknessMeta>;
   };
 
   const validDuration = duration === 6 || (duration > 0 && duration % 4 === 0);
@@ -2422,7 +2430,9 @@ export async function POST(req: Request) {
     const weaknessDayIdx = new Map<string, number>();
     const usedDayIdx = new Set<number>();
     for (const key of selectedWeaknesses) {
-      const meta = WEAKNESS_META[key];
+      // customWeaknessMeta d'abord (sport libre généré par Claude, /api/sports/custom) — repli
+      // sur le dictionnaire fixe pour les 9 sports du sélecteur.
+      const meta = customWeaknessMeta?.[key] ?? WEAKNESS_META[key];
       if (!meta) continue;
       const candidates = dayPlans.filter(d => !d.forced);
       const unused = (d: (typeof candidates)[number]) => !usedDayIdx.has(d.dayIdx);
@@ -2439,9 +2449,11 @@ export async function POST(req: Request) {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
       let notes = exercises
         ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+        : customExercises
+        ? buildNotesFromBank(customExercises[type], type, rotationAnchor, shape, prescriptionPhase)
         : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
       Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
-        if (idx === dayIdx) notes += "\n" + WEAKNESS_META[key].extraLine;
+        if (idx === dayIdx) notes += "\n" + (customWeaknessMeta?.[key]?.extraLine ?? WEAKNESS_META[key].extraLine);
       });
       const session: SessionTemplate = {
         name: archetypeName ?? sessionName(type, w, dayIdx),
