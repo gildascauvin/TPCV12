@@ -225,7 +225,7 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16 }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }> }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
@@ -239,7 +239,10 @@ async function generateAndAssignProgram(
     const genRes = await fetch("/api/programs/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [] }),
+      body: JSON.stringify({
+        sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [],
+        ...(opts.customExercises ? { customExercises: opts.customExercises, customWeaknessMeta: opts.customWeaknessMeta } : {}),
+      }),
     });
     if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
     const { template } = await genRes.json() as { template: ProgramTemplate };
@@ -322,7 +325,6 @@ const SPORT_CATEGORIES = [
   { id: "Sports collectifs",          icon: "⚽", sub: "Rugby, handball, basket, foot…" },
   { id: "Endurance",                  icon: "🏊", sub: "Course, cyclisme, natation…" },
   { id: "Arts martiaux & combat",     icon: "🥋", sub: "Judo, MMA, boxe…" },
-  { id: "Autre",                      icon: "✨", sub: "Autre discipline" },
 ];
 
 const SPORT_QUALITIES: Record<string, string> = {
@@ -975,8 +977,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [inviteLinkCopied, setInviteLinkCopied] = useState(false);
 
   /* questionnaire */
-  const [sport, setSport]                         = useState(pendingData?.sport || "Autre");
+  const [sport, setSport]                         = useState(pendingData?.sport || "");
   const [sportPrecision, setSportPrecision]       = useState(pendingData?.sportPrecision || "");
+  // Sport libre analysé par Claude (2026-08-06, porté de ProgramCriteriaModal.tsx in-app une fois
+  // validé) — sportPrecision sert de texte de description ET d'affichage ("Autre - <texte>" reste
+  // le sport stocké/affiché partout, inchangé) ; customSport ne fournit QUE la banque d'exercices +
+  // le menu de faiblesses en plus, injectés dans generateAndAssignProgram via customExercises/
+  // customWeaknessMeta quand status === "generated". "failed"/absent = repli silencieux sur le
+  // contenu générique "Autre" déjà existant, jamais d'écran cassé.
+  type CustomSportState =
+    | { status: "matched"; sportLabel: string }
+    | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }> }
+    | { status: "failed" };
+  const [analyzingSport, setAnalyzingSport]       = useState(false);
+  const [customSport, setCustomSport]             = useState<CustomSportState | null>(null);
   // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses, voir plus bas) —
   // `level`/`setLevel` restent réels (pas une constante) car `setLevel` est encore utilisé pour le
   // chemin "programme claimé" (ligne ~979, infère le niveau du programme réellement claimé, sans
@@ -1206,6 +1220,52 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     setTimeout(() => next(), 300);
   }
 
+  // Même route/logique que ProgramCriteriaModal.tsx (in-app, validé le 2026-08-06) — sportPrecision
+  // sert de description au lieu d'un champ séparé, portage direct une fois le comportement confirmé.
+  // Retourne le résultat (pas seulement un effet de bord setState) : handleSportNext() doit
+  // pouvoir utiliser la valeur immédiatement après l'avoir attendue, sans dépendre d'un re-render
+  // pour lire customSport à jour (setState est asynchrone/batché).
+  async function analyzeSport(): Promise<CustomSportState> {
+    const description = sportPrecision.trim();
+    if (!description) { const r: CustomSportState = { status: "failed" }; setCustomSport(r); return r; }
+    setAnalyzingSport(true);
+    setWeaknesses([]);
+    try {
+      const res = await fetch("/api/sports/custom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      const data = res.ok ? await res.json() : null;
+      let result: CustomSportState;
+      if (data?.matched) {
+        result = { status: "matched", sportLabel: data.sportLabel };
+      } else if (data?.exercises) {
+        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta };
+      } else {
+        result = { status: "failed" };
+      }
+      setCustomSport(result);
+      return result;
+    } catch {
+      const result: CustomSportState = { status: "failed" };
+      setCustomSport(result);
+      return result;
+    } finally {
+      setAnalyzingSport(false);
+    }
+  }
+
+  // Suivant sur l'écran sport (2026-08-06) : plie l'analyse dans l'action "Suivant" au lieu d'un
+  // CTA "Analyser mon sport →" séparé — décision explicite de Gildas ("le badge Autre est inutile,
+  // je veux que Suivant fasse cette action"). N'appelle l'API que si un texte libre est présent ET
+  // pas déjà analysé (customSport déjà résolu pour ce texte, cf. reset au onChange) ; un sport
+  // choisi via une des cartes ne déclenche jamais Claude (déjà un curriculum connu).
+  async function handleSportNext() {
+    if (sportPrecision.trim() && !customSport) await analyzeSport();
+    next();
+  }
+
   /* Compte créé au step "account" — désormais positionné avant la fin du diagnostic dans les
      2 variantes (juste après les pain points en A, juste après Rôle en B) : sport/niveau/objectif/
      jours ne sont pas encore connus à ce moment-là. N'upsert que ce qui est déjà collecté ;
@@ -1222,7 +1282,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
 
   async function completeProfile(uid: string) {
-    const sportValue = sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport;
+    const sportValue = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre";
     await supabase.from("profiles").upsert({
       user_id: uid,
       sport: sportValue, mode: role,
@@ -1236,7 +1296,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
       await Promise.all([
-        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16 })] : []),
+        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, {
+          sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
+          duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
+          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+        })] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -1272,7 +1336,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       const firstAthleteId = demoAthleteIds[0];
       if (firstAthleteId && trainingDays.length > 0) {
         await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
-        const ok = await generateAndAssignProgram(uid, { sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16 });
+        const ok = await generateAndAssignProgram(uid, {
+          sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
+          duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
+          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+        });
         if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
       if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
@@ -1800,25 +1868,43 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               {SPORT_CATEGORIES.map(s => (
                 <Chip key={s.id} icon={s.icon} label={s.id} title={s.sub} selected={sport === s.id}
                   onClick={() => {
-                    setSport(s.id);
-                    if (s.id !== "Autre" && isRegisterMode) nextAfterChoice(() => {});
+                    const isSame = sport === s.id;
+                    setSport(isSame ? "" : s.id);
+                    setSportPrecision("");
+                    setCustomSport(null);
+                    if (!isSame && isRegisterMode) nextAfterChoice(() => {});
                   }} />
               ))}
             </div>
-            {sport === "Autre" && (
-              <div style={{ marginBottom: 14 }}>
-                <input
-                  type="text" value={sportPrecision}
-                  onChange={e => setSportPrecision(e.target.value)}
-                  placeholder={role === "coach" ? "Précise le sport de tes sportifs (ex : rugby, natation…)" : "Précise ton sport (ex : rugby, yoga, escalade…)"}
-                  style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none" }}
-                  autoFocus
-                />
-              </div>
-            )}
+            {/* Champ libre toujours visible (2026-08-06, plus de badge "Autre" séparé à cliquer
+                pour le révéler — décision explicite de Gildas) : alternative aux cartes ci-dessus,
+                mutuellement exclusive (taper efface la carte sélectionnée et vice-versa). L'analyse
+                Claude n'est plus déclenchée par un bouton dédié mais par "Suivant" lui-même
+                (handleSportNext) — un sport choisi via une carte ne déclenche jamais Claude. */}
+            <div style={{ marginBottom: 14 }}>
+              <input
+                type="text" value={sportPrecision}
+                onChange={e => {
+                  setSportPrecision(e.target.value);
+                  if (customSport) setCustomSport(null);
+                  if (sport) setSport("");
+                }}
+                placeholder={role === "coach" ? "Ou précise le sport de tes sportifs (ex : rugby, kite-surf, cirque…)" : "Ou précise ton sport (ex : rugby, kite-surf, cirque…)"}
+                style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none" }}
+              />
+              {customSport?.status === "matched" && (
+                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour &quot;{customSport.sportLabel}&quot;.</p>
+              )}
+              {customSport?.status === "generated" && (
+                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour &quot;{customSport.sportLabel}&quot;.</p>
+              )}
+              {customSport?.status === "failed" && (
+                <p style={{ fontSize: 11, color: "#c0392b", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
+              )}
+            </div>
             {isRegisterMode
-              ? sport === "Autre" && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
-              : <Actions onNext={next} nextLabel="Suivant →" />
+              ? !sport && <Actions onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !sportPrecision.trim()} />
+              : <Actions onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
             }
           </div>
         )}
@@ -1834,7 +1920,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               {role === "coach" ? "On biaise la sélection d'exercices vers ce qui compte le plus pour eux." : "On biaise la sélection d'exercices de ton programme vers ce qui compte le plus pour toi."}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-              {(WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
+              {(!sport && customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
                 <Chip key={w.key} label={w.label} checkmark selected={weaknesses.includes(w.key)}
                   onClick={() => setWeaknesses(prev =>
                     prev.includes(w.key) ? prev.filter(k => k !== w.key) : prev.length >= 2 ? prev : [...prev, w.key]
@@ -2317,7 +2403,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <ProfileRecapStep
               role={role}
               sport={sport}
-              sportLabel={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
+              sportLabel={!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre"}
               sportIcon={SPORT_CATEGORIES.find(s => s.id === sport)?.icon || "🏋️"}
               // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses) — ne
               // jamais prétendre qu'un niveau a été choisi sur ce chemin. Reste vrai uniquement
@@ -2338,12 +2424,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── WEEK PREVIEW SPORTIF ── */}
         {currentStep === "week_preview_2a" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16}
+            customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
+            customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
         {currentStep === "week_preview_2b" && (
-          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16} role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16}
+            customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
+            customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
@@ -2907,7 +2999,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <CelebrationScreen
             role={role}
             name={name}
-            sport={sport === "Autre" && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport}
+            sport={!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre"}
             level={level}
             goal={goal}
             coachingChallenge={coachingChallenge}

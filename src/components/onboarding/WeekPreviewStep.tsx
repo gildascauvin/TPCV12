@@ -75,6 +75,8 @@ interface Props {
   focus?: ProgramFocus;
   weaknesses?: string[];
   duration?: 4 | 6 | 8 | 12 | 16;
+  customExercises?: Record<string, string[]>;
+  customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>;
   programFlow?: boolean;
   role: Role;
   goalLower: string;
@@ -83,7 +85,7 @@ interface Props {
   onNext: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
@@ -122,7 +124,10 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     fetch("/api/programs/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: duration ?? 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [] }),
+      body: JSON.stringify({
+        sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: duration ?? 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [],
+        ...(customExercises ? { customExercises, customWeaknessMeta } : {}),
+      }),
     })
       .then(r => r.ok ? r.json() : null)
       .then((data: { template: ProgramTemplate } | null) => {
@@ -131,7 +136,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
       .catch(() => {});
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses), duration]);
+  }, [sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses), duration, JSON.stringify(customExercises)]);
 
   // Contenu réel des séances : toujours le template généré en direct (jamais une copie statique).
   const week1 = generatedTemplate?.weeks?.[0] ?? null;

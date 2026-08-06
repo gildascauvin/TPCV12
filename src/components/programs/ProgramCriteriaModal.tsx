@@ -20,7 +20,6 @@ const SPORT_META: { value: string; icon: string; label: string; sub: string }[] 
   { value: "Sports collectifs", icon: "⚽", label: "Sports collectifs", sub: "Foot, rugby, hand…" },
   { value: "Endurance", icon: "🏊", label: "Endurance", sub: "Course, trail, natation, vélo…" },
   { value: "Arts martiaux & combat", icon: "🥋", label: "Arts martiaux & combat", sub: "MMA, boxe, judo…" },
-  { value: "Autre", icon: "✨", label: "Autre", sub: "Précise ton sport" },
 ];
 
 // Clés partagées avec WEAKNESS_META/WEAKNESS_ARCHETYPE_L1 côté generate/route.ts — biaise la
@@ -152,9 +151,12 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
     setCustomSport(null);
   }
 
-  async function analyzeSport() {
+  // Retourne le résultat (pas seulement un effet de bord setState) : handleGenerate() doit pouvoir
+  // l'utiliser immédiatement après l'avoir attendu, sans dépendre d'un re-render pour lire
+  // customSport à jour (setState est asynchrone/batché).
+  async function analyzeSport(): Promise<CustomSportState> {
     const description = sportDescription.trim();
-    if (!description || analyzing) return;
+    if (!description) { const r: CustomSportState = { status: "failed" }; setCustomSport(r); return r; }
     setAnalyzing(true);
     setWeaknesses([]);
     try {
@@ -164,15 +166,20 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
         body: JSON.stringify({ description }),
       });
       const data = res.ok ? await res.json() : null;
+      let result: CustomSportState;
       if (data?.matched) {
-        setCustomSport({ status: "matched", sportLabel: data.sportLabel });
+        result = { status: "matched", sportLabel: data.sportLabel };
       } else if (data?.exercises) {
-        setCustomSport({ status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta });
+        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta };
       } else {
-        setCustomSport({ status: "failed" });
+        result = { status: "failed" };
       }
+      setCustomSport(result);
+      return result;
     } catch {
-      setCustomSport({ status: "failed" });
+      const result: CustomSportState = { status: "failed" };
+      setCustomSport(result);
+      return result;
     } finally {
       setAnalyzing(false);
     }
@@ -194,16 +201,22 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
     if (!canSubmit) return;
     setLoading(true);
     try {
+      // Analyse pliée dans l'action principale (2026-08-06, plus de CTA "Analyser mon sport →"
+      // séparé — décision explicite de Gildas, même changement que l'onboarding). N'appelle l'API
+      // que si un texte libre est présent ET pas déjà analysé pour ce texte (customSport déjà
+      // résolu, cf. reset au onChange) ; un sport choisi via une des cartes ne déclenche jamais
+      // Claude (déjà un curriculum connu).
+      const resolvedCustomSport = sportDescription.trim() ? (customSport ?? await analyzeSport()) : null;
       // Sport libre analysé (matché ou généré) : utilise la description réelle plutôt que le
       // littéral "Autre" — un nom de programme plus parlant, et getSportCategory() la résout de
       // toute façon exactement pareil (déjà vérifié par /api/sports/custom).
-      const effectiveSport = customSport?.status === "failed" || !customSport ? sport : customSport.sportLabel;
+      const effectiveSport = resolvedCustomSport?.status === "failed" || !resolvedCustomSport ? sport : resolvedCustomSport.sportLabel;
       const res = await fetch("/api/programs/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sport: effectiveSport, level: NEUTRAL_LEVEL, days, duration, focus, weaknesses,
-          ...(customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+          ...(resolvedCustomSport?.status === "generated" ? { customExercises: resolvedCustomSport.exercises, customWeaknessMeta: resolvedCustomSport.weaknessMeta } : {}),
         }),
       });
       if (!res.ok) return;
@@ -251,51 +264,56 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
               ))}
             </div>
 
-            {/* Sport libre (2026-08-06) — "Autre" ne route plus systématiquement vers le contenu
-                générique : getSportCategory() vérifie d'abord si le texte matche déjà un
-                curriculum existant, sinon Claude génère exercices + faiblesses adaptés (façon
-                Levels "Or describe your meal here…" — texte libre, bouton explicite, l'analyse
-                prend quelques secondes contrairement au reste de l'écran, jamais silencieuse). */}
-            {sport === "Autre" && (
-              <div style={{ marginTop: 12 }}>
-                <textarea
-                  value={sportDescription}
-                  onChange={e => { setSportDescription(e.target.value); setCustomSport(null); }}
-                  placeholder="Décris ton sport (ex. escalade en salle, kite-surf, cirque…)"
-                  rows={2}
-                  style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", fontFamily: "inherit", fontSize: 13, resize: "vertical", marginBottom: 8, outline: "none" }}
-                />
-                <button
-                  onClick={analyzeSport}
-                  disabled={!sportDescription.trim() || analyzing}
-                  style={{
-                    padding: "9px 16px", borderRadius: 10, border: "none",
-                    cursor: sportDescription.trim() && !analyzing ? "pointer" : "not-allowed",
-                    background: sportDescription.trim() && !analyzing ? "#171b1f" : "#e8e4df",
-                    color: sportDescription.trim() && !analyzing ? "#fff" : "#aaa",
-                    fontWeight: 800, fontSize: 12.5,
-                  }}
-                >
-                  {analyzing ? "Analyse en cours…" : "Analyser mon sport →"}
-                </button>
-                {customSport?.status === "matched" && (
-                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour "{customSport.sportLabel}".</p>
-                )}
-                {customSport?.status === "generated" && (
-                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour "{customSport.sportLabel}".</p>
-                )}
-                {customSport?.status === "failed" && (
-                  <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
-                )}
-              </div>
-            )}
+            {/* Champ libre toujours visible (2026-08-06, plus de badge "Autre" séparé à cliquer
+                pour le révéler — décision explicite de Gildas). Alternative aux cartes ci-dessus,
+                mutuellement exclusive (taper efface la carte sélectionnée et vice-versa via
+                selectSport). Le bouton "Analyser mon sport →" reste explicite ici (contrairement à
+                l'onboarding) : sport et faiblesses sont sur le même écran dans ce modal, la section
+                Faiblesses ci-dessous doit refléter les options spécifiques AVANT que l'utilisateur
+                les sélectionne — plier l'analyse dans "Générer le programme →" les laisserait
+                choisir des faiblesses génériques puis changer sous eux au clic final. */}
+            <div style={{ marginTop: 12 }}>
+              <textarea
+                value={sportDescription}
+                onChange={e => {
+                  setSportDescription(e.target.value);
+                  setCustomSport(null);
+                  if (sport) setSport("");
+                }}
+                placeholder="Ou décris ton sport (ex. escalade en salle, kite-surf, cirque…)"
+                rows={2}
+                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", fontFamily: "inherit", fontSize: 13, resize: "vertical", marginBottom: 8, outline: "none" }}
+              />
+              <button
+                onClick={analyzeSport}
+                disabled={!sportDescription.trim() || analyzing}
+                style={{
+                  padding: "9px 16px", borderRadius: 10, border: "none",
+                  cursor: sportDescription.trim() && !analyzing ? "pointer" : "not-allowed",
+                  background: sportDescription.trim() && !analyzing ? "#171b1f" : "#e8e4df",
+                  color: sportDescription.trim() && !analyzing ? "#fff" : "#aaa",
+                  fontWeight: 800, fontSize: 12.5,
+                }}
+              >
+                {analyzing ? "Analyse en cours…" : "Analyser mon sport →"}
+              </button>
+              {customSport?.status === "matched" && (
+                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour "{customSport.sportLabel}".</p>
+              )}
+              {customSport?.status === "generated" && (
+                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour "{customSport.sportLabel}".</p>
+              )}
+              {customSport?.status === "failed" && (
+                <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
+              )}
+            </div>
           </Section>
 
           {/* Faiblesses — biaise réellement la génération, voir generate/route.ts. Pour un sport
-              libre "matched" (reconnu comme un curriculum existant sans correspondre à une des 9
+              libre "matched" (reconnu comme un curriculum existant sans correspondre à une des 8
               cartes), pas de menu taillé disponible côté frontend — repli sur le menu générique
               "Autre" plutôt que masquer la section entière. */}
-          {sport && (
+          {(sport || sportDescription.trim()) && (
             <Section label="🎯 Points à travailler en priorité">
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
                 {(customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
