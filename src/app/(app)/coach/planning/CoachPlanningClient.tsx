@@ -23,6 +23,9 @@ import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
+import { coachAlertFor } from "@/lib/alerts";
+import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
+import AlertBox from "@/components/calendar/AlertBox";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -317,11 +320,13 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     handleDateChange(format(newBase, "yyyy-MM-dd"));
   }
 
+  // Scroll vers le jour sélectionné (ring du header cliqué, ou "Aujourd'hui" par défaut au montage/
+  // changement de semaine — selectedDate vaut todayStr initialement et à chaque navigation).
   useEffect(() => {
     if (viewMode !== "week") return;
-    const todayIdx = weekDates.findIndex(d => format(d, "yyyy-MM-dd") === todayStr);
-    if (todayIdx >= 0) {
-      dayRefs.current[todayIdx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const idx = weekDates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
+    if (idx >= 0) {
+      dayRefs.current[idx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
   }, [selectedDate, viewMode]);
 
@@ -566,6 +571,20 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           };
           const rule = loadRule(daySessions, ctx);
           const tagColor = ruleTagColors[rule.cls];
+          // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui" du sportif sélectionné,
+          // avec le vrai wellness/la vraie difficulté du jour (attention()/decisionText() réels de
+          // CoachAthleteCard.tsx). Le score doit venir de `wellness` (dayWellness() via wellnessMap,
+          // déjà utilisé pour la ring affichée) et non de `athlete.wellness_score` (dénormalisé au
+          // chargement de la page, peut être périmé pour un vrai sportif dont le check-in est arrivé
+          // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
+          // aucune alerte).
+          const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
+          const alert = isToday
+            ? coachAlertFor(
+                { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
+                maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr))
+              )
+            : null;
 
           return (
             <div key={dstr} ref={el => { dayRefs.current[idx] = el; }} className="week-col-width" style={{
@@ -596,15 +615,19 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                 {formLabel(wellness)}
               </div>
 
-              <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                  <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                  <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
-                    {rule.tag}
+              {alert ? (
+                <AlertBox alert={alert} />
+              ) : (
+                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
+                    <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
+                      {rule.tag}
+                    </div>
                   </div>
+                  <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
                 </div>
-                <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-              </div>
+              )}
 
               <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
                 Séances · {daySessions.length}

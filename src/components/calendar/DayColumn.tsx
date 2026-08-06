@@ -3,7 +3,9 @@
 import { format } from "date-fns";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
+import AlertBox from "@/components/calendar/AlertBox";
 import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
+import type { DayAlert } from "@/lib/alerts";
 import type { Session, WellnessDaily } from "@/types";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -118,14 +120,13 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
   /* Remplace tout l'encart (prioritaire sur recoveryAdvice) — réservé à la carte "aujourd'hui",
      reprend le style/logique réels de l'alerte wellness de TodayClient.tsx (sportif) ou de
      decisionText() de CoachAthleteCard.tsx (coach). */
-  alert?: { border: string; glow: string; text: string };
+  alert?: DayAlert;
 }) {
   const dstr = format(date, "yyyy-MM-dd");
   const isToday = dstr === todayStr;
   const score = wellness?.score ?? null;
   const rule = loadRule(sessions, ctx);
   const tagColor = ruleTagColors[rule.cls];
-  const hasAlert = !!alert;
 
   return (
     <div className="week-col-width" style={{
@@ -169,30 +170,7 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
          pastille pulsants (copie exacte de CoachAthleteCard.tsx, showBadge) — la carte du jour reste
          blanche, comme /week et /coach/planning en vrai. */}
       {alert ? (
-        <div style={{
-          position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
-          background: "linear-gradient(145deg,#1a1a1a,#282828)", border: `1.5px solid ${alert.border}`,
-          fontSize: 13, lineHeight: 1.4, color: "#fff", fontWeight: 600,
-          boxShadow: "0 10px 24px rgba(0,0,0,.18)",
-          animation: "perf-border-pulse 1.8s ease-in-out infinite",
-        }}>
-          <style>{`
-            @keyframes perf-pulse {
-              0%, 100% { opacity: 1; transform: scale(1); }
-              50% { opacity: 0.55; transform: scale(1.35); }
-            }
-            @keyframes perf-border-pulse {
-              0%, 100% { border-color: ${alert.border}; box-shadow: 0 10px 24px rgba(0,0,0,.18); }
-              50% { border-color: ${alert.glow}; box-shadow: 0 0 16px 3px ${alert.glow}, 0 10px 24px rgba(0,0,0,.18); }
-            }
-          `}</style>
-          <div style={{
-            position: "absolute", top: 12, right: 12,
-            width: 8, height: 8, borderRadius: "50%", background: alert.glow,
-            animation: "perf-pulse 1.8s ease-in-out infinite",
-          }} />
-          <div style={{ paddingRight: 16 }}>{alert.text}</div>
-        </div>
+        <AlertBox alert={alert} />
       ) : recoveryAdvice ? (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "#171b1f", marginBottom: 5 }}>🌿 Récupération</div>
@@ -211,13 +189,13 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
       )}
 
       {/* Sessions label */}
-      <div style={{ position: "relative", fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: hasAlert ? "rgba(255,255,255,.55)" : "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
+      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
         Séances · {sessions.length}
       </div>
 
-      <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {sessions.length === 0 && (
-          <div style={{ fontSize: 10, color: hasAlert ? "rgba(255,255,255,.45)" : "#8a8f94", textAlign: "center", border: `0.5px dashed ${hasAlert ? "rgba(255,255,255,.18)" : "rgba(0,0,0,0.12)"}`, borderRadius: 10, padding: "11px 4px" }}>
+          <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
             Repos / libre
           </div>
         )}

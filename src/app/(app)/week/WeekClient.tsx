@@ -16,6 +16,7 @@ import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
+import { athleteAlertFor } from "@/lib/alerts";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -191,13 +192,15 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     handleDateChange(format(base, "yyyy-MM-dd"));
   }
 
+  // Scroll vers le jour sélectionné (ring du header cliqué, ou "Aujourd'hui" par défaut au montage/
+  // changement de semaine — selectedDate vaut todayStr initialement et à chaque navigation).
   useEffect(() => {
     if (viewMode !== "week") return;
-    const todayIdx = dates.findIndex(d => format(d, "yyyy-MM-dd") === todayStr);
-    if (todayIdx >= 0) {
-      dayRefs.current[todayIdx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const idx = dates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
+    if (idx >= 0) {
+      dayRefs.current[idx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
-  }, [weekBase, viewMode]);
+  }, [weekBase, selectedDate, viewMode]);
 
   useEffect(() => {
     const el = weekGridRef.current;
@@ -339,6 +342,17 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
               prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
               nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
             };
+            // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui", avec le vrai wellness/
+            // la vraie difficulté du jour (jamais de valeur forcée, contrairement à l'aperçu onboarding).
+            let alert;
+            if (dstr === todayStr) {
+              const todaySessions = sessions.filter(s => s.date === todayStr);
+              const pendingDiffs = todaySessions.filter(s => !s.done && s.target_difficulty).map(s => s.target_difficulty!);
+              const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
+              const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
+              const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
+              alert = athleteAlertFor(wellnessToday?.score ?? null, maxDiff, wellnessFilledToday) ?? undefined;
+            }
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
               <DayColumn
@@ -347,6 +361,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 wellness={wellnessList.find(w => w.date === dstr) ?? null}
                 todayStr={todayStr}
                 ctx={ctx}
+                alert={alert}
                 onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
                 onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                 onEdit={(s) => requireSubscription(() => setEditing(s))}

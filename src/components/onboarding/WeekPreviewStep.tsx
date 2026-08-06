@@ -7,9 +7,9 @@ import DayColumn from "@/components/calendar/DayColumn";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { getRecoveryAdvice } from "@/lib/wellness";
-import { attention, decisionText } from "@/components/coach/CoachAthleteCard";
+import { athleteAlertFor, coachAlertFor } from "@/lib/alerts";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import type { ProgramTemplate, ProgramFocus, Session, WellnessDaily, CoachAthlete } from "@/types";
+import type { ProgramTemplate, ProgramFocus, Session, WellnessDaily } from "@/types";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -53,28 +53,6 @@ function wellnessPreviewFor(diff: number): { score: number; behaviors: string[] 
   if (diff <= 6) return { score: 74, behaviors: ["walk"] };
   if (diff <= 8) return { score: 58, behaviors: ["late_sleep"] };
   return { score: 40, behaviors: ["late_sleep", "screen_late"] };
-}
-
-/* Alerte wellness — copie exacte des seuils/couleurs/textes de la carte réelle de TodayClient.tsx
-   (fonction row(), sportif). Calculée pour CHAQUE jour (pas seulement "aujourd'hui") à partir du
-   score/diff réels de ce jour-là : sur une semaine, ça illustre naturellement les différents cas
-   (🔥/⚠️/💛/✅) sans forcer aucun jour en particulier. Repli sur le conseil récupération si aucun cas
-   ne matche (score 55-79), exactement comme en prod (le encart n'apparaît pas du tout dans ce cas). */
-function athleteAlertFor(score: number, maxDiff: number): { border: string; glow: string; text: string } | null {
-  if (score < 55 && maxDiff >= 8) return { border: "rgba(212,64,0,.4)", glow: "#d44000", text: `🔥 Wellness bas · Séance à ${maxDiff}/10 prévue — allège à 6/10` };
-  if (score < 55 && maxDiff >= 5) return { border: "rgba(212,64,0,.4)", glow: "#d44000", text: `⚠️ Wellness bas · Séance à ${maxDiff}/10 — surveille ton effort` };
-  if (score < 55) return { border: "rgba(242,138,0,.4)", glow: "#f28a00", text: "💛 Wellness bas — journée de récupération recommandée" };
-  if (score >= 80 && maxDiff >= 8) return { border: "rgba(47,158,68,.4)", glow: "#2f9e44", text: `✅ Score ${score} · Séance à ${maxDiff}/10 — fenêtre idéale !` };
-  return null;
-}
-
-/* Alerte coach — reprend telle quelle la logique/texte de l'encart décision de CoachCard
-   (attention()/decisionText(), CoachAthleteCard.tsx). N'est affichée que quand isPriority est vrai
-   (comme le badge "Attention requise" réel) — sinon repli sur le conseil récupération, pour ne pas
-   marquer CHAQUE jour d'un encart alors que "Plan cohérent" n'a rien de notable à signaler. */
-function coachAlertFor(athlete: CoachAthlete, maxDiff: number): { border: string; glow: string; text: string } | null {
-  if (!attention(athlete, maxDiff)) return null;
-  return { border: "rgba(212,64,0,.4)", glow: "#d44000", text: `💛 ${decisionText(athlete, maxDiff)}` };
 }
 
 type Level = "beginner" | "intermediate" | "elite";
@@ -280,7 +258,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
       const alert = !isToday ? undefined
         : role === "coach"
           ? coachAlertFor({ id: "preview", coach_id: "preview", name: COACH_DEMO_NAMES[activeAthleteIdx], sport: displaySport, wellness_score: wp.score, behaviors: wp.behaviors, wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, 0) ?? undefined
-          : athleteAlertFor(wp.score, 0) ?? undefined;
+          : athleteAlertFor(wp.score, 0, true) ?? undefined;
       return { date, sessions: [], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice, alert };
     }
 
@@ -312,7 +290,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     const alert = !isToday ? undefined
       : role === "coach"
         ? coachAlertFor({ id: "preview", coach_id: "preview", name: COACH_DEMO_NAMES[activeAthleteIdx], sport: displaySport, wellness_score: wp.score, behaviors: wp.behaviors, wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, s.diff) ?? undefined
-        : athleteAlertFor(wp.score, s.diff) ?? undefined;
+        : athleteAlertFor(wp.score, s.diff, true) ?? undefined;
     return { date, sessions: [session], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice, alert };
   }
 
