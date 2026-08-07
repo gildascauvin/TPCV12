@@ -15,7 +15,7 @@ import AutoRegScoreStep, { computeAthleteAutoregProfile } from "@/components/onb
 import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
 import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_CTA_LABEL, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
-import { PricingPrimingContent } from "@/components/paywall/PricingPriming";
+import { PricingPrimingContent, PRICING_PRIMING_GUARANTEE_CAPTION } from "@/components/paywall/PricingPriming";
 import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -2776,7 +2776,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 sport={displaySport}
                 sessionCount={role === "coach" ? undefined : realSessionCount}
               />
-              <Actions onNext={next} nextLabel="Continuer →" caption="Garanti remboursé 14 jours" />
+              <Actions onNext={next} nextLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} caption={PRICING_PRIMING_GUARANTEE_CAPTION} />
             </div>
           );
         })()}

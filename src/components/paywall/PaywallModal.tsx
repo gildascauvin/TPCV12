@@ -28,8 +28,8 @@ interface PaywallModalProps {
 }
 
 export const PRICING = {
-  athlete: { monthly: 9,  annual: 79,  annualMonthly: 6.58 },
-  coach:   { monthly: 39, annual: 349, annualMonthly: 29.08 },
+  athlete: { monthly: 9,  annual: 78,  annualMonthly: 6.50 },
+  coach:   { monthly: 39, annual: 348, annualMonthly: 29.00 },
 };
 
 /* CTA final (soumission Stripe) — plus d'essai gratuit (retiré 2026-08-07), garantie remboursé
@@ -111,7 +111,8 @@ export function CheckoutForm({
       });
       if (!res.ok) {
         ev.complete("fail");
-        setError("Erreur lors de la création de l'abonnement. Réessaie.");
+        const body = await res.json().catch(() => null);
+        setError(body?.error ?? "Erreur lors de la création de l'abonnement. Réessaie.");
         setLoading(false);
       } else {
         ev.complete("success");
@@ -149,7 +150,8 @@ export function CheckoutForm({
       });
 
       if (!res.ok) {
-        setError("Erreur lors de la création de l'abonnement. Réessaie.");
+        const body = await res.json().catch(() => null);
+        setError(body?.error ?? "Erreur lors de la création de l'abonnement. Réessaie.");
         setLoading(false);
         return;
       }

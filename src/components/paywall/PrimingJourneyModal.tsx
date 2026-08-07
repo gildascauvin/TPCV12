@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import posthog from "posthog-js";
-import { PricingPrimingContent } from "./PricingPriming";
+import { PricingPrimingContent, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 
 interface Props {
   mode: "athlete" | "coach";
@@ -49,8 +50,11 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
         <div style={{ padding: "20px 28px 20px", background: "#fff", flexShrink: 0 }}>
           <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
-            Continuer →
+            {PAYWALL_CTA_LABEL[mode]}
           </button>
+          <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600, marginBottom: allowDismiss ? 4 : 0 }}>
+            {PRICING_PRIMING_GUARANTEE_CAPTION}
+          </div>
           {allowDismiss && (
             <button onClick={() => { posthog.capture("paywall_skipped", { plan: mode, billing }); onDismiss(); }} style={skipBtn}>
               Accéder sans abonnement →

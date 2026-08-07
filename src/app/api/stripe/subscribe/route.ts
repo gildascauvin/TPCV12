@@ -44,12 +44,22 @@ export async function POST(request: Request) {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
-  await stripe.subscriptions.create({
+  const subscription = await stripe.subscriptions.create({
     customer: customerId,
     items: [{ price: priceId }],
     default_payment_method: paymentMethodId,
     metadata: { user_id: user.id, plan },
   });
+
+  // Sans essai, le premier prélèvement est tenté ici même (synchrone) — contrairement à l'ancien
+  // comportement avec trial_period_days, où Stripe ne tentait jamais de charge à cet instant
+  // (status="trialing" garanti). Un paiement refusé/nécessitant une authentification renvoie
+  // status="incomplete" sans lever d'exception : ne jamais accorder l'accès dans ce cas, sous
+  // peine de désynchroniser subscription_status de la réalité Stripe (même classe de bug que la
+  // résiliation pendant l'essai corrigée le 2026-07-15).
+  if (subscription.status !== "active") {
+    return NextResponse.json({ error: "Le paiement n'a pas pu être confirmé. Vérifie ta carte et réessaie." }, { status: 402 });
+  }
 
   await supabase
     .from("profiles")

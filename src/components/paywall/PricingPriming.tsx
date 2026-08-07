@@ -14,6 +14,10 @@ import type { Billing } from "./PaywallModal";
    Plus d'essai gratuit (retiré 2026-08-07, remplacé par une garantie remboursé 14 jours) — voir
    CLAUDE.md section correspondante pour l'historique complet de la décision. */
 
+/* Sous le CTA "Continuer →" de l'écran priming (pas dans la carte prix elle-même — retiré de là
+   le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
+export const PRICING_PRIMING_GUARANTEE_CAPTION = "🛡️ Remboursé sous 14 jours si besoin, sans justification.";
+
 const BULLETS: Record<"athlete" | "coach", string[]> = {
   athlete: [
     "Adapté à ton objectif d'intensité",
@@ -103,19 +107,16 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
           ✓ Garanti 14j
         </div>
         <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
-          {isMonthly ? `${p.monthly}€` : `${p.annual}€`}<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>{isMonthly ? "/mois" : "/an"}</span>
+          {isMonthly ? `${p.monthly}€` : `${p.annualMonthly.toFixed(2).replace(".", ",")}€`}<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>/mois</span>
         </div>
         <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
-          {isMonthly ? "Facturé chaque mois, résiliable à tout moment." : `Soit ${p.annualMonthly}€/mois. Tu économises ${annualSavingsPct}%.`}
+          {isMonthly ? `Facturé chaque mois, soit ${(p.monthly / 30).toFixed(2).replace(".", ",")}€/jour.` : `Facturé ${p.annual}€/an. Tu économises ${annualSavingsPct}%.`}
         </div>
         <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
           <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
             Annuel<span style={{ marginLeft: 5, fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
           </button>
           <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.65)", marginTop: 12 }}>
-          🛡️ Remboursé sous 14 jours si besoin, sans justification.
         </div>
 
         <ul style={{ margin: "16px 0 4px", padding: 0, listStyle: "none" }}>
