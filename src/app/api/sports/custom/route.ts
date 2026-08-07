@@ -16,6 +16,7 @@ interface CustomExercises {
   test: string[];
 }
 interface CustomWeakness { key: string; label: string; extraLine: string; typeHints: SessionType[] }
+type CustomSessionLabels = Partial<Record<SessionType, string>>;
 
 function isValidExercises(v: unknown): v is CustomExercises {
   if (!v || typeof v !== "object") return false;
@@ -24,6 +25,20 @@ function isValidExercises(v: unknown): v is CustomExercises {
     const arr = o[t];
     return Array.isArray(arr) && arr.length > 0 && arr.every(x => typeof x === "string" && x.trim());
   });
+}
+
+// Libellés optionnels — un manque/format invalide sur un type précis ne fait pas échouer tout
+// l'appel (repli sur le libellé générique de ce type côté generate/route.ts), contrairement aux
+// exercices/faiblesses qui doivent être valides à 100% ou rien.
+function sanitizeSessionLabels(v: unknown): CustomSessionLabels | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  const out: CustomSessionLabels = {};
+  for (const t of SESSION_TYPES) {
+    const label = o[t];
+    if (typeof label === "string" && label.trim()) out[t] = label.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function isValidWeaknesses(v: unknown): v is CustomWeakness[] {
@@ -106,7 +121,7 @@ export async function POST(req: Request) {
 
   const EXERCISES_TOOL = {
     name: "soumettre_exercices",
-    description: "Soumet la banque d'exercices pour le sport décrit.",
+    description: "Soumet la banque d'exercices et les libellés de séance pour le sport décrit.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -121,8 +136,20 @@ export async function POST(req: Request) {
           },
           required: SESSION_TYPES,
         },
+        sessionLabels: {
+          type: "object" as const,
+          description: "Nom de séance affiché par type — la discipline de préparation physique la plus pertinente pour ce sport (ex. Circuit Training, Renfo spécifique, Sprints, Pliométrie), pas un libellé générique.",
+          properties: {
+            technique: { type: "string" as const },
+            volume: { type: "string" as const },
+            intensite: { type: "string" as const },
+            recuperation: { type: "string" as const },
+            test: { type: "string" as const },
+          },
+          required: SESSION_TYPES,
+        },
       },
-      required: ["exercises"],
+      required: ["exercises", "sessionLabels"],
     },
   };
 
@@ -149,11 +176,12 @@ Vocabulaire réellement spécifique au sport décrit (mouvements, équipement, g
   try {
     const [weaknessResult, exercisesResult] = await Promise.all([
       callTool(WEAKNESS_TOOL, `Règles strictes :\n- 4 à 5 entrées dans "weaknesses", clés courtes en snake_case sans accents.`),
-      callTool(EXERCISES_TOOL, `Règles strictes :\n- Exactement 4 exercices par catégorie dans "exercises".\n- Format des exercices "technique"/"volume"/"intensite" : "Nom de l'exercice — Sx R" (ex. "Pompes lestées — 4×8"), jamais de fourchette approximative.\n- "recuperation"/"test" : texte libre plus descriptif accepté.`),
+      callTool(EXERCISES_TOOL, `Règles strictes :\n- Exactement 4 exercices par catégorie dans "exercises".\n- Format des exercices "technique"/"volume"/"intensite" : "Nom de l'exercice — Sx R" (ex. "Pompes lestées — 4×8"), jamais de fourchette approximative.\n- "recuperation"/"test" : texte libre plus descriptif accepté.\n- "sessionLabels" : un nom de séance par type, 1-3 mots, qui reflète la VRAIE nature de la séance pour ce sport précis — pas un nom générique ("Séance volume"). Pour "volume"/"intensite" (les 2 séances de préparation physique de la semaine), choisis la discipline la plus adaptée à ce sport parmi ex. Circuit Training, Renfo ciblé, Sprints, Musculation, Pliométrie, Gainage — jamais la même discipline pour les deux, sauf si le sport le justifie vraiment. Pour "technique", garde un nom qui nomme le geste du sport (ex. "Technique de vol" pour le kitesurf), pas "Séance technique".`),
     ]);
 
     const weaknesses = weaknessResult.weaknesses;
     const exercises = exercisesResult.exercises;
+    const sessionLabels = sanitizeSessionLabels(exercisesResult.sessionLabels);
 
     if (!isValidExercises(exercises) || !isValidWeaknesses(weaknesses)) {
       throw new Error("Forme d'outil invalide : " + JSON.stringify({ weaknesses, exercises }));
@@ -172,11 +200,12 @@ Vocabulaire réellement spécifique au sport décrit (mouvements, équipement, g
       exercises: exercises as CustomExercises,
       weaknessOptions,
       weaknessMeta,
+      sessionLabels: sessionLabels ?? null,
     });
   } catch (err) {
     // Repli explicite — le front retombe sur le contenu générique "Autre" existant, jamais
     // d'écran cassé sur un échec Claude (timeout, refus d'appeler l'outil, forme inattendue).
     console.error("[api/sports/custom] échec génération Claude:", err);
-    return NextResponse.json({ matched: false, sportLabel: description, exercises: null, weaknessOptions: null, weaknessMeta: null });
+    return NextResponse.json({ matched: false, sportLabel: description, exercises: null, weaknessOptions: null, weaknessMeta: null, sessionLabels: null });
   }
 }

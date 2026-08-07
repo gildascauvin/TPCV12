@@ -227,7 +227,7 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }> }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>; customSessionLabels?: Record<string, string> }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
@@ -243,7 +243,7 @@ async function generateAndAssignProgram(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [],
-        ...(opts.customExercises ? { customExercises: opts.customExercises, customWeaknessMeta: opts.customWeaknessMeta } : {}),
+        ...(opts.customExercises ? { customExercises: opts.customExercises, customWeaknessMeta: opts.customWeaknessMeta, customSessionLabels: opts.customSessionLabels } : {}),
       }),
     });
     if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
@@ -1039,7 +1039,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // contenu générique "Autre" déjà existant, jamais d'écran cassé.
   type CustomSportState =
     | { status: "matched"; sportLabel: string }
-    | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }> }
+    | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }>; sessionLabels?: Record<string, string> }
     | { status: "failed" };
   const [analyzingSport, setAnalyzingSport]       = useState(false);
   const [customSport, setCustomSport]             = useState<CustomSportState | null>(null);
@@ -1289,7 +1289,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       if (data?.matched) {
         result = { status: "matched", sportLabel: data.sportLabel };
       } else if (data?.exercises) {
-        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta };
+        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta, sessionLabels: data.sessionLabels ?? undefined };
       } else {
         result = { status: "failed" };
       }
@@ -1347,6 +1347,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, {
           sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
+          // customSessionLabels volontairement pas porté ici (2026-08-07) — même pattern que le
+          // reste du chantier "Autre"+Claude : in-app d'abord (ProgramCriteriaModal.tsx), onboarding
+          // dans un 2e temps une fois validé en prod (clé Anthropic non testable en local).
           ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
         })] : []),
         supabase.from("sessions").insert(pastSessions),

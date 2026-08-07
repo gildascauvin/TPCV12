@@ -159,6 +159,51 @@ const FOCUS_DIST: Record<string, SessionType[]> = {
 // exercices. "technique"/"volume" restent plafonnés par sessionDifficulty() (max 4 et 7).
 const FOCUS_DIST_REEDUCATION: SessionType[] = ["technique", "volume", "recuperation", "technique", "volume", "recuperation", "technique"];
 
+// ---- "Autre" (sport tapé librement, sans curriculum dédié) : répartition technique/préparation
+// physique déterministe par nombre de jours, VOLONTAIREMENT générique (pas de ratio par sport) —
+// contrairement aux curriculums de SPORT_CURRICULUM plus bas, chacun construit à partir d'une vraie
+// page produit WordPress, il n'existe aucune source de vérité pour arbitrer un "bon" ratio technique/
+// prépa par sport inconnu (kitesurf, BMX racing, escalade...) : ce serait de la pure invention.
+// Formule directe (jamais un cyclage modulo sur une liste plus courte) : élimine par construction le
+// bug de reachability déjà rencontré 2 fois dans ce fichier (Renfo endurance jamais atteint à n=4,
+// Skill calisthenics jamais atteint à n=3 — un type/archétype placé à un index ≥ n n'apparaissait
+// jamais, quel que soit n). Repères donnés par Gildas : 4j → 2 technique + 2 prépa, 5j → 3 technique
+// + 2 prépa — équivaut à techCount = ceil(n/2), prépa = le reste. "technique" = le geste du sport
+// lui-même ; "volume"/"intensite" = les 2 saveurs de préparation physique généraliste (alternées) —
+// leur discipline réelle (circuit training, renfo, sprints, muscu...) est choisie par Claude côté
+// /api/sports/custom (customSessionLabels), jamais ici : cette fonction ne décide QUE combien de
+// jours de chaque type, jamais leur contenu — même principe que "Claude fournit le vocabulaire,
+// jamais la structure" déjà appliqué à customExercises.
+function selectAutreTypes(dayCount: number): SessionType[] {
+  const techCount = Math.ceil(dayCount / 2);
+  const prepCount = dayCount - techCount;
+  if (prepCount === 0) return Array(dayCount).fill("technique") as SessionType[]; // n=1, cas limite
+
+  const types: SessionType[] = [];
+  let prepPlaced = 0;
+  let techPlaced = 0;
+  // Alterne strictement prépa/technique en commençant par la prépa — protège le ratio annoncé
+  // contre la Phase A2 universelle (1er jour de la semaine jamais facile, "technique" est le
+  // palier facile) : sans ce choix, la Phase A2 retransformerait silencieusement le 1er jour en
+  // prépa et ferait dériver le compte exact promis (ex. 4j → 2 technique+2 prépa deviendrait 1+3
+  // dès que le 1er jour calendaire tombait sur une case technique — vérifié en testant contre le
+  // serveur dev réel, pas juste en relisant le code). Un seul jour "technique" en trop reste
+  // possible en fin de semaine quand n est impair (techCount = prepCount+1, ex. 5j → 3 technique+
+  // 2 prépa) : mathématiquement inévitable une fois le 1er jour réservé à la prépa — la Phase B
+  // (jamais 2 jours calendairement consécutifs au même palier) reste le filet de sécurité si ces
+  // 2 jours techniques sont effectivement adjacents dans le calendrier choisi.
+  while (prepPlaced < prepCount || techPlaced < techCount) {
+    if (prepPlaced <= techPlaced && prepPlaced < prepCount) {
+      types.push(prepPlaced % 2 === 0 ? "volume" : "intensite");
+      prepPlaced++;
+    } else {
+      types.push("technique");
+      techPlaced++;
+    }
+  }
+  return types;
+}
+
 const DAY_ORDER = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 const LEVEL_BASE_DIFF: Record<ProgramLevel, number> = {
@@ -2197,7 +2242,7 @@ function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus)
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { sport, level, days, duration, focus, weaknesses, customExercises, customWeaknessMeta } = body as {
+  const { sport, level, days, duration, focus, weaknesses, customExercises, customWeaknessMeta, customSessionLabels } = body as {
     sport: string;
     level: ProgramLevel;
     days: string[];
@@ -2210,6 +2255,12 @@ export async function POST(req: Request) {
     // change jamais — voir buildNotes()/Phase C plus bas pour le point d'injection exact.
     customExercises?: Record<SessionType, string[]>;
     customWeaknessMeta?: Record<string, WeaknessMeta>;
+    // Libellés de séance par discipline de prépa physique (2026-08-07, même origine que
+    // customExercises) — ex. "Circuit Training"/"Sprints"/"Renfo spécifique" au lieu du générique
+    // "Séance volume"/"Travail d'intensité". Reste du vocabulaire pur (un nom affiché), jamais une
+    // décision de structure — voir selectAutreTypes() plus haut pour ce qui décide le nombre de
+    // jours de chaque type, indépendant de ce libellé.
+    customSessionLabels?: Partial<Record<SessionType, string>>;
   };
 
   const validDuration = duration === 6 || (duration > 0 && duration % 4 === 0);
@@ -2248,6 +2299,10 @@ export async function POST(req: Request) {
     // archétype/banque dédiée, retombe sur la banque générique "test" du sport.
     const curriculumSelector = SPORT_CURRICULUM[category];
     const archetypes = curriculumSelector?.(sortedDays.length);
+    // "Autre" (sport libre sans curriculum) : ratio technique/prépa déterministe par nombre de
+    // jours (selectAutreTypes), pas la rotation FOCUS_DIST générique partagée avec cyclisme/
+    // natation/ski/trail/rééducation générale — ceux-là gardent FOCUS_DIST inchangé.
+    const autreTypes = category === "autre" ? selectAutreTypes(sortedDays.length) : null;
     const dayPlans = sortedDays.map((day, dayIdx) => {
       const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
       const forced = isMrvWeek && isLastDayOfWeek;
@@ -2261,6 +2316,8 @@ export async function POST(req: Request) {
         type = archetype.type;
         archetypeName = archetype.name;
         exercises = archetype.exercises;
+      } else if (autreTypes) {
+        type = autreTypes[dayIdx];
       } else {
         const typeIdx = (rotationAnchor * sortedDays.length + dayIdx) % focusDist.length;
         type = focusDist[typeIdx];
@@ -2456,7 +2513,7 @@ export async function POST(req: Request) {
         if (idx === dayIdx) notes += "\n" + (customWeaknessMeta?.[key]?.extraLine ?? WEAKNESS_META[key].extraLine);
       });
       const session: SessionTemplate = {
-        name: archetypeName ?? sessionName(type, w, dayIdx),
+        name: archetypeName ?? customSessionLabels?.[type] ?? sessionName(type, w, dayIdx),
         notes,
         target_difficulty,
         load: weekLoad,

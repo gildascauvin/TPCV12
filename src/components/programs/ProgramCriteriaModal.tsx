@@ -124,7 +124,7 @@ export interface ProgramMeta {
 // sur le contenu générique "Autre" déjà existant, jamais d'écran cassé.
 type CustomSportState =
   | { status: "matched"; sportLabel: string }
-  | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }> }
+  | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }>; sessionLabels?: Record<string, string> }
   | { status: "failed" };
 
 interface Props {
@@ -170,7 +170,7 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
       if (data?.matched) {
         result = { status: "matched", sportLabel: data.sportLabel };
       } else if (data?.exercises) {
-        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta };
+        result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta, sessionLabels: data.sessionLabels ?? undefined };
       } else {
         result = { status: "failed" };
       }
@@ -216,7 +216,7 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sport: effectiveSport, level: NEUTRAL_LEVEL, days, duration, focus, weaknesses,
-          ...(resolvedCustomSport?.status === "generated" ? { customExercises: resolvedCustomSport.exercises, customWeaknessMeta: resolvedCustomSport.weaknessMeta } : {}),
+          ...(resolvedCustomSport?.status === "generated" ? { customExercises: resolvedCustomSport.exercises, customWeaknessMeta: resolvedCustomSport.weaknessMeta, customSessionLabels: resolvedCustomSport.sessionLabels } : {}),
         }),
       });
       if (!res.ok) return;
