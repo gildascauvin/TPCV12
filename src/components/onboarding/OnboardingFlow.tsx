@@ -2775,6 +2775,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 headline={headline}
                 sport={displaySport}
                 sessionCount={role === "coach" ? undefined : realSessionCount}
+                focus={role === "coach" ? undefined : (GOAL_TO_FOCUS[goal] ?? "mixte")}
               />
               <Actions onNext={next} nextLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} caption={PRICING_PRIMING_GUARANTEE_CAPTION} />
             </div>

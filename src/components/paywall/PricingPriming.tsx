@@ -2,6 +2,7 @@
 
 import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
+import type { ProgramFocus } from "@/types";
 
 /* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
    paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
@@ -18,9 +19,24 @@ import type { Billing } from "./PaywallModal";
    le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "🛡️ Remboursé sous 14 jours si besoin, sans justification.";
 
+/* Bullet "objectif" — un par ProgramFocus réellement sélectionnable via goal_2a (GOAL_META dans
+   OnboardingFlow.tsx : volume/intensite/competition/mixte). "échéance" et "équilibre" reprennent
+   le vocabulaire déjà établi ailleurs dans l'app pour ces 2 focus (goalLower "préparer ton
+   échéance" ; icône ⚖️ déjà utilisée pour "mixte") plutôt que les noms techniques de l'enum. Les 3
+   valeurs de ProgramFocus non sélectionnables ici (technique/combat/autre, utilisées ailleurs par
+   le générateur) retombent sur un libellé générique. */
+const FOCUS_BULLET: Record<ProgramFocus, string> = {
+  volume: "Adapté à ton objectif de volume",
+  intensite: "Adapté à ton objectif d'intensité",
+  competition: "Adapté à ton objectif d'échéance",
+  mixte: "Adapté à ton objectif d'équilibre",
+  technique: "Adapté à ton objectif d'entraînement",
+  combat: "Adapté à ton objectif d'entraînement",
+  autre: "Adapté à ton objectif d'entraînement",
+};
+
 const BULLETS: Record<"athlete" | "coach", string[]> = {
   athlete: [
-    "Adapté à ton objectif d'intensité",
     "Ajusté selon ta récupération",
   ],
   coach: [
@@ -75,9 +91,11 @@ export interface PricingPrimingProps {
   sport?: string;
   /** Nombre réel de séances du programme généré (weeks × jours d'entraînement) — absent en gating in-app (pas de génération en cours), un bullet non chiffré prend le relais. */
   sessionCount?: number;
+  /** Objectif de bloc réel (GOAL_TO_FOCUS[goal]) — absent en gating in-app (pas de choix fait à cet instant), bullet générique en repli. */
+  focus?: ProgramFocus;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount }: PricingPrimingProps) {
+export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, focus }: PricingPrimingProps) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
@@ -85,7 +103,11 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
   const testimonial = PAYWALL_TESTIMONIALS[role];
 
   const bullets = role === "athlete"
-    ? [sessionCount ? `${sessionCount} séances générées` : "Ton programme sur mesure, déjà généré", ...BULLETS.athlete]
+    ? [
+        sessionCount ? `${sessionCount} séances générées` : "Ton programme sur mesure, déjà généré",
+        focus ? FOCUS_BULLET[focus] : "Adapté à ton objectif d'entraînement",
+        ...BULLETS.athlete,
+      ]
     : BULLETS.coach;
 
   const friseTitle = sport
