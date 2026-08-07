@@ -248,7 +248,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 22 }}>📚</span>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.2 }}>36 programmes gratuits à explorer</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.2 }}>36 programmes à explorer</div>
               <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2 }}>Trail, vélo, fitness, sports co… →</div>
             </div>
           </div>

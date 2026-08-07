@@ -28,8 +28,16 @@ interface PaywallModalProps {
 }
 
 export const PRICING = {
-  athlete: { monthly: 9,  annual: 59,  annualMonthly: 4.92 },
-  coach:   { monthly: 49, annual: 179, annualMonthly: 14.92 },
+  athlete: { monthly: 9,  annual: 79,  annualMonthly: 6.58 },
+  coach:   { monthly: 39, annual: 349, annualMonthly: 29.08 },
+};
+
+/* CTA final (soumission Stripe) — plus d'essai gratuit (retiré 2026-08-07), garantie remboursé
+   14 jours à la place. Reste le seul écran qui déclenche un vrai paiement, contrairement à l'écran
+   priming qui ne fait qu'avancer vers celui-ci (voir PricingPriming.tsx / Actions "Continuer →"). */
+export const PAYWALL_CTA_LABEL: Record<"athlete" | "coach", string> = {
+  athlete: "Débloquer mon programme",
+  coach: "Débloquer mon espace coach",
 };
 
 /* Preuve sociale — partagée entre l'onboarding (paywall_form) et le paywall in-app
@@ -44,13 +52,13 @@ export const PAYWALL_AVATARS = [
 
 export const PAYWALL_TESTIMONIALS = {
   athlete: {
-    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation — et mes résultats ont suivi.",
+    quote: "ThePerfClub a totalement changé la façon dont je structure mes entraînements. Je suis passé de « plus c'est mieux » à une vraie autorégulation. Mes résultats ont suivi.",
     name: "Franck G.",
     role: "Sportif · Membre ThePerfClub",
     photo: "https://www.theperfclub.com/wp-content/uploads/2021/03/Antoine-serpe-handball-powerlifting-1536x978.png",
   },
   coach: {
-    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation — un véritable tableau de bord.",
+    quote: "Je pensais que ThePerfClub était encore un outil pour créer des séances. Cela va bien plus loin : gestion du volume, de la fatigue, autorégulation. Un véritable tableau de bord.",
     name: "Killian Anno",
     role: "Préparateur physique · Rugby Club d'Arcachon",
     photo: "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
@@ -60,18 +68,18 @@ export const PAYWALL_TESTIMONIALS = {
 /* Exporté pour réutilisation par les 2 écrans plein-page de l'onboarding (paywall_priming/
    paywall_form dans OnboardingFlow.tsx) — même logique Stripe, pas de duplication. */
 export function CheckoutForm({
-  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel = "Commencer gratuitement", showTrialLegal = true,
+  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel, showBillingLegal = true,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
   footerPortalNode: HTMLDivElement | null;
   onSuccess: () => void;
   abVariant?: string;
-  /** Libellé du CTA — défaut inchangé pour PaywallModal in-app, "Essayer gratuitement 7 jours" sur l'onboarding. */
+  /** Libellé du CTA — défaut role-aware ("Débloquer mon programme"/"Débloquer mon espace coach") si absent. */
   ctaLabel?: string;
-  /** Désactivé sur l'onboarding (2026-07-30) : le récap "Dû aujourd'hui / À partir du..." rendu juste au-dessus
+  /** Désactivé sur l'onboarding (2026-07-30) : le reçu "Dû aujourd'hui / Renouvellement..." rendu juste au-dessus
       (OnboardingFlow.tsx) dit déjà tout ça, plus précisément — répéter la phrase ici ferait doublon. */
-  showTrialLegal?: boolean;
+  showBillingLegal?: boolean;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -113,10 +121,8 @@ export function CheckoutForm({
     });
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const trialEnd = new Date();
-  trialEnd.setDate(trialEnd.getDate() + 7);
-  const trialEndStr = trialEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
   const priceStr = billing === "annual" ? `${p.annual}€/an` : `${p.monthly}€/mois`;
+  const effectiveCtaLabel = ctaLabel ?? PAYWALL_CTA_LABEL[mode];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -188,9 +194,9 @@ export function CheckoutForm({
 
       {footerPortalNode && createPortal(
         <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
-          {showTrialLegal && (
+          {showBillingLegal && (
             <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-              Essai gratuit jusqu&apos;au {trialEndStr}.<br />Ensuite {priceStr} · Résiliable à tout moment.
+              Facturé aujourd&apos;hui : {priceStr}.<br />Remboursable sous 14 jours si besoin, sans justification.
             </div>
           )}
 
@@ -205,15 +211,15 @@ export function CheckoutForm({
               letterSpacing: "-0.01em",
             }}
           >
-            {loading ? "Traitement..." : ctaLabel}
+            {loading ? "Traitement..." : effectiveCtaLabel}
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: showTrialLegal ? 4 : 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 10, marginBottom: showBillingLegal ? 4 : 0 }}>
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none">
               <rect x="1" y="5" width="10" height="8" rx="2" stroke="#8a8f94" strokeWidth="1.2" />
               <path d="M4 5V3.5a2 2 0 114 0V5" stroke="#8a8f94" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
-            <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé{!showTrialLegal && " · Résiliable à tout moment"}</span>
+            <span style={{ fontSize: 11, color: "#8a8f94" }}>Paiement sécurisé{!showBillingLegal && " · Résiliable à tout moment"}</span>
           </div>
         </div>,
         footerPortalNode
@@ -263,10 +269,10 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
         {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
             badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-          🔒 Essai 7j gratuit
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+          🔒 Garanti 14j
         </div>
-        <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Démarre ton essai gratuit"}</div>
+        <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Passe au niveau supérieur."}</div>
         <div
           onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
           style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
@@ -286,7 +292,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             ))}
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+300 sportifs, coachs et clubs</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
             <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
           </div>
         </div>

@@ -14,7 +14,8 @@ import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
 import AutoRegScoreStep, { computeAthleteAutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
-import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
+import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_CTA_LABEL, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
+import { PricingPrimingContent } from "@/components/paywall/PricingPriming";
 import { Elements } from "@stripe/react-stripe-js";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -2753,164 +2754,29 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── PAYWALL PRIMING (pricing + réassurance) ── */}
         {currentStep === "paywall_priming" && (() => {
-          const p = PRICING[role === "coach" ? "coach" : "athlete"];
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
           const headline = isClaimed
             ? `Ton programme ${claimedProgramName} t'attend.`
             : (role === "coach"
                 ? "Le manque de visibilité sur la récupération de tes sportifs freine leur progression."
                 : "Ta charge d'entraînement irrégulière limite ta progression en endurance.");
-          const sub = isClaimed ? "Aucun prélèvement avant la fin de l'essai." : null;
-          const isMonthly = billing === "monthly";
-          const annualSavings = p.monthly * 12 - p.annual;
-          const annualSavingsPct = Math.round((annualSavings / (p.monthly * 12)) * 100);
-          const faqItems = [
-            { q: "Suis-je prélevé pendant l'essai gratuit ?", a: "Non. Aucun prélèvement avant la fin des 7 jours d'essai. En formule annuelle, on te prévient 2 jours avant la fin de l'essai." },
-            { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
-            { q: "Puis-je changer de formule après ?", a: "Oui, tu peux basculer entre mensuel et annuel à tout moment depuis ton profil." },
-            role === "coach"
-              ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
-              : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté automatiquement selon ton wellness." },
-          ];
-          const anchor = role === "coach"
-            ? "Moins cher qu'un mois de logiciel de coaching classique — pour un nombre de sportifs illimités, ajoutés sans surcoût."
-            : "Moins cher qu'une séance avec un coach particulier — pour un an de programme sur mesure avec 40+ modèles de programmes personnalisables.";
-          /* Frise "chemin dans le temps" (2026-07-31, remplace le comparatif avant/après déplacé sur
-             profile_recap) — répond à une objection différente : pas "est-ce que l'app comprend mon
-             problème" (déjà réglé plus tôt dans le funnel) mais "est-ce que ça va vraiment marcher,
-             et quand", juste avant l'engagement financier. Goal-aware via goalLower (comme
-             WeekPreviewStep), pas hardcodé sur un objectif précis — seul le titre référence
-             l'objectif, les 3 étapes restent volontairement génériques pour rester vraies quel que
-             soit l'objectif choisi. */
-          const goalLower = GOAL_TO_LOWER[goal] ?? "";
-          const friseTitle = `Le chemin pour enfin ${goalLower || "progresser"}, sans deviner.`;
-          const friseSteps = role === "coach"
-            ? [
-                { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre les séances et le ressenti de tes sportifs pendant 2 semaines — ThePerfClub identifie déjà ce qui joue sur leur récupération." },
-                { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur la forme de chacun — leur charge s'ajuste automatiquement à leur vraie récupération." },
-                { title: "Progresse", period: "Mois 2+", text: "Le profil d'autorégulation de chaque sportif prend forme — tu sais enfin ce qui les freine et ce qui les fait vraiment avancer." },
-              ]
-            : [
-                { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre tes séances et ton ressenti pendant 2 semaines — ThePerfClub identifie déjà ce qui joue sur ta récupération et ta forme." },
-                { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur ta forme — ta charge s'ajuste automatiquement à ta vraie récupération." },
-                { title: "Progresse", period: "Mois 2+", text: "Ton profil d'autorégulation prend forme — tu sais enfin ce qui te freine et ce qui te fait vraiment avancer." },
-              ];
+          const displaySport = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : (sport || undefined);
+          const durationWeeks = claimedProgramWeeks ?? 4;
+          const realSessionCount = trainingDays.length > 0 ? trainingDays.length * durationWeeks : undefined;
           return (
             <div>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#d44000", marginBottom: 10 }}>
                 🎯 Ta formule
               </div>
-              <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10, lineHeight: 1.2 }}>{headline}</div>
-              {sub && <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>{sub}</div>}
-
-              {/* Hero offer — TEST fond sombre (2026-07-27, à comparer avec la version claire) —
-                  même dégradé que les autres cartes "hero" de l'app (WeekPreviewStep, WellnessCard). */}
-              <div style={{
-                position: "relative", overflow: "hidden",
-                background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-                border: "1px solid rgba(255,255,255,.13)", borderRadius: 16, padding: "18px 18px 16px",
-                marginBottom: 22, marginTop: sub ? 0 : 18, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
-              }}>
-                <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#ff8a55", background: "rgba(255,107,43,.18)", padding: "5px 10px", borderRadius: 999 }}>
-                  ✓ Essai 7j
-                </div>
-                <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
-                  0€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>aujourd&apos;hui</span>
-                </div>
-                <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
-                  {isMonthly
-                    ? `${p.monthly}€/mois après l'essai`
-                    : `${p.annual}€/an (${p.annualMonthly}€/mois) après l'essai`}
-                </div>
-                <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
-                  <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
-                    Annuel<span style={{ marginLeft: 5, fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
-                  </button>
-                  <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
-                </div>
-                <div style={{ fontSize: 14.5, color: "#fff", fontWeight: 700, fontStyle: "italic", marginTop: 13, lineHeight: 1.5 }}>
-                  {anchor}
-                </div>
-              </div>
-
-              {/* Frise "chemin dans le temps" — remplace le comparatif avant/après (déplacé sur
-                  profile_recap), désamorce l'objection "est-ce que ça marche vraiment" juste avant
-                  le prix. */}
-              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.02em", color: "#1f2428", marginBottom: 14 }}>
-                {friseTitle}
-              </div>
-              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "6px 18px", marginBottom: 22 }}>
-                {friseSteps.map((s, i) => (
-                  <div key={i} style={{ display: "flex", gap: 14, padding: "16px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                    <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "rgba(212,64,0,.09)", color: "#d44000", fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>{s.title}</span>
-                        <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.period}</span>
-                      </div>
-                      <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5 }}>{s.text}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Témoignage */}
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
-                  Ce que disent des {role === "coach" ? "coachs" : "sportifs"} comme vous
-                </div>
-                <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-                  <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
-                    &ldquo;{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].quote}&rdquo;
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                      <img src={PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].name}</div>
-                      <div style={{ fontSize: 11, color: "#8a8f94" }}>{PAYWALL_TESTIMONIALS[role === "coach" ? "coach" : "athlete"].role}</div>
-                    </div>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                      {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#f28a00", fontSize: 12 }}>★</span>)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bande de confiance "+600" — anciennement dans paywall_form (bloc "+300"), déplacée
-                  ici et le chiffre remonté à jour (2026-07-27) : plus utile comme réassurance
-                  pendant la décision du prix que sur l'écran de paiement, qu'on simplifie au max. */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-                <div style={{ display: "flex" }}>
-                  {PAYWALL_AVATARS.map((src, i) => (
-                    <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    </div>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-                  <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-                </div>
-              </div>
-
-              {/* FAQ */}
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
-                  Questions fréquentes
-                </div>
-                <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, padding: "4px 16px" }}>
-                  {faqItems.map((item, i) => (
-                    <div key={i} style={{ padding: "14px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1f2428", marginBottom: 6 }}>{item.q}</div>
-                      <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>{item.a}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Actions onNext={next} nextLabel="Essayer gratuitement 7 jours" caption="Résiliable à tout moment" />
+              <PricingPrimingContent
+                role={role === "coach" ? "coach" : "athlete"}
+                billing={billing}
+                setBilling={setBilling}
+                headline={headline}
+                sport={displaySport}
+                sessionCount={role === "coach" ? undefined : realSessionCount}
+              />
+              <Actions onNext={next} nextLabel="Continuer →" caption="Garanti remboursé 14 jours" />
             </div>
           );
         })()}
@@ -2919,19 +2785,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "paywall_form" && (() => {
           const p = PRICING[role === "coach" ? "coach" : "athlete"];
           const isMonthly = billing === "monthly";
-          const trialEnd = new Date();
-          trialEnd.setDate(trialEnd.getDate() + 7);
-          const trialEndStr = trialEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+          const renewalDate = new Date();
+          if (isMonthly) renewalDate.setMonth(renewalDate.getMonth() + 1);
+          else renewalDate.setFullYear(renewalDate.getFullYear() + 1);
+          const renewalDateStr = renewalDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: isMonthly ? undefined : "numeric" });
           return (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-                🔒 Essai 7j gratuit
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+                🔒 Garanti 14j
               </div>
               <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Passe au niveau supérieur.</div>
 
-              {/* Reçu (2026-07-30) — remplace l'ancien bandeau "Facturé..." + la phrase de
-                  réassurance séparée par un seul bloc façon reçu (Dû aujourd'hui / rappel / à
-                  partir du...), même structure que le POC A3 validé. */}
+              {/* Reçu (2026-07-30, mis à jour 2026-08-07 : plus d'essai, montant réel dû
+                  aujourd'hui) — un seul bloc façon reçu (Dû aujourd'hui / garantie / renouvellement),
+                  même structure que le POC A3 validé, chiffres réels au lieu de "0€"/"essai". */}
               <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "16px 17px", marginBottom: 20 }}>
                 <div
                   onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
@@ -2941,13 +2808,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontWeight: 900, fontSize: 15 }}>
                   <span>Dû aujourd&apos;hui</span>
-                  <span style={{ fontSize: 22, fontWeight: 1000, color: "#d44000" }}>0€</span>
+                  <span style={{ fontSize: 22, fontWeight: 1000, color: "#d44000" }}>{isMonthly ? `${p.monthly}€` : `${p.annual}€`}</span>
                 </div>
                 <div style={{ fontSize: 13, color: "#8a8f94", padding: "4px 0 6px", lineHeight: 1.5 }}>
-                  🔔 Rappel 2 jours avant la fin de l&apos;essai.
+                  🛡️ Remboursable sous 14 jours, sans justification.
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13, color: "#8a8f94", paddingTop: 2 }}>
-                  <span>À partir du {trialEndStr}</span>
+                  <span>Renouvellement le {renewalDateStr}</span>
                   <span>{isMonthly ? `${p.monthly}€/mois` : `${p.annual}€/an (${p.annualMonthly}€/mois)`}</span>
                 </div>
               </div>
@@ -2956,7 +2823,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               {setupError && <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
               {clientSecret && (
                 <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
-                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} ctaLabel="Essayer gratuitement 7 jours" showTrialLegal={false} />
+                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} ctaLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} showBillingLegal={false} />
                 </Elements>
               )}
               {/* Le footer sticky de CheckoutForm (récap + bouton + mention sécurité) est plus haut
