@@ -900,6 +900,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      cas, ces sessions basculaient en "mode auth" (CTA explicite) sur les étapes de sélection
      qui suivent, au lieu de l'auto-advance au tap attendu en inscription. */
   const isRegisterMode = !userId || !!pendingData;
+  /* Ancre neutre pour les A/B tests (2026-08-07) : capture_pageview est désactivé
+     (PostHogProvider.tsx), donc rien ne se déclenchait avant la toute première étape réellement
+     rendue (value_intro OU role selon le flag skip-value-intro) — un funnel qui démarrerait sur
+     l'un des deux tomberait à 0% pour l'autre bras. Déclenché une seule fois au montage,
+     indépendamment de path/currentStep/valueVariantResolved, pour rester commun aux 4 combinaisons
+     des 2 flags A/B en cours. */
+  useEffect(() => {
+    if (!isRegisterMode) return;
+    posthog.capture("onboarding_flow_started");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   /* Largeur de colonne responsive (2026-07-27) — même formule que OnboardingBackground.tsx/
      Actions.tsx, pour que les 2 footers fixed rendus directement ici (wellness_q, paywall_form)
      restent alignés avec le contenu au lieu de rester figés à 560px pendant que la page
@@ -933,6 +944,40 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   useEffect(() => {
     if (assignedVariant) posthog.setPersonProperties({ ab_variant: assignedVariant });
   }, [assignedVariant]);
+
+  /* A/B test "skip-value-intro" (2026-08-07) : bras "test" = value_intro retiré du path, atterrit
+     directement sur "role" (redevenu un step séparé depuis la défusion du 2026-08-06). Indépendant
+     du flag ci-dessus (control/test de la position du signup) — Gildas a choisi de faire tourner
+     les deux en parallèle malgré la dilution de volume, jugeant les deux questions sans interaction
+     l'une sur l'autre. Override dev/support : ?value=test|control (nom différent de ?ab= pour ne
+     pas collisionner avec l'autre test). Personne property `value_variant` posée pour le breakdown
+     funnel, MAIS même limite documentée que `ab_variant` (feedback-ab-variant-bug) : croiser avec
+     l'event property $feature/skip-value-intro avant de conclure quoi que ce soit, ne jamais faire
+     confiance à la seule person property. */
+  const rawValueVariant = useFeatureFlagVariantKey("skip-value-intro");
+  const [assignedValueVariant, setAssignedValueVariant] = useState<"control" | "test" | null>(null);
+  useEffect(() => {
+    if (assignedValueVariant || !abEligible) return;
+    const forced = new URLSearchParams(window.location.search).get("value");
+    if (forced === "test" || forced === "control") { setAssignedValueVariant(forced); return; }
+    if (rawValueVariant === "test" || rawValueVariant === "control") setAssignedValueVariant(rawValueVariant);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawValueVariant, abEligible]);
+  useEffect(() => {
+    if (assignedValueVariant) posthog.setPersonProperties({ value_variant: assignedValueVariant });
+  }, [assignedValueVariant]);
+  /* Garde de premier rendu : value_intro est l'étape 0, donc si ce flag résout APRÈS le premier
+     paint, path perdrait "value_intro" sous les yeux d'un visiteur déjà en train de le regarder
+     (flash value_intro→role). Même mécanisme que claimedNameResolved plus bas (écran vide court,
+     jamais bloquant indéfiniment) — seuls les visiteurs éligibles (isRegisterMode) sont concernés,
+     une reprise de session n'a pas besoin d'attendre puisque son stepIdx n'est de toute façon pas 0. */
+  const [valueVariantResolved, setValueVariantResolved] = useState(!abEligible);
+  useEffect(() => {
+    if (!abEligible || valueVariantResolved) return;
+    if (assignedValueVariant) { setValueVariantResolved(true); return; }
+    const t = setTimeout(() => setValueVariantResolved(true), 700);
+    return () => clearTimeout(t);
+  }, [abEligible, assignedValueVariant, valueVariantResolved]);
 
   /* value_intro est désormais toujours l'étape 0 dans tous les paths, pour tout le monde — "role"
      n'existe plus comme step séparé (fusionné dans le CTA de value_intro, voir plus bas). Un
@@ -1071,6 +1116,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       base = r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
     } else {
       base = r === "coach" ? COACH_PATH : ATHLETE_PATH;
+    }
+    /* A/B "skip-value-intro" : ne s'applique jamais à INVITE_ATHLETE_PATH (hors périmètre, comme
+       l'autre test) — pour tous les autres, "value_intro" est toujours en position 0, un simple
+       filtre suffit, "role" devient alors la première étape réellement rendue. */
+    if (assignedValueVariant === "test" && base !== INVITE_ATHLETE_PATH) {
+      base = base.filter(s => s !== "value_intro");
     }
     /* Activation (wellness_q/wellness_reveal sportif, invite_team coach) réservée aux payeurs :
        insérée après "celebration" seulement une fois trial_started réussi (voir paidExtras,
@@ -1668,7 +1719,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
-  if (hasClaimedProgram === null || hasCoachInvite === null || !claimedNameResolved) {
+  if (hasClaimedProgram === null || hasCoachInvite === null || !claimedNameResolved || !valueVariantResolved) {
     return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
   }
 
