@@ -1347,10 +1347,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, {
           sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          // customSessionLabels volontairement pas porté ici (2026-08-07) — même pattern que le
-          // reste du chantier "Autre"+Claude : in-app d'abord (ProgramCriteriaModal.tsx), onboarding
-          // dans un 2e temps une fois validé en prod (clé Anthropic non testable en local).
-          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
         })] : []),
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
@@ -1390,7 +1387,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         const ok = await generateAndAssignProgram(uid, {
           sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta } : {}),
+          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
         });
         if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
@@ -2463,6 +2460,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16}
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
+            customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
             role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
@@ -2471,6 +2469,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <WeekPreviewStep sport={sport} level={level} trainingDays={trainingDays} focus={GOAL_TO_FOCUS[goal] ?? "mixte"} weaknesses={weaknesses} duration={(claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16}
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
+            customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
             role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 

@@ -77,6 +77,7 @@ interface Props {
   duration?: 4 | 6 | 8 | 12 | 16;
   customExercises?: Record<string, string[]>;
   customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>;
+  customSessionLabels?: Record<string, string>;
   programFlow?: boolean;
   role: Role;
   goalLower: string;
@@ -85,7 +86,7 @@ interface Props {
   onNext: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, customSessionLabels, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
@@ -126,7 +127,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: duration ?? 4, focus: focus ?? "mixte", weaknesses: weaknesses ?? [],
-        ...(customExercises ? { customExercises, customWeaknessMeta } : {}),
+        ...(customExercises ? { customExercises, customWeaknessMeta, customSessionLabels } : {}),
       }),
     })
       .then(r => r.ok ? r.json() : null)
