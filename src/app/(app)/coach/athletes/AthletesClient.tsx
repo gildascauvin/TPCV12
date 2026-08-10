@@ -5,58 +5,29 @@ import { useRouter } from "next/navigation";
 import InviteModal from "@/components/coach/InviteModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
+import CalendarHeader from "@/components/calendar/CalendarHeader";
+import ZoneSparkline from "@/components/conseils/ZoneSparkline";
+import SparkLineClient from "@/components/conseils/SparkLineClient";
+import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
-import { sigDimInfo, type AthleteSignature } from "@/lib/fatigueSignature";
+import { sigDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
+import type { TrendCode } from "@/lib/trainingLoad";
+import type { AthleteTrendInsight } from "@/lib/athletesData";
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
-function statusLabel(s: number) { return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller"; }
-
-// Mini-sparkline condensée : même style que le vrai graphe /conseils (SparkLineClient) — aire
-// remplie + trait 2px + point plein pour les lignes, colonnes arrondies pour les barres — mais
-// sans le tooltip au survol, et en ne reliant que les jours renseignés (pas d'axe temporel avec
-// trous visibles) pour rester lisible en liste dense.
-function MiniSpark({ points, color, type = "line" }: { points: (number | null)[]; color: string; type?: "line" | "bars" }) {
-  const known = points.filter((p): p is number => p !== null);
-  if (known.length < 2) return null;
-  const w = 148, h = 30, pad = 4;
-  const min = type === "bars" ? 0 : Math.min(...known);
-  const max = Math.max(...known, min + 1);
-  const range = Math.max(1, max - min);
-  const step = (w - pad * 2) / (known.length - 1);
-  const toXY = (v: number, i: number): [number, number] => [pad + i * step, pad + (1 - (v - min) / range) * (h - pad * 2)];
-  const baseline = h - pad;
-
-  if (type === "bars") {
-    const barW = Math.max(3, step * 0.55);
-    return (
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", marginBottom: 2 }}>
-        {known.map((v, i) => {
-          if (v === 0) return null;
-          const [x, y] = toXY(v, i);
-          return <rect key={i} x={x - barW / 2} y={y} width={barW} height={Math.max(0, baseline - y)} rx={1.5} fill={color} fillOpacity={0.75} />;
-        })}
-      </svg>
-    );
-  }
-
-  const coords = known.map((v, i) => toXY(v, i));
-  const path = coords.map(c => c.join(",")).join(" ");
-  const fillD = `M ${coords[0][0]},${baseline} L ${coords.map(c => c.join(",")).join(" L ")} L ${coords[coords.length - 1][0]},${baseline} Z`;
-  const [lx, ly] = coords[coords.length - 1];
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: "block", marginBottom: 2 }}>
-      <path d={fillD} fill={color} fillOpacity={0.12} />
-      <polyline points={path} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-      <circle cx={lx} cy={ly} r={3.5} fill={color} stroke="rgba(0,0,0,.4)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
+const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
+function statusLabel(s: number, trend?: TrendCode | null) {
+  if (trend && TREND_WATCH.has(trend)) return "À surveiller";
+  return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller";
 }
 
-// Condensé de la signature de fatigue (/conseils) par sportif : coût nerveux, coût musculaire,
-// récupération. Plus de libellé "COÛT ÉLEVÉ" à côté de chaque courbe — la couleur et la forme
-// suffisent. Colonnes étroites + .sig-grid (globals.css) : espacées sur desktop, empilées sur mobile.
-function AthleteSignatureBlock({ signature }: { signature: AthleteSignature }) {
+// Mêmes charts que /conseils (ZoneSparkline + SparkLineClient) — un seul point de vérité, plus de
+// mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
+// "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
+// fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
+function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSignature; athleteId: string }) {
   if (signature.kind === "manual") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
@@ -67,32 +38,72 @@ function AthleteSignatureBlock({ signature }: { signature: AthleteSignature }) {
   if (signature.kind === "no_data") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13 }}>
-        🕳️ Pas de wellness renseigné ces 10 derniers jours — pas de signature de fatigue à afficher.
+        🕳️ Pas de wellness renseigné ces 28 derniers jours — pas de signature de fatigue à afficher.
       </div>
     );
   }
 
-  // Mêmes couleurs que SparkLineClient/conseils/page.tsx : nerveux et musculaire ont une teinte
-  // fixe (identité de la métrique), seule la récupération suit le statut dynamique (sigDimInfo).
-  const knownRecovery = signature.recovery.filter((v): v is number => v !== null);
-  const lastRecovery = knownRecovery[knownRecovery.length - 1];
-  const recoveryColor = lastRecovery !== undefined ? sigDimInfo("recovery", lastRecovery).color : "#8a8f94";
+  const { isLg } = useBreakpoint();
+  const { series, sig } = signature;
+  // Charge et Récupération sur la même fenêtre (7 derniers jours glissants)
+  const last7 = series.slice(-7);
+  const zoneAcwr = last7.map(p => p.acwr);
+  const zoneLoads = last7.map(p => p.load);
+  const zoneDates = last7.map(p => p.date);
 
-  const sigs: Array<{ key: string; icon: string; label: string; points: (number | null)[]; footer: string; type: "line" | "bars"; color: string }> = [
-    { key: "nervous", icon: "⚡", label: "Coût nerveux", points: signature.nervous, footer: "intensité, 10 derniers jours", type: "line", color: "#f04a08" },
-    { key: "muscular", icon: "💪", label: "Coût musculaire", points: signature.muscular, footer: "volume, 10 derniers jours", type: "bars", color: "#f28a00" },
-    { key: "recovery", icon: "🌿", label: "Récupération", points: signature.recovery, footer: "wellness quotidien", type: "line", color: recoveryColor },
-  ];
+  const todayAcwr = series[series.length - 1]?.acwr ?? null;
+  const loadInfo = todayAcwr !== null
+    ? sigDimInfo("load", todayAcwr, "coach")
+    : { label: "HISTORIQUE INSUFFISANT", color: "#8a8f94", text: "Pas assez d'historique pour l'ACWR." };
+  const monotonyInfo = sig.monotony !== null
+    ? sigDimInfo("monotony", sig.monotony, "coach")
+    : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "" };
+  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, "coach") : null;
+  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "coach");
+  const todayForm = series[series.length - 1]?.form ?? null;
+  const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, "coach") : null;
+  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, "coach");
+  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach");
 
   return (
-    <div className="sig-grid" style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)" }}>
-      {sigs.map(s => (
-        <div key={s.key}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: "#62686e", marginBottom: 4, whiteSpace: "nowrap" }}>{s.icon} {s.label}</div>
-          <MiniSpark points={s.points} color={s.color} type={s.type} />
-          <div style={{ fontSize: 10.5, color: "#8a8f94" }}>{s.footer}</div>
+    <div style={{
+      marginTop: 14,
+      background: "linear-gradient(145deg,#1a1a1a,#282828)",
+      border: "1px solid rgba(255,255,255,.08)",
+      borderRadius: 20, padding: 16, color: "#fff",
+      display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 20,
+    }}>
+      {/* Charge — titre + badges sur la même ligne, insight dessous, chart ensuite */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>⚡ Charge</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+            <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={METRIC_DEFINITIONS.acwr} size="sm" />
+            <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} size="sm" />
+            {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} size="sm" />}
+          </div>
         </div>
-      ))}
+        <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
+        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} />
+      </div>
+
+      {/* Récupération + Form — titre + badges sur la même ligne, insight dessous, chart ensuite */}
+      <div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>🌿 Récupération</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
+            <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
+            {formInfo && <ZoneBadge label={`FORM ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
+          </div>
+        </div>
+        <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
+        <SparkLineClient
+          points={last7.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
+          maxVal={100} height={168} animDelay={0}
+          metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line"
+          points2={last7.map(p => p.form)} points2Raw={last7.map(p => p.formRaw)} color2="#5b8dee"
+        />
+      </div>
     </div>
   );
 }
@@ -119,17 +130,44 @@ function AthleteRing({ score }: { score: number }) {
 interface Props {
   userId: string;
   initialAthletes: CoachAthlete[];
-  signatures: Record<string, AthleteSignature>;
+  initialDate: string;
+  initialSignatures: Record<string, AthleteSignature>;
+  initialTrends: Record<string, TrendCode | null>;
+  initialTrendInsights: Record<string, AthleteTrendInsight>;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
 }
 
-export default function AthletesClient({ userId, initialAthletes, signatures, subscriptionStatus, inviteCode }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, subscriptionStatus, inviteCode }: Props) {
   const router = useRouter();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [signatures, setSignatures] = useState(initialSignatures);
+  const [trends, setTrends] = useState(initialTrends);
+  const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+
+  function toggleExpanded(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleDateChange(date: string) {
+    setSelectedDate(date);
+    const res = await fetch(`/api/coach/athletes?date=${date}`);
+    if (res.ok) {
+      const { signatures: s, trends: t, trendInsights: ti } = await res.json();
+      setSignatures(s);
+      setTrends(t);
+      setTrendInsights(ti);
+    }
+  }
 
   async function handleDelete(athlete: CoachAthlete) {
     const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
@@ -146,6 +184,8 @@ export default function AthletesClient({ userId, initialAthletes, signatures, su
 
   return (
     <>
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
+
       <div className="page-shell">
 
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
@@ -206,7 +246,7 @@ export default function AthletesClient({ userId, initialAthletes, signatures, su
                     <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>
                       {isPending
                         ? <span style={{ color: "#f28a00" }}>{a.invite_email}</span>
-                        : <>{a.sport}{a.sport ? " · " : ""}<span style={{ color: scoreColor(a.wellness_score), fontWeight: 700 }}>{statusLabel(a.wellness_score)}</span></>
+                        : <>{a.sport}{a.sport ? " · " : ""}<span style={{ color: scoreColor(a.wellness_score), fontWeight: 700 }}>{statusLabel(a.wellness_score, trends[a.id])}</span></>
                       }
                     </div>
                   </div>
@@ -228,9 +268,28 @@ export default function AthletesClient({ userId, initialAthletes, signatures, su
                   </div>
                 </div>
 
-                {!isPending && (
-                  <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} />
-                )}
+                {!isPending && (() => {
+                  const insight = trendInsights[a.id];
+                  const isExpanded = expandedIds.has(a.id);
+                  return (
+                    <>
+                      {insight && (
+                        <div style={{ marginTop: 4, padding: "9px 13px", borderRadius: 12, background: "rgba(0,0,0,.035)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
+                          {insight.emoji} <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
+                        </div>
+                      )}
+                      <button
+                        onClick={() => toggleExpanded(a.id)}
+                        style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: "#d44000", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}
+                      >
+                        {isExpanded ? "Masquer le détail ▴" : "Voir charge & récupération ▾"}
+                      </button>
+                      {isExpanded && (
+                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} />
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               );
             })}

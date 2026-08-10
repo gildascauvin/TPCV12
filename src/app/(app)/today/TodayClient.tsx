@@ -10,6 +10,7 @@ import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
+import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -39,7 +40,7 @@ function buildDotMap(sessions: Session[], anchor: string) {
   const weekStart = startOfWeek(new Date(anchor + "T12:00:00"), { weekStartsOn: 1 });
   for (let i = 0; i < 7; i++) {
     const d = format(addDays(weekStart, i), "yyyy-MM-dd");
-    const charge = sessions.filter((s) => s.date === d && s.done && s.rpe && s.duration).reduce((a, s) => a + s.rpe! * s.duration!, 0);
+    const charge = dailyLoad(sessions.filter((s) => s.date === d));
     if (charge > 600) map[d] = "done-high";
     else if (charge > 300) map[d] = "done-med";
     else if (charge > 0) map[d] = "done-light";

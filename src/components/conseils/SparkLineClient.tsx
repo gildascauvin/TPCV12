@@ -17,23 +17,36 @@ function wellnessZone(v: number): string {
   return "Zone récupération";
 }
 
-function formatTooltipValue(metricType: "nervous" | "muscular" | "recovery", v: number | null): string {
-  if (metricType === "nervous") {
+function formatTooltipValue(metricType: "load" | "monotony" | "recovery", v: number | null): string {
+  if (metricType === "load") {
     if (v === null || v === 0) return "🛌 Repos";
     return `⚡ Charge : ${v}`;
   }
-  if (metricType === "muscular") {
-    if (v === null || v === 0) return "🛌 Repos";
-    return `💪 ${v} min de séance`;
+  if (metricType === "monotony") {
+    if (v === null) return "— Pas assez d'historique";
+    return `🔁 Monotonie : ${v}`;
   }
   // recovery
   if (v === null) return "— Non renseigné";
   return `🌿 ${v}/100 · ${wellnessZone(v)}`;
 }
 
+function formatFormValue(v: number | null, raw: number | null): string | null {
+  if (v === null) return null;
+  const rawStr = raw !== null ? ` (${raw > 0 ? "+" : ""}${raw} UA)` : "";
+  return `📊 Form : ${v}/100${rawStr}`;
+}
+
+function dayLabel(dateStr: string) {
+  const d = new Date(dateStr + "T12:00:00");
+  return DAY_FR[d.getDay()];
+}
+
 const W = 400;
 const PAD_TOP = 5;
-const PAD_BOT = 2;
+// Espace réservé en bas pour la ligne de labels de jour (overlay HTML, voir ZoneSparkline.tsx pour
+// le pourquoi de l'overlay plutôt que du <text> SVG — même piège de "zoom" déjà rencontré ici).
+const PAD_BOT = 20;
 
 interface Props {
   points: (number | null)[];
@@ -42,13 +55,23 @@ interface Props {
   maxVal: number;
   height?: number;
   animDelay?: number;
-  metricType: "nervous" | "muscular" | "recovery";
+  metricType: "load" | "monotony" | "recovery";
   uid: string;
   chartType?: "line" | "bars";
+  /* Série secondaire optionnelle superposée (ex. Form sur le chart Récupération) — rendue en
+     simple trait pointillé, sans aire remplie, même échelle Y que la série principale. */
+  points2?: (number | null)[];
+  points2Raw?: (number | null)[]; // valeur brute (ex. UA) affichée en tooltip à côté de la valeur normalisée
+  color2?: string;
+  /* Ligne de seuil horizontale optionnelle (ex. monotonie = 2, seuil Foster) — uniquement pertinent
+     quand un seuil universel existe réellement dans la littérature, pas une valeur inventée. */
+  thresholdValue?: number;
+  thresholdLabel?: string;
 }
 
 export default function SparkLineClient({
   points, dates, color, maxVal, height = 52, animDelay = 0, metricType, uid, chartType = "line",
+  points2, points2Raw, color2, thresholdValue, thresholdLabel,
 }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
@@ -66,6 +89,11 @@ export default function SparkLineClient({
     const pct = maxVal > 0 ? Math.min(v / maxVal, 1) : 0;
     return H - PAD_BOT - pct * (H - PAD_TOP - PAD_BOT);
   };
+  const toXPct = (i: number) => (toX(i) / W) * 100;
+
+  // Décimation des labels si beaucoup de points (mêmes règles que ZoneSparkline) — toujours le
+  // premier et le dernier, un point tous les `labelStep` entre les deux.
+  const labelStep = n > 10 ? Math.ceil(n / 7) : 1;
 
   type Seg = { x: number; y: number }[];
   const segments: Seg[] = [];
@@ -81,6 +109,16 @@ export default function SparkLineClient({
     ? { x: toX(lastNonNullIdx), y: toY(points[lastNonNullIdx] as number) }
     : null;
 
+  const segments2: Seg[] = [];
+  if (points2) {
+    let cur2: Seg = [];
+    points2.forEach((v, i) => {
+      if (v === null) { if (cur2.length) { segments2.push(cur2); cur2 = []; } }
+      else cur2.push({ x: toX(i), y: toY(v) });
+    });
+    if (cur2.length) segments2.push(cur2);
+  }
+
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const xRatio = (e.clientX - rect.left) / rect.width;
@@ -90,6 +128,8 @@ export default function SparkLineClient({
 
   const hIdx = hover?.idx ?? null;
   const hVal  = hIdx !== null ? points[hIdx] : null;
+  const hVal2 = hIdx !== null && points2 ? points2[hIdx] : null;
+  const hVal2Raw = hIdx !== null && points2Raw ? points2Raw[hIdx] : null;
   const hDate = hIdx !== null ? dates[hIdx] : null;
   const cursorX = hIdx !== null ? toX(hIdx) : null;
 
@@ -126,12 +166,17 @@ export default function SparkLineClient({
           <div style={{ fontSize: 13, fontWeight: 800, color }}>
             {formatTooltipValue(metricType, hVal)}
           </div>
+          {points2 && formatFormValue(hVal2, hVal2Raw) && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: color2 ?? "#8a8f94", marginTop: 2 }}>
+              {formatFormValue(hVal2, hVal2Raw)}
+            </div>
+          )}
         </div>
       )}
 
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        style={{ width: "100%", height, display: "block", cursor: "crosshair" }}
+        style={{ width: "100%", aspectRatio: `${W} / ${H}`, display: "block", cursor: "crosshair" }}
         preserveAspectRatio="none"
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHover(null)}
@@ -151,6 +196,21 @@ export default function SparkLineClient({
 
         {/* Baseline */}
         <line x1={0} y1={H - PAD_BOT} x2={W} y2={H - PAD_BOT} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+
+        {/* Seuil à ne pas dépasser */}
+        {thresholdValue !== undefined && thresholdValue <= maxVal && (
+          <>
+            <line
+              x1={0} y1={toY(thresholdValue).toFixed(1)} x2={W} y2={toY(thresholdValue).toFixed(1)}
+              stroke="#d10000" strokeWidth={1} strokeDasharray="5,4" opacity={0.55}
+            />
+            {thresholdLabel && (
+              <text x={W} y={toY(thresholdValue) - 4} textAnchor="end" fontSize={9} fontWeight={800} fill="#d10000" opacity={0.75}>
+                {thresholdLabel}
+              </text>
+            )}
+          </>
+        )}
 
         {/* Chart content — animated reveal via clipPath */}
         <g clipPath={`url(#sc-${uid})`}>
@@ -203,6 +263,14 @@ export default function SparkLineClient({
               )}
             </>
           )}
+          {segments2.map((seg, si) => {
+            if (seg.length < 2) return null;
+            const ptStr = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+            return (
+              <polyline key={`s2-${si}`} points={ptStr} fill="none" stroke={color2 ?? "#8a8f94"}
+                strokeWidth={1.5} strokeDasharray="4,3" strokeLinecap="round" strokeLinejoin="round" />
+            );
+          })}
         </g>
 
         {/* Cursor vertical line */}
@@ -225,6 +293,25 @@ export default function SparkLineClient({
           />
         )}
       </svg>
+
+      {/* Labels de jour — overlay HTML (taille fixe en px), pas du <text> SVG à l'intérieur du
+          viewBox : voir ZoneSparkline.tsx pour le détail du piège de "zoom" évité ici. */}
+      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+        {dates.map((d, i) => {
+          if (i % labelStep !== 0 && i !== n - 1) return null;
+          const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
+          const xPct = toXPct(i);
+          return (
+            <div key={d} style={{
+              position: "absolute", bottom: 0,
+              ...(anchor === "left" ? { left: `${xPct}%` } : anchor === "right" ? { right: `${100 - xPct}%` } : { left: `${xPct}%`, transform: "translateX(-50%)" }),
+              fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" as const,
+            }}>
+              {dayLabel(d)}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

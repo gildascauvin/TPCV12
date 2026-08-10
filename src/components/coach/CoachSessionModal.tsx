@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CoachSession, CoachAthlete } from "@/types";
+import type { TrendCode } from "@/lib/trainingLoad";
 
 interface Exercise {
   id: string;
@@ -13,6 +14,7 @@ export interface ReviewContext {
   maxDiff: number;
   queueCurrent: number;
   queueTotal: number;
+  trend?: TrendCode | null; // charge/récupération 7j vs 7j précédents — voir trainingLoad.ts
 }
 
 interface Props {
@@ -27,8 +29,10 @@ interface Props {
   onClose: () => void;
 }
 
-function buildAttentionPoints(wellness: number | null, maxDiff: number): string[] {
+function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: TrendCode | null): string[] {
   const points: string[] = [];
+  if (trend === "accumulation") points.push("Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.");
+  if (trend === "fatigue_persistante") points.push("Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.");
   if (wellness === null) {
     if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — wellness non renseigné aujourd'hui, vérifier avec lui.`);
     return points;
@@ -164,7 +168,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
           const wBorder = w === null ? "rgba(0,0,0,0.10)" : w >= 70 ? "rgba(120,191,19,0.26)" : w >= 45 ? "rgba(242,138,0,0.26)" : "rgba(209,0,0,0.26)";
           const wLabel = w === null ? "Non renseigné" : w >= 82 ? "Zone optimale" : w >= 65 ? "Zone stable" : w >= 45 ? "Zone prudente" : "Zone récupération";
           const dColor = reviewContext.maxDiff >= 8 ? "#d44000" : reviewContext.maxDiff >= 5 ? "#b96500" : "#2f9e44";
-          const points = buildAttentionPoints(w, reviewContext.maxDiff);
+          const points = buildAttentionPoints(w, reviewContext.maxDiff, reviewContext.trend);
           return (
             <div style={{ background: wBg, border: `1px solid ${wBorder}`, borderRadius: 16, padding: "13px 16px", marginBottom: 18 }}>
               {/* Gauge row */}

@@ -16,6 +16,7 @@ import { usePaywall } from "@/hooks/usePaywall";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import InviteModal from "@/components/coach/InviteModal";
+import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
 interface Props {
@@ -26,6 +27,7 @@ interface Props {
   userId: string;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
+  trends: Record<string, TrendCode | null>;
 }
 
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
@@ -62,7 +64,7 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
 }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -204,14 +206,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const priority = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return hasSessions && attention(a, maxDiffToday(a.id, sessions));
+    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id]);
   });
   const stable = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions));
+    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id]);
   });
   const sortedPriority = [...priority].sort((a, b) =>
-    riskScore(b, maxDiffToday(b.id, sessions)) - riskScore(a, maxDiffToday(a.id, sessions))
+    riskScore(b, maxDiffToday(b.id, sessions), trends[b.id]) - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id])
   );
 
   const filledAthletes = athletes.filter(a => a.wellnessFilledToday !== false);
@@ -487,6 +489,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
                     isReviewed={reviewedIds.has(a.id)}
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
+                    trend={trends[a.id]}
                     onDecide={() => requireSubscription(() => handleDecide(a))} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
@@ -507,6 +510,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 {stable.length > 0 ? stable.map(a => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
+                    trend={trends[a.id]}
                     onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
@@ -553,6 +557,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             maxDiff: maxDiffToday(reviewAthlete.id, sessions),
             queueCurrent: reviewedPriorityCount,
             queueTotal: sortedPriority.length,
+            trend: trends[reviewAthlete.id],
           }}
           onSave={handleSaveReview}
           onClose={handleCloseReview}

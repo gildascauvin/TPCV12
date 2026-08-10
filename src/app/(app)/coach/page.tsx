@@ -5,7 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachClient from "./CoachClient";
 import { realToView, demoToView } from "@/lib/coachSessions";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
+import { computeWeekOverWeekTrend, daysAgoStr, type TrendCode } from "@/lib/trainingLoad";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
 
 export default async function CoachPage() {
   const supabase = await createClient();
@@ -68,6 +69,29 @@ export default async function CoachPage() {
       : { ...a, wellnessFilledToday: false };
   });
 
+  // Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente
+  // decisionText()/attention() du Coach Control (voir src/lib/trainingLoad.ts). Fenêtre minimale
+  // pour une comparaison semaine vs semaine, même fetch admin bypass que /coach/athletes.
+  const since14 = daysAgoStr(13);
+  const [historySessionsRes, historyWellnessRes] = await Promise.all([
+    realUserIds.length
+      ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", since14)
+      : Promise.resolve({ data: [] as Session[] }),
+    realUserIds.length
+      ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", since14)
+      : Promise.resolve({ data: [] as WellnessDaily[] }),
+  ]);
+  const historySessions = (historySessionsRes.data || []) as Session[];
+  const historyWellness = (historyWellnessRes.data || []) as WellnessDaily[];
+
+  const trends: Record<string, TrendCode | null> = {};
+  for (const a of updatedAthletes) {
+    if (!a.user_id) { trends[a.id] = null; continue; }
+    const mySessions = historySessions.filter(s => s.user_id === a.user_id);
+    const myWellness = historyWellness.filter(w => w.user_id === a.user_id);
+    trends[a.id] = computeWeekOverWeekTrend(mySessions, myWellness).code;
+  }
+
   const todaySessions: CoachViewSession[] = [
     ...(realSessionsRes.data || []).map(s => realToView(s as Session, athletes)),
     ...(demoSessionsRes.data || []).map(s => demoToView(s as CoachSession)),
@@ -82,6 +106,7 @@ export default async function CoachPage() {
       userId={user.id}
       subscriptionStatus={profile.subscription_status ?? "free"}
       inviteCode={inviteCode}
+      trends={trends}
     />
   );
 }

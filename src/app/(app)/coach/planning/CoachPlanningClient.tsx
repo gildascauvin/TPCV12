@@ -23,6 +23,7 @@ import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
+import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AlertBox from "@/components/calendar/AlertBox";
@@ -215,7 +216,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     weekDates.forEach(d => {
       const dstr = format(d, "yyyy-MM-dd");
       const ds = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-      const charge = ds.filter(s => s.done && s.rpe && s.duration).reduce((a, s) => a + s.rpe! * s.duration!, 0);
+      const charge = dailyLoad(ds);
       if (charge > 600) map[dstr] = "done-high";
       else if (charge > 300) map[dstr] = "done-med";
       else if (charge > 0) map[dstr] = "done-light";

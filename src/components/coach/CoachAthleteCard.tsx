@@ -3,6 +3,7 @@
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { zoneLabel } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
 
 /* Carte sportif de Coach Control — extraite de CoachClient.tsx pour être réutilisable ailleurs
@@ -38,14 +39,20 @@ export function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
   return s.length ? Math.max(...s.map(x => x.target_difficulty ?? 6)) : 0;
 }
 
-export function attention(a: CoachAthlete, maxDiff: number) {
+/* trend?: résultat de classifyTrend() (trainingLoad.ts) sur les 7j courants vs 7j précédents du
+   sportif — optionnel partout, absent pour tous les appelants qui n'ont pas cet historique
+   (alerts.ts, aperçu onboarding WeekPreviewStep) : comportement strictement inchangé pour eux. */
+const TREND_ALERT: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
+
+export function attention(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null) {
+  if (trend && TREND_ALERT.has(trend)) return true; // charge en accumulation ou fatigue persistante : alerte même si le snapshot du jour semble OK
   if (a.wellnessFilledToday === false) return maxDiff >= 8; // pas de wellness du jour : seule une séance dure prévue justifie une alerte
   return a.wellness_score < 55 ||
     (a.wellness_score < 65 && maxDiff >= 5) ||
     maxDiff >= 8;
 }
 
-export function riskScore(a: CoachAthlete, maxDiff: number): number {
+export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null): number {
   let score = 0;
   if (a.wellnessFilledToday !== false) {
     if (a.wellness_score < 55) score += 4;
@@ -53,10 +60,13 @@ export function riskScore(a: CoachAthlete, maxDiff: number): number {
   }
   if (maxDiff >= 8) score += 3;
   else if (maxDiff >= 6) score += 1;
+  if (trend && TREND_ALERT.has(trend)) score += 2;
   return score;
 }
 
-export function decisionText(a: CoachAthlete, maxDiff: number) {
+export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null) {
+  if (trend === "accumulation") return "Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.";
+  if (trend === "fatigue_persistante") return "Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.";
   if (a.wellnessFilledToday === false) {
     if (maxDiff >= 8) return "Wellness non renseigné aujourd'hui + séance dure prévue : vérifier avec lui avant.";
     return "Wellness non renseigné aujourd'hui.";
@@ -68,19 +78,20 @@ export function decisionText(a: CoachAthlete, maxDiff: number) {
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId, trend }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
   isReviewed: boolean;
   onDecide: () => void;
   tourId?: string;
+  trend?: TrendCode | null;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
   const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   const extraSessions = todaySessions.length - (topSession ? 1 : 0);
-  const decision = decisionText(athlete, maxDiff);
+  const decision = decisionText(athlete, maxDiff, trend);
   const showBadge = isPriority && !isReviewed;
   const showReviewed = isPriority && isReviewed;
   const behaviors = athlete.behaviors ?? [];
