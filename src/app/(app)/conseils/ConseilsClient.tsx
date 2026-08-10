@@ -138,7 +138,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
 
   const {
     profile, sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, chargeInsight, recoveryInsight,
-    zoneAcwr, zoneLoads, zoneDates, recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
+    zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain, recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
     loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
     recentBehaviors, allRecentBehaviorKeys,
   } = data;
@@ -234,13 +234,13 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
                       <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={METRIC_DEFINITIONS.acwr} />
                       <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} />
-                      {strainInfo && sig.strain !== null && <ZoneBadge label={`${strainInfo.label} · ${sig.strain} UA`} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} />}
+                      {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} />}
                     </div>
                   </div>
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                     {chargeInsight}
                   </div>
-                  <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} />
+                  <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} />
                 </div>
 
                 {/* Récupération + Form (Fitness − Fatigue, readiness du jour) */}
@@ -251,7 +251,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
                       <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} />
-                      {formInfo && <ZoneBadge label={`FORM ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
+                      {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
                     </div>
                   </div>
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
@@ -265,7 +265,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                       points2={last7Series.map(p => p.form)} points2Raw={last7Series.map(p => p.formRaw)} color2="#5b8dee"
                     />
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Plein = wellness · Pointillé = Form</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Plein = wellness · Pointillé = Forme</div>
                 </div>
               </div>
 

@@ -35,7 +35,7 @@ export function computeSignature(sessions: Session[], wellnessScore: number, day
   return { monotony, strain, strainPct, acwr, weeklyLoad, chronicLoad, recovery: wellnessScore, signals, hard, long, avgRpe };
 }
 
-/** Définitions courtes pour les tooltips au survol des badges (ACWR/Monotonie/Strain/Récup/Form) —
+/** Définitions courtes pour les tooltips au survol des badges (ACWR/Monotonie/Contrainte/Récup/Forme) —
  * neutres (pas de "tu"/"ta"), réutilisables telles quelles côté sportif et côté coach. */
 export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recovery" | "form", string> = {
   acwr: "Charge des 7 derniers jours comparée à la charge habituelle (28j). Une hausse trop rapide augmente le risque de blessure.",
@@ -85,7 +85,7 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
     return { label: "RISQUE BLESSURE", color: "#d10000", text: "Risque de blessure accru au-delà de 2,5 (Foster, 1998)." };
   }
   if (dim === "strain") {
-    if (value < 6000) return { label: "STRAIN OK", color: "#2f9e44", text: "En dessous du seuil de fatigue (Foster, 1998)." };
+    if (value < 6000) return { label: "CONTRAINTE OK", color: "#2f9e44", text: "En dessous du seuil de fatigue (Foster, 1998)." };
     if (value < 10000) return { label: "RISQUE FATIGUE", color: "#f28a00", text: "Fatigue/surentraînement possible au-delà de 6000 UA/semaine (Foster, 1998)." };
     return { label: "RISQUE BLESSURE", color: "#d10000", text: "Risque de blessure accru au-delà de 10000 UA/semaine (Foster, 1998)." };
   }
@@ -132,7 +132,7 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
 }
 
 /**
- * Insight croisé "Récupération" — combine le wellness (ressenti subjectif du jour) et le Form
+ * Insight croisé "Récupération" — combine le wellness (ressenti subjectif du jour) et la Forme
  * (charge chronique − aiguë, signal objectif dérivé de l'entraînement). Les deux peuvent diverger
  * (ex. bon wellness mais charge récente élevée = fatigue possible avec un décalage) — c'est
  * justement ce décalage qui est le plus intéressant à signaler.
@@ -163,10 +163,11 @@ export type DayPoint = {
   date: string;
   load: number;             // charge Foster du jour (RPE × durée, Σ séances terminées)
   monotony: number | null;  // monotonie 7j glissante se terminant ce jour-là (null si <7j d'historique dans la fenêtre)
+  strain: number | null;    // contrainte (charge hebdo × monotonie) 7j glissante se terminant ce jour-là — même fenêtre que monotony, null si <7j d'historique
   acwr: number | null;      // ACWR ce jour-là (fenêtre chronique élargie progressivement, voir acwrSeries) — null si <14j d'historique
   recovery: number | null;  // wellness score ce jour-là
-  form: number | null;      // Form (TSB-like) normalisé 0-100 (50 = neutre) pour partager l'axe visuel avec le wellness — null si <14j d'historique
-  formRaw: number | null;   // Form en UA brutes (chronique − aiguë), pour affichage tooltip
+  form: number | null;      // Forme (TSB-like) normalisé 0-100 (50 = neutre) pour partager l'axe visuel avec le wellness — null si <14j d'historique
+  formRaw: number | null;   // Forme en UA brutes (chronique − aiguë), pour affichage tooltip
 };
 
 export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDaily[], days = 28, anchor: Date = new Date()): DayPoint[] {
@@ -188,11 +189,12 @@ export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDail
 
   return loadPoints.map((p, idx) => {
     const monotonyVal = idx >= 6 ? monotonyOf(loadPoints.slice(0, idx + 1)) : null;
+    const strainVal = idx >= 6 ? strainOf(loadPoints.slice(0, idx + 1)) : null;
     const formRaw = formPoints[idx].value;
     const form = formRaw !== null ? Math.round(50 + (formRaw / maxAbsForm) * 50) : null;
     const w = wellness.find(wd => wd.date === p.date);
     const recovery = (w?.score ?? w?.base_score) ?? null;
-    return { date: p.date, load: p.load, monotony: monotonyVal, acwr: acwrPoints[idx].value, recovery, form, formRaw };
+    return { date: p.date, load: p.load, monotony: monotonyVal, strain: strainVal, acwr: acwrPoints[idx].value, recovery, form, formRaw };
   });
 }
 

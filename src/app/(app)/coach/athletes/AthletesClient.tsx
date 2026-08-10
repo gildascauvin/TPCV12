@@ -50,6 +50,8 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
   const zoneAcwr = last7.map(p => p.acwr);
   const zoneLoads = last7.map(p => p.load);
   const zoneDates = last7.map(p => p.date);
+  const zoneMonotony = last7.map(p => p.monotony);
+  const zoneStrain = last7.map(p => p.strain);
 
   const todayAcwr = series[series.length - 1]?.acwr ?? null;
   const loadInfo = todayAcwr !== null
@@ -84,7 +86,7 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
-        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} />
+        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} />
       </div>
 
       {/* Récupération + Form — titre + badges sur la même ligne, insight dessous, chart ensuite */}
@@ -93,7 +95,7 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>🌿 Récupération</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
             <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
-            {formInfo && <ZoneBadge label={`FORM ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
+            {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>

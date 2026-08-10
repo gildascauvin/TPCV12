@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 
-/* Badge coloré (zone ACWR/Monotonie/Strain/Récupération) avec définition au survol OU au tap —
+/* Badge coloré (zone ACWR/Monotonie/Contrainte/Récupération) avec définition au survol OU au tap —
    un `title` HTML natif est peu fiable (délai variable, invisible sur mobile tactile), donc un
    vrai petit composant, cliquable pour rester accessible sans souris. Partagé entre /conseils et
    /coach/athletes (2 tailles via `size`, mêmes couleurs/style sinon). */

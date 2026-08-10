@@ -42,7 +42,12 @@ function zoneFor(ratio: number): Zone {
 
 const W = 400, H = 168, PAD_L = 4, PAD_R = 10, PAD_TOP = 10, PAD_BOT = 22;
 
-export default function ZoneSparkline({ points, dates, loads }: { points: (number | null)[]; dates: string[]; loads?: number[] }) {
+export default function ZoneSparkline({ points, dates, loads, monotony, strain }: {
+  points: (number | null)[]; dates: string[]; loads?: number[];
+  /* Monotonie/Contrainte du jour survolé, en complément de l'ACWR déjà affiché — pour les
+     sportifs/coachs qui veulent le détail complet du tooltip, pas juste le résumé en badge. */
+  monotony?: (number | null)[]; strain?: (number | null)[];
+}) {
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const n = points.length;
@@ -71,6 +76,8 @@ export default function ZoneSparkline({ points, dates, loads }: { points: (numbe
   const hIdx = hover?.idx ?? null;
   const hVal = hIdx !== null ? points[hIdx] : null;
   const hLoad = hIdx !== null && loads ? loads[hIdx] : null;
+  const hMonotony = hIdx !== null && monotony ? monotony[hIdx] : null;
+  const hStrain = hIdx !== null && strain ? strain[hIdx] : null;
   const hDate = hIdx !== null ? dates[hIdx] : null;
   const hZone = hVal !== null ? zoneFor(hVal) : null;
 
@@ -118,6 +125,14 @@ export default function ZoneSparkline({ points, dates, loads }: { points: (numbe
           {hLoad !== null && (
             <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.55)", marginTop: 2 }}>
               {hLoad > 0 ? `${hLoad} UA` : "🛌 Repos"}
+            </div>
+          )}
+          {(hMonotony !== null || hStrain !== null) && (
+            <div style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+              {[
+                hMonotony !== null ? `Monotonie ${hMonotony.toFixed(2)}` : null,
+                hStrain !== null ? `Contrainte ${hStrain} UA` : null,
+              ].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>

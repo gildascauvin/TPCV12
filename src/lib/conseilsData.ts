@@ -71,6 +71,8 @@ export type ConseilsData = {
   zoneAcwr: (number | null)[];
   zoneLoads: number[];
   zoneDates: string[];
+  zoneMonotony: (number | null)[];
+  zoneStrain: (number | null)[];
   recoveryAlert: boolean;
   done7Count: number;
   avgRpe: number | null;
@@ -175,6 +177,8 @@ export async function getConseilsData(
   const zoneAcwr = last7.map(p => p.acwr);
   const zoneLoads = last7.map(p => p.load);
   const zoneDates = last7.map(p => p.date);
+  const zoneMonotony = last7.map(p => p.monotony);
+  const zoneStrain = last7.map(p => p.strain);
 
   const loadAdviceShort = done7Sessions.length >= freqTarget
     ? avgRpe !== null && avgRpe >= 8
@@ -187,7 +191,7 @@ export async function getConseilsData(
   return {
     referenceDate,
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
-    sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates,
+    sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
     recoveryAlert, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
     trendCode, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };

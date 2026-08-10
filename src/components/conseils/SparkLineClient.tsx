@@ -34,7 +34,7 @@ function formatTooltipValue(metricType: "load" | "monotony" | "recovery", v: num
 function formatFormValue(v: number | null, raw: number | null): string | null {
   if (v === null) return null;
   const rawStr = raw !== null ? ` (${raw > 0 ? "+" : ""}${raw} UA)` : "";
-  return `📊 Form : ${v}/100${rawStr}`;
+  return `📊 Forme : ${v}/100${rawStr}`;
 }
 
 function dayLabel(dateStr: string) {
