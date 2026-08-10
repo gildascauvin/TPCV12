@@ -11,7 +11,10 @@ interface Props {
 }
 
 export default function CoachCompleteModal({ session, athleteName, onSave, onClose }: Props) {
-  const [rpe, setRpe] = useState(session.target_difficulty ?? 6);
+  // Neutre par défaut (pas la difficulté prévue) — même convention que CompleteModal.tsx côté
+  // sportif, sinon un coach qui clique "Terminer" sans toucher le curseur enregistre silencieusement
+  // le RPE réel comme égal à la valeur prévue.
+  const [rpe, setRpe] = useState(session.rpe ?? 6);
   const [duration, setDuration] = useState(session.duration ?? 45);
   const [saving, setSaving] = useState(false);
 
