@@ -1,5 +1,6 @@
 import type { Session, WellnessDaily } from "@/types";
 import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection } from "@/lib/trainingLoad";
+import { wellnessColor } from "@/lib/wellness";
 
 export { fitnessFatigueTrend } from "@/lib/trainingLoad";
 export type { TrendDirection } from "@/lib/trainingLoad";
@@ -94,9 +95,12 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
     if (value < 10000) return { label: "RISQUE FATIGUE", color: "#f28a00", text: "Fatigue/surentraînement possible au-delà de 6000 UA/semaine (Foster, 1998)." };
     return { label: "RISQUE BLESSURE", color: "#d10000", text: "Risque de blessure accru au-delà de 10000 UA/semaine (Foster, 1998)." };
   }
-  if (value >= 70) return { label: "BONNE RÉCUP",  color: "#2f9e44", text: "Bonne capacité de récupération." };
-  if (value >= 50) return { label: "RÉCUP STABLE", color: "#f28a00", text: coach ? "Récupération moyenne — sommeil à surveiller." : "Récupération moyenne — surveille le sommeil." };
-  return             { label: "RÉCUP FRAGILE", color: "#d10000", text: coach ? "Récupération fragile — éviter d'enchaîner les séances dures." : "Récupération fragile — évite d'enchaîner les séances dures." };
+  // Couleur = wellnessColor(value) (dégradé séquentiel bleu, même source que le ring/chart) au lieu
+  // de rouge/orange/vert — seuils/labels de zone inchangés, seule la couleur suit désormais le même
+  // dégradé que partout ailleurs pour le wellness.
+  if (value >= 70) return { label: "BONNE RÉCUP",  color: wellnessColor(value), text: "Bonne capacité de récupération." };
+  if (value >= 50) return { label: "RÉCUP STABLE", color: wellnessColor(value), text: coach ? "Récupération moyenne — sommeil à surveiller." : "Récupération moyenne — surveille le sommeil." };
+  return             { label: "RÉCUP FRAGILE", color: wellnessColor(value), text: coach ? "Récupération fragile — éviter d'enchaîner les séances dures." : "Récupération fragile — évite d'enchaîner les séances dures." };
 }
 
 /**
@@ -109,8 +113,8 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
 export function trendDimInfo(dim: "fitness" | "fatigue", trend: TrendDirection, perspective: Perspective = "athlete"): { label: string; color: string; text: string } {
   const coach = perspective === "coach";
   if (dim === "fitness") {
-    if (trend === "up") return { label: "FITNESS ↗ EN HAUSSE", color: "#2f9e44", text: coach ? "Charge chronique en hausse : adaptation à l'entraînement en cours." : "Ta charge chronique est en hausse : tu es en phase d'adaptation." };
-    if (trend === "down") return { label: "FITNESS ↘ EN BAISSE", color: "#f28a00", text: coach ? "Charge chronique en baisse : possible perte de forme si ça dure." : "Ta charge chronique est en baisse : possible perte de forme si ça dure." };
+    if (trend === "up") return { label: "FITNESS ↗", color: "#2f9e44", text: coach ? "Charge chronique en hausse : adaptation à l'entraînement en cours." : "Ta charge chronique est en hausse : tu es en phase d'adaptation." };
+    if (trend === "down") return { label: "FITNESS ↘", color: "#f28a00", text: coach ? "Charge chronique en baisse : possible perte de forme si ça dure." : "Ta charge chronique est en baisse : possible perte de forme si ça dure." };
     return { label: "FITNESS → STABLE", color: "#8a8f94", text: "Charge chronique stable ces derniers jours." };
   }
   if (trend === "up") return { label: "FATIGUE ACCUMULÉE ↗", color: "#f28a00", text: coach ? "Charge récente en hausse par rapport à sa charge habituelle." : "Ta charge récente est en hausse par rapport à ta charge habituelle." };

@@ -6,7 +6,7 @@ import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/c
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { BEHAVIOR_META } from "@/lib/behaviors";
-import { OBJECTIVE_LABELS, type ConseilsData, type BehaviorCorrelation } from "@/lib/conseilsData";
+import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
 
 function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
@@ -137,7 +137,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
   }
 
   const {
-    profile, sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
+    sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
     zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain, recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
     loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
     recentBehaviors, allRecentBehaviorKeys,
@@ -161,21 +161,6 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
       <CalendarHeader selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap} />
 
       <div className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
-
-        {/* Header */}
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "#8a8f94", marginBottom: 4 }}>
-            Conseils
-          </div>
-          <div style={{ fontSize: 32, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>
-            {profile?.name ? `Bonjour, ${profile.name.split(" ")[0]}` : "Analyse & conseils"}
-          </div>
-          {profile?.sport && (
-            <div style={{ fontSize: 15, color: "#62686e", marginTop: 4 }}>
-              {profile.sport}{profile.objective ? ` · ${OBJECTIVE_LABELS[profile.objective] ?? profile.objective}` : ""}
-            </div>
-          )}
-        </div>
 
         {/* Signature de fatigue + Entraînement */}
         <div data-tour="fatigue-signature" style={{
@@ -232,9 +217,10 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                       ⚡ Charge
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-                      <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={METRIC_DEFINITIONS.acwr} />
                       <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} />
                       {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} />}
+                      {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} />}
+                      {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} />}
                     </div>
                   </div>
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
@@ -252,8 +238,6 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
                       <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} />
                       {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
-                      {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} />}
-                      {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} />}
                     </div>
                   </div>
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>

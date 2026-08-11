@@ -87,9 +87,10 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>⚡ Charge</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-            <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={METRIC_DEFINITIONS.acwr} size="sm" />
             <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} size="sm" />
             {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} size="sm" />}
+            {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
+            {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
@@ -103,8 +104,6 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
             <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
             {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
-            {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
-            {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>

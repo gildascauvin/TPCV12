@@ -1141,6 +1141,18 @@ Partout, le cas `score === null` garde son propre gris translucide existant (`rg
 
 **Vérifié** : `tsc --noEmit` + `npm run build` propres après les 2 rounds.
 
+### Itération suivante (même jour) — badges Fitness/Fatigue déplacés vers Charge, badge ACWR retiré, header /conseils retiré
+
+Suite à une discussion (pas juste une implémentation directe — voir échange précédent) sur où ranger Fitness/Fatigue : Gildas a tranché pour Charge (ce sont des vues de la charge à 2 fenêtres EWMA, comme ACWR/Monotonie/Contrainte en sont d'autres vues), en gardant Forme (badge + courbe) sur Récupération — l'argument retenu : Forme n'a de valeur que comparée visuellement au wellness sur le même chart (`recoveryCrossInsight`), la déplacer casserait cette comparaison à l'œil.
+
+- **Badges Fitness/Fatigue** (`fitnessTrendInfo`/`fatigueTrendInfo`) : déplacés du badge row Récupération vers le badge row Charge, dans `ConseilsClient.tsx` et `AthletesClient.tsx` (coach) — juste après Monotonie/Contrainte. Aucun changement de calcul, seulement de placement JSX.
+- **Badge ACWR retiré** (`loadInfo` — "SOUS-CHARGE"/"ZONE OPTIMALE"/etc.) des 2 mêmes badge rows : déjà entièrement illustré par les bandes de zone + la ligne colorée du chart `ZoneSparkline` juste en dessous, redondant en tant que badge texte. `loadInfo` reste calculé (toujours nécessaire à `chargeCrossInsight()`), seul son rendu `ZoneBadge` disparaît.
+- **Texte d'arrow redondant retiré** (`trendDimInfo`, `fatigueSignature.ts`) : "FITNESS ↗ EN HAUSSE"/"FITNESS ↘ EN BAISSE" → "FITNESS ↗"/"FITNESS ↘" (le mot répétait ce que la flèche dit déjà) — "→ STABLE" inchangé (une flèche neutre seule ne dit pas clairement "stable" sans le mot). Les badges Fatigue avaient déjà ce pattern correct dès le départ (`FATIGUE ACCUMULÉE ↗` sans texte), seul Fitness avait la redondance.
+- **Badge Récupération en couleurs du dégradé bleu** (`sigDimInfo("recovery",...)`) : `color` passe de rouge/orange/vert (seuils Status) à `wellnessColor(value)` — mêmes labels/seuils de zone ("BONNE RÉCUP"/"RÉCUP STABLE"/"RÉCUP FRAGILE") inchangés, seule la couleur suit désormais exactement le même dégradé que le ring/chart pour ce score (retour sur la distinction "texte de statut = Status" du chantier précédent — Gildas a explicitement demandé cette harmonisation malgré cette distinction).
+- **Header `/conseils` retiré** ("Conseils" / "Bonjour, {prénom}" / "{sport} · {objectif}") dans `ConseilsClient.tsx`, sur demande explicite — `profile`/`OBJECTIVE_LABELS` retirés en même temps (devenus inutilisés dans ce fichier une fois le bloc supprimé).
+
+**Vérifié** : `tsc --noEmit` + `npm run build` propres (piège `.next/types` déjà documenté rencontré une fois de plus pendant ce round — `next dev` tournait en parallèle du premier `tsc`, faux positif sur `getSportCategory` dans un fichier non touché — `rm -rf .next` + relance a confirmé un `tsc` propre).
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
