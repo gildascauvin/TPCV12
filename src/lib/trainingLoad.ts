@@ -103,15 +103,14 @@ export function acwr(series28: LoadPoint[]): { value: number | null; hasEnoughHi
 }
 
 /**
- * Charge aiguë (7j) / chronique (jusqu'à 28j, élargie progressivement) à un jour donné — même
- * calcul sous-jacent que le modèle Fitness/Fatigue de Banister (Fitness ≈ chronique, Fatigue ≈
- * aiguë), juste combiné différemment selon l'usage : en ratio pour l'ACWR, en différence pour le
- * Form (TSB). Seuil relâché à 14j (au lieu de 28) pour couvrir les 7 derniers jours affichés sans
- * exiger 56j de données — au prix d'une fenêtre chronique parfois plus courte que 28j sur les tout
- * premiers jours d'usage de l'app. Différence assumée avec le vrai modèle de Banister : ici,
- * moyennes glissantes simples (comme l'ACWR standard), pas de moyennes pondérées exponentiellement
- * (le modèle Banister original utilise une décroissance exponentielle, ex. constantes de temps
- * 7j/42j) — plus simple à calculer et cohérent avec l'ACWR déjà en place, mais moins lissé.
+ * Charge aiguë (7j) / chronique (jusqu'à 28j, élargie progressivement) à un jour donné — utilisée
+ * uniquement pour l'ACWR (Gabbett, ratio, fenêtres 7j/28j) depuis que le Form est passé aux fenêtres
+ * EWMA 7j/42j façon Banister/TrainingPeaks (voir fitnessFatigueAt plus bas) : deux conventions
+ * différentes de la littérature, chacune gardée fidèle à son propre modèle plutôt que forcées sur
+ * les mêmes fenêtres. Seuil relâché à 14j (au lieu de 28) pour couvrir les 7 derniers jours affichés
+ * sans exiger 56j de données — au prix d'une fenêtre chronique parfois plus courte que 28j sur les
+ * tout premiers jours d'usage de l'app. Moyennes glissantes simples (pas EWMA) — cohérent avec la
+ * convention ACWR standard de Gabbett et al., qui n'utilise pas de pondération exponentielle.
  */
 function acuteChronicAt(series: LoadPoint[], idx: number): { acute: number; chronic: number } | null {
   const upTo = series.slice(0, idx + 1);
@@ -139,18 +138,89 @@ export function acwrSeries(series: LoadPoint[]): { value: number | null; hasEnou
 }
 
 /**
- * Form (TSB-like) par jour : charge chronique ("Fitness") − charge aiguë ("Fatigue"), en UA brutes.
- * Positif = charge récente en dessous de l'habituelle (fraîcheur, ex. après un allègement/tapering) ;
- * négatif = charge récente au-dessus de l'habituelle (fatigue accumulée). C'est la même donnée que
- * l'ACWR (acuteChronicAt), combinée en différence plutôt qu'en ratio — la lecture "readiness du
- * jour" que ni la Fitness seule ni l'ACWR seul ne donnent isolément.
+ * Fitness (chronique)/Fatigue (aiguë) façon Banister/TrainingPeaks CTL-ATL — constantes de temps
+ * 7j/42j (pas 7j/28j comme l'ACWR de Gabbett juste au-dessus : deux conventions différentes de la
+ * littérature, chacune empruntée à son propre modèle, ne pas les confondre). EWMA (lambda=2/(n+1),
+ * même convention que ewmaWellness plus bas) plutôt que moyenne simple : un effet de charge
+ * s'estompe progressivement, pas d'un coup quand un jour sort de la fenêtre — voir ewmaLoadAt.
+ * Même seuil de disponibilité que acuteChronicAt (14j/4 séances non nulles) pour rester cohérent
+ * avec l'ACWR ; la fenêtre chronique s'élargit progressivement vers 42j réels comme acuteChronicAt
+ * le fait vers 28j.
  */
-export function formSeries(series: LoadPoint[]): { value: number | null; hasEnoughHistory: boolean }[] {
+const ACUTE_EWMA_DAYS = 7;
+const CHRONIC_EWMA_DAYS = 42;
+
+function ewmaLoadAt(series: LoadPoint[], endIdx: number, n: number): number {
+  const lambda = 2 / (n + 1);
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (let i = 0; i < n && endIdx - i >= 0; i++) {
+    const weight = lambda * Math.pow(1 - lambda, i);
+    weightedSum += series[endIdx - i].load * weight;
+    weightTotal += weight;
+  }
+  return weightTotal > 0 ? weightedSum / weightTotal : 0;
+}
+
+function fitnessFatigueAt(series: LoadPoint[], idx: number): { fitness: number; fatigue: number } | null {
+  const upTo = series.slice(0, idx + 1);
+  const nonZeroDays = upTo.filter(p => p.load > 0).length;
+  if (upTo.length < 14 || nonZeroDays < 4) return null;
+  return {
+    fatigue: ewmaLoadAt(series, idx, ACUTE_EWMA_DAYS),
+    fitness: ewmaLoadAt(series, idx, CHRONIC_EWMA_DAYS),
+  };
+}
+
+/**
+ * Form% par jour : (Fitness − Fatigue) / Fitness × 100 — Form = Fitness − Fatigue (Banister), mais
+ * exprimé en % de la charge chronique plutôt qu'en UA brutes (l'ancienne version, `formSeries`,
+ * différence brute puis normalisée sur le pic de la fenêtre affichée — abandonnée : le pic étant
+ * relatif à la fenêtre, un "+30" pendant un bloc chargé et un "+30" pendant une période calme ne
+ * représentaient pas le même écart réel). Le %-de-chronique est stable dans le temps pour UNE
+ * personne (n'importe quand, un même % représente le même écart relatif à sa propre charge
+ * habituelle) — mais reste assumé NON comparable entre deux sportifs ou deux sports : le Foster
+ * session-RPE n'a pas de normalisation d'intensité individuelle type FTP (contrairement au TSS de
+ * TrainingPeaks), donc l'amplitude "normale" des variations diffère par nature d'un profil à l'autre.
+ * Jamais présenté comme un prédicteur de blessure/performance — un signal de tendance relative,
+ * comme l'ACWR juste au-dessus.
+ */
+export function formPercentSeries(series: LoadPoint[]): { value: number | null; hasEnoughHistory: boolean; fitness: number | null; fatigue: number | null }[] {
   return series.map((_, idx) => {
-    const ac = acuteChronicAt(series, idx);
-    if (!ac) return { value: null, hasEnoughHistory: false };
-    return { value: Math.round(ac.chronic - ac.acute), hasEnoughHistory: true };
+    const ff = fitnessFatigueAt(series, idx);
+    if (!ff) return { value: null, hasEnoughHistory: false, fitness: null, fatigue: null };
+    if (ff.fitness === 0) return { value: null, hasEnoughHistory: true, fitness: ff.fitness, fatigue: ff.fatigue };
+    const pct = Math.round(((ff.fitness - ff.fatigue) / ff.fitness) * 100);
+    return { value: pct, hasEnoughHistory: true, fitness: ff.fitness, fatigue: ff.fatigue };
   });
+}
+
+/**
+ * Tendance Fitness/Fatigue sur les 7 derniers jours (valeur du jour vs valeur 7j avant) — pour un
+ * badge "Fitness ↗ en hausse"/"Fatigue accumulée ↗", jamais la valeur EWMA brute affichée seule
+ * (UA sans repère fixe, voir le commentaire de formPercentSeries). Seuil ±5% pour "stable", plus
+ * resserré que les bandes Form (±8%) : on compare ici directement 2 valeurs EWMA déjà lissées,
+ * moins bruitées qu'une différence de deux quantités (Form%).
+ */
+export type TrendDirection = "up" | "down" | "stable";
+const FF_TREND_STABLE_PCT = 5;
+
+export function fitnessFatigueTrend(series: LoadPoint[]): { fitness: TrendDirection | null; fatigue: TrendDirection | null } {
+  const todayIdx = series.length - 1;
+  if (todayIdx < 0) return { fitness: null, fatigue: null };
+  const today = fitnessFatigueAt(series, todayIdx);
+  const pastIdx = todayIdx - 7;
+  const past = pastIdx >= 0 ? fitnessFatigueAt(series, pastIdx) : null;
+  if (!today || !past) return { fitness: null, fatigue: null };
+
+  const dir = (curr: number, prev: number): TrendDirection => {
+    if (prev === 0) return curr === 0 ? "stable" : "up";
+    const deltaPct = ((curr - prev) / prev) * 100;
+    if (deltaPct > FF_TREND_STABLE_PCT) return "up";
+    if (deltaPct < -FF_TREND_STABLE_PCT) return "down";
+    return "stable";
+  };
+  return { fitness: dir(today.fitness, past.fitness), fatigue: dir(today.fatigue, past.fatigue) };
 }
 
 export type TrendCode =

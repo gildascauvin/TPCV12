@@ -1,5 +1,8 @@
 import type { Session, WellnessDaily } from "@/types";
-import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formSeries as formSeriesOf, daysAgoStr, type LoadPoint } from "@/lib/trainingLoad";
+import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection } from "@/lib/trainingLoad";
+
+export { fitnessFatigueTrend } from "@/lib/trainingLoad";
+export type { TrendDirection } from "@/lib/trainingLoad";
 
 export { daysAgoStr } from "@/lib/trainingLoad";
 
@@ -37,12 +40,14 @@ export function computeSignature(sessions: Session[], wellnessScore: number, day
 
 /** Définitions courtes pour les tooltips au survol des badges (ACWR/Monotonie/Contrainte/Récup/Forme) —
  * neutres (pas de "tu"/"ta"), réutilisables telles quelles côté sportif et côté coach. */
-export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recovery" | "form", string> = {
+export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recovery" | "form" | "fitness" | "fatigue", string> = {
   acwr: "Charge des 7 derniers jours comparée à la charge habituelle (28j). Une hausse trop rapide augmente le risque de blessure.",
   monotony: "Régularité de la charge d'entraînement. Trop répétitive = risque de fatigue et de blessure plus élevé (Foster, 1998).",
   strain: "Charge × Monotonie. Une charge élevée et répétitive à la fois est plus risquée que prise séparément (Foster, 1998).",
   recovery: "Wellness du jour : sommeil, stress, courbatures, motivation.",
-  form: "Charge habituelle moins charge récente. Positif = fraîcheur, négatif = fatigue accumulée.",
+  form: "Charge chronique (Fitness) moins charge récente (Fatigue), en % de la charge chronique. Positif = fraîcheur, négatif = fatigue accumulée. Un signal de tendance relative, pas une mesure physiologique directe.",
+  fitness: "Charge chronique (moyenne pondérée sur ~42j) — plus elle monte, plus l'organisme s'adapte à l'entraînement.",
+  fatigue: "Charge aiguë (moyenne pondérée sur ~7j) — plus elle monte par rapport à la charge chronique, plus la fatigue récente s'accumule.",
 };
 
 /**
@@ -57,21 +62,21 @@ export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recove
  * - "strain" (Contrainte = Charge × Monotonie, hebdomadaire) : seuils Foster, 1998 — fatigue/
  *   surentraînement possible au-delà de 6000 UA/semaine, risque de blessure au-delà de 10000 UA/semaine.
  * - "recovery" : wellness littéral (échelle app 0-100, plus haut = mieux), seuils inchangés.
- * - "form" (Fitness − Fatigue, TSB-like) : indice normalisé 0-100 autour de 50 = neutre (voir
- *   buildDailyTimeSeries), pas de seuil qualitatif universel — utile en évolution relative, pas en
- *   valeur absolue isolée.
+ * - "form" (Fitness − Fatigue, en % de la charge chronique, voir formPercentSeries) : bandes
+ *   "produit" choisies pour rester lisibles (inspirées de la forme du TSB TrainingPeaks, sans
+ *   reprendre ses seuils en points TSS — pas transférables à une échelle en % de Foster session-RPE)
+ *   — PAS des seuils issus d'une étude, à recalibrer sur données réelles une fois assez d'historique.
  */
 export type Perspective = "athlete" | "coach";
 
 export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "form", value: number, perspective: Perspective = "athlete"): { label: string; color: string; text: string } {
   const coach = perspective === "coach";
   if (dim === "form") {
-    // Pas de seuil universel (contrairement à ACWR/monotonie/strain) — indice normalisé sur le
-    // pic personnel de la fenêtre, seuils choisis pour rester cohérents avec recoveryCrossInsight
-    // (formGood > 55, formBad < 45).
-    if (value > 55) return { label: "FRAIS", color: "#2f9e44", text: coach ? "Charge récente sous sa charge habituelle : fraîcheur disponible." : "Charge récente sous ta charge habituelle : fraîcheur disponible." };
-    if (value < 45) return { label: "FATIGUE", color: "#f28a00", text: coach ? "Charge récente au-dessus de sa charge habituelle : fatigue qui s'accumule." : "Charge récente au-dessus de ta charge habituelle : fatigue qui s'accumule." };
-    return { label: "ÉQUILIBRÉ", color: "#8a8f94", text: "Charge récente proche de la charge habituelle." };
+    // 3 bandes (pas 5) — la version à 5 paliers testée d'abord ajoutait plus de bruit que de
+    // lecture utile sur un aussi petit chart ; ±8% aligné sur recoveryCrossInsight juste au-dessus.
+    if (value >= 8) return { label: "FRAIS", color: "#2f9e44", text: coach ? "Charge récente sous sa charge habituelle : fraîcheur disponible." : "Ta charge récente est sous ta charge habituelle : fraîcheur disponible." };
+    if (value > -8) return { label: "ÉQUILIBRÉ", color: "#8a8f94", text: "Charge récente proche de la charge habituelle." };
+    return { label: "FATIGUE ACCUMULÉE", color: "#d10000", text: coach ? "Charge récente au-dessus de sa charge habituelle : fatigue qui s'accumule." : "Ta charge récente est au-dessus de ta charge habituelle : fatigue qui s'accumule." };
   }
   if (dim === "load") {
     if (value < 0.8) return { label: "SOUS-CHARGE", color: "#8a8f94", text: coach ? "En dessous de sa zone d'entraînement optimale (ACWR < 0,8)." : "En dessous de ta zone d'entraînement optimale (ACWR < 0,8)." };
@@ -92,6 +97,25 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
   if (value >= 70) return { label: "BONNE RÉCUP",  color: "#2f9e44", text: "Bonne capacité de récupération." };
   if (value >= 50) return { label: "RÉCUP STABLE", color: "#f28a00", text: coach ? "Récupération moyenne — sommeil à surveiller." : "Récupération moyenne — surveille le sommeil." };
   return             { label: "RÉCUP FRAGILE", color: "#d10000", text: coach ? "Récupération fragile — éviter d'enchaîner les séances dures." : "Récupération fragile — évite d'enchaîner les séances dures." };
+}
+
+/**
+ * Badge de tendance Fitness/Fatigue (7 derniers jours) — jamais la valeur EWMA brute (UA sans
+ * repère fixe, voir formPercentSeries dans trainingLoad.ts), seulement la direction. "Fitness en
+ * baisse" et "Fatigue en hausse" ne sont pas symétriquement négatifs : monter en fatigue est un
+ * signal à surveiller (orange), monter en fitness est positif (vert) — même logique inversée entre
+ * les deux dimensions, comme Fitness/Fatigue le sont conceptuellement (adaptation vs coût récent).
+ */
+export function trendDimInfo(dim: "fitness" | "fatigue", trend: TrendDirection, perspective: Perspective = "athlete"): { label: string; color: string; text: string } {
+  const coach = perspective === "coach";
+  if (dim === "fitness") {
+    if (trend === "up") return { label: "FITNESS ↗ EN HAUSSE", color: "#2f9e44", text: coach ? "Charge chronique en hausse : adaptation à l'entraînement en cours." : "Ta charge chronique est en hausse : tu es en phase d'adaptation." };
+    if (trend === "down") return { label: "FITNESS ↘ EN BAISSE", color: "#f28a00", text: coach ? "Charge chronique en baisse : possible perte de forme si ça dure." : "Ta charge chronique est en baisse : possible perte de forme si ça dure." };
+    return { label: "FITNESS → STABLE", color: "#8a8f94", text: "Charge chronique stable ces derniers jours." };
+  }
+  if (trend === "up") return { label: "FATIGUE ACCUMULÉE ↗", color: "#f28a00", text: coach ? "Charge récente en hausse par rapport à sa charge habituelle." : "Ta charge récente est en hausse par rapport à ta charge habituelle." };
+  if (trend === "down") return { label: "FATIGUE ACCUMULÉE ↘", color: "#2f9e44", text: coach ? "Charge récente en baisse : récupération en cours." : "Ta charge récente est en baisse : récupération en cours." };
+  return { label: "FATIGUE ACCUMULÉE → STABLE", color: "#8a8f94", text: "Charge récente stable ces derniers jours." };
 }
 
 type ZoneInfo = { label: string; color: string; text: string };
@@ -140,8 +164,10 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
 export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number | null, perspective: Perspective = "athlete"): string {
   if (formValue === null) return recoveryInfo.text;
   const coach = perspective === "coach";
-  const formGood = formValue > 55;
-  const formBad = formValue < 45;
+  // Bornes alignées sur la bande "Équilibré" de sigDimInfo (±8%, voir plus haut) — pas de nouveau
+  // seuil inventé séparément.
+  const formGood = formValue >= 8;
+  const formBad = formValue <= -8;
   const wellGood = recoveryInfo.color === "#2f9e44";
   const wellBad = recoveryInfo.color === "#d10000";
   if (wellGood && formGood) return coach
@@ -166,8 +192,8 @@ export type DayPoint = {
   strain: number | null;    // contrainte (charge hebdo × monotonie) 7j glissante se terminant ce jour-là — même fenêtre que monotony, null si <7j d'historique
   acwr: number | null;      // ACWR ce jour-là (fenêtre chronique élargie progressivement, voir acwrSeries) — null si <14j d'historique
   recovery: number | null;  // wellness score ce jour-là
-  form: number | null;      // Forme (TSB-like) normalisé 0-100 (50 = neutre) pour partager l'axe visuel avec le wellness — null si <14j d'historique
-  formRaw: number | null;   // Forme en UA brutes (chronique − aiguë), pour affichage tooltip
+  form: number | null;      // Forme (Fitness − Fatigue) en % de la charge chronique, voir formPercentSeries — null si <14j d'historique
+  formRaw: number | null;   // Forme en UA brutes (fitness EWMA42j − fatigue EWMA7j), pour affichage tooltip
 };
 
 export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDaily[], days = 28, anchor: Date = new Date()): DayPoint[] {
@@ -178,20 +204,14 @@ export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDail
   }
 
   const acwrPoints = acwrSeriesOf(loadPoints);
-  const formPoints = formSeriesOf(loadPoints);
-
-  // Normalisation 0-100 (50 = neutre) sur le pic absolu observé dans la fenêtre, pour partager
-  // l'axe visuel avec le wellness (0-100) — voir /conseils.
-  const maxAbsForm = Math.max(
-    ...formPoints.filter(p => p.value !== null).map(p => Math.abs(p.value as number)),
-    1
-  );
+  const formPoints = formPercentSeriesOf(loadPoints);
 
   return loadPoints.map((p, idx) => {
     const monotonyVal = idx >= 6 ? monotonyOf(loadPoints.slice(0, idx + 1)) : null;
     const strainVal = idx >= 6 ? strainOf(loadPoints.slice(0, idx + 1)) : null;
-    const formRaw = formPoints[idx].value;
-    const form = formRaw !== null ? Math.round(50 + (formRaw / maxAbsForm) * 50) : null;
+    const fp = formPoints[idx];
+    const form = fp.value;
+    const formRaw = fp.fitness !== null && fp.fatigue !== null ? Math.round(fp.fitness - fp.fatigue) : null;
     const w = wellness.find(wd => wd.date === p.date);
     const recovery = (w?.score ?? w?.base_score) ?? null;
     return { date: p.date, load: p.load, monotony: monotonyVal, strain: strainVal, acwr: acwrPoints[idx].value, recovery, form, formRaw };

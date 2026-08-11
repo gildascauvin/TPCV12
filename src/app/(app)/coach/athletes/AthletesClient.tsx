@@ -7,13 +7,13 @@ import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
-import SparkLineClient from "@/components/conseils/SparkLineClient";
+import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
-import { sigDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
-import type { TrendCode } from "@/lib/trainingLoad";
+import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
+import { fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
 
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
@@ -64,6 +64,9 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
   const recoveryInfo = sigDimInfo("recovery", sig.recovery, "coach");
   const todayForm = series[series.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, "coach") : null;
+  const ffTrend = fitnessFatigueTrend(series);
+  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, "coach") : null;
+  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, "coach") : null;
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, "coach");
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach");
 
@@ -96,14 +99,17 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
             <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
             {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
+            {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
+            {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
         <SparkLineClient
           points={last7.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
           maxVal={100} height={168} animDelay={0}
-          metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line"
-          points2={last7.map(p => p.form)} points2Raw={last7.map(p => p.formRaw)} color2="#5b8dee"
+          metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line" sequentialFill
+          points2={last7.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
+          points2Raw={last7.map(p => p.form)} zones2={FORM_ZONES}
         />
       </div>
     </div>

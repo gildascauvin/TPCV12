@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import SparkLineClient from "@/components/conseils/SparkLineClient";
+import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { BEHAVIOR_META } from "@/lib/behaviors";
@@ -137,7 +137,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
   }
 
   const {
-    profile, sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, chargeInsight, recoveryInsight,
+    profile, sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
     zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain, recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
     loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
     recentBehaviors, allRecentBehaviorKeys,
@@ -252,6 +252,8 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
                       <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} />
                       {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
+                      {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} />}
+                      {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} />}
                     </div>
                   </div>
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
@@ -261,11 +263,12 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                     <SparkLineClient
                       points={last7Series.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
                       maxVal={100} height={168} animDelay={300}
-                      metricType="recovery" uid="recovery" chartType="line"
-                      points2={last7Series.map(p => p.form)} points2Raw={last7Series.map(p => p.formRaw)} color2="#5b8dee"
+                      metricType="recovery" uid="recovery" chartType="line" sequentialFill
+                      points2={last7Series.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
+                      points2Raw={last7Series.map(p => p.form)} zones2={FORM_ZONES}
                     />
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Plein = wellness · Pointillé = Forme</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Dégradé bleu = wellness (clair = en forme) · Pointillé coloré = Forme</div>
                 </div>
               </div>
 

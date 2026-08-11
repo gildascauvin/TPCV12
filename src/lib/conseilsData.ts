@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
-import { computeSignature, sigDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
-import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
+import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
+import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -66,6 +66,8 @@ export type ConseilsData = {
   strainInfo: { label: string; color: string; text: string } | null;
   recoveryInfo: { label: string; color: string; text: string };
   formInfo: { label: string; color: string; text: string } | null;
+  fitnessTrendInfo: { label: string; color: string; text: string } | null;
+  fatigueTrendInfo: { label: string; color: string; text: string } | null;
   chargeInsight: string;
   recoveryInsight: string;
   zoneAcwr: (number | null)[];
@@ -169,6 +171,9 @@ export async function getConseilsData(
   const recoveryInfo = sigDimInfo("recovery", sig.recovery);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm) : null;
+  const ffTrend = fitnessFatigueTrend(timeSeries);
+  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness) : null;
+  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue) : null;
 
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" });
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm);
@@ -191,7 +196,7 @@ export async function getConseilsData(
   return {
     referenceDate,
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
-    sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
+    sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
     recoveryAlert, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
     trendCode, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };

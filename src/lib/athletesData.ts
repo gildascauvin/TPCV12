@@ -10,7 +10,7 @@ import { daysAgoStr, computeWeekOverWeekTrend, describeTrend, trendSeverity, tre
    pattern que /api/coach/wellness).
 
    Fenêtre à 28j (comme /conseils, pas 14) : le chart de zone ACWR affiche les 7 derniers jours,
-   et acwrSeries/formSeries n'ont une valeur valide qu'à partir du 14e jour de la série fournie —
+   et acwrSeries/formPercentSeries n'ont une valeur valide qu'à partir du 14e jour de la série fournie —
    avec seulement 14j de fenêtre, seul le tout dernier jour affiché aurait une valeur (6 des 7
    points du chart resteraient vides). Il faut n-7+1 >= 14, donc n >= 20 au minimum ; 28 aligne
    avec /conseils et garantit les 7 points. */
