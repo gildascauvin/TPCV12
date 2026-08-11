@@ -50,17 +50,19 @@ export function zoneLabel(score: number | null): string {
 
 /* Rampe séquentielle bleue pour toute couleur wellness dérivée d'un score (rings, tendances) —
    source unique, voir la doc complète dans SparkLineClient.tsx (skill dataviz : magnitude
-   continue 0-100 = job "Sequential", pas "Status" rouge/orange/vert). Sur fond sombre (toutes les
-   surfaces qui l'utilisent), le clair ressort du fond (en forme), le foncé s'y fond (fatigué) —
-   confirmé avec Gildas, inverse de la convention fond clair. Valeurs reprises telles quelles de la
-   rampe séquentielle bleue documentée du skill dataviz (jamais de hex inventé à l'œil), plafonnées
-   au step 600 (#184f95) en bas : en dessous, le contraste tombe sous 2:1 sur fond sombre. */
+   continue 0-100 = job "Sequential", pas "Status" rouge/orange/vert). Ancrage choisi par Gildas
+   après test visuel (inverse de la 1ère version, elle-même déjà un choix délibéré vs la convention
+   par défaut) : le foncé = en forme (score haut), le clair = fatigué (score bas) — sur les deux
+   types de fond (cartes sombres ET la carte claire de CoachSessionModal), le foncé reste la couleur
+   "prononcée"/qui ressort, le clair la couleur "discrète". Valeurs reprises telles quelles de la
+   rampe séquentielle bleue documentée du skill dataviz (jamais de hex inventé à l'œil) ; le step le
+   plus foncé (#184f95) reste calibré ≥2:1 sur fond sombre (voir palette.md du skill). */
 const WELLNESS_RAMP: { stop: number; hex: string }[] = [
-  { stop: 0,    hex: "#184f95" },
-  { stop: 0.25, hex: "#2a78d6" },
+  { stop: 0,    hex: "#cde2fb" },
+  { stop: 0.25, hex: "#b7d3f6" },
   { stop: 0.5,  hex: "#6da7ec" },
-  { stop: 0.75, hex: "#b7d3f6" },
-  { stop: 1,    hex: "#cde2fb" },
+  { stop: 0.75, hex: "#2a78d6" },
+  { stop: 1,    hex: "#184f95" },
 ];
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);

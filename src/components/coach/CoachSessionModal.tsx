@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CoachSession, CoachAthlete } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
+import { wellnessColor } from "@/lib/wellness";
 
 interface Exercise {
   id: string;
@@ -57,7 +58,8 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
   return points;
 }
 
-function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+// Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
+function scoreColor(s: number) { return wellnessColor(s); }
 
 export default function CoachSessionModal({ athleteName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onClose }: Props) {
   const [name, setName] = useState(session?.name ?? "");
@@ -163,9 +165,12 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
         {/* Wellness + attention block (combined) */}
         {reviewContext && (() => {
           const w = reviewContext.wellness;
-          const wColor = w === null ? "rgba(0,0,0,0.22)" : w >= 70 ? "#78bf13" : w >= 45 ? "#f28a00" : "#d10000";
-          const wBg = w === null ? "rgba(0,0,0,0.03)" : w >= 70 ? "rgba(120,191,19,0.07)" : w >= 45 ? "rgba(242,138,0,0.07)" : "rgba(209,0,0,0.07)";
-          const wBorder = w === null ? "rgba(0,0,0,0.10)" : w >= 70 ? "rgba(120,191,19,0.26)" : w >= 45 ? "rgba(242,138,0,0.26)" : "rgba(209,0,0,0.26)";
+          // Dégradé séquentiel bleu (wellnessColor) — ring, texte ET fond/bordure de la carte
+          // dérivés de la même couleur (suffixe hex+alpha) pour rester cohérents entre eux, plutôt
+          // que de ne recolorer que le ring et laisser le fond de carte en rouge/orange/vert.
+          const wColor = w === null ? "rgba(0,0,0,0.22)" : wellnessColor(w);
+          const wBg = w === null ? "rgba(0,0,0,0.03)" : `${wColor}12`;
+          const wBorder = w === null ? "rgba(0,0,0,0.10)" : `${wColor}44`;
           const wLabel = w === null ? "Non renseigné" : w >= 82 ? "Zone optimale" : w >= 65 ? "Zone stable" : w >= 45 ? "Zone prudente" : "Zone récupération";
           const dColor = reviewContext.maxDiff >= 8 ? "#d44000" : reviewContext.maxDiff >= 5 ? "#b96500" : "#2f9e44";
           const points = buildAttentionPoints(w, reviewContext.maxDiff, reviewContext.trend);

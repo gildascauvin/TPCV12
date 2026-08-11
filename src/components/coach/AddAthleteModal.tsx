@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CoachAthlete } from "@/types";
+import { wellnessColor } from "@/lib/wellness";
 
 const SPORTS = [
   "Running", "Cyclisme", "Natation", "Triathlon", "Football", "Rugby",
@@ -38,7 +39,8 @@ export default function AddAthleteModal({ athlete, onSave, onDelete, onClose }: 
     setDeleting(false);
   }
 
-  const wellnessColor = wellness >= 75 ? "#2f9e44" : wellness >= 55 ? "#f28a00" : "#d10000";
+  // Dégradé séquentiel bleu — voir SparkLineClient.tsx pour la doc complète du choix.
+  const wellnessAccent = wellnessColor(wellness);
 
   return (
     <div
@@ -83,12 +85,12 @@ export default function AddAthleteModal({ athlete, onSave, onDelete, onClose }: 
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Wellness actuel</div>
-              <div style={{ fontSize: 22, fontWeight: 1000, color: wellnessColor, letterSpacing: "-0.04em" }}>{wellness}/100</div>
+              <div style={{ fontSize: 22, fontWeight: 1000, color: wellnessAccent, letterSpacing: "-0.04em" }}>{wellness}/100</div>
             </div>
             <input
               type="range" min={0} max={100} value={wellness}
               onChange={e => setWellness(Number(e.target.value))}
-              style={{ width: "100%", accentColor: wellnessColor }}
+              style={{ width: "100%", accentColor: wellnessAccent }}
             />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
               <span>Fatigue élevée</span><span>Bonne forme</span>

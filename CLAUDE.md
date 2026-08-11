@@ -1133,11 +1133,13 @@ Partout, le cas `score === null` garde son propre gris translucide existant (`rg
 
 **Distinction volontaire, pas oubliée** : les fonctions `scoreColor` qui colorent un **texte** de statut (ex. "Disponible"/"Stable"/"À surveiller" dans `AthletesClient.tsx`, `CoachPlanningClient.tsx`, `DayColumn.tsx`) restent en Status rouge/orange/vert — seuls les **rings** (jauges circulaires) sont passés en Sequential bleu. Un texte d'état pair avec un libellé catégoriel est un job Status légitime (voir skill dataviz), différent d'un ring qui encode juste la magnitude.
 
-**2 exceptions identifiées, volontairement pas touchées — à trancher par Gildas s'il veut une cohérence à 100%** :
-- **`CoachSessionModal.tsx`** (encart "Décider" au clic sur une séance côté coach) : le ring y est imbriqué dans toute une carte "attention" dont le fond, la bordure ET les puces de texte sont teintés par le même seuil 3 couleurs (`wColor`) — recolorer seulement le ring en bleu aurait laissé le reste de la carte (fond/bordure orange ou rouge) en désaccord visuel avec lui. C'est un widget de décision/alerte intégré (job Status par nature, comme `decisionText()`/`attention()` déjà volontairement non touchés ailleurs dans ce fichier), pas un ring `wellness` isolé — laissé en l'état.
-- **`AddAthleteModal.tsx`** (édition manuelle d'un sportif démo côté coach) : pas un ring, un simple chiffre + accentColor de slider coloré par le même seuil — hors du périmètre littéral "rings" demandé, pas touché.
+**Itération suivante (même jour) — inversion du sens du dégradé + 2 exceptions couvertes sur demande explicite** : après test visuel, Gildas a demandé d'inverser le sens (foncé = en forme, clair = fatigué — l'inverse de la 1ère version) et de couvrir les 2 exceptions ci-dessus plutôt que de les laisser de côté.
 
-**Vérifié** : `tsc --noEmit` + `npm run build` propres.
+- **Inversion** : un seul changement, l'ordre des hex dans `WELLNESS_RAMP` (`src/lib/wellness.ts`) — les stops restent `0→1` mais les couleurs sont inversées (`#cde2fb` clair en stop 0, `#184f95` foncé en stop 1). Se propage automatiquement partout (7 rings, gradient SVG du chart Récupération, barre de légende CSS, labels d'ancrage "EN FORME"/"FATIGUÉ") sans toucher `SparkLineClient.tsx` — tous ces call sites dérivent leur couleur de ce seul tableau ou de `wellnessColor()`, aucune direction n'y est codée en dur séparément.
+- **`CoachSessionModal.tsx`** : `wColor` (ring + texte + puces d'attention) passe sur `wellnessColor(w)`. `wBg`/`wBorder` (fond/bordure de la carte, sur fond **clair** — seul cas non-dark-card de tout ce chantier) dérivés de `wColor` via suffixe hex+alpha (`${wColor}12`/`${wColor}44`) plutôt que 3 `rgba()` codés en dur par seuil — ring, texte et fond de carte restent ainsi toujours cohérents entre eux quelle que soit la couleur. Le badge wellness du sélecteur de destinataires (`scoreColor(a.wellness_score)`, simple chiffre sans mot de statut) basculé aussi, par la même logique que les rings (magnitude affichée seule, pas un badge catégoriel).
+- **`AddAthleteModal.tsx`** : `const wellnessColor = ...` renommé `wellnessAccent` (collision de nom avec la fonction importée) — colore le chiffre "X/100" et l'`accentColor` du slider d'édition manuelle (coach, sportif démo).
+
+**Vérifié** : `tsc --noEmit` + `npm run build` propres après les 2 rounds.
 
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
