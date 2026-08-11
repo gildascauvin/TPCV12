@@ -71,7 +71,7 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
   const ffTrend = fitnessFatigueTrend(series);
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, "coach") : null;
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, "coach") : null;
-  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, "coach");
+  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, "coach");
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach");
 
   return (

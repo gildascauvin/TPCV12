@@ -1153,6 +1153,16 @@ Suite à une discussion (pas juste une implémentation directe — voir échange
 
 **Vérifié** : `tsc --noEmit` + `npm run build` propres (piège `.next/types` déjà documenté rencontré une fois de plus pendant ce round — `next dev` tournait en parallèle du premier `tsc`, faux positif sur `getSportCategory` dans un fichier non touché — `rm -rf .next` + relance a confirmé un `tsc` propre).
 
+### Bug réel trouvé et corrigé — `recoveryCrossInsight()` cassée par le recolorage du badge Récupération (2026-08-11, suite)
+
+Repéré en répondant à une question de Gildas ("est-ce que l'insight croisé récup parle bien du wellness ?"), pas anticipé au moment du recolorage. `recoveryCrossInsight()` détectait `wellGood`/`wellBad` par égalité stricte sur `recoveryInfo.color` (`=== "#2f9e44"` / `=== "#d10000"`) — dès que le badge Récupération est passé au dégradé séquentiel bleu (`wellnessColor(value)`, itération précédente), cette couleur n'est plus jamais un vert/rouge fixe, donc les deux branches ne se déclenchaient plus **jamais** : l'insight croisé retombait silencieusement sur `recoveryInfo.text` (texte wellness seul), perdant toute comparaison avec la Forme — régression invisible à l'œil (le texte affiché restait plausible), seulement visible en relisant le code. **Fix** : détection sur `recoveryInfo.label` (`"BONNE RÉCUP"`/`"RÉCUP FRAGILE"`, chaînes stables, jamais touchées par le recolorage) au lieu de `.color`.
+
+**Confirmé par la même occasion** : l'insight global tout en haut de carte (`describeTrend()`/`bodySignalPhrase()`, `trainingLoad.ts`) parle bien du wellness — `wellnessDelta` (EWMA) alimente la phrase via le mot "récupération" (ex. "ta récupération se dégrade"/"s'améliore"), pas juste la charge/RPE.
+
+**`chargeCrossInsight()` étendue à Fitness/Fatigue** : depuis que leurs badges vivent dans la carte Charge (itération précédente), l'insight textuel de cette carte ne les mentionnait pas encore — 2 nouveaux paramètres optionnels `fitnessTrendInfo`/`fatigueTrendInfo`, intégrés à la même logique alerte/watch que ACWR/Monotonie/Contrainte (`severityOf(color)`, déjà en place) — jamais de statut "alerte" pour ces deux-là (`trendDimInfo` ne renvoie que vert/gris/orange), seulement "à surveiller" si fitness en baisse ou fatigue en hausse. Câblé dans `conseilsData.ts` et `AthletesClient.tsx` (coach), qui calculaient déjà ces deux variables juste avant l'appel.
+
+**Vérifié** : `tsc --noEmit` + `npm run build` propres.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`

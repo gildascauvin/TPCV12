@@ -131,17 +131,22 @@ function severityOf(color: string): Severity {
 }
 
 /**
- * Insight croisé "Charge" — combine ACWR, monotonie et strain (3 signaux distincts de la même
- * dimension charge) en une seule phrase, plutôt que de laisser le sportif recouper 3 badges tout
- * seul. Priorité aux signaux "alerte" (rouge), puis "à surveiller" (orange).
+ * Insight croisé "Charge" — combine ACWR, monotonie, strain, et (depuis le déplacement des badges
+ * Fitness/Fatigue vers la carte Charge) leur tendance, en une seule phrase plutôt que de laisser le
+ * sportif recouper 5 badges tout seul. Priorité aux signaux "alerte" (rouge), puis "à surveiller"
+ * (orange). Fitness/Fatigue optionnels (`null` tant que <14j d'historique, comme le reste) — jamais
+ * de statut "alerte" pour ces deux-là (trendDimInfo ne renvoie que vert/gris/orange), seulement
+ * "à surveiller" (fitness en baisse, fatigue en hausse) ou rien (stable/positif).
  */
-export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, perspective: Perspective = "athlete"): string {
+export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
   const items = [
     { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", sev: severityOf(loadInfo.color) },
     { name: coach ? "sa monotonie" : "ta monotonie", sev: severityOf(monotonyInfo.color) },
     { name: coach ? "son strain" : "ton strain", sev: severityOf(strainInfo.color) },
   ];
+  if (fitnessTrendInfo) items.push({ name: coach ? "sa fitness" : "ta fitness", sev: severityOf(fitnessTrendInfo.color) });
+  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", sev: severityOf(fatigueTrendInfo.color) });
   const alerts = items.filter(i => i.sev === "alert").map(i => i.name);
   const watches = items.filter(i => i.sev === "watch").map(i => i.name);
   if (alerts.length >= 2) return coach
@@ -156,7 +161,8 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
   if (watches.length === 1) return coach
     ? `${watches[0]} est à surveiller, le reste de sa charge est sain.`
     : `${watches[0]} est à surveiller, le reste de ta charge est sain.`;
-  return "Charge, monotonie et strain sont tous dans des zones saines : rien à ajuster.";
+  const extra = (fitnessTrendInfo || fatigueTrendInfo) ? ", fitness et fatigue" : "";
+  return `Charge, monotonie, strain${extra} sont tous dans des zones saines : rien à ajuster.`;
 }
 
 /**
@@ -172,8 +178,11 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
   // seuil inventé séparément.
   const formGood = formValue >= 8;
   const formBad = formValue <= -8;
-  const wellGood = recoveryInfo.color === "#2f9e44";
-  const wellBad = recoveryInfo.color === "#d10000";
+  // Sur le label, pas la couleur : depuis le passage du badge Récupération au dégradé séquentiel
+  // bleu (wellnessColor), la couleur n'est plus un rouge/vert fixe comparable par égalité — le
+  // label ("BONNE RÉCUP"/"RÉCUP FRAGILE") reste, lui, une chaîne stable.
+  const wellGood = recoveryInfo.label === "BONNE RÉCUP";
+  const wellBad = recoveryInfo.label === "RÉCUP FRAGILE";
   if (wellGood && formGood) return coach
     ? "Wellness et forme (charge chronique vs récente) sont alignés positivement : prêt à bien performer."
     : "Wellness et forme (charge chronique vs récente) sont alignés positivement : tu es prêt à bien performer.";

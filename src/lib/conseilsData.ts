@@ -175,7 +175,7 @@ export async function getConseilsData(
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness) : null;
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue) : null;
 
-  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" });
+  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo);
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm);
 
   const last7 = timeSeries.slice(-7);
