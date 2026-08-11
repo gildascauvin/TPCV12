@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { wellnessColor, WELLNESS_RAMP } from "@/lib/wellness";
 
 const MONTH_FR = ["jan","fév","mar","avr","mai","juin","juil","aoû","sep","oct","nov","déc"];
 const DAY_FR   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -65,39 +66,9 @@ export function formToChartPosition(pct: number): number {
   return Math.max(0, Math.min(100, 50 + pct));
 }
 
-/* Rampe séquentielle bleue (méthode du skill dataviz : le wellness est une magnitude continue
-   0-100, pas un état catégoriel — job "Sequential", un seul ton clair→foncé — contrairement à
-   Form/ACWR/monotonie/strain qui encodent un état bon/watch/critique et restent en Status
-   rouge/orange/vert). Le WellnessRing (Today/Coach/onboarding) reste en Status : c'est une jauge
-   d'état instantané, un job différent d'une tendance continue sur 7j, volontairement pas touché.
-   Ancrage sur fond sombre (confirmé avec Gildas) : le clair ressort du fond (en forme), le foncé
-   s'y fond (fatigué) — inverse de la convention fond clair où le clair recule vers zéro. Pas plus
-   foncé que le step 600 (#184f95) : en dessous, le contraste tombe sous 2:1 sur fond sombre. */
-const WELLNESS_RAMP: { stop: number; hex: string }[] = [
-  { stop: 0,    hex: "#184f95" },
-  { stop: 0.25, hex: "#2a78d6" },
-  { stop: 0.5,  hex: "#6da7ec" },
-  { stop: 0.75, hex: "#b7d3f6" },
-  { stop: 1,    hex: "#cde2fb" },
-];
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-function rgbToHex([r, g, b]: [number, number, number]): string {
-  return "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
-}
-export function wellnessColor(score: number): string {
-  const t = Math.max(0, Math.min(1, score / 100));
-  let lo = WELLNESS_RAMP[0], hi = WELLNESS_RAMP[WELLNESS_RAMP.length - 1];
-  for (let i = 0; i < WELLNESS_RAMP.length - 1; i++) {
-    if (t >= WELLNESS_RAMP[i].stop && t <= WELLNESS_RAMP[i + 1].stop) { lo = WELLNESS_RAMP[i]; hi = WELLNESS_RAMP[i + 1]; break; }
-  }
-  const localT = (t - lo.stop) / (hi.stop - lo.stop || 1);
-  const [r1, g1, b1] = hexToRgb(lo.hex);
-  const [r2, g2, b2] = hexToRgb(hi.hex);
-  return rgbToHex([r1 + (r2 - r1) * localT, g1 + (g2 - g1) * localT, b1 + (b2 - b1) * localT]);
-}
+/* wellnessColor()/WELLNESS_RAMP vivent dans src/lib/wellness.ts (source unique, réutilisée par les
+   WellnessRing partout dans l'app depuis leur unification — voir ce fichier pour la doc complète
+   de la rampe et du choix d'ancrage sur fond sombre). */
 
 function dayLabel(dateStr: string) {
   const d = new Date(dateStr + "T12:00:00");

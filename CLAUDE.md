@@ -1115,6 +1115,30 @@ Suite directe de la section précédente, après une discussion sur la fidélit�
 
 **Vérifié** : `tsc --noEmit` + `npm run build` propres après chaque round (dev server arrêté avant chaque build, piège `.next` déjà documenté). Pas de nouveau test isolé `tsx` sur données synthétiques pour l'ensemble de ces itérations (fonctions EWMA dérivées directement de `ewmaWellness()` déjà testée/déployée le 08-10) — à re-vérifier visuellement par Gildas sur `/conseils` et `/coach/athletes` avant de considérer le chantier clos.
 
+Déployé en prod le 2026-08-11 (commit `73ce2b8`, push direct sur `main`, confirmé `READY` sur Vercel).
+
+### Unification des wellness rings — dégradé séquentiel bleu partout (2026-08-11, suite)
+
+Sur demande explicite de Gildas ("par cohérence, toutes les wellness rings") : `wellnessColor(score)`/`WELLNESS_RAMP` déplacés de `SparkLineClient.tsx` vers **`src/lib/wellness.ts`** (source unique, doc complète de la rampe et de l'ancrage fond sombre y reste) — `SparkLineClient.tsx` importe désormais depuis là au lieu de dupliquer.
+
+**7 rings basculés sur `wellnessColor()`** (avant : seuils Status rouge/orange/vert dupliqués indépendamment dans chaque fichier, cf. note pré-existante "pas encore unifiées" plus haut dans ce fichier — restent des composants séparés, seule la couleur est maintenant partagée) :
+- `src/components/wellness/WellnessRing.tsx` (partagé — `CelebrationScreen.tsx`, `OnboardingFlow.tsx`)
+- `src/app/(app)/today/TodayClient.tsx` (`WellnessRingPOC`)
+- `src/app/(app)/coach/athletes/AthletesClient.tsx` (`AthleteRing`)
+- `src/components/calendar/PlanningRing.tsx` (partagé — `WeekClient.tsx` via `DayColumn.tsx`, `CoachPlanningClient.tsx`)
+- `src/components/coach/CoachAthleteCard.tsx` (`WellnessRing` — Coach Control `/coach`, aperçu onboarding coach)
+- `src/components/calendar/CalendarHeader.tsx` (ring par jour dans l'en-tête)
+
+Partout, le cas `score === null` garde son propre gris translucide existant (`rgba(255,255,255,0.18)` ou équivalent — "pas de donnée", différent d'une valeur basse) plutôt que le gris neutre `#8a8f94` de `wellnessColor(null)` — pas de changement de comportement sur ce cas.
+
+**Distinction volontaire, pas oubliée** : les fonctions `scoreColor` qui colorent un **texte** de statut (ex. "Disponible"/"Stable"/"À surveiller" dans `AthletesClient.tsx`, `CoachPlanningClient.tsx`, `DayColumn.tsx`) restent en Status rouge/orange/vert — seuls les **rings** (jauges circulaires) sont passés en Sequential bleu. Un texte d'état pair avec un libellé catégoriel est un job Status légitime (voir skill dataviz), différent d'un ring qui encode juste la magnitude.
+
+**2 exceptions identifiées, volontairement pas touchées — à trancher par Gildas s'il veut une cohérence à 100%** :
+- **`CoachSessionModal.tsx`** (encart "Décider" au clic sur une séance côté coach) : le ring y est imbriqué dans toute une carte "attention" dont le fond, la bordure ET les puces de texte sont teintés par le même seuil 3 couleurs (`wColor`) — recolorer seulement le ring en bleu aurait laissé le reste de la carte (fond/bordure orange ou rouge) en désaccord visuel avec lui. C'est un widget de décision/alerte intégré (job Status par nature, comme `decisionText()`/`attention()` déjà volontairement non touchés ailleurs dans ce fichier), pas un ring `wellness` isolé — laissé en l'état.
+- **`AddAthleteModal.tsx`** (édition manuelle d'un sportif démo côté coach) : pas un ring, un simple chiffre + accentColor de slider coloré par le même seuil — hors du périmètre littéral "rings" demandé, pas touché.
+
+**Vérifié** : `tsc --noEmit` + `npm run build` propres.
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`

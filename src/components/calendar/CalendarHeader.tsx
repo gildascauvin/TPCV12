@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { format, addDays, startOfWeek, subDays, addMonths, subMonths } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { wellnessColor } from "@/lib/wellness";
 
 export type ViewMode = "week" | "month";
 
@@ -19,9 +20,10 @@ interface CalendarHeaderProps {
 
 const CIRC = 81.68; // 2π × r=13
 
+// Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
 function ringColor(score: number | null) {
   if (score === null) return "rgba(255,255,255,0.15)";
-  return score >= 75 ? "#2f9e44" : score >= 55 ? "#f28a00" : "#d10000";
+  return wellnessColor(score);
 }
 
 function dotColor(dot: string) {

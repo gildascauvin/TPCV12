@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { scoreLabel } from "@/lib/wellness";
+import { wellnessColor } from "@/lib/wellness";
 
 interface WellnessRingProps {
   score: number | null;
@@ -29,14 +29,10 @@ export default function WellnessRing({
   const pct = infinite ? 100 : score != null ? Math.max(0, Math.min(100, score)) : 0;
   const offset = circumference - (pct / 100) * circumference;
 
-  const label = score != null ? scoreLabel(score) : "s-empty";
-  const colorMap = {
-    "s-great": "#78bf13",
-    "s-ok": "#f28a00",
-    "s-low": "#d10000",
-    "s-empty": "#c0c0c0",
-  };
-  const ringColor = infinite ? "#78bf13" : colorMap[label];
+  // Dégradé séquentiel bleu (wellnessColor, src/lib/wellness.ts) — magnitude continue, pas un état
+  // catégoriel, voir la doc complète dans ce fichier. "infinite" (capacité illimitée coach) n'est
+  // pas un score wellness : reste en vert fixe, cas à part.
+  const ringColor = infinite ? "#78bf13" : wellnessColor(score);
   const trackColor = dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.07)";
 
   return (
@@ -67,7 +63,7 @@ export default function WellnessRing({
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span
             className="text-[14px] font-bold leading-none"
-            style={{ color: infinite ? ringColor : dark ? "#fff" : colorMap[label] }}
+            style={{ color: infinite ? ringColor : dark ? "#fff" : ringColor }}
           >
             {infinite ? "∞" : score != null ? score : "—"}
           </span>

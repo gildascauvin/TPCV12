@@ -8,7 +8,7 @@ import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore } from "@/lib/wellness";
+import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore, wellnessColor } from "@/lib/wellness";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -30,9 +30,11 @@ function greeting() {
   return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir";
 }
 
+// Dégradé séquentiel bleu (wellnessColor, src/lib/wellness.ts) — voir SparkLineClient.tsx pour la
+// doc complète du choix (magnitude continue, pas un état catégoriel).
 function scoreColor(score: number | null) {
   if (score === null) return "rgba(255,255,255,0.18)";
-  return score >= 75 ? "#2f9e44" : score >= 55 ? "#f28a00" : "#d10000";
+  return wellnessColor(score);
 }
 
 function buildDotMap(sessions: Session[], anchor: string) {

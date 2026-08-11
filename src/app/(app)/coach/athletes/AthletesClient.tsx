@@ -14,8 +14,12 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
 import { fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
+import { wellnessColor } from "@/lib/wellness";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
 
+// Reste en Status (rouge/orange/vert) — colore le libellé d'état "Disponible"/"Stable"/"À
+// surveiller" (statusLabel), pas un ring : job Status légitime (texte+couleur = état, pas
+// magnitude). AthleteRing plus bas utilise wellnessColor (Sequential bleu) pour le ring lui-même.
 function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
 const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
 function statusLabel(s: number, trend?: TrendCode | null) {
@@ -124,11 +128,11 @@ function AthleteRing({ score }: { score: number }) {
     <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0, borderRadius: 999, background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 6px 14px rgba(0,0,0,.14))" }}>
       <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: "rotate(-90deg)", display: "block" }}>
         <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-        <circle cx="26" cy="26" r={r} fill="none" stroke={scoreColor(score)} strokeWidth="5"
+        <circle cx="26" cy="26" r={r} fill="none" stroke={wellnessColor(score)} strokeWidth="5"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color: scoreColor(score) }}>{score}</span>
+        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color: wellnessColor(score) }}>{score}</span>
         <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
       </div>
     </div>

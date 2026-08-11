@@ -1,7 +1,7 @@
 "use client";
 
 import DiffGauge from "@/components/calendar/DiffGauge";
-import { zoneLabel } from "@/lib/wellness";
+import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
@@ -9,7 +9,9 @@ import type { CoachAthlete, CoachViewSession } from "@/types";
 /* Carte sportif de Coach Control — extraite de CoachClient.tsx pour être réutilisable ailleurs
    (ex. aperçu onboarding coach) sans dupliquer la logique décision/risque. */
 
-export function scoreColor(s: number | null) { return s === null ? "rgba(255,255,255,0.18)" : s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+// Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du
+// choix. null garde son propre gris translucide (ring vide, pas une valeur basse).
+export function scoreColor(s: number | null) { return s === null ? "rgba(255,255,255,0.18)" : wellnessColor(s); }
 
 export function WellnessRing({ score, size = 72 }: { score: number | null; size?: number }) {
   const r = Math.round(size * 0.423);

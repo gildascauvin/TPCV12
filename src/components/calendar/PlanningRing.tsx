@@ -1,6 +1,11 @@
+import { wellnessColor } from "@/lib/wellness";
+
+// Dégradé séquentiel bleu — voir SparkLineClient.tsx pour la doc complète du choix (magnitude
+// continue, pas un état catégoriel). null garde son propre gris translucide (pas de donnée, pas
+// une valeur basse) plutôt que le gris neutre de wellnessColor(null).
 function scoreColor(score: number | null) {
   if (score === null) return "rgba(255,255,255,0.18)";
-  return score >= 75 ? "#2f9e44" : score >= 55 ? "#f28a00" : "#d10000";
+  return wellnessColor(score);
 }
 
 export default function PlanningRing({ score, size = 58 }: { score: number | null; size?: number }) {

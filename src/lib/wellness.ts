@@ -48,6 +48,41 @@ export function zoneLabel(score: number | null): string {
   return "Zone récupération";
 }
 
+/* Rampe séquentielle bleue pour toute couleur wellness dérivée d'un score (rings, tendances) —
+   source unique, voir la doc complète dans SparkLineClient.tsx (skill dataviz : magnitude
+   continue 0-100 = job "Sequential", pas "Status" rouge/orange/vert). Sur fond sombre (toutes les
+   surfaces qui l'utilisent), le clair ressort du fond (en forme), le foncé s'y fond (fatigué) —
+   confirmé avec Gildas, inverse de la convention fond clair. Valeurs reprises telles quelles de la
+   rampe séquentielle bleue documentée du skill dataviz (jamais de hex inventé à l'œil), plafonnées
+   au step 600 (#184f95) en bas : en dessous, le contraste tombe sous 2:1 sur fond sombre. */
+const WELLNESS_RAMP: { stop: number; hex: string }[] = [
+  { stop: 0,    hex: "#184f95" },
+  { stop: 0.25, hex: "#2a78d6" },
+  { stop: 0.5,  hex: "#6da7ec" },
+  { stop: 0.75, hex: "#b7d3f6" },
+  { stop: 1,    hex: "#cde2fb" },
+];
+function hexToRgb(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHex([r, g, b]: [number, number, number]): string {
+  return "#" + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, "0")).join("");
+}
+export function wellnessColor(score: number | null): string {
+  if (score === null) return "#8a8f94";
+  const t = Math.max(0, Math.min(1, score / 100));
+  let lo = WELLNESS_RAMP[0], hi = WELLNESS_RAMP[WELLNESS_RAMP.length - 1];
+  for (let i = 0; i < WELLNESS_RAMP.length - 1; i++) {
+    if (t >= WELLNESS_RAMP[i].stop && t <= WELLNESS_RAMP[i + 1].stop) { lo = WELLNESS_RAMP[i]; hi = WELLNESS_RAMP[i + 1]; break; }
+  }
+  const localT = (t - lo.stop) / (hi.stop - lo.stop || 1);
+  const [r1, g1, b1] = hexToRgb(lo.hex);
+  const [r2, g2, b2] = hexToRgb(hi.hex);
+  return rgbToHex([r1 + (r2 - r1) * localT, g1 + (g2 - g1) * localT, b1 + (b2 - b1) * localT]);
+}
+export { WELLNESS_RAMP };
+
 export function getContextualInsight(
   wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "score">,
   postSession?: { displayScore: number; totalImpact: number }
