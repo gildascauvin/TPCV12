@@ -347,7 +347,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
   const doneToday = todaySessions.filter(s => s.done && s.rpe && s.duration);
   const impacts = doneToday.map(s => computeFatigueImpact(s.rpe!, s.duration!));
-  const totalImpact = impacts.reduce((a, b) => a + b, 0);
   const displayScore = wellnessFilledToday && score !== null ? computeDisplayScore(score, impacts) : null;
   const displayWellness = wellnessFilledToday ? wellness : null;
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
@@ -361,7 +360,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const rule = loadRule(todaySessions, loadCtx);
   const advice = {
     training: `${rule.title}. ${rule.text}`,
-    recovery: getRecoveryAdvice(displayWellness, rule.cls, displayScore !== null ? { totalImpact } : undefined),
+    recovery: getRecoveryAdvice(displayWellness, rule.cls),
   };
   const dotMap = buildDotMap(allSessions, selectedDate);
 

@@ -188,18 +188,15 @@ const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
 
 export function getRecoveryAdvice(
   wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "behaviors"> | null,
-  loadCls: "hard" | "moderate" | "easy" | "rest",
-  postSession?: { totalImpact: number }
+  loadCls: "hard" | "moderate" | "easy" | "rest"
 ): string {
   if (!wellness) return "Remplis ton wellness pour voir ton état de récupération.";
   const { sleep, stress, recovery, motivation, behaviors } = wellness;
 
-  const charge = postSession && postSession.totalImpact > 0
-    ? `charge élevée aujourd'hui (−${postSession.totalImpact} pts sur ton wellness)`
-    : loadCls === "hard" ? "charge élevée en ce moment"
+  const charge = loadCls === "hard" ? "charge élevée en ce moment"
     : loadCls === "moderate" ? "charge modérée en ce moment"
     : "charge légère en ce moment";
-  const isDemanding = loadCls === "hard" || (postSession?.totalImpact ?? 0) > 0;
+  const isDemanding = loadCls === "hard";
 
   const negBehavior = behaviors.map(b => NEGATIVE_BEHAVIOR_TIPS[b]).find(Boolean);
   if (negBehavior) {
