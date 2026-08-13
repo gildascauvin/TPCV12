@@ -40,14 +40,22 @@ function zoneFor(ratio: number): Zone {
   return ZONES.find(z => ratio < z.max) ?? ZONES[ZONES.length - 1];
 }
 
-const W = 400, H = 168, PAD_L = 4, PAD_R = 10, PAD_TOP = 10, PAD_BOT = 22;
+const W = 400, PAD_L = 4, PAD_R = 10, PAD_TOP = 10, PAD_BOT = 22;
 
-export default function ZoneSparkline({ points, dates, loads, monotony, strain }: {
+export default function ZoneSparkline({ points, dates, loads, monotony, strain, hideDayLabels, height }: {
   points: (number | null)[]; dates: string[]; loads?: number[];
   /* Monotonie/Contrainte du jour survolé, en complément de l'ACWR déjà affiché — pour les
      sportifs/coachs qui veulent le détail complet du tooltip, pas juste le résumé en badge. */
   monotony?: (number | null)[]; strain?: (number | null)[];
+  /* Masque les labels de jour en bas (Lun/Mar/...) — réservé aux previews illustratives qui
+     veulent simplifier le chart. `false` par défaut : zéro impact sur /conseils. */
+  hideDayLabels?: boolean;
+  /* Hauteur du viewBox (défaut 168, la valeur réelle de /conseils) — réservé aux previews
+     illustratives qui veulent un chart plus compact. Tout le reste (bandes de zone, points,
+     labels) est déjà positionné en % de cette hauteur, donc se redimensionne proprement. */
+  height?: number;
 }) {
+  const H = height ?? 168;
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const n = points.length;
@@ -192,7 +200,7 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain }
           );
         })}
 
-        {dates.map((d, i) => {
+        {!hideDayLabels && dates.map((d, i) => {
           if (i % labelStep !== 0 && i !== n - 1) return null;
           const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
           const xPct = toXPct(i);

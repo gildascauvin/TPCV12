@@ -3,6 +3,8 @@
 import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
 import type { ProgramFocus } from "@/types";
+import { PlanningPreview, WellnessCardPreview, CoachControlPreview, ChargePreview, AthleteChargePreview } from "./FrisePreviews";
+import { INTERVIEWS } from "./interviews";
 
 /* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
    paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
@@ -93,9 +95,13 @@ export interface PricingPrimingProps {
   sessionCount?: number;
   /** Objectif de bloc réel (GOAL_TO_FOCUS[goal]) — absent en gating in-app (pas de choix fait à cet instant), bullet générique en repli. */
   focus?: ProgramFocus;
+  /** Prénom réel de l'utilisateur — utilisé dans les illustrations de la frise (sportif démo côté
+      coach) pour rester personnel. Repli "Toi" si absent, même convention que coachFirstName dans
+      WeekPreviewStep.tsx. */
+  name?: string;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, focus }: PricingPrimingProps) {
+export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, focus, name }: PricingPrimingProps) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
@@ -158,17 +164,45 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
       </div>
       <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "6px 18px", marginBottom: 22 }}>
         {FRISE_STEPS[role].map((s, i) => (
-          <div key={i} style={{ display: "flex", gap: 14, padding: "16px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+          <div key={i} style={{ display: "flex", gap: 14, padding: "26px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
             <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "rgba(212,64,0,.09)", color: "#d44000", fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
             <div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>{s.title}</span>
                 <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.period}</span>
               </div>
-              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5 }}>{s.text}</div>
+              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 10 }}>{s.text}</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 2, fontSize: 8.5, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,.9)", background: "rgba(0,0,0,.5)", padding: "3px 8px", borderRadius: 999 }}>
+                  Aperçu
+                </div>
+                {i === 0 && <PlanningPreview sport={sport} />}
+                {i === 1 && (role === "coach" ? <CoachControlPreview name={name} /> : <WellnessCardPreview />)}
+                {i === 2 && (role === "coach" ? <AthleteChargePreview /> : <ChargePreview />)}
+              </div>
             </div>
           </div>
         ))}
+      </div>
+
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
+          Les experts en parlent
+        </div>
+        <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+          {INTERVIEWS.filter(v => v.personas.includes(role === "coach" ? "coach" : "athlete")).map(v => (
+            <div key={v.slug} style={{ flex: "0 0 240px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
+              <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
+                <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <div style={{ position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 800, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 5, letterSpacing: "0.02em" }}>▶ YouTube</div>
+              </div>
+              <div style={{ padding: "10px 12px 12px" }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: "#1f2428" }}>{v.name}</div>
+                <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2, lineHeight: 1.35 }}>{v.role}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ marginBottom: 28 }}>
