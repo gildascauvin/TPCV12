@@ -287,12 +287,22 @@ function formatRelativeDate(dateStr: string): string {
   return `il y a ${Math.round(days / 7)} sem.`;
 }
 
+// Distance/durée/allure en tête de ligne — plus spécifique en premier dans l'alternance ("min"
+// avant "m", "sec(ondes)?" avant "s") pour ne jamais matcher un préfixe trop court par erreur.
+const LEADING_QUANTITY_RE = /^(\d+(?:[.,]\d+)?\s*(?:km|min|h\d*|sec(?:ondes?)?|s|m)\b|\d+:\d+\s*\/\s*km)/i;
+
 function extractNameCandidate(line: string): string | null {
   const m = line.match(/^([^\d]+)/);
-  if (!m) return null;
-  const name = m[1].trim().replace(/[-–:·]+$/, "").trim();
-  if (name.length < 2 || name.split(/\s+/).length > 5) return null;
-  return name;
+  if (m) {
+    const name = m[1].trim().replace(/[-–:·]+$/, "").trim();
+    if (name.length >= 2 && name.split(/\s+/).length <= 5) return name;
+  }
+  // Une ligne qui commence directement par une distance/durée/allure ("400m", "30 min", "4:30/km")
+  // est fréquente en course à pied/natation/vélo — ce token EST l'identité de l'exercice, pas
+  // juste son volume : sans ce cas, ces lignes ne s'apprenaient jamais (aucun préfixe non-chiffré).
+  const lead = line.match(LEADING_QUANTITY_RE);
+  if (lead) return lead[1].replace(/\s+/g, " ").trim();
+  return null;
 }
 
 /** Construit un dictionnaire d'historique à partir des vraies séances de l'utilisateur (les plus
@@ -380,39 +390,53 @@ function extractVolumeText(line: string): string | null {
   return m ? m[0].trim() : null;
 }
 
+/* Aucun ordre de tokens imposé : chaque suggestion ne dépend que de sa propre absence sur la
+   ligne, jamais de la présence des autres. "Back squat @ 150kg" (intensité tapée avant le volume)
+   suggère quand même le volume manquant ; "@ 150kg" seul puis complété par un nom plus tard
+   fonctionne pareil, la ligne entière est ré-analysée à chaque frappe. Volume puis intensité
+   reste juste l'ordre par défaut quand rien n'est encore tapé (résolution de priorité, pas une
+   contrainte). */
 function suggestNextToken(ctx: ReturnType<typeof analyzeLineContext>, fullLine: string): TokenSuggestion[] {
-  const results: TokenSuggestion[] = [];
-  if (ctx.nameKey) {
-    const h = ctx.exercise!;
-    if (!ctx.hasVolume && h.volume) {
-      results.push({ type: "volume", value: h.volume, label: h.volume, meta: "← " + h.name + " · " + h.date, icon: h.sport || "📊", next: true });
-    } else if (ctx.hasVolume && !ctx.hasIntensity && h.intensity) {
-      results.push({ type: "intensity", value: h.intensity, label: h.intensity, meta: "← " + h.name + " · " + h.date, icon: h.sport || "⚡", next: true });
-    }
+  const h = ctx.exercise;
+
+  if (h && !ctx.hasVolume && h.volume) {
+    return [{ type: "volume", value: h.volume, label: h.volume, meta: "← " + h.name + " · " + h.date, icon: h.sport || "📊", next: true }];
   }
-  if (!ctx.nameKey && ctx.hasVolume) {
+  if (h && !ctx.hasIntensity && h.intensity) {
+    return [{ type: "intensity", value: h.intensity, label: h.intensity, meta: "← " + h.name + " · " + h.date, icon: h.sport || "⚡", next: true }];
+  }
+
+  // Volume tapé mais exercice non reconnu (ou personnalisé) : impossible de deviner le nom, mais
+  // le volume seul permet de recouper l'historique pour une intensité plausible.
+  if (!ctx.nameKey && ctx.hasVolume && !ctx.hasIntensity) {
     const vt = extractVolumeText(fullLine);
     if (vt) {
+      const results: TokenSuggestion[] = [];
       const seen = new Set<string>();
-      Object.values(ACTIVE_HISTORY).forEach(h => {
-        if (!h.intensity || !h.volume) return;
-        if (normalizeVol(h.volume).includes(normalizeVol(vt)) && !seen.has(h.intensity)) {
-          seen.add(h.intensity);
-          results.push({ type: "intensity", value: h.intensity, label: h.intensity, meta: h.name, icon: h.sport || "⚡", next: true });
+      Object.values(ACTIVE_HISTORY).forEach(hh => {
+        if (!hh.intensity || !hh.volume) return;
+        if (normalizeVol(hh.volume).includes(normalizeVol(vt)) && !seen.has(hh.intensity)) {
+          seen.add(hh.intensity);
+          results.push({ type: "intensity", value: hh.intensity, label: hh.intensity, meta: hh.name, icon: hh.sport || "⚡", next: true });
         }
       });
+      if (results.length) return results.slice(0, 4);
     }
   }
-  if (ctx.nameKey && ctx.hasVolume && ctx.hasIntensity) {
+
+  // Volume + intensité déjà présents (avec ou sans nom reconnu — un exercice personnalisé compte
+  // tout autant) : propose des contraintes usuelles.
+  if (ctx.hasVolume && ctx.hasIntensity) {
     const commonConstraints: TokenSuggestion[] = [
       { type: "constraint", value: "RIR 2", label: "RIR 2", meta: "reps en réserve", icon: "🎯", next: true },
       { type: "constraint", value: "RPE 8", label: "RPE 8", meta: "effort perçu", icon: "💪", next: true },
       { type: "constraint", value: "à l'échec", label: "à l'échec", meta: "gestion échec", icon: "🛑", next: true },
       { type: "constraint", value: "par jambe", label: "par jambe", meta: "côté / alternance", icon: "↔️", next: true },
     ];
-    if (results.length === 0) results.push(...commonConstraints.slice(0, 2));
+    return commonConstraints.slice(0, 2);
   }
-  return results.slice(0, 4);
+
+  return [];
 }
 
 function completeNxM(n: number, partial: string, _ctx: ReturnType<typeof analyzeLineContext>): TokenSuggestion[] {
@@ -470,6 +494,54 @@ function completeAtIntensity(numPart: string, ctx: ReturnType<typeof analyzeLine
   return results.slice(0, 8);
 }
 
+/** Génère des valeurs "proches" d'une base numérique (± plusieurs paliers), triées par distance
+    croissante — utilisé en mode click pour proposer des alternatives voisines plutôt qu'une liste
+    filtrée par préfixe (qui n'a de sens qu'en train de taper) ou une liste fixe non triée. */
+function nearbyValues(base: number, steps: number[]): number[] {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  steps.forEach(s => {
+    [base - s, base + s].forEach(v => {
+      if (v <= 0) return;
+      const rounded = Math.round(v * 2) / 2;
+      if (seen.has(rounded)) return;
+      seen.add(rounded);
+      out.push(rounded);
+    });
+  });
+  return out.sort((a, b) => Math.abs(a - base) - Math.abs(b - base));
+}
+
+function formatKg(v: number): string {
+  return v % 1 === 0 ? String(v) : v.toFixed(1).replace(".", ",");
+}
+
+/** Click sur une charge kg (ex. "@ 80" ou "80kg") → propose des charges voisines, pas un filtre
+    par préfixe (qui n'aurait presque jamais de résultat sur une valeur déjà complète). */
+function completeAtIntensityNear(baseVal: number): TokenSuggestion[] {
+  const steps = baseVal >= 100 ? [5, 10, 15, 20] : baseVal >= 40 ? [2.5, 5, 7.5, 10] : [1, 2, 2.5, 5];
+  return nearbyValues(baseVal, steps).slice(0, 8).map(v => {
+    const str = formatKg(v);
+    return { type: "intensity" as const, value: `@ ${str}`, label: `@ ${str}`, meta: "charge proche", icon: "⚡" };
+  });
+}
+
+/** Click sur un NxM (ex. "3x3") → fait varier séries ET reps (pas seulement les reps comme en
+    mode frappe), alterné pour proposer les deux dimensions dès les premiers résultats. */
+function completeNxMNear(sets: number, reps: number): TokenSuggestion[] {
+  const seen = new Set<string>();
+  const results: TokenSuggestion[] = [];
+  const add = (s: number, r: number) => {
+    if (s < 1 || r < 1) return;
+    const val = `${s}x${r}`;
+    if (seen.has(val)) return;
+    seen.add(val);
+    results.push({ type: "volume", value: val, label: val, meta: "séries × reps", icon: "🔢" });
+  };
+  [1, -1, 2, -2].forEach(d => { add(sets, reps + d); add(sets + d, reps); });
+  return results.slice(0, 8);
+}
+
 function completeVolumeFromNumber(numStr: string, ctx: ReturnType<typeof analyzeLineContext>): TokenSuggestion[] {
   const seen = new Set<string>();
   const results: TokenSuggestion[] = [];
@@ -517,15 +589,31 @@ function completeRIR(token: string): TokenSuggestion[] {
     .map(r => ({ type: "constraint" as const, value: `RIR ${r}`, label: `RIR ${r}`, meta: "reps en réserve", icon: "🎯" }))
     .filter(r => r.value.toLowerCase() !== lower);
 }
+function sortByProximity<T extends { value: string }>(items: T[], target: number | null, extract: (v: string) => number | null): T[] {
+  if (target === null) return items;
+  return [...items].sort((a, b) => {
+    const na = extract(a.value), nb = extract(b.value);
+    if (na === null || nb === null) return 0;
+    return Math.abs(na - target) - Math.abs(nb - target);
+  });
+}
+
 function completeVitesse(token: string): TokenSuggestion[] {
   const speeds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0];
-  return speeds
+  const target = parseFloat(token.replace(",", ".")) || null;
+  const results = speeds
     .map(s => ({ type: "constraint" as const, value: `${s} m/s`, label: `${s} m/s`, meta: "vitesse barre", icon: "⚡" }))
     .filter(r => r.value.replace(/\s/g, "") !== token.replace(/\s/g, ""));
+  return sortByProximity(results, target, v => parseFloat(v));
+}
+function parseAllureSeconds(s: string): number | null {
+  const m = s.match(/(\d+):(\d+)/);
+  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
 }
 function completeAllure(token: string): TokenSuggestion[] {
   const allures = ["3:00/km", "3:15/km", "3:30/km", "3:45/km", "4:00/km", "4:15/km", "4:30/km", "4:45/km", "5:00/km", "5:30/km", "6:00/km", "6:30/km"];
-  return allures.map(a => ({ type: "constraint" as const, value: a, label: a, meta: "allure course", icon: "🏃" })).filter(r => r.value !== token);
+  const results = allures.map(a => ({ type: "constraint" as const, value: a, label: a, meta: "allure course", icon: "🏃" })).filter(r => r.value !== token);
+  return sortByProximity(results, parseAllureSeconds(token), parseAllureSeconds);
 }
 function completeZone(token: string): TokenSuggestion[] {
   const lower = token.toLowerCase().trim();
@@ -538,22 +626,38 @@ function completeZone(token: string): TokenSuggestion[] {
   ];
   return zones.map(z => ({ type: "constraint" as const, value: z.v, label: z.v, meta: z.m, icon: "❤️" })).filter(r => r.value.toLowerCase() !== lower);
 }
+const BPM_VALUES = [100, 110, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 200];
 function completeBPM(numPart: string): TokenSuggestion[] {
-  const bpms = [100, 110, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 200];
-  return bpms
+  return BPM_VALUES
     .filter(b => !numPart || String(b).startsWith(numPart))
     .map(b => ({ type: "constraint" as const, value: `${b} bpm`, label: `${b} bpm`, meta: "fréquence cardiaque", icon: "❤️" }));
+}
+/** Click sur un BPM complet — le filtre par préfixe de completeBPM ne renvoie presque jamais rien
+    sur une valeur déjà tapée en entier, donc on trie plutôt tout l'éventail par proximité. */
+function completeBPMNear(target: number): TokenSuggestion[] {
+  const results = BPM_VALUES
+    .filter(b => b !== target)
+    .map(b => ({ type: "constraint" as const, value: `${b} bpm`, label: `${b} bpm`, meta: "fréquence cardiaque", icon: "❤️" }));
+  return sortByProximity(results, target, v => parseInt(v, 10));
 }
 function completeVMA(token: string): TokenSuggestion[] {
   const lower = token.toLowerCase().trim();
   const vals = [70, 75, 80, 85, 90, 92, 95, 97, 100, 105, 110, 115];
-  return vals
+  const target = parseInt(token, 10) || null;
+  const results = vals
     .map(v => ({ type: "constraint" as const, value: `${v}% VMA`, label: `${v}% VMA`, meta: "vélocité max aérobie", icon: "🏃" }))
     .filter(r => r.value.toLowerCase() !== lower);
+  return sortByProximity(results, target, v => parseInt(v, 10));
+}
+function parseReposSeconds(s: string): number | null {
+  const m = s.match(/^(?:(\d+)')?(?:(\d+)")?$/);
+  if (!m || (!m[1] && !m[2])) return null;
+  return parseInt(m[1] || "0", 10) * 60 + parseInt(m[2] || "0", 10);
 }
 function completeRepos(token: string): TokenSuggestion[] {
   const repos = ["30\"", "45\"", "1'", "1'15\"", "1'30\"", "1'45\"", "2'", "2'30\"", "3'", "3'30\"", "4'", "5'", "récup active", "repos complet"];
-  return repos.map(r => ({ type: "constraint" as const, value: r, label: r, meta: "temps de repos", icon: "💤" })).filter(r => r.value !== token);
+  const results = repos.map(r => ({ type: "constraint" as const, value: r, label: r, meta: "temps de repos", icon: "💤" })).filter(r => r.value !== token);
+  return sortByProximity(results, parseReposSeconds(token), parseReposSeconds);
 }
 function completeTempo(token: string): TokenSuggestion[] {
   const tempos = ["3010", "3110", "3011", "2010", "2020", "3030", "4010", "4011", "1010", "2012", "3012", "explosif"];
@@ -615,7 +719,7 @@ function tryConstraintSuggestions(token: string, isClickMode: boolean): TokenSug
   if (/^(par\s|unilat|bilat|alter|super|[ab][12])/.test(lower)) return completeCote(token);
   if (isClickMode) {
     if (/^\d{4}$/.test(lower)) return completeTempo(token);
-    if (/^\d+\s*bpm$/i.test(lower)) return completeBPM("").filter(r => r.value.toLowerCase() !== lower);
+    if (/^\d+\s*bpm$/i.test(lower)) return completeBPMNear(parseInt(lower, 10));
     if (/^\d+%\s*vma$/i.test(lower)) return completeVMA(token);
     if (/^\d+'\d+"?$/i.test(lower) || /^\d+"$/.test(lower)) return completeRepos(token);
     if (/^(facile|modéré|dur|très dur|à fond|max|au feeling)$/i.test(lower)) return completeEffort(token);
@@ -672,29 +776,33 @@ export function generateSuggestionsClickMode(token: string, fullLine: string): T
   const ctx = analyzeLineContext(fullLine);
   const norm = (v: string) => v.toLowerCase().replace(/\s+/g, "").replace(/[×x]/g, "x");
 
-  const volNxM = token.match(/^(\d+)\s*[xX×]\s*(\d+.*)$/);
+  const volNxM = token.match(/^(\d+)\s*[xX×]\s*(\d+)/);
   if (volNxM) {
-    const n = parseInt(volNxM[1], 10);
-    const all = completeNxM(n, "", ctx);
-    return all.filter(r => norm(r.value) !== norm(token));
+    const sets = parseInt(volNxM[1], 10);
+    const reps = parseInt(volNxM[2], 10);
+    return completeNxMNear(sets, reps);
   }
 
+  if (/^@\s*\d/.test(token.trim())) {
+    const baseVal = parseFloat(token.replace("@", "").replace(",", ".").trim());
+    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal);
+  }
   if (/^@/.test(token.trim())) {
     const all = completeAtIntensity("", ctx);
     return all.filter(r => norm(r.value) !== norm(token));
   }
 
-  if (/^\d+\s*kg$/i.test(token)) {
-    const numStr = token.replace(/kg/i, "").trim();
-    const all = completeAtIntensity(numStr, ctx);
-    return all.filter(r => norm(r.value) !== norm(token));
+  if (/^\d/.test(token) && /kg$/i.test(token.trim())) {
+    const baseVal = parseFloat(token.replace(/kg/i, "").replace(",", ".").trim());
+    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal);
   }
 
   if (/^\d+\s*%$/.test(token)) {
     const n = parseInt(token, 10);
-    return [70, 75, 80, 82, 85, 87, 90, 92, 95, 97, 100, 102, 105]
+    const results = [70, 75, 80, 82, 85, 87, 90, 92, 95, 97, 100, 102, 105]
       .filter(v => v !== n)
       .map(v => ({ type: "intensity" as const, value: `${v}%`, label: `${v}%`, meta: "intensité relative", icon: "⚡" }));
+    return sortByProximity(results, n, v => parseInt(v, 10));
   }
 
   if (/^rpe/i.test(lower)) {

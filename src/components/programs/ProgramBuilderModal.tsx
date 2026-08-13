@@ -61,7 +61,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
       {exercises.length > 0 && (
         <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
-            <div key={i} onClick={e => e.stopPropagation()}>{renderExerciseLine(ex, i)}</div>
+            <div key={i}>{renderExerciseLine(ex, i)}</div>
           ) : (
             <div key={i} style={{
               padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
@@ -295,7 +295,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>
         <input
           value={name} onChange={e => setName(e.target.value)}
-          style={{ flex: 1, fontSize: 15, fontWeight: 800, color: "#171b1f", border: "none", outline: "none", background: "transparent", letterSpacing: "-0.02em", minWidth: 0 }}
+          style={{ flex: 1, fontSize: 16, fontWeight: 800, color: "#171b1f", border: "none", outline: "none", background: "transparent", letterSpacing: "-0.02em", minWidth: 0 }}
           placeholder="Nom du programme"
         />
       </div>

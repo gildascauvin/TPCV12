@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import type { SessionLike } from "@/components/calendar/DayColumn";
+import DiffGauge from "@/components/calendar/DiffGauge";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 
 type Mode = "deload" | "maintien" | "surcharge";
+const CHIP_VALUES = [2.5, 5, 10, 15, 20];
+const DAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 /* Positionnel (index de jour Lun=0..Dim=6) plutôt que basé sur des dates réelles — permet à ce
    même modal de reconduire une semaine réelle (/week, /coach/planning, dates concrètes) OU une
@@ -18,13 +21,16 @@ interface ReconduireModalProps {
   daySlots: ReconduireDaySlot[]; // 7 entrées, Lun → Dim, dans l'ordre
   title?: string;
   onClose: () => void;
-  onConfirm: (weeks: ReconduireOutputRow[][]) => Promise<void>; // weeks[w] = lignes à créer pour la (w+1)-ième semaine suivante
+  onConfirm: (weeks: ReconduireOutputRow[][]) => Promise<void>; // toujours 1 semaine (weeks[0])
+}
+
+function fmtNum(n: number): string {
+  return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
 }
 
 export default function ReconduireModal({ daySlots, title, onClose, onConfirm }: ReconduireModalProps) {
   const [mode, setMode] = useState<Mode>("maintien");
-  const [customPct, setCustomPct] = useState(5);
-  const [weeks, setWeeks] = useState(1);
+  const [customPct, setCustomPct] = useState(10);
   const [saving, setSaving] = useState(false);
 
   const currentPct = mode === "maintien" ? 0 : mode === "deload" ? -customPct : customPct;
@@ -32,26 +38,22 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
 
   async function handleConfirm() {
     setSaving(true);
-    const weeksOut: ReconduireOutputRow[][] = [];
-    for (let w = 0; w < weeks; w++) {
-      const rows: ReconduireOutputRow[] = [];
-      daySlots.forEach((slot, dayIndex) => {
-        slot.sessions.forEach(s => {
-          const notes = s.notes ? s.notes.split("\n").map(line => parseAndApply(line, currentPct)).join("\n") : s.notes ?? "";
-          const target_difficulty = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
-          rows.push({ dayIndex, name: s.name, notes, target_difficulty });
-        });
+    const rows: ReconduireOutputRow[] = [];
+    daySlots.forEach((slot, dayIndex) => {
+      slot.sessions.forEach(s => {
+        const notes = s.notes ? s.notes.split("\n").map(line => parseAndApply(line, currentPct)).join("\n") : s.notes ?? "";
+        const target_difficulty = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
+        rows.push({ dayIndex, name: s.name, notes, target_difficulty });
       });
-      weeksOut.push(rows);
-    }
-    await onConfirm(weeksOut);
+    });
+    await onConfirm([rows]);
     setSaving(false);
   }
 
   const modeCards: { key: Mode; icon: string; label: string; sub: string }[] = [
-    { key: "deload", icon: "📉", label: "Décharge", sub: `−${customPct}%` },
+    { key: "deload", icon: "📉", label: "Décharge", sub: `−${fmtNum(customPct)}%` },
     { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
-    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${customPct}%` },
+    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtNum(customPct)}%` },
   ];
 
   return (
@@ -71,19 +73,17 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
         borderRadius: 30, width: "100%", maxWidth: 480,
         maxHeight: "calc(100vh - 34px)", display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
-        <div style={{ padding: "28px 28px 0" }}>
-          <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", marginBottom: 4 }}>{title ?? "Reconduire la semaine"}</div>
-          <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.5, marginBottom: 20 }}>
-            Copie les {totalSessions} séance{totalSessions > 1 ? "s" : ""} de cette semaine sur les suivantes, avec un ajustement de charge optionnel.
-          </div>
+        <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>{title ?? "Reconduire la semaine"}</div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 28px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 0" }}>
           {/* Mode */}
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Mode de progression
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 16 }}>
             {modeCards.map(m => (
               <div
                 key={m.key}
@@ -102,31 +102,33 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
           </div>
 
           {mode !== "maintien" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-              <span style={{ fontSize: 13, color: "#62686e", flexShrink: 0 }}>{mode === "deload" ? "−" : "+"}</span>
-              <input type="range" min={1} max={30} value={customPct} onChange={e => setCustomPct(Number(e.target.value))} style={{ flex: 1, accentColor: "#d44000", cursor: "pointer" }} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#d44000", width: 40, textAlign: "right", flexShrink: 0 }}>{customPct}%</span>
-            </div>
+            <>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+                De combien {mode === "deload" ? "alléger" : "surcharger"} ?
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+                {CHIP_VALUES.map(v => {
+                  const active = v === customPct;
+                  const sign = mode === "deload" ? "−" : "+";
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => setCustomPct(v)}
+                      style={{
+                        padding: "9px 16px", borderRadius: 999, fontSize: 14, fontWeight: 800, cursor: "pointer",
+                        border: `1.5px solid ${active ? "#d44000" : "rgba(0,0,0,.12)"}`,
+                        background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "#fff",
+                        color: active ? "#fff" : "#62686e",
+                        boxShadow: active ? "0 4px 12px rgba(212,64,0,.22)" : "none",
+                      }}
+                    >
+                      {sign}{fmtNum(v)}%
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
-
-          {/* Nombre de semaines */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
-            Nombre de semaines
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-            <button
-              onClick={() => setWeeks(w => Math.max(1, w - 1))}
-              style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #eee", background: "#f8f8f8", fontSize: 18, color: "#666", cursor: "pointer" }}
-            >−</button>
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <span style={{ fontSize: 26, fontWeight: 800 }}>{weeks}</span>
-              <span style={{ fontSize: 13, color: "#8a8f94", marginLeft: 4 }}>semaine{weeks > 1 ? "s" : ""}</span>
-            </div>
-            <button
-              onClick={() => setWeeks(w => Math.min(8, w + 1))}
-              style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #eee", background: "#f8f8f8", fontSize: 18, color: "#666", cursor: "pointer" }}
-            >+</button>
-          </div>
 
           {/* Diff preview */}
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
@@ -138,51 +140,70 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
                 Aucune séance cette semaine à reconduire.
               </div>
             )}
-            {daySlots.flatMap(slot => slot.sessions).map(s => {
+            {daySlots.map((slot, dayIndex) => slot.sessions.map(s => {
               const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
               const baseDiff = s.target_difficulty ?? 6;
               const newDiff = adjustDifficulty(baseDiff, currentPct);
+              const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
+              const changedCount = rendered.filter(r => r.after !== r.line).length;
+
               return (
-                <div key={s.id} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{s.name}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: newDiff !== baseDiff ? "#d44000" : "#bbb", flexShrink: 0 }}>
-                      Difficulté {newDiff !== baseDiff ? (
-                        <>
-                          <span style={{ color: "#bbb", textDecoration: "line-through", fontWeight: 500 }}>{baseDiff}</span> → {newDiff}
-                        </>
-                      ) : baseDiff}
+                <div key={s.id} style={{
+                  marginBottom: 12, borderRadius: 14, overflow: "hidden",
+                  background: "#faf9f7", border: "1px solid rgba(0,0,0,.06)",
+                  borderLeft: "3px solid #d44000",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 12px 0" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94", background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 999, padding: "2px 8px" }}>
+                        {DAY_LABELS[dayIndex]}
+                      </span>
+                      {changedCount > 0 && (
+                        <span style={{ fontSize: 10, fontWeight: 800, color: "#d44000", background: "rgba(212,64,0,.10)", borderRadius: 999, padding: "2px 8px" }}>
+                          {changedCount} modif.
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {lines.length === 0 && <div style={{ fontSize: 12, color: "#bbb", fontStyle: "italic" }}>Aucun exercice</div>}
-                  {lines.map((line, i) => {
-                    const after = parseAndApply(line, currentPct);
-                    const changed = after !== line;
-                    return (
-                      <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 6, padding: "3px 0", fontSize: 12, borderBottom: i < lines.length - 1 ? "1px solid #f5f5f5" : "none" }}>
-                        {changed ? (
-                          <>
-                            <span style={{ color: "#aaa", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{line}</span>
-                            <span style={{ color: "#ddd", flexShrink: 0 }}>→</span>
-                            <span style={{ color: "#171b1f", fontWeight: 500, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{after}</span>
-                          </>
-                        ) : (
-                          <span style={{ color: "#bbb", fontStyle: "italic" }}>{line}</span>
-                        )}
-                      </div>
-                    );
-                  })}
+
+                  {newDiff !== baseDiff && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 0" }}>
+                      <span style={{ fontSize: 10, color: "#8a8f94", flexShrink: 0 }}>Difficulté</span>
+                      <div style={{ flex: 1 }}><DiffGauge value={baseDiff} height={6} /></div>
+                      <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>→</span>
+                      <div style={{ flex: 1 }}><DiffGauge value={newDiff} height={6} /></div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", flexShrink: 0, width: 14, textAlign: "right" }}>{newDiff}</span>
+                    </div>
+                  )}
+
+                  <div style={{ padding: "6px 12px 10px" }}>
+                    {rendered.length === 0 && <div style={{ fontSize: 12, color: "#bbb", fontStyle: "italic", padding: "4px 0" }}>Aucun exercice</div>}
+                    {rendered.map(({ line, after }, i) => {
+                      const changed = after !== line;
+                      return changed ? (
+                        <div key={i} style={{ padding: "5px 0", borderBottom: i < rendered.length - 1 ? "1px solid rgba(0,0,0,.05)" : "none" }}>
+                          <div style={{ fontSize: 11, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
+                        </div>
+                      ) : (
+                        <div key={i} style={{ fontSize: 12, color: "#aaa", fontStyle: "italic", padding: "5px 0", borderBottom: i < rendered.length - 1 ? "1px solid rgba(0,0,0,.05)" : "none", wordBreak: "break-word" }}>
+                          {line}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
 
         <div style={{
           flexShrink: 0, display: "flex", gap: 10, alignItems: "center",
-          padding: "16px 28px 20px", borderTop: "1px solid #f0f0f0", background: "#fff",
+          padding: "16px 24px 20px", borderTop: "1px solid #f0f0f0", background: "#fff",
         }}>
-          <span style={{ fontSize: 12, color: "#bbb", flex: 1 }}>{totalSessions * weeks} séance(s) créée(s)</span>
+          <span style={{ fontSize: 12, color: "#bbb", flex: 1 }}>{totalSessions} séance{totalSessions > 1 ? "s" : ""} concernée{totalSessions > 1 ? "s" : ""}</span>
           <button onClick={onClose} style={{ background: "#f5f5f5", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, cursor: "pointer", color: "#666" }}>
             Annuler
           </button>

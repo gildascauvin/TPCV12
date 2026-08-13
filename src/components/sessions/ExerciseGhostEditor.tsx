@@ -152,7 +152,8 @@ export default function ExerciseGhostEditor({ value, onChange }: Props) {
           onBlur={handleBlur}
           placeholder={"Commencez à taper un exercice…\nex: Back squat, Snatch, Clean…"}
           style={{
-            width: "100%", padding: "12px 14px", fontSize: 13, fontFamily: "inherit", lineHeight: 1.9,
+            // fontSize >= 16px : en dessous, iOS Safari zoome automatiquement la page au focus.
+            width: "100%", padding: "12px 14px", fontSize: 16, fontFamily: "inherit", lineHeight: 1.6,
             border: "none", outline: "none", resize: "none", minHeight: 160,
             background: "#fff", color: "#171b1f", boxSizing: "border-box" as const,
           }}
