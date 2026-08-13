@@ -247,7 +247,7 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
 
 // Exportés (2026-08-06) pour réutilisation par /api/sports/custom/route.ts — évite de dupliquer
 // le routage par mots-clés pour décider si un sport libre matche déjà un curriculum existant.
-export type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "autre";
+export type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "gendarmerie" | "sapeur_pompier" | "armee_tap" | "police_nationale" | "gign" | "escalade" | "autre";
 
 export function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
@@ -279,6 +279,21 @@ export function getSportCategory(sport: string): SportCategory {
   if (s.includes("saut")) return "athletisme_sauts";
   if (s.includes("sprint") || s.includes("athlé") || s.includes("piste") || s.includes("lancé")) return "sprint";
   if (s.includes("combat") || s.includes("art") || s.includes("mma") || s.includes("judo") || s.includes("boxe") || s.includes("karaté") || s.includes("lutte")) return "combat";
+  // Concours et tests physiques de sélection professionnelle — épreuves fixes et documentées
+  // (barèmes officiels), pas des sports au sens classique : "technique" = drill de l'épreuve
+  // elle-même (parcours, natation contrainte...), "volume"/"intensite" = PPG complémentaire.
+  // Vérifié avant "police"/"pompier" ne collisionnent avec rien d'existant (aucun mot-clé déjà
+  // présent plus haut ne les contient).
+  if (s.includes("gendarmerie")) return "gendarmerie";
+  if (s.includes("pompier") || s.includes("sapeur")) return "sapeur_pompier";
+  if (s.includes("armée") || s.includes("armee") || s.includes("tap militaire")) return "armee_tap";
+  if (s.includes("police")) return "police_nationale";
+  if (s.includes("gign")) return "gign";
+  // Escalade : contenu réel (technique/doigts/limite/continuité, vocabulaire de coaching grimpe
+  // établi), ajouté comme catégorie dédiée plutôt que laissée sur "autre" — le générateur "autre"+
+  // Claude (customExercises) dépend d'un appel IA en prod uniquement (ANTHROPIC_API_KEY absente en
+  // local), impossible à utiliser pour construire un programme de bibliothèque publique hors prod.
+  if (s.includes("escalade") || s.includes("grimpe") || s.includes("bloc")) return "escalade";
   // Hyrox : format de course spécifique (8km course + 8 stations) — vérifié AVANT le générique
   // "fitness" (le sport-field "Fitness/Hyrox" contient les deux mots-clés).
   if (s.includes("hyrox")) return "hyrox";
@@ -640,6 +655,190 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Test de détente verticale",
       "Match de préparation",
       "Yo-Yo test ou équivalent",
+    ],
+  },
+
+  gendarmerie: {
+    technique: [
+      "Parcours Killy technique : franchissement + coordination — 4 passages",
+      "Ateliers d'habileté motrice : équilibre + précision — 20 min",
+      "Course d'orientation courte + prise de décision rapide — 15 min",
+    ],
+    volume: [
+      "Tractions pronation — 5×max (récup 2 min)",
+      "Tirage poulie haute — 4×10",
+      "Circuit PPG : pompes + squats + burpees — 4 tours",
+      "Gainage complet — 3×45s",
+    ],
+    intensite: [
+      "Luc Léger : paliers progressifs jusqu'à épuisement",
+      "Fractionné VMA — 10×30s effort / 30s récup",
+      "Course navette 20m — 8×30s effort",
+    ],
+    recuperation: [
+      "Mobilité générale — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Respiration et relaxation — 10 min",
+    ],
+    test: [
+      "Simulation SOG : Luc Léger + tractions + parcours Killy enchaînés",
+      "Test Luc Léger : palier atteint",
+      "Tractions : test max en 1 min",
+      "Bilan chronométré parcours Killy",
+    ],
+  },
+
+  sapeur_pompier: {
+    technique: [
+      "Natation crawl technique — 8×50m (récup 30s)",
+      "Éducatifs natation : battements + coulée — 15 min",
+      "Natation avec effort soutenu — 6×50m (récup 45s)",
+    ],
+    volume: [
+      "Port de charge : sac lesté 20kg — 5×30m",
+      "Tractions + pompes — 4×max",
+      "Gainage complet — 3×45s",
+    ],
+    intensite: [
+      "Parcours simulation intervention : franchissement + portage — 4 passages",
+      "Portage mannequin/partenaire — 5×20m",
+      "Luc Léger : paliers progressifs",
+      "Fractionné course — 8×400m (récup 90s)",
+    ],
+    recuperation: [
+      "Mobilité générale — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Respiration et relaxation — 10 min",
+    ],
+    test: [
+      "Simulation complète : natation 50m + PPA + Luc Léger",
+      "Test natation 50m chronométré",
+      "Test PPA chronométré",
+      "Luc Léger : palier atteint",
+    ],
+  },
+
+  armee_tap: {
+    technique: [
+      "Squats rythmés technique — 3×1 min",
+      "Lancer médecine-ball 3kg assis technique — 4×8",
+      "Gainage technique : planche + variantes — 3×40s",
+    ],
+    volume: [
+      "Tractions pronation — 5×max (récup 2 min)",
+      "Tirage poulie haute — 4×10",
+      "Abdos gainage 2 min — 3 séries",
+      "Circuit PPG complet : squats + pompes + burpees — 4 tours",
+    ],
+    intensite: [
+      "Luc Léger : paliers progressifs",
+      "Fractionné VMA — 10×30s effort / 30s récup",
+    ],
+    recuperation: [
+      "Mobilité générale — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Natation base tranquille — 15 min",
+    ],
+    test: [
+      "Simulation TAP : les 6 épreuves enchaînées",
+      "Test Luc Léger : palier atteint",
+      "Test tractions/tirage poulie : max en 1 série",
+      "Test lancer médecine-ball 3kg : distance",
+    ],
+  },
+
+  police_nationale: {
+    technique: [
+      "Parcours PHM technique : ateliers enchaînés — 3 passages",
+      "Franchissements + équilibre — 15 min",
+      "Port de charge 25-30kg — 5×20m",
+    ],
+    volume: [
+      "Port de charge lourd — 5×20m",
+      "Tractions + pompes — 4×max",
+      "Circuit PPG : squats + fentes + burpees — 4 tours",
+      "Gainage complet — 3×45s",
+    ],
+    intensite: [
+      "TECR : course progressive par paliers",
+      "Fractionné VMA — 8×400m (récup 90s)",
+    ],
+    recuperation: [
+      "Mobilité générale — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Respiration et relaxation — 10 min",
+    ],
+    test: [
+      "Simulation PHM + TECR enchaînés",
+      "Test PHM chronométré",
+      "Test TECR : palier atteint",
+      "Test port de charge chronométré",
+    ],
+  },
+
+  gign: {
+    technique: [
+      "Parcours d'obstacles technique : franchissements enchaînés — 4 passages",
+      "Corde à bras 7m — 5×montées",
+      "Reptation + franchissement bas — 15 min",
+    ],
+    volume: [
+      "Tractions max en 2 min — 3 séries",
+      "Pompes max en 2 min — 3 séries",
+      "Gainage complet — 3×50s",
+    ],
+    intensite: [
+      "Natation apnée dynamique — 8×25m (récup 45s)",
+      "Natation enchaînée sans pause — 400m continu",
+      "Luc Léger : paliers élevés",
+      "Fractionné VMA — 10×30s effort / 30s récup",
+    ],
+    recuperation: [
+      "Mobilité générale — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Respiration et relaxation — 10 min",
+    ],
+    test: [
+      "Simulation sélection : parcours + natation contrainte + Luc Léger",
+      "Test natation 100m chronométré",
+      "Test tractions/pompes max en 2 min",
+      "Bilan chronométré parcours d'obstacles",
+    ],
+  },
+
+  escalade: {
+    technique: [
+      "Travail gestuel : mouvements techniques sur mur — 45 min",
+      "Répétitions de blocs faciles, focus posture — 6 blocs",
+      "Travail de placement de pieds — 20 min",
+    ],
+    volume: [
+      "Suspension à la poutre — 6×10s (récup 3 min)",
+      "Travail de préhension : réglettes + bacs — 4 séries",
+      "Continuité sur voies faciles — 45 min",
+      "Gainage spécifique grimpe — 3×40s",
+    ],
+    intensite: [
+      "Blocs au niveau limite — 6 tentatives (récup 3-5 min)",
+      "Voie à vue difficulté élevée — 3 essais",
+      "4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
+    ],
+    recuperation: [
+      "Mobilité épaules et doigts — 15 min",
+      "Étirements avant-bras et dos — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage avant-bras — 10 min",
+    ],
+    test: [
+      "Test de force de préhension : suspension max",
+      "Bloc test : niveau limite chronométré",
+      "Voie test à vue : niveau atteint",
+      "Bilan technique vidéo",
     ],
   },
 
@@ -1762,6 +1961,170 @@ function selectCombat(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => COMBAT_PRIORITY[i % COMBAT_PRIORITY.length]);
 }
 
+// ---- Concours et tests physiques de sélection professionnelle (Gendarmerie/Pompier/Armée/Police/
+// GIGN) : épreuves fixes et documentées (barèmes officiels réels, sourcés), pas des sports au sens
+// classique. Chaque curriculum suit le même principe que "Autre" demandé explicitement par
+// Gildas — ratio technique/préparation physique équilibré selon le nombre de jours — mais avec un
+// contenu 100% nommé et spécifique à l'épreuve plutôt qu'une discipline générique choisie par
+// l'IA : "technique" = drill de l'épreuve elle-même (parcours, natation contrainte, gestuelle
+// notée), "volume"/"intensite" = préparation physique générale (PPG, VMA, force). Le jour de test
+// forcé de fin de semaine MRV (mécanisme universel, cf. plus haut) utilise la banque EXERCISES.test
+// de chaque catégorie — une simulation réaliste de l'épreuve complète, pas un supplément générique.
+
+// Gendarmerie (sous-officiers, SOG) : Luc Léger → tractions (H) / tirage poulie (F) → parcours
+// Killy (habileté motrice), coefficient 4, barème éliminatoire réel (<7/20).
+const GEND_KILLY: Archetype = { name: "Parcours Killy", type: "technique", exercises: [
+  "Parcours Killy technique : franchissement + coordination — 4 passages",
+  "Ateliers d'habileté motrice : équilibre + précision — 20 min",
+  "Course d'orientation courte + prise de décision rapide — 15 min",
+]};
+const GEND_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
+  "Luc Léger : paliers progressifs jusqu'à épuisement",
+  "Fractionné VMA — 10×30s effort / 30s récup",
+  "Course navette 20m — 8×30s effort",
+]};
+const GEND_TRACTIONS: Archetype = { name: "Tractions & Gainage", type: "volume", exercises: [
+  "Tractions pronation — 5×max (récup 2 min)",
+  "Tirage poulie haute — 4×10",
+  "Gainage complet — 3×45s",
+]};
+const GEND_PPG: Archetype = { name: "PPG générale", type: "volume", exercises: [
+  "Circuit PPG : pompes + squats + burpees — 4 tours",
+  "Fentes marchées — 3×12",
+  "Gainage latéral — 3×30s par côté",
+]};
+const GENDARMERIE_PRIORITY: Archetype[] = [GEND_KILLY, GEND_LUC_LEGER, GEND_TRACTIONS, GEND_PPG];
+function selectGendarmerie(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => GENDARMERIE_PRIORITY[i % GENDARMERIE_PRIORITY.length]);
+}
+
+// Sapeur-pompier professionnel : natation 50m (pass/fail) → PPA (Parcours Professionnel Adapté,
+// simulation d'intervention avec franchissement/portage) → Luc Léger.
+const POMPIER_NATATION: Archetype = { name: "Natation", type: "technique", exercises: [
+  "Natation crawl technique — 8×50m (récup 30s)",
+  "Éducatifs natation : battements + coulée — 15 min",
+  "Natation avec effort soutenu — 6×50m (récup 45s)",
+]};
+const POMPIER_PPA: Archetype = { name: "PPA — Parcours Intervention", type: "intensite", exercises: [
+  "Parcours simulation intervention : franchissement + portage — 4 passages",
+  "Portage mannequin/partenaire — 5×20m",
+]};
+const POMPIER_PORT_CHARGE: Archetype = { name: "Port de charge", type: "volume", exercises: [
+  "Port de charge : sac lesté 20kg — 5×30m",
+  "Tractions + pompes — 4×max",
+  "Gainage complet — 3×45s",
+]};
+const POMPIER_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
+  "Luc Léger : paliers progressifs",
+  "Fractionné course — 8×400m (récup 90s)",
+]};
+const SAPEUR_POMPIER_PRIORITY: Archetype[] = [POMPIER_NATATION, POMPIER_PPA, POMPIER_PORT_CHARGE, POMPIER_LUC_LEGER];
+function selectSapeurPompier(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => SAPEUR_POMPIER_PRIORITY[i % SAPEUR_POMPIER_PRIORITY.length]);
+}
+
+// Armée de Terre (TAP — Tests d'Aptitude Physique) : Luc Léger, tractions (H) / tirage poulie (F),
+// squats 1min, lancer médecine-ball 3kg assis, gainage/abdos 2min, natation base — 6 épreuves,
+// chacune notée sur son propre barème.
+const TAP_DRILLS: Archetype = { name: "Squats & Lancer — Drills", type: "technique", exercises: [
+  "Squats rythmés technique — 3×1 min",
+  "Lancer médecine-ball 3kg assis technique — 4×8",
+  "Gainage technique : planche + variantes — 3×40s",
+]};
+const TAP_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
+  "Luc Léger : paliers progressifs",
+  "Fractionné VMA — 10×30s effort / 30s récup",
+]};
+const TAP_TRACTIONS: Archetype = { name: "Tractions & Gainage", type: "volume", exercises: [
+  "Tractions pronation — 5×max (récup 2 min)",
+  "Tirage poulie haute — 4×10",
+  "Abdos gainage 2 min — 3 séries",
+]};
+const TAP_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises: [
+  "Circuit PPG complet : squats + pompes + burpees — 4 tours",
+  "Natation base tranquille — 15 min",
+]};
+const ARMEE_TAP_PRIORITY: Archetype[] = [TAP_DRILLS, TAP_LUC_LEGER, TAP_TRACTIONS, TAP_CIRCUIT];
+function selectArmeeTap(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => ARMEE_TAP_PRIORITY[i % ARMEE_TAP_PRIORITY.length]);
+}
+
+// Police nationale (gardien de la paix) : PHM (Parcours Habileté Motrice, 10 ateliers incl. port
+// de charge 25-40kg/20m) + TECR (endurance, coefficient 4).
+const POLICE_PHM: Archetype = { name: "PHM — Parcours Habileté", type: "technique", exercises: [
+  "Parcours PHM technique : ateliers enchaînés — 3 passages",
+  "Franchissements + équilibre — 15 min",
+  "Port de charge 25-30kg — 5×20m",
+]};
+const POLICE_TECR: Archetype = { name: "TECR — Endurance", type: "intensite", exercises: [
+  "TECR : course progressive par paliers",
+  "Fractionné VMA — 8×400m (récup 90s)",
+]};
+const POLICE_FORCE: Archetype = { name: "Port de charge & Force", type: "volume", exercises: [
+  "Port de charge lourd — 5×20m",
+  "Tractions + pompes — 4×max",
+  "Gainage complet — 3×45s",
+]};
+const POLICE_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises: [
+  "Circuit PPG : squats + fentes + burpees — 4 tours",
+]};
+const POLICE_NATIONALE_PRIORITY: Archetype[] = [POLICE_PHM, POLICE_TECR, POLICE_FORCE, POLICE_CIRCUIT];
+function selectPoliceNationale(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => POLICE_NATIONALE_PRIORITY[i % POLICE_NATIONALE_PRIORITY.length]);
+}
+
+// GIGN : Luc Léger, parcours d'obstacles, natation contrainte (plongeon 10m + 100m chrono + 50m
+// apnée mains/pieds liés), pompes/abdos/tractions max en 2min, corde à bras 7m — sélection extrême,
+// contenu volontairement exigeant.
+const GIGN_OBSTACLES: Archetype = { name: "Parcours d'obstacles", type: "technique", exercises: [
+  "Parcours d'obstacles technique : franchissements enchaînés — 4 passages",
+  "Corde à bras 7m — 5×montées",
+  "Reptation + franchissement bas — 15 min",
+]};
+const GIGN_NATATION: Archetype = { name: "Natation contrainte", type: "intensite", exercises: [
+  "Natation apnée dynamique — 8×25m (récup 45s)",
+  "Natation enchaînée sans pause — 400m continu",
+  "Plongeon + nage immédiate — 6 répétitions",
+]};
+const GIGN_FORCE_MAX: Archetype = { name: "Force max", type: "volume", exercises: [
+  "Tractions max en 2 min — 3 séries",
+  "Pompes max en 2 min — 3 séries",
+  "Gainage complet — 3×50s",
+]};
+const GIGN_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
+  "Luc Léger : paliers élevés",
+  "Fractionné VMA — 10×30s effort / 30s récup",
+]};
+const GIGN_PRIORITY: Archetype[] = [GIGN_OBSTACLES, GIGN_NATATION, GIGN_FORCE_MAX, GIGN_LUC_LEGER];
+function selectGign(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => GIGN_PRIORITY[i % GIGN_PRIORITY.length]);
+}
+
+// ---- Escalade : contenu dédié plutôt que "autre" générique — technique (gestuelle) → limite
+// (blocs/voies au niveau max) → doigts (préhension, poutre) → continuité (endurance spécifique).
+const ESCALADE_TECHNIQUE: Archetype = { name: "Technique gestuelle", type: "technique", exercises: [
+  "Travail gestuel : mouvements techniques sur mur — 45 min",
+  "Répétitions de blocs faciles, focus posture — 6 blocs",
+  "Travail de placement de pieds — 20 min",
+]};
+const ESCALADE_LIMITE: Archetype = { name: "Blocs limite", type: "intensite", exercises: [
+  "Blocs au niveau limite — 6 tentatives (récup 3-5 min)",
+  "Voie à vue difficulté élevée — 3 essais",
+]};
+const ESCALADE_DOIGTS: Archetype = { name: "Doigts & préhension", type: "volume", exercises: [
+  "Suspension à la poutre — 6×10s (récup 3 min)",
+  "Travail de préhension : réglettes + bacs — 4 séries",
+  "Gainage spécifique grimpe — 3×40s",
+]};
+const ESCALADE_CONTINUITE: Archetype = { name: "Continuité", type: "volume", exercises: [
+  "Continuité sur voies faciles — 45 min",
+  "4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
+]};
+const ESCALADE_PRIORITY: Archetype[] = [ESCALADE_TECHNIQUE, ESCALADE_LIMITE, ESCALADE_DOIGTS, ESCALADE_CONTINUITE];
+function selectEscalade(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => ESCALADE_PRIORITY[i % ESCALADE_PRIORITY.length]);
+}
+
 // ---- Hyrox : distinct de "fitness"/CrossFit générique — format de course fixe (8km course + 8
 // stations : SkiErg, sled push/pull, burpee broad jumps, row, farmers carry, sandbag lunges,
 // wall balls). 4 jours demandés explicitement : 2 cardio (course + machines, pour varier les
@@ -2110,6 +2473,12 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
   fitness: selectFitness,
   hyrox: selectHyrox,
   combat: selectCombat,
+  gendarmerie: selectGendarmerie,
+  sapeur_pompier: selectSapeurPompier,
+  armee_tap: selectArmeeTap,
+  police_nationale: selectPoliceNationale,
+  gign: selectGign,
+  escalade: selectEscalade,
   athletisme_sauts: selectAthletismeSauts,
   aviron: selectAviron,
   gymnastique: selectGymnastique,
