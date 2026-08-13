@@ -8,7 +8,7 @@ export type AutoregDir = "low" | "high";
 export interface AutoregSuggestion {
   dir: AutoregDir;
   reco: number; // % signé pré-sélectionné, ex. -15 ou 10
-  icon: string; // 💛 ou 💚
+  icon: string; // ⚠️/🚨 (alléger, gradué sur le seul palier existant : wellness<40 → 🚨) ou 🚀 (surcharger)
 }
 
 /* ALERTE BASSE : wellness < 60 ET difficulté prévue ≥ 7 → alléger (reco -15%, ou -20% si wellness < 40)
@@ -17,12 +17,22 @@ export interface AutoregSuggestion {
 export function computeAutoregSuggestion(wellness: number | null, plannedDifficulty: number | null): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
   if (wellness < 60 && plannedDifficulty >= 7) {
-    return { dir: "low", reco: wellness < 40 ? -20 : -15, icon: "💛" };
+    // Gradation sur le seul palier réel de l'heuristique (le % pré-rempli) : -15% = alerte modérée
+    // (⚠️), -20% = cas critique (🚨) — pas de 3e palier inventé, contrairement à l'itération précédente.
+    return { dir: "low", reco: wellness < 40 ? -20 : -15, icon: wellness < 40 ? "🚨" : "⚠️" };
   }
   if (wellness >= 80 && plannedDifficulty <= 4) {
-    return { dir: "high", reco: 10, icon: "💚" };
+    return { dir: "high", reco: 10, icon: "🚀" };
   }
   return null;
+}
+
+/* Reprend les paliers déjà établis ailleurs dans l'app (DiffGauge, loadRule.ts : hard≥8/moderate≥5/
+   easy<5) — jamais de nombre brut dans les textes d'autorégulation, uniquement ce vocabulaire. */
+export function qualitativeDifficulty(diff: number): "légère" | "modérée" | "dure" {
+  if (diff >= 8) return "dure";
+  if (diff >= 5) return "modérée";
+  return "légère";
 }
 
 export const AUTOREG_CHIPS: Record<AutoregDir, number[]> = {
@@ -39,14 +49,15 @@ export function formatAutoregPct(v: number): string {
 /* subject omis = à la 2e personne (Aujourd'hui, sportif sur sa propre séance) ; fourni = à la 3e
    personne (Coach Control / Planning coach, prénom du sportif). */
 export function autoregAdvice(dir: AutoregDir, plannedDifficulty: number, subject?: string): string {
+  const qualif = qualitativeDifficulty(plannedDifficulty);
   if (dir === "low") {
     return subject
-      ? `Wellness bas — la séance à ${plannedDifficulty}/10 prévue est trop élevée pour la récupération de ${subject}.`
-      : `Wellness bas — la séance à ${plannedDifficulty}/10 prévue est trop élevée pour ta récupération actuelle.`;
+      ? `Wellness bas — la séance ${qualif} prévue est trop élevée pour la récupération de ${subject}.`
+      : `Wellness bas — la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
   }
   return subject
-    ? `Forme optimale — la séance à ${plannedDifficulty}/10 prévue est légère pour ${subject}. De la marge pour plus.`
-    : `Forme optimale — la séance à ${plannedDifficulty}/10 prévue est légère. Tu as la marge pour plus.`;
+    ? `Forme optimale — la séance ${qualif} prévue laisse de la marge pour ${subject}.`
+    : `Forme optimale — la séance ${qualif} prévue laisse de la marge. Tu peux pousser plus.`;
 }
 
 export function autoregTitle(dir: AutoregDir): string {

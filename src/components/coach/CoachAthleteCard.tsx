@@ -216,7 +216,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         ) : (
           <>
             <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", flex: 1, minWidth: 0 }}>
-              {isPriority ? "💛" : "✅"} {decision}
+              {isPriority ? "⚠️" : "👌"} {decision}
             </div>
             <button
               data-tour={tourId ? "decider-btn" : undefined}
