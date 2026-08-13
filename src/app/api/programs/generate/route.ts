@@ -1993,7 +1993,13 @@ const GEND_PPG: Archetype = { name: "PPG générale", type: "volume", exercises:
   "Fentes marchées — 3×12",
   "Gainage latéral — 3×30s par côté",
 ]};
-const GENDARMERIE_PRIORITY: Archetype[] = [GEND_KILLY, GEND_LUC_LEGER, GEND_TRACTIONS, GEND_PPG];
+// Intensité en position 0 (pas la technique) : la Phase A2 universelle écrase systématiquement le
+// 1er jour d'entraînement de la semaine s'il est "facile" (bucket technique/récup), lui faisant
+// perdre son nom d'archétype — mettre l'épreuve-signature (Killy) en position 0 la ferait donc
+// disparaître de l'affichage à chaque semaine, quel que soit le jour calendaire choisi. Vérifié
+// contre le serveur dev réel : ce seul réordonnancement suffit à préserver Killy dans la semaine
+// (voir même principe appliqué aux 4 autres catégories concours + escalade ci-dessous).
+const GENDARMERIE_PRIORITY: Archetype[] = [GEND_LUC_LEGER, GEND_KILLY, GEND_TRACTIONS, GEND_PPG];
 function selectGendarmerie(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => GENDARMERIE_PRIORITY[i % GENDARMERIE_PRIORITY.length]);
 }
@@ -2018,7 +2024,7 @@ const POMPIER_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", ex
   "Luc Léger : paliers progressifs",
   "Fractionné course — 8×400m (récup 90s)",
 ]};
-const SAPEUR_POMPIER_PRIORITY: Archetype[] = [POMPIER_NATATION, POMPIER_PPA, POMPIER_PORT_CHARGE, POMPIER_LUC_LEGER];
+const SAPEUR_POMPIER_PRIORITY: Archetype[] = [POMPIER_PPA, POMPIER_NATATION, POMPIER_PORT_CHARGE, POMPIER_LUC_LEGER];
 function selectSapeurPompier(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => SAPEUR_POMPIER_PRIORITY[i % SAPEUR_POMPIER_PRIORITY.length]);
 }
@@ -2044,7 +2050,7 @@ const TAP_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises:
   "Circuit PPG complet : squats + pompes + burpees — 4 tours",
   "Natation base tranquille — 15 min",
 ]};
-const ARMEE_TAP_PRIORITY: Archetype[] = [TAP_DRILLS, TAP_LUC_LEGER, TAP_TRACTIONS, TAP_CIRCUIT];
+const ARMEE_TAP_PRIORITY: Archetype[] = [TAP_LUC_LEGER, TAP_DRILLS, TAP_TRACTIONS, TAP_CIRCUIT];
 function selectArmeeTap(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => ARMEE_TAP_PRIORITY[i % ARMEE_TAP_PRIORITY.length]);
 }
@@ -2068,7 +2074,7 @@ const POLICE_FORCE: Archetype = { name: "Port de charge & Force", type: "volume"
 const POLICE_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises: [
   "Circuit PPG : squats + fentes + burpees — 4 tours",
 ]};
-const POLICE_NATIONALE_PRIORITY: Archetype[] = [POLICE_PHM, POLICE_TECR, POLICE_FORCE, POLICE_CIRCUIT];
+const POLICE_NATIONALE_PRIORITY: Archetype[] = [POLICE_TECR, POLICE_PHM, POLICE_FORCE, POLICE_CIRCUIT];
 function selectPoliceNationale(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => POLICE_NATIONALE_PRIORITY[i % POLICE_NATIONALE_PRIORITY.length]);
 }
@@ -2095,7 +2101,7 @@ const GIGN_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exerc
   "Luc Léger : paliers élevés",
   "Fractionné VMA — 10×30s effort / 30s récup",
 ]};
-const GIGN_PRIORITY: Archetype[] = [GIGN_OBSTACLES, GIGN_NATATION, GIGN_FORCE_MAX, GIGN_LUC_LEGER];
+const GIGN_PRIORITY: Archetype[] = [GIGN_NATATION, GIGN_OBSTACLES, GIGN_FORCE_MAX, GIGN_LUC_LEGER];
 function selectGign(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => GIGN_PRIORITY[i % GIGN_PRIORITY.length]);
 }
@@ -2120,7 +2126,7 @@ const ESCALADE_CONTINUITE: Archetype = { name: "Continuité", type: "volume", ex
   "Continuité sur voies faciles — 45 min",
   "4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
 ]};
-const ESCALADE_PRIORITY: Archetype[] = [ESCALADE_TECHNIQUE, ESCALADE_LIMITE, ESCALADE_DOIGTS, ESCALADE_CONTINUITE];
+const ESCALADE_PRIORITY: Archetype[] = [ESCALADE_LIMITE, ESCALADE_TECHNIQUE, ESCALADE_DOIGTS, ESCALADE_CONTINUITE];
 function selectEscalade(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => ESCALADE_PRIORITY[i % ESCALADE_PRIORITY.length]);
 }
