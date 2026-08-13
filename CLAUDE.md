@@ -1225,3 +1225,33 @@ CTA intégré dans `ProgramBanner.tsx` (état "Aucun programme actif", bouton se
 **Non testé par Claude** : le drag & drop réel (glisser une séance/un exercice), la confirmation effective d'un Reconduire (écriture DB), et l'acceptation d'une suggestion d'autocomplete jusqu'à sauvegarde — seuls `tsc`/`build`/lecture de code/clics de navigation en lecture seule ont été faits. Gildas doit valider ces parcours mutants lui-même après déploiement.
 
 Déployé en prod le 2026-08-13 (commit `5c20f3d` puis `68e9b57`, push direct sur `main`).
+
+## Frise "Enregistre/Cible/Progresse" — illustrations reelles + preuve video (2026-08-13)
+
+Point de depart : POC pricing itere dans un artifact Claude (`9fc57bd4-...`, suite du retrait de l'essai gratuit du 2026-08-07) — rendre la frise `paywall_priming` (`PricingPriming.tsx`, partagee onboarding + gating in-app) plus concrete en montrant de vrais bouts d'app sous chaque etape plutot que du texte seul, et ajouter de la preuve sociale video. Nombreuses iterations sur le rendu reel (Gildas testait en continu sur `next dev` local) avant de converger sur l'etat ci-dessous.
+
+### `src/components/paywall/FrisePreviews.tsx` — illustrations reelles, pas des maquettes
+3 previews, donnees illustratives statiques (aucun historique n'existe a ce stade du funnel) mais construites avec les vraies fonctions/composants de l'app, jamais du texte invente :
+- **Enregistre** : 3 cartes seance cote a cote, sport-aware (`SPORT_SESSION_PREVIEW`, table couvrant les 8 `SPORT_CATEGORIES` reelles + repli generique) — nom/jauge/exercices seulement, pas de header jour/ring ni de boutons d'action (retires pour rester compact ; une version anterieure avec `DayColumn` complet — header jour/ring/boutons Terminer/Dupliquer — a ete simplifiee apres plusieurs allers-retours).
+- **Cible** : sportif → carte wellness dark (ring + zone + comportements + `getRecoveryAdvice()`) + reco decharge/surcharge via le vrai `AutoregButtons`/`computeAutoregSuggestion` (memes fonctions que `/today`). Coach → carte compacte maison (pas le vrai `CoachCard` — son prenom fixe a 22px en dur depasse la contrainte typo ci-dessous), meme mecanique `AutoregButtons`, prenom reel de l'utilisateur (`name`, repli "Toi").
+- **Progresse** : insight croise charge/recuperation/RPE (`classifyTrend`/`describeTrend`/`trendSeverity`/`trendActionWord` de `trainingLoad.ts`, memes fonctions que `/conseils`) + le vrai `ZoneSparkline`, compacte (118px au lieu de 168, labels de jour masques). Cas demo choisi delibitement positif (`supercompensation`, vert "Augmenter") plutot que le premier essai (`accumulation`, rouge "Reduire") — la frise ne doit pas finir sur un signal negatif juste avant le prix. Courbe ACWR construite pour raconter une histoire coherente : 2j en surcharge → 1j optimal → 2j recup (correction) → 2j optimal (stabilise).
+- **Toute la typographie reste < 13px** (le sous-texte de la frise) — `AutoregButtons` (13px en interne, composant partage avec `/today`/Coach Control, jamais modifie pour ca) enveloppe en `zoom:0.85` plutot que retouche.
+- **Non cliquable pour les 2 roles** (`pointerEvents:none`) — decision finale apres un aller-retour (rendu cliquable un temps, revert explicite demande par Gildas) : un ecran de paiement n'est pas le bon endroit pour une vraie interaction. Badge "Apercu" (coin haut-droit, fond sombre semi-transparent, un seul point d'implementation dans `PricingPriming.tsx` plutot que duplique par preview) ajoute apres coup pour eviter qu'un bouton a l'air cliquable mais inerte ne lise comme un bug.
+
+### 2 props additifs sur des composants reels partages (zero impact sur leurs usages existants)
+- **`ZoneSparkline.tsx`** : `hideDayLabels?`/`height?` (defaut `false`/`168`, la valeur reelle de `/conseils`) — tout le positionnement interne est deja en % de la hauteur, se redimensionne proprement.
+- **`PricingPriming.tsx`** : nouveau prop `name?` sur `PricingPrimingProps`/`PricingPrimingContent`, threade depuis `OnboardingFlow.tsx` (state `name`, deja collecte a l'etape `account`) — absent cote `PrimingJourneyModal.tsx` (gating in-app), repli "Toi".
+- **Ecart de scope corrige en cours de route** : `CoachAthleteCard.tsx` (le vrai `CoachCard` de Coach Control) a ete temporairement modifie (`initialPreviewPct`/`hideSessionCard`) puis entierement revert dans la meme session une fois la contrainte typo <13px identifiee comme incompatible avec ses tailles fixes — fichier revenu intact, aucune trace dans le code final.
+
+### Preuve video — `src/components/paywall/interviews.ts` + `public/testimonials/`
+15 captures d'interview ThePerfCast (fournies par Gildas) compressees (~30 Ko chacune, `sips -Z 480 -s format jpeg`) et stockees dans le repo. Persona(s) par personne deduite du prefixe "Sportif:" que Gildas a ajoute aux noms de fichiers sources (certains coachs sont aussi pratiquants haut niveau dans leur discipline, donc tagges sur les 2 roles) — 6 vignettes dans le carousel sportif, 14 dans le carousel coach (tous sauf le seul pur athlete du lot, Corentin Lecomte). Toutes les vignettes possibles par persona affichees (pas de cap a 3, sur demande explicite), cards 240px (agrandies depuis un premier essai a 150px).
+
+### Autres ajustements de densite (retours successifs sur le rendu reel)
+Padding vertical entre les 3 etapes de la frise remonte (16px → 26px, "un peu dense, ca respirera"). Ordre de la preuve sociale reagence : prix → frise (mecanisme) → preuve groupee (videos + temoignage + bande "+600") → FAQ — coherent avec un principe deja en place ailleurs dans ce fichier (la persuasion a deja eu lieu sur la frise, un ecran de checkout doit rester rapide, pas re-convaincre).
+
+### Verifie
+`tsc --noEmit` propre apres chaque iteration (seule erreur residuelle : le piege `.next/types`/`getSportCategory` deja documente ailleurs dans ce fichier, `next dev` tournant en parallele pendant toute la session — fichier jamais touche par ce chantier). **Pas de `npm run build`** — dev server actif en continu pendant la session (Gildas l'utilisait pour verifier visuellement au fur et a mesure), risque de corruption `.next` deja documente ailleurs dans ce fichier.
+
+**Non teste par Claude** : aucun clic reel dans le navigateur (composants non-cliquables par design sur cet ecran, donc peu de risque, mais le rendu visuel final — alignement des 3 illustrations, lisibilite du badge Apercu sur fond clair et sombre, largeur des vignettes video — n'a ete verifie que par Gildas au fil des iterations, pas par Claude).
+
+Deploye en prod le 2026-08-13 (commit `5e1d780`, push direct sur `main`).
