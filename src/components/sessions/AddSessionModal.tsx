@@ -1,33 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Session } from "@/types";
-
-interface Exercise {
-  id: string;
-  text: string;
-}
+import ExerciseGhostEditor from "@/components/sessions/ExerciseGhostEditor";
+import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
+import { createClient } from "@/lib/supabase/client";
 
 interface AddSessionModalProps {
   date: string;
   session?: Session;
   initialName?: string;
   hideDate?: boolean;
+  /* Optionnel — quand fourni, l'autocomplete priorise les exercices des dernières séances
+     réellement faites par cet utilisateur (fetch léger, RLS déjà scoping sur son propre user_id). */
+  userId?: string;
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, onSave, onDelete, onClose }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, onSave, onDelete, onClose }: AddSessionModalProps) {
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    supabase.from("sessions").select("notes,date").eq("user_id", userId).eq("done", true)
+      .order("date", { ascending: false }).limit(60)
+      .then(({ data }) => { if (!cancelled && data) setUserHistory(buildUserHistory(data)); });
+    return () => { cancelled = true; resetUserHistory(); };
+  }, [userId]);
+
   const [name, setName] = useState(session?.name ?? initialName ?? "");
   const [selectedDate, setSelectedDate] = useState(session?.date ?? date);
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
-  const [exercises, setExercises] = useState<Exercise[]>(() => {
-    if (session?.notes) {
-      return session.notes.split("\n").filter(Boolean).map((text, i) => ({ id: String(i), text }));
-    }
-    return [{ id: "0", text: "" }];
-  });
+  const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -39,25 +45,10 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   const diffColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[diffCls];
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
 
-  function addExercise() {
-    setExercises(p => [...p, { id: Date.now().toString(), text: "" }]);
-  }
-  function duplicateExercise(id: string) {
-    const idx = exercises.findIndex(e => e.id === id);
-    if (idx < 0) return;
-    setExercises(p => [...p.slice(0, idx + 1), { id: Date.now().toString(), text: p[idx].text }, ...p.slice(idx + 1)]);
-  }
-  function removeExercise(id: string) {
-    setExercises(p => p.filter(e => e.id !== id));
-  }
-  function updateExercise(id: string, text: string) {
-    setExercises(p => p.map(e => e.id === id ? { ...e, text } : e));
-  }
-
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    const notes = exercises.map(e => e.text.trim()).filter(Boolean).join("\n");
+    const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
     await onSave({ name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff });
     setSaving(false);
   }
@@ -145,47 +136,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         </div>
 
         {/* Exercices */}
-        <div style={{ background: "#f6f6f6", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: 14, marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 1000, color: "#202428", letterSpacing: "-0.02em" }}>Exercices de la séance</div>
-            <span style={{ fontSize: 11, color: "#8a8f94" }}>{exercises.filter(e => e.text.trim()).length} renseigné{exercises.filter(e => e.text.trim()).length > 1 ? "s" : ""}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {exercises.map((ex, i) => (
-              <div key={ex.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 7, alignItems: "start" }}>
-                <textarea
-                  value={ex.text}
-                  onChange={e => updateExercise(ex.id, e.target.value)}
-                  placeholder={`Exercice ${i + 1} : séries, reps, consignes...`}
-                  style={{
-                    height: 48, minHeight: 48, maxHeight: 48, resize: "none",
-                    background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 14,
-                    padding: "10px 12px", fontSize: 13, color: "#171b1f",
-                    fontFamily: "inherit", lineHeight: 1.35, outline: "none",
-                    overflowY: "auto",
-                  }}
-                />
-                <button
-                  onClick={() => duplicateExercise(ex.id)} title="Dupliquer"
-                  style={{ width: 38, height: 38, borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", background: "#fff", color: "#8a8f94", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >⎘</button>
-                {exercises.length > 1 ? (
-                  <button
-                    onClick={() => removeExercise(ex.id)} title="Supprimer"
-                    style={{ width: 38, height: 38, borderRadius: 12, border: "1px solid rgba(200,30,30,.14)", background: "#fff", color: "#d44000", cursor: "pointer", fontSize: 18, fontWeight: 1000, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                  >×</button>
-                ) : (
-                  <div style={{ width: 38 }} />
-                )}
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={addExercise}
-            style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 14, border: "1px dashed rgba(212,64,0,.35)", background: "#fff", color: "#d44000", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-          >
-            + Ajouter un exercice
-          </button>
+        <div style={{ marginBottom: 8 }}>
+          <ExerciseGhostEditor value={exercisesText} onChange={setExercisesText} />
         </div>
 
         {/* Sticky actions bar */}

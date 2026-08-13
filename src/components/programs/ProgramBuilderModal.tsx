@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable, type DragEndEvent } from "@dnd-kit/core";
 import type { ProgramTemplate, SessionTemplate, WeekTemplate, Session } from "@/types";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
+import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions/ReconduireModal";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 
@@ -21,18 +23,34 @@ export function loadBarColor(avg: number): string {
   return "#d44000";
 }
 
-export function SessionTemplateCard({ session, onClick }: { session: SessionTemplate; onClick?: () => void }) {
+export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine }: {
+  session: SessionTemplate;
+  onClick?: () => void;
+  dragHandleProps?: Record<string, unknown>;
+  cardRef?: (el: HTMLDivElement | null) => void;
+  cardStyle?: React.CSSProperties;
+  renderExerciseLine?: (line: string, index: number) => React.ReactNode;
+}) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.target_difficulty ?? null;
   return (
-    <div onClick={onClick} style={{
+    <div ref={cardRef} onClick={onClick} style={{
       cursor: onClick ? "pointer" : "default",
       border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14,
       padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
       transition: "transform .2s ease, box-shadow .2s ease",
+      ...cardStyle,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
+        {dragHandleProps && (
+          <span
+            {...dragHandleProps}
+            onClick={e => e.stopPropagation()}
+            title="Glisser vers un autre jour"
+            style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 12, flexShrink: 0, marginTop: 2, userSelect: "none" as const, lineHeight: 1 }}
+          >⠿</span>
+        )}
+        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
           {session.name}
         </div>
         <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: "rgba(212,64,0,0.10)", color: "#d44000" }}>
@@ -42,7 +60,9 @@ export function SessionTemplateCard({ session, onClick }: { session: SessionTemp
       {gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null}
       {exercises.length > 0 && (
         <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-          {exercises.map((ex, i) => (
+          {exercises.map((ex, i) => renderExerciseLine ? (
+            <div key={i} onClick={e => e.stopPropagation()}>{renderExerciseLine(ex, i)}</div>
+          ) : (
             <div key={i} style={{
               padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
               borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
@@ -51,6 +71,64 @@ export function SessionTemplateCard({ session, onClick }: { session: SessionTemp
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Drag & drop local au template (aucune écriture DB — setTemplate direct, tant que le
+   programme n'est pas enregistré). Séances entre jours (Lun..Dim) de la semaine affichée +
+   réordonnancement des exercices dans une séance. ─── */
+
+function DroppableProgramDay({ day, children }: { day: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `day:${day}`, data: { type: "day", day } });
+  return (
+    <div ref={setNodeRef} style={{ borderRadius: 26, outline: isOver ? "2px dashed rgba(212,64,0,.55)" : "2px dashed transparent", outlineOffset: 4, transition: "outline-color .15s" }}>
+      {children}
+    </div>
+  );
+}
+
+function DraggableProgramSession({ day, sIdx, session, onClick }: { day: string; sIdx: number; session: SessionTemplate; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `sess:${day}:${sIdx}`, data: { type: "session", day, sIdx } });
+  const style: React.CSSProperties = {
+    transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+    opacity: isDragging ? 0.4 : 1,
+    position: isDragging ? "relative" : undefined,
+    zIndex: isDragging ? 30 : undefined,
+  };
+  return (
+    <SessionTemplateCard
+      session={session}
+      onClick={onClick}
+      dragHandleProps={{ ...attributes, ...listeners }}
+      cardRef={setNodeRef}
+      cardStyle={style}
+      renderExerciseLine={(line, exIdx) => (
+        <DraggableProgramExercise key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} text={line} />
+      )}
+    />
+  );
+}
+
+function DraggableProgramExercise({ day, sIdx, exIdx, text }: { day: string; sIdx: number; exIdx: number; text: string }) {
+  const dragId = `ex:${day}:${sIdx}:${exIdx}`;
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
+  return (
+    <div
+      ref={el => { setDragRef(el); setDropRef(el); }}
+      style={{
+        padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
+        borderTop: exIdx > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
+        background: isOver ? "#fff5f2" : "transparent", whiteSpace: "pre-wrap", wordBreak: "break-word",
+        display: "flex", alignItems: "flex-start", gap: 6, opacity: isDragging ? 0.4 : 1,
+      }}
+    >
+      <span
+        {...attributes} {...listeners}
+        style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
+      >⠿</span>
+      <span style={{ flex: 1 }}>{text}</span>
     </div>
   );
 }
@@ -72,6 +150,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
   const [weekIdx, setWeekIdx] = useState(0);
+  const [showReconduire, setShowReconduire] = useState(false);
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -79,6 +158,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const week = template.weeks[weekIdx];
   const weekAvgLoads = template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
   const maxAvgLoad = Math.max(...weekAvgLoads, 0.01);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const editingSession: SessionTemplate | null = editingTarget
     ? (template.weeks[editingTarget.weekIdx]?.[editingTarget.day]?.[editingTarget.sessionIdx] ?? null)
@@ -110,13 +190,70 @@ export default function ProgramBuilderModal({ programName: initialName, template
     setEditingTarget({ weekIdx, day, sessionIdx: newIdx });
   }
 
-  function addWeek() {
-    const last = template.weeks[template.weeks.length - 1];
-    const newWeek: WeekTemplate = {};
-    DAYS.forEach(d => { newWeek[d] = [...((last[d] ?? []) as SessionTemplate[]).map(s => ({ ...s }))]; });
-    const newIdx = template.weeks.length;
-    setTemplate(prev => ({ weeks: [...prev.weeks, newWeek] }));
-    setWeekIdx(newIdx);
+  function moveSessionToDay(fromDay: string, sIdx: number, toDay: string) {
+    if (fromDay === toDay) return;
+    setTemplate(prev => ({
+      weeks: prev.weeks.map((w, wi) => {
+        if (wi !== weekIdx) return w;
+        const fromArr = [...((w[fromDay] ?? []) as SessionTemplate[])];
+        const [moved] = fromArr.splice(sIdx, 1);
+        if (!moved) return w;
+        const toArr = [...((w[toDay] ?? []) as SessionTemplate[]), moved];
+        return { ...w, [fromDay]: fromArr, [toDay]: toArr };
+      }),
+    }));
+  }
+
+  function reorderExercisesInSession(day: string, sIdx: number, fromExIdx: number, toExIdx: number) {
+    if (fromExIdx === toExIdx) return;
+    setTemplate(prev => ({
+      weeks: prev.weeks.map((w, wi) => {
+        if (wi !== weekIdx) return w;
+        const sessions = [...((w[day] ?? []) as SessionTemplate[])];
+        const session = sessions[sIdx];
+        if (!session || !session.notes) return w;
+        const lines = session.notes.split("\n").filter(Boolean);
+        if (fromExIdx < 0 || fromExIdx >= lines.length || toExIdx < 0 || toExIdx >= lines.length) return w;
+        const [moved] = lines.splice(fromExIdx, 1);
+        lines.splice(toExIdx, 0, moved);
+        sessions[sIdx] = { ...session, notes: lines.join("\n") };
+        return { ...w, [day]: sessions };
+      }),
+    }));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeData = active.data.current as { type?: string; day?: string; sIdx?: number; exIdx?: number } | undefined;
+    if (activeData?.type === "exercise") {
+      const overData = over.data.current as { type?: string; day?: string; sIdx?: number; exIdx?: number } | undefined;
+      if (overData?.type !== "exercise" || overData.day !== activeData.day || overData.sIdx !== activeData.sIdx) return;
+      reorderExercisesInSession(activeData.day!, activeData.sIdx!, activeData.exIdx!, overData.exIdx!);
+      return;
+    }
+    if (activeData?.type === "session") {
+      const overData = over.data.current as { type?: string; day?: string } | undefined;
+      if (overData?.type !== "day" || !overData.day) return;
+      moveSessionToDay(activeData.day!, activeData.sIdx!, overData.day);
+    }
+  }
+
+  function applyReconduire(weeksOut: ReconduireOutputRow[][]) {
+    const startIdx = template.weeks.length;
+    const newWeeks: WeekTemplate[] = weeksOut.map(rows => {
+      const w: WeekTemplate = {};
+      DAYS.forEach(d => { w[d] = []; });
+      rows.forEach(r => {
+        (w[DAYS[r.dayIndex]] as SessionTemplate[]).push({
+          name: r.name, notes: r.notes || null, target_difficulty: r.target_difficulty, load: 2, type: "volume",
+        });
+      });
+      return w;
+    });
+    setTemplate(prev => ({ weeks: [...prev.weeks, ...newWeeks] }));
+    setWeekIdx(startIdx);
+    setShowReconduire(false);
   }
 
   function deleteWeek(idx: number) {
@@ -185,7 +322,17 @@ export default function ProgramBuilderModal({ programName: initialName, template
             </div>
           );
         })}
-        <button onClick={() => gate(addWeek)} style={{ padding: "0 12px 12px", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#8a8f94", display: "flex", alignItems: "flex-end", borderBottom: "2.5px solid transparent", flexShrink: 0 }}>+</button>
+        <div style={{ flex: 1, minWidth: 12 }} />
+        <button
+          onClick={() => gate(() => setShowReconduire(true))}
+          style={{
+            margin: "0 0 12px", padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)",
+            cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11,
+            display: "flex", alignItems: "center", flexShrink: 0, whiteSpace: "nowrap",
+          }}
+        >
+          Reconduire la semaine →
+        </button>
       </div>
 
       {/* Warning: programme with active assignments */}
@@ -196,6 +343,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
       )}
 
       {/* 7-column grid — same layout as planning */}
+      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div style={{
         flex: 1,
         display: "grid",
@@ -219,7 +367,9 @@ export default function ProgramBuilderModal({ programName: initialName, template
           const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
           const tagColor = ruleTagColors[rule.cls];
           return (
-            <div key={day} style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
+            <div key={day}>
+            <DroppableProgramDay day={day}>
+            <div style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>{day}</div>
               </div>
@@ -245,7 +395,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                   </div>
                 )}
                 {daySessions.map((s, sIdx) => (
-                  <SessionTemplateCard key={sIdx} session={s} onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))} />
+                  <DraggableProgramSession key={sIdx} day={day} sIdx={sIdx} session={s} onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))} />
                 ))}
                 <div
                   onClick={() => gate(() => addSession(day))}
@@ -255,9 +405,12 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 </div>
               </div>
             </div>
+            </DroppableProgramDay>
+            </div>
           );
         })}
       </div>
+      </DndContext>
 
       {/* Bottom */}
       {saveError && (
@@ -273,6 +426,24 @@ export default function ProgramBuilderModal({ programName: initialName, template
           {saving === "assign" ? "Assignation…" : "👤 Assigner →"}
         </button>
       </div>
+
+      {showReconduire && (() => {
+        const lastWeek = template.weeks[template.weeks.length - 1];
+        const daySlots = DAYS.map(day => ({
+          sessions: ((lastWeek[day] ?? []) as SessionTemplate[]).map((s, idx) => ({
+            id: `${day}:${idx}`, date: "", name: s.name, notes: s.notes,
+            duration: null, rpe: null, done: false, target_difficulty: s.target_difficulty,
+          })),
+        }));
+        return (
+          <ReconduireModal
+            daySlots={daySlots}
+            title="Reconduire la dernière semaine"
+            onClose={() => setShowReconduire(false)}
+            onConfirm={async (weeksOut) => applyReconduire(weeksOut)}
+          />
+        );
+      })()}
 
       {editingSession && editingTarget && fakeSession && (
         <AddSessionModal

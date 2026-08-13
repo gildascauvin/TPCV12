@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -16,8 +17,12 @@ import WelcomeModal from "@/components/onboarding/WelcomeModal";
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
+import DayColumn from "@/components/calendar/DayColumn";
+import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
+import DuplicateModal from "@/components/sessions/DuplicateModal";
+import ReconduireModal from "@/components/sessions/ReconduireModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
@@ -26,12 +31,6 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
-import AlertBox from "@/components/calendar/AlertBox";
-
-const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-
-function scoreColor(s: number | null) { if (s === null) return "#8a8f94"; return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
-function formLabel(s: number | null) { if (s === null) return "—"; return s >= 82 ? "Zone optimale" : s >= 65 ? "Zone stable" : s >= 45 ? "Zone prudente" : "Zone récupération"; }
 
 function dayWellness(
   athlete: CoachAthlete,
@@ -47,8 +46,7 @@ function dayWellness(
 }
 
 
-/* PlanningRing et DiffGauge — alias des composants partagés */
-const PlanningRing = ({ score }: { score: number | null }) => <PlanningRingShared score={score} />;
+/* DiffGauge — alias du composant partagé, encore utilisé par la vue mois. */
 const DiffGauge = DiffGaugeShared;
 
 interface Props {
@@ -85,6 +83,8 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
+  const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
+  const [showReconduire, setShowReconduire] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
@@ -280,6 +280,44 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     setCompleting(null);
   }, [completing, athlete]);
 
+  const moveSessionToDate = useCallback(async (session: CoachViewSession, newDate: string) => {
+    if (session.date === newDate || !athlete) return;
+    setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: newDate } : s));
+    const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: session.id, data: { date: newDate } });
+    if (!result.ok) setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s));
+  }, [athlete]);
+
+  const reorderExercises = useCallback(async (sessionId: string, fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || !athlete) return;
+    const target = sessions.find(s => s.id === sessionId);
+    if (!target || !target.notes) return;
+    const lines = target.notes.split("\n").filter(Boolean);
+    if (fromIdx < 0 || fromIdx >= lines.length || toIdx < 0 || toIdx >= lines.length) return;
+    const [moved] = lines.splice(fromIdx, 1);
+    lines.splice(toIdx, 0, moved);
+    const newNotes = lines.join("\n");
+    const prevNotes = target.notes;
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
+    const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId, data: { notes: newNotes } });
+    if (!result.ok) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
+  }, [athlete, sessions]);
+
+  const duplicateSessionToDate = useCallback(async (newDate: string) => {
+    if (!duplicating || !athlete) return;
+    const result = await callSessionAPI({
+      action: "add", athleteId: athlete.id,
+      data: { name: duplicating.name, notes: duplicating.notes ?? "", target_difficulty: duplicating.target_difficulty ?? 6, date: newDate },
+    });
+    if (result.ok && result.session) {
+      const created: CoachViewSession = result._real ? realToView(result.session as Session, athletes) : demoToView(result.session as CoachSession);
+      setSessions(prev => [...prev, created]);
+    }
+    setDuplicating(null);
+  }, [duplicating, athlete, athletes]);
+
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, reorderExercises }) as (event: DragEndEvent) => void;
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
   async function loadMonth(anchor: string, athleteObj: CoachAthlete) {
     const base = new Date(anchor + "T12:00:00");
     const start = format(startOfMonth(base), "yyyy-MM-dd");
@@ -408,6 +446,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         currentWeek={activeProgramWeek}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
+        onReconduire={athlete ? () => requireSubscription(() => setShowReconduire(true)) : undefined}
       />
 
       {/* Empty state — aucune séance cette semaine pour cet athlète */}
@@ -547,141 +586,78 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
         );
       })()}
 
-      {/* 7-column scrollable grid — semaine */}
-      {viewMode === "week" && <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
-        gap: isMd ? 12 : 10,
-        overflowX: "auto",
-        padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
-        scrollSnapType: "x proximity",
-        scrollbarWidth: "thin",
-      }}>
-        {weekDates.map((date, idx) => {
-          const dstr = format(date, "yyyy-MM-dd");
-          const isToday = dstr === todayStr;
-          const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-          const wellness = dayWellness(athlete, dstr, wellnessMap);
-          const prevStr = idx > 0 ? format(weekDates[idx - 1], "yyyy-MM-dd") : null;
-          const nextStr = idx < weekDates.length - 1 ? format(weekDates[idx + 1], "yyyy-MM-dd") : null;
-          const prevSess = prevStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === prevStr) : [];
-          const nextSess = nextStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === nextStr) : [];
-          const ctx = {
-            prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
-            nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
-          };
-          const rule = loadRule(daySessions, ctx);
-          const tagColor = ruleTagColors[rule.cls];
-          // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui" du sportif sélectionné,
-          // avec le vrai wellness/la vraie difficulté du jour (attention()/decisionText() réels de
-          // CoachAthleteCard.tsx). Le score doit venir de `wellness` (dayWellness() via wellnessMap,
-          // déjà utilisé pour la ring affichée) et non de `athlete.wellness_score` (dénormalisé au
-          // chargement de la page, peut être périmé pour un vrai sportif dont le check-in est arrivé
-          // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
-          // aucune alerte).
-          const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
-          const alert = isToday
-            ? coachAlertFor(
-                { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
-                maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr))
-              )
-            : null;
+      {/* 7-column scrollable grid — semaine — même DayColumn générique que /week (WeekClient.tsx) */}
+      {viewMode === "week" && (
+        <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+          gap: isMd ? 12 : 10,
+          overflowX: "auto",
+          padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
+          scrollSnapType: "x proximity",
+          scrollbarWidth: "thin",
+        }}>
+          {weekDates.map((date, idx) => {
+            const dstr = format(date, "yyyy-MM-dd");
+            const isToday = dstr === todayStr;
+            const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
+            const wellness = dayWellness(athlete, dstr, wellnessMap);
+            const prevStr = idx > 0 ? format(weekDates[idx - 1], "yyyy-MM-dd") : null;
+            const nextStr = idx < weekDates.length - 1 ? format(weekDates[idx + 1], "yyyy-MM-dd") : null;
+            const prevSess = prevStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === prevStr) : [];
+            const nextSess = nextStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === nextStr) : [];
+            const ctx = {
+              prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
+              nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
+            };
+            // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui" du sportif sélectionné,
+            // avec le vrai wellness/la vraie difficulté du jour (attention()/decisionText() réels de
+            // CoachAthleteCard.tsx). Le score doit venir de `wellness` (dayWellness() via wellnessMap,
+            // déjà utilisé pour la ring affichée) et non de `athlete.wellness_score` (dénormalisé au
+            // chargement de la page, peut être périmé pour un vrai sportif dont le check-in est arrivé
+            // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
+            // aucune alerte).
+            const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
+            const alert = isToday
+              ? coachAlertFor(
+                  { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
+                  maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr))
+                ) ?? undefined
+              : undefined;
 
-          return (
-            <div key={dstr} ref={el => { dayRefs.current[idx] = el; }} className="week-col-width" style={{
-              background: "#fff",
-              border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
-              borderRadius: 26, padding: 16,
-              boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
-              scrollSnapAlign: "start",
-            }}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
-                    {DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
-                  </div>
-                  <div style={{ fontSize: 26, fontWeight: 1000, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.04em" }}>
-                    {date.getDate()}
-                  </div>
-                  {isToday && (
-                    <span style={{ display: "inline-block", fontSize: 9, fontWeight: 800, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
-                      Aujourd'hui
-                    </span>
-                  )}
-                </div>
-                <PlanningRing score={wellness} />
-              </div>
-
-              <div style={{ fontSize: 10, fontWeight: 800, color: scoreColor(wellness), marginBottom: 8 }}>
-                {formLabel(wellness)}
-              </div>
-
-              {alert ? (
-                <AlertBox alert={alert} />
-              ) : (
-                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                    <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
-                      {rule.tag}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
-                </div>
-              )}
-
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
-                Séances · {daySessions.length}
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {daySessions.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
-                    Repos / libre
-                  </div>
+            return (
+              <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
+              <DroppableDay dstr={dstr}>
+              <DayColumn
+                date={date}
+                sessions={daySessions}
+                wellness={wellness !== null ? { score: wellness } : null}
+                todayStr={todayStr}
+                ctx={ctx}
+                alert={alert}
+                renderSession={(s) => (
+                  <DraggableSessionCard
+                    key={s.id}
+                    session={s}
+                    onComplete={(sess) => requireSubscription(() => setCompleting(sess))}
+                    onEdit={(sess) => requireSubscription(() => setEditingSession(sess))}
+                    onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
+                  />
                 )}
-                {daySessions.map(s => {
-                  const gaugeValue = s.done ? s.rpe : s.target_difficulty;
-                  return (
-                    <div key={s.id}
-                      style={{ border: s.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}
-                      onClick={() => requireSubscription(() => setEditingSession(s))}>
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
-                          {s.name}
-                        </div>
-                        <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
-                          {s.done ? "Terminé" : "Prévu"}
-                        </span>
-                      </div>
-                      {gaugeValue && <DiffGauge value={gaugeValue} height={10} />}
-                      {s.notes && (
-                        <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-                          {s.notes.split("\n").filter(Boolean).map((ex, i) => (
-                            <div key={i} style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                              {ex}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 5, marginTop: 8 }} onClick={e => e.stopPropagation()}>
-                        <button data-tour="terminer-btn" onClick={() => setCompleting(s)} style={{ flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer", background: s.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)", color: s.done ? "#171b1f" : "#fff", border: s.done ? "1px solid rgba(0,0,0,.10)" : "none", boxShadow: s.done ? "none" : "0 4px 12px rgba(212,64,0,.20)" }}>
-                          {s.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div data-tour="add-session-btn" onClick={() => requireSubscription(() => setAddingDate(dstr))}
-                  style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>
-                  + Ajouter une séance<span className="tour-lock">🔒</span>
-                </div>
+                onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
+                onComplete={(s) => requireSubscription(() => setCompleting(s))}
+                onEdit={(s) => requireSubscription(() => setEditingSession(s))}
+                onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
+                onWellness={() => {}}
+              />
+              </DroppableDay>
               </div>
-            </div>
-          );
-        })}
-      </div>}
+            );
+          })}
+        </div>
+        </DndContext>
+      )}
 
       {(addingDate || editingSession) && athlete && (
         <CoachSessionModal
@@ -705,6 +681,28 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
+        />
+      )}
+
+      {duplicating && (
+        <DuplicateModal session={duplicating} onDuplicate={duplicateSessionToDate} onClose={() => setDuplicating(null)} />
+      )}
+      {showReconduire && athlete && (
+        <ReconduireModal
+          daySlots={weekDates.map(d => ({ sessions: sessions.filter(s => s.athlete_id === athlete.id && s.date === format(d, "yyyy-MM-dd")) }))}
+          onClose={() => setShowReconduire(false)}
+          onConfirm={async (weeksOut) => {
+            const allRows = weeksOut.flatMap((rows, w) => rows.map(r => ({
+              name: r.name, notes: r.notes, target_difficulty: r.target_difficulty,
+              date: format(addDays(weekDates[r.dayIndex], 7 * (w + 1)), "yyyy-MM-dd"),
+            })));
+            const results = await Promise.all(allRows.map(r => callSessionAPI({ action: "add", athleteId: athlete.id, data: r })));
+            const created: CoachViewSession[] = results
+              .filter(r => r.ok && r.session)
+              .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
+            setSessions(prev => [...prev, ...created]);
+            setShowReconduire(false);
+          }}
         />
       )}
 

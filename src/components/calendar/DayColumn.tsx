@@ -6,7 +6,10 @@ import PlanningRing from "@/components/calendar/PlanningRing";
 import AlertBox from "@/components/calendar/AlertBox";
 import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
 import type { DayAlert } from "@/lib/alerts";
-import type { Session, WellnessDaily } from "@/types";
+/* Seul le score est lu ici — un objet minimal suffit, permet à /coach/planning (qui n'a qu'un
+   score déjà résolu par jour, pas une ligne wellness_daily complète) de passer directement sans
+   fabriquer un faux WellnessDaily. */
+export interface WellnessScoreLike { score: number | null }
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -22,13 +25,36 @@ function formLabel(score: number | null) {
   return "Zone récupération";
 }
 
+/* Forme minimale commune à `Session` (sportif) et `CoachViewSession` (coach) — permet à DayColumn/
+   WeekSessionCard d'être littéralement le même composant sur /week et /coach/planning, chacun avec
+   son propre type concret (générique T), sans dupliquer le rendu. */
+export interface SessionLike {
+  id: string;
+  date: string;
+  name: string;
+  notes: string | null;
+  duration: number | null;
+  rpe: number | null;
+  done: boolean;
+  target_difficulty: number | null;
+}
+
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
-   à l'identique par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
-  session: Session;
-  onComplete: (s: Session) => void;
-  onEdit: (s: Session) => void;
-  onDuplicate: (s: Session) => void;
+   à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine }: {
+  session: T;
+  onComplete: (s: T) => void;
+  onEdit: (s: T) => void;
+  onDuplicate: (s: T) => void;
+  /* Optionnelles — branchées par WeekClient.tsx/CoachPlanningClient.tsx pour le drag & drop entre
+     jours (dnd-kit). `undefined` par défaut : zéro impact sur l'aperçu onboarding (WeekPreviewStep.tsx),
+     qui ne les passe jamais. */
+  dragHandleProps?: Record<string, unknown>;
+  cardRef?: (el: HTMLDivElement | null) => void;
+  cardStyle?: React.CSSProperties;
+  /* Réordonnancement des exercices par drag & drop — remplace le rendu par défaut d'une ligne
+     d'exercice quand fourni. */
+  renderExerciseLine?: (line: string, index: number) => React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   // Single gauge: rpe if done, target_difficulty if planned
@@ -36,17 +62,26 @@ export function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
 
   return (
     <div
+      ref={cardRef}
       style={{
         border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
         background: "#fff", borderRadius: 14, padding: "10px 11px",
         cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
         transition: "transform .2s ease, box-shadow .2s ease",
+        ...cardStyle,
       }}
       onClick={() => onEdit(session)}
     >
       {/* 1. Name + badge */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
+        {dragHandleProps && (
+          <span
+            {...dragHandleProps}
+            title="Glisser vers un autre jour"
+            style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 12, flexShrink: 0, marginTop: 2, userSelect: "none" as const, lineHeight: 1 }}
+          >⠿</span>
+        )}
+        <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
           {session.name}
         </div>
         <span style={{
@@ -68,7 +103,9 @@ export function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
       {/* 3. Exercise display list (v50 — no numbers) */}
       {exercises.length > 0 && (
         <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-          {exercises.map((ex, i) => (
+          {exercises.map((ex, i) => renderExerciseLine ? (
+            <div key={i}>{renderExerciseLine(ex, i)}</div>
+          ) : (
             <div key={i} style={{
               padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4,
               color: "#2c3236", fontWeight: 600,
@@ -105,14 +142,14 @@ export function WeekSessionCard({ session, onComplete, onEdit, onDuplicate }: {
   );
 }
 
-/* ─── Day column — extrait de WeekClient.tsx (même composant exact que /week et /coach/planning),
-   réutilisé par l'aperçu programme de l'onboarding pour un carrousel réellement identique plutôt
-   qu'une reconstruction approximative. ─── */
-export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, recoveryAdvice, alert }: {
-  date: Date; sessions: Session[]; wellness: WellnessDaily | null;
+/* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
+   (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
+   l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
+export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, recoveryAdvice, alert, renderSession, columnRef, columnStyle }: {
+  date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
-  onComplete: (s: Session) => void; onEdit: (s: Session) => void;
-  onDuplicate: (s: Session) => void; onWellness: () => void;
+  onComplete: (s: T) => void; onEdit: (s: T) => void;
+  onDuplicate: (s: T) => void; onWellness: () => void;
   /* Props optionnelles réservées à l'aperçu programme de l'onboarding (WeekPreviewStep.tsx) —
      `false`/`undefined` par défaut, donc zéro impact sur /week et /coach/planning. */
   hideDayNumber?: boolean;
@@ -121,6 +158,11 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
      reprend le style/logique réels de l'alerte wellness de TodayClient.tsx (sportif) ou de
      decisionText() de CoachAthleteCard.tsx (coach). */
   alert?: DayAlert;
+  /* Optionnelles — branchées par WeekClient.tsx/CoachPlanningClient.tsx pour le drag & drop entre
+     jours, `undefined` par défaut ailleurs (onboarding) : zéro changement de comportement. */
+  renderSession?: (session: T) => React.ReactNode;
+  columnRef?: (el: HTMLDivElement | null) => void;
+  columnStyle?: React.CSSProperties;
 }) {
   const dstr = format(date, "yyyy-MM-dd");
   const isToday = dstr === todayStr;
@@ -129,13 +171,14 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
   const tagColor = ruleTagColors[rule.cls];
 
   return (
-    <div className="week-col-width" style={{
+    <div ref={columnRef} className="week-col-width" style={{
       background: "#fff",
       border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
       borderRadius: 26, padding: 16,
       boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
       scrollSnapAlign: "start",
       transition: "transform 0.22s ease, box-shadow 0.22s ease",
+      ...columnStyle,
     }}>
       {/* Header: day + ring */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
@@ -199,7 +242,7 @@ export default function DayColumn({ date, sessions, wellness, todayStr, ctx, onA
             Repos / libre
           </div>
         )}
-        {sessions.map(s => (
+        {sessions.map(s => renderSession ? renderSession(s) : (
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
         <div

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { Session } from "@/types";
+import type { SessionLike } from "@/components/calendar/DayColumn";
 
 interface DuplicateModalProps {
-  session: Session;
+  session: SessionLike;
   onDuplicate: (newDate: string) => Promise<void>;
   onClose: () => void;
 }

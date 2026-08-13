@@ -4,14 +4,17 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
+import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AddSessionModal from "@/components/sessions/AddSessionModal";
 import CompleteModal from "@/components/sessions/CompleteModal";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
+import ReconduireModal from "@/components/sessions/ReconduireModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
@@ -60,6 +63,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [showReconduire, setShowReconduire] = useState(false);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -247,6 +251,36 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     router.refresh();
   }, [supabase, router]);
 
+  const moveSessionToDate = useCallback(async (session: Session, newDate: string) => {
+    if (session.date === newDate) return;
+    setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: newDate } : s));
+    const { error } = await supabase.from("sessions").update({ date: newDate }).eq("id", session.id);
+    if (error) {
+      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s));
+      return;
+    }
+    router.refresh();
+  }, [supabase, router]);
+
+  const reorderExercises = useCallback(async (sessionId: string, fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const target = sessions.find(s => s.id === sessionId);
+    if (!target || !target.notes) return;
+    const lines = target.notes.split("\n").filter(Boolean);
+    if (fromIdx < 0 || fromIdx >= lines.length || toIdx < 0 || toIdx >= lines.length) return;
+    const [moved] = lines.splice(fromIdx, 1);
+    lines.splice(toIdx, 0, moved);
+    const newNotes = lines.join("\n");
+    const prevNotes = target.notes;
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
+    const { error } = await supabase.from("sessions").update({ notes: newNotes }).eq("id", sessionId);
+    if (error) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
+  }, [supabase, sessions]);
+
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, reorderExercises }) as (event: DragEndEvent) => void;
+
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
   const duplicateSession = useCallback(async (newDate: string) => {
     if (!duplicating) return;
     const { data: saved } = await supabase.from("sessions").insert({
@@ -312,6 +346,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
         currentWeek={activeProgramWeek}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
+        onReconduire={() => requireSubscription(() => setShowReconduire(true))}
       />
 
       <div ref={weekGridRef} data-tour="week-sessions">
@@ -323,6 +358,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
+        <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
@@ -355,6 +391,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
             }
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
+              <DroppableDay dstr={dstr}>
               <DayColumn
                 date={date}
                 sessions={sessions.filter(s => s.date === dstr)}
@@ -362,16 +399,27 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
+                renderSession={(s) => (
+                  <DraggableSessionCard
+                    key={s.id}
+                    session={s}
+                    onComplete={(sess) => requireSubscription(() => handleTerminer(sess))}
+                    onEdit={(sess) => requireSubscription(() => setEditing(sess))}
+                    onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
+                  />
+                )}
                 onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
                 onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                 onEdit={(s) => requireSubscription(() => setEditing(s))}
                 onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
                 onWellness={() => requireSubscription(() => setShowWellness(true))}
               />
+              </DroppableDay>
               </div>
             );
           })}
         </div>
+        </DndContext>
       )}
 
       {/* ── Vue mois ── */}
@@ -503,14 +551,35 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
 
       {/* Modals */}
       {addingDate && (
-        <AddSessionModal date={addingDate} onSave={addSession} onClose={() => setAddingDate(null)} />
+        <AddSessionModal date={addingDate} userId={userId} onSave={addSession} onClose={() => setAddingDate(null)} />
+      )}
+      {showReconduire && (
+        <ReconduireModal
+          daySlots={dates.map(d => ({ sessions: sessions.filter(s => s.date === format(d, "yyyy-MM-dd")) }))}
+          onClose={() => setShowReconduire(false)}
+          onConfirm={async (weeksOut) => {
+            const inserts = weeksOut.flatMap((rows, w) => rows.map(r => ({
+              user_id: userId,
+              name: r.name,
+              notes: r.notes,
+              target_difficulty: r.target_difficulty,
+              date: format(addDays(dates[r.dayIndex], 7 * (w + 1)), "yyyy-MM-dd"),
+              done: false,
+            })));
+            const { data: saved } = await supabase.from("sessions").insert(inserts).select();
+            if (saved) setSessions(prev => [...prev, ...(saved as Session[])]);
+            setShowReconduire(false);
+            if (inserts.length) handleDateChange(inserts[0].date);
+            router.refresh();
+          }}
+        />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={saveComplete} onClose={() => setCompleting(null)} />
       )}
       {editing && (
         <AddSessionModal
-          date={editing.date} session={editing}
+          date={editing.date} session={editing} userId={userId}
           onSave={saveEdit}
           onDelete={async () => deleteSession(editing)}
           onClose={() => setEditing(null)}

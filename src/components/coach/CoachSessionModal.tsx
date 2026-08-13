@@ -1,14 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CoachSession, CoachAthlete } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
-
-interface Exercise {
-  id: string;
-  text: string;
-}
+import ExerciseGhostEditor from "@/components/sessions/ExerciseGhostEditor";
+import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 
 export interface ReviewContext {
   wellness: number | null;
@@ -65,18 +62,26 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
   const [name, setName] = useState(session?.name ?? "");
   const [sessionDate, setSessionDate] = useState(session?.date ?? date);
   const [difficulty, setDifficulty] = useState(session?.target_difficulty ?? 6);
-  const [exercises, setExercises] = useState<Exercise[]>(() => {
-    if (session?.notes) {
-      return session.notes.split("\n").filter(Boolean).map((text, i) => ({ id: String(i), text }));
-    }
-    return [{ id: "0", text: "" }];
-  });
+  const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
   const [recipients, setRecipients] = useState<string[]>(() =>
     initialAthleteId ? [initialAthleteId] : athletes.length > 0 ? [athletes[0].id] : []
   );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Autocomplete priorisé sur les dernières séances réellement faites par ce sportif (route admin —
+  // RLS bloque la lecture directe cross-user, même pour un coach).
+  useEffect(() => {
+    if (!initialAthleteId) return;
+    let cancelled = false;
+    fetch(`/api/coach/session-history?athleteId=${initialAthleteId}`)
+      .then(r => r.json())
+      .then((res: { ok?: boolean; sessions?: { notes: string | null; date: string }[] }) => {
+        if (!cancelled && res.ok && res.sessions) setUserHistory(buildUserHistory(res.sessions));
+      });
+    return () => { cancelled = true; resetUserHistory(); };
+  }, [initialAthleteId]);
 
   const isEdit = !!session;
   const showRecipients = athletes.length > 0;
@@ -94,27 +99,12 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
     );
   }
 
-  function addExercise() {
-    setExercises(p => [...p, { id: Date.now().toString(), text: "" }]);
-  }
-  function duplicateExercise(id: string) {
-    const idx = exercises.findIndex(e => e.id === id);
-    if (idx < 0) return;
-    setExercises(p => [...p.slice(0, idx + 1), { id: Date.now().toString(), text: p[idx].text }, ...p.slice(idx + 1)]);
-  }
-  function removeExercise(id: string) {
-    setExercises(p => p.filter(e => e.id !== id));
-  }
-  function updateExercise(id: string, text: string) {
-    setExercises(p => p.map(e => e.id === id ? { ...e, text } : e));
-  }
-
   const canSave = name.trim() && (isEdit || recipients.length > 0);
 
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
-    const notes = exercises.map(e => e.text.trim()).filter(Boolean).join("\n");
+    const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
     const ids = isEdit && initialAthleteId ? [initialAthleteId] : recipients;
     await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty }, ids);
     setSaving(false);
@@ -249,47 +239,8 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
         </div>
 
         {/* Exercises */}
-        <div style={{ background: "#f6f6f6", border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: 14, marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 1000, color: "#202428", letterSpacing: "-0.02em" }}>Exercices de la séance</div>
-            <span style={{ fontSize: 11, color: "#8a8f94" }}>{exercises.filter(e => e.text.trim()).length} renseigné{exercises.filter(e => e.text.trim()).length > 1 ? "s" : ""}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {exercises.map((ex, i) => (
-              <div key={ex.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 7, alignItems: "start" }}>
-                <textarea
-                  value={ex.text}
-                  onChange={e => updateExercise(ex.id, e.target.value)}
-                  placeholder={`Exercice ${i + 1} : séries, reps, consignes...`}
-                  style={{
-                    height: 48, minHeight: 48, maxHeight: 48, resize: "none",
-                    background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 14,
-                    padding: "10px 12px", fontSize: 13, color: "#171b1f",
-                    fontFamily: "inherit", lineHeight: 1.35, outline: "none",
-                    overflowY: "auto",
-                  }}
-                />
-                <button
-                  onClick={() => duplicateExercise(ex.id)} title="Dupliquer"
-                  style={{ width: 38, height: 38, borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", background: "#fff", color: "#8a8f94", cursor: "pointer", fontSize: 15, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                >⎘</button>
-                {exercises.length > 1 ? (
-                  <button
-                    onClick={() => removeExercise(ex.id)} title="Supprimer"
-                    style={{ width: 38, height: 38, borderRadius: 12, border: "1px solid rgba(200,30,30,.14)", background: "#fff", color: "#d44000", cursor: "pointer", fontSize: 18, fontWeight: 1000, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                  >×</button>
-                ) : (
-                  <div style={{ width: 38 }} />
-                )}
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={addExercise}
-            style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 14, border: "1px dashed rgba(212,64,0,.35)", background: "#fff", color: "#d44000", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
-          >
-            + Ajouter un exercice
-          </button>
+        <div style={{ marginBottom: 16 }}>
+          <ExerciseGhostEditor value={exercisesText} onChange={setExercisesText} />
         </div>
 
         {/* Recipients */}

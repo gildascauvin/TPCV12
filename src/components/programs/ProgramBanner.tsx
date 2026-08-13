@@ -37,9 +37,10 @@ interface Props {
   onStop?: () => void;
   onShare?: () => void;
   onOpenLibrary?: () => void;
+  onReconduire?: () => void;
 }
 
-export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onShare, onOpenLibrary }: Props) {
+export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onShare, onOpenLibrary, onReconduire }: Props) {
   if (!program) {
     return (
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -47,11 +48,18 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
           <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2 }}>Aucun programme actif</div>
           <div style={{ fontSize: 11, color: "#8a8f94" }}>Les séances libres restent disponibles</div>
         </div>
-        {onOpenLibrary && (
-          <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}>
-            📚 Programmes<span className="tour-lock">🔒</span>
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+          {onReconduire && (
+            <button onClick={onReconduire} style={{ padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11 }}>
+              Reconduire la semaine →
+            </button>
+          )}
+          {onOpenLibrary && (
+            <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}>
+              📚 Programmes<span className="tour-lock">🔒</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }
