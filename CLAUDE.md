@@ -1125,6 +1125,8 @@ Point de départ : un POC standalone (`tpc_autoregulation_poc_15.html`) exploran
 
 Chips `±2,5/5/10/15/20%`, direction-lockées (`AUTOREG_CHIPS`). `autoregAdvice(dir, diff, subject?)` génère le texte — 2e personne ("ta récupération") si `subject` omis (Aujourd'hui, sportif sur sa propre séance), 3e personne (prénom du sportif) sinon (Coach Control, Planning coach).
 
+**Wording sans chiffre + langage d'emojis dédié (même jour, suite)** — retour de Gildas après premier test réel : `autoregAdvice()` ne mentionne plus jamais la difficulté en chiffre (`"la séance à 10/10"`) — `qualitativeDifficulty(diff)` la traduit en `"légère"`/`"modérée"`/`"dure"` (repris tel quel des seuils déjà utilisés par `DiffGauge`/`loadRule.ts` : dure≥8, modérée≥5, légère sinon — aucun nouveau vocabulaire inventé). `computeAutoregSuggestion().icon` abandonne le duo 💛/💚 initial (jugé monotone, "que des cœurs") pour un langage à 3 symboles cohérent avec la structure réelle de la heuristique : `🚀` (surcharger, un seul palier existant) / `⚠️` (alléger, −15%) / `🚨` (alléger, −20% si wellness<40 — escalade dans le même registre "signal" plutôt qu'un 3e symbole hors-famille type 🔴). `CoachAthleteCard.tsx` : l'encart générique existant (`decisionText()`, quand aucune suggestion autorégulation ne se déclenche) reprend le même langage — `👌` (stable, remplace `✅`) / `⚠️` (priorité générique, remplace `💛`) — cohérence complète entre le cas spécifique (suggestion) et le cas générique (attention() large, ex. tendance). **Non touché, hors scope** : les 4 cas `row()` de `TodayClient.tsx` (🔥/⚠️/💛/✅, seuils score<55/≥80 — carte "Score & conseils" pré-existante à ce chantier, seuils différents) — Gildas ne les a pas mentionnés.
+
 **Décision "traitée" du jour — localStorage, pas de colonne DB** (`getAutoregDecision`/`setAutoregDecision`/`clearAutoregDecision`, clé = id de la séance ajustée, valeur inclut la date du jour). Nécessaire pour 2 raisons : ne pas re-proposer la même décision à chaque rechargement, et éviter un ré-déclenchement en boucle après application (une décharge −15% appliquée à une difficulté 8 retombe à 7, qui reste ≥7 — sans ce garde-fou la suggestion réapparaîtrait indéfiniment). **Limite assumée, V1** : `"Annuler"` sur une décision déjà appliquée n'inverse pas les données déjà écrites en base (juste le flag local) — `parseAndApply`/`adjustDifficulty` ne sont pas exactement inversibles (arrondis), un vrai revert nécessiterait de stocker les valeurs d'origine ; le coach/sportif repasse par l'édition normale de la séance s'il veut vraiment revenir en arrière.
 
 ### `src/components/sessions/AutoregButtons.tsx` — bloc inline partagé
@@ -1151,7 +1153,7 @@ Le bloc `AutoregButtons` inline s'insère dans la carte "Score & conseils" (dark
 
 **Non testé par Claude** : aucun scénario où la suggestion se déclenche réellement n'a été vérifié en clic-à-clic par Claude (données réelles de Gildas ne matchant naturellement aucun des deux seuils) — uniquement le cas "pas de déclenchement" (non-régression). Le mode chaîné Coach Control (bascule modal/éditeur libre selon l'athlète) et le flux Planning n'ont été vérifiés par Claude que par lecture de code + compilation, pas par clic réel.
 
-Déployé en prod le 2026-08-13 (commit `5dd44cd`, push direct sur `main`).
+Déployé en prod le 2026-08-13 (commit `5dd44cd` fonctionnalité, `012871e` wording/emojis, push direct sur `main`).
 
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
