@@ -1113,6 +1113,46 @@ Partout, `score === null` garde son propre gris translucide existant par fichier
 
 Déployé en prod entre le 2026-08-10 et le 2026-08-11 en 6 commits sur `main` (`379b9d6` moteur de charge initial, `73ce2b8` Form% EWMA + bandes + wellness séquentiel, `5a3cb4a` unification rings, `4462e5e` inversion du dégradé + CoachSessionModal/AddAthleteModal, `2d32fc7` réorganisation badges Charge/Récupération + retrait header, `2d8a9b4` fix `recoveryCrossInsight` + Fitness/Fatigue dans `chargeCrossInsight`).
 
+## Boucle d'autorégulation — décision décharge/surcharge 1-clic (2026-08-13)
+
+Point de départ : un POC standalone (`tpc_autoregulation_poc_15.html`) explorant une couche décisionnelle au-dessus du wellness existant — quand la difficulté prévue d'une séance est incohérente avec le wellness du jour, coach ou sportif voit un signal + un CTA pour ajuster la charge en 1 clic, sans jamais de modification automatique. Porté dans le vrai produit sur les 3 mêmes surfaces que le chantier Reconduire (`/coach` Coach Control, `/today`, `/week` + `/coach/planning`), en réutilisant délibérément l'infrastructure déjà construite pour Reconduire (`parseAndApply()`/`adjustDifficulty()`, `src/lib/loadAdjust.ts`) plutôt que de la dupliquer.
+
+### Heuristique — `src/lib/autoregulation.ts`
+`computeAutoregSuggestion(wellness, plannedDifficulty)` — fonction pure, aucune notion de surface :
+- **Alléger** : wellness < 60 ET difficulté prévue ≥ 7 → reco −15% (ou −20% si wellness < 40)
+- **Surcharger** : wellness ≥ 80 ET difficulté prévue ≤ 4 → reco +10%
+- Sinon : `null`, aucun CTA décisionnel (affichage inchangé)
+
+Chips `±2,5/5/10/15/20%`, direction-lockées (`AUTOREG_CHIPS`). `autoregAdvice(dir, diff, subject?)` génère le texte — 2e personne ("ta récupération") si `subject` omis (Aujourd'hui, sportif sur sa propre séance), 3e personne (prénom du sportif) sinon (Coach Control, Planning coach).
+
+**Décision "traitée" du jour — localStorage, pas de colonne DB** (`getAutoregDecision`/`setAutoregDecision`/`clearAutoregDecision`, clé = id de la séance ajustée, valeur inclut la date du jour). Nécessaire pour 2 raisons : ne pas re-proposer la même décision à chaque rechargement, et éviter un ré-déclenchement en boucle après application (une décharge −15% appliquée à une difficulté 8 retombe à 7, qui reste ≥7 — sans ce garde-fou la suggestion réapparaîtrait indéfiniment). **Limite assumée, V1** : `"Annuler"` sur une décision déjà appliquée n'inverse pas les données déjà écrites en base (juste le flag local) — `parseAndApply`/`adjustDifficulty` ne sont pas exactement inversibles (arrondis), un vrai revert nécessiterait de stocker les valeurs d'origine ; le coach/sportif repasse par l'édition normale de la séance s'il veut vraiment revenir en arrière.
+
+### `src/components/sessions/AutoregButtons.tsx` — bloc inline partagé
+Gère son propre cycle idle → chips ouvertes → traité (lecture localStorage au montage). Deux modes d'usage, pilotés par les props fournies par le parent :
+- **Inline** (Coach Control, Aujourd'hui) : `onPreviewChange`/`onApply` fournis — "Alléger/Surcharger →" ouvre les chips directement dans le bloc, `onPreviewChange(pct)` remonte au parent pour mettre à jour en live les lignes d'exercice affichées ailleurs dans la carte (surbrillance orange + **ancienne valeur barrée au-dessus de la nouvelle**, ajouté après un retour de Gildas comparant au style de la modale).
+- **Modal** (Planning) : `onOpenModal` fourni à la place — aucune expansion inline, le clic ouvre directement `AdjustSessionModal`. Le "traité" reste géré ici (localStorage) ; le parent doit rappeler `setAutoregDecision()` lui-même après confirmation du modal, et forcer un remount du composant (`key` incluant un tick local) pour qu'il relise l'état traité.
+
+### `src/components/sessions/AdjustSessionModal.tsx` — modal Planning + mode chaîné
+Repris du même gabarit visuel que `ReconduireModal.tsx` (fond blanc, radius 30, centré) — **écart volontaire vs le POC**, qui demandait un vrai bottom sheet (`position:fixed; bottom:0`) : jugé incohérent avec toutes les autres modales de l'app (aucune n'est un bottom sheet), la cohérence avec l'existant a primé sur la lettre du POC. Contenu : carte contexte wellness (ring + zone + comportements + texte conseil), jauge de difficulté effective dynamique (`adjustDifficulty(baseDiff, pct)`), chips, aperçu diff (ancienne ligne barrée au-dessus de la nouvelle en gras orange — même style que le bloc inline). Props optionnelles `chainCurrent`/`chainTotal`/`onSkip` pour le mode chaîné.
+
+### Coach Control (`CoachAthleteCard.tsx`/`CoachClient.tsx`)
+L'encart décision existant (`isPriority` → "Décider"/"Voir" → `CoachSessionModal`, éditeur libre) est **remplacé par `AutoregButtons` en mode inline uniquement quand `computeAutoregSuggestion` se déclenche** — indépendamment de `isPriority` : une suggestion "surcharge" (forme au top + séance légère) n'a rien d'une alerte, l'athlète reste classé "Plan cohérent" mais garde son CTA actionnable. Sinon, le bouton "Décider"/"Voir" existant reste inchangé. Écriture réelle via `callSessionAPI` (admin, RLS bloque l'écriture cross-user directe).
+
+**"Traiter les décisions (N) →" (mode chaîné) rendu intelligent** : `openDecision(athlete)` choisit `AdjustSessionModal` (si une suggestion existe pour la séance du jour de l'athlète courant de la file) ou `CoachSessionModal` (éditeur libre, sinon — ex. alerte de tendance sans signal wellness/difficulté net). `advanceQueue()` factorise l'avancée dans `sortedPriority`, commune aux deux chemins de confirmation (`handleSaveReview` pour l'éditeur libre, `handleAdjustChainConfirm`/`handleAdjustChainSkip` pour le modal). Les deux marquent `reviewedIds` de la même façon — le compteur "Décisions restantes" du bandeau du haut (déjà existant avant ce chantier) reste synchronisé quel que soit le chemin emprunté.
+
+### Aujourd'hui (`TodayClient.tsx`)
+Le bloc `AutoregButtons` inline s'insère dans la carte "Score & conseils" (dark), en remplacement des lignes `row(...)` existantes uniquement quand la suggestion se déclenche (sinon les 5 cas `row(...)` déjà en prod restent inchangés — non renseigné, score bas + séance dure, score haut + séance dure...). Cible la séance non terminée à la plus haute difficulté prévue du jour. La prévisualisation live (avec l'ancienne valeur barrée) se répercute dans `TodaySessionCard`, un composant séparé rendu plus bas dans la colonne séances — état `autoregPreview` (sessionId + pct) lifté dans `TodayClient` pour connecter les deux.
+
+### Planning (`WeekClient.tsx` + `CoachPlanningClient.tsx`, via `DayColumn.tsx`)
+`AlertBox.tsx`/`DayColumn.tsx` gagnent un prop optionnel `actions`/`alertActions` (ReactNode, rendu sous le texte de l'alerte) — `undefined` par défaut, zéro impact sur l'aperçu onboarding (`WeekPreviewStep.tsx`, qui ne le fournit jamais). Sur la carte "aujourd'hui" uniquement : quand `computeAutoregSuggestion` se déclenche, l'alerte texte-only existante (`athleteAlertFor`/`coachAlertFor`) est **remplacée** par le nouveau texte + les boutons `AutoregButtons` en mode modal (`onOpenModal`) ; sinon l'alerte existante reste inchangée. Confirmation du modal → écriture directe Supabase côté sportif, `callSessionAPI` côté coach — mêmes mécanismes déjà en place pour l'édition de séance sur ces deux pages.
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres après chaque round. Vérifié en lecture seule sur le compte réel de Gildas (`/today`, `/week` — aucune régression confirmée quand la suggestion ne se déclenche pas, comportement identique à avant ce chantier) ; `/coach` redirige vers `/today` sur ce compte, comportement pré-existant déjà documenté ailleurs dans ce fichier, sans rapport avec ce chantier. Gildas a ensuite testé lui-même en conditions réelles (séance de test dédiée) et confirmé le flux "Alléger → chips → appliqué → traité" fonctionnel sur Coach Control et Aujourd'hui ; a demandé et obtenu l'ajout de l'ancienne valeur barrée (initialement absente) sur les deux surfaces, pour matcher le style de la modale.
+
+**Non testé par Claude** : aucun scénario où la suggestion se déclenche réellement n'a été vérifié en clic-à-clic par Claude (données réelles de Gildas ne matchant naturellement aucun des deux seuils) — uniquement le cas "pas de déclenchement" (non-régression). Le mode chaîné Coach Control (bascule modal/éditeur libre selon l'athlète) et le flux Planning n'ont été vérifiés par Claude que par lecture de code + compilation, pas par clic réel.
+
+Déployé en prod le 2026-08-13 (commit `5dd44cd`, push direct sur `main`).
+
 ## Base de données (Supabase)
 - `sessions` : RLS activée, `target_difficulty INTEGER` ajouté manuellement
 - `wellness_daily` : unique sur `(user_id, date)`, upsert via `onConflict`
