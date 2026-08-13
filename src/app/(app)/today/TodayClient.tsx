@@ -15,6 +15,9 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
+import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 
@@ -103,11 +106,14 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
 }
 
 /* ─── Today session card (v59 POC exact layout) ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
   onDelete: (s: Session) => void;
+  /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
+     orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
+  previewPct?: number | null;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
@@ -160,16 +166,30 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete }: {
       {/* 3. Exercise display list (v50 — no numbers) */}
       {exercises.length > 0 && (
         <div style={{ marginBottom: 12, border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
-          {exercises.map((ex, i) => (
-            <div key={i} style={{
-              padding: "10px 12px", fontSize: 13.5, lineHeight: 1.45,
-              color: "#2c3236", fontWeight: 650,
-              borderTop: i > 0 ? "1px solid rgba(0,0,0,.08)" : "none",
-              background: "#fff", whiteSpace: "pre-wrap", wordBreak: "break-word",
-            }}>
-              {ex}
-            </div>
-          ))}
+          {exercises.map((ex, i) => {
+            const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
+            const changed = modified !== ex;
+            return (
+              <div key={i} style={{
+                padding: "10px 12px",
+                borderTop: i > 0 ? "1px solid rgba(0,0,0,.08)" : "none",
+                background: "#fff",
+              }}>
+                {changed && (
+                  <div style={{ fontSize: 11, lineHeight: 1.35, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {ex}
+                  </div>
+                )}
+                <div style={{
+                  fontSize: 13.5, lineHeight: 1.45,
+                  color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 650,
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                }}>
+                  {modified}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -293,6 +313,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [completing, setCompleting] = useState<Session | null>(null);
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
+  const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
 
   const [showActivation, setShowActivation] = useState(false);
 
@@ -549,6 +570,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 .filter(s => !s.done && s.target_difficulty)
                 .map(s => s.target_difficulty!);
               const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
+              const autoregTarget = [...todaySessions].filter(s => !s.done)
+                .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+              const suggestion = wellnessFilledToday && autoregTarget
+                ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty)
+                : null;
 
               const scrollToSessions = (e: React.MouseEvent) => {
                 e.stopPropagation();
@@ -571,6 +597,32 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                       {cta}
                     </button>
                   )}
+                </div>
+              );
+
+              if (suggestion && autoregTarget) return (
+                <div
+                  style={{
+                    position: "relative", zIndex: 2, borderRadius: 16, padding: "12px 14px", marginBottom: 12,
+                    background: suggestion.dir === "low" ? "rgba(242,138,0,.13)" : "rgba(42,128,69,.18)",
+                    border: `1px solid ${suggestion.dir === "low" ? "rgba(242,138,0,.22)" : "rgba(42,128,69,.28)"}`,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <AutoregButtons
+                    sessionId={autoregTarget.id}
+                    dir={suggestion.dir}
+                    reco={suggestion.reco}
+                    advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`}
+                    sessionLabel={autoregTarget.name}
+                    onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
+                    onApply={async (pct) => {
+                      const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
+                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                      const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
+                      if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                    }}
+                  />
                 </div>
               );
 
@@ -696,6 +748,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   onComplete={(s) => requireSubscription(() => handleTerminer(s))}
                   onEdit={(s) => requireSubscription(() => setEditing(s))}
                   onDelete={(s) => requireSubscription(() => deleteSession(s))}
+                  previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                 />
               ))}
             </div>

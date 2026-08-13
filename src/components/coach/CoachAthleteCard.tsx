@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
 
@@ -80,12 +84,19 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, tourId, trend }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onAutoregDecided, tourId, trend }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
   isReviewed: boolean;
   onDecide: () => void;
+  /* Écriture réelle de la décharge/surcharge — déléguée au parent (callSessionAPI côté coach,
+     RLS bloque l'écriture cross-user directe). Jamais appelé pour "Maintenir" (aucune donnée
+     à modifier dans ce cas). */
+  onApplyAdjust: (session: CoachViewSession, pct: number) => Promise<void>;
+  /* Marque l'athlète "traité" (Maintenir OU décharge/surcharge appliquée) — garde le compteur
+     "Décisions restantes" du bandeau du haut synchronisé avec ce chemin de décision rapide. */
+  onAutoregDecided: () => void;
   tourId?: string;
   trend?: TrendCode | null;
 }) {
@@ -99,6 +110,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   const behaviors = athlete.behaviors ?? [];
   const firstName = athlete.name.split(" ")[0];
   const displayScore = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
+
+  /* Suggestion décharge/surcharge — seulement sur une séance encore prévue (une séance déjà
+     terminée n'a plus de sens à ajuster). Indépendant de isPriority : une "surcharge" (forme au
+     top + séance légère) n'a rien d'une alerte, ce sportif reste classé "Plan cohérent" — voir
+     autoregulation.ts. */
+  const suggestion = topSession && !topSession.done
+    ? computeAutoregSuggestion(displayScore, topSession.target_difficulty)
+    : null;
+  const [previewPct, setPreviewPct] = useState<number | null>(null);
 
   return (
     <div data-tour={tourId} style={{
@@ -172,36 +192,54 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         </div>
       </div>
 
-      {/* Encart décision */}
+      {/* Encart décision — bloc décharge/surcharge 1-clic (AutoregButtons) quand une suggestion
+         existe, sinon l'encart "Décider/Voir" existant (inchangé, ouvre l'éditeur libre). */}
       <div style={{
         padding: "12px 14px", borderRadius: 16,
         background: isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
         border: `1px solid ${isPriority ? "rgba(212,64,0,.30)" : "rgba(47,158,68,.30)"}`,
         marginBottom: todaySessions.length > 0 ? 12 : 0,
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+        ...(suggestion ? {} : { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }),
       }}>
-        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", flex: 1, minWidth: 0 }}>
-          {isPriority ? "💛" : "✅"} {decision}
-        </div>
-        <button
-          data-tour={tourId ? "decider-btn" : undefined}
-          onClick={onDecide}
-          style={{
-            height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, flexShrink: 0,
-            background: showReviewed
-              ? "linear-gradient(180deg,#2f9e44,#166534)"
-              : "linear-gradient(180deg,#f04a08,#d44000)",
-            color: "#fff", border: "none", fontSize: 12, fontWeight: 800,
-            cursor: "pointer",
-            boxShadow: showReviewed ? "0 6px 16px rgba(47,158,68,.22)" : "0 6px 16px rgba(212,64,0,.22)",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
-        </button>
+        {suggestion && topSession ? (
+          <AutoregButtons
+            key={`${topSession.id}-${isReviewed}`}
+            sessionId={topSession.id}
+            dir={suggestion.dir}
+            reco={suggestion.reco}
+            advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, firstName)}`}
+            sessionLabel={topSession.name}
+            onPreviewChange={setPreviewPct}
+            onApply={async (pct) => { await onApplyAdjust(topSession, pct); onAutoregDecided(); }}
+            onMaintenir={onAutoregDecided}
+          />
+        ) : (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", flex: 1, minWidth: 0 }}>
+              {isPriority ? "💛" : "✅"} {decision}
+            </div>
+            <button
+              data-tour={tourId ? "decider-btn" : undefined}
+              onClick={onDecide}
+              style={{
+                height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, flexShrink: 0,
+                background: showReviewed
+                  ? "linear-gradient(180deg,#2f9e44,#166534)"
+                  : "linear-gradient(180deg,#f04a08,#d44000)",
+                color: "#fff", border: "none", fontSize: 12, fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: showReviewed ? "0 6px 16px rgba(47,158,68,.22)" : "0 6px 16px rgba(212,64,0,.22)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Carte séance imbriquée */}
+      {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
+         surcharge est en cours de sélection ou déjà appliquée (previewPct). */}
       {topSession && (
         <div style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
@@ -217,11 +255,22 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           )}
           {topSession.notes && (
             <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-              {topSession.notes.split("\n").filter(Boolean).map((ex, i) => (
-                <div key={i} style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                  {ex}
-                </div>
-              ))}
+              {topSession.notes.split("\n").filter(Boolean).map((ex, i) => {
+                const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
+                const changed = modified !== ex;
+                return (
+                  <div key={i} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                    {changed && (
+                      <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>
+                        {ex}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600, wordBreak: "break-word" }}>
+                      {modified}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           {extraSessions > 0 && (

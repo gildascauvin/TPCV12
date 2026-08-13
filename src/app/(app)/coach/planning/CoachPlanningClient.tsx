@@ -31,6 +31,10 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
+import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 
 function dayWellness(
   athlete: CoachAthlete,
@@ -85,6 +89,8 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
+  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number } | null>(null);
+  const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
@@ -619,12 +625,39 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
             // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
             // aucune alerte).
             const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
-            const alert = isToday
-              ? coachAlertFor(
+            let alert;
+            let alertActions;
+            if (isToday) {
+              const autoregTarget = [...daySessions].filter(s => !s.done)
+                .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+              const suggestion = wellnessFilledToday && autoregTarget
+                ? computeAutoregSuggestion(wellness, autoregTarget.target_difficulty)
+                : null;
+              if (suggestion && autoregTarget) {
+                alert = {
+                  border: suggestion.dir === "low" ? "rgba(242,138,0,.4)" : "rgba(47,158,68,.4)",
+                  glow: suggestion.dir === "low" ? "#f28a00" : "#2f9e44",
+                  text: `${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0])}`,
+                };
+                alertActions = (
+                  <AutoregButtons
+                    key={`${autoregTarget.id}-${decisionTick}`}
+                    sessionId={autoregTarget.id}
+                    dir={suggestion.dir}
+                    reco={suggestion.reco}
+                    advice=""
+                    sessionLabel={autoregTarget.name}
+                    onMaintenir={() => setDecisionTick(t => t + 1)}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                  />
+                );
+              } else {
+                alert = coachAlertFor(
                   { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
                   maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr))
-                ) ?? undefined
-              : undefined;
+                ) ?? undefined;
+              }
+            }
 
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
@@ -636,6 +669,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
+                alertActions={alertActions}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -702,6 +736,29 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
               .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
             setSessions(prev => [...prev, ...created]);
             setShowReconduire(false);
+          }}
+        />
+      )}
+
+      {adjustCtx && athlete && (
+        <AdjustSessionModal
+          session={adjustCtx.session as AdjustSessionTarget}
+          dir={adjustCtx.dir}
+          reco={adjustCtx.reco}
+          wellnessScore={dayWellness(athlete, todayStr, wellnessMap)}
+          behaviors={athlete.behaviors ?? []}
+          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0])}
+          onClose={() => setAdjustCtx(null)}
+          onConfirm={async (pct) => {
+            const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
+            const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
+            const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: adjustCtx.session.id, data: { notes, target_difficulty } });
+            if (result.ok) {
+              setSessions(prev => prev.map(s => s.id === adjustCtx.session.id ? { ...s, notes, target_difficulty } : s));
+            }
+            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct);
+            setDecisionTick(t => t + 1);
+            setAdjustCtx(null);
           }}
         />
       )}

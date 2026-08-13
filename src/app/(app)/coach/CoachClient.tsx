@@ -16,6 +16,9 @@ import { usePaywall } from "@/hooks/usePaywall";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import InviteModal from "@/components/coach/InviteModal";
+import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
 
@@ -79,6 +82,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [reviewAthlete, setReviewAthlete] = useState<CoachAthlete | null>(null);
   const [reviewSession, setReviewSession] = useState<CoachViewSession | null>(null);
   const [showReviewComplete, setShowReviewComplete] = useState(false);
+  /* Mode chaîné "Traiter les décisions" — utilise le modal décharge/surcharge (AdjustSessionModal)
+     quand l'heuristique d'autorégulation propose une décision claire pour l'athlète courant de la
+     file, sinon retombe sur l'éditeur libre existant (CoachSessionModal, reviewAthlete/reviewSession
+     ci-dessus) — voir decisionFor()/openDecision() plus bas. */
+  const [adjustChainCtx, setAdjustChainCtx] = useState<{ athlete: CoachAthlete; session: CoachViewSession; dir: AutoregDir; reco: number } | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -231,11 +239,55 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   }
 
-  function handleDecide(athlete: CoachAthlete) {
+  async function applyAutoregAdjust(athleteId: string, session: CoachViewSession, pct: number) {
+    const notes = session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
+    const target_difficulty = adjustDifficulty(session.target_difficulty ?? 6, pct);
+    const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: { notes, target_difficulty } });
+    if (result.ok) {
+      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));
+    }
+  }
+
+  function markAutoregDecided(athleteId: string) {
+    setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.add(athleteId); return s; });
+  }
+
+  /* Décide quel outil ouvrir pour un athlète de la file : le modal décharge/surcharge (1-clic, même
+     heuristique que les cartes) quand elle propose une décision claire pour sa séance du jour,
+     l'éditeur libre existant sinon (alerte sans signal wellness/difficulté net, ex. tendance ou
+     séance déjà terminée). */
+  function openDecision(athlete: CoachAthlete) {
     const topSession = getTopSession(athlete.id);
+    const wellness = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
+    const suggestion = topSession && !topSession.done ? computeAutoregSuggestion(wellness, topSession.target_difficulty) : null;
+    if (suggestion && topSession) {
+      setAdjustChainCtx({ athlete, session: topSession, dir: suggestion.dir, reco: suggestion.reco });
+      setReviewAthlete(null);
+      setReviewSession(null);
+    } else {
+      setAdjustChainCtx(null);
+      setReviewAthlete(athlete);
+      setReviewSession(topSession);
+    }
+  }
+
+  function handleDecide(athlete: CoachAthlete) {
     setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.add(athlete.id); return s; });
-    setReviewAthlete(athlete);
-    setReviewSession(topSession);
+    openDecision(athlete);
+  }
+
+  function advanceQueue(newReviewed: Set<string>) {
+    const next = sortedPriority.find(a => !newReviewed.has(a.id));
+    if (next) {
+      const nr = new Set(Array.from(newReviewed)); nr.add(next.id);
+      setReviewedIds(nr);
+      openDecision(next);
+    } else {
+      setReviewAthlete(null);
+      setReviewSession(null);
+      setAdjustChainCtx(null);
+      if (sortedPriority.length > 0) setShowReviewComplete(true);
+    }
   }
 
   async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number }, _athleteIds: string[]) {
@@ -257,27 +309,28 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }
 
     const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(reviewAthlete.id);
-    setReviewedIds(newReviewed);
+    advanceQueue(newReviewed);
+  }
 
-    const next = sortedPriority.find(a => !newReviewed.has(a.id));
+  async function handleAdjustChainConfirm(pct: number) {
+    if (!adjustChainCtx) return;
+    await applyAutoregAdjust(adjustChainCtx.athlete.id, adjustChainCtx.session, pct);
+    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, pct);
+    const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(adjustChainCtx.athlete.id);
+    advanceQueue(newReviewed);
+  }
 
-    if (next) {
-      const nextSession = getTopSession(next.id);
-      const nextReviewed = new Set(Array.from(newReviewed)); nextReviewed.add(next.id); setReviewedIds(nextReviewed);
-      setReviewAthlete(next);
-      setReviewSession(nextSession);
-    } else {
-      setReviewAthlete(null);
-      setReviewSession(null);
-      if (sortedPriority.length > 0) {
-        setShowReviewComplete(true);
-      }
-    }
+  function handleAdjustChainSkip() {
+    if (!adjustChainCtx) return;
+    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, null);
+    const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(adjustChainCtx.athlete.id);
+    advanceQueue(newReviewed);
   }
 
   function handleCloseReview() {
     setReviewAthlete(null);
     setReviewSession(null);
+    setAdjustChainCtx(null);
   }
 
   const reviewedPriorityCount = sortedPriority.filter(a => reviewedIds.has(a.id)).length;
@@ -490,7 +543,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={reviewedIds.has(a.id)}
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
-                    onDecide={() => requireSubscription(() => handleDecide(a))} />
+                    onDecide={() => requireSubscription(() => handleDecide(a))}
+                    onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
+                    onAutoregDecided={() => markAutoregDecided(a.id)} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Aucune décision urgente. L'équipe peut suivre le plan.
@@ -511,7 +566,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
-                    onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))} />
+                    onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))}
+                    onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
+                    onAutoregDecided={() => markAutoregDecided(a.id)} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Tous les sportifs nécessitent une attention aujourd'hui.
@@ -561,6 +618,22 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           }}
           onSave={handleSaveReview}
           onClose={handleCloseReview}
+        />
+      )}
+
+      {adjustChainCtx && (
+        <AdjustSessionModal
+          session={adjustChainCtx.session as AdjustSessionTarget}
+          dir={adjustChainCtx.dir}
+          reco={adjustChainCtx.reco}
+          wellnessScore={adjustChainCtx.athlete.wellnessFilledToday === false ? null : adjustChainCtx.athlete.wellness_score}
+          behaviors={adjustChainCtx.athlete.behaviors ?? []}
+          advice={autoregAdvice(adjustChainCtx.dir, adjustChainCtx.session.target_difficulty ?? 6, adjustChainCtx.athlete.name.split(" ")[0])}
+          chainCurrent={reviewedPriorityCount - 1}
+          chainTotal={sortedPriority.length}
+          onSkip={handleAdjustChainSkip}
+          onClose={handleCloseReview}
+          onConfirm={handleAdjustChainConfirm}
         />
       )}
 

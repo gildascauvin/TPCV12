@@ -16,10 +16,14 @@ import CompleteModal from "@/components/sessions/CompleteModal";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import ReconduireModal from "@/components/sessions/ReconduireModal";
 import WellnessModal from "@/components/wellness/WellnessModal";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
+import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
+import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -64,6 +68,8 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
   const [showWellness, setShowWellness] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
+  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number } | null>(null);
+  const [decisionTick, setDecisionTick] = useState(0);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -381,13 +387,39 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
             // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui", avec le vrai wellness/
             // la vraie difficulté du jour (jamais de valeur forcée, contrairement à l'aperçu onboarding).
             let alert;
+            let alertActions;
             if (dstr === todayStr) {
               const todaySessions = sessions.filter(s => s.date === todayStr);
               const pendingDiffs = todaySessions.filter(s => !s.done && s.target_difficulty).map(s => s.target_difficulty!);
               const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
               const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
               const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
-              alert = athleteAlertFor(wellnessToday?.score ?? null, maxDiff, wellnessFilledToday) ?? undefined;
+              const autoregTarget = [...todaySessions].filter(s => !s.done)
+                .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+              const suggestion = wellnessFilledToday && autoregTarget
+                ? computeAutoregSuggestion(wellnessToday?.score ?? null, autoregTarget.target_difficulty)
+                : null;
+              if (suggestion && autoregTarget) {
+                alert = {
+                  border: suggestion.dir === "low" ? "rgba(242,138,0,.4)" : "rgba(47,158,68,.4)",
+                  glow: suggestion.dir === "low" ? "#f28a00" : "#2f9e44",
+                  text: `${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
+                };
+                alertActions = (
+                  <AutoregButtons
+                    key={`${autoregTarget.id}-${decisionTick}`}
+                    sessionId={autoregTarget.id}
+                    dir={suggestion.dir}
+                    reco={suggestion.reco}
+                    advice=""
+                    sessionLabel={autoregTarget.name}
+                    onMaintenir={() => setDecisionTick(t => t + 1)}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                  />
+                );
+              } else {
+                alert = athleteAlertFor(wellnessToday?.score ?? null, maxDiff, wellnessFilledToday) ?? undefined;
+              }
             }
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
@@ -399,6 +431,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
+                alertActions={alertActions}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -571,6 +604,26 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
             setShowReconduire(false);
             if (inserts.length) handleDateChange(inserts[0].date);
             router.refresh();
+          }}
+        />
+      )}
+      {adjustCtx && (
+        <AdjustSessionModal
+          session={adjustCtx.session as AdjustSessionTarget}
+          dir={adjustCtx.dir}
+          reco={adjustCtx.reco}
+          wellnessScore={wellnessList.find(w => w.date === todayStr)?.score ?? null}
+          behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
+          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6)}
+          onClose={() => setAdjustCtx(null)}
+          onConfirm={async (pct) => {
+            const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
+            const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
+            const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", adjustCtx.session.id).select().single();
+            if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct);
+            setDecisionTick(t => t + 1);
+            setAdjustCtx(null);
           }}
         />
       )}

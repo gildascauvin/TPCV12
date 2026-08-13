@@ -145,7 +145,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, recoveryAdvice, alert, renderSession, columnRef, columnStyle }: {
+export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
@@ -158,6 +158,10 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
      reprend le style/logique réels de l'alerte wellness de TodayClient.tsx (sportif) ou de
      decisionText() de CoachAthleteCard.tsx (coach). */
   alert?: DayAlert;
+  /* Boutons de décision (Maintenir / Alléger|Surcharger →) sous le texte de `alert` — réservés à la
+     carte "aujourd'hui" de /week et /coach/planning, jamais fournis par l'aperçu onboarding. Ignoré
+     si `alert` est absent (pas de sens sans encart). */
+  alertActions?: React.ReactNode;
   /* Optionnelles — branchées par WeekClient.tsx/CoachPlanningClient.tsx pour le drag & drop entre
      jours, `undefined` par défaut ailleurs (onboarding) : zéro changement de comportement. */
   renderSession?: (session: T) => React.ReactNode;
@@ -213,7 +217,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
          pastille pulsants (copie exacte de CoachAthleteCard.tsx, showBadge) — la carte du jour reste
          blanche, comme /week et /coach/planning en vrai. */}
       {alert ? (
-        <AlertBox alert={alert} />
+        <AlertBox alert={alert} actions={alertActions} />
       ) : recoveryAdvice ? (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "#171b1f", marginBottom: 5 }}>🌿 Récupération</div>

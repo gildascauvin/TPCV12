@@ -4,7 +4,7 @@ import type { DayAlert } from "@/lib/alerts";
 
 /* Encart alerte "jour prioritaire" — sombre avec halo + pastille pulsants, extrait de DayColumn.tsx
    pour être réutilisé à l'identique dans les vues qui n'utilisent pas DayColumn (CoachPlanningClient.tsx). */
-export default function AlertBox({ alert }: { alert: DayAlert }) {
+export default function AlertBox({ alert, actions }: { alert: DayAlert; actions?: React.ReactNode }) {
   return (
     <div style={{
       position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
@@ -29,6 +29,7 @@ export default function AlertBox({ alert }: { alert: DayAlert }) {
         animation: "perf-pulse 1.8s ease-in-out infinite",
       }} />
       <div style={{ paddingRight: 16 }}>{alert.text}</div>
+      {actions && <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>{actions}</div>}
     </div>
   );
 }
