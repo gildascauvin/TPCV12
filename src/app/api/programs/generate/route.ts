@@ -114,6 +114,17 @@ function pluralize(word: string, n: number): string {
   return n === 1 ? word : `${word}s`;
 }
 
+// Un %1RM n'a de sens que pour un mouvement chargé en reps pures ("5×5") — jamais pour une tenue
+// isométrique (s), une distance (m) ou un circuit compté en tours/séries/rounds, où le fallback
+// DEFAULT_INTENSITY_PCT produisait un "@70%" fabriqué et dénué de sens ("Gainage — 3×40s@70%",
+// "3 tours@65%"). `qualitativeEffort` traduit la même échelle/phase en mot, pas en chiffre.
+function qualitativeEffort(pct: number): string {
+  if (pct < 60) return "effort léger";
+  if (pct < 70) return "effort modéré";
+  if (pct < 85) return "effort soutenu";
+  return "effort maximal";
+}
+
 function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): string {
   if (spec.mode === "static") return spec.name;
   const mult = PRESCRIPTION_SHAPE[shape];
@@ -140,7 +151,15 @@ function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): 
     : sets > 1 ? `${sets}×${qty}${spec.unit}` : `${qty}${spec.unit}`;
   const rawPct = (spec.baseIntensityPct ?? DEFAULT_INTENSITY_PCT) + mult.intensity[phase];
   const pct = Math.max(40, Math.min(100, roundTo5(rawPct)));
-  return `${spec.name} — ${core}@${pct}%${suffix}`;
+
+  // % numérique gardé seulement si explicitement écrit dans la banque, ou si le mouvement est
+  // chargé en reps pures (unit "", pas un mot) — les tenues/distances/circuits passent en mot
+  // qualitatif. Si le suffixe préservé décrit déjà l'effort ("effort max", "effort / 30s récup"),
+  // ne pas en rajouter un 2e — déjà porté par le texte d'origine.
+  const usesNumericPct = spec.baseIntensityPct !== null || (!spec.wordUnit && spec.unit === "");
+  const suffixHasEffort = /^effort\b/i.test(spec.suffix.trim());
+  const intensityLabel = usesNumericPct ? `@${pct}%` : suffixHasEffort ? "" : ` (${qualitativeEffort(pct)})`;
+  return `${spec.name} — ${core}${intensityLabel}${suffix}`;
 }
 
 const FOCUS_DIST: Record<string, SessionType[]> = {
