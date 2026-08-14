@@ -1325,4 +1325,4 @@ Nouvelle règle ajoutée à la section "Wording — convention à respecter" plu
 ### Vérifié
 `tsc --noEmit` + `npm run build` propres après l'ensemble des deux chantiers. Pas de test de clic réel (aucune suggestion d'autorégulation ne se déclenche naturellement sur les données de test disponibles, même limite déjà documentée pour le chantier du 2026-08-13) — revert tracé à la main sur les 6 points d'intégration + repli via lecture de code sur le wording (aucune ambiguïté possible, remplacement de texte statique).
 
-Déployé en prod le 2026-08-14 (commit à venir, push direct sur `main`).
+Déployé en prod le 2026-08-14 (commit `14f7620`, push direct sur `main`).
