@@ -4,12 +4,16 @@ import { useState, useEffect, useRef } from "react";
 import { startOfWeek, addDays, format } from "date-fns";
 import Actions from "@/components/onboarding/Actions";
 import DayColumn from "@/components/calendar/DayColumn";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
+import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import { CoachCard, attention, maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { getRecoveryAdvice } from "@/lib/wellness";
-import { athleteAlertFor, coachAlertFor } from "@/lib/alerts";
+import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import type { ProgramTemplate, ProgramFocus, Session, WellnessDaily } from "@/types";
+import type { ProgramTemplate, ProgramFocus, Session, WellnessDaily, CoachAthlete, CoachViewSession } from "@/types";
 
 const DOW_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -55,6 +59,16 @@ function wellnessPreviewFor(diff: number): { score: number; behaviors: string[] 
   return { score: 40, behaviors: ["late_sleep", "screen_late"] };
 }
 
+/* 3 situations de forme sur la carte "Aujourd'hui" (sportif uniquement) — seul le wellness varie,
+   jamais la difficulté réelle de la séance (même principe que athleteAlertFor()/coachAlertFor(),
+   voir src/lib/alerts.ts). Reprend le vrai mécanisme d'autorégulation (computeAutoregSuggestion,
+   déjà en prod sur /today, /week, Coach Control) — jusque-là jamais branché sur l'onboarding. */
+const SITUATIONS: { icon: string; label: string; wellness: number; behaviors: string[] }[] = [
+  { icon: "😔", label: "Pas en forme", wellness: 45, behaviors: ["late_sleep", "screen_late"] },
+  { icon: "🙂", label: "Normal",       wellness: 70, behaviors: ["walk"] },
+  { icon: "💪", label: "En forme",     wellness: 88, behaviors: ["hydration"] },
+];
+
 type Level = "beginner" | "intermediate" | "elite";
 type Role = "athlete" | "coach";
 
@@ -82,11 +96,10 @@ interface Props {
   role: Role;
   goalLower: string;
   frise?: React.ReactNode;
-  coachFirstName?: string;
   onNext: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, customSessionLabels, programFlow, role, goalLower, frise, coachFirstName, onNext }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, customSessionLabels, programFlow, role, goalLower, frise, onNext }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
@@ -169,65 +182,141 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     });
   }
 
-  const defaultDay = displayDays[0] ?? 0;
-  const [selectedDay, setSelectedDay] = useState<number>(defaultDay);
-
-  /* TEST LOCAL — carrousel horizontal type /week, pas encore en prod. Réutilise exactement les
-     mêmes fonctions/données réelles que le calcul de selectedDay ci-dessous (loadRule,
-     wellnessPreviewFor, sessionForDay), juste étendu à tous les jours de la semaine. */
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  /* Jour réellement "aujourd'hui" (vraie date calendaire) — distinct de selectedDay (qui ne sert
-     plus qu'à centrer le carrousel au clic). Porte l'alerte wellness/décision, comme en prod. */
+  /* Jour réellement "aujourd'hui" (vraie date calendaire). */
   const todayIndex = toDisplayIndex(new Date().getDay());
 
-  /* TEST LOCAL — onglets sportifs (coach uniquement), même principe que les tabs réelles de
-     /coach/planning (Thomas M. / Emma L. / ...). Un seul programme généré disponible ici : les
-     autres sportifs démo réutilisent les mêmes séances. La carte "aujourd'hui" de chaque onglet force
-     un SCORE différent (jamais un diff : le diff utilisé dans le texte de l'alerte est toujours le
-     vrai target_difficulty de la séance du jour, jamais un chiffre inventé — sinon le texte peut
-     contredire la jauge affichée juste en dessous, cf. retour Gildas). Les 3 paliers de score (<55,
-     55-64, ≥65) sont ceux qui font vraiment bifurquer decisionText()/attention() : selon le vrai
-     diff du jour, ils illustrent jusqu'à 2-3 cas réellement différents — jamais plus que ce que la
-     vraie difficulté du jour permet, par construction. */
-  const COACH_DEMO_NAMES = [coachFirstName || "Toi", "Sportif 2", "Sportif 3"];
-  const COACH_TODAY_FORCE = [
-    { score: 40, behaviors: ["late_sleep", "screen_late"] }, // score<55 : toujours prioritaire
-    { score: 60, behaviors: ["late_sleep"] },                // 55-64 : prioritaire seulement si le vrai diff l'exige
-    { score: 75, behaviors: ["walk"] },                      // ≥65 : "Plan cohérent" sauf vrai diff ≥8
-  ];
-  const ATHLETE_TODAY_FORCE = { score: 40, behaviors: ["late_sleep", "screen_late"] }; // score<55 : toujours un cas (💛 au minimum)
-  const [activeAthleteIdx, setActiveAthleteIdx] = useState(0);
+  /* Jour qui porte le sélecteur de forme + la mécanique d'autorégulation interactive — "aujourd'hui"
+     s'il s'entraîne aujourd'hui, sinon le prochain jour d'entraînement de la semaine affichée,
+     sinon (aucun jour d'entraînement restant cette semaine) le premier jour choisi. Sans ce repli,
+     un sportif dont aucun jour choisi ne tombe sur "aujourd'hui" (ex. il s'inscrit un jour où il ne
+     s'entraîne pas) ne voyait jamais l'aha moment — trouvé par Gildas en testant, 2026-08-14.
+     Le badge "Aujourd'hui" (todayStr passé à DayColumn) reste volontairement sur le vrai jour
+     calendaire — jamais déplacé sur ce jour démo, pour ne pas afficher un mensonge de date. Seul le
+     texte du sélecteur change (voir plus bas, "avant ta prochaine séance") quand demoIndex diffère
+     de todayIndex — retour de Gildas, 2026-08-14 (2e itération). */
+  const demoIndex = displayDays.includes(todayIndex)
+    ? todayIndex
+    : displayDays.find(d => d > todayIndex) ?? displayDays[0] ?? todayIndex;
 
-  // Keep selected day in sync when real data loads
+  // Le carrousel s'ouvre directement sur le jour démo (pas juste le premier jour choisi), pour que
+  // l'aha moment soit visible sans avoir à scroller le trouver.
+  const defaultDay = displayDays.includes(demoIndex) ? demoIndex : (displayDays[0] ?? 0);
+  const [selectedDay, setSelectedDay] = useState<number>(defaultDay);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  /* 3 situations de forme sur le jour démo (sportif) — voir SITUATIONS plus haut. */
+  const [situationIdx, setSituationIdx] = useState(0);
+  const [previewOverrides, setPreviewOverrides] = useState<Record<number, { notes: string | null; diff: number }>>({});
+  const [adjustCtx, setAdjustCtx] = useState<{ dir: AutoregDir; reco: number } | null>(null);
+  const [demoTick, setDemoTick] = useState(0);
+
+  /* Présélectionne la situation qui fait vraiment apparaître un ajustement (Alléger/Surcharger) sur
+     le jour démo, quand c'est possible — plutôt que "Pas en forme" par défaut, qui tombe parfois
+     sur "Plan cohérent" selon la difficulté réelle du jour et laisse le sportif sans rien à voir au
+     premier coup d'œil (retour de Gildas, 2026-08-14). Une seule fois, dès que la vraie difficulté
+     du jour démo est connue (chargement du template réel) — n'écrase jamais un choix déjà fait par
+     le sportif lui-même sur les pills.
+     "Normal" (wellness 70) ne déclenche jamais de suggestion par construction (ni <60 ni ≥80), donc
+     findIndex ne peut retomber que sur "Pas en forme" (diff≥7) ou "En forme" (diff≤4). */
+  const autoSelectedSituationRef = useRef(false);
+  useEffect(() => {
+    if (role === "coach" || autoSelectedSituationRef.current) return;
+    const demoDiff = sessionForDay[demoIndex]?.diff;
+    if (demoDiff == null) return;
+    autoSelectedSituationRef.current = true;
+    const idx = SITUATIONS.findIndex(sit => !!computeAutoregSuggestion(sit.wellness, demoDiff));
+    if (idx !== -1) setSituationIdx(idx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionForDay[demoIndex]?.diff]);
+
+  /* Coach Control — 3 sportifs démo (mêmes prénoms que ceux réellement créés par completeProfile()
+     à la fin de l'onboarding coach : Thomas M./Emma L./Pierre D.), le vrai CoachCard de /coach.
+     Séances cherchées sur TOUT le template généré (pas juste sa 1re semaine) — un bloc de
+     périodisation complet (MEV/Surcharge/MRV/Deload) contient forcément une semaine dure et une
+     semaine légère, jamais une difficulté inventée, juste cherchée plus largement pour que Thomas
+     (wellness bas) et Pierre (wellness haut) déclenchent chacun une vraie suggestion de façon
+     fiable (retour de Gildas, 2026-08-14 : "Pierre est censé avoir l'alerte et halo"). Emma reste
+     "cohérent" quelle que soit sa séance — son wellness (70) ne franchit ni le seuil bas (<60) ni
+     le seuil haut (≥80) de computeAutoregSuggestion(), par construction. */
+  const [demoAthletes, setDemoAthletes] = useState<CoachAthlete[]>([]);
+  const [demoSessions, setDemoSessions] = useState<CoachViewSession[]>([]);
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+
+  function flattenTemplateSessions(template: ProgramTemplate | null): { name: string; notes: string | null; diff: number }[] {
+    if (!template?.weeks) return [];
+    const out: { name: string; notes: string | null; diff: number }[] = [];
+    template.weeks.forEach(week => {
+      Object.values(week).forEach(daySessions => {
+        daySessions.forEach(s => out.push({ name: s.name, notes: s.notes ?? null, diff: s.target_difficulty }));
+      });
+    });
+    return out;
+  }
+
+  useEffect(() => {
+    if (role !== "coach") return;
+    const pool = flattenTemplateSessions(generatedTemplate);
+    const source = pool.length ? pool : Object.values(sessionForDay);
+    if (!source.length) return;
+    const sorted = [...source].sort((a, b) => b.diff - a.diff);
+    const hardest = sorted.find(s => s.diff >= 7) ?? sorted[0];
+    const lightest = [...sorted].reverse().find(s => s.diff <= 4) ?? sorted[sorted.length - 1];
+    const middle = sorted[Math.floor(sorted.length / 2)] ?? sorted[0];
+    const defs: { id: string; name: string; wellness: number; behaviors: string[]; tpl: { name: string; notes: string | null; diff: number } }[] = [
+      { id: "preview-thomas", name: "Thomas M.", wellness: 45, behaviors: ["late_sleep", "screen_late"], tpl: hardest },
+      { id: "preview-emma",   name: "Emma L.",   wellness: 70, behaviors: ["walk"],                      tpl: middle },
+      { id: "preview-pierre", name: "Pierre D.", wellness: 88, behaviors: ["hydration"],                 tpl: lightest },
+    ];
+    setDemoAthletes(defs.map(d => ({
+      id: d.id, coach_id: "preview", name: d.name, sport: displaySport,
+      wellness_score: d.wellness, behaviors: d.behaviors, wellnessFilledToday: true,
+      user_id: null, invite_email: null, created_at: new Date().toISOString(),
+    })));
+    setDemoSessions(defs.map(d => ({
+      id: `preview-session-${d.id}`, athlete_id: d.id, date: format(new Date(), "yyyy-MM-dd"),
+      name: d.tpl.name, notes: d.tpl.notes, duration: null, rpe: null, done: false,
+      target_difficulty: d.tpl.diff, created_at: new Date().toISOString(), _real: false,
+    })));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, generatedTemplate, JSON.stringify(sessionForDay), displaySport]);
+
+  async function handleCoachApplyAdjust(session: CoachViewSession, pct: number) {
+    const notes = session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
+    const target_difficulty = adjustDifficulty(session.target_difficulty ?? 6, pct);
+    setDemoSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));
+  }
+  function markCoachReviewed(athleteId: string) {
+    setReviewedIds(prev => { const s = new Set(prev); s.add(athleteId); return s; });
+  }
+  /* Priorité démo : la vraie attention() (jamais "priorité" pour une opportunité de surcharge, par
+     design) est complétée par "a une suggestion active" — pour que Pierre (surcharge) rejoigne
+     Thomas (alléger) en section "À décider maintenant" avec le halo, comme demandé par Gildas. Une
+     vraie surcharge reste un cas moins urgent qu'une alerte, mais les deux méritent une décision. */
+  function demoIsPriority(a: CoachAthlete, maxDiff: number): boolean {
+    return attention(a, maxDiff) || !!computeAutoregSuggestion(a.wellnessFilledToday === false ? null : a.wellness_score, maxDiff);
+  }
+
+  // Keep selected day in sync when real data loads (préfère le jour démo, cf. defaultDay plus haut)
   useEffect(() => {
     if (displayDays.length > 0 && !displayDays.includes(selectedDay)) {
-      setSelectedDay(displayDays[0]);
+      setSelectedDay(displayDays.includes(demoIndex) ? demoIndex : displayDays[0]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [week1]);
 
   const allDiffs = displayDays.map(d => sessionForDay[d]?.diff ?? 6);
 
-  /* TEST LOCAL — carrousel unique (sportif ET coach), dates de la semaine calendaire en cours
-     (Lun→Dim, jamais de vraie date d'assignation à ce stade de l'onboarding). Réutilise DayColumn
-     tel quel (props date/sessions/wellness/ctx), avec 2 props optionnelles propres à cet aperçu :
-     hideDayNumber (les dates affichées ne correspondent à rien de réel) et recoveryAdvice (remplace
-     le rule-box par le conseil récupération — amalgame /today+/week). */
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), i));
 
   /* Score de forme illustratif — palette fixe couvrant les 4 zones (88/40/58/74), assignée par
-     position dans la semaine, sur les jours de repos ET d'entraînement. Volontairement DÉCONNECTÉE
-     de la vraie difficulté de la séance (WELLNESS_SEED n'alimente que wellnessPreviewFor(), jamais
-     loadRule()) : la variation ne doit jouer que sur le wellness, jamais sur la caractérisation de
-     charge, sinon le texte ("charge légère en ce moment"...) peut contredire la jauge réelle affichée
-     juste en dessous. loadRule()/le texte de charge restent donc TOUJOURS calculés sur le vrai
-     target_difficulty de la séance (ou vide pour un jour de repos), jamais décalés. */
+     position dans la semaine, sur les jours de repos ET d'entraînement (jours ≠ aujourd'hui
+     uniquement — "aujourd'hui" utilise SITUATIONS ci-dessus). loadRule()/le texte de charge
+     restent TOUJOURS calculés sur le vrai target_difficulty de la séance, jamais décalés. */
   const REST_DIFF_PALETTE = [3, 10, 7, 5];
   const WELLNESS_SEED = [6, 3, 8, 5, 2, 9, 4]; // Lun..Dim, seed arbitraire pour la variété de score
   const restDays = [0, 1, 2, 3, 4, 5, 6].filter(d => !displayDays.includes(d));
 
-  function dayColumnData(d: number): { date: Date; sessions: Session[]; wellness: WellnessDaily | null; ctx: LoadContext; recoveryAdvice?: string; alert?: { border: string; glow: string; text: string } } {
+  function dayColumnData(d: number): { date: Date; sessions: Session[]; wellness: WellnessDaily | null; ctx: LoadContext; recoveryAdvice?: string; alert?: { border: string; glow: string; text: string }; alertActions?: React.ReactNode } {
     const date = weekDates[d];
     const dstr = format(date, "yyyy-MM-dd");
     const s = sessionForDay[d];
@@ -235,20 +324,16 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     const prevMax = idx > 0 ? (allDiffs[idx - 1] ?? 0) : 0;
     const nextMax = idx < displayDays.length - 1 ? (allDiffs[idx + 1] ?? 0) : 0;
     const isPast = d < todayIndex;
-    const isToday = d === todayIndex;
-    const isFuture = d > todayIndex;
-    // "Aujourd'hui" force un cas précis (illustration du concept) — différent par onglet sportif
-    // côté coach, pour montrer la variété des cas possibles d'un sportif à l'autre. Les jours après
-    // aujourd'hui n'ont pas de wellness renseigné (aucun vrai check-in n'existe encore pour un jour
-    // futur, comme en prod sur /week's DayColumn) — repli sur le rule-box classique, pas de conseil
-    // récupération ni d'alerte pour ces jours-là.
-    const forced = role === "coach" ? COACH_TODAY_FORCE[activeAthleteIdx] : ATHLETE_TODAY_FORCE;
+    const isDemoDay = d === demoIndex;
+    // Le jour démo garde son traitement interactif même s'il tombe chronologiquement dans le futur
+    // (ex. "aujourd'hui" est un jour de repos, la démo se rattache au prochain jour d'entraînement).
+    const isFuture = d > todayIndex && !isDemoDay;
 
     if (!s) {
       if (isFuture) return { date, sessions: [], wellness: null, ctx: { prevMax, nextMax } };
       const restIdx = restDays.indexOf(d);
       const restDiff = REST_DIFF_PALETTE[restIdx % REST_DIFF_PALETTE.length];
-      const wp = isToday ? { score: forced.score, behaviors: forced.behaviors } : wellnessPreviewFor(restDiff);
+      const wp = wellnessPreviewFor(restDiff);
       const wellness: WellnessDaily = {
         id: `preview-w-${d}`, user_id: "preview", date: dstr,
         sleep: 7, stress: 3, recovery: 7, motivation: 7,
@@ -260,44 +345,93 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
         { sleep: 7, stress: 3, recovery: 7, motivation: 7, behaviors: wp.behaviors },
         rule.cls
       );
-      // maxDiff=0 : pas de séance réelle ce jour-là (jour de repos), jamais un chiffre inventé.
-      const alert = !isToday ? undefined
-        : role === "coach"
-          ? coachAlertFor({ id: "preview", coach_id: "preview", name: COACH_DEMO_NAMES[activeAthleteIdx], sport: displaySport, wellness_score: wp.score, behaviors: wp.behaviors, wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, 0) ?? undefined
-          : athleteAlertFor(wp.score, 0, true) ?? undefined;
-      return { date, sessions: [], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice, alert };
+      return { date, sessions: [], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice };
     }
 
-    // Passé = déjà "terminé" (bouton Résultat), aujourd'hui/à venir = "à faire" (bouton Terminer) —
-    // rpe repris du diff prévu pour garder la jauge visible sur les jours passés.
+    // Jour démo : diff/notes potentiellement remplacés par la décharge/surcharge appliquée pour la
+    // situation en cours (previewOverrides, keyé par situationIdx — chaque situation garde sa
+    // propre décision, jamais mélangée avec les autres). Toujours "Prévu" (jamais "Terminé"), même
+    // si ce jour tombe chronologiquement dans le passé cette semaine — rien à décider sur une
+    // séance déjà faite.
+    const override = isDemoDay ? previewOverrides[situationIdx] : undefined;
+    const effNotes = override ? override.notes : s.notes;
+    const effDiff  = override ? override.diff  : s.diff;
+
     const session: Session = {
       id: `preview-${d}`, user_id: "preview", date: dstr,
-      name: s.name, notes: s.notes, duration: null,
-      rpe: isPast ? s.diff : null, done: isPast,
-      target_difficulty: s.diff, created_at: new Date().toISOString(),
+      name: s.name, notes: effNotes, duration: null,
+      rpe: isDemoDay ? null : (isPast ? effDiff : null),
+      done: isDemoDay ? false : isPast,
+      target_difficulty: effDiff, created_at: new Date().toISOString(),
     };
     if (isFuture) return { date, sessions: [session], wellness: null, ctx: { prevMax, nextMax } };
-    // Le texte de charge (rule.cls → "charge X en ce moment" dans getRecoveryAdvice) est TOUJOURS
-    // calculé sur le vrai target_difficulty — seul le score wellness (wp) varie, via WELLNESS_SEED,
-    // découplé de la difficulté réelle.
-    const wp = isToday ? { score: forced.score, behaviors: forced.behaviors } : wellnessPreviewFor(WELLNESS_SEED[d]);
-    const rule = loadRule([{ target_difficulty: s.diff }], { prevMax, nextMax });
-    const advice = getRecoveryAdvice(
-      { sleep: 7, stress: 3, recovery: 7, motivation: 7, behaviors: wp.behaviors },
-      rule.cls
-    );
+
+    if (!isDemoDay) {
+      const wp = wellnessPreviewFor(WELLNESS_SEED[d]);
+      const rule = loadRule([{ target_difficulty: s.diff }], { prevMax, nextMax });
+      const advice = getRecoveryAdvice(
+        { sleep: 7, stress: 3, recovery: 7, motivation: 7, behaviors: wp.behaviors },
+        rule.cls
+      );
+      const wellness: WellnessDaily = {
+        id: `preview-w-${d}`, user_id: "preview", date: dstr,
+        sleep: 7, stress: 3, recovery: 7, motivation: 7,
+        base_score: wp.score, score: wp.score, behaviors: wp.behaviors, bedtime: null,
+        created_at: new Date().toISOString(),
+      };
+      return { date, sessions: [session], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice };
+    }
+
+    // "Aujourd'hui" — situation de forme choisie via le sélecteur, vraie mécanique d'autorégulation
+    // (computeAutoregSuggestion/AutoregButtons, déjà en prod sur /today, /week, Coach Control).
+    // Seul le wellness varie, jamais s.diff (la vraie difficulté prévue) — même principe que
+    // athleteAlertFor()/coachAlertFor() (voir src/lib/alerts.ts).
+    const situation = SITUATIONS[situationIdx];
     const wellness: WellnessDaily = {
       id: `preview-w-${d}`, user_id: "preview", date: dstr,
       sleep: 7, stress: 3, recovery: 7, motivation: 7,
-      base_score: wp.score, score: wp.score, behaviors: wp.behaviors, bedtime: null,
+      base_score: situation.wellness, score: situation.wellness, behaviors: situation.behaviors, bedtime: null,
       created_at: new Date().toISOString(),
     };
-    // maxDiff = s.diff (vrai diff prévu, jamais un chiffre inventé) — seul le score wellness (wp) est forcé.
-    const alert = !isToday ? undefined
-      : role === "coach"
-        ? coachAlertFor({ id: "preview", coach_id: "preview", name: COACH_DEMO_NAMES[activeAthleteIdx], sport: displaySport, wellness_score: wp.score, behaviors: wp.behaviors, wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, s.diff) ?? undefined
-        : athleteAlertFor(wp.score, s.diff, true) ?? undefined;
-    return { date, sessions: [session], wellness, ctx: { prevMax, nextMax }, recoveryAdvice: advice, alert };
+    const suggestion = computeAutoregSuggestion(situation.wellness, s.diff);
+    let alert: { border: string; glow: string; text: string } | undefined;
+    let alertActions: React.ReactNode | undefined;
+    if (suggestion) {
+      alert = {
+        border: suggestion.dir === "low" ? "rgba(242,138,0,.4)" : "rgba(47,158,68,.4)",
+        glow: suggestion.dir === "low" ? "#f28a00" : "#2f9e44",
+        text: `${suggestion.icon} ${autoregAdvice(suggestion.dir, s.diff)}`,
+      };
+      alertActions = (
+        <AutoregButtons
+          key={`preview-today-${situationIdx}-${demoTick}`}
+          sessionId={`preview-today-${situationIdx}`}
+          dir={suggestion.dir}
+          reco={suggestion.reco}
+          advice=""
+          sessionLabel={s.name}
+          onMaintenir={() => {}}
+          onOpenModal={() => setAdjustCtx({ dir: suggestion.dir, reco: suggestion.reco })}
+        />
+      );
+    } else {
+      // Pas de suggestion : jamais le texte numérique d'athleteAlertFor() (X/10) — un message neutre,
+      // mots uniquement, cohérent avec autoregAdvice() (retour de Gildas, 2026-08-14).
+      alert = { border: "rgba(47,158,68,.3)", glow: "#2f9e44", text: "🟢 Plan cohérent — suis la séance prévue." };
+    }
+    return { date, sessions: [session], wellness, ctx: { prevMax, nextMax }, alert, alertActions };
+  }
+
+  async function handleConfirmAdjust(pct: number) {
+    if (!adjustCtx) return;
+    const demoSession = sessionForDay[demoIndex];
+    if (!demoSession) return;
+    const notes = demoSession.notes ? demoSession.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : demoSession.notes;
+    const diff = adjustDifficulty(demoSession.diff, pct);
+    setPreviewOverrides(prev => ({ ...prev, [situationIdx]: { notes, diff } }));
+    setAutoregDecision(`preview-today-${situationIdx}`, adjustCtx.dir, pct);
+    setDemoTick(t => t + 1);
+    setAdjustCtx(null);
   }
 
   useEffect(() => {
@@ -305,111 +439,179 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [selectedDay]);
 
+  // Wording de l'aha moment (2026-08-14) — remplace l'ancien texte générique "aide à {objectif}"
+  // par un texte centré sur le mécanisme (alléger/maintenir/surcharger) qu'on vient de rendre
+  // interactif, retour de Gildas. Reste propre au chemin classique — le programme claimé garde son
+  // propre texte (displayName), pas concerné par ce changement.
   const headerTitle = programFlow
     ? (displayName ?? "Chargement…")
-    : `Voici comment ThePerfClub ${role === "coach" ? "aide tes sportifs" : "t'aide"} à ${goalLower || "progresser"}.`;
+    : (role === "coach"
+        ? "⚡ Voici comment ThePerfClub simplifie tes décisions de coaching."
+        : "⚡ Voici comment ton programme s'adapte à ta forme.");
   const headerSub = programFlow
     ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
     : (role === "coach"
-        ? "Chaque séance enregistrée est analysée en détail — tu identifies enfin ce qui freine leur progression et ce qui favorise leur récupération."
-        : "Chaque séance enregistrée est analysée en détail — tu identifies enfin ce qui freine ta progression et ce qui favorise ta récupération.");
+        ? "Ton Coach Control fait ressortir les sportifs qui nécessitent ton attention et t'aide à ajuster leur charge au bon moment."
+        : "Maintiens, allège ou augmente ta charge selon ton état du jour. ThePerfClub t'aide à prendre la bonne décision sans perdre de vue ton objectif.");
+  const headerTitleDisplay = programFlow ? `${sportEmoji} ${headerTitle}` : headerTitle;
+  const nextLabel = role === "coach" ? "Continuer avec mes sportifs →" : "Continuer avec mon programme →";
 
-  return (
-    <div>
-      {/* Plein écran (largeur + jusqu'en haut) : casse le maxWidth (responsive, voir
-          OnboardingBackground.tsx)/padding-top:36 imposés par OnboardingBackground. Sûr d'annuler
-          ce padding ici car la frise est désormais rendue à l'intérieur de ce bloc (juste en
-          dessous, via {frise}) et non plus au-dessus par OnboardingFlow — plus de risque de la
-          faire disparaître sous ce bloc. Même formule de largeur que OnboardingBackground.tsx/
-          Actions.tsx pour rester aligné avec le reste de la page sur desktop/tablette. */}
-      <div style={{
-        background: "#141414",
-        width: "100vw", position: "relative", left: "50%", right: "50%", marginLeft: "-50vw", marginRight: "-50vw",
-        marginTop: -36, paddingTop: 24, marginBottom: role === "coach" ? 0 : 20,
-      }}>
-        <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px 24px" }}>
+  const heroBlock = (
+    <div style={{
+      background: "#141414",
+      width: "100vw", position: "relative", left: "50%", right: "50%", marginLeft: "-50vw", marginRight: "-50vw",
+      marginTop: -36, paddingTop: 24, paddingBottom: role === "coach" ? 24 : 0,
+    }}>
+      <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: role === "coach" ? "0 20px" : "0 20px 24px" }}>
         {frise}
         <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
-          {sportEmoji} {headerTitle}
+          {headerTitleDisplay}
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginBottom: role === "coach" ? 0 : 18 }}>
           {headerSub}
         </div>
 
-        {/* Sélecteur de jours — style app réelle (contour discret, rond blanc plein pour le
-            sélectionné), point sous le rond coloré par difficulté. Jour en texte dans le rond
-            (pas de quantième, gardé volontairement). */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
-          {DOW_LABELS.map((label, i) => {
-            const hasSession = displayDays.includes(i);
-            const isSelected = i === selectedDay;
-            const dayDiff = sessionForDay[i]?.diff;
-            return (
-              <div
-                key={i}
-                onClick={() => hasSession ? setSelectedDay(i) : undefined}
-                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: hasSession ? "pointer" : "default" }}
-              >
-                <div style={{
-                  width: 30, height: 30, borderRadius: "50%",
-                  background: isSelected ? "#fff" : "transparent",
-                  border: isSelected ? "none" : `1.5px solid ${hasSession ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)"}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  transition: "all 0.15s",
-                }}>
-                  <span style={{ fontSize: 9, fontWeight: 800, color: isSelected ? "#171b1f" : hasSession ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
-                    {label}
-                  </span>
+        {role !== "coach" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3 }}>
+            {DOW_LABELS.map((label, i) => {
+              const hasSession = displayDays.includes(i);
+              const isSelected = i === selectedDay;
+              const dayDiff = sessionForDay[i]?.diff;
+              return (
+                <div
+                  key={i}
+                  onClick={() => hasSession ? setSelectedDay(i) : undefined}
+                  style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, cursor: hasSession ? "pointer" : "default" }}
+                >
+                  <div style={{
+                    width: 30, height: 30, borderRadius: "50%",
+                    background: isSelected ? "#fff" : "transparent",
+                    border: isSelected ? "none" : `1.5px solid ${hasSession ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.12)"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.15s",
+                  }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: isSelected ? "#171b1f" : hasSession ? "rgba(255,255,255,.85)" : "rgba(255,255,255,.3)", textTransform: "uppercase", letterSpacing: "0.02em" }}>
+                      {label}
+                    </span>
+                  </div>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: hasSession ? loadBarColor(dayDiff ?? 0) : "transparent" }} />
                 </div>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: hasSession ? loadBarColor(dayDiff ?? 0) : "transparent" }} />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (role === "coach") {
+    // Même découpage que /coach (CoachClient.tsx) : "À décider maintenant" (grille 2 colonnes en
+    // desktop, isLg) au-dessus de "Plan cohérent" — pas une simple liste empilée.
+    const priorityList = demoAthletes.filter(a => demoIsPriority(a, maxDiffToday(a.id, demoSessions)));
+    const stableList = demoAthletes.filter(a => !demoIsPriority(a, maxDiffToday(a.id, demoSessions)));
+    return (
+      <div>
+        {heroBlock}
+
+        {/* Largeur réelle de /coach (CoachClient.tsx), pas la colonne étroite du reste de l'onboarding
+           (OnboardingBackground.tsx plafonne toute la page à 720px max) — un maxWidth simple ici
+           restait invisible, bridé par ce parent plus étroit. Même technique d'évasion "plein-bleed"
+           que le carrousel sportif juste en dessous (100vw + marges négatives), pour que la grille 2
+           colonnes ait vraiment la place du dashboard, pas celle de la colonne d'onboarding. */}
+        <div style={{ width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw" }}>
+        <div style={{ maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "20px 40px 0" : isMd ? "18px 24px 0" : "16px 16px 0" }}>
+          <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 14 }}>
+            Ton analyse réelle s'appuierait sur les données d'entraînement de tes sportifs.
+          </div>
+
+          {priorityList.length > 0 && (
+            <div style={{ margin: "13px 0" }}>
+              <div style={{ marginBottom: 9 }}>
+                <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428" }}>À décider maintenant</div>
+                <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Le coach voit d&apos;abord ce qui mérite une action.</div>
               </div>
-            );
-          })}
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
+                {priorityList.map(a => (
+                  <CoachCard
+                    key={a.id}
+                    athlete={a}
+                    sessions={demoSessions}
+                    isPriority={true}
+                    isReviewed={reviewedIds.has(a.id)}
+                    onDecide={() => markCoachReviewed(a.id)}
+                    onApplyAdjust={handleCoachApplyAdjust}
+                    onAutoregDecided={() => markCoachReviewed(a.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {stableList.length > 0 && (
+            <div style={{ margin: "13px 0 20px" }}>
+              <div style={{ marginBottom: 9 }}>
+                <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428" }}>Plan cohérent</div>
+                <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Pas d&apos;intervention immédiate.</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
+                {stableList.map(a => (
+                  <CoachCard
+                    key={a.id}
+                    athlete={a}
+                    sessions={demoSessions}
+                    isPriority={false}
+                    isReviewed={false}
+                    onDecide={() => markCoachReviewed(a.id)}
+                    onApplyAdjust={handleCoachApplyAdjust}
+                    onAutoregDecided={() => markCoachReviewed(a.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+        </div>
+
+        <Actions onNext={onNext} nextLabel={nextLabel} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {heroBlock}
+
+      {/* Sélecteur de situation — sportif uniquement, agit uniquement sur la carte démo du carrousel
+         (jamais sur les autres jours). Vraie mécanique d'autorégulation, jamais un chiffre de
+         difficulté inventé — seul le wellness varie ici, voir dayColumnData(). Libellé adapté quand
+         le jour démo n'est pas vraiment "aujourd'hui" (aucun entraînement prévu ce jour-là) — le
+         badge "Aujourd'hui" du carrousel reste honnête, seul ce texte change (retour de Gildas,
+         2026-08-14, 2e itération). */}
+      <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: isMd ? "14px 24px 0" : "14px 16px 0" }}>
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 8 }}>
+          {demoIndex === todayIndex ? "Simule ta forme du jour" : "Simule ta forme avant ta prochaine séance"}
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {SITUATIONS.map((sit, i) => (
+            <button
+              key={sit.label}
+              onClick={() => setSituationIdx(i)}
+              style={{
+                flex: 1, padding: "9px 4px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+                border: i === situationIdx ? "1.5px solid #d44000" : "1.5px solid rgba(0,0,0,.08)",
+                background: i === situationIdx ? "#fff4f0" : "#fff",
+                color: i === situationIdx ? "#d44000" : "#8a8f94",
+                fontSize: 12, fontWeight: 800,
+              }}
+            >
+              {sit.icon} {sit.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Carrousel horizontal unique (sportif ET coach) — le vrai DayColumn de /week et
-         /coach/planning, réutilisé tel quel (même composant, pas une reconstruction). Le rule-box
-         est remplacé par le conseil récupération (amalgame /today+/week, cf. échange avec Gildas) :
-         plus besoin de carte wellness séparée au-dessus, le ring de chaque jour porte déjà
-         l'information. Clic sur une carte = setSelectedDay, même state que le bandeau de ronds
-         ci-dessus. Full-bleed (100vw) : /week n'est jamais contraint à la colonne étroite de
-         l'onboarding, un carrousel de 7 colonnes a besoin de la largeur réelle de l'écran. */}
-      {/* Onglets sportifs (coach uniquement) — markup identique à la vraie tab bar de
-         CoachPlanningClient.tsx ("Athlete tabs bar") : collée directement sous le header sombre
-         (aucun gap), pleine largeur (100vw) — jamais contrainte à la colonne étroite de
-         l'onboarding, exactement comme en vrai. */}
-      {role === "coach" && (
-        <div style={{ width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw", marginBottom: 14 }}>
-          <div style={{
-            background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)",
-            display: "flex", alignItems: "stretch", overflowX: "auto",
-            gap: 0, padding: isMd ? "0 24px" : "0 16px",
-          }}>
-            {COACH_DEMO_NAMES.map((name, i) => (
-              <button
-                key={name}
-                onClick={() => setActiveAthleteIdx(i)}
-                style={{
-                  padding: "10px 16px", fontSize: 13, fontWeight: activeAthleteIdx === i ? 700 : 600,
-                  background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
-                  color: activeAthleteIdx === i ? "#171b1f" : "#8a8f94",
-                  borderBottom: activeAthleteIdx === i ? "2.5px solid #d44000" : "2.5px solid transparent",
-                  whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
-                }}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, marginBottom: 8 }}>
-        {role === "coach"
-          ? "Ton analyse réelle s'appuierait sur les données d'entraînement de tes sportifs."
-          : "Ton analyse réelle s'appuierait sur tes données d'entraînement."}
+      <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.45, margin: "14px 20px 8px" }}>
+        Ton analyse réelle s'appuierait sur tes données d'entraînement.
       </div>
 
       <div style={{ width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw" }}>
@@ -422,7 +624,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
           }}
         >
           {[0, 1, 2, 3, 4, 5, 6].map(d => {
-            const { date, sessions, wellness, ctx, recoveryAdvice, alert } = dayColumnData(d);
+            const { date, sessions, wellness, ctx, recoveryAdvice, alert, alertActions } = dayColumnData(d);
             return (
               <div key={d} data-day={d} onClick={() => setSelectedDay(d)}>
                 <DayColumn
@@ -433,6 +635,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
                   ctx={ctx}
                   recoveryAdvice={recoveryAdvice}
                   alert={alert}
+                  alertActions={alertActions}
                   onAddSession={() => {}}
                   onComplete={() => {}}
                   onEdit={() => {}}
@@ -445,7 +648,25 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
         </div>
       </div>
 
-      <Actions onNext={onNext} nextLabel="Personnaliser ce programme →" />
+      {adjustCtx && sessionForDay[demoIndex] && (
+        <AdjustSessionModal
+          session={{
+            id: "preview-today",
+            name: sessionForDay[demoIndex].name,
+            notes: sessionForDay[demoIndex].notes,
+            target_difficulty: sessionForDay[demoIndex].diff,
+          } as AdjustSessionTarget}
+          dir={adjustCtx.dir}
+          reco={adjustCtx.reco}
+          wellnessScore={SITUATIONS[situationIdx].wellness}
+          behaviors={SITUATIONS[situationIdx].behaviors}
+          advice={autoregAdvice(adjustCtx.dir, sessionForDay[demoIndex].diff)}
+          onClose={() => setAdjustCtx(null)}
+          onConfirm={handleConfirmAdjust}
+        />
+      )}
+
+      <Actions onNext={onNext} nextLabel={nextLabel} />
     </div>
   );
 }

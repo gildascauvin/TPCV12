@@ -46,7 +46,7 @@ type StepId =
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level; weaknesses: string[];
   goal: string; frustration: string; trainingDays: number[];
-  coachingContext: string; athleteCount: string; coachingChallenge: string; currentTool: string;
+  coachingContext: string; athleteCount: string; coachingChallenge: string; currentTool: string; trainingStyle: string;
   name: string; wSleep: number; wBedtime: string; wStress: number; wRecovery: number;
   wBehaviors: string[]; wMotivation: number; wScore: number | null;
 };
@@ -423,6 +423,33 @@ const GOAL_META: { label: string; icon: string; focus: ProgramFocus; lower: stri
 ];
 const GOAL_TO_FOCUS: Record<string, ProgramFocus> = Object.fromEntries(GOAL_META.map(g => [g.label, g.focus]));
 const GOAL_TO_LOWER: Record<string, string> = Object.fromEntries(GOAL_META.map(g => [g.label, g.lower]));
+
+/* Contenu coach post-concept_autoreg (2026-08-14) — remplace level_2a/goal_2a/days_2a côté coach
+   uniquement (le sportif garde faiblesses/objectif du bloc/jours inchangés) ; sport reste sport_2a,
+   déjà coach-aware. Même step IDs/mêmes events PostHog — juste le contenu qui change, pas le
+   nombre d'étapes. Reprend les options déjà écrites sous les step IDs morts count_2b/tool_2b
+   (jamais dans un path actif) plutôt que d'en réinventer. */
+const COACH_COUNT_OPTS = [
+  { v: "1–5 sportifs",   sub: "Coaching rapproché" },
+  { v: "6–20 sportifs",  sub: "Groupe moyen" },
+  { v: "21–50 sportifs", sub: "Large effectif" },
+  { v: "50+ sportifs",   sub: "Structure club" },
+];
+const COACH_TOOL_OPTS = [
+  { id: "Excel / Google Sheets",      icon: "📊" },
+  { id: "Application de suivi",       icon: "📱" },
+  { id: "Questionnaire / formulaire", icon: "📋" },
+  { id: "Plusieurs outils différents", icon: "🔀" },
+  { id: "Principalement au feeling",  icon: "🤷" },
+];
+// "Ils suivent des programmes personnalisés" et "Chaque sportif a son propre programme" du brief
+// initial disaient la même chose (programme individuel par sportif) — fusionnées, 3 options au
+// lieu de 4 (retour de Gildas).
+const COACH_STYLE_OPTS = [
+  { id: "Tous suivent le même programme",                  icon: "🧑‍🤝‍🧑" },
+  { id: "Programme commun avec adaptations individuelles", icon: "🔀" },
+  { id: "Chaque sportif a son propre programme",           icon: "👤" },
+];
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -884,6 +911,27 @@ const PLANNING_TIME_COACH_INSIGHTS: Record<string, string> = {
   "Oui, c'est souvent chronophage": "Planifier la charge de chaque sportif te prend souvent trop de temps.",
   "Oui, c'est le principal frein de ma semaine": "La planification de la charge est le principal frein de ta semaine.",
 };
+/* Ajoutées le 2026-08-14 : nombre de sportifs/outil de suivi/style d'entraînement (level_2a/
+   goal_2a/days_2a côté coach, voir plus haut) — même logique "after" que les tables ci-dessus,
+   .before n'est jamais affiché (carte grisée générique), voir compareRows plus bas. */
+const ATHLETE_COUNT_INSIGHTS: Record<string, string> = {
+  "1–5 sportifs":   "Suivi individuel fin, sans effort de plus.",
+  "6–20 sportifs":  "Toute l'équipe visible d'un coup d'œil.",
+  "21–50 sportifs": "Priorisation automatique sur qui a besoin d'attention.",
+  "50+ sportifs":   "Structure club sans perdre le suivi individuel.",
+};
+const TRACKING_TOOL_INSIGHTS: Record<string, string> = {
+  "Excel / Google Sheets":      "Fini les tableurs à remplir à la main.",
+  "Application de suivi":       "Wellness et charge dans un seul endroit.",
+  "Questionnaire / formulaire": "Les réponses arrivent déjà analysées.",
+  "Plusieurs outils différents": "Un seul endroit pour tout voir.",
+  "Principalement au feeling":  "Le ressenti devient une vraie donnée.",
+};
+const TRAINING_STYLE_INSIGHTS: Record<string, string> = {
+  "Tous suivent le même programme":                        "Chaque sportif garde son propre wellness.",
+  "Programme commun avec adaptations individuelles":       "Les adaptations se font automatiquement.",
+  "Chaque sportif a son propre programme":                  "Chaque programme s'ajuste sans y repenser.",
+};
 /* Tags courts de la carte grisée "Ton profil : {persona}" (profile_recap) — un par dimension du
    diagnostic, pas par réponse individuelle (contrairement aux tables ci-dessus) : cette carte est
    volontairement générique/rapide à lire, la personnalisation réelle vit dans la carte "Avec
@@ -1056,6 +1104,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [athleteCount, setAthleteCount]           = useState(pendingData?.athleteCount || "");
   const [coachingChallenge, setCoachingChallenge] = useState(pendingData?.coachingChallenge || "");
   const [currentTool, setCurrentTool]             = useState(pendingData?.currentTool || "");
+  const [trainingStyle, setTrainingStyle]         = useState(pendingData?.trainingStyle || "");
+
+  // Coach : days_2a ne fait plus choisir de jours (remplacé par "comment s'entraînent-ils", voir
+  // plus bas) — 4 séances/semaine par défaut pour alimenter generateAndAssignProgram() à
+  // profile_recap sans question supplémentaire (décision de Gildas, 2026-08-14). Lun/Mar/Jeu/Ven.
+  useEffect(() => {
+    if (role === "coach") setTrainingDays([1, 2, 4, 5]);
+  }, [role]);
 
   /* account */
   const [name, setName]         = useState(pendingData?.name || "");
@@ -1598,7 +1654,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   async function handleGoogleRegister() {
     const pending: PendingData = {
       role, sport, sportPrecision, level, weaknesses, goal, frustration, trainingDays,
-      coachingContext, athleteCount, coachingChallenge, currentTool, name,
+      coachingContext, athleteCount, coachingChallenge, currentTool, trainingStyle, name,
       wSleep, wBedtime, wStress, wRecovery, wBehaviors, wMotivation, wScore,
     };
     const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(pending)))));
@@ -1942,16 +1998,24 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── 2A-2. FAIBLESSES (remplace l'ancien step "niveau" — même step ID level_2a, contenu
-             différent, pour ne pas perturber le funnel PostHog historique) ── */}
-        {currentStep === "level_2a" && (
+        {/* ── 2A-2. FAIBLESSES (sportif) / NOMBRE DE SPORTIFS (coach) — même step ID level_2a,
+             contenu différent par rôle, pour ne pas perturber le funnel PostHog historique ── */}
+        {currentStep === "level_2a" && (role === "coach" ? (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Les points à travailler en priorité de tes sportifs ?" : "Tes points à travailler en priorité ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Combien de sportifs suis-tu ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Dimensionne l&apos;aperçu Coach Control de la fin du parcours.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
+              {COACH_COUNT_OPTS.map(c => (
+                <Choice key={c.v} icon="" title={c.v} sub={c.sub} selected={athleteCount === c.v}
+                  onClick={() => isRegisterMode ? nextAfterChoice(() => setAthleteCount(c.v)) : setAthleteCount(c.v)} />
+              ))}
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              {role === "coach" ? "On biaise la sélection d'exercices vers ce qui compte le plus pour eux." : "On biaise la sélection d'exercices de ton programme vers ce qui compte le plus pour toi."}
-            </div>
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />}
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Tes points à travailler en priorité ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On biaise la sélection d&apos;exercices de ton programme vers ce qui compte le plus pour toi.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
               {(!sport && customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
                 <Chip key={w.key} label={w.label} checkmark selected={weaknesses.includes(w.key)}
@@ -1963,18 +2027,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14 }}>Jusqu&apos;à 2 priorités — optionnel.</div>
             <Actions onNext={next} nextLabel="Suivant →" />
           </div>
-        )}
+        ))}
 
-        {/* ── 2A-3. OBJECTIF DU BLOC (4 options réelles, pilotent ProgramFocus — remplace les 4
-             options narratives qui n'alimentaient que profiles.objective) ── */}
-        {currentStep === "goal_2a" && (
+        {/* ── 2A-3. OBJECTIF DU BLOC (sportif) / SUIVI ACTUEL (coach) — même step ID goal_2a ── */}
+        {currentStep === "goal_2a" && (role === "coach" ? (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "L'objectif de ce bloc pour tes sportifs ?" : "L'objectif de ce bloc ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Comment suis-tu actuellement tes sportifs ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Pour comprendre ce que Coach Control remplace concrètement.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
+              {COACH_TOOL_OPTS.map(t => (
+                <Choice key={t.id} icon={t.icon} title={t.id} sub="" selected={currentTool === t.id}
+                  onClick={() => isRegisterMode ? nextAfterChoice(() => setCurrentTool(t.id)) : setCurrentTool(t.id)} />
+              ))}
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              {role === "coach" ? "Change vraiment la façon dont leur programme est construit." : "Change vraiment la façon dont ton programme est construit."}
-            </div>
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />}
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>L&apos;objectif de ce bloc ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Change vraiment la façon dont ton programme est construit.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {GOAL_META.map(o => (
                 <Choice key={o.label} icon={o.icon} title={o.label} sub="" selected={goal === o.label}
@@ -1983,7 +2054,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             </div>
             {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />}
           </div>
-        )}
+        ))}
 
         {/* ── 2A-4. FRUSTRATION ── */}
         {currentStep === "frustration_2a" && (
@@ -2005,15 +2076,27 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── 2A-5. JOURS D'ENTRAÎNEMENT ── */}
-        {currentStep === "days_2a" && (
+        {/* ── 2A-5. JOURS D'ENTRAÎNEMENT (sportif) / ENTRAÎNEMENT ÉQUIPE (coach) — même step ID
+             days_2a. Côté coach, plus de sélecteur de jours : 4 séances/semaine par défaut (voir
+             l'effet qui pose trainingDays au choix du rôle), cette étape sert le contraste de
+             profile_recap juste après. ── */}
+        {currentStep === "days_2a" && role === "coach" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Créons un premier programme" : "Quels sont tes jours d'entraînement ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Comment tes sportifs s&apos;entraînent-ils aujourd&apos;hui ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Construit le contraste de l&apos;écran suivant.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
+              {COACH_STYLE_OPTS.map(o => (
+                <Choice key={o.id} icon={o.icon} title={o.id} sub="" selected={trainingStyle === o.id}
+                  onClick={() => isRegisterMode ? nextAfterChoice(() => setTrainingStyle(o.id)) : setTrainingStyle(o.id)} />
+              ))}
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>
-              {role === "coach" ? "Choisis les jours d'entraînement de tes sportifs." : "Tes séances seront planifiées sur ces jours."}
-            </div>
+            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!trainingStyle} />}
+          </div>
+        )}
+        {currentStep === "days_2a" && role !== "coach" && (
+          <div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Quels sont tes jours d&apos;entraînement ?</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>Tes séances seront planifiées sur ces jours.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 8 }}>
               {([
                 { dow: 1, full: "Lundi" },
@@ -2425,6 +2508,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { before: OVERLOAD_COACH_INSIGHTS[overloadCoachAns] || "Tes sportifs poussent parfois plus dur que prévu, sans que tu le voies venir.", after: "Le RPE réel est comparé au prévu." },
                 { before: PLANNING_TIME_COACH_INSIGHTS[planningCoachAns] || "La planification de la charge de tes sportifs se fait au feeling.", after: "Un plan de charge généré par sportif." },
                 { before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.", after: "Alertes wellness avant la blessure." },
+                // Avant/après ajouté le 2026-08-14 (level_2a/goal_2a/days_2a coach) — même pattern,
+                // 3 lignes de plus plutôt qu'un écran séparé : profile_recap a déjà la carte
+                // empilée grise/blanche, pas besoin d'en construire une seconde.
+                { before: "Le suivi de la charge devient difficile à mesure que le groupe grandit.", after: ATHLETE_COUNT_INSIGHTS[athleteCount] || "Suivi individuel fin, sans effort de plus." },
+                { before: "Les ajustements doivent être faits manuellement.", after: TRACKING_TOOL_INSIGHTS[currentTool] || "Un seul endroit pour tout voir." },
+                { before: "La récupération varie d'un sportif à l'autre.", after: TRAINING_STYLE_INSIGHTS[trainingStyle] || "Chaque programme s'ajuste sans y repenser." },
               ]
             : [
                 { before: FRUSTRATION_INSIGHTS[frustration] || "Tu manques de visibilité sur ta propre progression.", after: "Ta progression est analysée." },
@@ -2461,7 +2550,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
@@ -2470,7 +2559,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} coachFirstName={name} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
