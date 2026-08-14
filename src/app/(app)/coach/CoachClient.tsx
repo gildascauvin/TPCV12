@@ -59,9 +59,9 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   if (withHard.length > 0 && avgWellness >= 80)
     return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue — équipe en forme (${avgWellness}/100). Fenêtre idéale, valide les charges.`;
   if (withHard.length > 0)
-    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile (≥8/10) prévue. Wellness équipe à ${avgWellness}/100 — surveille les réponses après séance.`;
+    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile (≥8/10) prévue. Récupération équipe à ${avgWellness}/100 — surveille les réponses après séance.`;
   if (avgWellness < 55)
-    return `Wellness équipe bas (${avgWellness}/100). Réduis les intensités et favorise la récupération aujourd'hui.`;
+    return `Récupération équipe basse (${avgWellness}/100). Réduis les intensités et favorise la récupération aujourd'hui.`;
   if (avgWellness < 70)
     return `Forme correcte (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Les charges planifiées sont adaptées, pas besoin d'intervenir.`;
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
@@ -248,8 +248,19 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }
   }
 
+  async function undoAutoregAdjust(athleteId: string, session: CoachViewSession, original: { notes: string | null; target_difficulty: number | null }) {
+    const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: original });
+    if (result.ok) {
+      setSessions(prev => prev.map(s => s.id === session.id ? { ...s, ...original } : s));
+    }
+  }
+
   function markAutoregDecided(athleteId: string) {
     setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.add(athleteId); return s; });
+  }
+
+  function unmarkAutoregDecided(athleteId: string) {
+    setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.delete(athleteId); return s; });
   }
 
   /* Décide quel outil ouvrir pour un athlète de la file : le modal décharge/surcharge (1-clic, même
@@ -314,8 +325,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   async function handleAdjustChainConfirm(pct: number) {
     if (!adjustChainCtx) return;
+    const original = { notes: adjustChainCtx.session.notes, target_difficulty: adjustChainCtx.session.target_difficulty };
     await applyAutoregAdjust(adjustChainCtx.athlete.id, adjustChainCtx.session, pct);
-    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, pct);
+    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, pct, original);
     const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(adjustChainCtx.athlete.id);
     advanceQueue(newReviewed);
   }
@@ -413,7 +425,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     ? <WellnessRing score={avgWellness} size={52} />
                     : <div style={{ fontSize: 34, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
                   }
-                  <div style={label}>Wellness équipe</div>
+                  <div style={label}>Récupération équipe</div>
                 </div>
                 {divider}
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -474,7 +486,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   Invite ton premier sportif
                 </div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
-                  Ton espace est prêt. Partage une invitation pour commencer à suivre le wellness et les séances de tes sportifs.
+                  Ton espace est prêt. Partage une invitation pour commencer à suivre la récupération et les séances de tes sportifs.
                 </div>
               </div>
             </div>
@@ -545,7 +557,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     trend={trends[a.id]}
                     onDecide={() => requireSubscription(() => handleDecide(a))}
                     onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
-                    onAutoregDecided={() => markAutoregDecided(a.id)} />
+                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                    onAutoregDecided={() => markAutoregDecided(a.id)}
+                    onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Aucune décision urgente. L'équipe peut suivre le plan.
@@ -568,7 +582,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     trend={trends[a.id]}
                     onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))}
                     onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
-                    onAutoregDecided={() => markAutoregDecided(a.id)} />
+                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                    onAutoregDecided={() => markAutoregDecided(a.id)}
+                    onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
                   <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
                     Tous les sportifs nécessitent une attention aujourd'hui.

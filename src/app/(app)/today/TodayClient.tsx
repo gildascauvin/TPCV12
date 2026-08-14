@@ -617,9 +617,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     sessionLabel={autoregTarget.name}
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onApply={async (pct) => {
+                      const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                       const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
                       const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
+                      if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      return original;
+                    }}
+                    onUndo={async (original) => {
+                      if (!original) return;
+                      const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
                       if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
                     }}
                   />
@@ -628,22 +635,22 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
               if (!wellnessFilledToday) return row(
                 "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
-                "Complète ton wellness pour des conseils personnalisés",
+                "Complète ta récupération pour des conseils personnalisés",
                 "Comment tu vas ? →", openWellness
               );
               if (displayScore !== null && displayScore < 55 && maxDiff >= 8) return row(
                 "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
-                `🔥 Wellness bas · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
+                `🔥 Récupération basse · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
                 "Baisse la charge →", scrollToSessions
               );
               if (displayScore !== null && displayScore < 55 && maxDiff >= 5) return row(
                 "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
-                `⚠️ Wellness bas · Séance à ${maxDiff}/10 — surveille ton effort`,
+                `⚠️ Récupération basse · Séance à ${maxDiff}/10 — surveille ton effort`,
                 "Voir la séance →", scrollToSessions
               );
               if (displayScore !== null && displayScore < 55) return row(
                 "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
-                "💛 Wellness bas — journée de récupération recommandée"
+                "💛 Récupération basse — journée allégée recommandée"
               );
               if (displayScore !== null && displayScore >= 80 && maxDiff >= 8) return row(
                 "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",

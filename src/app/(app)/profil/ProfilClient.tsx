@@ -120,7 +120,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
           {[
             { value: doneSessions.length, label: "SÉANCES" },
             { value: avgRpe ?? "—", label: "DIFF. MOY." },
-            { value: avgWellness ?? "—", label: "WELLNESS" },
+            { value: avgWellness ?? "—", label: "RÉCUPÉRATION" },
           ].map(({ value, label }) => (
             <div key={label} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 10px", textAlign: "center", boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize: 28, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.05em", lineHeight: 1 }}>{value}</div>

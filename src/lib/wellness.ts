@@ -133,7 +133,7 @@ function recoveryAdvice(
   doneToday: Session[],
   postSession?: { totalImpact: number }
 ): string {
-  if (!wellness) return "Remplis ton wellness pour voir ton état de récupération.";
+  if (!wellness) return "Remplis ta récupération pour voir ton état de forme.";
   const score = wellness.score ?? 0;
 
   if (doneToday.length && postSession && postSession.totalImpact > 0) {
@@ -141,7 +141,7 @@ function recoveryAdvice(
     const loadTip = load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce."
       : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier."
       : "Routine simple : hydratation, marche légère et sommeil stable.";
-    return `Wellness −${postSession.totalImpact} pts après l'effort. ${loadTip}`;
+    return `Récupération −${postSession.totalImpact} pts après l'effort. ${loadTip}`;
   }
 
   const { sleep, stress, recovery, motivation } = wellness;
@@ -190,7 +190,7 @@ export function getRecoveryAdvice(
   wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "behaviors"> | null,
   loadCls: "hard" | "moderate" | "easy" | "rest"
 ): string {
-  if (!wellness) return "Remplis ton wellness pour voir ton état de récupération.";
+  if (!wellness) return "Remplis ta récupération pour voir ton état de forme.";
   const { sleep, stress, recovery, motivation, behaviors } = wellness;
 
   const charge = loadCls === "hard" ? "charge élevée en ce moment"

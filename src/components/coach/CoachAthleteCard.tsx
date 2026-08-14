@@ -6,7 +6,7 @@ import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
-import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregAdvice, type AutoregOriginal } from "@/lib/autoregulation";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
 
@@ -74,17 +74,17 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   if (trend === "accumulation") return "Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.";
   if (trend === "fatigue_persistante") return "Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.";
   if (a.wellnessFilledToday === false) {
-    if (maxDiff >= 8) return "Wellness non renseigné aujourd'hui + séance dure prévue : vérifier avec lui avant.";
-    return "Wellness non renseigné aujourd'hui.";
+    if (maxDiff >= 8) return "Récupération non renseignée aujourd'hui + séance dure prévue : vérifier avec lui avant.";
+    return "Récupération non renseignée aujourd'hui.";
   }
-  if (a.wellness_score < 55 && maxDiff >= 7) return "Wellness bas + séance difficile : alléger maintenant.";
+  if (a.wellness_score < 55 && maxDiff >= 7) return "Récupération basse + séance difficile : alléger maintenant.";
   if (maxDiff >= 8) return "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
-  if (a.wellness_score < 65 && maxDiff <= 4) return "Wellness légèrement bas, séance légère : rien à changer, surveiller demain.";
-  if (a.wellness_score < 65) return "Wellness à surveiller : réduire le volume ou vérifier la difficulté réelle.";
+  if (a.wellness_score < 65 && maxDiff <= 4) return "Récupération légèrement basse, séance légère : rien à changer, surveiller demain.";
+  if (a.wellness_score < 65) return "Récupération à surveiller : réduire le volume ou vérifier la difficulté réelle.";
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onAutoregDecided, tourId, trend }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -94,9 +94,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      RLS bloque l'écriture cross-user directe). Jamais appelé pour "Maintenir" (aucune donnée
      à modifier dans ce cas). */
   onApplyAdjust: (session: CoachViewSession, pct: number) => Promise<void>;
+  /* "Annuler" une décision déjà appliquée — réécrit notes/target_difficulty d'origine tels quels
+     (snapshot capturé au moment de l'application, voir autoregulation.ts), jamais une inversion
+     calculée de parseAndApply()/adjustDifficulty(). */
+  onUndoAdjust: (session: CoachViewSession, original: AutoregOriginal) => Promise<void>;
   /* Marque l'athlète "traité" (Maintenir OU décharge/surcharge appliquée) — garde le compteur
      "Décisions restantes" du bandeau du haut synchronisé avec ce chemin de décision rapide. */
   onAutoregDecided: () => void;
+  /* Symétrique : "Annuler" repasse l'athlète en attente de décision. */
+  onAutoregUndone: () => void;
   tourId?: string;
   trend?: TrendCode | null;
 }) {
@@ -210,8 +216,17 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, firstName)}`}
             sessionLabel={topSession.name}
             onPreviewChange={setPreviewPct}
-            onApply={async (pct) => { await onApplyAdjust(topSession, pct); onAutoregDecided(); }}
+            onApply={async (pct) => {
+              const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
+              await onApplyAdjust(topSession, pct);
+              onAutoregDecided();
+              return original;
+            }}
             onMaintenir={onAutoregDecided}
+            onUndo={async (original) => {
+              if (original) await onUndoAdjust(topSession, original);
+              onAutoregUndone();
+            }}
           />
         ) : (
           <>

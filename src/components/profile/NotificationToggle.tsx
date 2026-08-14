@@ -38,8 +38,8 @@ export default function NotificationToggle() {
             {status === "unsupported" && "Non disponible sur ce navigateur"}
             {status === "install-needed" && "Ajoute ThePerfClub à ton écran d'accueil pour les activer"}
             {status === "checking" && "Vérification…"}
-            {status === "on" && "Rappels séance et wellness activés"}
-            {status === "off" && "Reçois des rappels pour ta séance et ton wellness"}
+            {status === "on" && "Rappels séance et récupération activés"}
+            {status === "off" && "Reçois des rappels pour ta séance et ta récupération"}
           </div>
         </div>
         {(status === "on" || status === "off") && (

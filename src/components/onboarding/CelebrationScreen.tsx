@@ -104,7 +104,7 @@ export default function CelebrationScreen({
             <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
               <WellnessRing dark score={wScore} size={64} strokeWidth={6} />
               <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Score wellness</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Score de récupération</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.5 }}>
                   {wellnessTip || "Ton programme tient compte de ta récupération réelle, pas d'un plan générique."}
                 </div>

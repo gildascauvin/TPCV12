@@ -649,6 +649,12 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                     sessionLabel={autoregTarget.name}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                    onUndo={async (original) => {
+                      if (!original) return;
+                      const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: original });
+                      if (result.ok) setSessions(prev => prev.map(s => s.id === autoregTarget.id ? { ...s, ...original } : s));
+                      setDecisionTick(t => t + 1);
+                    }}
                   />
                 );
               } else {
@@ -756,7 +762,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
             if (result.ok) {
               setSessions(prev => prev.map(s => s.id === adjustCtx.session.id ? { ...s, notes, target_difficulty } : s));
             }
-            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct);
+            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
             setDecisionTick(t => t + 1);
             setAdjustCtx(null);
           }}

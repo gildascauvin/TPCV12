@@ -28,7 +28,7 @@ export default function WelcomeModal({ mode, onClose }: Props) {
               Ton espace est prêt
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.65, marginBottom: 24, textAlign: "center" }}>
-              On a pré-rempli ton historique avec des données réalistes — séances passées, wellness, séances à venir — calibrées sur ton niveau et ton sport.
+              On a pré-rempli ton historique avec des données réalistes — séances passées, récupération, séances à venir — calibrées sur ton niveau et ton sport.
               <br /><br />
               C&apos;est un point de départ pour que tu te projettes. Tout est remplaçable et personnalisable dès maintenant.
             </div>

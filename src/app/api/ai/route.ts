@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   const prompt = `Données sportif :
 - Sport : ${body.profil.sport ?? "non renseigné"}
 - Objectif : ${body.profil.objective ?? "non renseigné"}
-- Wellness aujourd'hui : sommeil ${body.wellness.sleep}/10, stress ${body.wellness.stress}/10, récupération ${body.wellness.recovery}/10, motivation ${body.wellness.motivation}/10, score global ${body.wellness.score}/100
+- Récupération aujourd'hui : sommeil ${body.wellness.sleep}/10, stress ${body.wellness.stress}/10, récupération ${body.wellness.recovery}/10, motivation ${body.wellness.motivation}/10, score global ${body.wellness.score}/100
 - Comportements négatifs : ${body.wellness.behaviors.join(", ") || "aucun"}
 - Séances cette semaine : ${JSON.stringify(body.sessions_semaine)}
 

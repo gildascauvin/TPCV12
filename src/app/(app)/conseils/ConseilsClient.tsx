@@ -22,8 +22,8 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
           <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", marginBottom: 8 }}>Données en cours de collecte</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", lineHeight: 1.5, marginBottom: 18 }}>
             {remaining > 0
-              ? `Renseigne ton wellness ${remaining} jour${remaining > 1 ? "s" : ""} de plus pour voir l'impact réel de tes comportements.`
-              : "Continue à renseigner ton wellness — les corrélations apparaîtront bientôt."}
+              ? `Renseigne ta récupération ${remaining} jour${remaining > 1 ? "s" : ""} de plus pour voir l'impact réel de tes comportements.`
+              : "Continue à renseigner ta récupération — les corrélations apparaîtront bientôt."}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             {["🧘 Stretching", "🧊 Douche froide", "📖 Lecture", "💧 Hydratation", "🍷 Alcool", "📱 Écran tard"].map(b => (
@@ -51,7 +51,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
           <div>
             <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
             <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet des comportements de la veille sur ton wellness</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet des comportements de la veille sur ta récupération</div>
           </div>
           <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
         </div>
@@ -101,7 +101,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
                 <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
-                {" "}améliore ton wellness de{" "}
+                {" "}améliore ta récupération de{" "}
                 <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
               </div>
             )}
@@ -109,7 +109,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
                 <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
-                {" "}pénalise ton wellness de{" "}
+                {" "}pénalise ta récupération de{" "}
                 <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
               </div>
             )}
@@ -252,7 +252,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                       points2Raw={last7Series.map(p => p.form)} zones2={FORM_ZONES}
                     />
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Dégradé bleu = wellness (clair = en forme) · Pointillé coloré = Forme</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Dégradé bleu = récupération (clair = en forme) · Pointillé coloré = Forme</div>
                 </div>
               </div>
 

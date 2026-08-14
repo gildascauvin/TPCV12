@@ -415,6 +415,12 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                     sessionLabel={autoregTarget.name}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                    onUndo={async (original) => {
+                      if (!original) return;
+                      const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
+                      if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      setDecisionTick(t => t + 1);
+                    }}
                   />
                 );
               } else {
@@ -621,7 +627,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
             const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
             const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", adjustCtx.session.id).select().single();
             if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct);
+            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
             setDecisionTick(t => t + 1);
             setAdjustCtx(null);
           }}

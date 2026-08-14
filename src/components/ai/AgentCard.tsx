@@ -74,7 +74,7 @@ export default function AgentCard({ advice, loading, onRefresh }: AgentCardProps
 
       {!loading && !advice && (
         <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.55)" }}>
-          Renseigne ton wellness pour obtenir des conseils personnalisés.
+          Renseigne ta récupération pour obtenir des conseils personnalisés.
         </p>
       )}
     </div>

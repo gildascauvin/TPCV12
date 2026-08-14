@@ -52,8 +52,8 @@ export function autoregAdvice(dir: AutoregDir, plannedDifficulty: number, subjec
   const qualif = qualitativeDifficulty(plannedDifficulty);
   if (dir === "low") {
     return subject
-      ? `Wellness bas — la séance ${qualif} prévue est trop élevée pour la récupération de ${subject}.`
-      : `Wellness bas — la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
+      ? `Récupération basse — la séance ${qualif} prévue est trop élevée pour l'état de forme de ${subject}.`
+      : `Récupération basse — la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
   }
   return subject
     ? `Forme optimale — la séance ${qualif} prévue laisse de la marge pour ${subject}.`
@@ -74,8 +74,13 @@ export function autoregCtaLabel(dir: AutoregDir): string {
    appliquée à une difficulté 8 retombe à 7, qui reste ≥7 — sans ce garde-fou la suggestion réapparaît
    indéfiniment). Clé = id de la séance concernée, réinitialisée naturellement chaque jour (la date
    fait partie de la valeur stockée, pas de purge active nécessaire).
-   */
-export interface AutoregDecision { date: string; dir: AutoregDir; pct: number | null } // pct null = "Maintenir"
+
+   `original` (notes/difficulté AVANT application) est capturé par l'appelant au moment précis de la
+   décision — jamais recalculé après coup — car parseAndApply()/adjustDifficulty() ne sont pas
+   exactement inversibles (arrondis). "Annuler" réécrit ces valeurs d'origine telles quelles plutôt
+   que de tenter d'inverser la transformation. */
+export interface AutoregOriginal { notes: string | null; target_difficulty: number | null }
+export interface AutoregDecision { date: string; dir: AutoregDir; pct: number | null; original?: AutoregOriginal } // pct null = "Maintenir"
 
 function storageKey(sessionId: string) { return `autoreg_decided_${sessionId}`; }
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -91,9 +96,9 @@ export function getAutoregDecision(sessionId: string): AutoregDecision | null {
   } catch { return null; }
 }
 
-export function setAutoregDecision(sessionId: string, dir: AutoregDir, pct: number | null) {
+export function setAutoregDecision(sessionId: string, dir: AutoregDir, pct: number | null, original?: AutoregOriginal) {
   if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(storageKey(sessionId), JSON.stringify({ date: todayStr(), dir, pct })); } catch {}
+  try { window.localStorage.setItem(storageKey(sessionId), JSON.stringify({ date: todayStr(), dir, pct, original })); } catch {}
 }
 
 export function clearAutoregDecision(sessionId: string) {

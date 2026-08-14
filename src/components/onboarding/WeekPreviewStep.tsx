@@ -285,8 +285,14 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     const target_difficulty = adjustDifficulty(session.target_difficulty ?? 6, pct);
     setDemoSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));
   }
+  async function handleCoachUndoAdjust(session: CoachViewSession, original: { notes: string | null; target_difficulty: number | null }) {
+    setDemoSessions(prev => prev.map(s => s.id === session.id ? { ...s, ...original } : s));
+  }
   function markCoachReviewed(athleteId: string) {
     setReviewedIds(prev => { const s = new Set(prev); s.add(athleteId); return s; });
+  }
+  function unmarkCoachReviewed(athleteId: string) {
+    setReviewedIds(prev => { const s = new Set(prev); s.delete(athleteId); return s; });
   }
   /* Priorité démo : la vraie attention() (jamais "priorité" pour une opportunité de surcharge, par
      design) est complétée par "a une suggestion active" — pour que Pierre (surcharge) rejoigne
@@ -412,6 +418,14 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
           sessionLabel={s.name}
           onMaintenir={() => {}}
           onOpenModal={() => setAdjustCtx({ dir: suggestion.dir, reco: suggestion.reco })}
+          onUndo={() => {
+            setPreviewOverrides(prev => {
+              const next = { ...prev };
+              delete next[situationIdx];
+              return next;
+            });
+            setDemoTick(t => t + 1);
+          }}
         />
       );
     } else {
@@ -429,7 +443,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     const notes = demoSession.notes ? demoSession.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : demoSession.notes;
     const diff = adjustDifficulty(demoSession.diff, pct);
     setPreviewOverrides(prev => ({ ...prev, [situationIdx]: { notes, diff } }));
-    setAutoregDecision(`preview-today-${situationIdx}`, adjustCtx.dir, pct);
+    setAutoregDecision(`preview-today-${situationIdx}`, adjustCtx.dir, pct, { notes: demoSession.notes, target_difficulty: demoSession.diff });
     setDemoTick(t => t + 1);
     setAdjustCtx(null);
   }
@@ -540,7 +554,9 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
                     isReviewed={reviewedIds.has(a.id)}
                     onDecide={() => markCoachReviewed(a.id)}
                     onApplyAdjust={handleCoachApplyAdjust}
+                    onUndoAdjust={handleCoachUndoAdjust}
                     onAutoregDecided={() => markCoachReviewed(a.id)}
+                    onAutoregUndone={() => unmarkCoachReviewed(a.id)}
                   />
                 ))}
               </div>
@@ -563,7 +579,9 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
                     isReviewed={false}
                     onDecide={() => markCoachReviewed(a.id)}
                     onApplyAdjust={handleCoachApplyAdjust}
+                    onUndoAdjust={handleCoachUndoAdjust}
                     onAutoregDecided={() => markCoachReviewed(a.id)}
+                    onAutoregUndone={() => unmarkCoachReviewed(a.id)}
                   />
                 ))}
               </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
-  type AutoregDir, AUTOREG_CHIPS, formatAutoregPct, autoregCtaLabel,
+  type AutoregDir, type AutoregOriginal, AUTOREG_CHIPS, formatAutoregPct, autoregCtaLabel,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
 
@@ -23,9 +23,14 @@ interface Props {
   /* Ex. "Sprint technique" — utilisé dans la ligne "traité" ("−15% appliqué · Sprint technique") */
   sessionLabel: string;
   onPreviewChange?: (pct: number | null) => void;
-  onApply?: (pct: number) => Promise<void>;
+  /* Retourne le snapshot AVANT écriture (notes/target_difficulty d'origine) — capturé par le
+     parent, seul à connaître la valeur pré-modification au moment précis de l'appel. Stocké
+     avec la décision pour permettre un "Annuler" fidèle (voir autoregulation.ts). */
+  onApply?: (pct: number) => Promise<AutoregOriginal | void>;
   onMaintenir?: () => void;
-  onUndo?: () => void;
+  /* Reçoit le snapshot d'origine stocké au moment de la décision (absent pour un "Maintenir",
+     qui n'a rien écrit) — au parent de réécrire ces valeurs telles quelles en base. */
+  onUndo?: (original?: AutoregOriginal) => void | Promise<void>;
   /* Planning (/week, /coach/planning) : pas d'expansion inline, "Alléger/Surcharger →" ouvre
      directement le modal (AdjustSessionModal) — fourni, remplace tout le mode "open" ci-dessous.
      Le "traité" reste géré ici (localStorage) ; le parent doit rappeler setAutoregDecision() lui-même
@@ -38,6 +43,7 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
   const [selectedPct, setSelectedPct] = useState(reco);
   const [decidedPct, setDecidedPct] = useState<number | null>(null);
   const [applying, setApplying] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
     const decision = getAutoregDecision(sessionId);
@@ -76,19 +82,22 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
   async function apply() {
     if (!onApply) return;
     setApplying(true);
-    await onApply(selectedPct);
+    const original = await onApply(selectedPct);
     setApplying(false);
-    setAutoregDecision(sessionId, dir, selectedPct);
+    setAutoregDecision(sessionId, dir, selectedPct, original ?? undefined);
     setMode("decided");
     setDecidedPct(selectedPct);
     onPreviewChange?.(selectedPct);
   }
 
-  function undo() {
+  async function undo() {
+    const decision = getAutoregDecision(sessionId);
+    setUndoing(true);
+    await onUndo?.(decision?.original);
+    setUndoing(false);
     clearAutoregDecision(sessionId);
     setMode("idle");
     onPreviewChange?.(null);
-    onUndo?.();
   }
 
   const chips = AUTOREG_CHIPS[dir];
@@ -161,8 +170,8 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.9)", minWidth: 0 }}>
             {decidedPct !== null ? `${formatAutoregPct(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
           </div>
-          <button onClick={undo} style={{ background: "none", border: "none", color: "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-            Annuler
+          <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
+            {undoing ? "..." : "Annuler"}
           </button>
         </div>
       )}

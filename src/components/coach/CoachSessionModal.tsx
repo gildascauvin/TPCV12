@@ -32,15 +32,15 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
   if (trend === "accumulation") points.push("Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.");
   if (trend === "fatigue_persistante") points.push("Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.");
   if (wellness === null) {
-    if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — wellness non renseigné aujourd'hui, vérifier avec lui.`);
+    if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — récupération non renseignée aujourd'hui, vérifier avec lui.`);
     return points;
   }
   if (wellness < 55) {
-    points.push(`Wellness critique (${wellness}/100) — récupération insuffisante.`);
+    points.push(`Récupération critique (${wellness}/100) — insuffisante.`);
   } else if (wellness < 65) {
-    points.push(`Wellness faible (${wellness}/100) — surveiller la charge du jour.`);
+    points.push(`Récupération faible (${wellness}/100) — surveiller la charge du jour.`);
   } else if (wellness < 72) {
-    points.push(`Wellness en dessous de la zone optimale (${wellness}/100).`);
+    points.push(`Récupération en dessous de la zone optimale (${wellness}/100).`);
   }
   if (maxDiff >= 9) {
     points.push(`Séance maximale prévue (${maxDiff}/10) — confirmer que la forme le permet.`);
@@ -50,7 +50,7 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
     points.push(`Charge importante (${maxDiff}/10) malgré une récupération limitée.`);
   }
   if (wellness < 65 && maxDiff >= 7) {
-    points.push("Risque élevé : wellness bas + séance difficile.");
+    points.push("Risque élevé : récupération basse + séance difficile.");
   }
   return points;
 }
@@ -177,13 +177,13 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
                   </svg>
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                     <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{w !== null ? w : "—"}</span>
-                    <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
+                    <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>récup.</span>
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 900, color: wColor, letterSpacing: "-0.01em" }}>{wLabel}</div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>
-                    {w !== null ? <>Wellness <span style={{ fontWeight: 800 }}>{w}/100</span></> : "Wellness non renseigné aujourd'hui"}
+                    {w !== null ? <>Récupération <span style={{ fontWeight: 800 }}>{w}/100</span></> : "Récupération non renseignée aujourd'hui"}
                     {reviewContext.maxDiff > 0 && (
                       <> · Difficulté prévue <span style={{ fontWeight: 800, color: dColor }}>{reviewContext.maxDiff}/10</span></>
                     )}

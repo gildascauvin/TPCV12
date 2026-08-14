@@ -84,7 +84,7 @@ export default function AddAthleteModal({ athlete, onSave, onDelete, onClose }: 
           {/* Wellness */}
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Wellness actuel</div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Récupération actuelle</div>
               <div style={{ fontSize: 22, fontWeight: 1000, color: wellnessAccent, letterSpacing: "-0.04em" }}>{wellness}/100</div>
             </div>
             <input

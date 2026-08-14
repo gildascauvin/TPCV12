@@ -922,13 +922,13 @@ const ATHLETE_COUNT_INSIGHTS: Record<string, string> = {
 };
 const TRACKING_TOOL_INSIGHTS: Record<string, string> = {
   "Excel / Google Sheets":      "Fini les tableurs à remplir à la main.",
-  "Application de suivi":       "Wellness et charge dans un seul endroit.",
+  "Application de suivi":       "Récupération et charge dans un seul endroit.",
   "Questionnaire / formulaire": "Les réponses arrivent déjà analysées.",
   "Plusieurs outils différents": "Un seul endroit pour tout voir.",
   "Principalement au feeling":  "Le ressenti devient une vraie donnée.",
 };
 const TRAINING_STYLE_INSIGHTS: Record<string, string> = {
-  "Tous suivent le même programme":                        "Chaque sportif garde son propre wellness.",
+  "Tous suivent le même programme":                        "Chaque sportif garde sa propre récupération.",
   "Programme commun avec adaptations individuelles":       "Les adaptations se font automatiquement.",
   "Chaque sportif a son propre programme":                  "Chaque programme s'ajuste sans y repenser.",
 };
@@ -2197,7 +2197,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "fatigue_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tu t'entraînes dur même quand tu es fatigué ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Le wellness score t'aide à prendre les bonnes décisions.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Le score de récupération t'aide à prendre les bonnes décisions.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, je sais récupérer quand il le faut",
@@ -2225,7 +2225,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { id: "Coach",                                   icon: "👤", sub: "Individuel ou en groupe" },
                 { id: "Préparateur physique",                    icon: "🏋️", sub: "Individuel ou collectif" },
                 { id: "Kiné ou professionnel de la réhabilitation", icon: "🩺", sub: "Suivi santé & retour à l'effort" },
-                { id: "Autre",                                   icon: "⚡", sub: "Coach wellness, nutritionniste…" },
+                { id: "Autre",                                   icon: "⚡", sub: "Coach bien-être, nutritionniste…" },
               ].map(c => (
                 <Choice key={c.id} icon={c.icon} title={c.id} sub={c.sub} selected={coachingContext === c.id}
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCoachingContext(c.id)) : setCoachingContext(c.id)} />
@@ -2377,7 +2377,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "fatigue_2b" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Est-ce que tu maintiens des séances dures quand tes sportifs se sentent fatigués ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Les alertes wellness détectent ça en temps réel pour toi.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Les alertes de récupération détectent ça en temps réel pour toi.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
               {[
                 "Non, je m'adapte toujours au ressenti",
@@ -2507,7 +2507,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 { before: COACHING_CHALLENGE_INSIGHTS[coachingChallenge] || "Tu manques de visibilité sur tes sportifs au quotidien.", after: "Suivi individualisé par sportif." },
                 { before: OVERLOAD_COACH_INSIGHTS[overloadCoachAns] || "Tes sportifs poussent parfois plus dur que prévu, sans que tu le voies venir.", after: "Le RPE réel est comparé au prévu." },
                 { before: PLANNING_TIME_COACH_INSIGHTS[planningCoachAns] || "La planification de la charge de tes sportifs se fait au feeling.", after: "Un plan de charge généré par sportif." },
-                { before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.", after: "Alertes wellness avant la blessure." },
+                { before: FATIGUE_COACH_INSIGHTS[fatigueCoachAns] || "Difficile de savoir quand un sportif fatigué ne devrait pas enchaîner une séance dure.", after: "Alertes de récupération avant la blessure." },
                 // Avant/après ajouté le 2026-08-14 (level_2a/goal_2a/days_2a coach) — même pattern,
                 // 3 lignes de plus plutôt qu'un écran séparé : profile_recap a déjà la carte
                 // empilée grise/blanche, pas besoin d'en construire une seconde.
@@ -2566,7 +2566,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "wellness_q" && (
           <div>
             <div style={{ fontSize: 11, fontWeight: 800, color: "#d44000", letterSpacing: "0.10em", textTransform: "uppercase", marginBottom: 8 }}>
-              💓 Wellness du jour
+              💓 Récupération du jour
             </div>
             <div style={{ display: "flex", gap: 3, marginBottom: 20 }}>
               {Array.from({ length: WQ_TOTAL }).map((_, i) => (

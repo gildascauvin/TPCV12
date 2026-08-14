@@ -45,7 +45,7 @@ export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recove
   acwr: "Charge des 7 derniers jours comparée à la charge habituelle (28j). Une hausse trop rapide augmente le risque de blessure.",
   monotony: "Régularité de la charge d'entraînement. Trop répétitive = risque de fatigue et de blessure plus élevé (Foster, 1998).",
   strain: "Charge × Monotonie. Une charge élevée et répétitive à la fois est plus risquée que prise séparément (Foster, 1998).",
-  recovery: "Wellness du jour : sommeil, stress, courbatures, motivation.",
+  recovery: "Récupération du jour : sommeil, stress, courbatures, motivation.",
   form: "Charge chronique (Fitness) moins charge récente (Fatigue), en % de la charge chronique. Positif = fraîcheur, négatif = fatigue accumulée. Un signal de tendance relative, pas une mesure physiologique directe.",
   fitness: "Charge chronique (moyenne pondérée sur ~42j) — plus elle monte, plus l'organisme s'adapte à l'entraînement.",
   fatigue: "Charge aiguë (moyenne pondérée sur ~7j) — plus elle monte par rapport à la charge chronique, plus la fatigue récente s'accumule.",
@@ -184,17 +184,17 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
   const wellGood = recoveryInfo.label === "BONNE RÉCUP";
   const wellBad = recoveryInfo.label === "RÉCUP FRAGILE";
   if (wellGood && formGood) return coach
-    ? "Wellness et forme (charge chronique vs récente) sont alignés positivement : prêt à bien performer."
-    : "Wellness et forme (charge chronique vs récente) sont alignés positivement : tu es prêt à bien performer.";
+    ? "Récupération et forme (charge chronique vs récente) sont alignées positivement : prêt à bien performer."
+    : "Récupération et forme (charge chronique vs récente) sont alignées positivement : tu es prêt à bien performer.";
   if (wellBad && formBad) return coach
-    ? "Wellness bas et forme dégradée en même temps : signaux convergents de fatigue, récupération à prioriser."
-    : "Wellness bas et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.";
+    ? "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, récupération à prioriser."
+    : "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.";
   if (wellGood && formBad) return coach
-    ? "Wellness bon, mais charge récente au-dessus de l'habituelle : une fatigue avec décalage est possible dans les prochains jours."
+    ? "Récupération bonne, mais charge récente au-dessus de l'habituelle : une fatigue avec décalage est possible dans les prochains jours."
     : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : une fatigue avec décalage est possible dans les prochains jours.";
   if (wellBad && formGood) return coach
-    ? "Charge récente sous l'habituelle mais wellness bas : la fatigue ne semble pas (encore) liée à l'entraînement — sommeil/stress à explorer."
-    : "Ta charge récente est sous ta charge habituelle mais ton wellness reste bas : la fatigue ne semble pas (encore) liée à l'entraînement — regarde sommeil/stress.";
+    ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement — sommeil/stress à explorer."
+    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement — regarde sommeil/stress.";
   return recoveryInfo.text;
 }
 

@@ -48,7 +48,7 @@ export default function AuthBackground({ children }: { children: React.ReactNode
               </svg>
               <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1 }}>78</div>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", fontWeight: 700, marginTop: 2 }}>WELLNESS</div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", fontWeight: 700, marginTop: 2 }}>RÉCUP.</div>
               </div>
             </div>
             <div>

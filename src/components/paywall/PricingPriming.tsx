@@ -73,7 +73,7 @@ function faqItems(role: "athlete" | "coach") {
     { q: "Puis-je changer de formule après ?", a: "Oui, tu peux basculer entre mensuel et annuel à tout moment depuis ton profil." },
     role === "coach"
       ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
-      : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté automatiquement selon ton wellness." },
+      : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté automatiquement selon ta récupération." },
   ];
 }
 

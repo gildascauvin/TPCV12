@@ -42,7 +42,7 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
   if (signature.kind === "no_data") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13 }}>
-        🕳️ Pas de wellness renseigné ces 28 derniers jours — pas de signature de fatigue à afficher.
+        🕳️ Pas de récupération renseignée ces 28 derniers jours — pas de signature de fatigue à afficher.
       </div>
     );
   }
@@ -221,7 +221,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
             <div style={{ fontSize: 40, marginBottom: 12 }}>🏅</div>
             <div style={{ fontSize: 18, fontWeight: 1000, color: "#171b1f", marginBottom: 8 }}>Aucun sportif encore</div>
             <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5, marginBottom: 20 }}>
-              Invite un sportif pour commencer à suivre son wellness et ses séances.
+              Invite un sportif pour commencer à suivre sa récupération et ses séances.
             </div>
             <button
               data-tour="invite-btn"
