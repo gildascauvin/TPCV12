@@ -1018,13 +1018,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      paint, path perdrait "value_intro" sous les yeux d'un visiteur déjà en train de le regarder
      (flash value_intro→role). Même mécanisme que claimedNameResolved plus bas (écran vide court,
      jamais bloquant indéfiniment) — seuls les visiteurs éligibles (isRegisterMode) sont concernés,
-     une reprise de session n'a pas besoin d'attendre puisque son stepIdx n'est de toute façon pas 0. */
+     une reprise de session n'a pas besoin d'attendre puisque son stepIdx n'est de toute façon pas 0.
+     Bug trouvé le 2026-08-14 (voir mémoire project_ab_test_skip_value_intro) : un timeout fixe de
+     700ms devinait la résolution du flag au lieu de l'observer — sur 20 personnes taguées "test",
+     19 ont quand même vu value_intro (le timeout tombait avant que le flag ait réellement résolu,
+     surtout en 1ère visite sans cache local PostHog). Fix : `posthog.onFeatureFlags()` est le
+     signal réel de résolution (fire dès que les flags sont chargés, y compris si déjà en cache),
+     le timeout ne sert plus que de filet de sécurité si l'appel réseau échoue/traîne. */
   const [valueVariantResolved, setValueVariantResolved] = useState(!abEligible);
   useEffect(() => {
     if (!abEligible || valueVariantResolved) return;
     if (assignedValueVariant) { setValueVariantResolved(true); return; }
-    const t = setTimeout(() => setValueVariantResolved(true), 700);
-    return () => clearTimeout(t);
+    const unsubscribe = posthog.onFeatureFlags(() => setValueVariantResolved(true));
+    const t = setTimeout(() => setValueVariantResolved(true), 2500);
+    return () => { clearTimeout(t); unsubscribe(); };
   }, [abEligible, assignedValueVariant, valueVariantResolved]);
 
   /* value_intro est désormais toujours l'étape 0 dans tous les paths, pour tout le monde — "role"
@@ -1246,7 +1253,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* Bug trouvé le 2026-08-14 (voir mémoire project_ab_test_skip_value_intro) : cet effet dépend
+     seulement de `currentStep`, calculé à CHAQUE render — y compris les tout premiers, avant que
+     `hasClaimedProgram`/`hasCoachInvite`/`claimedNameResolved`/`valueVariantResolved` soient
+     connus, pendant lesquels le JSX plus bas affiche encore l'écran de chargement (voir ce même
+     garde de rendu ligne ~1785). Sur ce premier render non résolu, `path` retombe sur son défaut
+     (value_intro inclus) donc `currentStep === "value_intro"` — l'event `onboarding_value_intro_viewed`
+     partait alors AVANT toute résolution de flag, quel que soit le bras assigné ensuite, y compris
+     pour des visiteurs qui n'ont jamais vu cet écran à l'affichage réel (masqué par l'écran de
+     chargement). `flowReady` reprend exactement la même condition que le garde de rendu — aucun
+     event de vue d'étape ne doit partir tant que le JSX correspondant n'est pas réellement affiché. */
+  const flowReady = hasClaimedProgram !== null && hasCoachInvite !== null && claimedNameResolved && valueVariantResolved;
   useEffect(() => {
+    if (!flowReady) return;
     const props = {
       step: currentStep,
       step_index: stepIdx,
@@ -1258,7 +1277,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     posthog.capture(`onboarding_${currentStep}_viewed`, props);
     advancingRef.current = false;
     finishGuardRef.current = false;
-  }, [currentStep]);
+  }, [currentStep, flowReady]);
 
   /* Ancien effet synthétique "?role= saute le step role" supprimé le 2026-08-06 : "role" redevient
      un vrai step rendu (voir plus bas) et roleChosen ne dérive plus de initialRole (voir plus haut)
@@ -1775,7 +1794,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   };
   const wBehaviorPenalty = Math.min(wBehaviors.length * 3, 15);
 
-  if (hasClaimedProgram === null || hasCoachInvite === null || !claimedNameResolved || !valueVariantResolved) {
+  if (!flowReady) {
     return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
   }
 
