@@ -139,13 +139,14 @@ interface Props {
   programName: string;
   template: ProgramTemplate;
   assignmentCount?: number;
+  userName?: string;
   requireSubscription?: (fn: () => void) => void;
   onSaveToLibrary: (name: string, template: ProgramTemplate) => Promise<void>;
   onSaveAndAssign: (name: string, template: ProgramTemplate) => Promise<void>;
   onBack: () => void;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, requireSubscription, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
@@ -286,6 +287,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
     done: false,
     target_difficulty: editingSession.target_difficulty,
     created_at: "",
+    exercise_media: editingSession.exercise_media,
   } : undefined;
 
   return (
@@ -450,8 +452,9 @@ export default function ProgramBuilderModal({ programName: initialName, template
           date={fakeSession.date}
           session={fakeSession}
           hideDate
+          userName={userName ?? "Toi"}
           onSave={async (data) => {
-            updateSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx, { name: data.name, notes: data.notes || null, target_difficulty: data.target_difficulty });
+            updateSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx, { name: data.name, notes: data.notes || null, target_difficulty: data.target_difficulty, exercise_media: data.exercise_media });
             setEditingTarget(null);
           }}
           onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); }}

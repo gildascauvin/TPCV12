@@ -6,6 +6,7 @@ import PlanningRing from "@/components/calendar/PlanningRing";
 import AlertBox from "@/components/calendar/AlertBox";
 import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
 import type { DayAlert } from "@/lib/alerts";
+import type { ExerciseAttachments } from "@/types";
 /* Seul le score est lu ici — un objet minimal suffit, permet à /coach/planning (qui n'a qu'un
    score déjà résolu par jour, pas une ligne wellness_daily complète) de passer directement sans
    fabriquer un faux WellnessDaily. */
@@ -37,6 +38,9 @@ export interface SessionLike {
   rpe: number | null;
   done: boolean;
   target_difficulty: number | null;
+  exercise_media?: Record<string, ExerciseAttachments> | null;
+  viewed_by_athlete_at?: string | null;
+  viewed_by_coach_at?: string | null;
 }
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé

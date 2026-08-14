@@ -26,7 +26,7 @@ import ReconduireModal from "@/components/sessions/ReconduireModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
@@ -55,6 +55,7 @@ const DiffGauge = DiffGaugeShared;
 
 interface Props {
   userId: string;
+  coachName: string | null;
   athletes: CoachAthlete[];
   initialSessions: CoachViewSession[];
   initialWellnessMap: Record<string, Record<string, number>>;
@@ -62,7 +63,7 @@ interface Props {
   initialDate?: string;
 }
 
-export default function CoachPlanningClient({ userId, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate }: Props) {
+export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -240,7 +241,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     return res.json();
   }
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => {
+  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => {
     const results = await Promise.all(
       athleteIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data }))
     );
@@ -251,7 +252,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
     setAddingDate(null);
   }, [athletes]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => {
+  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => {
     if (!editingSession || !athlete) return;
     const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data });
     if (result.ok) {
@@ -680,6 +681,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
                   <DraggableSessionCard
                     key={s.id}
                     session={s}
+                    viewerRole="coach"
                     onComplete={(sess) => requireSubscription(() => setCompleting(sess))}
                     onEdit={(sess) => requireSubscription(() => setEditingSession(sess))}
                     onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
@@ -702,6 +704,7 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
       {(addingDate || editingSession) && athlete && (
         <CoachSessionModal
           athleteName={athlete.name}
+          coachName={coachName ?? "Coach"}
           date={addingDate ?? editingSession!.date}
           session={editingSession ? {
             id: editingSession.id,
@@ -715,12 +718,17 @@ export default function CoachPlanningClient({ userId, athletes, initialSessions,
             duration: editingSession.duration,
             target_difficulty: editingSession.target_difficulty,
             created_at: editingSession.created_at,
+            exercise_media: editingSession.exercise_media,
           } : null}
           athletes={athletes}
           initialAthleteId={athlete.id}
           onSave={editingSession ? saveEdit : addSession}
           onDelete={editingSession ? deleteSession : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
+          onMarkViewed={() => {
+            if (!editingSession) return;
+            callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data: { viewed_by_coach_at: new Date().toISOString() } });
+          }}
         />
       )}
 

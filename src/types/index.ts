@@ -52,6 +52,9 @@ export interface Session {
   target_difficulty: number | null;
   created_at: string;
   program_assignment_id?: string | null;
+  exercise_media?: Record<string, ExerciseAttachments> | null;
+  viewed_by_athlete_at?: string | null;
+  viewed_by_coach_at?: string | null;
 }
 
 export interface CoachAthlete {
@@ -80,6 +83,29 @@ export interface CoachSession {
   target_difficulty: number | null;
   created_at: string;
   program_assignment_id?: string | null;
+  exercise_media?: Record<string, ExerciseAttachments> | null;
+  viewed_by_athlete_at?: string | null;
+  viewed_by_coach_at?: string | null;
+}
+
+export interface ExerciseComment {
+  id: string;
+  author: "coach" | "athlete";
+  authorName: string;
+  kind: "text" | "video";
+  text?: string;
+  url?: string;
+  createdAt: string;
+}
+
+export interface ExerciseAttachments {
+  videoUrl?: string;
+  photoUrl?: string;
+  comments: ExerciseComment[];
+  /* Dernière modification (vidéo/photo ajoutée ou retirée, commentaire ajouté/modifié/supprimé) —
+     pilote le point de notification sur la ligne dans les vues de lecture. */
+  updatedAt?: string;
+  updatedBy?: "coach" | "athlete";
 }
 
 // Unified session for coach views (real athlete → sessions table, demo → coach_sessions)
@@ -95,6 +121,9 @@ export interface CoachViewSession {
   target_difficulty: number | null;
   created_at: string;
   _real: boolean;          // true = sessions table, false = coach_sessions
+  exercise_media?: Record<string, ExerciseAttachments> | null;
+  viewed_by_athlete_at?: string | null;
+  viewed_by_coach_at?: string | null;
 }
 
 export interface FatigueLog {
@@ -121,6 +150,7 @@ export interface SessionTemplate {
   target_difficulty: number;
   load: SessionLoad;
   type: SessionType;
+  exercise_media?: Record<string, ExerciseAttachments> | null;
 }
 
 export interface WeekTemplate {

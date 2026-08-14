@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Session } from "@/types";
-import ExerciseGhostEditor from "@/components/sessions/ExerciseGhostEditor";
+import type { Session, ExerciseAttachments } from "@/types";
+import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 import { createClient } from "@/lib/supabase/client";
 
@@ -14,12 +14,14 @@ interface AddSessionModalProps {
   /* Optionnel — quand fourni, l'autocomplete priorise les exercices des dernières séances
      réellement faites par cet utilisateur (fetch léger, RLS déjà scoping sur son propre user_id). */
   userId?: string;
-  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }) => Promise<void>;
+  /* Signe les commentaires laissés dans l'éditeur d'exercices — pas juste "Sportif" générique. */
+  userName?: string;
+  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, onSave, onDelete, onClose }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose }: AddSessionModalProps) {
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
@@ -30,15 +32,26 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
     return () => { cancelled = true; resetUserHistory(); };
   }, [userId]);
 
+  // Marque la séance vue par le sportif — fait disparaître le point de notification sur ses lignes
+  // dans les vues de lecture. `user_id: "template"` = édition de programme (ProgramBuilderModal),
+  // pas une vraie séance, rien à marquer.
+  useEffect(() => {
+    if (!session?.id || session.user_id === "template") return;
+    createClient().from("sessions").update({ viewed_by_athlete_at: new Date().toISOString() }).eq("id", session.id).then();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
   const [name, setName] = useState(session?.name ?? initialName ?? "");
   const [selectedDate, setSelectedDate] = useState(session?.date ?? date);
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
   const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
+  const [exerciseMedia, setExerciseMedia] = useState<Record<string, ExerciseAttachments>>(session?.exercise_media ?? {});
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEdit = !!session;
+
   const diffCls = targetDiff >= 8 ? "hard" : targetDiff >= 5 ? "moderate" : "easy";
   const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
   const diffBg = { hard: "#fff0ed", moderate: "#fff7e6", easy: "#edf9f0" }[diffCls];
@@ -49,7 +62,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
     if (!name.trim()) return;
     setSaving(true);
     const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
-    await onSave({ name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff });
+    await onSave({ name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff, exercise_media: exerciseMedia });
     setSaving(false);
   }
 
@@ -75,7 +88,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         border: "1px solid rgba(0,0,0,.10)",
         boxShadow: "0 42px 120px rgba(0,0,0,.34)",
         borderRadius: 30, paddingTop: 28, paddingLeft: 28, paddingRight: 28, paddingBottom: 0,
-        width: "100%", maxWidth: 480,
+        width: "100%", maxWidth: 620,
         maxHeight: "calc(100vh - 34px)",
         overflowY: "auto",
         animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
@@ -95,25 +108,25 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           </div>
         )}
 
-        {/* Date */}
-        {!hideDate && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
+        {/* Date + nom */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          {!hideDate && (
+            <div style={{ flex: "0 0 150px" }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
+              <input
+                type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+                style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+              />
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nom de la séance *</div>
             <input
-              type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+              type="text" value={name} onChange={e => setName(e.target.value)}
+              placeholder="Ex: Squat max, Sprint 20m, Récup active..."
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
             />
           </div>
-        )}
-
-        {/* Nom */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nom de la séance *</div>
-          <input
-            type="text" value={name} onChange={e => setName(e.target.value)}
-            placeholder="Ex: Squat max, Sprint 20m, Récup active..."
-            style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
-          />
         </div>
 
         {/* Difficulté cible */}
@@ -137,7 +150,14 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
 
         {/* Exercices */}
         <div style={{ marginBottom: 8 }}>
-          <ExerciseGhostEditor value={exercisesText} onChange={setExercisesText} />
+          <ExerciseBlockEditor
+            value={exercisesText}
+            onChange={setExercisesText}
+            authorRole="athlete"
+            authorName={userName ?? "Toi"}
+            initialMedia={session?.exercise_media}
+            onMediaChange={setExerciseMedia}
+          />
         </div>
 
         {/* Sticky actions bar */}

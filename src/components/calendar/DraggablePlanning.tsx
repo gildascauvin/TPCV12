@@ -2,6 +2,7 @@
 
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
+import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 
 /* Wrappers dnd-kit partagés par /week (WeekClient.tsx) ET /coach/planning (CoachPlanningClient.tsx) —
    "le même composant" des deux côtés, générique sur SessionLike (Session ou CoachViewSession).
@@ -17,11 +18,15 @@ export function DroppableDay({ dstr, children }: { dstr: string; children: React
   );
 }
 
-export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate }: {
+export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole }: {
   session: T;
   onComplete: (s: T) => void;
   onEdit: (s: T) => void;
   onDuplicate: (s: T) => void;
+  /* "coach" sur /coach/planning, "athlete" sur /week — pilote le point de notification (voir
+     UnseenDot.tsx) : visible quand la dernière modif d'une ligne vient de l'autre rôle et n'a pas
+     encore été vue par celui-ci. */
+  viewerRole: "coach" | "athlete";
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id, data: { type: "session" } });
   const style: React.CSSProperties = {
@@ -30,6 +35,7 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
     position: isDragging ? "relative" : undefined,
     zIndex: isDragging ? 30 : undefined,
   };
+  const viewedAt = viewerRole === "coach" ? session.viewed_by_coach_at : session.viewed_by_athlete_at;
   return (
     <WeekSessionCard
       session={session}
@@ -40,13 +46,16 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
       cardRef={setNodeRef}
       cardStyle={style}
       renderExerciseLine={(line, index) => (
-        <DraggableExerciseLine key={index} sessionId={session.id} index={index} text={line} />
+        <DraggableExerciseLine
+          key={index} sessionId={session.id} index={index} text={line}
+          unseen={hasUnseenAttachment(session.exercise_media?.[String(index)], viewerRole, viewedAt)}
+        />
       )}
     />
   );
 }
 
-export function DraggableExerciseLine({ sessionId, index, text }: { sessionId: string; index: number; text: string }) {
+export function DraggableExerciseLine({ sessionId, index, text, unseen }: { sessionId: string; index: number; text: string; unseen?: boolean }) {
   const dragId = `ex:${sessionId}:${index}`;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", sessionId, index } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", sessionId, index } });
@@ -65,7 +74,7 @@ export function DraggableExerciseLine({ sessionId, index, text }: { sessionId: s
         {...attributes} {...listeners}
         style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
       >⠿</span>
-      <span style={{ flex: 1 }}>{text}</span>
+      <span style={{ flex: 1 }}>{text}{unseen && <UnseenDot />}</span>
     </div>
   );
 }

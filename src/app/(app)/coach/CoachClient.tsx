@@ -20,7 +20,7 @@ import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessi
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode } from "@/lib/trainingLoad";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments } from "@/types";
 
 interface Props {
   coachName: string | null;
@@ -301,7 +301,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }
   }
 
-  async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number }, _athleteIds: string[]) {
+  async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, _athleteIds: string[]) {
     if (!reviewAthlete) return;
 
     if (reviewSession) {
@@ -609,6 +609,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       {reviewAthlete && (
         <CoachSessionModal
           athleteName={reviewAthlete.name}
+          coachName={coachName ?? "Coach"}
           date={selectedDate}
           session={reviewSession ? {
             id: reviewSession.id,
@@ -622,6 +623,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             duration: reviewSession.duration,
             target_difficulty: reviewSession.target_difficulty,
             created_at: reviewSession.created_at,
+            exercise_media: reviewSession.exercise_media,
           } : null}
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
@@ -634,6 +636,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           }}
           onSave={handleSaveReview}
           onClose={handleCloseReview}
+          onMarkViewed={() => {
+            if (!reviewSession) return;
+            callSessionAPI({ action: "update", athleteId: reviewAthlete.id, sessionId: reviewSession.id, data: { viewed_by_coach_at: new Date().toISOString() } });
+          }}
         />
       )}
 

@@ -15,10 +15,11 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
+import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import type { Profile, WellnessDaily, Session, SubscriptionStatus } from "@/types";
+import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
@@ -169,6 +170,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }:
           {exercises.map((ex, i) => {
             const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
             const changed = modified !== ex;
+            const unseen = hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
             return (
               <div key={i} style={{
                 padding: "10px 12px",
@@ -185,7 +187,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }:
                   color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 650,
                   whiteSpace: "pre-wrap", wordBreak: "break-word",
                 }}>
-                  {modified}
+                  {modified}{unseen && <UnseenDot />}
                 </div>
               </div>
             );
@@ -436,7 +438,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     }
   }
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
+  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     const { data: saved } = await supabase
       .from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
@@ -460,7 +462,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     router.refresh();
   }, [supabase, router]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
+  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     if (!editing) return;
     const { data: saved } = await supabase
       .from("sessions").update(data).eq("id", editing.id).select().single();
@@ -783,7 +785,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} onSave={addSession} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={addSession} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={saveComplete} onClose={() => setCompleting(null)} />
@@ -792,6 +794,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <AddSessionModal
           date={editing.date}
           session={editing}
+          userName={profile.name ?? "Toi"}
           onSave={saveEdit}
           onDelete={async () => { await deleteSession(editing); setEditing(null); }}
           onClose={() => setEditing(null)}

@@ -29,7 +29,7 @@ import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
-import type { Session, WellnessDaily, SubscriptionStatus, Program } from "@/types";
+import type { Session, WellnessDaily, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
 
 /* ─── helpers ─── */
 function getWeekDates(base: Date): Date[] {
@@ -38,9 +38,9 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; initialDate?: string; }
+interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; initialDate?: string; }
 
-export default function WeekClient({ userId, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, initialDate }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, initialDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -227,7 +227,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     return () => el.removeEventListener("wheel", handler);
   });
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
+  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     const { data: saved } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
     setAddingDate(null);
@@ -242,7 +242,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
     router.refresh();
   }, [supabase, completing, router]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number }) => {
+  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     if (!editing) return;
     const { data: saved } = await supabase.from("sessions").update(data).eq("id", editing.id).select().single();
     if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
@@ -442,6 +442,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
                   <DraggableSessionCard
                     key={s.id}
                     session={s}
+                    viewerRole="athlete"
                     onComplete={(sess) => requireSubscription(() => handleTerminer(sess))}
                     onEdit={(sess) => requireSubscription(() => setEditing(sess))}
                     onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
@@ -590,7 +591,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
 
       {/* Modals */}
       {addingDate && (
-        <AddSessionModal date={addingDate} userId={userId} onSave={addSession} onClose={() => setAddingDate(null)} />
+        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={addSession} onClose={() => setAddingDate(null)} />
       )}
       {showReconduire && (
         <ReconduireModal
@@ -638,7 +639,7 @@ export default function WeekClient({ userId, initialSessions, initialWellness, s
       )}
       {editing && (
         <AddSessionModal
-          date={editing.date} session={editing} userId={userId}
+          date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"}
           onSave={saveEdit}
           onDelete={async () => deleteSession(editing)}
           onClose={() => setEditing(null)}

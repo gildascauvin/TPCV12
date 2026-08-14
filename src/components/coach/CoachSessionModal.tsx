@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { CoachSession, CoachAthlete } from "@/types";
+import type { CoachSession, CoachAthlete, ExerciseAttachments } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
-import ExerciseGhostEditor from "@/components/sessions/ExerciseGhostEditor";
+import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 
 export interface ReviewContext {
@@ -17,14 +17,20 @@ export interface ReviewContext {
 
 interface Props {
   athleteName: string;
+  /* Signe les commentaires laissés dans l'éditeur d'exercices — pas juste "Coach" générique. */
+  coachName: string;
   date: string;
   session?: CoachSession | null;
   athletes?: CoachAthlete[];
   initialAthleteId?: string;
   reviewContext?: ReviewContext;
-  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number }, athleteIds: string[]) => Promise<void>;
+  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
+  /* Marque la séance vue par le coach (fait disparaître le point de notification côté sportif) —
+     passe par le parent car ça écrit sur la ligne `sessions` d'un vrai sportif, RLS bloque
+     l'écriture directe cross-user même pour un coach (même contrainte que exercise_media). */
+  onMarkViewed?: () => void;
 }
 
 function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: TrendCode | null): string[] {
@@ -58,11 +64,17 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
 // Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
 function scoreColor(s: number) { return wellnessColor(s); }
 
-export default function CoachSessionModal({ athleteName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onClose }: Props) {
+export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onClose, onMarkViewed }: Props) {
+  useEffect(() => {
+    if (session?.id) onMarkViewed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
   const [name, setName] = useState(session?.name ?? "");
   const [sessionDate, setSessionDate] = useState(session?.date ?? date);
   const [difficulty, setDifficulty] = useState(session?.target_difficulty ?? 6);
   const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
+  const [exerciseMedia, setExerciseMedia] = useState<Record<string, ExerciseAttachments>>(session?.exercise_media ?? {});
   const [recipients, setRecipients] = useState<string[]>(() =>
     initialAthleteId ? [initialAthleteId] : athletes.length > 0 ? [athletes[0].id] : []
   );
@@ -106,7 +118,7 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
     setSaving(true);
     const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
     const ids = isEdit && initialAthleteId ? [initialAthleteId] : recipients;
-    await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty }, ids);
+    await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty, exercise_media: exerciseMedia }, ids);
     setSaving(false);
   }
 
@@ -208,18 +220,18 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
           );
         })()}
 
-        {/* Date */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
-          <input type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)}
-            style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
-        </div>
-
-        {/* Name */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nom de la séance *</div>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex : Squat 5×5, Interval run…"
-            style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
+        {/* Date + nom */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+          <div style={{ flex: "0 0 150px" }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
+            <input type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)}
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nom de la séance *</div>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex : Squat 5×5, Interval run…"
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
+          </div>
         </div>
 
         {/* Difficulty */}
@@ -240,7 +252,14 @@ export default function CoachSessionModal({ athleteName, date, session, athletes
 
         {/* Exercises */}
         <div style={{ marginBottom: 16 }}>
-          <ExerciseGhostEditor value={exercisesText} onChange={setExercisesText} />
+          <ExerciseBlockEditor
+            value={exercisesText}
+            onChange={setExercisesText}
+            authorRole="coach"
+            authorName={coachName}
+            initialMedia={session?.exercise_media}
+            onMediaChange={setExerciseMedia}
+          />
         </div>
 
         {/* Recipients */}

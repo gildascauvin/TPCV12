@@ -14,6 +14,9 @@ export function realToView(s: Session, athletes: CoachAthlete[]): CoachViewSessi
     target_difficulty: s.target_difficulty,
     created_at: s.created_at,
     _real: true,
+    exercise_media: s.exercise_media,
+    viewed_by_athlete_at: s.viewed_by_athlete_at,
+    viewed_by_coach_at: s.viewed_by_coach_at,
   };
 }
 
@@ -30,6 +33,9 @@ export function demoToView(s: CoachSession): CoachViewSession {
     target_difficulty: s.target_difficulty,
     created_at: s.created_at,
     _real: false,
+    exercise_media: s.exercise_media,
+    viewed_by_athlete_at: s.viewed_by_athlete_at,
+    viewed_by_coach_at: s.viewed_by_coach_at,
   };
 }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
@@ -273,6 +274,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               {topSession.notes.split("\n").filter(Boolean).map((ex, i) => {
                 const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
                 const changed = modified !== ex;
+                const unseen = hasUnseenAttachment(topSession.exercise_media?.[String(i)], "coach", topSession.viewed_by_coach_at);
                 return (
                   <div key={i} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
                     {changed && (
@@ -281,7 +283,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                       </div>
                     )}
                     <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600, wordBreak: "break-word" }}>
-                      {modified}
+                      {modified}{unseen && <UnseenDot />}
                     </div>
                   </div>
                 );

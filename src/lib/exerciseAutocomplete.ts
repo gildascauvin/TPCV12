@@ -305,6 +305,18 @@ function extractNameCandidate(line: string): string | null {
   return null;
 }
 
+/** Nom canonique d'un exercice pour une ligne donnée — même résolution que buildUserHistory
+    (banque HISTORY d'abord, repli sur extractNameCandidate), exposée séparément pour la
+    bibliothèque vidéo par nom (rattacher une démo au token "nom", pas à la ligne entière avec ses
+    séries/charges qui changent à chaque occurrence). */
+export function resolveExerciseName(line: string): string | null {
+  const lower = line.toLowerCase();
+  for (const key of HISTORY_KEYS) {
+    if (lower.includes(key)) return HISTORY[key].name;
+  }
+  return extractNameCandidate(line);
+}
+
 /** Construit un dictionnaire d'historique à partir des vraies séances de l'utilisateur (les plus
     récentes en premier) — un exercice déjà connu de la base statique récupère son nom canonique et
     son emoji sport ; un exercice inconnu devient suggérable via son propre libellé tel que tapé. */

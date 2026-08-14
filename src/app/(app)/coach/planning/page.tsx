@@ -12,7 +12,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("mode, name, subscription_status").eq("user_id", user.id).maybeSingle();
   if (!profile || profile.mode !== "coach") redirect("/today");
 
   const since = new Date();
@@ -59,6 +59,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   return (
     <CoachPlanningClient
       userId={user.id}
+      coachName={profile.name}
       athletes={athletes}
       initialSessions={initialSessions}
       initialWellnessMap={wellnessMap}
