@@ -142,7 +142,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
           <BadgeRow badges={s.badges ?? []} />
           <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5, marginBottom: 14 }}>{s.insight}</div>
-          <ZoneSparkline points={s.points ?? []} dates={s.dates ?? []} loads={s.loads} monotony={s.monotony} strain={s.strain} height={168} />
+          <ZoneSparkline points={s.points ?? []} dates={s.dates ?? []} loads={s.loads} monotony={s.monotony} strain={s.strain} height={168} weekLabels={s.weekLabels} />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 16, textAlign: "center" }}>Partagé par {s.authorName ?? "un membre ThePerfClub"}</div>
         </Card>
       )}
@@ -156,6 +156,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             points={s.points ?? []} dates={s.dates ?? []} color={s.color ?? "#7fa8ea"}
             maxVal={100} height={168} metricType="recovery" uid="share-recuperation" chartType="line" sequentialFill
             points2={s.points2} points2Raw={s.points2Raw} zones2={FORM_ZONES}
+            weekLabels={s.weekLabels}
           />
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic", textAlign: "right", marginTop: 4 }}>
             Dégradé bleu = récupération (clair = en forme) · Pointillé coloré = Forme

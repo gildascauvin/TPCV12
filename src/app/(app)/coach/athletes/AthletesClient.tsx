@@ -6,6 +6,7 @@ import InviteModal from "@/components/coach/InviteModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
@@ -32,7 +33,7 @@ function statusLabel(s: number, trend?: TrendCode | null) {
 // mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
 // "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
 // fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
-function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signature: AthleteSignature; athleteId: string; athleteName: string }) {
+function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode }) {
   if (signature.kind === "manual") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
@@ -50,8 +51,11 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signatur
 
   const { isLg } = useBreakpoint();
   const { series, sig } = signature;
-  // Charge et Récupération sur la même fenêtre (7 derniers jours glissants)
-  const last7 = series.slice(-7);
+  // Charge et Récupération sur la même fenêtre — 7 derniers jours ou 4 dernières semaines (toggle
+  // Sem./Mois) — `series` est 42j calculés (athletesData.ts, dont 14j de pur recul pour l'ACWR),
+  // jamais un nouveau fetch. On affiche toujours au plus 28j, jamais les 42 calculés. Nom `last7`
+  // conservé, plus toujours 7j.
+  const last7 = rangeMode === "month" ? series.slice(-28) : series.slice(-7);
   const zoneAcwr = last7.map(p => p.acwr);
   const zoneLoads = last7.map(p => p.load);
   const zoneDates = last7.map(p => p.date);
@@ -104,6 +108,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signatur
                   ...(fatigueTrendInfo ? [{ key: "fatigue", label: fatigueTrendInfo.label, color: fatigueTrendInfo.color }] : []),
                 ],
                 points: zoneAcwr, dates: zoneDates, loads: zoneLoads, monotony: zoneMonotony, strain: zoneStrain,
+                weekLabels: rangeMode === "month",
                 authorName: athleteName,
               })}
               title={`Charge — ${athleteName}`}
@@ -112,7 +117,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signatur
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
-        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} />
+        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode === "month"} />
       </div>
 
       {/* Récupération + Form — titre + badges sur la même ligne, insight dessous, chart ensuite */}
@@ -134,6 +139,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signatur
                 points: last7.map(p => p.recovery), dates: zoneDates, color: recoveryInfo.color,
                 points2: last7.map(p => p.form !== null ? formToChartPosition(p.form) : null),
                 points2Raw: last7.map(p => p.form),
+                weekLabels: rangeMode === "month",
                 authorName: athleteName,
               })}
               title={`Récupération — ${athleteName}`}
@@ -148,6 +154,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signatur
           metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line" sequentialFill
           points2={last7.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
           points2Raw={last7.map(p => p.form)} zones2={FORM_ZONES}
+          weekLabels={rangeMode === "month"}
         />
       </div>
     </div>
@@ -194,6 +201,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [trends, setTrends] = useState(initialTrends);
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
 
   function toggleExpanded(id: string) {
@@ -230,7 +238,10 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
 
   return (
     <>
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
+      <CalendarHeader
+        selectedDate={selectedDate} onDateChange={handleDateChange}
+        extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
+      />
 
       <div className="page-shell">
 
@@ -331,7 +342,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                         {isExpanded ? "Masquer le détail ▴" : "Voir charge & récupération ▾"}
                       </button>
                       {isExpanded && (
-                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} />
+                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} rangeMode={rangeMode} />
                       )}
                     </>
                   );

@@ -133,6 +133,108 @@ function DraggableProgramExercise({ day, sIdx, exIdx, text }: { day: string; sId
   );
 }
 
+/* Dupliquer une séance de template — DuplicateModal.tsx (Planning) ne convient pas ici : il exige
+   une vraie date calendaire (`<input type="date">`), alors qu'une séance de template n'a qu'une
+   position (semaine + jour de la semaine "Lun".."Dim"), jamais de date réelle — même contrainte déjà
+   contournée par Reconduire dans ce fichier (`daySlots` positionnel, `date: ""` factice). Modal
+   locale dédiée, pas exportée : sélection semaine + jour au lieu d'un date picker. */
+function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultDay, onClose, onConfirm }: {
+  /* Toutes les séances du jour source — un sélecteur "Séance" n'apparaît que si plusieurs (le
+     déclencheur est par jour, pas par carte, voir la ligne "+ Ajouter une séance"). */
+  sessions: SessionTemplate[];
+  weeksCount: number;
+  defaultWeekIdx: number;
+  defaultDay: string;
+  onClose: () => void;
+  onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string) => void;
+}) {
+  const [sourceIdx, setSourceIdx] = useState(0);
+  const [targetWeek, setTargetWeek] = useState(defaultWeekIdx);
+  const [targetDay, setTargetDay] = useState(defaultDay);
+  const session = sessions[sourceIdx];
+  if (!session) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 2147483200, padding: 18,
+      }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        background: "#fff", color: "#171b1f",
+        border: "1px solid rgba(0,0,0,.10)",
+        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
+        borderRadius: 30, padding: 28,
+        width: "100%", maxWidth: 380,
+      }}>
+        <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>
+          Dupliquer
+        </div>
+        <div style={{ fontSize: 14, color: "#62686e", marginBottom: 20, lineHeight: 1.4 }}>
+          Une copie de la séance sera ajoutée à l&apos;emplacement choisi.
+        </div>
+
+        {sessions.length > 1 ? (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Séance</div>
+            <select
+              value={sourceIdx} onChange={e => setSourceIdx(Number(e.target.value))}
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+            >
+              {sessions.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
+            </select>
+          </div>
+        ) : (
+          <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "10px 13px", marginBottom: 18, fontSize: 14, fontWeight: 700, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+            {session.name}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Semaine</div>
+            <select
+              value={targetWeek} onChange={e => setTargetWeek(Number(e.target.value))}
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+            >
+              {Array.from({ length: weeksCount }, (_, i) => <option key={i} value={i}>S{i + 1}</option>)}
+              <option value={weeksCount}>+ Nouvelle semaine</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Jour</div>
+            <select
+              value={targetDay} onChange={e => setTargetDay(e.target.value)}
+              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+            >
+              {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => onConfirm(sourceIdx, targetWeek, targetDay)}
+            style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+          >
+            ⎘ Dupliquer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface EditingTarget { weekIdx: number; day: string; sessionIdx: number }
 
 interface Props {
@@ -153,6 +255,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const [weekIdx, setWeekIdx] = useState(0);
   const [showReconduire, setShowReconduire] = useState(false);
   const [editingTarget, setEditingTarget] = useState<EditingTarget | null>(null);
+  const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string } | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -255,6 +358,23 @@ export default function ProgramBuilderModal({ programName: initialName, template
     setTemplate(prev => ({ weeks: [...prev.weeks, ...newWeeks] }));
     setWeekIdx(startIdx);
     setShowReconduire(false);
+  }
+
+  function duplicateSession(source: { weekIdx: number; day: string }, sourceIdx: number, targetWeekIdx: number, targetDay: string) {
+    const sourceSession = ((template.weeks[source.weekIdx]?.[source.day] ?? []) as SessionTemplate[])[sourceIdx];
+    if (!sourceSession) return;
+    setTemplate(prev => {
+      const weeks = targetWeekIdx >= prev.weeks.length
+        ? [...prev.weeks, DAYS.reduce((w, d) => ({ ...w, [d]: [] }), {} as WeekTemplate)]
+        : prev.weeks;
+      return {
+        weeks: weeks.map((w, wi) => wi !== targetWeekIdx ? w : {
+          ...w, [targetDay]: [...((w[targetDay] ?? []) as SessionTemplate[]), { ...sourceSession }],
+        }),
+      };
+    });
+    setWeekIdx(targetWeekIdx);
+    setDuplicateDay(null);
   }
 
   function deleteWeek(idx: number) {
@@ -397,13 +517,25 @@ export default function ProgramBuilderModal({ programName: initialName, template
                   </div>
                 )}
                 {daySessions.map((s, sIdx) => (
-                  <DraggableProgramSession key={sIdx} day={day} sIdx={sIdx} session={s} onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))} />
+                  <DraggableProgramSession
+                    key={sIdx} day={day} sIdx={sIdx} session={s}
+                    onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))}
+                  />
                 ))}
-                <div
-                  onClick={() => gate(() => addSession(day))}
-                  style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
-                >
-                  + Ajouter une séance
+                <div style={{ display: "flex", gap: 5 }}>
+                  <div
+                    onClick={() => gate(() => addSession(day))}
+                    style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
+                  >
+                    + Ajouter une séance
+                  </div>
+                  {daySessions.length > 0 && (
+                    <button
+                      onClick={() => gate(() => setDuplicateDay({ weekIdx, day }))}
+                      title="Dupliquer"
+                      style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                    >⎘</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -443,6 +575,21 @@ export default function ProgramBuilderModal({ programName: initialName, template
             title="Reconduire la dernière semaine"
             onClose={() => setShowReconduire(false)}
             onConfirm={async (weeksOut) => applyReconduire(weeksOut)}
+          />
+        );
+      })()}
+
+      {duplicateDay && (() => {
+        const daySessions = (template.weeks[duplicateDay.weekIdx]?.[duplicateDay.day] ?? []) as SessionTemplate[];
+        if (!daySessions.length) return null;
+        return (
+          <DuplicateTemplateModal
+            sessions={daySessions}
+            weeksCount={template.weeks.length}
+            defaultWeekIdx={duplicateDay.weekIdx}
+            defaultDay={duplicateDay.day}
+            onClose={() => setDuplicateDay(null)}
+            onConfirm={(sourceIdx, targetWeekIdx, targetDay) => duplicateSession(duplicateDay, sourceIdx, targetWeekIdx, targetDay)}
           />
         );
       })()}

@@ -10,6 +10,13 @@ function formatDateFr(dateStr: string) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DAY_FR[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()]}`;
 }
+/* Vue Mois (28j) : "S{n} {mois}" au lieu de "Lun/Mar..." — voir ZoneSparkline.tsx pour le pourquoi
+   (même logique, dupliquée ici comme MONTH_FR/DAY_FR le sont déjà entre les deux fichiers). */
+function weekMonthLabel(dateStr: string, weekNum: number) {
+  const d = new Date(dateStr + "T12:00:00");
+  const month = MONTH_FR[d.getMonth()];
+  return `S${weekNum} ${month.charAt(0).toUpperCase()}${month.slice(1)}.`;
+}
 
 function wellnessZone(v: number): string {
   if (v >= 82) return "Zone optimale";
@@ -109,11 +116,15 @@ interface Props {
      quand un seuil universel existe réellement dans la littérature, pas une valeur inventée. */
   thresholdValue?: number;
   thresholdLabel?: string;
+  /* Vue Mois (28j, toggle Sem./Mois) : "S{n} {mois}" au lieu de "Lun/Mar/..." — voir
+     ZoneSparkline.tsx pour le pourquoi. `false` par défaut : zéro impact sur les appelants
+     existants (vue Sem. inchangée). */
+  weekLabels?: boolean;
 }
 
 export default function SparkLineClient({
   points, dates, color, maxVal, height = 52, animDelay = 0, metricType, uid, chartType = "line",
-  points2, points2Raw, color2, thresholdValue, thresholdLabel, zones2, sequentialFill,
+  points2, points2Raw, color2, thresholdValue, thresholdLabel, zones2, sequentialFill, weekLabels,
 }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
@@ -406,20 +417,23 @@ export default function SparkLineClient({
             </div>
           );
         })}
-        {dates.map((d, i) => {
-          if (i % labelStep !== 0 && i !== n - 1) return null;
-          const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
-          const xPct = toXPct(i);
-          return (
-            <div key={d} style={{
-              position: "absolute", bottom: 0,
-              ...(anchor === "left" ? { left: `${xPct}%` } : anchor === "right" ? { right: `${100 - xPct}%` } : { left: `${xPct}%`, transform: "translateX(-50%)" }),
-              fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" as const,
-            }}>
-              {dayLabel(d)}
-            </div>
-          );
-        })}
+        {(() => {
+          const shownIdx = dates.map((_, i) => i).filter(i => i % labelStep === 0 || i === n - 1);
+          return shownIdx.map((i, shownI) => {
+            const d = dates[i];
+            const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
+            const xPct = toXPct(i);
+            return (
+              <div key={d} style={{
+                position: "absolute", bottom: 0,
+                ...(anchor === "left" ? { left: `${xPct}%` } : anchor === "right" ? { right: `${100 - xPct}%` } : { left: `${xPct}%`, transform: "translateX(-50%)" }),
+                fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" as const,
+              }}>
+                {weekLabels ? weekMonthLabel(d, shownI + 1) : dayLabel(d)}
+              </div>
+            );
+          });
+        })()}
       </div>
     </div>
   );

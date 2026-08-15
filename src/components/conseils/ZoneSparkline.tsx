@@ -25,6 +25,14 @@ function formatDateFr(dateStr: string) {
   const d = new Date(dateStr + "T12:00:00");
   return `${DAY_FR[d.getDay()]} ${d.getDate()} ${MONTH_FR[d.getMonth()]}`;
 }
+/* Vue Mois (28j) : "Lun/Mar..." répété 4x ne donne aucun repère temporel (retour de Gildas,
+   2026-08-16) — "S{n} {mois}" à la place (n = position parmi les labels affichés, jamais un numéro
+   ISO de semaine réelle, plus simple à lire pour se situer dans les 4 dernières semaines). */
+function weekMonthLabel(dateStr: string, weekNum: number) {
+  const d = new Date(dateStr + "T12:00:00");
+  const month = MONTH_FR[d.getMonth()];
+  return `S${weekNum} ${month.charAt(0).toUpperCase()}${month.slice(1)}.`;
+}
 
 /* Bandes ACWR — seuils Gabbett et al. (la "sweet spot" 0.8–1.3 est la bande la plus citée dans la
    littérature sportive) : <0.8 sous-charge, 0.8–1.3 zone optimale, >1.3 risque accru. */
@@ -42,7 +50,7 @@ function zoneFor(ratio: number): Zone {
 
 const W = 400, PAD_L = 4, PAD_R = 10, PAD_TOP = 10, PAD_BOT = 22;
 
-export default function ZoneSparkline({ points, dates, loads, monotony, strain, hideDayLabels, height }: {
+export default function ZoneSparkline({ points, dates, loads, monotony, strain, hideDayLabels, weekLabels, height }: {
   points: (number | null)[]; dates: string[]; loads?: number[];
   /* Monotonie/Contrainte du jour survolé, en complément de l'ACWR déjà affiché — pour les
      sportifs/coachs qui veulent le détail complet du tooltip, pas juste le résumé en badge. */
@@ -50,6 +58,10 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
   /* Masque les labels de jour en bas (Lun/Mar/...) — réservé aux previews illustratives qui
      veulent simplifier le chart. `false` par défaut : zéro impact sur /conseils. */
   hideDayLabels?: boolean;
+  /* Vue Mois (28j, toggle Sem./Mois sur /conseils et /coach/athletes) : "S{n} {mois}" au lieu de
+     "Lun/Mar/..." — un jour de la semaine répété 4x ne donne aucun repère pour se situer dans le
+     mois. `false` par défaut : zéro impact sur les appelants existants (vue Sem. inchangée). */
+  weekLabels?: boolean;
   /* Hauteur du viewBox (défaut 168, la valeur réelle de /conseils) — réservé aux previews
      illustratives qui veulent un chart plus compact. Tout le reste (bandes de zone, points,
      labels) est déjà positionné en % de cette hauteur, donc se redimensionne proprement. */
@@ -200,20 +212,23 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
           );
         })}
 
-        {!hideDayLabels && dates.map((d, i) => {
-          if (i % labelStep !== 0 && i !== n - 1) return null;
-          const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
-          const xPct = toXPct(i);
-          return (
-            <div key={d} style={{
-              position: "absolute", bottom: 0,
-              ...(anchor === "left" ? { left: `${xPct}%` } : anchor === "right" ? { right: `${100 - xPct}%` } : { left: `${xPct}%`, transform: "translateX(-50%)" }),
-              fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" as const,
-            }}>
-              {dayLabel(d)}
-            </div>
-          );
-        })}
+        {!hideDayLabels && (() => {
+          const shownIdx = dates.map((_, i) => i).filter(i => i % labelStep === 0 || i === n - 1);
+          return shownIdx.map((i, shownI) => {
+            const d = dates[i];
+            const anchor = i === 0 ? "left" : i === n - 1 ? "right" : "center";
+            const xPct = toXPct(i);
+            return (
+              <div key={d} style={{
+                position: "absolute", bottom: 0,
+                ...(anchor === "left" ? { left: `${xPct}%` } : anchor === "right" ? { right: `${100 - xPct}%` } : { left: `${xPct}%`, transform: "translateX(-50%)" }),
+                fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" as const,
+              }}>
+                {weekLabels ? weekMonthLabel(d, shownI + 1) : dayLabel(d)}
+              </div>
+            );
+          });
+        })()}
       </div>
     </div>
   );

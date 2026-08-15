@@ -6,6 +6,7 @@ import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/c
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
+import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
@@ -126,6 +127,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
 export default function ConseilsClient({ initialData }: { initialData: ConseilsData }) {
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
+  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
 
   async function handleDateChange(date: string) {
     setLoading(true);
@@ -139,7 +141,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
 
   const {
     sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
-    zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain, recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
+    recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
     loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
     recentBehaviors, allRecentBehaviorKeys,
   } = data;
@@ -153,13 +155,24 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
     else if (p.load > 0) dotMap[p.date] = "done-light";
   }
 
-  // Charge et Récupération sur la même fenêtre (7 derniers jours glissants), pour rester cohérents
-  // l'un avec l'autre — zoneDates/zoneAcwr/zoneLoads (déjà 7j) viennent de conseilsData.ts.
-  const last7Series = timeSeries.slice(-7);
+  // Charge et Récupération sur la même fenêtre — 7 derniers jours ou 4 dernières semaines (toggle
+  // Sem./Mois) — dérivées côté client de `timeSeries` (42j calculés côté serveur, dont 14j de pur
+  // recul pour l'ACWR — voir conseilsData.ts), jamais un nouveau fetch. On affiche toujours au plus
+  // 28j (jamais les 42 calculés), sinon les 14j de recul apparaîtraient dans le chart lui-même.
+  // last7Series (nom conservé) = la fenêtre courante, pas toujours 7j.
+  const last7Series = rangeMode === "month" ? timeSeries.slice(-28) : timeSeries.slice(-7);
+  const zoneAcwr = last7Series.map(p => p.acwr);
+  const zoneLoads = last7Series.map(p => p.load);
+  const zoneDates = last7Series.map(p => p.date);
+  const zoneMonotony = last7Series.map(p => p.monotony);
+  const zoneStrain = last7Series.map(p => p.strain);
 
   return (
     <>
-      <CalendarHeader selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap} />
+      <CalendarHeader
+        selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap}
+        extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
+      />
 
       <div className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
 
@@ -234,6 +247,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                             ...(fatigueTrendInfo ? [{ key: "fatigue", label: fatigueTrendInfo.label, color: fatigueTrendInfo.color }] : []),
                           ],
                           points: zoneAcwr, dates: zoneDates, loads: zoneLoads, monotony: zoneMonotony, strain: zoneStrain,
+                          weekLabels: rangeMode === "month",
                         })}
                         title="Ma charge d'entraînement"
                         text={chargeInsight}
@@ -243,7 +257,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                   <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
                     {chargeInsight}
                   </div>
-                  <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} />
+                  <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode === "month"} />
                 </div>
 
                 {/* Récupération + Form (Fitness − Fatigue, readiness du jour) */}
@@ -267,6 +281,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                           points: last7Series.map(p => p.recovery), dates: zoneDates, color: recoveryInfo.color,
                           points2: last7Series.map(p => p.form !== null ? formToChartPosition(p.form) : null),
                           points2Raw: last7Series.map(p => p.form),
+                          weekLabels: rangeMode === "month",
                         })}
                         title="Ma récupération"
                         text={recoveryInsight}
@@ -283,6 +298,7 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
                       metricType="recovery" uid="recovery" chartType="line" sequentialFill
                       points2={last7Series.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
                       points2Raw={last7Series.map(p => p.form)} zones2={FORM_ZONES}
+                      weekLabels={rangeMode === "month"}
                     />
                   </div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Dégradé bleu = récupération (clair = en forme) · Pointillé coloré = Forme</div>

@@ -16,6 +16,12 @@ interface CalendarHeaderProps {
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
   onSwipe?: (dir: "next" | "prev") => void;
+  /* Slot alternatif dans le même emplacement (haut-droite) que le toggle Semaine/Mois — pour les
+     pages qui veulent un contrôle différent à cet endroit sans activer le toggle de navigation
+     lui-même (ex. /conseils, /coach/athletes : bascule 7j/4 semaines des graphiques, indépendante
+     de la navigation par jour de ce header — voir RangeToggle.tsx). Ignoré si onViewModeChange est
+     fourni (jamais les deux en même temps). */
+  extraControls?: React.ReactNode;
 }
 
 const CIRC = 81.68; // 2π × r=13
@@ -41,6 +47,7 @@ export default function CalendarHeader({
   viewMode = "week",
   onViewModeChange,
   onSwipe,
+  extraControls,
 }: CalendarHeaderProps) {
   const today = format(new Date(), "yyyy-MM-dd");
   const [currentDate, setCurrentDate] = useState(new Date(selectedDate + "T12:00:00"));
@@ -136,7 +143,7 @@ export default function CalendarHeader({
 
         {/* Droite : toggle Semaine/Mois */}
         <div style={{ minWidth: 80, display: "flex", justifyContent: "flex-end" }}>
-          {showControls && (
+          {showControls ? (
             <div style={{ display: "flex", background: "rgba(255,255,255,.10)", borderRadius: 10, padding: 3, gap: 2 }}>
               {(["week", "month"] as ViewMode[]).map(m => (
                 <button
@@ -153,7 +160,7 @@ export default function CalendarHeader({
                 </button>
               ))}
             </div>
-          )}
+          ) : extraControls}
         </div>
       </div>
 

@@ -221,13 +221,20 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
   const autoSelectedSituationRef = useRef(false);
   useEffect(() => {
     if (role === "coach" || autoSelectedSituationRef.current) return;
+    /* Attendre le vrai template généré (`week1`), pas le repli statique getSessionTemplates() —
+       ce repli fournit un diff immédiatement (synchrone, avant même le fetch réseau), donc sans
+       cette garde la décision se figeait sur une difficulté transitoire (celle du repli), presque
+       toujours différente de celle du template réellement affiché une fois generatedTemplate
+       résolu — d'où un sélecteur "pas toujours" sur la bonne situation, trouvé par Gildas en
+       testant en local (2026-08-16). */
+    if (!week1) return;
     const demoDiff = sessionForDay[demoIndex]?.diff;
     if (demoDiff == null) return;
     autoSelectedSituationRef.current = true;
     const idx = SITUATIONS.findIndex(sit => !!computeAutoregSuggestion(sit.wellness, demoDiff));
     if (idx !== -1) setSituationIdx(idx);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionForDay[demoIndex]?.diff]);
+  }, [week1, sessionForDay[demoIndex]?.diff]);
 
   /* Coach Control — 3 sportifs démo (mêmes prénoms que ceux réellement créés par completeProfile()
      à la fin de l'onboarding coach : Thomas M./Emma L./Pierre D.), le vrai CoachCard de /coach.

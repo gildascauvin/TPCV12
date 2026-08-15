@@ -98,14 +98,21 @@ export async function getConseilsData(
   referenceDate: string
 ): Promise<ConseilsData> {
   const anchor = new Date(referenceDate + "T12:00:00");
-  const since28 = daysAgoStr(28, anchor);
+  /* 42 jours fetchés (pas 28) pour que la vue "Mois" du chart (28 derniers jours affichés) ait un
+     ACWR valide sur toute sa largeur — acuteChronicAt() (trainingLoad.ts) exige au moins 14 jours
+     d'historique AVANT un point donné pour lui donner une valeur non-nulle ; avec seulement 28
+     jours fetchés, les 13 premiers jours affichés en vue Mois n'auraient jamais assez de recul et
+     resteraient nuls (ligne du chart tronquée aux ~15 derniers jours seulement — bug réel constaté
+     par Gildas). Les 14 jours de marge servent uniquement de recul de calcul, jamais affichés tels
+     quels (voir last28/last7 plus bas). */
+  const since42 = daysAgoStr(42, anchor);
   const since7  = daysAgoStr(7, anchor);
   const tomorrowStr = daysAgoStr(-1, anchor);
 
   const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).single(),
-    supabase.from("sessions").select("*").eq("user_id", userId).gte("date", since28).order("date", { ascending: false }),
-    supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", since28).order("date", { ascending: false }),
+    supabase.from("sessions").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
+    supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
   ]);
 
   const profile     = rawProfile as Profile | null;
@@ -154,7 +161,10 @@ export async function getConseilsData(
   const sig = computeSignature(allSessions, wellnessScore ?? 75, 28, anchor);
   const recoveryAlert = hasTomorrowSession && sig.recovery < 50 && sig.signals > 0;
 
-  const timeSeries = buildDailyTimeSeries(allSessions, allWellness, 28, anchor);
+  // 42 jours calculés, mais seuls les 28 derniers sont destinés à être affichés (vue "Mois") — les
+  // 14 premiers ne servent qu'à donner à acuteChronicAt() assez de recul pour que l'ACWR des jours
+  // réellement affichés soit toujours valide (voir commentaire sur since42 plus haut).
+  const timeSeries = buildDailyTimeSeries(allSessions, allWellness, 42, anchor);
   const maxLoad     = Math.max(...timeSeries.map(p => p.load), 400);
   const maxMonotony = Math.max(...timeSeries.map(p => p.monotony ?? 0), 3);
 
