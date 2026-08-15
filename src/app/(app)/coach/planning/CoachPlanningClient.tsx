@@ -309,16 +309,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (!result.ok) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
   }, [athlete, sessions]);
 
-  const duplicateSessionToDate = useCallback(async (newDate: string) => {
+  const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[]) => {
     if (!duplicating || !athlete) return;
-    const result = await callSessionAPI({
-      action: "add", athleteId: athlete.id,
-      data: { name: duplicating.name, notes: duplicating.notes ?? "", target_difficulty: duplicating.target_difficulty ?? 6, date: newDate },
-    });
-    if (result.ok && result.session) {
-      const created: CoachViewSession = result._real ? realToView(result.session as Session, athletes) : demoToView(result.session as CoachSession);
-      setSessions(prev => [...prev, created]);
-    }
+    const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
+    const data = { name: duplicating.name, notes: duplicating.notes ?? "", target_difficulty: duplicating.target_difficulty ?? 6, date: newDate };
+    const results = await Promise.all(recipientIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
+    const created: CoachViewSession[] = results
+      .filter(r => r.ok && r.session)
+      .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
+    setSessions(prev => [...prev, ...created]);
     setDuplicating(null);
   }, [duplicating, athlete, athletes]);
 
@@ -380,6 +379,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const el = calGridRef.current;
     if (!el) return;
     const handler = (e: WheelEvent) => {
+      // Même garde que WeekClient.tsx : une modale ouverte ne doit jamais laisser un scroll rapide
+      // sous-jacent changer de semaine et désynchroniser la modale de la séance qu'elle édite.
+      if (addingDate || editingSession || completing || duplicating || showReconduire || adjustCtx) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (Math.abs(e.deltaY) < 60) return;
       const now = Date.now();
@@ -732,19 +734,24 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         />
       )}
 
-      {duplicating && (
-        <DuplicateModal session={duplicating} onDuplicate={duplicateSessionToDate} onClose={() => setDuplicating(null)} />
+      {duplicating && athlete && (
+        <DuplicateModal session={duplicating} onDuplicate={duplicateSessionToDate} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
       )}
       {showReconduire && athlete && (
         <ReconduireModal
           daySlots={weekDates.map(d => ({ sessions: sessions.filter(s => s.athlete_id === athlete.id && s.date === format(d, "yyyy-MM-dd")) }))}
+          athletes={athletes}
+          sourceAthleteId={athlete.id}
           onClose={() => setShowReconduire(false)}
-          onConfirm={async (weeksOut) => {
+          onConfirm={async (weeksOut, targetAthleteIds) => {
+            const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
             const allRows = weeksOut.flatMap((rows, w) => rows.map(r => ({
               name: r.name, notes: r.notes, target_difficulty: r.target_difficulty,
               date: format(addDays(weekDates[r.dayIndex], 7 * (w + 1)), "yyyy-MM-dd"),
             })));
-            const results = await Promise.all(allRows.map(r => callSessionAPI({ action: "add", athleteId: athlete.id, data: r })));
+            const results = await Promise.all(
+              recipientIds.flatMap(aid => allRows.map(r => callSessionAPI({ action: "add", athleteId: aid, data: r })))
+            );
             const created: CoachViewSession[] = results
               .filter(r => r.ok && r.session)
               .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));

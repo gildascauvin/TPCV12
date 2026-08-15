@@ -157,8 +157,12 @@ function ActionMenu({ rows, onClose, anchorRect }: { rows: MenuRow[]; onClose: (
   );
 }
 
-function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus }: {
+function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus, initialClickPos }: {
   value: string; onChange: (v: string) => void; onCommit: () => void; onCancel?: () => void; placeholder?: string; autoFocus?: boolean;
+  /* Position (dans `value`) d'un token cliqué avant même que ce champ ne soit monté — cas où un clic
+     sur une ligne en lecture seule doit à la fois passer en édition ET ouvrir directement les
+     suggestions du token cliqué, en un seul clic (voir ExerciseCard). */
+  initialClickPos?: number;
 }) {
   const [ac, setAc] = useState<AcState | null>(null);
   const ref = useRef<HTMLInputElement | null>(null);
@@ -184,25 +188,37 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => refreshSuggestions(text, pos), 120);
   }
+  function resolveClickSuggestions(pos: number) {
+    const el = ref.current;
+    if (!el) return;
+    const text = el.value;
+    const clicked = getClickToken(text, pos);
+    if (!clicked) {
+      const { fullLine } = getCurrentToken(text, pos);
+      if (!fullLine.trim()) { closeAc(); return; }
+      openAc(generateSuggestions("", fullLine), null, null);
+      return;
+    }
+    const suggestions = generateSuggestionsClickMode(clicked.token, clicked.fullLine);
+    if (!suggestions.length) openAc(generateSuggestions(clicked.token, clicked.fullLine), null, null);
+    else openAc(suggestions, clicked.tokenStart, clicked.tokenEnd);
+  }
   function handleClick() {
     const el = ref.current;
     if (!el) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const pos = el.selectionStart ?? 0;
-      const text = el.value;
-      const clicked = getClickToken(text, pos);
-      if (!clicked) {
-        const { fullLine } = getCurrentToken(text, pos);
-        if (!fullLine.trim()) { closeAc(); return; }
-        openAc(generateSuggestions("", fullLine), null, null);
-        return;
-      }
-      const suggestions = generateSuggestionsClickMode(clicked.token, clicked.fullLine);
-      if (!suggestions.length) openAc(generateSuggestions(clicked.token, clicked.fullLine), null, null);
-      else openAc(suggestions, clicked.tokenStart, clicked.tokenEnd);
-    }, 60);
+    debounceRef.current = setTimeout(() => resolveClickSuggestions(el.selectionStart ?? 0), 60);
   }
+  useEffect(() => {
+    if (initialClickPos === undefined) return;
+    const el = ref.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.setSelectionRange(initialClickPos, initialClickPos);
+      resolveClickSuggestions(initialClickPos);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   function acceptSuggestion(valueToInsert: string) {
     const el = ref.current;
     if (!el || !ac) return;
@@ -249,19 +265,37 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
 
 /* Rampes de charge ("@ 80, 85, 87,5 90 / 85 90 92,5 97,5") fusionnées en un seul pastille plutôt
    que la seule première valeur — heuristique d'affichage, indépendante de la grammaire de
-   l'autocomplete (exerciseAutocomplete.ts) qui reste inchangée. */
-const TOKEN_RE = /(\d+\s?[x×X]\s?\d+(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|\d+\s?(?:kg|s|min|m)\b)/g;
+   l'autocomplete (exerciseAutocomplete.ts) qui reste inchangée. Dernière alternative : nombre +
+   unité (kg/%/km/min/m/s) reconnu avec ou sans espace, avec ou sans "@" devant — le "@ ..." reste
+   prioritaire (1re alternative testée) pour absorber les rampes multi-valeurs en un seul token
+   avant que cette alternative plus générique ne les redécoupe en morceaux. Lookahead négatif sur
+   une lettre plutôt que \b : \b échoue après "%" (non word-char) suivi d'un non word-char (virgule,
+   espace) — piège vérifié en écrivant cette regex, "50%," ne matchait pas avec \b. */
+const TOKEN_RE = /(\d+\s?[x×X]\s?\d+(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/g;
 
-function Tokenized({ text }: { text: string }) {
-  const parts = text.split(TOKEN_RE);
+function Tokenized({ text, onTokenClick }: { text: string; onTokenClick?: (pos: number) => void }) {
+  const parts: { text: string; isToken: boolean; start: number }[] = [];
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  TOKEN_RE.lastIndex = 0;
+  while ((m = TOKEN_RE.exec(text))) {
+    if (m.index > lastIndex) parts.push({ text: text.slice(lastIndex, m.index), isToken: false, start: lastIndex });
+    parts.push({ text: m[0], isToken: true, start: m.index });
+    lastIndex = m.index + m[0].length;
+  }
+  if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isToken: false, start: lastIndex });
   return (
     <>
       {parts.map((part, i) =>
-        TOKEN_RE.test(part) ? (
-          <span key={i} style={{ background: "rgba(212,64,0,.1)", color: "#d44000", fontWeight: 800, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5 }}>
-            {part}
+        part.isToken ? (
+          <span
+            key={i}
+            onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start); } : undefined}
+            style={{ background: "rgba(212,64,0,.1)", color: "#d44000", fontWeight: 800, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5, cursor: onTokenClick ? "pointer" : undefined }}
+          >
+            {part.text}
           </span>
-        ) : part
+        ) : part.text
       )}
     </>
   );
@@ -374,6 +408,7 @@ interface CardProps {
   editing: boolean;
   onStartEdit: () => void;
   onCommitEdit: (text: string) => void;
+  onDeleteEmpty: () => void;
   onDelete: () => void;
   attachments: ExerciseAttachments;
   authorRole: "coach" | "athlete";
@@ -381,12 +416,15 @@ interface CardProps {
   onUpdateAttachments: (next: ExerciseAttachments) => void;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDelete, attachments, authorRole, authorName, onUpdateAttachments }: CardProps) {
+function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments }: CardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const [draftText, setDraftText] = useState(line.text);
+  /* Position d'un token cliqué en lecture (avant passage en édition) — voir TokenInput.initialClickPos.
+     undefined = clic hors-token, entrée en édition normale sans ouvrir de suggestions. */
+  const [clickPos, setClickPos] = useState<number | undefined>(undefined);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentKind, setCommentKind] = useState<"text" | "video">("text");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -490,16 +528,21 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDelete, atta
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenInput
               value={draftText} onChange={setDraftText} autoFocus
-              onCommit={() => onCommitEdit(draftText.trim() || line.text)}
+              initialClickPos={clickPos}
+              onCommit={() => {
+                const trimmed = draftText.trim();
+                if (!trimmed) { onDeleteEmpty(); return; }
+                onCommitEdit(trimmed);
+              }}
               onCancel={() => onCommitEdit(line.text)}
             />
           </div>
         ) : (
           <div
-            onClick={onStartEdit}
+            onClick={() => { setClickPos(undefined); onStartEdit(); }}
             style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, color: "#2c3236", cursor: "text", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
           >
-            <Tokenized text={line.text} />
+            <Tokenized text={line.text} onTokenClick={pos => { setClickPos(pos); onStartEdit(); }} />
           </div>
         )}
 
@@ -557,7 +600,10 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDelete, atta
       )}
 
       {(hasComments || open === "comments") && (
-        <div style={{ marginTop: 8, marginLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{
+          marginTop: 8, marginLeft: 18, display: "flex", flexDirection: "column", gap: 6,
+          border: "1px solid rgba(0,0,0,.08)", borderRadius: 10, background: "#fafafa", padding: "8px 9px",
+        }}>
           {attachments.comments.map(c => {
             const mine = c.author === authorRole;
             return (
@@ -744,6 +790,10 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
                 onStartEdit={() => setEditingId(l.id)}
                 onCommitEdit={text => {
                   commitLines(lines.map(x => (x.id === l.id ? { ...x, text } : x)));
+                  setEditingId(null);
+                }}
+                onDeleteEmpty={() => {
+                  deleteLine(l.id);
                   setEditingId(null);
                 }}
                 onDelete={() => deleteLine(l.id)}

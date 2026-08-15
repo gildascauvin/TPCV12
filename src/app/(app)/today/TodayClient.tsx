@@ -15,7 +15,9 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
-import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
+import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
+import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
+import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -107,7 +109,7 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
 }
 
 /* ─── Today session card (v59 POC exact layout) ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, onReorderExercises }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
@@ -115,9 +117,22 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }:
   /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
      orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
   previewPct?: number | null;
+  /* Drag & drop des exercices — même composant/geste que /week et /coach/planning
+     (DraggableExerciseLine, DraggablePlanning.tsx). DndContext scopé à cette carte (une seule
+     séance ici, contrairement au Planning qui en gère plusieurs sur une grille de jours). */
+  onReorderExercises: (sessionId: string, fromIdx: number, toIdx: number) => void;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
+  const exerciseSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  function handleExerciseDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const activeData = active.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
+    const overData = over.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
+    if (activeData?.type !== "exercise" || overData?.type !== "exercise" || overData.sessionId !== activeData.sessionId) return;
+    onReorderExercises(activeData.sessionId!, activeData.index!, overData.index!);
+  }
   const [justDone, setJustDone] = useState(false);
   const prevDoneRef = useRef(session.done);
   useEffect(() => {
@@ -164,34 +179,18 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct }:
         </div>
       )}
 
-      {/* 3. Exercise display list (v50 — no numbers) */}
+      {/* 3. Exercise display list — drag & drop, même composant que /week et /coach/planning */}
       {exercises.length > 0 && (
         <div style={{ marginBottom: 12, border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
-          {exercises.map((ex, i) => {
-            const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
-            const changed = modified !== ex;
-            const unseen = hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
-            return (
-              <div key={i} style={{
-                padding: "10px 12px",
-                borderTop: i > 0 ? "1px solid rgba(0,0,0,.08)" : "none",
-                background: "#fff",
-              }}>
-                {changed && (
-                  <div style={{ fontSize: 11, lineHeight: 1.35, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {ex}
-                  </div>
-                )}
-                <div style={{
-                  fontSize: 13.5, lineHeight: 1.45,
-                  color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 650,
-                  whiteSpace: "pre-wrap", wordBreak: "break-word",
-                }}>
-                  {modified}{unseen && <UnseenDot />}
-                </div>
-              </div>
-            );
-          })}
+          <DndContext sensors={exerciseSensors} onDragEnd={handleExerciseDragEnd}>
+            {exercises.map((ex, i) => {
+              const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
+              const unseen = hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
+              return (
+                <DraggableExerciseLine key={i} sessionId={session.id} index={i} text={modified} originalText={ex} unseen={unseen} />
+              );
+            })}
+          </DndContext>
         </div>
       )}
 
@@ -461,6 +460,23 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
     router.refresh();
   }, [supabase, router]);
+
+  // Réordonner les exercices d'une séance par drag & drop — même mécanique que WeekClient.tsx
+  // (reorderExercises), pour que /today utilise le même composant/geste que le Planning.
+  const reorderTodayExercises = useCallback(async (sessionId: string, fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx) return;
+    const target = allSessions.find(s => s.id === sessionId);
+    if (!target || !target.notes) return;
+    const lines = target.notes.split("\n").filter(Boolean);
+    if (fromIdx < 0 || fromIdx >= lines.length || toIdx < 0 || toIdx >= lines.length) return;
+    const [moved] = lines.splice(fromIdx, 1);
+    lines.splice(toIdx, 0, moved);
+    const newNotes = lines.join("\n");
+    const prevNotes = target.notes;
+    setAllSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
+    const { error } = await supabase.from("sessions").update({ notes: newNotes }).eq("id", sessionId);
+    if (error) setAllSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
+  }, [supabase, allSessions]);
 
   const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     if (!editing) return;
@@ -758,6 +774,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   onEdit={(s) => requireSubscription(() => setEditing(s))}
                   onDelete={(s) => requireSubscription(() => deleteSession(s))}
                   previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                  onReorderExercises={reorderTodayExercises}
                 />
               ))}
             </div>

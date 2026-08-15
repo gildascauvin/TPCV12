@@ -55,10 +55,17 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
   );
 }
 
-export function DraggableExerciseLine({ sessionId, index, text, unseen }: { sessionId: string; index: number; text: string; unseen?: boolean }) {
+export function DraggableExerciseLine({ sessionId, index, text, originalText, unseen }: {
+  sessionId: string; index: number; text: string; unseen?: boolean;
+  /* Ligne brute avant décharge/surcharge (autorégulation) — quand différente de `text`, affichée
+     barrée au-dessus (même style que TodaySessionCard/CoachAthleteCard). undefined partout où ce
+     mécanisme n'existe pas (comportement inchangé pour /week et /coach/planning aujourd'hui). */
+  originalText?: string;
+}) {
   const dragId = `ex:${sessionId}:${index}`;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", sessionId, index } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", sessionId, index } });
+  const changed = originalText !== undefined && originalText !== text;
   return (
     <div
       ref={el => { setDragRef(el); setDropRef(el); }}
@@ -74,7 +81,13 @@ export function DraggableExerciseLine({ sessionId, index, text, unseen }: { sess
         {...attributes} {...listeners}
         style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
       >⠿</span>
-      <span style={{ flex: 1 }}>{text}{unseen && <UnseenDot />}</span>
+      <span style={{ flex: 1 }}>
+        {changed && (
+          <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>{originalText}</div>
+        )}
+        <span style={{ color: changed ? "#E8571A" : undefined, fontWeight: changed ? 800 : undefined }}>{text}</span>
+        {unseen && <UnseenDot />}
+      </span>
     </div>
   );
 }

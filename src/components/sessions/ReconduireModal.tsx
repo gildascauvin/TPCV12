@@ -4,6 +4,10 @@ import { useState } from "react";
 import type { SessionLike } from "@/components/calendar/DayColumn";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { wellnessColor } from "@/lib/wellness";
+import type { CoachAthlete } from "@/types";
+
+function scoreColor(s: number) { return wellnessColor(s); }
 
 type Mode = "deload" | "maintien" | "surcharge";
 const CHIP_VALUES = [2.5, 5, 10, 15, 20];
@@ -21,22 +25,40 @@ interface ReconduireModalProps {
   daySlots: ReconduireDaySlot[]; // 7 entrées, Lun → Dim, dans l'ordre
   title?: string;
   onClose: () => void;
-  onConfirm: (weeks: ReconduireOutputRow[][]) => Promise<void>; // toujours 1 semaine (weeks[0])
+  /* targetAthleteIds : présent seulement quand `athletes` est fourni (contexte coach) — un ou
+     plusieurs sportifs destinataires, jamais forcément le sportif consulté actuellement (voir
+     "Sportifs destinataires" ci-dessous). Absent pour les 2 autres appelants (WeekClient — sportif
+     sur sa propre semaine, ProgramBuilderModal — template local sans notion d'athlète). */
+  onConfirm: (weeks: ReconduireOutputRow[][], targetAthleteIds?: string[]) => Promise<void>; // toujours 1 semaine (weeks[0])
+  /* Coach uniquement — permet de reconduire la semaine vers un ou plusieurs sportifs différents de
+     celui actuellement consulté, même idée que le sélecteur multi-destinataires de
+     CoachSessionModal ("Sportifs destinataires"). Absent = comportement inchangé pour WeekClient/
+     ProgramBuilderModal (aucun sélecteur affiché). */
+  athletes?: CoachAthlete[];
+  sourceAthleteId?: string;
 }
 
 function fmtNum(n: number): string {
   return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
 }
 
-export default function ReconduireModal({ daySlots, title, onClose, onConfirm }: ReconduireModalProps) {
+export default function ReconduireModal({ daySlots, title, onClose, onConfirm, athletes = [], sourceAthleteId }: ReconduireModalProps) {
   const [mode, setMode] = useState<Mode>("maintien");
   const [customPct, setCustomPct] = useState(10);
   const [saving, setSaving] = useState(false);
+  const [recipients, setRecipients] = useState<string[]>(() => sourceAthleteId ? [sourceAthleteId] : []);
+
+  const showRecipients = athletes.length > 0;
+  function toggleRecipient(id: string) {
+    setRecipients(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
 
   const currentPct = mode === "maintien" ? 0 : mode === "deload" ? -customPct : customPct;
   const totalSessions = daySlots.reduce((n, s) => n + s.sessions.length, 0);
+  const canConfirm = totalSessions > 0 && (!showRecipients || recipients.length > 0);
 
   async function handleConfirm() {
+    if (!canConfirm) return;
     setSaving(true);
     const rows: ReconduireOutputRow[] = [];
     daySlots.forEach((slot, dayIndex) => {
@@ -46,7 +68,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
         rows.push({ dayIndex, name: s.name, notes, target_difficulty });
       });
     });
-    await onConfirm([rows]);
+    await onConfirm([rows], showRecipients ? recipients : undefined);
     setSaving(false);
   }
 
@@ -130,6 +152,56 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
             </>
           )}
 
+          {/* Sportifs destinataires — coach uniquement */}
+          {showRecipients && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+                Reconduire vers
+                {recipients.length > 0 && (
+                  <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
+                    {recipients.length}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {athletes.map(a => {
+                  const checked = recipients.includes(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      onClick={() => toggleRecipient(a.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        background: checked ? "#fff5f0" : "#fff",
+                        border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
+                        borderRadius: 14, padding: "10px 12px",
+                        cursor: "pointer", textAlign: "left",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{
+                        width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                        background: checked ? "#d44000" : "#f0efed",
+                        border: checked ? "none" : "1.5px solid rgba(0,0,0,.14)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {checked && <span style={{ color: "#fff", fontSize: 13, lineHeight: 1, fontWeight: 900 }}>✓</span>}
+                      </div>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>
+                        {a.name}
+                        {a.id === sourceAthleteId && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", textTransform: "uppercase" }}>actuel</span>}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {recipients.length === 0 && (
+                <div style={{ fontSize: 12, color: "#c81e1e", marginTop: 8 }}>Sélectionne au moins un sportif.</div>
+              )}
+            </div>
+          )}
+
           {/* Diff preview */}
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Aperçu des modifications
@@ -209,10 +281,10 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm }:
           </button>
           <button
             onClick={handleConfirm}
-            disabled={saving || totalSessions === 0}
-            style={{ background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: totalSessions === 0 ? 0.5 : 1 }}
+            disabled={saving || !canConfirm}
+            style={{ background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: canConfirm ? 1 : 0.5 }}
           >
-            {saving ? "..." : "Reconduire →"}
+            {saving ? "..." : recipients.length > 1 ? `Reconduire (${recipients.length}) →` : "Reconduire →"}
           </button>
         </div>
       </div>

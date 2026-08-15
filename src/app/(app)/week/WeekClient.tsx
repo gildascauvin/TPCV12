@@ -216,6 +216,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     const el = weekGridRef.current;
     if (!el) return;
     const handler = (e: WheelEvent) => {
+      // Une modale ouverte (édition/ajout/dupliquer/reconduire/ajustement) ne doit jamais laisser
+      // un scroll rapide sur la grille sous-jacente changer de semaine — le contenu affilié à la
+      // modale (session référencée par id) devient alors incohérent avec la semaine affichée
+      // dessous, provoquant un "saut" visuel de la modale.
+      if (addingDate || completing || pendingCompleteSession || editing || duplicating || showReconduire || adjustCtx) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (Math.abs(e.deltaY) < 60) return;
       const now = Date.now();
