@@ -35,12 +35,11 @@ interface Props {
   currentWeek?: number;
   onEdit?: () => void;
   onStop?: () => void;
-  onShare?: () => void;
   onOpenLibrary?: () => void;
   onReconduire?: () => void;
 }
 
-export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onShare, onOpenLibrary, onReconduire }: Props) {
+export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire }: Props) {
   if (!program) {
     return (
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -110,11 +109,6 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
         {onStop && (
           <button onClick={onStop} style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid rgba(212,64,0,.25)", cursor: "pointer", background: "#fff", color: "#d44000", fontWeight: 700, fontSize: 11 }}>
             Arrêter
-          </button>
-        )}
-        {onShare && (
-          <button onClick={onShare} style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid rgba(0,0,0,.10)", cursor: "pointer", background: "#fff", color: "#8a8f94", fontSize: 13 }}>
-            🔗
           </button>
         )}
       </div>

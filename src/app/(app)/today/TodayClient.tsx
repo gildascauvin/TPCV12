@@ -19,6 +19,7 @@ import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import ShareButton from "@/components/sessions/ShareButton";
 import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
@@ -109,11 +110,12 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
 }
 
 /* ─── Today session card (v59 POC exact layout) ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, onReorderExercises }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, onReorderExercises, authorName }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
   onDelete: (s: Session) => void;
+  authorName: string;
   /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
      orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
   previewPct?: number | null;
@@ -163,13 +165,27 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, o
         <span style={{ fontSize: 17, fontWeight: 1000, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.04em" }}>
           {session.name}
         </span>
-        <span style={{
-          fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0,
-          background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
-          color: session.done ? "#2f9e44" : "#d44000",
-        }}>
-          {session.done ? "Terminé" : "Prévu"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+          <span style={{
+            fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
+            background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
+            color: session.done ? "#2f9e44" : "#d44000",
+          }}>
+            {session.done ? "Terminé" : "Prévu"}
+          </span>
+          <ShareButton
+            resourceType="session"
+            buildSnapshot={() => ({
+              name: session.name,
+              done: session.done,
+              difficulty: gaugeValue,
+              exercises,
+              authorName,
+            })}
+            title={session.name}
+            text={exercises.length ? `${exercises.length} exercice${exercises.length > 1 ? "s" : ""}` : undefined}
+          />
+        </div>
       </div>
 
       {/* 2. Single difficulty gauge — no label */}
@@ -563,6 +579,27 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           >
             <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
+            {wellnessFilledToday && (
+              <div style={{ position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18, zIndex: 3 }}>
+                <ShareButton
+                  resourceType="wellness"
+                  variant="dark"
+                  buildSnapshot={() => ({
+                    score: displayScore,
+                    zoneLabel: formLabel(displayScore),
+                    behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
+                      ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
+                      : { emoji: "", label: b, positive: true }),
+                    trainingAdvice: advice.training,
+                    recoveryAdvice: advice.recovery,
+                    authorName: profile.name ?? "Toi",
+                  })}
+                  title={`${profile.name ?? "Mon"} — ${formLabel(displayScore)}`}
+                  text={advice.recovery}
+                />
+              </div>
+            )}
+
             {/* Ring + status */}
             <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18 }}>
               <WellnessRingPOC score={displayScore} size={ringSize} />
@@ -775,6 +812,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   onDelete={(s) => requireSubscription(() => deleteSession(s))}
                   previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   onReorderExercises={reorderTodayExercises}
+                  authorName={profile.name ?? "Toi"}
                 />
               ))}
             </div>

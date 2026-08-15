@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import type { Session, ExerciseAttachments } from "@/types";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
+import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 import { createClient } from "@/lib/supabase/client";
 
@@ -96,8 +97,29 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         scrollbarWidth: "thin" as const,
       }}>
         {/* Title */}
-        <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>
-          {isEdit ? "Modifier la séance" : "Nouvelle séance"}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>
+            {isEdit ? "Modifier la séance" : "Nouvelle séance"}
+          </div>
+          {isEdit && session && (
+            <div style={{ flexShrink: 0, marginTop: 2 }}>
+              <ShareButton
+                resourceType="session"
+                buildSnapshot={() => ({
+                  name: name.trim() || session.name,
+                  done: session.done,
+                  difficulty: targetDiff,
+                  exercises: exercisesText.split("\n").map(l => l.trim()).filter(Boolean),
+                  authorName: userName ?? "Toi",
+                })}
+                title={name.trim() || session.name}
+                text={(() => {
+                  const n = exercisesText.split("\n").filter(Boolean).length;
+                  return n ? `${n} exercice${n > 1 ? "s" : ""}` : undefined;
+                })()}
+              />
+            </div>
+          )}
         </div>
         {isEdit && session && (
           <div style={{ fontSize: 13, color: "#62686e", marginBottom: 20 }}>{session.name}</div>

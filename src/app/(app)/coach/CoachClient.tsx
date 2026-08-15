@@ -555,6 +555,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={reviewedIds.has(a.id)}
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
+                    coachName={coachName ?? "Coach"}
                     onDecide={() => requireSubscription(() => handleDecide(a))}
                     onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
                     onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
@@ -580,6 +581,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
+                    coachName={coachName ?? "Coach"}
                     onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))}
                     onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
                     onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}

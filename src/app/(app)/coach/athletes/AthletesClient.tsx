@@ -9,6 +9,7 @@ import CalendarHeader from "@/components/calendar/CalendarHeader";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
+import ShareButton from "@/components/sessions/ShareButton";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
@@ -31,7 +32,7 @@ function statusLabel(s: number, trend?: TrendCode | null) {
 // mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
 // "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
 // fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
-function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSignature; athleteId: string }) {
+function AthleteSignatureBlock({ signature, athleteId, athleteName }: { signature: AthleteSignature; athleteId: string; athleteName: string }) {
   if (signature.kind === "manual") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
@@ -91,6 +92,23 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
             {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} size="sm" />}
             {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
             {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
+            <ShareButton
+              resourceType="charge"
+              variant="dark"
+              buildSnapshot={() => ({
+                insight: chargeInsight,
+                badges: [
+                  { key: "monotony", label: monotonyInfo.label, color: monotonyInfo.color },
+                  ...(strainInfo ? [{ key: "strain", label: strainInfo.label, color: strainInfo.color }] : []),
+                  ...(fitnessTrendInfo ? [{ key: "fitness", label: fitnessTrendInfo.label, color: fitnessTrendInfo.color }] : []),
+                  ...(fatigueTrendInfo ? [{ key: "fatigue", label: fatigueTrendInfo.label, color: fatigueTrendInfo.color }] : []),
+                ],
+                points: zoneAcwr, dates: zoneDates, loads: zoneLoads, monotony: zoneMonotony, strain: zoneStrain,
+                authorName: athleteName,
+              })}
+              title={`Charge — ${athleteName}`}
+              text={chargeInsight}
+            />
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
@@ -104,6 +122,23 @@ function AthleteSignatureBlock({ signature, athleteId }: { signature: AthleteSig
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
             <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
             {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
+            <ShareButton
+              resourceType="recuperation"
+              variant="dark"
+              buildSnapshot={() => ({
+                insight: recoveryInsight,
+                badges: [
+                  { key: "recovery", label: recoveryInfo.label, color: recoveryInfo.color },
+                  ...(formInfo ? [{ key: "form", label: `FORME ${formInfo.label}`, color: formInfo.color }] : []),
+                ],
+                points: last7.map(p => p.recovery), dates: zoneDates, color: recoveryInfo.color,
+                points2: last7.map(p => p.form !== null ? formToChartPosition(p.form) : null),
+                points2Raw: last7.map(p => p.form),
+                authorName: athleteName,
+              })}
+              title={`Récupération — ${athleteName}`}
+              text={recoveryInsight}
+            />
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
@@ -296,7 +331,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                         {isExpanded ? "Masquer le détail ▴" : "Voir charge & récupération ▾"}
                       </button>
                       {isExpanded && (
-                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} />
+                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} />
                       )}
                     </>
                   );

@@ -5,8 +5,10 @@ export async function updateSession(request: NextRequest) {
   /* /p/* est public et à fort trafic anonyme (iframe WP + liens directs) — aucun besoin
      de résoudre l'utilisateur ni de rafraîchir son cookie de session pour cette route,
      l'aller-retour Auth Supabase pesait directement sur le TTFB/LCP (mesuré jusqu'à 18s
-     mobile p90). Restreint à /p/ (pas tous les publicPaths) pour limiter le risque. */
-  if (request.nextUrl.pathname.startsWith("/p/")) {
+     mobile p90). Restreint à /p/ (pas tous les publicPaths) pour limiter le risque.
+     /share/* suit le même principe : public par design (snapshot sans donnée sensible,
+     ouvert directement quel que soit le statut de connexion, voir CLAUDE.md). */
+  if (request.nextUrl.pathname.startsWith("/p/") || request.nextUrl.pathname.startsWith("/share/")) {
     return NextResponse.next({ request });
   }
 
@@ -42,7 +44,7 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/login", "/register", "/auth/callback", "/api/", "/join/", "/p/"];
+  const publicPaths = ["/login", "/register", "/auth/callback", "/api/", "/join/", "/p/", "/share/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {

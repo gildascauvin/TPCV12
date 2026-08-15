@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
@@ -85,7 +86,7 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -106,6 +107,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   onAutoregUndone: () => void;
   tourId?: string;
   trend?: TrendCode | null;
+  coachName?: string;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
@@ -158,6 +160,31 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           }} />
         </>
       )}
+
+      <div style={{ position: "absolute", top: 12, right: showBadge ? 34 : 14, zIndex: 2 }} onClick={e => e.stopPropagation()}>
+        <ShareButton
+          resourceType="coach_athlete"
+          variant="dark"
+          buildSnapshot={() => ({
+            athleteName: athlete.name,
+            score: displayScore,
+            zoneLabel: zoneLabel(displayScore),
+            decision,
+            isPriority,
+            behaviors: behaviors.map(b => BEHAVIOR_META[b]
+              ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
+              : { emoji: "", label: b, positive: true }),
+            topSession: topSession ? {
+              name: topSession.name, done: topSession.done,
+              difficulty: topSession.done ? topSession.rpe : topSession.target_difficulty,
+              exercises: topSession.notes ? topSession.notes.split("\n").filter(Boolean) : [],
+            } : undefined,
+            authorName: coachName ?? "Coach",
+          })}
+          title={`${firstName} — ${zoneLabel(displayScore)}`}
+          text={decision}
+        />
+      </div>
 
       {/* Ring + zone + prénom */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>

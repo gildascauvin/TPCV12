@@ -5,6 +5,7 @@ import type { CoachSession, CoachAthlete, ExerciseAttachments } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
+import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 
 export interface ReviewContext {
@@ -161,7 +162,26 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
               )}
             </div>
           </div>
-          <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            {isEdit && session && (
+              <ShareButton
+                resourceType="session"
+                buildSnapshot={() => ({
+                  name: name.trim() || session.name,
+                  done: session.done,
+                  difficulty,
+                  exercises: exercisesText.split("\n").map(l => l.trim()).filter(Boolean),
+                  authorName: coachName,
+                })}
+                title={name.trim() || session.name}
+                text={(() => {
+                  const n = exercisesText.split("\n").filter(Boolean).length;
+                  return n ? `${n} exercice${n > 1 ? "s" : ""}` : undefined;
+                })()}
+              />
+            )}
+            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
+          </div>
         </div>
 
         {/* Wellness + attention block (combined) */}
