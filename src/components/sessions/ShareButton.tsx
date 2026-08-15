@@ -1,33 +1,34 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createShare, type ShareResourceType } from "@/lib/share";
 
 /* Icône de partage générique, réutilisée sur tous les types partageables (Wellness, Séance, Charge,
-   Récupération, Coach Control) — même geste partout : clic → petit menu avec les options
-   disponibles (Partager l'image / Copier le lien / WhatsApp), plutôt qu'un déclenchement automatique
-   de la Web Share API — sur desktop (pas de navigator.share) ça ne montrait jamais rien de visible,
-   juste une copie silencieuse.
+   Récupération, Coach Control).
 
-   Le lien est créé (createShare) dès l'OUVERTURE du menu, pas au clic sur une option — bug mobile
-   réel trouvé par Gildas : `await createShare()` PUIS `window.open(wa.me...)` casse la chaîne de
-   geste utilisateur sur mobile (Safari/Chrome mobile bloquent silencieusement un window.open()
-   déclenché après un await, contrairement à desktop, plus permissif). Même piège que celui déjà
-   évité dans InviteModal.tsx (le lien y est connu de façon synchrone, jamais ce problème). Fix : le
-   lien est résolu pendant que le menu est déjà ouvert, et "WhatsApp" devient un vrai `<a href>`
-   (navigation native, jamais bloquée) une fois l'URL prête — plus de window.open() du tout ici.
+   2026-08-16, dernière révision — retour explicite de Gildas après avoir testé le menu personnalisé
+   à 3 options sur son téléphone : "les 3 options servent à rien, il faut juste que le clic sur le
+   picto déclenche les options de partage" (comparé à la vraie share sheet iOS, avec tous ses
+   contacts WhatsApp/Messages/Mail/AirDrop). Un menu maison qui ne fait que réimplémenter un
+   sous-ensemble de ce que l'OS propose déjà nativement n'a aucune valeur ajoutée sur un appareil qui
+   supporte `navigator.share()`. Nouveau comportement :
+   - **Si `navigator.share` existe** (quasi tous les navigateurs mobiles) : le clic déclenche
+     directement la vraie share sheet OS, sans aucun menu intermédiaire. L'image est jointe si le
+     navigateur sait partager des fichiers (`navigator.canShare({files})`, Safari/Chrome mobile) ;
+     sinon le partage se fait juste avec titre/texte/lien — toujours mieux que notre mini-menu, la
+     share sheet OS reste plus riche (AirDrop, Mail, Messages, Copier...) dans tous les cas.
+   - **Sinon (desktop, aucun `navigator.share`)** : repli sur le petit menu Copier le lien/WhatsApp,
+     seule situation où il a encore une utilité (rien d'équivalent nativement sur desktop).
 
-   "Partager l'image" (2026-08-16, suite) — la preview de lien WhatsApp reste plafonnée par
-   l'habillage propre de WhatsApp (miniature + texte dans SA typographie), quelle que soit la
-   fidélité de l'og:image fourni. Partager l'image en pièce jointe réelle via le share sheet natif
-   (`navigator.share({files:[...]})`) place les pixels exacts de la carte dans la conversation, sans
-   aucun habillage tiers — comme le fait Strava. Réutilise directement la même image que l'og:image
-   (`/share/[id]/opengraph-image`, déjà fidèle après le chantier v4), aucune nouvelle route de rendu.
-   Feature-detecté (`navigator.canShare({files})`, supporté mobile Safari/Chrome, pas desktop) —
-   n'apparaît que là où ça marche réellement, le reste du menu (lien + WhatsApp) est inchangé sur
-   desktop. Même précaution anti-gesture-chain que le lien : l'image est préchargée dès l'ouverture
-   du menu (pas au clic sur l'option), pour que `navigator.share()` s'exécute sans attente réseau au
-   moment du clic — Safari est strict sur la fraîcheur du geste utilisateur pour cette API. */
+   Lien toujours transmis (retour explicite : "on a dit image + lien à la base") — passé dans le
+   vrai champ `url` de ShareData (pas seulement concaténé dans `text`), l'usage le plus correct de
+   l'API. Si une app cible spécifique (WhatsApp iOS notamment) n'affiche pas la légende/le lien à
+   côté d'une image jointe, c'est une limite de l'extension de partage de cette app, hors de notre
+   contrôle — pas quelque chose qu'on peut forcer depuis le web.
+
+   Le lien est créé (createShare) et mis en cache dès le premier clic (jamais recréé au clic
+   suivant) — même principe qu'avant, pour ne pas dupliquer les lignes `shares` en base à chaque
+   réouverture. */
 interface ShareButtonProps {
   resourceType: ShareResourceType;
   buildSnapshot: () => Record<string, unknown>;
@@ -37,8 +38,12 @@ interface ShareButtonProps {
   size?: number;
 }
 
+function shareApiAvailable(): boolean {
+  return typeof navigator !== "undefined" && !!navigator.share;
+}
+
 function canShareFiles(): boolean {
-  if (typeof navigator === "undefined" || !navigator.share || !navigator.canShare) return false;
+  if (typeof navigator === "undefined" || !navigator.canShare) return false;
   try {
     const dummy = new File([""], "test.png", { type: "image/png" });
     return navigator.canShare({ files: [dummy] });
@@ -62,28 +67,58 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
   const [url, setUrl] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageFetchFailed, setImageFetchFailed] = useState(false);
-  const [imageShareSupported, setImageShareSupported] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => { setImageShareSupported(canShareFiles()); }, []);
+  async function resolveUrl(): Promise<string> {
+    if (url) return url;
+    const resolved = await createShare(resourceType, buildSnapshot());
+    setUrl(resolved);
+    return resolved;
+  }
 
-  async function openMenu(e: React.MouseEvent) {
+  async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
-    setMenuOpen(true);
-    if (url || resolveError) return; // déjà résolu (ou déjà échoué) — pas de recréation à chaque réouverture
-    try {
-      const resolvedUrl = await createShare(resourceType, buildSnapshot());
-      setUrl(resolvedUrl);
-      if (imageShareSupported) {
-        fetch(`${resolvedUrl}/opengraph-image`)
-          .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
-          .then(blob => setImageFile(new File([blob], "theperfclub.png", { type: "image/png" })))
-          .catch(() => setImageFetchFailed(true));
+
+    if (!shareApiAvailable()) {
+      // Desktop, pas de share sheet OS — seul cas où le menu maison (Copier le lien/WhatsApp)
+      // apporte encore quelque chose.
+      setMenuOpen(true);
+      if (url || resolveError) return;
+      try {
+        await resolveUrl();
+      } catch {
+        setResolveError(true);
       }
+      return;
+    }
+
+    setSharing(true);
+    try {
+      const resolvedUrl = await resolveUrl();
+      let file: File | undefined;
+      if (canShareFiles()) {
+        try {
+          const res = await fetch(`${resolvedUrl}/opengraph-image`);
+          if (res.ok) {
+            const blob = await res.blob();
+            const candidate = new File([blob], "theperfclub.png", { type: "image/png" });
+            if (navigator.canShare({ files: [candidate] })) file = candidate;
+          }
+        } catch {
+          // pas d'image jointe si le fetch échoue — le partage titre/texte/lien reste tenté
+        }
+      }
+      await navigator.share({
+        title,
+        text: [title, text].filter(Boolean).join(" · "),
+        url: resolvedUrl,
+        ...(file ? { files: [file] } : {}),
+      });
     } catch {
-      setResolveError(true);
+      // AbortError (annulation utilisateur) ou refus plateforme — rien à afficher
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -100,22 +135,6 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
     setMenuOpen(false);
   }
 
-  async function handleShareImage(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!imageFile || !url) return;
-    setMenuOpen(false);
-    try {
-      await navigator.share({
-        files: [imageFile],
-        title,
-        text: [title, text].filter(Boolean).join(" · ") + "\n" + url,
-      });
-    } catch {
-      // AbortError (annulation utilisateur) ou refus plateforme — rien à afficher, le menu de
-      // partage classique (Copier le lien / WhatsApp) reste accessible en rouvrant le menu.
-    }
-  }
-
   const dark = variant === "dark";
   const label = copyStatus === "copied" ? "✓" : copyStatus === "error" ? "!" : null;
   const rect = btnRef.current?.getBoundingClientRect();
@@ -126,12 +145,13 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
     <>
       <button
         ref={btnRef}
-        onClick={openMenu}
+        onClick={handleClick}
+        disabled={sharing}
         aria-label="Partager"
         title="Partager"
         style={{
-          width: size, height: size, borderRadius: Math.round(size * 0.32), flexShrink: 0, border: "none", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
+          width: size, height: size, borderRadius: Math.round(size * 0.32), flexShrink: 0, border: "none", cursor: sharing ? "default" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", opacity: sharing ? 0.5 : 1,
           background: dark ? "rgba(255,255,255,.1)" : "rgba(212,64,0,.09)",
           color: dark ? "rgba(255,255,255,.85)" : "#d44000",
           fontSize: 12, fontWeight: 900,
@@ -154,14 +174,7 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
               <div style={{ padding: "12px 13px", fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>Création du lien…</div>
             ) : (
               <>
-                {imageShareSupported && !imageFetchFailed && (
-                  imageFile ? (
-                    <button onClick={handleShareImage} style={rowStyle}>📷 Partager l'image</button>
-                  ) : (
-                    <div style={{ ...rowStyle, color: "#8a8f94", cursor: "default" }}>📷 Préparation…</div>
-                  )
-                )}
-                <button onClick={handleCopy} style={{ ...rowStyle, borderTop: imageShareSupported && !imageFetchFailed ? "1px solid #f0f0f0" : "none" }}>📋 Copier le lien</button>
+                <button onClick={handleCopy} style={rowStyle}>📋 Copier le lien</button>
                 <a
                   href={waHref} target="_blank" rel="noopener noreferrer"
                   onClick={e => { e.stopPropagation(); setMenuOpen(false); }}
