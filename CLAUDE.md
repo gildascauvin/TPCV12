@@ -1455,3 +1455,27 @@ Deux problèmes distincts remontés après test réel sur téléphone :
 `tsc --noEmit` + `npm run build` propres après chaque round. OG image testée en conditions réelles (voir ci-dessus) — seul le rendu final dans une vraie conversation WhatsApp (crawler externe, ne peut pas atteindre `localhost`) reste à confirmer par Gildas une fois déployé. Reste du chantier (toggle, dupliquer, fix onboarding, fix mobile WhatsApp) vérifié par `tsc`/`build` uniquement, pas de clic réel par Claude (jamais de manipulation du compte de Gildas) — à valider par Gildas.
 
 Déployé en prod le 2026-08-16 (commit `cb043b3`, push direct sur `main`).
+
+## Image OG fidèle aux vraies cartes, CTA connexion sur /share, wrap mobile ProgramBanner (2026-08-16, suite)
+
+Gildas a testé le partage WhatsApp en réel juste après le déploiement précédent — capture à l'appui. Le lien fonctionnait et une preview apparaissait bien, mais **ne ressemblait pas au contenu réel** : c'était le texte simple (eyebrow/titre/description) posé le jour même, jugé trop pauvre comparé à la vraie carte de l'app (`ShareView.tsx`). Demande explicite de vérifier la compréhension avant d'exécuter, et de ne pas sur-investir en crédits sur du rendu d'image.
+
+### `opengraph-image.tsx` — reproduit la vraie carte, pas un résumé texte
+Remplace le contenu texte-only du jour précédent par une reconstruction fidèle de chaque type via satori (moteur de rendu de `next/og` — flexbox, `gap`, `border-radius`, `linear-gradient`, SVG basique et emoji supportés, `box-shadow`/`transform` sur `<svg>` non fiables) :
+- **`session`** : nom+emoji, badge Terminé/Prévu, jauge de difficulté colorée (`Gauge`, mêmes seuils/couleurs que `DiffGauge.tsx`), jusqu'à 4 lignes d'exercice en liste bordée + "+N autres" si plus.
+- **`wellness`**/**`coach_athlete`** : ring SVG (cercle + arc coloré via `wellnessColor()`, réutilisée telle quelle — pas de rotation depuis midi comme dans l'app, satori ne supporte pas `transform` sur `<svg>` de façon fiable, différence mineure assumée), eyebrow, titre (zone/nom), chips de comportements, encart conseil/décision.
+- **`charge`**/**`recuperation`** : eyebrow + insight + mini-graphe SVG simplifié (`MiniLine`, polyline + points colorés par zone ACWR pour Charge, couleur wellness fixe pour Récupération) — pas une reproduction des vrais `ZoneSparkline`/`SparkLineClient` (interactifs, décimation de labels, dégradés par point : hors de portée raisonnable pour une image statique de preview), mais une silhouette de tendance fidèle en esprit.
+`getShare()`/`wellnessColor()` réutilisés tels quels (fonctions pures, aucune dépendance React/client).
+
+**Vérifié en réel, pas en confiance aveugle** : 3 lignes `shares` de test insérées directement en base (session, wellness, charge — types représentatifs), images récupérées via `curl` sur `/share/{id}/opengraph-image` en local et **inspectées visuellement** avant de considérer le travail fini — comparées côte à côte aux captures de référence de Gildas. Un défaut mineur trouvé et corrigé au passage (le mini-graphe rognait ses points de bord) ; un autre accepté tel quel (l'emoji 📱 s'affiche en carré plutôt qu'en glyphe — limitation ponctuelle du rendu emoji de satori sur ce caractère précis, un seul cas sur une dizaine testés, cosmétique). Lignes de test supprimées immédiatement après vérification.
+
+### CTA "Accéder à ThePerfClub" sur /share/[id]
+Demandé en cours de route (même message) : bouton pleine largeur en bas de chaque page de partage, `<a href="/login">` — sortie évidente pour un destinataire qui découvre l'app via un lien partagé.
+
+### `ProgramBanner.tsx` — wrap mobile de l'état "Aucun programme actif"
+Signalé séparément par Gildas : sur mobile, le texte "Aucun programme actif" + les 2 boutons ("Reconduire la semaine →", "📚 Programmes") s'écrasaient sur une seule ligne. Fix : `useBreakpoint().isMd` bascule la ligne en colonne sous ce seuil (texte en haut, boutons pleine largeur côte à côte en dessous) — même pattern responsive déjà utilisé ailleurs dans l'app (`isLg ? "1fr 1fr" : "1fr"` etc.), pas de nouvelle logique inventée.
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres. OG image vérifiée en conditions réelles pour 3 des 5 types (voir ci-dessus) — `coach_athlete`/`recuperation` partagent le même code que `wellness`/`charge` respectivement, pas re-testés séparément (risque jugé faible). CTA et wrap mobile vérifiés par lecture de code + build uniquement, pas de clic réel par Claude.
+
+Déployé en prod le 2026-08-16 (commit `485e659`, push direct sur `main`).
