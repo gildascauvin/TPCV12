@@ -1,6 +1,7 @@
 "use client";
 
 import type { Program } from "@/types";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<string, string> = {
@@ -40,21 +41,27 @@ interface Props {
 }
 
 export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire }: Props) {
+  const { isMd } = useBreakpoint();
+
   if (!program) {
     return (
-      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{
+        background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px",
+        display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "flex-start",
+        justifyContent: "space-between", gap: isMd ? 0 : 10,
+      }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2 }}>Aucun programme actif</div>
           <div style={{ fontSize: 11, color: "#8a8f94" }}>Les séances libres restent disponibles</div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, width: isMd ? "auto" : "100%" }}>
           {onReconduire && (
-            <button onClick={onReconduire} style={{ padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11 }}>
+            <button onClick={onReconduire} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
               Reconduire la semaine →
             </button>
           )}
           {onOpenLibrary && (
-            <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}>
+            <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)", whiteSpace: "nowrap" }}>
               📚 Programmes<span className="tour-lock">🔒</span>
             </button>
           )}

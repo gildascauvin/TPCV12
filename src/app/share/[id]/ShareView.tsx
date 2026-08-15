@@ -202,6 +202,19 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>
         </Card>
       )}
+
+      <div style={{ maxWidth: 460, margin: "22px auto 0" }}>
+        <a
+          href="/login"
+          style={{
+            display: "block", textAlign: "center", padding: "14px", borderRadius: 16,
+            background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 800,
+            boxShadow: "0 10px 24px rgba(212,64,0,.22)", textDecoration: "none",
+          }}
+        >
+          Accéder à ThePerfClub →
+        </a>
+      </div>
     </div>
   );
 }
