@@ -1563,3 +1563,15 @@ Gildas a testé "Partager l'image" sur son téléphone : "📷 Préparation…" 
 **Conséquence non anticipée, plus grave que le seul partage en image** : `og:image` pointe vers cette même route — **la preview de lien WhatsApp elle-même était cassée en prod depuis le déploiement v4** (aucune image, probablement aucune carte de preview du tout), pas seulement la nouvelle fonctionnalité de partage natif. Corrigé du même coup par ce fix.
 
 Déployé en prod le 2026-08-16 (commit `61f545e`, push direct sur `main`).
+
+## Simplification finale : clic = share sheet OS directe, plus de menu maison (2026-08-16, suite)
+
+Une fois le 500 corrigé, Gildas a testé le menu à 3 options sur son téléphone : *"les 3 options servent à rien, il faut juste que le clic sur le picto déclenche les options de partage"* — avec une capture d'écran de la vraie share sheet iOS (WhatsApp par contact, Messages, Mail, AirDrop, Copier...) en référence. Constat correct : un menu maison qui ne réimplémente qu'un sous-ensemble (Copier le lien/WhatsApp) de ce que l'OS propose déjà nativement, en plus riche, n'a aucune valeur ajoutée sur un appareil qui supporte `navigator.share()`.
+
+**`ShareButton.tsx` — nouveau comportement** : si `navigator.share` existe (quasi tous les navigateurs mobiles), le clic sur l'icône appelle **directement** `navigator.share()` — plus de menu intermédiaire du tout. L'image est jointe si le navigateur supporte le partage de fichiers (`navigator.canShare({files})`, Safari/Chrome mobile) ; sinon le partage se fait avec titre/texte/lien seuls — dans les deux cas la vraie share sheet OS s'ouvre, toujours plus riche que le mini-menu qu'elle remplace. Le petit menu Copier le lien/WhatsApp ne subsiste que pour desktop (aucun `navigator.share` disponible, rien d'équivalent nativement à déléguer).
+
+**Fix "j'ai plus le lien"** : `url` est désormais transmis dans le **vrai champ `url` de `ShareData`** (pas seulement concaténé dans `text` comme dans la version précédente) — l'usage le plus correct/standard de l'API. Limite honnête documentée dans le commentaire du fichier : si une app cible précise (WhatsApp iOS en particulier) n'affiche pas la légende/le lien à côté d'une image jointe malgré ça, c'est une limite de l'extension de partage propre à cette app côté iOS — hors de portée d'un ajustement côté web, pas quelque chose à masquer ou prétendre résoudre.
+
+**Non testable par Claude** (comme les rounds précédents sur ce composant) : le déclenchement réel de `navigator.share()` et le rendu final dans la share sheet nécessitent un vrai appareil mobile — vérifié uniquement par `tsc --noEmit` + `npm run build` propres et lecture de code, à confirmer par Gildas sur son téléphone.
+
+Déployé en prod le 2026-08-16 (commit `30e89c0`, push direct sur `main`).
