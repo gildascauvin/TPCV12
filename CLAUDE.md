@@ -1525,3 +1525,25 @@ Gildas a soumis un échange avec ChatGPT proposant de ne plus chercher à rendre
 **Pas encore implémenté à ce stade** — reste une étape suivante distincte, en attente d'accord explicite de Gildas avant de démarrer : bouton "Partager l'image" dans `ShareButton.tsx`, `fetch()` du PNG déjà généré → `Blob`/`File` → `navigator.share({ files, text, url })`, feature-detecté via `navigator.canShare({ files })` (supporté iOS Safari/Android Chrome mobile, pas desktop — comportement desktop actuel inchangé dans tous les cas).
 
 Déployé en prod le 2026-08-16 (commit `b2bbf55`, push direct sur `main`).
+
+## Partage natif en image (`navigator.share`), en plus du lien (2026-08-16, suite)
+
+Suite directe de la décision d'architecture documentée dans la section précédente (échange avec ChatGPT sur lien vs image) — Gildas a confirmé de construire l'ajout ("go, fais-le") après avoir validé que le fix v4 restait pertinent pour les deux usages.
+
+### `ShareButton.tsx` — nouvelle option "📷 Partager l'image"
+Nouvelle ligne de menu, **feature-détectée** via `navigator.canShare({files})` (test avec un `File` factice au montage, `canShareFiles()`) — supportée sur mobile Safari/Chrome, absente sur desktop (le reste du menu, Copier le lien/WhatsApp, reste strictement inchangé partout). Placée en premier quand disponible : c'est désormais l'option la plus fidèle, celle qui met les pixels exacts de la carte dans la conversation sans l'habillage de WhatsApp.
+
+**Aucune nouvelle route de rendu** — réutilise directement `/share/[id]/opengraph-image` (déjà fidèle depuis le chantier v4 ci-dessus) comme source des bytes de l'image partagée. Le fetch confirme donc directement que la v4 sert deux usages, pas un seul, comme discuté.
+
+**Même précaution anti-chaîne-de-geste que le lien WhatsApp (déjà documentée plus haut dans ce fichier)** : l'image est **préchargée dès l'ouverture du menu** (`fetch()` lancé en parallèle de `createShare()`, résultat stocké dans un state `imageFile`), pas au clic sur l'option — `navigator.share()` a la réputation d'être strict (surtout Safari) sur la fraîcheur du geste utilisateur qui l'invoque ; un `await fetch()` réseau juste avant l'appel risquerait de sortir de cette fenêtre de confiance, exactement le même mécanisme de bug déjà trouvé et corrigé sur le `window.open()` de WhatsApp. Au clic, `navigator.share({files:[imageFile], ...})` s'exécute donc sans aucune attente réseau (le fichier est déjà en mémoire) si le préchargement a eu le temps de finir ; sinon la ligne de menu affiche "📷 Préparation…" (désactivée) le temps que ça résolve.
+
+**Lien transmis dans `text`, pas dans le champ `url` séparé de `ShareData`** — décision délibérée : combiner `files` et `url` dans un même partage a un support cross-plateforme incertain (certaines implémentations d'iOS Safari ignorent ou rejettent `url` en présence de `files`), alors que `text` accompagne toujours fidèlement le fichier comme légende sur WhatsApp/Messages/Mail. Le format suit exactement la recommandation "image + lien" du brief ChatGPT : `text = "{title} · {text}\n{url}"`.
+
+**Repli silencieux en cas d'échec du fetch de l'image** (`imageFetchFailed`) : la ligne "Partager l'image" disparaît simplement du menu plutôt que d'afficher un état d'erreur permanent — Copier le lien/WhatsApp restent toujours disponibles en repli, cohérent avec le principe déjà établi ailleurs dans ce fichier de dégradation gracieuse plutôt que d'écran cassé.
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres. **L'URL exacte utilisée par le client** (`${url}/opengraph-image`) testée en réel : une ligne `shares` de test insérée en base, `curl` sur cette URL précise confirmant `200 image/png` (pas une supposition sur le format d'URL), ligne supprimée immédiatement après.
+
+**Non testable par Claude** : le déclenchement réel de `navigator.share()` et l'apparition du share sheet OS nécessitent un vrai appareil mobile (iOS Safari ou Android Chrome) — aucun navigateur desktop utilisé pendant cette session n'implémente le partage de fichiers via cette API, donc impossible à vérifier au clic comme le reste du chantier. Logique tracée à la main (feature detection, préchargement, désactivation temporaire de la ligne, repli silencieux) mais **à valider par Gildas sur son téléphone** avant de considérer le clic-à-clic confirmé.
+
+Déployé en prod le 2026-08-16 (commit `f885f7b`, push direct sur `main`).
