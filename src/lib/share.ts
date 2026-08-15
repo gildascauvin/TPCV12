@@ -8,7 +8,14 @@ import { createClient } from "@/lib/supabase/client";
 /* "programme" volontairement absent : le partage d'un programme passe par le mécanisme public
    existant (/p/[id], is_public) plutôt que par ce système de snapshot générique — décision
    explicite de Gildas, pour ne pas dupliquer deux façons de partager la même chose. */
-export type ShareResourceType = "wellness" | "session" | "charge" | "recuperation" | "coach_athlete";
+/* "signature" (2026-08-16) : remplace les 2 boutons de partage séparés Charge/Récupération sur
+   /conseils et /coach/athletes par un seul lien combiné (insight croisé global + les 2 charts, sans
+   les badges d'indicateurs) — retour explicite de Gildas après avoir vu les 2 partages séparés :
+   "je préfère qu'un lien de partage... avec les infos : insight croisé global, charge + graph,
+   récupération + graph". "charge"/"recuperation" restent des types valides (rendus toujours
+   supportés dans ShareView.tsx/opengraph-image.tsx) pour ne pas casser d'anciens liens déjà
+   partagés, mais plus aucun nouveau bouton ne les crée. */
+export type ShareResourceType = "wellness" | "session" | "charge" | "recuperation" | "coach_athlete" | "signature";
 
 export async function createShare(resourceType: ShareResourceType, snapshot: Record<string, unknown>): Promise<string> {
   const supabase = createClient();

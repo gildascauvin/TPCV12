@@ -5,8 +5,8 @@ import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
-import { wellnessColor } from "@/lib/wellness";
 import type { ShareResourceType } from "@/lib/share";
+import { ShareRing, ShareChip, ShareExerciseList, type ShareBehavior } from "./ShareCardParts";
 
 /* Rendu public de /share/[id] — un snapshot figé au moment du partage (jamais un pointeur live
    vers la ligne source), aucune notion de connecté/non-connecté (décision explicite, aucune donnée
@@ -16,16 +16,7 @@ import type { ShareResourceType } from "@/lib/share";
    sur chaque badge), donc le partage reste lisible sans le contexte de l'app autour. "use client"
    nécessaire pour ces 3 composants (tooltips/hover). */
 
-interface Behavior { emoji: string; label: string; positive: boolean }
 interface Badge { key: string; label: string; color: string }
-
-function Chip({ b }: { b: Behavior }) {
-  return (
-    <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: b.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)", color: b.positive ? "#bfeec8" : "#ffd2bf" }}>
-      {b.emoji} {b.label}
-    </span>
-  );
-}
 
 function BadgeRow({ badges }: { badges: Badge[] }) {
   if (!badges.length) return null;
@@ -38,43 +29,10 @@ function BadgeRow({ badges }: { badges: Badge[] }) {
   );
 }
 
-function Ring({ score, size = 84 }: { score: number | null; size?: number }) {
-  const r = Math.round(size * 0.42);
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = +(circ * (1 - pct / 100)).toFixed(1);
-  const color = wellnessColor(score);
-  return (
-    <div style={{ position: "relative", flexShrink: 0, width: size, height: size, borderRadius: "50%", background: "linear-gradient(145deg,#171717,#2f2f2f)" }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={Math.round(size * 0.08)} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={Math.round(size * 0.08)} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: Math.round(size * 0.3), fontWeight: 1000, letterSpacing: "-0.04em", color }}>{score ?? "—"}</span>
-        <span style={{ fontSize: Math.round(size * 0.1), fontWeight: 900, letterSpacing: "0.12em", color: "rgba(255,255,255,.55)", marginTop: 2, textTransform: "uppercase" }}>récup.</span>
-      </div>
-    </div>
-  );
-}
-
-function ExerciseList({ exercises }: { exercises: string[] }) {
-  if (!exercises.length) return null;
-  return (
-    <div style={{ border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, overflow: "hidden" }}>
-      {exercises.map((ex, i) => (
-        <div key={i} style={{ padding: "10px 12px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.06)" : "none", fontSize: 13.5, lineHeight: 1.45, color: "#2c3236", fontWeight: 650, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {ex}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Card({ children, dark }: { children: React.ReactNode; dark?: boolean }) {
+function Card({ children, dark, maxWidth = 460 }: { children: React.ReactNode; dark?: boolean; maxWidth?: number }) {
   return (
     <div style={{
-      borderRadius: 26, padding: 22, maxWidth: 460, margin: "0 auto",
+      borderRadius: 26, padding: 22, maxWidth, margin: "0 auto",
       background: dark ? "linear-gradient(145deg,#1a1a1a,#282828)" : "#fff",
       color: dark ? "#fff" : "#171b1f",
       boxShadow: "0 24px 60px rgba(0,0,0,.14)",
@@ -98,13 +56,13 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
       {resourceType === "wellness" && (
         <Card dark>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
-            <Ring score={s.score ?? null} />
+            <ShareRing score={s.score ?? null} />
             <div>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", textTransform: "uppercase", marginBottom: 4 }}>Score &amp; conseils</div>
               <div style={{ fontSize: 26, fontWeight: 1000, letterSpacing: "-0.035em" }}>{s.zoneLabel}</div>
               {Array.isArray(s.behaviors) && s.behaviors.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
-                  {s.behaviors.map((b: Behavior, i: number) => <Chip key={i} b={b} />)}
+                  {s.behaviors.map((b: ShareBehavior, i: number) => <ShareChip key={i} b={b} />)}
                 </div>
               )}
             </div>
@@ -132,7 +90,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             </span>
           </div>
           {s.difficulty != null && <div style={{ marginBottom: 14 }}><DiffGauge value={s.difficulty} height={10} /></div>}
-          <ExerciseList exercises={s.exercises ?? []} />
+          <ShareExerciseList exercises={s.exercises ?? []} />
           <div style={{ fontSize: 11, color: "#9a9ea1", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>
         </Card>
       )}
@@ -165,16 +123,36 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
         </Card>
       )}
 
+      {resourceType === "signature" && (
+        <Card dark maxWidth={620}>
+          {s.insight && (
+            <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "13px 15px", fontSize: 14, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600, marginBottom: 20 }}>
+              {s.emoji} {s.action && <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", color: "#ff8a55" }}>{s.action} — </span>}{s.insight}
+            </div>
+          )}
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
+          <ZoneSparkline points={s.chargePoints ?? []} dates={s.dates ?? []} loads={s.chargeLoads} monotony={s.chargeMonotony} strain={s.chargeStrain} height={150} weekLabels={s.weekLabels} />
+          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", margin: "20px 0 8px" }}>🌿 Récupération</div>
+          <SparkLineClient
+            points={s.recoveryPoints ?? []} dates={s.dates ?? []} color={s.recoveryColor ?? "#7fa8ea"}
+            maxVal={100} height={150} metricType="recovery" uid="share-signature" chartType="line" sequentialFill
+            points2={s.recoveryPoints2} zones2={FORM_ZONES}
+            weekLabels={s.weekLabels}
+          />
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,.3)", marginTop: 16, textAlign: "center" }}>Partagé par {s.authorName ?? "un membre ThePerfClub"}</div>
+        </Card>
+      )}
+
       {resourceType === "coach_athlete" && (
         <Card dark>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
-            <Ring score={s.score ?? null} />
+            <ShareRing score={s.score ?? null} />
             <div>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", textTransform: "uppercase", marginBottom: 4 }}>Coach control</div>
               <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em" }}>{s.athleteName}</div>
               {Array.isArray(s.behaviors) && s.behaviors.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
-                  {s.behaviors.map((b: Behavior, i: number) => <Chip key={i} b={b} />)}
+                  {s.behaviors.map((b: ShareBehavior, i: number) => <ShareChip key={i} b={b} />)}
                 </div>
               )}
             </div>
@@ -196,7 +174,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
                 </span>
               </div>
               {s.topSession.difficulty != null && <div style={{ marginBottom: Array.isArray(s.topSession.exercises) && s.topSession.exercises.length ? 8 : 0 }}><DiffGauge value={s.topSession.difficulty} height={8} /></div>}
-              {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ExerciseList exercises={s.topSession.exercises} />}
+              {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} />}
             </div>
           )}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>

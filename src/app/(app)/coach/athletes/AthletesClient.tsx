@@ -33,7 +33,7 @@ function statusLabel(s: number, trend?: TrendCode | null) {
 // mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
 // "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
 // fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
-function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode }) {
+function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, trendInsight }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode; trendInsight: AthleteTrendInsight }) {
   if (signature.kind === "manual") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
@@ -85,8 +85,24 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }:
       background: "linear-gradient(145deg,#1a1a1a,#282828)",
       border: "1px solid rgba(255,255,255,.08)",
       borderRadius: 20, padding: 16, color: "#fff",
-      display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 20,
     }}>
+      {trendInsight && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <ShareButton
+            resourceType="signature"
+            variant="dark"
+            buildSnapshot={() => ({
+              emoji: trendInsight.emoji, action: trendInsight.action, insight: trendInsight.text,
+              chargePoints: zoneAcwr, recoveryPoints: last7.map(p => p.recovery),
+              recoveryPoints2: last7.map(p => p.form !== null ? formToChartPosition(p.form) : null),
+              dates: zoneDates, weekLabels: rangeMode === "month", authorName: athleteName,
+            })}
+            title={`Signature de fatigue — ${athleteName}`}
+            text={trendInsight.text}
+          />
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 20 }}>
       {/* Charge — titre + badges sur la même ligne, insight dessous, chart ensuite */}
       <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
@@ -96,24 +112,6 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }:
             {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} size="sm" />}
             {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
             {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
-            <ShareButton
-              resourceType="charge"
-              variant="dark"
-              buildSnapshot={() => ({
-                insight: chargeInsight,
-                badges: [
-                  { key: "monotony", label: monotonyInfo.label, color: monotonyInfo.color },
-                  ...(strainInfo ? [{ key: "strain", label: strainInfo.label, color: strainInfo.color }] : []),
-                  ...(fitnessTrendInfo ? [{ key: "fitness", label: fitnessTrendInfo.label, color: fitnessTrendInfo.color }] : []),
-                  ...(fatigueTrendInfo ? [{ key: "fatigue", label: fatigueTrendInfo.label, color: fatigueTrendInfo.color }] : []),
-                ],
-                points: zoneAcwr, dates: zoneDates, loads: zoneLoads, monotony: zoneMonotony, strain: zoneStrain,
-                weekLabels: rangeMode === "month",
-                authorName: athleteName,
-              })}
-              title={`Charge — ${athleteName}`}
-              text={chargeInsight}
-            />
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
@@ -127,24 +125,6 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }:
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
             <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
             {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
-            <ShareButton
-              resourceType="recuperation"
-              variant="dark"
-              buildSnapshot={() => ({
-                insight: recoveryInsight,
-                badges: [
-                  { key: "recovery", label: recoveryInfo.label, color: recoveryInfo.color },
-                  ...(formInfo ? [{ key: "form", label: `FORME ${formInfo.label}`, color: formInfo.color }] : []),
-                ],
-                points: last7.map(p => p.recovery), dates: zoneDates, color: recoveryInfo.color,
-                points2: last7.map(p => p.form !== null ? formToChartPosition(p.form) : null),
-                points2Raw: last7.map(p => p.form),
-                weekLabels: rangeMode === "month",
-                authorName: athleteName,
-              })}
-              title={`Récupération — ${athleteName}`}
-              text={recoveryInsight}
-            />
           </div>
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
@@ -156,6 +136,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode }:
           points2Raw={last7.map(p => p.form)} zones2={FORM_ZONES}
           weekLabels={rangeMode === "month"}
         />
+      </div>
       </div>
     </div>
   );
@@ -342,7 +323,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                         {isExpanded ? "Masquer le détail ▴" : "Voir charge & récupération ▾"}
                       </button>
                       {isExpanded && (
-                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} rangeMode={rangeMode} />
+                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} rangeMode={rangeMode} trendInsight={insight} />
                       )}
                     </>
                   );

@@ -22,5 +22,6 @@ export function metaFor(row: ShareRow): { title: string; description?: string } 
     case "charge": return { title: "Charge d'entraînement", description: s.insight };
     case "recuperation": return { title: "Récupération", description: s.insight };
     case "coach_athlete": return { title: `${s.athleteName} · Coach control`, description: s.decision };
+    case "signature": return { title: "Ma signature de fatigue", description: s.insight };
   }
 }

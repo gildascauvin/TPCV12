@@ -8,8 +8,8 @@ export default function DiffGauge({ value, height = 11 }: { value: number | null
   };
   const w = Math.max(22, Math.min(100, Math.round(value * 10)));
   return (
-    <div style={{ width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
-      <div style={{ height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
+    <div style={{ display: "flex", width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
+      <div style={{ display: "flex", height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
     </div>
   );
 }
