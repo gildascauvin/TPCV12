@@ -1633,4 +1633,4 @@ Une fois le canvas 630→1200 de hauteur, les branches `session`/`wellness`/`coa
 ### Vérifié
 `tsc --noEmit` + `npm run build` propres (`.next/server/app/share/[id]/opengraph-image/route.js.nft.json` re-vérifié après ce build : les 3 `.woff` toujours tracés, `outputFileTracingIncludes` intact — pas touché par ce round, revérifié par précaution après l'incident ENOENT de la section précédente). Les 6 types de partage vérifiés visuellement contre le code final (lignes `shares` de test insérées puis supprimées, images récupérées en `curl` sur `localhost` et inspectées via `Read`) — y compris une revérification de `"signature"` après le round d'agrandissement du `Card`/`AuthorFooter` global, pour confirmer que ce changement partagé n'a rien cassé sur ce type déjà validé plus tôt.
 
-Déployé en prod le 2026-08-16 (commit à venir, push direct sur `main`).
+Déployé en prod le 2026-08-16 (commit `76933a8`, push direct sur `main`).
