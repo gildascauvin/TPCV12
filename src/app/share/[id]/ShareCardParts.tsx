@@ -38,7 +38,7 @@ export function ShareRing({ score, size = 84 }: { score: number | null; size?: n
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={Math.round(size * 0.08)} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={Math.round(size * 0.08)} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, width: size, height: size, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", fontSize: Math.round(size * 0.3), fontWeight: 900, letterSpacing: "-0.04em", color }}>{score ?? "—"}</div>
         <div style={{ display: "flex", fontSize: Math.round(size * 0.1), fontWeight: 900, letterSpacing: "0.12em", color: "rgba(255,255,255,.55)", marginTop: 2, textTransform: "uppercase" }}>récup.</div>
       </div>
