@@ -1634,3 +1634,24 @@ Une fois le canvas 630→1200 de hauteur, les branches `session`/`wellness`/`coa
 `tsc --noEmit` + `npm run build` propres (`.next/server/app/share/[id]/opengraph-image/route.js.nft.json` re-vérifié après ce build : les 3 `.woff` toujours tracés, `outputFileTracingIncludes` intact — pas touché par ce round, revérifié par précaution après l'incident ENOENT de la section précédente). Les 6 types de partage vérifiés visuellement contre le code final (lignes `shares` de test insérées puis supprimées, images récupérées en `curl` sur `localhost` et inspectées via `Read`) — y compris une revérification de `"signature"` après le round d'agrandissement du `Card`/`AuthorFooter` global, pour confirmer que ce changement partagé n'a rien cassé sur ce type déjà validé plus tôt.
 
 Déployé en prod le 2026-08-16 (commit `76933a8`, push direct sur `main`).
+
+## Image OG v7 — canvas portrait 1200×1500, textes agrandis, fix centrage ring (2026-08-16, suite)
+
+Gildas, après la v6 (canvas carré 1200×1200) : *"bien mieux, maintenant agrandit la taille des textes (je dirais entre 1,5 et X2)... et le score n'est pas centré dans le ring sur la wellness card"*, puis en cours de route : *"peut être qu'un format rectangle avec la hauteur plus grande que la largeur ca me fait comme ca c'est encore plus lisible, on peut agrandir la taille des textes et composant"*.
+
+### Canvas 1200×1500 (portrait, était 1200×1200 carré)
+Plus de hauteur disponible pour accueillir des textes nettement plus grands sans dépasser — décision prise avant d'écrire le moindre code : budget vertical calculé à la main branche par branche (la plus contrainte, `"signature"` avec ses 2 charts empilés, dimensionnée en dernier avec le moins de marge de sécurité), confirmé ensuite par test réel sur les 6 types.
+
+### Bug réel corrigé : score non centré dans le ring (`ShareCardParts.tsx`)
+`ShareRing` positionnait le texte du score via `position:absolute; inset:0` — fonctionne en navigateur (`ShareView.tsx`), mais **satori ne respecte pas le shorthand `inset`**, laissant le score collé en haut-gauche du ring au lieu d'être centré. Fix : `top:0, left:0, width:size, height:size` (explicite, garanti satori-compatible) — ce composant étant partagé (single source de vérité, voir v5), le fix s'applique automatiquement à `ShareView.tsx` aussi (aucun changement visuel côté navigateur, `inset:0` et `top/left/width/height` sont strictement équivalents là où ils fonctionnent tous les deux).
+
+### Toutes les tailles de texte augmentées (~1.5-1.7x)
+Nom de séance 46→74, eyebrow 19→30, heading (zone/nom sportif) 48→74, chips 21→32, encarts conseils/décision 22→34, footer "Partagé par..." 16→26, labels de jour du mini-graphe 13→20, etc. Ring wellness 220→280 (160→220 en coach) — pas seulement le texte, les composants aussi (demande explicite de Gildas "textes et composants"). Paddings/gaps ajustés en proportion pour rester cohérents visuellement, pas juste le texte isolé.
+
+### Bug réel trouvé en testant après l'agrandissement : troncature en plein mot
+Le texte d'insight de la carte `"signature"` (et 4 autres endroits : conseils entraînement/récupération, décision coach, insight charge/récupération standalone) utilisait un simple `.slice(0, N)` — coupait parfois en plein mot sans aucune indication visuelle (ex. *"...vers une accumu"*, mot "accumulation" tronqué net). Beaucoup plus visible une fois le texte agrandi (moins de caractères tiennent par ligne, la limite est atteinte plus souvent). **Fix** : nouvelle fonction `truncate(str, max)` — coupe au dernier espace avant la limite (pas en plein mot, sauf si aucun espace dans le dernier 40% de la limite) et ajoute "…" si le texte a été tronqué. Appliquée aux 5 endroits concernés, avec les limites elles-mêmes légèrement remontées (130→140-170 selon l'endroit) puisque le canvas plus haut laissait de la marge.
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres (font tracing `.woff` re-vérifié dans `route.js.nft.json` après ce build, intact — pas touché par ce round). Les 6 types de partage vérifiés visuellement (lignes `shares` de test insérées puis supprimées, images récupérées en `curl` sur `localhost` et inspectées via `Read`) — le score mal centré et la troncature en plein mot ont tous les deux été confirmés puis corrigés ainsi, jamais en relisant le code seul. **Piège de hot-reload de la route `opengraph-image` rencontré une nouvelle fois** (déjà documenté dans ce fichier pour un round précédent) : le premier re-fetch après le fix de troncature a renvoyé exactement les mêmes bytes qu'avant — résolu par un restart propre du dev server (`pkill` + `rm -rf .next`), confirmé par un changement de taille de fichier au re-fetch suivant.
+
+Déployé en prod le 2026-08-16 (commit `ea7ed62`, push direct sur `main`).
