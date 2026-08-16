@@ -1611,3 +1611,26 @@ Retour explicite de Gildas après avoir vu les 2 cartes partagées séparément 
 **Non testé par Claude** : le clic réel sur les nouveaux boutons de partage combinés dans `/conseils` et `/coach/athletes` (jamais de manipulation du compte réel de Gildas) — logique tracée à la main, structure JSX revue diff par diff, mais à confirmer par Gildas en conditions réelles.
 
 Déployé en prod le 2026-08-16 (commit `098dcb1`, push direct sur `main`).
+
+## Image OG v6 — canvas carré, signature empilée, agrandissement session/wellness/coach (2026-08-16, suite)
+
+Gildas, après avoir vu la v5 (landscape 1200×630) : *"c'est pas mal. C'est possible que l'image soit plus carré ? ou du moins que la largeur soit pas supérieure à la hauteur sur tous les partages (ca permettrait de mieux voir le contenu) ? du coup faudrait mettre le chart charge au dessus de récupération"* — le format miniature dans une conversation WhatsApp affiche l'image bien plus petite qu'un aperçu plein écran, un carré/portrait laisse voir le contenu à une taille plus lisible qu'un landscape écrasé.
+
+### `opengraph-image.tsx` — canvas 1200×1200 (était 1200×630)
+`export const size = { width: 1200, height: 1200 }`. Appliqué uniformément aux 6 types de partage (`session`/`wellness`/`coach_athlete`/`charge`/`recuperation`/`signature`).
+
+**Type `"signature"`** : les 2 charts Charge/Récupération, côte à côte en v5 (choix délibéré à l'époque pour exploiter la largeur du canvas landscape), repassent en **empilés verticalement** (Charge au-dessus de Récupération) — conséquence directe et explicitement demandée du passage au carré. `ShareView.tsx` (rendu navigateur réel) n'a pas eu besoin de changement : sa version était déjà empilée verticalement depuis sa création en v5, seule la version satori de l'image OG avait dévié en side-by-side.
+
+### Sparseness auto-corrigée avant confirmation de Gildas
+Une fois le canvas 630→1200 de hauteur, les branches `session`/`wellness`/`coach_athlete` (contenu de hauteur bornée, centré verticalement dans `Page`) laissaient un vide vertical important au-dessus/en dessous de la carte — repéré par Claude en testant, pas signalé par Gildas (le round précédent avait justement établi le thème "réduire les espaces blancs, remplir le canvas"). Corrigé en amont, avant de solliciter Gildas :
+- `Card` : `padding` 36→48. `AuthorFooter` : `fontSize` 15→16, `marginTop` 20→32.
+- `session` : nom 34→46px, badge 15→19px/padding élargi, `DiffGauge` 20→30px, `ShareExerciseList` max 5→6 lignes/fontSize 20→26/padding élargi.
+- `wellness`/`coach_athlete` : `ShareRing` 130-160→180-220px, eyebrow/heading/chips agrandis, encarts conseils (wellness) et décision/topSession (coach) agrandis en proportion.
+- `charge`/`recuperation` standalone : seul le `MiniChart` par défaut (`h` 230/250→480) a changé — badges/texte non retouchés, jugés déjà bien remplis avec juste le graphe plus haut.
+
+**2e bug réel trouvé en testant, comme les rounds précédents** : aucun cette fois — le canvas beaucoup plus haut (1200 contre 630 en v5) a laissé assez de marge pour que le ring Coach Control repasse à sa taille pleine (180px, plus la taille resserrée à 130px de la v5 pour éviter le débordement) sans reproduire le dépassement déjà rencontré et corrigé en v5.
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres (`.next/server/app/share/[id]/opengraph-image/route.js.nft.json` re-vérifié après ce build : les 3 `.woff` toujours tracés, `outputFileTracingIncludes` intact — pas touché par ce round, revérifié par précaution après l'incident ENOENT de la section précédente). Les 6 types de partage vérifiés visuellement contre le code final (lignes `shares` de test insérées puis supprimées, images récupérées en `curl` sur `localhost` et inspectées via `Read`) — y compris une revérification de `"signature"` après le round d'agrandissement du `Card`/`AuthorFooter` global, pour confirmer que ce changement partagé n'a rien cassé sur ce type déjà validé plus tôt.
+
+Déployé en prod le 2026-08-16 (commit à venir, push direct sur `main`).
