@@ -7,6 +7,7 @@ import { wellnessColor } from "@/lib/wellness";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 export interface ReviewContext {
   wellness: number | null;
@@ -66,6 +67,8 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
 function scoreColor(s: number) { return wellnessColor(s); }
 
 export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onClose, onMarkViewed }: Props) {
+  const { isMd } = useBreakpoint();
+
   useEffect(() => {
     if (session?.id) onMarkViewed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,29 +142,32 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 2147483100, padding: "0 0" }}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483100, overflow: "hidden",
+      }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", borderRadius: "30px 30px 0 0", paddingTop: 28, paddingLeft: 28, paddingRight: 28, paddingBottom: 0, width: "100%", maxWidth: 640, maxHeight: "90svh", overflowY: "auto", boxShadow: "0 -20px 60px rgba(0,0,0,.22)" }}>
+      <div style={{
+        background: "#fff",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+      }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 28, overscrollBehavior: "contain", scrollbarWidth: "thin" as const }}>
 
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: reviewContext ? 12 : 20 }}>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>
-              {reviewContext ? `Réviser · ${athleteName}` : isEdit ? "Modifier la séance" : "Nouvelle séance"}
-            </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2, display: "flex", alignItems: "center", gap: 8 }}>
-              {reviewContext ? (
-                <>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", background: "#fff0e9", border: "1px solid rgba(212,64,0,.20)", borderRadius: 999, padding: "2px 8px" }}>
-                    Revue {reviewContext.queueCurrent}/{reviewContext.queueTotal}
-                  </span>
-                </>
-              ) : (
-                isEdit ? `Pour ${athleteName}` : "Choisir les destinataires ci-dessous"
-              )}
-            </div>
-          </div>
+        {/* Header — nom éditable directement, pas de titre ni de doublon */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <input
+            type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="Nom de la séance"
+            style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit" }}
+          />
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isEdit && session && (
               <ShareButton
@@ -182,6 +188,22 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             )}
             <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
           </div>
+        </div>
+        <input
+          type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)}
+          style={{ fontSize: 14, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
+        />
+        <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6, marginBottom: reviewContext ? 12 : 20, display: "flex", alignItems: "center", gap: 8 }}>
+          {reviewContext ? (
+            <>
+              <span>Réviser · {athleteName}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", background: "#fff0e9", border: "1px solid rgba(212,64,0,.20)", borderRadius: 999, padding: "2px 8px" }}>
+                Revue {reviewContext.queueCurrent}/{reviewContext.queueTotal}
+              </span>
+            </>
+          ) : (
+            isEdit ? `Pour ${athleteName}` : "Choisir les destinataires ci-dessous"
+          )}
         </div>
 
         {/* Wellness + attention block (combined) */}
@@ -239,20 +261,6 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             </div>
           );
         })()}
-
-        {/* Date + nom */}
-        <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-          <div style={{ flex: "0 0 150px" }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Date</div>
-            <input type="date" value={sessionDate} onChange={e => setSessionDate(e.target.value)}
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nom de la séance *</div>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex : Squat 5×5, Interval run…"
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 16px", fontSize: 16, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }} />
-          </div>
-        </div>
 
         {/* Difficulty */}
         <div style={{ background: diffBg, border: `1px solid ${diffBorder}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
@@ -332,17 +340,17 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             )}
           </div>
         )}
+      </div>
 
-        {/* Sticky actions bar */}
+        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu */}
         <div style={{
-          position: "sticky", bottom: 0, zIndex: 20,
+          flexShrink: 0,
           display: "grid",
           gridTemplateColumns: isEdit && onDelete ? "auto 1fr 1fr" : "1fr 1fr",
           gap: 8, alignItems: "center",
-          margin: "16px -28px 0", padding: "14px 28px 20px",
-          background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)",
+          padding: "20px 28px 20px",
+          background: "#fff",
           borderTop: "1px solid rgba(0,0,0,.08)",
-          boxShadow: "0 -16px 28px rgba(0,0,0,.08)",
         }}>
           {isEdit && onDelete && (
             <div>

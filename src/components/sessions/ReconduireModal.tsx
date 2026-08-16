@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { SessionLike } from "@/components/calendar/DayColumn";
-import DiffGauge from "@/components/calendar/DiffGauge";
+import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { wellnessColor } from "@/lib/wellness";
 import type { CoachAthlete } from "@/types";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 function scoreColor(s: number) { return wellnessColor(s); }
 
@@ -43,6 +43,7 @@ function fmtNum(n: number): string {
 }
 
 export default function ReconduireModal({ daySlots, title, onClose, onConfirm, athletes = [], sourceAthleteId }: ReconduireModalProps) {
+  const { isMd } = useBreakpoint();
   const [mode, setMode] = useState<Mode>("maintien");
   const [customPct, setCustomPct] = useState(10);
   const [saving, setSaving] = useState(false);
@@ -83,17 +84,18 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 2147483100, padding: 18,
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
         background: "#fff", color: "#171b1f",
-        border: "1px solid rgba(0,0,0,.10)",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 30, width: "100%", maxWidth: 480,
-        maxHeight: "calc(100vh - 34px)", display: "flex", flexDirection: "column", overflow: "hidden",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>{title ?? "Reconduire la semaine"}</div>
@@ -202,73 +204,74 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
             </div>
           )}
 
-          {/* Diff preview */}
+          {/* Aperçu — scroll horizontal par jour, mêmes composants séance/exercice que le planning
+              (WeekSessionCard, DayColumn.tsx) plutôt qu'une liste de cartes diff maison. Sessions
+              en lecture seule (onComplete/onEdit/onDuplicate no-op) : ce n'est qu'un aperçu avant
+              confirmation, pas un éditeur. */}
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Aperçu des modifications
           </div>
-          <div style={{ marginBottom: 20 }}>
-            {totalSessions === 0 && (
-              <div style={{ fontSize: 13, color: "#8a8f94", fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>
-                Aucune séance cette semaine à reconduire.
-              </div>
-            )}
-            {daySlots.map((slot, dayIndex) => slot.sessions.map(s => {
-              const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
-              const baseDiff = s.target_difficulty ?? 6;
-              const newDiff = adjustDifficulty(baseDiff, currentPct);
-              const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
-              const changedCount = rendered.filter(r => r.after !== r.line).length;
-
-              return (
-                <div key={s.id} style={{
-                  marginBottom: 12, borderRadius: 14, overflow: "hidden",
-                  background: "#faf9f7", border: "1px solid rgba(0,0,0,.06)",
-                  borderLeft: "3px solid #d44000",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "10px 12px 0" }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94", background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 999, padding: "2px 8px" }}>
-                        {DAY_LABELS[dayIndex]}
-                      </span>
-                      {changedCount > 0 && (
-                        <span style={{ fontSize: 10, fontWeight: 800, color: "#d44000", background: "rgba(212,64,0,.10)", borderRadius: 999, padding: "2px 8px" }}>
-                          {changedCount} modif.
-                        </span>
-                      )}
-                    </div>
+          {totalSessions === 0 ? (
+            <div style={{ fontSize: 13, color: "#8a8f94", fontStyle: "italic", textAlign: "center", padding: "12px 0", marginBottom: 20 }}>
+              Aucune séance cette semaine à reconduire.
+            </div>
+          ) : (
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 220px))", gap: 10,
+              overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "thin" as const,
+              margin: "0 -24px 20px", padding: "2px 24px 6px",
+            }}>
+              {daySlots.map((slot, dayIndex) => (
+                <div key={dayIndex} style={{ scrollSnapAlign: "start", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+                    {DAY_LABELS[dayIndex]}
                   </div>
-
-                  {newDiff !== baseDiff && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px 0" }}>
-                      <span style={{ fontSize: 10, color: "#8a8f94", flexShrink: 0 }}>Difficulté</span>
-                      <div style={{ flex: 1 }}><DiffGauge value={baseDiff} height={6} /></div>
-                      <span style={{ fontSize: 11, color: "#bbb", flexShrink: 0 }}>→</span>
-                      <div style={{ flex: 1 }}><DiffGauge value={newDiff} height={6} /></div>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", flexShrink: 0, width: 14, textAlign: "right" }}>{newDiff}</span>
+                  {slot.sessions.length === 0 && (
+                    <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                      Repos / libre
                     </div>
                   )}
-
-                  <div style={{ padding: "6px 12px 10px" }}>
-                    {rendered.length === 0 && <div style={{ fontSize: 12, color: "#bbb", fontStyle: "italic", padding: "4px 0" }}>Aucun exercice</div>}
-                    {rendered.map(({ line, after }, i) => {
-                      const changed = after !== line;
-                      return changed ? (
-                        <div key={i} style={{ padding: "5px 0", borderBottom: i < rendered.length - 1 ? "1px solid rgba(0,0,0,.05)" : "none" }}>
-                          <div style={{ fontSize: 11, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
-                        </div>
-                      ) : (
-                        <div key={i} style={{ fontSize: 12, color: "#aaa", fontStyle: "italic", padding: "5px 0", borderBottom: i < rendered.length - 1 ? "1px solid rgba(0,0,0,.05)" : "none", wordBreak: "break-word" }}>
-                          {line}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {slot.sessions.map(s => {
+                    const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
+                    const newDiff = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
+                    const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
+                    const previewSession: SessionLike = {
+                      id: s.id, date: s.date, name: s.name, notes: s.notes,
+                      duration: s.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
+                    };
+                    return (
+                      <WeekSessionCard
+                        key={s.id}
+                        session={previewSession}
+                        onComplete={() => {}}
+                        onEdit={() => {}}
+                        onDuplicate={() => {}}
+                        cardStyle={{ cursor: "default" }}
+                        renderExerciseLine={(_ex, i) => {
+                          const { line, after } = rendered[i];
+                          const changed = after !== line;
+                          return changed ? (
+                            <div style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                              <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
+                              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff",
+                              whiteSpace: "pre-wrap", wordBreak: "break-word",
+                            }}>
+                              {line}
+                            </div>
+                          );
+                        }}
+                      />
+                    );
+                  })}
                 </div>
-              );
-            }))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{

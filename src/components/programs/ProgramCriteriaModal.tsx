@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 // Wording/icônes repris du POC (theperfclub_poc_onboarding_program_fields_v1.html, SPORT_META) —
 // "Musculation / Force" du POC reste ici volontairement splitté en 2 cartes (Powerlifting +
@@ -133,6 +134,7 @@ interface Props {
 }
 
 export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
+  const { isMd } = useBreakpoint();
   const [sport, setSport] = useState("");
   const [focus, setFocus] = useState<ProgramFocus | "">("");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
@@ -233,17 +235,21 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 2147483100, padding: 18, overflow: "hidden",
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
-        background: "#fff", borderRadius: 30, padding: "28px 28px 0",
-        width: "100%", maxWidth: 520, maxHeight: "90vh",
-        display: "flex", flexDirection: "column",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
+        background: "#fff",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
           <div>
@@ -253,7 +259,6 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>
         </div>
 
-        <div style={{ overflowY: "auto", flex: 1, paddingBottom: 8 }}>
           {/* Sport — chips compactes comme le POC (icône inline, pas de carte haute) */}
           <Section label="🏋️ Sport">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -365,11 +370,12 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
           </Section>
         </div>
 
-        {/* Sticky action */}
+        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu */}
         <div style={{
-          position: "sticky", bottom: 0, margin: "16px -28px 0",
-          padding: "14px 28px 20px",
-          background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)",
+          flexShrink: 0,
+          padding: "20px 28px 20px",
+          background: "#fff",
+          borderTop: "1px solid rgba(0,0,0,.08)",
         }}>
           <button
             onClick={handleGenerate}
