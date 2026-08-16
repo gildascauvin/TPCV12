@@ -18,10 +18,16 @@ import { ShareRing, ShareChip, ShareExerciseList, type ShareBehavior } from "./S
    restent hand-portés séparément ici, par nécessité technique et non par oubli.
    Carte élargie (v5) et espaces réduits — retour explicite de Gildas ("réduis fortement les
    espaces blancs... agrandis le contenu") après un round où la carte ne prenait qu'environ la
-   moitié du canvas. */
+   moitié du canvas.
+   v6 (2026-08-16, suite) : canvas passé de 1200×630 (landscape, ratio OG "standard" 1.91:1) à
+   1200×1200 (carré) — retour de Gildas après avoir vu le rendu en vrai : "la largeur [ne devrait]
+   pas [être] supérieure à la hauteur... ça permettrait de mieux voir le contenu". Conséquence
+   directe sur la carte "signature" (Charge+Récupération) : les 2 charts passent de côte à côte
+   (pensés pour un canvas large) à empilés (Charge au-dessus de Récupération) — demande explicite,
+   et de toute façon mieux adapté à un canvas qui n'a plus l'espace horizontal en plus. */
 
 export const runtime = "nodejs";
-export const size = { width: 1200, height: 630 };
+export const size = { width: 1200, height: 1200 };
 export const contentType = "image/png";
 
 const ACCENT = "#d44000";
@@ -119,7 +125,7 @@ function ZoneBands({ zones, toY, maxVal, h }: { zones: { min: number; max: numbe
    dégradé séquentiel bleu (WELLNESS_RAMP, même direction bas→haut que le <linearGradient> réel) +
    ligne pointillée Forme (points2) avec marqueurs colorés par zone — les 2 pièces manquantes
    signalées par Gildas sur la v4 (chart plat, sans aire ni ligne Forme). */
-function MiniChart({ points, dates, colorFn, maxVal, h = 250, showZones, sequentialFill, points2, zones2FormColorFn }: {
+function MiniChart({ points, dates, colorFn, maxVal, h = 480, showZones, sequentialFill, points2, zones2FormColorFn }: {
   points: (number | null)[]; dates: string[]; colorFn: (v: number) => string; maxVal: number; h?: number;
   showZones?: boolean; sequentialFill?: boolean; points2?: (number | null)[]; zones2FormColorFn?: (v: number) => string;
 }) {
@@ -200,7 +206,7 @@ function Card({ children, dark }: { children: React.ReactNode; dark?: boolean })
   return (
     <div style={{
       width: "100%", display: "flex", flexDirection: "column",
-      padding: 36, borderRadius: 28, border: dark ? "1px solid rgba(255,255,255,.08)" : "1px solid rgba(0,0,0,.06)",
+      padding: 48, borderRadius: 28, border: dark ? "1px solid rgba(255,255,255,.08)" : "1px solid rgba(0,0,0,.06)",
       background: dark ? "linear-gradient(145deg,#1a1a1a,#282828)" : "#ffffff",
       color: dark ? "#ffffff" : "#171b1f",
     }}>
@@ -211,7 +217,7 @@ function Card({ children, dark }: { children: React.ReactNode; dark?: boolean })
 
 function AuthorFooter({ name, dark }: { name?: string; dark?: boolean }) {
   return (
-    <div style={{ display: "flex", fontSize: 15, color: dark ? "rgba(255,255,255,.35)" : "#9a9ea1", marginTop: 20, justifyContent: "center", width: "100%" }}>
+    <div style={{ display: "flex", fontSize: 16, color: dark ? "rgba(255,255,255,.35)" : "#9a9ea1", marginTop: 32, justifyContent: "center", width: "100%" }}>
       Partagé par {name ?? "un membre ThePerfClub"}
     </div>
   );
@@ -246,14 +252,14 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       (
         <Page>
           <Card>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
-              <div style={{ display: "flex", fontSize: 34, fontWeight: fw(900), letterSpacing: -1 }}>{s.name}</div>
-              <div style={{ display: "flex", flexShrink: 0, fontSize: 15, fontWeight: fw(800), padding: "7px 16px", borderRadius: 999, background: s.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,.1)", color: s.done ? "#2f9e44" : "#d44000" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 28 }}>
+              <div style={{ display: "flex", fontSize: 46, fontWeight: fw(900), letterSpacing: -1 }}>{s.name}</div>
+              <div style={{ display: "flex", flexShrink: 0, fontSize: 19, fontWeight: fw(800), padding: "10px 22px", borderRadius: 999, background: s.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,.1)", color: s.done ? "#2f9e44" : "#d44000" }}>
                 {s.done ? "Terminé" : "Prévu"}
               </div>
             </div>
-            {s.difficulty != null && <div style={{ display: "flex", marginBottom: 20, width: "100%" }}><DiffGauge value={s.difficulty} height={20} /></div>}
-            <ShareExerciseList exercises={exercises} max={5} fontSize={20} rowPadding="16px 20px" />
+            {s.difficulty != null && <div style={{ display: "flex", marginBottom: 32, width: "100%" }}><DiffGauge value={s.difficulty} height={30} /></div>}
+            <ShareExerciseList exercises={exercises} max={6} fontSize={26} rowPadding="24px 26px" />
             <AuthorFooter name={s.authorName} />
           </Card>
         </Page>
@@ -271,14 +277,14 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       (
         <Page>
           <Card dark>
-            <div style={{ display: "flex", alignItems: "center", gap: 24, marginBottom: isCoach ? 14 : 24 }}>
-              <ShareRing score={s.score ?? null} size={isCoach ? 130 : 160} />
+            <div style={{ display: "flex", alignItems: "center", gap: 30, marginBottom: isCoach ? 24 : 34 }}>
+              <ShareRing score={s.score ?? null} size={isCoach ? 180 : 220} />
               <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: fw(900), letterSpacing: 2, color: "#ff8a55", display: "flex", marginBottom: 5 }}>{eyebrow}</div>
-                <div style={{ fontSize: 36, fontWeight: fw(900), display: "flex", letterSpacing: -1 }}>{heading}</div>
+                <div style={{ fontSize: 19, fontWeight: fw(900), letterSpacing: 2, color: "#ff8a55", display: "flex", marginBottom: 7 }}>{eyebrow}</div>
+                <div style={{ fontSize: 48, fontWeight: fw(900), display: "flex", letterSpacing: -1 }}>{heading}</div>
                 {behaviors.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 11 }}>
-                    {behaviors.map((b, i) => <ShareChip key={i} b={b} fontSize={17} padding="7px 16px" />)}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 }}>
+                    {behaviors.map((b, i) => <ShareChip key={i} b={b} fontSize={21} padding="10px 20px" />)}
                   </div>
                 )}
               </div>
@@ -286,16 +292,16 @@ export default async function Image({ params }: { params: Promise<{ id: string }
 
             {!isCoach && (
               <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-                <div style={{ display: "flex", height: 1, background: "rgba(255,255,255,.08)", margin: "3px 0 18px" }} />
-                <div style={{ display: "flex", fontSize: 15, fontWeight: fw(900), letterSpacing: 1, color: "#ff8a55", marginBottom: 12 }}>✨ CONSEILS</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ display: "flex", flexDirection: "column", background: "rgba(255,255,255,.05)", borderRadius: 16, padding: "16px 20px" }}>
-                    <div style={{ display: "flex", fontSize: 12, fontWeight: fw(900), letterSpacing: 1, color: "rgba(255,255,255,.6)", marginBottom: 5 }}>⚡ ENTRAÎNEMENT</div>
-                    <div style={{ display: "flex", fontSize: 17, lineHeight: 1.4 }}>{(s.trainingAdvice ?? "").slice(0, 140)}</div>
+                <div style={{ display: "flex", height: 1, background: "rgba(255,255,255,.08)", margin: "4px 0 28px" }} />
+                <div style={{ display: "flex", fontSize: 19, fontWeight: fw(900), letterSpacing: 1, color: "#ff8a55", marginBottom: 18 }}>✨ CONSEILS</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ display: "flex", flexDirection: "column", background: "rgba(255,255,255,.05)", borderRadius: 20, padding: "24px 28px" }}>
+                    <div style={{ display: "flex", fontSize: 14, fontWeight: fw(900), letterSpacing: 1, color: "rgba(255,255,255,.6)", marginBottom: 8 }}>⚡ ENTRAÎNEMENT</div>
+                    <div style={{ display: "flex", fontSize: 22, lineHeight: 1.4 }}>{(s.trainingAdvice ?? "").slice(0, 140)}</div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", background: "rgba(255,255,255,.05)", borderRadius: 16, padding: "16px 20px" }}>
-                    <div style={{ display: "flex", fontSize: 12, fontWeight: fw(900), letterSpacing: 1, color: "rgba(255,255,255,.6)", marginBottom: 5 }}>🌿 RÉCUPÉRATION</div>
-                    <div style={{ display: "flex", fontSize: 17, lineHeight: 1.4 }}>{(s.recoveryAdvice ?? "").slice(0, 140)}</div>
+                  <div style={{ display: "flex", flexDirection: "column", background: "rgba(255,255,255,.05)", borderRadius: 20, padding: "24px 28px" }}>
+                    <div style={{ display: "flex", fontSize: 14, fontWeight: fw(900), letterSpacing: 1, color: "rgba(255,255,255,.6)", marginBottom: 8 }}>🌿 RÉCUPÉRATION</div>
+                    <div style={{ display: "flex", fontSize: 22, lineHeight: 1.4 }}>{(s.recoveryAdvice ?? "").slice(0, 140)}</div>
                   </div>
                 </div>
               </div>
@@ -304,23 +310,23 @@ export default async function Image({ params }: { params: Promise<{ id: string }
             {isCoach && (
               <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
                 <div style={{
-                  display: "flex", borderRadius: 16, padding: "13px 18px", marginBottom: s.topSession ? 10 : 0,
+                  display: "flex", borderRadius: 20, padding: "20px 26px", marginBottom: s.topSession ? 16 : 0,
                   background: s.isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
                   border: `1px solid ${s.isPriority ? "rgba(212,64,0,.3)" : "rgba(47,158,68,.3)"}`,
-                  fontSize: 16, lineHeight: 1.35, fontWeight: fw(650),
+                  fontSize: 21, lineHeight: 1.35, fontWeight: fw(650),
                 }}>
                   {s.isPriority ? "⚠️" : "👌"} {(s.decision ?? "").slice(0, 140)}
                 </div>
                 {s.topSession && (
-                  <div style={{ display: "flex", flexDirection: "column", background: "#fff", borderRadius: 16, padding: "13px 18px", color: "#171b1f" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", fontSize: 17, fontWeight: fw(800) }}>{s.topSession.name}</div>
-                      <div style={{ display: "flex", fontSize: 12, fontWeight: fw(800), padding: "3px 11px", borderRadius: 999, background: s.topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.1)", color: s.topSession.done ? "#2f9e44" : "#d44000" }}>
+                  <div style={{ display: "flex", flexDirection: "column", background: "#fff", borderRadius: 20, padding: "22px 26px", color: "#171b1f" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                      <div style={{ display: "flex", fontSize: 22, fontWeight: fw(800) }}>{s.topSession.name}</div>
+                      <div style={{ display: "flex", fontSize: 15, fontWeight: fw(800), padding: "5px 15px", borderRadius: 999, background: s.topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.1)", color: s.topSession.done ? "#2f9e44" : "#d44000" }}>
                         {s.topSession.done ? "Terminé" : "Prévu"}
                       </div>
                     </div>
-                    {s.topSession.difficulty != null && <div style={{ display: "flex", width: "100%", marginBottom: 8 }}><DiffGauge value={s.topSession.difficulty} height={12} /></div>}
-                    {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} max={3} fontSize={15} rowPadding="9px 13px" />}
+                    {s.topSession.difficulty != null && <div style={{ display: "flex", width: "100%", marginBottom: 14 }}><DiffGauge value={s.topSession.difficulty} height={18} /></div>}
+                    {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} max={3} fontSize={20} rowPadding="18px 20px" />}
                   </div>
                 )}
               </div>
@@ -336,28 +342,28 @@ export default async function Image({ params }: { params: Promise<{ id: string }
   if (row.resource_type === "signature") {
     // Remplace les 2 partages séparés Charge/Récupération par un seul lien combiné (insight croisé
     // global + les 2 charts, sans les badges d'indicateurs) — retour explicite de Gildas. Charts
-    // côte à côte (canvas landscape) plutôt qu'empilés, mêmes proportions que la grille desktop de
-    // AthleteSignatureBlock (isLg ? "1fr 1fr" : "1fr") sur /coach/athletes.
+    // empilés (Charge au-dessus de Récupération, v6) — canvas carré depuis v6, plus l'espace
+    // horizontal qui justifiait le côte-à-côte de la v5.
     const dates: string[] = s.dates ?? [];
     return new ImageResponse(
       (
         <Page>
           <Card dark>
             {s.insight && (
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 7, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: "18px 22px", marginBottom: 24 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 7, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 18, padding: "18px 22px", marginBottom: 26 }}>
                 <div style={{ display: "flex", fontSize: 19 }}>{s.emoji}</div>
                 {s.action && <div style={{ display: "flex", fontSize: 19, fontWeight: fw(900), textTransform: "uppercase", letterSpacing: 1, color: "#ff8a55" }}>{s.action} —</div>}
                 <div style={{ display: "flex", fontSize: 19, color: "rgba(255,255,255,.9)", fontWeight: fw(650), lineHeight: 1.4 }}>{(s.insight ?? "").slice(0, 160)}</div>
               </div>
             )}
-            <div style={{ display: "flex", width: "100%", gap: 28 }}>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <div style={{ display: "flex", fontSize: 15, fontWeight: fw(900), letterSpacing: 1, marginBottom: 10 }}>⚡ CHARGE</div>
-                <MiniChart points={s.chargePoints ?? []} dates={dates} colorFn={zoneColorFor} maxVal={2} showZones h={230} />
+            <div style={{ display: "flex", flexDirection: "column", width: "100%", gap: 30 }}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ display: "flex", fontSize: 15, fontWeight: fw(900), letterSpacing: 1, marginBottom: 12 }}>⚡ CHARGE</div>
+                <MiniChart points={s.chargePoints ?? []} dates={dates} colorFn={zoneColorFor} maxVal={2} showZones h={340} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                <div style={{ display: "flex", fontSize: 15, fontWeight: fw(900), letterSpacing: 1, marginBottom: 10 }}>🌿 RÉCUPÉRATION</div>
-                <MiniChart points={s.recoveryPoints ?? []} dates={dates} colorFn={v => wellnessColor(v)} maxVal={100} sequentialFill points2={s.recoveryPoints2} zones2FormColorFn={formZoneColorFor} h={230} />
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ display: "flex", fontSize: 15, fontWeight: fw(900), letterSpacing: 1, marginBottom: 12 }}>🌿 RÉCUPÉRATION</div>
+                <MiniChart points={s.recoveryPoints ?? []} dates={dates} colorFn={v => wellnessColor(v)} maxVal={100} sequentialFill points2={s.recoveryPoints2} zones2FormColorFn={formZoneColorFor} h={340} />
               </div>
             </div>
             <AuthorFooter name={s.authorName} dark />
