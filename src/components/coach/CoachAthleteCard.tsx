@@ -330,6 +330,25 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               })}
             </div>
           )}
+          {/* Résultats (durée + RPE réel) — seulement une fois la séance terminée, même info que
+             le grid "MIN/DIFF." de TodaySessionCard, pour que le coach voie aussi le résultat réel
+             et pas seulement la difficulté prévue. */}
+          {topSession.done && (topSession.duration || topSession.rpe) && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 7 }}>
+              {topSession.duration != null && (
+                <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.03em", lineHeight: 1 }}>{topSession.duration}</div>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>MIN</div>
+                </div>
+              )}
+              {topSession.rpe != null && (
+                <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
+                  <div style={{ fontSize: 15, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.03em", lineHeight: 1 }}>{topSession.rpe}</div>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>DIFF.</div>
+                </div>
+              )}
+            </div>
+          )}
           {extraSessions > 0 && (
             <div style={{ fontSize: 10, color: "#8a8f94", marginTop: 7 }}>+{extraSessions} autre{extraSessions > 1 ? "s" : ""} séance{extraSessions > 1 ? "s" : ""}</div>
           )}

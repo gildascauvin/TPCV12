@@ -561,277 +561,263 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           </div>
         </div>
 
-        {/* ── 2-col layout on md+ ── */}
-        <div className="today-layout">
+        {/* ── Wellness + séance du jour, carte unique ── */}
+        <div
+          data-tour="wellness-card"
+          style={{
+            position: "relative", overflow: "hidden",
+            borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
+            background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
+            border: "1px solid rgba(255,255,255,0.13)",
+            boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
+            color: "#fff",
+          }}
+        >
+          <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
-          {/* ── Wellness + Conseils card ── */}
-          <div
-            data-tour="wellness-card"
-            onClick={() => requireSubscription(() => setShowWellness(true))}
-            style={{
-              position: "relative", overflow: "hidden",
-              borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
-              background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-              border: "1px solid rgba(255,255,255,0.13)",
-              boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
-              color: "#fff", cursor: "pointer",
-            }}
-          >
-            <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
-
-            {wellnessFilledToday && (
-              <div style={{ position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18, zIndex: 3 }}>
-                <ShareButton
-                  resourceType="wellness"
-                  variant="dark"
-                  buildSnapshot={() => ({
-                    score: displayScore,
-                    zoneLabel: formLabel(displayScore),
-                    behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
-                      ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
-                      : { emoji: "", label: b, positive: true }),
-                    trainingAdvice: advice.training,
-                    recoveryAdvice: advice.recovery,
-                    authorName: profile.name ?? "Toi",
-                  })}
-                  title={`${profile.name ?? "Mon"} — ${formLabel(displayScore)}`}
-                  text={advice.recovery}
-                />
-              </div>
-            )}
-
-            {/* Ring + status */}
-            <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18 }}>
-              <WellnessRingPOC score={displayScore} size={ringSize} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
-                  Score &amp; conseils
-                </div>
-                <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
-                  {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
-                </div>
-                {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                    {wellness.behaviors.map((b) => (
-                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
+          {wellnessFilledToday && (
+            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18, zIndex: 3 }}>
+              <ShareButton
+                resourceType="wellness"
+                variant="dark"
+                buildSnapshot={() => ({
+                  score: displayScore,
+                  zoneLabel: formLabel(displayScore),
+                  behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
+                    ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
+                    : { emoji: "", label: b, positive: true }),
+                  trainingAdvice: advice.training,
+                  recoveryAdvice: advice.recovery,
+                  authorName: profile.name ?? "Toi",
+                })}
+                title={`${profile.name ?? "Mon"} — ${formLabel(displayScore)}`}
+                text={advice.recovery}
+              />
             </div>
+          )}
 
-            {(() => {
-              const pendingDiffs = todaySessions
-                .filter(s => !s.done && s.target_difficulty)
-                .map(s => s.target_difficulty!);
-              const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
-              const autoregTarget = [...todaySessions].filter(s => !s.done)
-                .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-              const suggestion = wellnessFilledToday && autoregTarget
-                ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty)
-                : null;
-
-              const scrollToSessions = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                document.getElementById("day-sessions-container")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              };
-              const openWellness = (e: React.MouseEvent) => {
-                e.stopPropagation();
-                requireSubscription(() => setShowWellness(true));
-              };
-
-              const row = (
-                bg: string, border: string, text: string,
-                cta?: string, onCta?: (e: React.MouseEvent) => void
-              ) => (
-                <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
-                  <span style={{ lineHeight: 1.4 }}>{text}</span>
-                  {cta && onCta && (
-                    <button onClick={onCta} style={{ flexShrink: 0, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap" }}>
-                      {cta}
-                    </button>
+          {/* Sur md+ : 2 colonnes CÔTE À CÔTE à l'intérieur de la même carte (wellness+conseils à
+             gauche, séance à droite) — évite que les exercices se retrouvent tout en bas d'une
+             unique colonne étroite et forcent un scroll important sur desktop. Sur mobile, empilé
+             normalement (les 2 blocs sont de simples <div> block quand `display` vaut "block"). */}
+          <div style={{
+            position: "relative", zIndex: 2,
+            display: isMd ? "grid" : "block",
+            gridTemplateColumns: isMd ? (isLg ? "5fr 4fr" : "1fr 1fr") : undefined,
+            gap: isMd ? (isLg ? 28 : 20) : 0,
+            alignItems: "start",
+          }}>
+            <div>
+              {/* Ring + status — seule zone cliquable pour ouvrir le formulaire wellness (le reste
+                 de la carte contient la séance, avec ses propres actions Terminer/éditer). */}
+              <div
+                onClick={() => requireSubscription(() => setShowWellness(true))}
+                style={{ display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18, cursor: "pointer" }}
+              >
+                <WellnessRingPOC score={displayScore} size={ringSize} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
+                    Score &amp; conseils
+                  </div>
+                  <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
+                    {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
+                  </div>
+                  {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                      {wellness.behaviors.map((b) => (
+                        <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
+                      ))}
+                    </div>
                   )}
                 </div>
-              );
-
-              if (suggestion && autoregTarget) return (
-                <div
-                  style={{
-                    position: "relative", zIndex: 2, borderRadius: 16, padding: "12px 14px", marginBottom: 12,
-                    background: suggestion.dir === "low" ? "rgba(242,138,0,.13)" : "rgba(42,128,69,.18)",
-                    border: `1px solid ${suggestion.dir === "low" ? "rgba(242,138,0,.22)" : "rgba(42,128,69,.28)"}`,
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
-                  <AutoregButtons
-                    sessionId={autoregTarget.id}
-                    dir={suggestion.dir}
-                    reco={suggestion.reco}
-                    advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`}
-                    sessionLabel={autoregTarget.name}
-                    onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
-                    onApply={async (pct) => {
-                      const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
-                      const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
-                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
-                      const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
-                      if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                      return original;
-                    }}
-                    onUndo={async (original) => {
-                      if (!original) return;
-                      const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
-                      if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                    }}
-                  />
-                </div>
-              );
-
-              if (!wellnessFilledToday) return row(
-                "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
-                "Complète ta récupération pour des conseils personnalisés",
-                "Comment tu vas ? →", openWellness
-              );
-              if (displayScore !== null && displayScore < 55 && maxDiff >= 8) return row(
-                "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
-                `🔥 Récupération basse · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
-                "Baisse la charge →", scrollToSessions
-              );
-              if (displayScore !== null && displayScore < 55 && maxDiff >= 5) return row(
-                "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
-                `⚠️ Récupération basse · Séance à ${maxDiff}/10 — surveille ton effort`,
-                "Voir la séance →", scrollToSessions
-              );
-              if (displayScore !== null && displayScore < 55) return row(
-                "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
-                "💛 Récupération basse — journée allégée recommandée"
-              );
-              if (displayScore !== null && displayScore >= 80 && maxDiff >= 8) return row(
-                "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",
-                `✅ Score ${displayScore} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
-                "C'est parti →", scrollToSessions
-              );
-              return null;
-            })()}
-
-            <div style={{ position: "relative", zIndex: 2, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-                ✦ Conseils
               </div>
-              <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>⚡ Entraînement</div>
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.training}</div>
-              </div>
-              <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 5 }}>🌿 Récupération</div>
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: "#fff" }}>{advice.recovery}</div>
-              </div>
-            </div>
-          </div>
 
-          {/* ── Sessions column ── */}
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-              <div className="section-label" style={{ marginBottom: 0 }}>
-                {format(new Date(selectedDate + "T12:00:00"), "EEEE d MMMM", { locale: fr })}
-              </div>
-            </div>
+              {(() => {
+            const pendingDiffs = todaySessions
+              .filter(s => !s.done && s.target_difficulty)
+              .map(s => s.target_difficulty!);
+            const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
+            const autoregTarget = [...todaySessions].filter(s => !s.done)
+              .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+            const suggestion = wellnessFilledToday && autoregTarget
+              ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty)
+              : null;
 
-            {/* Bandeau séance du jour */}
-            {(() => {
-              const nextSession = todaySessions.find(s => !s.done);
-              if (!nextSession) return null;
-              return (
-                <div style={{
-                  background: "linear-gradient(135deg,#171b1f,#2a2f35)",
-                  borderRadius: 18, padding: "14px 16px", marginBottom: 10,
-                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
-                }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 4 }}>
-                      Séance du jour
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em", marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {nextSession.name}
-                    </div>
-                    {nextSession.target_difficulty && (
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)" }}>
-                        Diff. cible : {nextSession.target_difficulty}/10
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    data-tour="demarrer-btn"
-                    onClick={() => requireSubscription(() => handleTerminer(nextSession))}
-                    style={{ flexShrink: 0, height: 38, paddingLeft: 16, paddingRight: 16, borderRadius: 11, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.3)" }}
-                  >
-                    ▶ Démarrer<span className="tour-lock">🔒</span>
+            const scrollToSessions = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              document.getElementById("day-sessions-container")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            };
+            const openWellness = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              requireSubscription(() => setShowWellness(true));
+            };
+
+            const row = (
+              bg: string, border: string, text: string,
+              cta?: string, onCta?: (e: React.MouseEvent) => void
+            ) => (
+              <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
+                <span style={{ lineHeight: 1.4 }}>{text}</span>
+                {cta && onCta && (
+                  <button onClick={onCta} style={{ flexShrink: 0, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap" }}>
+                    {cta}
                   </button>
-                </div>
-              );
-            })()}
+                )}
+              </div>
+            );
 
-            <div id="day-sessions-container">
-              {/* Empty state semaine entière */}
-              {weekSessions.length === 0 ? (
-                activeProgram && activeProgram.start_date > initialDate ? (
-                  <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#2f9e44", marginBottom: 4 }}>
-                      Programme en attente
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>
-                      {activeProgram.name}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#62686e", lineHeight: 1.5 }}>
-                      {(() => {
-                        const [, m, d] = activeProgram.start_date.split("-").map(Number);
-                        const MONTHS = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
-                        return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Semaine.`;
-                      })()}
+            if (suggestion && autoregTarget) return (
+              <div
+                style={{
+                  position: "relative", zIndex: 2, borderRadius: 16, padding: "12px 14px", marginBottom: 12,
+                  background: suggestion.dir === "low" ? "rgba(242,138,0,.13)" : "rgba(42,128,69,.18)",
+                  border: `1px solid ${suggestion.dir === "low" ? "rgba(242,138,0,.22)" : "rgba(42,128,69,.28)"}`,
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <AutoregButtons
+                  sessionId={autoregTarget.id}
+                  dir={suggestion.dir}
+                  reco={suggestion.reco}
+                  advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`}
+                  sessionLabel={autoregTarget.name}
+                  onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
+                  onApply={async (pct) => {
+                    const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
+                    const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
+                    const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                    const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
+                    if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                    return original;
+                  }}
+                  onUndo={async (original) => {
+                    if (!original) return;
+                    const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
+                    if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                  }}
+                />
+              </div>
+            );
+
+            if (!wellnessFilledToday) return row(
+              "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
+              "Complète ta récupération pour des conseils personnalisés",
+              "Comment tu vas ? →", openWellness
+            );
+            if (displayScore !== null && displayScore < 55 && maxDiff >= 8) return row(
+              "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
+              `🔥 Récupération basse · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
+              "Baisse la charge →", scrollToSessions
+            );
+            if (displayScore !== null && displayScore < 55 && maxDiff >= 5) return row(
+              "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
+              `⚠️ Récupération basse · Séance à ${maxDiff}/10 — surveille ton effort`,
+              "Voir la séance →", scrollToSessions
+            );
+            if (displayScore !== null && displayScore < 55) return row(
+              "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
+              "💛 Récupération basse — journée allégée recommandée"
+            );
+            if (displayScore !== null && displayScore >= 80 && maxDiff >= 8) return row(
+              "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",
+              `✅ Score ${displayScore} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
+              "C'est parti →", scrollToSessions
+            );
+            return null;
+          })()}
+
+              {/* ✦ Conseils — condensé en un seul bloc (2 lignes à icône) plutôt que 2 cartes
+                 empilées, pour libérer de la hauteur avant la séance sur mobile. */}
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+                  ✦ Conseils
+                </div>
+                <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 15, lineHeight: 1.55 }}>⚡</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 3 }}>Entraînement</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, color: "#fff" }}>{advice.training}</div>
                     </div>
                   </div>
-                ) : (
-                  <EmptySessionState
-                    sport={profile.sport}
-                    label="Créer ma première séance"
-                    onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
-                  />
-                )
-              ) : todaySessions.length === 0 ? (
-                <div style={{ border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "var(--muted)", fontSize: 12, marginBottom: 9 }}>
-                  Repos ou séance libre
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 10 }}>
+                    <span style={{ fontSize: 15, lineHeight: 1.55 }}>🌿</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 3 }}>Récupération</div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, color: "#fff" }}>{advice.recovery}</div>
+                    </div>
+                  </div>
                 </div>
-              ) : null}
-              {todaySessions.map((s) => (
-                <TodaySessionCard
-                  key={s.id}
-                  session={s}
-                  onComplete={(s) => requireSubscription(() => handleTerminer(s))}
-                  onEdit={(s) => requireSubscription(() => setEditing(s))}
-                  onDelete={(s) => requireSubscription(() => deleteSession(s))}
-                  previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
-                  onReorderExercises={reorderTodayExercises}
-                  authorName={profile.name ?? "Toi"}
-                />
-              ))}
+              </div>
             </div>
 
-            <div
-              data-tour="add-session-btn"
-              onClick={() => requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
-              style={{
-                border: "0.5px dashed rgba(212,64,0,0.34)",
-                color: "var(--accent)", background: "#fff",
-                borderRadius: "var(--radius)", padding: "18px 14px",
-                textAlign: "center", fontSize: 13, fontWeight: 600,
-                cursor: "pointer", marginTop: 10, transition: "all 0.15s",
-              }}
-            >
-              + Ajouter une séance
+            {/* ── Séance(s) du jour — imbriquée dans la même carte, colonne de droite sur md+ ── */}
+            <div style={{ marginTop: isMd ? 0 : 16, borderTop: isMd ? "none" : "1px solid rgba(255,255,255,0.12)", paddingTop: isMd ? 0 : 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
+                ✦ Séance{todaySessions.length > 1 ? "s" : ""} · {format(new Date(selectedDate + "T12:00:00"), "EEEE d MMMM", { locale: fr })}
+              </div>
+
+              <div id="day-sessions-container">
+                {/* Empty state semaine entière */}
+                {weekSessions.length === 0 ? (
+                  activeProgram && activeProgram.start_date > initialDate ? (
+                    <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#2f9e44", marginBottom: 4 }}>
+                        Programme en attente
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>
+                        {activeProgram.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#62686e", lineHeight: 1.5 }}>
+                        {(() => {
+                          const [, m, d] = activeProgram.start_date.split("-").map(Number);
+                          const MONTHS = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+                          return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Semaine.`;
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptySessionState
+                      sport={profile.sport}
+                      label="Créer ma première séance"
+                      onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
+                    />
+                  )
+                ) : todaySessions.length === 0 ? (
+                  <div style={{ border: "0.5px dashed rgba(255,255,255,0.22)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 9 }}>
+                    Repos ou séance libre
+                  </div>
+                ) : null}
+                {todaySessions.map((s) => (
+                  <TodaySessionCard
+                    key={s.id}
+                    session={s}
+                    onComplete={(s) => requireSubscription(() => handleTerminer(s))}
+                    onEdit={(s) => requireSubscription(() => setEditing(s))}
+                    onDelete={(s) => requireSubscription(() => deleteSession(s))}
+                    previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                    onReorderExercises={reorderTodayExercises}
+                    authorName={profile.name ?? "Toi"}
+                  />
+                ))}
+              </div>
             </div>
           </div>
+        </div>
 
+        <div
+          data-tour="add-session-btn"
+          onClick={() => requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
+          style={{
+            border: "0.5px dashed rgba(212,64,0,0.34)",
+            color: "var(--accent)", background: "#fff",
+            borderRadius: "var(--radius)", padding: "18px 14px",
+            textAlign: "center", fontSize: 13, fontWeight: 600,
+            cursor: "pointer", marginTop: 10, transition: "all 0.15s",
+          }}
+        >
+          + Ajouter une séance
         </div>
       </div>
 
