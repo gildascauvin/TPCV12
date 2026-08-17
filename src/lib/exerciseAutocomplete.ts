@@ -278,6 +278,30 @@ export function resetUserHistory() {
 const VOLUME_TOKEN_RE = /\d+\s*[xX×]\s*\d+[\w]*|\d+\s*(OTM|EMOM|AMRAP)\b|\d+\s*min\b|\d+\s*h\d*|\d+\s*(km|m)\b/i;
 const INTENSITY_TOKEN_RE = /@\s*\d+(?:[.,]\d+)?\s*(kg)?|RPE\s*\d+(?:\.\d+)?|\d+\s*kg\b|\d+\s*%/i;
 
+/* Regex de tokens partagée — source unique pour la mise en pastille (Tokenized, ExerciseBlockEditor.tsx)
+   ET pour la détection du token cliqué (getClickToken ci-dessous), pour ne jamais avoir deux
+   définitions de "qu'est-ce qu'un token" qui divergent (c'était la cause du bug "la valeur+unité ne
+   reste pas encadrée ensemble" — Tokenized les fusionnait déjà correctement via ce regex, mais
+   getClickToken recalculait les bornes autrement, par simple découpage sur les espaces).
+   Flag `i` (insensible à la casse) — "90Kg"/"3X30S" doivent être reconnus au même titre que
+   "90kg"/"3x30s", pas seulement au clic (déjà insensible à la casse côté suggestions) mais aussi
+   à l'affichage en pastille, sinon la casse tapée change silencieusement ce qui est cliquable.
+   - 1re alternative : complexe haltéro type "5x(1+2)" ou "5X(1+1+1)" — un nombre de séries suivi
+     d'une formule entre parenthèses (addition/soustraction de mouvements). Reconnu comme un seul
+     token "volume", avant l'alternative NxM simple (qui ne peut de toute façon jamais matcher un
+     "(" juste après le x, donc l'ordre entre les deux n'a pas d'incidence — gardé explicite pour la
+     lisibilité).
+   - 2e alternative : NxM, avec une unité optionnelle collée sur le 2e nombre ("3x30s", "3x30m",
+     jamais capturée avant ce chantier — le token s'arrêtait à "3x30", laissant l'unité en texte
+     brut) ou un suffixe "/quelque_chose" (ex. "4x10/jambe") — jamais les deux en même temps.
+   - 3e alternative : rampe d'intensité "@ ..." (une ou plusieurs valeurs).
+   - 4e alternative : "RPE"/"RIR" collé ou espacé à un nombre ("RPE8", "RPE 8", "RIR 2") — jamais
+     tokénisé avant ce chantier (aucune des 3 autres alternatives ne couvre un token qui commence
+     par des lettres).
+   - 5e alternative : nombre + unité (km/kg/min/m/s/%), espace optionnel entre les deux — couvre
+     "5kg" et "5 kg" identiquement, unité toujours prise avec la valeur dans le même token. */
+export const TOKEN_RE = /(\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|(?:RPE|RIR)\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/gi;
+
 function formatRelativeDate(dateStr: string): string {
   const diffMs = Date.now() - new Date(dateStr + "T12:00:00").getTime();
   const days = Math.round(diffMs / 86400000);
@@ -315,6 +339,25 @@ export function resolveExerciseName(line: string): string | null {
     if (lower.includes(key)) return HISTORY[key].name;
   }
   return extractNameCandidate(line);
+}
+
+/** Bornes exactes (dans la casse d'origine) du nom d'exercice au sein d'une ligne — même
+    résolution que detectName/analyzeLineContext (banque active en premier, ACTIVE_HISTORY_KEYS
+    déjà triée par pertinence/longueur), pour que le nom cliqué en lecture (Tokenized) et les
+    suggestions générées au clic (generateSuggestionsClickMode) portent sur exactement le même
+    texte. Retourne null si aucun nom n'est identifiable (ligne réduite à un volume/intensité sans
+    aucun mot devant, ex. juste "4x5 @150kg"). */
+export function findNameSpan(line: string): { start: number; end: number } | null {
+  const lower = line.toLowerCase();
+  for (const key of ACTIVE_HISTORY_KEYS) {
+    const idx = lower.indexOf(key);
+    if (idx !== -1) return { start: idx, end: idx + key.length };
+  }
+  const name = extractNameCandidate(line);
+  if (!name) return null;
+  const idx = line.indexOf(name);
+  if (idx === -1) return null;
+  return { start: idx, end: idx + name.length };
 }
 
 /** Construit un dictionnaire d'historique à partir des vraies séances de l'utilisateur (les plus
@@ -358,6 +401,7 @@ function normalizeVol(v: string) {
 function detectVolume(line: string) {
   return (
     /\d+\s*[xX×]\s*\d+/.test(line) ||
+    /\d+\s*[xX×]\s*\(/.test(line) || // complexe type "5x(1+2)" — le nombre après "(" n'est pas requis ici, juste la forme
     /\d+\s*(OTM|EMOM|AMRAP)\b/i.test(line) ||
     /\d+\s*(rounds?|reps?)\b/i.test(line) ||
     /\d+\s*min\b/i.test(line) ||
@@ -524,33 +568,54 @@ function nearbyValues(base: number, steps: number[]): number[] {
   return out.sort((a, b) => Math.abs(a - base) - Math.abs(b - base));
 }
 
-function formatKg(v: number): string {
+function formatNum(v: number): string {
   return v % 1 === 0 ? String(v) : v.toFixed(1).replace(".", ",");
 }
 
-/** Click sur une charge kg (ex. "@ 80" ou "80kg") → propose des charges voisines, pas un filtre
-    par préfixe (qui n'aurait presque jamais de résultat sur une valeur déjà complète). */
-function completeAtIntensityNear(baseVal: number): TokenSuggestion[] {
+/** Click sur une charge (ex. "@ 80" ou "80kg") → propose des charges voisines, pas un filtre par
+    préfixe (qui n'aurait presque jamais de résultat sur une valeur déjà complète). `format`
+    reproduit l'écriture d'origine du token cliqué — un "80kg" cliqué doit proposer "85kg", jamais
+    "@ 85" (bug trouvé par Gildas en testant : la fonction renvoyait toujours "@ ..." même pour un
+    token qui n'a jamais eu de "@"). */
+function completeAtIntensityNear(baseVal: number, format: "at" | "kg" = "at"): TokenSuggestion[] {
   const steps = baseVal >= 100 ? [5, 10, 15, 20] : baseVal >= 40 ? [2.5, 5, 7.5, 10] : [1, 2, 2.5, 5];
   return nearbyValues(baseVal, steps).slice(0, 8).map(v => {
-    const str = formatKg(v);
-    return { type: "intensity" as const, value: `@ ${str}`, label: `@ ${str}`, meta: "charge proche", icon: "⚡" };
+    const str = formatNum(v);
+    const value = format === "kg" ? `${str}kg` : `@ ${str}`;
+    return { type: "intensity" as const, value, label: value, meta: "charge proche", icon: "⚡" };
   });
 }
 
-/** Click sur un NxM (ex. "3x3") → fait varier séries ET reps (pas seulement les reps comme en
-    mode frappe), alterné pour proposer les deux dimensions dès les premiers résultats. */
-function completeNxMNear(sets: number, reps: number): TokenSuggestion[] {
+/** Click sur une distance (m/km) ou une durée (s) → propose des valeurs voisines par incréments de
+    5, quelle que soit l'unité (demande explicite de Gildas) — jamais implémenté avant ce chantier,
+    ces tokens ne proposaient aucune suggestion au clic. */
+function completeUnitNear(baseVal: number, unit: "m" | "km" | "s"): TokenSuggestion[] {
+  return nearbyValues(baseVal, [5, 10, 15, 20]).slice(0, 8).map(v => {
+    const str = formatNum(v);
+    const value = `${str}${unit}`;
+    return { type: "volume" as const, value, label: value, meta: unit === "s" ? "durée proche" : "distance proche", icon: unit === "s" ? "⏱️" : "📏" };
+  });
+}
+
+/** Click sur un NxM (ex. "3x3", ou "3x30s"/"6x20m" — `unit` préserve l'unité collée sur le 2e nombre
+    plutôt que la perdre dans les variantes générées). Fait varier séries ET reps (pas seulement les
+    reps comme en mode frappe), alterné pour proposer les deux dimensions dès les premiers résultats.
+    Le pas sur la 2e dimension est de 5 quand elle représente une distance/durée (s/m/km) plutôt que
+    1 — une variante "±1 mètre" ou "±1 seconde" n'a aucun sens pratique (demande explicite de
+    Gildas, d'abord faite pour les secondes puis étendue aux mètres/km après qu'il ait remarqué que
+    "6x20m" variait encore les mètres par pas de 1). */
+function completeNxMNear(sets: number, reps: number, unit: string = ""): TokenSuggestion[] {
   const seen = new Set<string>();
   const results: TokenSuggestion[] = [];
+  const repStep = ["s", "m", "km"].includes(unit.toLowerCase()) ? 5 : 1;
   const add = (s: number, r: number) => {
     if (s < 1 || r < 1) return;
-    const val = `${s}x${r}`;
+    const val = `${s}x${r}${unit}`;
     if (seen.has(val)) return;
     seen.add(val);
     results.push({ type: "volume", value: val, label: val, meta: "séries × reps", icon: "🔢" });
   };
-  [1, -1, 2, -2].forEach(d => { add(sets, reps + d); add(sets + d, reps); });
+  [1, -1, 2, -2].forEach(d => { add(sets, reps + d * repStep); add(sets + d, reps); });
   return results.slice(0, 8);
 }
 
@@ -788,16 +853,48 @@ export function generateSuggestionsClickMode(token: string, fullLine: string): T
   const ctx = analyzeLineContext(fullLine);
   const norm = (v: string) => v.toLowerCase().replace(/\s+/g, "").replace(/[×x]/g, "x");
 
-  const volNxM = token.match(/^(\d+)\s*[xX×]\s*(\d+)/);
+  // Complexe haltéro type "5x(1+2)" — ne fait varier que le nombre de séries en tête (1-2 en plus/
+  // moins), la formule entre parenthèses n'est pas décomposable de façon générique.
+  const volComplex = token.match(/^(\d+)\s*[xX×]\s*(\(.*\))\s*$/);
+  if (volComplex) {
+    const n = parseInt(volComplex[1], 10);
+    const suffix = volComplex[2];
+    const seen = new Set<number>();
+    const results: TokenSuggestion[] = [];
+    [1, -1, 2, -2].forEach(d => {
+      const v = n + d;
+      if (v < 1 || seen.has(v)) return;
+      seen.add(v);
+      results.push({ type: "volume", value: `${v}x${suffix}`, label: `${v}x${suffix}`, meta: "séries × complexe", icon: "🔢" });
+    });
+    return results;
+  }
+
+  // Unité optionnelle collée sur le 2e nombre ("3x30s") préservée dans les variantes générées —
+  // sans ce groupe, le "s"/"m" tombait hors de la capture et disparaissait des suggestions.
+  const volNxM = token.match(/^(\d+)\s*[xX×]\s*(\d+)(km|kg|min|m|s|%)?$/i);
   if (volNxM) {
     const sets = parseInt(volNxM[1], 10);
     const reps = parseInt(volNxM[2], 10);
-    return completeNxMNear(sets, reps);
+    return completeNxMNear(sets, reps, volNxM[3] ?? "");
+  }
+
+  if (/^\d/.test(token) && /km$/i.test(token.trim())) {
+    const baseVal = parseFloat(token.replace(/km$/i, "").replace(",", ".").trim());
+    if (!isNaN(baseVal)) return completeUnitNear(baseVal, "km");
+  }
+  if (/^\d/.test(token) && /m$/i.test(token.trim())) {
+    const baseVal = parseFloat(token.replace(/m$/i, "").replace(",", ".").trim());
+    if (!isNaN(baseVal)) return completeUnitNear(baseVal, "m");
+  }
+  if (/^\d/.test(token) && /s$/i.test(token.trim())) {
+    const baseVal = parseFloat(token.replace(/s$/i, "").replace(",", ".").trim());
+    if (!isNaN(baseVal)) return completeUnitNear(baseVal, "s");
   }
 
   if (/^@\s*\d/.test(token.trim())) {
     const baseVal = parseFloat(token.replace("@", "").replace(",", ".").trim());
-    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal);
+    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal, "at");
   }
   if (/^@/.test(token.trim())) {
     const all = completeAtIntensity("", ctx);
@@ -806,7 +903,7 @@ export function generateSuggestionsClickMode(token: string, fullLine: string): T
 
   if (/^\d/.test(token) && /kg$/i.test(token.trim())) {
     const baseVal = parseFloat(token.replace(/kg/i, "").replace(",", ".").trim());
-    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal);
+    if (!isNaN(baseVal)) return completeAtIntensityNear(baseVal, "kg");
   }
 
   if (/^\d+\s*%$/.test(token)) {
@@ -884,6 +981,30 @@ export function getFullTokenAtCursor(text: string, pos: number): { currentToken:
  * Retourne null si le curseur est sur un espace en ligne vide (rien à éditer).
  */
 export function getClickToken(text: string, pos: number): { token: string; tokenStart: number; tokenEnd: number; fullLine: string } | null {
+  /* 1re passe — bornes exactes du même regex que l'affichage en pastille (TOKEN_RE), pas un simple
+     découpage par espace. Corrige le bug "la valeur+unité ne reste pas encadrée ensemble" : avant
+     ce chantier, un token "5 kg" (avec espace) était scindé en 2 mots par le découpage espace
+     ci-dessous, donc cliquer sur "5" ne sélectionnait que "5", pas "5 kg" — jamais le cas ici, ce
+     regex matche toujours la valeur ET l'unité comme un seul token, espace ou non. */
+  const lineStart0 = text.lastIndexOf("\n", pos - 1) + 1;
+  const nlRight0 = text.indexOf("\n", pos);
+  const lineEnd0 = nlRight0 === -1 ? text.length : nlRight0;
+  const lineText0 = text.slice(lineStart0, lineEnd0);
+  const fullLine0 = lineText0.trim();
+  if (fullLine0) {
+    const relPos = pos - lineStart0;
+    TOKEN_RE.lastIndex = 0;
+    let tm: RegExpExecArray | null;
+    while ((tm = TOKEN_RE.exec(lineText0))) {
+      const s = tm.index, e = s + tm[0].length;
+      if (relPos >= s && relPos <= e) {
+        return { token: tm[0], tokenStart: lineStart0 + s, tokenEnd: lineStart0 + e, fullLine: fullLine0 };
+      }
+    }
+  }
+
+  // 2e passe — fallback pour tout ce qui n'est pas un token numérique reconnu (nom d'exercice, mot
+  // isolé type "max"/"BW") : découpage par espace + extension sur le nom complet, inchangé.
   const full = getFullTokenAtCursor(text, pos);
   let { currentToken, tokenStart, tokenEnd, fullLine, lineStart } = full;
   if (!fullLine.trim()) return null;

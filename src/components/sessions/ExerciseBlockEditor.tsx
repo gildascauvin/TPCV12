@@ -2,14 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  type TokenSuggestion, type TokenType,
-  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, getClickToken, resolveExerciseName,
+  type TokenSuggestion, type TokenType, TOKEN_RE,
+  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, getClickToken, resolveExerciseName, findNameSpan,
 } from "@/lib/exerciseAutocomplete";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ExerciseAttachments, ExerciseComment } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -84,30 +85,127 @@ interface AcState {
   rect: DOMRect;
 }
 
-function AcDropdown({ ac, onAccept, onCancelBlur }: { ac: AcState; onAccept: (value: string) => void; onCancelBlur: () => void }) {
-  const rect = ac.rect;
-  const vpH = typeof window !== "undefined" ? window.innerHeight : 800;
-  const vpW = typeof window !== "undefined" ? window.innerWidth : 400;
-  const spaceBelow = vpH - rect.bottom - 8;
-  const spaceAbove = rect.top - 8;
-  const showBelow = spaceBelow >= 140 || spaceBelow >= spaceAbove;
-  const left = Math.max(8, rect.left);
-  return (
-    <div style={{
-      position: "fixed", left, width: Math.min(rect.width, vpW - left - 8),
-      top: showBelow ? rect.bottom + 4 : undefined, bottom: showBelow ? undefined : vpH - rect.top + 4,
-      maxHeight: Math.max(120, showBelow ? spaceBelow : spaceAbove), overflowY: "auto",
-      background: "#fff", border: "1px solid #e8e8e8", borderRadius: 14, boxShadow: "0 10px 32px rgba(0,0,0,.18)", zIndex: 2147483200,
-    }}>
-      {ac.suggestions.map((s, i) => (
+/* Décalage du bas de l'écran occupé par le clavier virtuel (mobile) — technique standard via
+   visualViewport (window.innerHeight ne change pas quand le clavier s'ouvre, visualViewport.height
+   si). Permet au sheet de rester posé juste au-dessus du clavier plutôt que caché dessous ou
+   superposé par-dessus. Fallback à 0 si visualViewport n'existe pas (navigateurs anciens). */
+function useKeyboardInset(active: boolean): number {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    if (!active || typeof window === "undefined" || !window.visualViewport) { setInset(0); return; }
+    const vv = window.visualViewport;
+    function update() {
+      setInset(Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop));
+    }
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
+  }, [active]);
+  return inset;
+}
+
+/* Panneau de suggestions — remplace AcDropdown. Deux présentations du même contenu :
+   - Desktop : ancré juste sous (ou au-dessus si pas de place) le champ/token concerné, comme
+     l'ancien AcDropdown — jamais superposé au champ, jamais au-dessus du contenu tapé.
+   - Mobile : vrai bottom sheet, fixé au bas du viewport visuel (au-dessus du clavier s'il est
+     ouvert, voir useKeyboardInset) — n'ouvre jamais le clavier lui-même (voir valueRow, mode click).
+   `valueRow` n'est fourni qu'en mode "click" (édition d'un token précis sans activer toute la
+   ligne en texte libre, cf. ExerciseCard) — pré-rempli avec la valeur actuelle, un tap dedans
+   ouvre le clavier pour taper une valeur personnalisée ; sinon un tap direct sur une suggestion
+   applique la valeur sans jamais ouvrir le clavier (façon sélecteur multi-valeurs Notion). */
+function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur, anchorRect, isMobile, valueRow }: {
+  suggestions: TokenSuggestion[];
+  selectedIdx: number;
+  onAccept: (value: string) => void;
+  onCancelBlur: () => void;
+  anchorRect: DOMRect | null;
+  isMobile: boolean;
+  valueRow?: { value: string; onChange: (v: string) => void; onClear: () => void; inputRef?: (el: HTMLInputElement | null) => void; onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>; onFocus?: () => void; onBlur?: () => void };
+}) {
+  const keyboardInset = useKeyboardInset(isMobile);
+
+  const list = suggestions.length > 0 ? (
+    <div style={{ padding: "6px 0" }}>
+      {valueRow && <div style={{ padding: "6px 14px 2px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#b0b4b7" }}>Suggestions</div>}
+      {suggestions.map((s, i) => (
         <div key={i} onMouseDown={e => { e.preventDefault(); onCancelBlur(); onAccept(s.value); }}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", background: i === ac.selectedIdx ? "#fff5f2" : "#fff" }}>
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", background: i === selectedIdx ? "#fff5f2" : "#fff" }}>
           <span style={{ fontSize: 15, width: 20, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>
           <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: "#171b1f", minWidth: 0 }}>{s.label}</span>
           <span style={{ fontSize: 11, color: "#bbb", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{s.meta}</span>
           <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", padding: "2px 7px", borderRadius: 4, flexShrink: 0, ...AC_BADGE_STYLE[s.type] }}>{AC_BADGE_LABEL[s.type]}</span>
         </div>
       ))}
+    </div>
+  ) : valueRow ? (
+    <div style={{ padding: "10px 14px", fontSize: 12, color: "#bbb" }}>Aucune suggestion — tape une valeur.</div>
+  ) : null;
+
+  const content = (
+    <>
+      {valueRow && (
+        <div style={{ padding: "10px 14px", borderBottom: (suggestions.length > 0 || valueRow) ? "1px solid #eee" : "none", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f5f5f5", borderRadius: 9, padding: "8px 10px" }}>
+            <input
+              ref={valueRow.inputRef}
+              value={valueRow.value}
+              onChange={e => valueRow.onChange(e.target.value)}
+              onKeyDown={valueRow.onKeyDown}
+              onFocus={valueRow.onFocus}
+              onBlur={valueRow.onBlur}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 16, fontFamily: "inherit", color: "#171b1f" }}
+            />
+            {valueRow.value && (
+              <button
+                onMouseDown={e => { e.preventDefault(); onCancelBlur(); valueRow.onClear(); }}
+                aria-label="Effacer"
+                style={{ border: "none", background: "none", cursor: "pointer", color: "#9a9ea1", fontSize: 17, padding: 0, lineHeight: 1, flexShrink: 0 }}
+              >×</button>
+            )}
+          </div>
+        </div>
+      )}
+      <div style={{ overflowY: "auto" }}>{list}</div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div
+        style={{
+          position: "fixed", left: 0, right: 0, bottom: keyboardInset, zIndex: 2147483200,
+          background: "#fff", borderRadius: "16px 16px 0 0", boxShadow: "0 -10px 32px rgba(0,0,0,.20)",
+          maxHeight: "50vh", display: "flex", flexDirection: "column",
+          animation: "sheetInUp 0.18s cubic-bezier(0.2,0,0,1)",
+        }}
+      >
+        <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "8px 0 2px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "#e2e2e2" }} />
+        </div>
+        {content}
+      </div>
+    );
+  }
+
+  if (!anchorRect) return null;
+  const rect = anchorRect;
+  const vpH = typeof window !== "undefined" ? window.innerHeight : 800;
+  const vpW = typeof window !== "undefined" ? window.innerWidth : 400;
+  const panelWidth = Math.max(rect.width, 280);
+  const spaceBelow = vpH - rect.bottom - 8;
+  const spaceAbove = rect.top - 8;
+  const showBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
+  const left = Math.max(8, Math.min(rect.left, vpW - panelWidth - 8));
+  return (
+    <div style={{
+      position: "fixed", left, width: panelWidth,
+      top: showBelow ? rect.bottom + 6 : undefined, bottom: showBelow ? undefined : vpH - rect.top + 6,
+      maxHeight: Math.max(160, showBelow ? spaceBelow : spaceAbove),
+      background: "#fff", border: "1px solid #e8e8e8", borderRadius: 14, boxShadow: "0 10px 32px rgba(0,0,0,.18)",
+      zIndex: 2147483200, display: "flex", flexDirection: "column", overflow: "hidden",
+    }}>
+      {content}
     </div>
   );
 }
@@ -157,17 +255,28 @@ function ActionMenu({ rows, onClose, anchorRect }: { rows: MenuRow[]; onClose: (
   );
 }
 
-function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus, initialClickPos }: {
+function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus }: {
   value: string; onChange: (v: string) => void; onCommit: () => void; onCancel?: () => void; placeholder?: string; autoFocus?: boolean;
-  /* Position (dans `value`) d'un token cliqué avant même que ce champ ne soit monté — cas où un clic
-     sur une ligne en lecture seule doit à la fois passer en édition ET ouvrir directement les
-     suggestions du token cliqué, en un seul clic (voir ExerciseCard). */
-  initialClickPos?: number;
 }) {
+  const { isMd } = useBreakpoint();
   const [ac, setAc] = useState<AcState | null>(null);
-  const ref = useRef<HTMLInputElement | null>(null);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-grow — jamais de scroll interne, la ligne doit toujours se voir en entier comme un vrai
+  // champ texte (demande explicite : "je veux tout voir comme un champ texte").
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  useEffect(() => () => {
+    if (blurTimeout.current) clearTimeout(blurTimeout.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
 
   function closeAc() { setAc(null); }
   function openAc(suggestions: TokenSuggestion[], replaceStart: number | null, replaceEnd: number | null) {
@@ -209,16 +318,6 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => resolveClickSuggestions(el.selectionStart ?? 0), 60);
   }
-  useEffect(() => {
-    if (initialClickPos === undefined) return;
-    const el = ref.current;
-    if (!el) return;
-    requestAnimationFrame(() => {
-      el.setSelectionRange(initialClickPos, initialClickPos);
-      resolveClickSuggestions(initialClickPos);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
   function acceptSuggestion(valueToInsert: string) {
     const el = ref.current;
     if (!el || !ac) return;
@@ -237,66 +336,108 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
       setTimeout(() => refreshSuggestions(newText, newPos), 60);
     });
   }
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (ac) {
       if (e.key === "ArrowDown") { e.preventDefault(); setAc(p => p ? { ...p, selectedIdx: (p.selectedIdx + 1) % p.suggestions.length } : p); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); setAc(p => p ? { ...p, selectedIdx: (p.selectedIdx - 1 + p.suggestions.length) % p.suggestions.length } : p); return; }
       if (e.key === "Tab") { const sel = ac.suggestions[ac.selectedIdx]; if (sel) { e.preventDefault(); acceptSuggestion(sel.value); } return; }
       if (e.key === "Escape") { e.preventDefault(); closeAc(); return; }
     }
+    // Entrée reste un raccourci explicite pour valider tout de suite (jamais un saut de ligne dans
+    // une ligne d'exercice) — mais n'est plus indispensable, voir handleBlur : la sortie du champ
+    // enregistre déjà automatiquement.
     if (e.key === "Enter") { e.preventDefault(); closeAc(); onCommit(); }
     if (e.key === "Escape" && onCancel) onCancel();
   }
   function handleBlur() {
-    blurTimeout.current = setTimeout(() => closeAc(), 150);
+    // Enregistrement automatique à la sortie du champ — plus besoin d'Entrée (demande explicite).
+    // Délai de 150ms : laisse le temps à un onMouseDown sur une suggestion (qui preventDefault le
+    // mousedown, donc ne déclenche jamais ce blur) de s'exécuter avant qu'on ne referme/committe.
+    blurTimeout.current = setTimeout(() => { closeAc(); onCommit(); }, 150);
   }
 
   return (
     <>
-      <input
-        ref={ref} value={value} autoFocus={autoFocus} placeholder={placeholder}
+      <textarea
+        ref={ref} value={value} autoFocus={autoFocus} placeholder={placeholder} rows={1}
         onChange={e => handleChange(e.target.value)} onClick={handleClick} onKeyDown={handleKeyDown} onBlur={handleBlur}
-        style={{ width: "100%", fontSize: 16, fontFamily: "inherit", border: "none", outline: "none", background: "transparent", color: "#171b1f", padding: 0 }}
+        style={{
+          display: "block", width: "100%", fontSize: 16, fontFamily: "inherit", border: "none", outline: "none",
+          background: "transparent", color: "#171b1f", padding: 0, margin: 0, resize: "none", overflow: "hidden",
+          whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4,
+        }}
       />
-      {ac && <AcDropdown ac={ac} onAccept={acceptSuggestion} onCancelBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); }} />}
+      {ac && (
+        <TokenSuggestionPanel
+          suggestions={ac.suggestions} selectedIdx={ac.selectedIdx} onAccept={acceptSuggestion}
+          onCancelBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); }}
+          anchorRect={ac.rect} isMobile={!isMd}
+        />
+      )}
     </>
   );
 }
 
-/* Rampes de charge ("@ 80, 85, 87,5 90 / 85 90 92,5 97,5") fusionnées en un seul pastille plutôt
-   que la seule première valeur — heuristique d'affichage, indépendante de la grammaire de
-   l'autocomplete (exerciseAutocomplete.ts) qui reste inchangée. Dernière alternative : nombre +
-   unité (kg/%/km/min/m/s) reconnu avec ou sans espace, avec ou sans "@" devant — le "@ ..." reste
-   prioritaire (1re alternative testée) pour absorber les rampes multi-valeurs en un seul token
-   avant que cette alternative plus générique ne les redécoupe en morceaux. Lookahead négatif sur
-   une lettre plutôt que \b : \b échoue après "%" (non word-char) suivi d'un non word-char (virgule,
-   espace) — piège vérifié en écrivant cette regex, "50%," ne matchait pas avec \b. */
-const TOKEN_RE = /(\d+\s?[x×X]\s?\d+(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/g;
+/* TOKEN_RE vit désormais dans exerciseAutocomplete.ts (source unique, réutilisée aussi par
+   getClickToken côté détection) — voir ce fichier pour le détail des 4 alternatives.
 
-function Tokenized({ text, onTokenClick }: { text: string; onTokenClick?: (pos: number) => void }) {
-  const parts: { text: string; isToken: boolean; start: number }[] = [];
-  let lastIndex = 0;
+   `onTokenClick` reçoit les bornes exactes du même match TOKEN_RE utilisé pour l'affichage — la
+   source de vérité du "qu'est-ce qui est cliqué" est donc unique (plus de recalcul séparé via
+   getClickToken pour ce chemin, cf. ExerciseCard). Le token cliqué en cours d'édition (mode click,
+   voir ExerciseCard) est mis en évidence différemment (fond plein plutôt que teinté) pour montrer
+   clairement quel token le panneau de suggestions est en train de modifier. */
+function Tokenized({ text, onTokenClick, activeSpan }: {
+  text: string;
+  onTokenClick?: (start: number, end: number, rect: DOMRect) => void;
+  activeSpan?: { start: number; end: number } | null;
+}) {
+  const spans: { start: number; end: number; kind: "numeric" | "name" }[] = [];
   let m: RegExpExecArray | null;
   TOKEN_RE.lastIndex = 0;
   while ((m = TOKEN_RE.exec(text))) {
-    if (m.index > lastIndex) parts.push({ text: text.slice(lastIndex, m.index), isToken: false, start: lastIndex });
-    parts.push({ text: m[0], isToken: true, start: m.index });
-    lastIndex = m.index + m[0].length;
+    spans.push({ start: m.index, end: m.index + m[0].length, kind: "numeric" });
   }
-  if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isToken: false, start: lastIndex });
+  // Le nom de l'exercice est aussi un token cliquable (demande explicite : "les exercices ne sont
+  // pas tokénisés") — jamais ajouté s'il chevauche un token numérique déjà trouvé (arrive quand le
+  // nom EST une distance/durée, ex. "400m" reconnu à la fois comme nom et comme volume — un seul
+  // span suffit dans ce cas, inutile de le dupliquer).
+  const nameSpan = findNameSpan(text);
+  if (nameSpan && !spans.some(s => nameSpan.start < s.end && nameSpan.end > s.start)) {
+    spans.push({ ...nameSpan, kind: "name" });
+  }
+  spans.sort((a, b) => a.start - b.start);
+
+  const parts: { text: string; isToken: boolean; start: number; end: number; kind?: "numeric" | "name" }[] = [];
+  let lastIndex = 0;
+  spans.forEach(s => {
+    if (s.start > lastIndex) parts.push({ text: text.slice(lastIndex, s.start), isToken: false, start: lastIndex, end: s.start });
+    parts.push({ text: text.slice(s.start, s.end), isToken: true, start: s.start, end: s.end, kind: s.kind });
+    lastIndex = s.end;
+  });
+  if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isToken: false, start: lastIndex, end: text.length });
+
   return (
     <>
-      {parts.map((part, i) =>
-        part.isToken ? (
+      {parts.map((part, i) => {
+        if (!part.isToken) return part.text;
+        const isActive = !!activeSpan && activeSpan.start === part.start && activeSpan.end === part.end;
+        const isName = part.kind === "name";
+        const baseBg = isName ? "#EBF5FB" : "rgba(212,64,0,.1)";
+        const baseColor = isName ? "#2980B9" : "#d44000";
+        return (
           <span
             key={i}
-            onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start); } : undefined}
-            style={{ background: "rgba(212,64,0,.1)", color: "#d44000", fontWeight: 800, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5, cursor: onTokenClick ? "pointer" : undefined }}
+            onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start, part.end, e.currentTarget.getBoundingClientRect()); } : undefined}
+            style={{
+              background: isActive ? baseColor : baseBg, color: isActive ? "#fff" : baseColor,
+              fontWeight: 800, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5,
+              cursor: onTokenClick ? "pointer" : undefined,
+            }}
           >
             {part.text}
           </span>
-        ) : part.text
-      )}
+        );
+      })}
     </>
   );
 }
@@ -417,14 +558,21 @@ interface CardProps {
 }
 
 function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments }: CardProps) {
+  const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const [draftText, setDraftText] = useState(line.text);
-  /* Position d'un token cliqué en lecture (avant passage en édition) — voir TokenInput.initialClickPos.
-     undefined = clic hors-token, entrée en édition normale sans ouvrir de suggestions. */
-  const [clickPos, setClickPos] = useState<number | undefined>(undefined);
+  /* Édition d'un seul token sans jamais activer toute la ligne en texte libre ("sans que le champ
+     soit actif, juste updater les tokens avec les suggestions") — bornes figées au moment du clic
+     (snapshot), la valeur courante est retapée à chaque frappe dans le champ du panneau et
+     réappliquée immédiatement dans line.text (auto-save, jamais besoin d'un "OK"/Entrée séparé). */
+  const [clickTok, setClickTok] = useState<{ start: number; end: number; snapshot: string; value: string; rect: DOMRect } | null>(null);
+  const [clickAc, setClickAc] = useState<{ suggestions: TokenSuggestion[]; selectedIdx: number } | null>(null);
+  const clickValueRef = useRef<HTMLInputElement | null>(null);
+  const clickBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clickDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
   const [commentKind, setCommentKind] = useState<"text" | "video">("text");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -489,6 +637,64 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
     setCommentDraft(c.kind === "text" ? (c.text ?? "") : (c.url ?? ""));
   }
 
+  useEffect(() => () => {
+    if (clickBlurTimeout.current) clearTimeout(clickBlurTimeout.current);
+    if (clickDebounceRef.current) clearTimeout(clickDebounceRef.current);
+  }, []);
+
+  // Focus immédiat du champ valeur sur desktop uniquement (pas de coût clavier virtuel à éviter) —
+  // sur mobile, le panneau s'ouvre sans jamais donner le focus, exactement la demande initiale
+  // ("n'ouvre pas le clavier sur mobile"). Ne se redéclenche que sur un nouveau token (start/end),
+  // jamais à chaque frappe dans le champ lui-même.
+  useEffect(() => {
+    if (clickTok && isMd) requestAnimationFrame(() => clickValueRef.current?.focus());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clickTok?.start, clickTok?.end, isMd]);
+
+  /* Clic sur un token en lecture — ouvre le panneau directement sur ce token, sans jamais passer
+     par onStartEdit (qui activerait toute la ligne en texte libre). `start`/`end` viennent
+     directement de Tokenized (même regex que l'affichage), jamais recalculés autrement. */
+  function openTokenClick(start: number, end: number, rect: DOMRect) {
+    const snapshot = line.text;
+    const value = snapshot.slice(start, end);
+    setClickTok({ start, end, snapshot, value, rect });
+    const clickSugg = generateSuggestionsClickMode(value, snapshot.trim());
+    setClickAc({ suggestions: clickSugg.length ? clickSugg : generateSuggestions(value, snapshot.trim()), selectedIdx: 0 });
+  }
+  function updateClickValue(newValue: string) {
+    if (!clickTok) return;
+    const newLineText = clickTok.snapshot.slice(0, clickTok.start) + newValue + clickTok.snapshot.slice(clickTok.end);
+    setClickTok({ ...clickTok, value: newValue });
+    // Vider le token jusqu'à vider la ligne entière est rare (une ligne réduite à un seul token) —
+    // dans ce cas on committe quand même le texte tel quel (jamais onDeleteEmpty pendant la frappe,
+    // seulement à la fermeture définitive du panneau, cf. closeClickTok) pour ne pas supprimer la
+    // ligne sous les yeux de l'utilisateur alors que le panneau est encore ouvert.
+    onCommitEdit(newLineText);
+    if (clickDebounceRef.current) clearTimeout(clickDebounceRef.current);
+    clickDebounceRef.current = setTimeout(() => {
+      setClickAc({ suggestions: generateSuggestions(newValue, newLineText.trim()), selectedIdx: 0 });
+    }, 120);
+  }
+  function acceptClickSuggestion(newValue: string) {
+    if (!clickTok) return;
+    const newLineText = clickTok.snapshot.slice(0, clickTok.start) + newValue + clickTok.snapshot.slice(clickTok.end);
+    onCommitEdit(newLineText);
+    setClickTok(null);
+    setClickAc(null);
+  }
+  function closeClickTok() {
+    if (clickTok && !line.text.trim()) onDeleteEmpty();
+    setClickTok(null);
+    setClickAc(null);
+  }
+  function cancelClickTok() {
+    if (clickTok) onCommitEdit(clickTok.snapshot);
+    closeClickTok();
+  }
+  function handleClickValueBlur() {
+    clickBlurTimeout.current = setTimeout(closeClickTok, 150);
+  }
+
   async function handleFileSelected(file: File) {
     setUploading(true);
     try {
@@ -528,7 +734,6 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenInput
               value={draftText} onChange={setDraftText} autoFocus
-              initialClickPos={clickPos}
               onCommit={() => {
                 const trimmed = draftText.trim();
                 if (!trimmed) { onDeleteEmpty(); return; }
@@ -539,11 +744,33 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
           </div>
         ) : (
           <div
-            onClick={() => { setClickPos(undefined); onStartEdit(); }}
+            onClick={() => { setDraftText(line.text); closeClickTok(); onStartEdit(); }}
             style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, color: "#2c3236", cursor: "text", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
           >
-            <Tokenized text={line.text} onTokenClick={pos => { setClickPos(pos); onStartEdit(); }} />
+            <Tokenized
+              text={line.text}
+              onTokenClick={(start, end, rect) => openTokenClick(start, end, rect)}
+              activeSpan={clickTok ? { start: clickTok.start, end: clickTok.start + clickTok.value.length } : null}
+            />
           </div>
+        )}
+        {clickTok && clickAc && (
+          <TokenSuggestionPanel
+            suggestions={clickAc.suggestions} selectedIdx={clickAc.selectedIdx} onAccept={acceptClickSuggestion}
+            onCancelBlur={() => { if (clickBlurTimeout.current) clearTimeout(clickBlurTimeout.current); }}
+            anchorRect={clickTok.rect} isMobile={!isMd}
+            valueRow={{
+              value: clickTok.value,
+              onChange: updateClickValue,
+              onClear: () => updateClickValue(""),
+              inputRef: el => { clickValueRef.current = el; },
+              onBlur: handleClickValueBlur,
+              onKeyDown: e => {
+                if (e.key === "Enter") { e.preventDefault(); closeClickTok(); }
+                if (e.key === "Escape") { e.preventDefault(); cancelClickTok(); }
+              },
+            }}
+          />
         )}
 
         <button
