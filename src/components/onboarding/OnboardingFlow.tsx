@@ -7,10 +7,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
-import type { ProgramTemplate, ProgramFocus } from "@/types";
+import type { ProgramTemplate, ProgramFocus, SessionTemplate } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
+import DecisionStep from "@/components/onboarding/DecisionStep";
+import WellnessCheckStep from "@/components/onboarding/WellnessCheckStep";
 import AutoRegScoreStep, { computeAthleteAutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
@@ -35,6 +37,8 @@ type StepId =
   | "overload_2b" | "planning_time_2b" | "fatigue_2b"
   | "autoreg_score_coach"
   | "week_preview_2a" | "week_preview_2b"
+  | "wellness_check_2a" | "wellness_check_2b"
+  | "decision_2a" | "decision_2b"
   | "wellness_q"
   | "wellness_reveal"
   | "account"
@@ -52,34 +56,36 @@ type PendingData = {
 };
 interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role }
 
-/* Variante A : Signup juste après les pain points, avant le Score (voir plan onboarding v2). */
-/* Paywall (2 écrans) → Célébration → Activation, identique dans toutes les variantes/paths
-   (2026-07-19) : wellness_q/wellness_reveal (sportif) et invite_team (coach) ne sont plus dans
-   les tableaux statiques ci-dessous — ce sont des étapes "payeurs seulement", insérées
-   dynamiquement après celebration une fois trial_started réussi (voir getPath()/paidExtras). */
+/* Refonte "zéro problem awareness" (2026-08-17) — remplace l'ancien diagnostic self-report
+   (pain points → score → concept) par une construction directe : rôle → compte → sport+faiblesses
+   (un seul écran, fusionnés) → jours → programme réel + décision d'autorégulation vécue
+   (week_preview_2a/2b, déjà l'aha réel depuis le 2026-08-14) → formule. Signup juste après le
+   rôle dans TOUTES les variantes désormais (ancienne distinction control/test "position du
+   signup" n'a plus lieu d'être — voir discussion funnel du 2026-08-16/17, la position ne change
+   pas le taux de conversion à l'écran compte lui-même, seulement combien de monde l'atteint).
+   Les anciens écrans (frustration_2a/overload_2a/planning_2a/fatigue_2a, autoreg_score,
+   concept_autoreg, profile_recap, goal_2a, et leurs équivalents coach) restent dans le fichier
+   (JSX + state) mais ne sont plus référencés par aucun path actif — dead code assumé, même
+   principe que context_2b/sport_2b/count_2b/tool_2b déjà toléré ailleurs dans ce fichier. */
 const ATHLETE_PATH: StepId[] = [
-  "value_intro", "role",
-  "frustration_2a",
-  "overload_2a", "planning_2a", "fatigue_2a",
-  "account",
-  "autoreg_score",
-  "concept_autoreg",
-  "sport_2a", "level_2a", "goal_2a", "days_2a",
-  "profile_recap",
+  "value_intro", "role", "account",
+  "sport_2a",
+  "level_2a",
+  "days_2a",
   "week_preview_2a",
+  "wellness_check_2a",
+  "decision_2a",
   "paywall_priming", "paywall_form",
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
-  "value_intro", "role",
-  "challenge_2b",
-  "overload_2b", "planning_time_2b", "fatigue_2b",
-  "account",
-  "autoreg_score_coach",
-  "concept_autoreg",
-  "sport_2a", "level_2a", "goal_2a", "days_2a",
-  "profile_recap",
+  "value_intro", "role", "account",
+  "sport_2a",
+  "level_2a",
+  "days_2a",
   "week_preview_2b",
+  "wellness_check_2b",
+  "decision_2b",
   "paywall_priming", "paywall_form",
   "celebration",
 ];
@@ -89,23 +95,25 @@ const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal",
 const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
 /* week_preview_2a/2b restent en fond clair (page) : leur héros sombre est géré localement par
    WeekPreviewStep, qui reçoit aussi la frise en prop pour l'afficher dans ce même bloc sombre. */
-const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b"];
+const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
 
-/* Frise 3 étapes (Profil/Programme/Formule) — regroupe les steps réels par phase pour calculer
-   une progression persistante même sur les écrans historiquement masqués par POST_PROGRESS
-   (autoreg_score, profile_recap, week_preview, paywall_*). Filtré par le `path` actif pour rester
-   cohérent avec les variantes (programme claimé, A/B court, etc.) qui sautent certains steps. */
-const PHASE_1_STEPS: StepId[] = ["role", "frustration_2a", "challenge_2b", "overload_2a", "overload_2b", "planning_2a", "planning_time_2b", "fatigue_2a", "fatigue_2b", "account", "autoreg_score", "autoreg_score_coach", "concept_autoreg"];
-const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "goal_2a", "days_2a", "profile_recap", "week_preview_2a", "week_preview_2b"];
-const PHASE_3_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
+/* Frise 4 étapes (Profil/Programme/Adaptation/Formule, 2026-08-17 — remplace l'ancienne frise à 3
+   phases) — regroupe les steps réels par phase pour calculer une progression persistante.
+   "Adaptation" isole week_preview_2a/2b (l'aha réel : programme + décision d'autorégulation
+   vécue) comme sa propre phase plutôt que de le noyer dans "Programme". Filtré par le `path`
+   actif pour rester cohérent avec les variantes (programme claimé, etc.) qui sautent des steps. */
+const PHASE_1_STEPS: StepId[] = ["role", "account"];
+const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
+const PHASE_3_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
+const PHASE_4_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
 const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration"];
 
 /* Rendu de la frise, extrait en composant pour pouvoir être affiché soit à sa position par défaut
    (au-dessus du step), soit injecté par WeekPreviewStep dans son propre héros sombre. */
 function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct: number[]; dark: boolean }) {
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-      {["Profil", "Programme", "Formule"].map((label, i) => (
+    <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+      {["Profil", "Programme", "Adaptation", "Formule"].map((label, i) => (
         <div key={label} style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 8, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 5,
@@ -124,77 +132,106 @@ function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct:
   );
 }
 
-/* Variante A programme claimé : même repositionnement du Signup que ATHLETE_PATH/COACH_PATH.
-   "level_2a"(faiblesses)/"goal_2a"/"days_2a" ajoutés (2026-08-05) — sport reste déduit du
-   programme claimé (pas de "sport_2a" ici), mais faiblesses/objectif/jours sont maintenant
-   collectés pour personnaliser réellement le programme au lieu de copier le template public tel
-   quel (voir claimAndAssignProgram()/completeProfile() branche coach). */
+/* Transition automatique entre le dernier écran d'input et week_preview_2a/2b (2026-08-17) —
+   cascade spinner→check sur 3 lignes, ~1,7s, purement cosmétique (voir advanceMaybeGenerating()).
+   Rendu comme un early-return plein écran (même pattern que le bloc `initializing` juste avant
+   dans OnboardingFlow), pas comme un step navigable — n'a pas de StepId, n'apparaît jamais dans
+   un path ni dans la frise. */
+function GenerationLoadingScreen({ role }: { role: Role | null }) {
+  const [doneCount, setDoneCount] = useState(0);
+  useEffect(() => {
+    const labels = 3;
+    const timers = Array.from({ length: labels }, (_, i) =>
+      setTimeout(() => setDoneCount(i + 1), 220 + (i + 1) * 420)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  const labels = role === "coach"
+    ? ["Analyse du profil de tes sportifs", "Construction du cycle d'entraînement", "Génération des séances"]
+    : ["Analyse de ton profil", "Construction du cycle d'entraînement", "Génération de tes séances"];
+  return (
+    <OnboardingBackground variant="dark">
+      <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 260, margin: "40px auto 0" }}>
+        {labels.map((label, i) => {
+          const done = doneCount > i;
+          return (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 13, opacity: done ? 1 : 0.4, transition: "opacity .3s" }}>
+              {done ? (
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#237a35", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, flex: "none" }}>✓</div>
+              ) : (
+                <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,.18)", borderTopColor: "#d44000", flex: "none", animation: "genLoadingSpin .7s linear infinite" }} />
+              )}
+              <div style={{ fontSize: 14, fontWeight: 700, color: done ? "#fff" : "rgba(255,255,255,.55)", transition: "color .3s" }}>{label}</div>
+            </div>
+          );
+        })}
+      </div>
+      <style>{`@keyframes genLoadingSpin { to { transform: rotate(360deg); } }`}</style>
+    </OnboardingBackground>
+  );
+}
+
+/* Transition automatique entre le programme (pur) et l'écran de décision (2026-08-17) — vend la
+   valeur de la reconduction automatique de charge semaine après semaine SANS jamais nommer la
+   fonctionnalité elle-même (demande explicite de Gildas). Purement cosmétique/minutée, même
+   pattern que GenerationLoadingScreen — voir advanceMaybeReconduction(). */
+function ReconductionTeaserScreen({ role }: { role: Role | null }) {
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setGrown(true), 200);
+    return () => clearTimeout(t);
+  }, []);
+  const bars = [42, 64, 88];
+  return (
+    <OnboardingBackground variant="dark">
+      <div style={{ textAlign: "center", maxWidth: 280, margin: "24px auto 0" }}>
+        <div style={{ fontSize: 19, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff", marginBottom: 8 }}>
+          Et ton programme continue d&apos;évoluer.
+        </div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", lineHeight: 1.5, marginBottom: 28 }}>
+          {role === "coach"
+            ? "Chaque semaine, la charge de tes sportifs s'ajuste toute seule à leur progression — jamais figée, jamais à reprendre de zéro."
+            : "Chaque semaine, ta charge s'ajuste toute seule à ta progression — jamais figée, jamais à reprendre de zéro."}
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", justifyContent: "center", height: 90 }}>
+          {bars.map((h, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, width: 44 }}>
+              <div style={{
+                width: "100%", borderRadius: "8px 8px 0 0", background: "linear-gradient(180deg,#ff8a54,#d44000)",
+                height: grown ? h : 0, transition: `height .6s cubic-bezier(.2,.8,.2,1) ${i * 0.12}s`,
+              }} />
+              <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(255,255,255,.5)" }}>S{i + 1}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </OnboardingBackground>
+  );
+}
+
+/* Programme claimé : sport déjà déduit du programme (pas de "sport_2a" ici) — "level_2a" ne sert
+   plus que d'écran faiblesses seul (voir son rendu, réécrit le 2026-08-17 pour ne plus brancher
+   sur le rôle). Convergé avec la version courte : plus de distinction control/test, une seule
+   forme par rôle. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role",
-  "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
-  "account",
-  "autoreg_score",
-  "concept_autoreg",
-  "level_2a", "goal_2a", "days_2a",
-  "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
+  "value_intro", "role", "account",
+  "level_2a", "days_2a",
+  "week_preview_2a", "wellness_check_2a", "decision_2a", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "role",
-  "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
-  "account",
-  "autoreg_score_coach",
-  "concept_autoreg",
-  "level_2a", "goal_2a", "days_2a",
-  "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
+  "value_intro", "role", "account",
+  "level_2a", "days_2a",
+  "week_preview_2b", "wellness_check_2b", "decision_2b", "paywall_priming", "paywall_form", "celebration",
 ];
 
-/* Variante B (bras "test" de l'A/B short-onboarding-signup) : Signup dès le tout début, juste
-   après Rôle — profil encore vide à ce stade. Garde ensuite le diagnostic complet (contrairement
-   à l'ancien bras test qui sautait direct au paywall) : voir plan onboarding v2, "Pivot A/B". */
-const SHORT_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
-  "frustration_2a",
-  "overload_2a", "planning_2a", "fatigue_2a",
-  "autoreg_score",
-  "concept_autoreg",
-  "sport_2a", "level_2a", "goal_2a", "days_2a",
-  "profile_recap",
-  "week_preview_2a",
-  "paywall_priming", "paywall_form",
-  "celebration",
-];
-const SHORT_COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
-  "challenge_2b",
-  "overload_2b", "planning_time_2b", "fatigue_2b",
-  "autoreg_score_coach",
-  "concept_autoreg",
-  "sport_2a", "level_2a", "goal_2a", "days_2a",
-  "profile_recap",
-  "week_preview_2b",
-  "paywall_priming", "paywall_form",
-  "celebration",
-];
-/* Variante B + programme claimé : mêmes steps que PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH
-   (sport déjà déduit du programme, donc "sport_2a" absent — mais faiblesses/objectif/jours
-   collectés comme PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH, voir commentaire ci-dessus), Signup
-   déplacé juste après Rôle comme les paths courts ci-dessus. */
-const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
-  "frustration_2a", "overload_2a", "planning_2a", "fatigue_2a",
-  "autoreg_score",
-  "concept_autoreg",
-  "level_2a", "goal_2a", "days_2a",
-  "profile_recap", "week_preview_2a", "paywall_priming", "paywall_form", "celebration",
-];
-const SHORT_PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
-  "challenge_2b", "overload_2b", "planning_time_2b", "fatigue_2b",
-  "autoreg_score_coach",
-  "concept_autoreg",
-  "level_2a", "goal_2a", "days_2a",
-  "profile_recap", "week_preview_2b", "paywall_priming", "paywall_form", "celebration",
-];
+/* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
+   paths ci-dessus (le signup juste après le rôle est devenu le seul comportement, plus un bras de
+   test), conservées comme alias pour ne pas toucher getPath()/assignedVariant qui continuent de
+   résoudre un bras sans effet observable. */
+const SHORT_ATHLETE_PATH: StepId[] = ATHLETE_PATH;
+const SHORT_COACH_PATH: StepId[] = COACH_PATH;
+const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = PROGRAM_ATHLETE_PATH;
+const SHORT_PROGRAM_COACH_PATH: StepId[] = PROGRAM_COACH_PATH;
 
 /* Sportif invité par un coach (coach_invite_code en localStorage, posé par /join/[code]) : le lien
    coach→sportif est confirmé au submit d'"account" via /api/invite/join (voir handleFinish()), donc
@@ -1098,6 +1135,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     | { status: "failed" };
   const [analyzingSport, setAnalyzingSport]       = useState(false);
   const [customSport, setCustomSport]             = useState<CustomSportState | null>(null);
+  /* Transition de génération (2026-08-17) — voir advanceMaybeGenerating() et GenerationLoadingScreen. */
+  const [genLoading, setGenLoading]               = useState(false);
+  /* Transition "reconduction" (2026-08-17) — voir advanceMaybeReconduction() et ReconductionTeaserScreen. */
+  const [reconLoading, setReconLoading]           = useState(false);
   // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses, voir plus bas) —
   // `level`/`setLevel` restent réels (pas une constante) car `setLevel` est encore utilisé pour le
   // chemin "programme claimé" (ligne ~979, infère le niveau du programme réellement claimé, sans
@@ -1310,15 +1351,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, []);
 
 
-  /* Le Signup (step "account") arrive désormais avant la fin du diagnostic dans les 2 variantes —
-     sport/niveau/objectif/jours ne sont connus qu'à l'entrée de profile_recap. C'est ici que le
-     profil est complété (sessions, wellness baseline, démo coach). Pour le rôle coach, la branche
-     coach de completeProfile() gère déjà le cas "programme claimé" (sport/niveau déduits du claim,
-     objectif/faiblesses/jours collectés via les nouveaux écrans) — finishCoachClaim() (copie brute
-     du template public, écrasait ce travail juste après) est devenu redondant et a été supprimé
-     le 2026-08-05. */
+  /* Le Signup (step "account") arrive avant sport/faiblesses/jours dans tous les paths — c'est ici
+     que le profil est complété (sessions, wellness baseline, démo coach, génération réelle du
+     programme). Déclenché à l'entrée de week_preview_2a/2b (2026-08-17 — remplace l'ancien
+     déclenchement à l'entrée de profile_recap, retiré de tous les paths actifs) : c'est le premier
+     step qui a réellement besoin du programme généré, et le dernier step d'input avant lui (days_2a
+     ou sport_2a côté coach) vient de finir de collecter sport/faiblesses/jours. Pour le rôle coach,
+     la branche coach de completeProfile() gère déjà le cas "programme claimé" (sport/niveau déduits
+     du claim, faiblesses/jours collectés via les nouveaux écrans). */
   useEffect(() => {
-    if (currentStep !== "profile_recap" || profileCompleteGuardRef.current) return;
+    if ((currentStep !== "week_preview_2a" && currentStep !== "week_preview_2b") || profileCompleteGuardRef.current) return;
     profileCompleteGuardRef.current = true;
     const uid = userId || newUserId;
     if (!uid) return;
@@ -1336,11 +1378,50 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     window.location.href = role === "coach" ? "/coach" : "/today";
   }
 
+  /* Retour arrière (2026-08-17, 3e itération, retour explicite de Gildas) — réintroduit après avoir
+     été supprimé partout le 2026-07-13 ("pour forcer l'avancement"). Volontairement minimal :
+     navigation visuelle pure (décrémente stepIdx), ne défait aucun effet de bord déjà survenu
+     (compte déjà créé, completeProfile() déjà exécuté à l'entrée de week_preview...) — même
+     principe que l'ancien back() d'avant le 07-13, qui n'avait jamais annulé d'écriture non plus.
+     Exclu sur les steps post-paiement (wellness_q/wellness_reveal/invite_team, activation réelle)
+     et celebration (fin de flow) — reculer là n'a pas de sens. */
+  function goBack() {
+    if (stepIdx > 0) setStepIdx(i => i - 1);
+  }
+  const canGoBack = stepIdx > 0 && !["celebration", "wellness_q", "wellness_reveal", "invite_team"].includes(currentStep);
+
   function nextAfterChoice(setter: () => void) {
     if (advancingRef.current) return;
     advancingRef.current = true;
     setter();
     setTimeout(() => next(), 300);
+  }
+
+  /* Avance normalement, sauf si le step suivant dans le path résolu est week_preview_2a/2b — dans
+     ce cas, joue d'abord la transition de génération (~1,7s, voir GenerationLoadingScreen) avant
+     d'avancer réellement. Générique par construction (regarde path[stepIdx+1], pas le currentStep
+     courant) : couvre days_2a→week_preview_2a (sportif), sport_2a→week_preview_2b (coach), et
+     level_2a→week_preview_2b (coach, programme claimé) sans un branchement dédié par cas. */
+  function advanceMaybeGenerating() {
+    if (path[stepIdx + 1] === "week_preview_2a" || path[stepIdx + 1] === "week_preview_2b") {
+      setGenLoading(true);
+      setTimeout(() => { setGenLoading(false); next(); }, 1700);
+    } else {
+      next();
+    }
+  }
+
+  /* Même principe qu'advanceMaybeGenerating(), pour la transition entre le programme (pur) et
+     l'écran de décision — voir ReconductionTeaserScreen. Appelée par le onNext de week_preview_2a/2b. */
+  function advanceMaybeReconduction() {
+    if (path[stepIdx + 1] === "wellness_check_2a" || path[stepIdx + 1] === "wellness_check_2b") {
+      setReconLoading(true);
+      // 3,4s (retour de Gildas : 1,9s "tellement courte qu'on a pas le temps de lire") — assez pour
+      // lire le texte + voir les 3 barres monter en cascade (dernière barre finit vers ~2,1s).
+      setTimeout(() => { setReconLoading(false); next(); }, 3400);
+    } else {
+      next();
+    }
   }
 
   // Même route/logique que ProgramCriteriaModal.tsx (in-app, validé le 2026-08-06) — sportPrecision
@@ -1386,7 +1467,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // choisi via une des cartes ne déclenche jamais Claude (déjà un curriculum connu).
   async function handleSportNext() {
     if (sportPrecision.trim() && !customSport) await analyzeSport();
-    next();
+    advanceMaybeGenerating();
   }
 
   /* Compte créé au step "account" — désormais positionné avant la fin du diagnostic dans les
@@ -1774,7 +1855,82 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   const sessionCount  = trainingDays.length + (trainingDays.length < 6 ? 1 : 0);
   const showFrise = !HIDE_FRISE_STEPS.includes(currentStep) && !FRISE_INLINE_STEPS.includes(currentStep);
-  const frisePhases = [PHASE_1_STEPS, PHASE_2_STEPS, PHASE_3_STEPS].map(phaseSteps => path.filter(s => phaseSteps.includes(s)));
+  /* Partagée entre l'écran sport_2a (fusion sport+faiblesses, 2026-08-17) et l'écran level_2a
+     (faiblesses seul, programme claimé — sport déjà connu, pas de custom sport possible dans ce
+     cas). Un seul point de vérité pour éviter une divergence entre les deux rendus. */
+  const weaknessOptions = (!sport && customSport?.status === "generated") ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"];
+  /* Libellés réels des faiblesses choisies — un seul calcul, réutilisé partout où il faut les
+     mentionner (WeekPreviewStep). */
+  const weaknessLabels = weaknesses.map(k => weaknessOptions.find(w => w.key === k)?.label).filter((l): l is string => !!l);
+  const sportSentenceLabel = sport || sportPrecision.trim() || undefined;
+
+  /* Source unique du programme d'aperçu (2026-08-17, 3e itération) — auparavant WellnessCheckStep
+     et DecisionStep faisaient chacun leur propre appel à /api/programs/generate : déterministe donc
+     censé produire le même résultat, mais deux appels réseau indépendants plutôt qu'UNE vraie
+     séance partagée entre les deux écrans (retour de Gildas : "je veux une vraie séance du
+     programme créée... sinon ça defeat the purpose"). Un seul fetch ici, passé en prop aux deux
+     composants — garantit la même référence d'objet, pas seulement "la même valeur en théorie". */
+  const [previewTemplate, setPreviewTemplate] = useState<ProgramTemplate | null>(null);
+  useEffect(() => {
+    if (!trainingDays.length) return;
+    const dayStrings = trainingDays.map(d => DOW_NAMES[d]).filter(Boolean);
+    if (!dayStrings.length) return;
+    let cancelled = false;
+    fetch("/api/programs/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: (claimedProgramWeeks ?? 4), focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
+        ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
+      }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { template: ProgramTemplate } | null) => {
+        if (!cancelled && data?.template) setPreviewTemplate(data.template);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sport, level, JSON.stringify(trainingDays), goal, JSON.stringify(weaknesses), claimedProgramWeeks, JSON.stringify(customSport)]);
+
+  /* Sélection des séances démo — centralisée ici (2026-08-17, 5e itération) pour que
+     WellnessCheckStep et DecisionStep pointent vers EXACTEMENT le même objet (continuité déjà
+     demandée : "les séances... soient les mêmes que celles vues à week preview"). Bug réel trouvé
+     par Gildas en testant ("j'ai pas toujours un sportif à alléger et un sportif à surcharger") :
+     restreindre la recherche à la semaine 1 (pour cette continuité) peut la priver d'un vrai jour
+     difficile (diff≥7) ou léger (diff≤4) — computeAutoregSuggestion exige ces seuils réels, aucun
+     wellness forcé ne peut compenser une difficulté qui ne les franchit pas. Repli en 2 temps :
+     cherche d'abord dans la semaine 1 (préserve la continuité la plupart du temps), élargit à tout
+     le programme SEULEMENT si la semaine 1 n'atteint pas le seuil requis — jamais l'inverse. */
+  /* Exclut les séances de type "test" (2026-08-17, 6e itération, retour explicite de Gildas) — un
+     test de fin de bloc ("Bilan de cycle" : "Squat — tentative de maximum", "Bilan technique
+     (vidéo)"...) a beau avoir une difficulté élevée, son texte n'a aucun token numérique
+     (sets×reps@%) à modifier visiblement — parseAndApply() ne trouve rien à changer, l'ajustement
+     Alléger/Surcharger ne se voit pas. On préfère toujours une vraie séance "intensite"/"volume"
+     avec de vrais chiffres, même si elle est objectivement un peu moins dure/légère qu'un test. */
+  function flattenWeeks(t: ProgramTemplate | null, onlyFirst: boolean) {
+    const out: SessionTemplate[] = [];
+    const weeks = onlyFirst ? (t?.weeks?.[0] ? [t.weeks[0]] : []) : (t?.weeks ?? []);
+    weeks.forEach(week => Object.values(week).forEach(sessions => (sessions as SessionTemplate[]).forEach(s => { if (s.type !== "test") out.push(s); })));
+    return out;
+  }
+  const week1Pool = flattenWeeks(previewTemplate, true);
+  const allPool = flattenWeeks(previewTemplate, false);
+  function pickHardest(): SessionTemplate | null {
+    const inWeek1 = [...week1Pool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+    if (inWeek1 && (inWeek1.target_difficulty ?? 0) >= 7) return inWeek1;
+    return [...allPool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? inWeek1;
+  }
+  function pickLightest(): SessionTemplate | null {
+    const inWeek1 = [...week1Pool].sort((a, b) => (a.target_difficulty ?? 0) - (b.target_difficulty ?? 0))[0] ?? null;
+    if (inWeek1 && (inWeek1.target_difficulty ?? 0) <= 4) return inWeek1;
+    return [...allPool].sort((a, b) => (a.target_difficulty ?? 0) - (b.target_difficulty ?? 0))[0] ?? inWeek1;
+  }
+  const demoHardest = pickHardest();
+  const demoLightest = pickLightest();
+  const demoMiddle = week1Pool.length ? week1Pool[Math.floor(week1Pool.length / 2)] : (allPool[0] ?? null);
+
+  const frisePhases = [PHASE_1_STEPS, PHASE_2_STEPS, PHASE_3_STEPS, PHASE_4_STEPS].map(phaseSteps => path.filter(s => phaseSteps.includes(s)));
   const friseCurrentPhase = frisePhases.findIndex(steps => steps.includes(currentStep));
   const frisePct = frisePhases.map((steps, i) => {
     if (i < friseCurrentPhase) return 1;
@@ -1809,6 +1965,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       </OnboardingBackground>
     );
   }
+
+  /* Transition automatique (2026-08-17, refonte "zéro problem awareness") entre le dernier écran
+     d'input (days_2a, ou sport_2a côté coach/programme claimé) et week_preview_2a/2b — dramatise le
+     moment où le vrai programme se construit plutôt qu'un simple changement d'écran instantané.
+     Purement cosmétique/minutée (pas liée au vrai temps réseau) : WeekPreviewStep fait son propre
+     appel à /api/programs/generate indépendamment, cf. sa doc. Voir advanceMaybeGenerating(). */
+  if (genLoading) {
+    return <GenerationLoadingScreen role={role} />;
+  }
+
+  if (reconLoading) {
+    return <ReconductionTeaserScreen role={role} />;
+  }
+
 
   const isDarkStep = DARK_STEPS.includes(currentStep);
 
@@ -1963,7 +2133,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           );
         })()}
 
-        {/* ── 2A-1. SPORT ── */}
+        {/* ── SPORT + FAIBLESSES (fusionnés, 2026-08-17) — "on construit ta séance sous tes yeux" :
+             plus d'avancement auto au tap d'un sport (nextAfterChoice retiré), on reste sur l'écran
+             pour permettre de cocher jusqu'à 2 faiblesses avant de continuer. Les faiblesses
+             n'apparaissent que pour un sport reconnu via une carte (WEAKNESSES_BY_SPORT) — pour un
+             sport tapé en texte libre, l'analyse Claude ne résout qu'au clic sur "Continuer"
+             (handleSportNext), donc pas de liste de faiblesses affichable avant ce clic ; limite
+             assumée plutôt que de resynchroniser analyzeSport() sur la frappe. */}
+        {/* ── SPORT — de nouveau séparé des faiblesses (2026-08-17, 2e itération) : le retour de
+             Gildas sur la fusion précédente ("on voit pas les faiblesses en mobile en bas") a
+             montré que l'écran combiné dépassait l'écran sur mobile. Redevient sport seul, avec
+             l'auto-advance au tap d'une carte (comme avant la fusion). ── */}
         {currentStep === "sport_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
@@ -1980,6 +2160,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     setSport(isSame ? "" : s.id);
                     setSportPrecision("");
                     setCustomSport(null);
+                    setWeaknesses([]);
                     if (!isSame && isRegisterMode) nextAfterChoice(() => {});
                   }} />
               ))}
@@ -2011,42 +2192,31 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               )}
             </div>
             {isRegisterMode
-              ? !sport && <Actions onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !sportPrecision.trim()} />
-              : <Actions onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
+              ? !sport && <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !sportPrecision.trim()} />
+              : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
             }
           </div>
         )}
 
-        {/* ── 2A-2. FAIBLESSES (sportif) / NOMBRE DE SPORTIFS (coach) — même step ID level_2a,
-             contenu différent par rôle, pour ne pas perturber le funnel PostHog historique ── */}
-        {currentStep === "level_2a" && (role === "coach" ? (
+        {/* ── FAIBLESSES — de nouveau un écran séparé pour tous les paths (2026-08-17, 2e itération),
+             sport déjà connu (choisi sur sport_2a, ou déduit d'un programme claimé). ── */}
+        {currentStep === "level_2a" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Combien de sportifs suis-tu ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Dimensionne l&apos;aperçu Coach Control de la fin du parcours.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
-              {COACH_COUNT_OPTS.map(c => (
-                <Choice key={c.v} icon="" title={c.v} sub={c.sub} selected={athleteCount === c.v}
-                  onClick={() => isRegisterMode ? nextAfterChoice(() => setAthleteCount(c.v)) : setAthleteCount(c.v)} />
-              ))}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
+              {role === "coach" ? "Le point faible à travailler pour eux ?" : "Ton point faible en priorité ?"}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />}
-          </div>
-        ) : (
-          <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Tes points à travailler en priorité ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On biaise la sélection d&apos;exercices de ton programme vers ce qui compte le plus pour toi.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On ajoute les bons exercices à ton programme pour ça — jusqu&apos;à 2, facultatif.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-              {(!sport && customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
+              {weaknessOptions.map(w => (
                 <Chip key={w.key} label={w.label} checkmark selected={weaknesses.includes(w.key)}
                   onClick={() => setWeaknesses(prev =>
                     prev.includes(w.key) ? prev.filter(k => k !== w.key) : prev.length >= 2 ? prev : [...prev, w.key]
                   )} />
               ))}
             </div>
-            <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14 }}>Jusqu&apos;à 2 priorités — optionnel.</div>
-            <Actions onNext={next} nextLabel="Suivant →" />
+            <Actions onBack={canGoBack ? goBack : undefined} onNext={advanceMaybeGenerating} nextLabel={path[stepIdx + 1] === "week_preview_2a" || path[stepIdx + 1] === "week_preview_2b" ? "Découvrir mon programme →" : "Continuer →"} />
           </div>
-        ))}
+        )}
 
         {/* ── 2A-3. OBJECTIF DU BLOC (sportif) / SUIVI ACTUEL (coach) — même step ID goal_2a ── */}
         {currentStep === "goal_2a" && (role === "coach" ? (
@@ -2059,7 +2229,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCurrentTool(t.id)) : setCurrentTool(t.id)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />}
           </div>
         ) : (
           <div>
@@ -2071,7 +2241,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setGoal(o.label)) : setGoal(o.label)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!goal} />}
           </div>
         ))}
 
@@ -2091,7 +2261,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setFrustration(f.id)) : setFrustration(f.id)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!frustration} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!frustration} />}
           </div>
         )}
 
@@ -2099,23 +2269,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              days_2a. Côté coach, plus de sélecteur de jours : 4 séances/semaine par défaut (voir
              l'effet qui pose trainingDays au choix du rôle), cette étape sert le contraste de
              profile_recap juste après. ── */}
-        {currentStep === "days_2a" && role === "coach" && (
+        {/* ── JOURS D'ENTRAÎNEMENT — de nouveau demandé au coach aussi (2026-08-17, 3e itération,
+             retour explicite de Gildas) : réutilise le même sélecteur que le sportif, plus la vieille
+             question "Comment tes sportifs s'entraînent-ils" (self-report, retirée avec le reste du
+             diagnostic — voir refonte "zéro problem awareness" en tête de fichier). Ne pilote plus
+             le fallback [1,2,4,5] posé par l'effet [role] : ce choix réel le remplace. ── */}
+        {currentStep === "days_2a" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Comment tes sportifs s&apos;entraînent-ils aujourd&apos;hui ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>Construit le contraste de l&apos;écran suivant.</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14 }}>
-              {COACH_STYLE_OPTS.map(o => (
-                <Choice key={o.id} icon={o.icon} title={o.id} sub="" selected={trainingStyle === o.id}
-                  onClick={() => isRegisterMode ? nextAfterChoice(() => setTrainingStyle(o.id)) : setTrainingStyle(o.id)} />
-              ))}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
+              {role === "coach" ? "Sur quels jours entraînes-tu tes sportifs ?" : "Quels sont tes jours d'entraînement ?"}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!trainingStyle} />}
-          </div>
-        )}
-        {currentStep === "days_2a" && role !== "coach" && (
-          <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Quels sont tes jours d&apos;entraînement ?</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>Tes séances seront planifiées sur ces jours.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>Dernière info avant de générer {role === "coach" ? "leur programme réel" : "ton programme réel"}.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 8 }}>
               {([
                 { dow: 1, full: "Lundi" },
@@ -2166,7 +2330,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 14, textAlign: "center" }}>
               {trainingDays.length} jour{trainingDays.length > 1 ? "s" : ""} sélectionné{trainingDays.length > 1 ? "s" : ""}
             </div>
-            <Actions onNext={next} nextLabel="Continuer →" nextDisabled={trainingDays.length === 0} />
+            <Actions onBack={canGoBack ? goBack : undefined} onNext={advanceMaybeGenerating} nextLabel={role === "coach" ? "Découvrir leur programme →" : "Découvrir mon programme →"} nextDisabled={trainingDays.length === 0} />
           </div>
         )}
 
@@ -2250,7 +2414,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCoachingContext(c.id)) : setCoachingContext(c.id)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!coachingContext} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!coachingContext} />}
           </div>
         )}
 
@@ -2280,8 +2444,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
             {isRegisterMode
-              ? sport === "Autre" && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
-              : <Actions onNext={next} nextLabel="Suivant →" />
+              ? sport === "Autre" && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!sportPrecision.trim()} />
+              : <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" />
             }
           </div>
         )}
@@ -2302,7 +2466,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setAthleteCount(c.v)) : setAthleteCount(c.v)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!athleteCount} />}
           </div>
         )}
 
@@ -2323,7 +2487,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   onClick={() => isRegisterMode ? nextAfterChoice(() => setCoachingChallenge(c.id)) : setCoachingChallenge(c.id)} />
               ))}
             </div>
-            {!isRegisterMode && <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!coachingChallenge} />}
+            {!isRegisterMode && <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!coachingChallenge} />}
           </div>
         )}
 
@@ -2344,8 +2508,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               ))}
             </div>
             {!isRegisterMode && (isLast
-              ? <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon espace coach"} nextDisabled={saving || !currentTool} />
-              : <Actions onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />
+              ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon espace coach"} nextDisabled={saving || !currentTool} />
+              : <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel="Suivant →" nextDisabled={!currentTool} />
             )}
           </div>
         )}
@@ -2459,20 +2623,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── 3. ACCOUNT ── */}
         {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (() => {
-          /* Variante B (bras test) : Signup arrive juste après Rôle, profil encore vide — pas de
-             "bilan" à promettre. Variante A : Signup arrive après les pain points, le bilan
-             (Score/Concept) suit juste après — cadrage "débloque ton bilan" légitime ici. */
-          const isVariantB = assignedVariant === "test";
+          /* Position early du signup devenue la seule forme (2026-08-17, voir refonte "zéro
+             problem awareness" en tête de fichier) — plus de "bilan"/Score à promettre à ce
+             stade (rien n'est encore construit), le cadrage vend la construction à venir plutôt
+             qu'un résultat déjà là. `assignedVariant` continue de se résoudre (tagging analytics
+             inchangé) mais ne pilote plus ce wording. */
           return (
           <div>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-              {isVariantB ? "Ton compte" : "Ton bilan est prêt"}
+              Ton compte
             </div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              Améliore {role === "coach" ? "ton coaching" : "tes performances"}.
+              {role === "coach" ? "On construit le programme de tes sportifs." : "On construit ton programme."}
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 20 }}>
-              Débloque ton profil d&apos;autorégulation et construis ton programme adaptatif personnalisé.
+              Crée ton compte pour le garder et le retrouver, où que tu sois.
             </div>
             {error && (
               <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
@@ -2501,7 +2666,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
             <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 8 }} />
-            <Actions onNext={handleFinish} nextLabel={saving ? "Création…" : (isVariantB ? "Créer mon compte →" : "Recevoir mon bilan →")} nextDisabled={saving || !name.trim() || !email.trim()} />
+            <Actions onBack={canGoBack ? goBack : undefined} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
             <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
@@ -2569,7 +2734,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} onNext={next} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={advanceMaybeReconduction} onBack={canGoBack ? goBack : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+        )}
+
+        {currentStep === "wellness_check_2a" && (
+          <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+        )}
+
+        {/* ── DÉCISION — intégration wellness + aha d'autorégulation, écran séparé du programme
+             (2026-08-17, voir DecisionStep.tsx) ── */}
+        {currentStep === "decision_2a" && (
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} athleteName={name} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
@@ -2578,7 +2753,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} onNext={next} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={advanceMaybeReconduction} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+        )}
+
+        {currentStep === "wellness_check_2b" && (
+          <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+        )}
+
+        {currentStep === "decision_2b" && (
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
@@ -2916,11 +3099,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── PAYWALL PRIMING (pricing + réassurance) ── */}
         {currentStep === "paywall_priming" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
+          // Retiré (2026-08-17) : l'ancien headline "Ta charge d'entraînement irrégulière limite ta
+          // progression en endurance."/coach équivalent était statique par rôle, jamais personnalisé
+          // — un powerlifter voyait littéralement un texte sur l'endurance (retour de Gildas). Il
+          // provenait des pain points (frustration/overload/planning/fatigue), retirés du flow avec
+          // le reste du diagnostic self-report (voir refonte "zéro problem awareness" en tête de
+          // fichier) — plus aucune donnée pour le personnaliser légitimement. Remplacé par le même
+          // headline honnête déjà utilisé par PrimingJourneyModal.tsx (gating in-app, PricingPriming.tsx)
+          // — cohérent entre les deux surfaces plutôt que deux textes différents pour le même écran.
           const headline = isClaimed
             ? `Ton programme ${claimedProgramName} t'attend.`
-            : (role === "coach"
-                ? "Le manque de visibilité sur la récupération de tes sportifs freine leur progression."
-                : "Ta charge d'entraînement irrégulière limite ta progression en endurance.");
+            : (role === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
           const displaySport = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : (sport || undefined);
           const durationWeeks = claimedProgramWeeks ?? 4;
           const realSessionCount = trainingDays.length > 0 ? trainingDays.length * durationWeeks : undefined;
@@ -2936,10 +3125,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 headline={headline}
                 sport={displaySport}
                 sessionCount={role === "coach" ? undefined : realSessionCount}
-                focus={role === "coach" ? undefined : (GOAL_TO_FOCUS[goal] ?? "mixte")}
+                weaknessLabels={role === "coach" ? undefined : weaknessLabels}
                 name={name}
               />
-              <Actions onNext={next} nextLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} caption={PRICING_PRIMING_GUARANTEE_CAPTION} />
+              <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} caption={PRICING_PRIMING_GUARANTEE_CAPTION} />
             </div>
           );
         })()}
@@ -3012,6 +3201,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             name={name}
             sport={!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre"}
             level={level}
+            showLevel={hasClaimedProgram === true && !!level}
             goal={goal}
             coachingChallenge={coachingChallenge}
             wScore={wScore}

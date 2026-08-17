@@ -30,6 +30,13 @@ interface Props {
   name: string;
   sport: string;
   level: Level;
+  /* N'affiche le chip niveau que si un vrai choix existe derrière (programme claimé — voir
+     showLevel dans OnboardingFlow, même règle que ProfileRecapStep). Sur le chemin classique,
+     `level` reste figé à sa valeur neutre par défaut ("intermediate") jamais choisie par
+     l'utilisateur depuis que level_2a a été remplacé par les faiblesses — l'afficher sous "On a
+     compris ton profil" aurait affirmé un fait jamais recueilli (bug réel trouvé par Gildas,
+     2026-08-17, même catégorie que le headline paywall non personnalisé). */
+  showLevel: boolean;
   goal: string;
   coachingChallenge: string;
   wScore: number | null;
@@ -58,7 +65,7 @@ function Chip({ label }: { label: string }) {
 }
 
 export default function CelebrationScreen({
-  role, name, sport, level, goal, coachingChallenge, wScore, wellnessTip,
+  role, name, sport, level, showLevel, goal, coachingChallenge, wScore, wellnessTip,
   claimedProgramName, claimedProgramWeeks,
   showProfile, showWellness, saving, onNext,
 }: Props) {
@@ -92,7 +99,7 @@ export default function CelebrationScreen({
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {sport && <Chip label={sport} />}
-                {role === "athlete" && <Chip label={LEVEL_LABELS[level]} />}
+                {role === "athlete" && showLevel && <Chip label={LEVEL_LABELS[level]} />}
                 {role === "athlete" && goal && <Chip label={goal} />}
                 {role === "coach" && coachingChallenge && <Chip label={coachingChallenge} />}
               </div>

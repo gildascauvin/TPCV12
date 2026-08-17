@@ -72,21 +72,30 @@ export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | 
   return score;
 }
 
-export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null) {
+/* `selfView` (2026-08-17, réutilisation de CoachCard pour la carte "toi" du sportif dans
+   l'onboarding — voir DecisionStep.tsx) : 2 des branches ci-dessous parlent de l'athlète à la 3e
+   personne ("vérifier avec lui", "qu'il n'enchaîne pas dur"), correct quand c'est un coach qui
+   regarde un vrai sportif, faux quand la carte représente l'utilisateur lui-même. `undefined`/
+   `false` par défaut : comportement 100% inchangé pour /coach et /coach/planning. */
+export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, selfView?: boolean) {
   if (trend === "accumulation") return "Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.";
   if (trend === "fatigue_persistante") return "Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.";
   if (a.wellnessFilledToday === false) {
-    if (maxDiff >= 8) return "Récupération non renseignée aujourd'hui + séance dure prévue : vérifier avec lui avant.";
+    if (maxDiff >= 8) return selfView
+      ? "Récupération non renseignée aujourd'hui + séance dure prévue : vérifie avant de te lancer."
+      : "Récupération non renseignée aujourd'hui + séance dure prévue : vérifier avec lui avant.";
     return "Récupération non renseignée aujourd'hui.";
   }
   if (a.wellness_score < 55 && maxDiff >= 7) return "Récupération basse + séance difficile : alléger maintenant.";
-  if (maxDiff >= 8) return "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
+  if (maxDiff >= 8) return selfView
+    ? "Séance dure prévue : assure-toi de ne pas enchaîner trop dur."
+    : "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
   if (a.wellness_score < 65 && maxDiff <= 4) return "Récupération légèrement basse, séance légère : rien à changer, surveiller demain.";
   if (a.wellness_score < 65) return "Récupération à surveiller : réduire le volume ou vérifier la difficulté réelle.";
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -108,12 +117,16 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   tourId?: string;
   trend?: TrendCode | null;
   coachName?: string;
+  /* Carte représentant l'utilisateur lui-même (pas un vrai sportif suivi par un coach) — bascule
+     decisionText()/autoregAdvice() en 2e personne. Voir décisionText() ci-dessus. `undefined` par
+     défaut, zéro impact sur /coach et /coach/planning. */
+  selfView?: boolean;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
   const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   const extraSessions = todaySessions.length - (topSession ? 1 : 0);
-  const decision = decisionText(athlete, maxDiff, trend);
+  const decision = decisionText(athlete, maxDiff, trend, selfView);
   const showBadge = isPriority && !isReviewed;
   const showReviewed = isPriority && isReviewed;
   const behaviors = athlete.behaviors ?? [];
@@ -241,7 +254,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             sessionId={topSession.id}
             dir={suggestion.dir}
             reco={suggestion.reco}
-            advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, firstName)}`}
+            advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, selfView ? undefined : firstName)}`}
             sessionLabel={topSession.name}
             onPreviewChange={setPreviewPct}
             onApply={async (pct) => {

@@ -12,6 +12,11 @@ interface Props {
   onSkip?: () => void;
   skipLabel?: string;
   caption?: string;
+  /* Petit bouton "←" à gauche du CTA principal, dans la même rangée sticky (2026-08-17, réintroduit
+     après avoir été supprimé partout le 2026-07-13 — retour explicite de Gildas, qui veut le bouton
+     retour "à gauche du CTA sticky en bas", pas flottant en haut de l'écran comme un 1er essai).
+     `undefined` par défaut : zéro impact sur les appelants qui ne le passent pas. */
+  onBack?: () => void;
 }
 
 const PAGE_VARIANTS: Variant[] = ["light", "dark"];
@@ -23,11 +28,23 @@ const RECIPES: Record<Variant, React.CSSProperties> = {
   "modal-dark":  { padding: "20px 28px 20px", background: "#161616", flexShrink: 0 },
 };
 
-export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel, caption }: Props) {
+export default function Actions({ variant = "light", onNext, nextLabel, nextDisabled = false, onSkip, skipLabel, caption, onBack }: Props) {
   const isDark = variant === "dark" || variant === "modal-dark";
   const isPage = PAGE_VARIANTS.includes(variant);
   const { isMd, isLg } = useBreakpoint();
   const maxWidth = isLg ? 720 : isMd ? 640 : 560;
+
+  const backBtn = onBack && (
+    <button
+      onClick={onBack} aria-label="Retour"
+      style={{
+        width: 52, height: 52, borderRadius: 14, flexShrink: 0, cursor: "pointer", fontSize: 17,
+        border: isDark ? "1.5px solid rgba(255,255,255,.18)" : "1.5px solid rgba(0,0,0,.10)",
+        background: isDark ? "rgba(255,255,255,.06)" : "#fff",
+        color: isDark ? "#fff" : "#171b1f",
+      }}
+    >←</button>
+  );
 
   const button = (
     <button
@@ -38,6 +55,9 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
       {nextLabel}
     </button>
   );
+  const row = backBtn
+    ? <div style={{ display: "flex", gap: 10 }}>{backBtn}<div style={{ flex: 1 }}>{button}</div></div>
+    : button;
 
   const captionEl = caption && (
     <div style={{ textAlign: "center", fontSize: 11.5, color: isDark ? "rgba(255,255,255,.45)" : "#8a8f94", fontWeight: 600, padding: "9px 0 0" }}>
@@ -61,7 +81,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
     return (
       <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, ...RECIPES[variant] }}>
         <div style={{ maxWidth, margin: "0 auto" }}>
-          {button}
+          {row}
           {captionEl}
           {skip}
         </div>
@@ -71,7 +91,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
 
   return (
     <div style={{ ...RECIPES[variant] }}>
-      {button}
+      {row}
       {captionEl}
       {skip}
     </div>

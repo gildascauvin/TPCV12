@@ -2,7 +2,6 @@
 
 import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
-import type { ProgramFocus } from "@/types";
 import { PlanningPreview, WellnessCardPreview, CoachControlPreview, ChargePreview, AthleteChargePreview } from "./FrisePreviews";
 import { INTERVIEWS } from "./interviews";
 
@@ -20,22 +19,6 @@ import { INTERVIEWS } from "./interviews";
 /* Sous le CTA "Continuer →" de l'écran priming (pas dans la carte prix elle-même — retiré de là
    le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "🛡️ Remboursé sous 14 jours si besoin, sans justification.";
-
-/* Bullet "objectif" — un par ProgramFocus réellement sélectionnable via goal_2a (GOAL_META dans
-   OnboardingFlow.tsx : volume/intensite/competition/mixte). "échéance" et "équilibre" reprennent
-   le vocabulaire déjà établi ailleurs dans l'app pour ces 2 focus (goalLower "préparer ton
-   échéance" ; icône ⚖️ déjà utilisée pour "mixte") plutôt que les noms techniques de l'enum. Les 3
-   valeurs de ProgramFocus non sélectionnables ici (technique/combat/autre, utilisées ailleurs par
-   le générateur) retombent sur un libellé générique. */
-const FOCUS_BULLET: Record<ProgramFocus, string> = {
-  volume: "Adapté à ton objectif de volume",
-  intensite: "Adapté à ton objectif d'intensité",
-  competition: "Adapté à ton objectif d'échéance",
-  mixte: "Adapté à ton objectif d'équilibre",
-  technique: "Adapté à ton objectif d'entraînement",
-  combat: "Adapté à ton objectif d'entraînement",
-  autre: "Adapté à ton objectif d'entraînement",
-};
 
 const BULLETS: Record<"athlete" | "coach", string[]> = {
   athlete: [
@@ -93,15 +76,19 @@ export interface PricingPrimingProps {
   sport?: string;
   /** Nombre réel de séances du programme généré (weeks × jours d'entraînement) — absent en gating in-app (pas de génération en cours), un bullet non chiffré prend le relais. */
   sessionCount?: number;
-  /** Objectif de bloc réel (GOAL_TO_FOCUS[goal]) — absent en gating in-app (pas de choix fait à cet instant), bullet générique en repli. */
-  focus?: ProgramFocus;
+  /** Libellés réels des faiblesses choisies à level_2a — sportif uniquement (2026-08-17, 2e
+      itération). Côté coach, BULLETS.coach fait déjà 3 lignes sans ça ; côté sportif, sans ce
+      bullet il n'en restait que 2 (compteur de séances + 1 bullet statique) — retour de Gildas :
+      "je veux bien 3 check... comme ça coach et sportif ont 3 check en tout". Absent/vide → bullet
+      retiré (pas de filler générique), sportif retombe alors à 2. */
+  weaknessLabels?: string[];
   /** Prénom réel de l'utilisateur — utilisé dans les illustrations de la frise (sportif démo côté
       coach) pour rester personnel. Repli "Toi" si absent, même convention que coachFirstName dans
       WeekPreviewStep.tsx. */
   name?: string;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, focus, name }: PricingPrimingProps) {
+export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, weaknessLabels, name }: PricingPrimingProps) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
@@ -111,7 +98,7 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
   const bullets = role === "athlete"
     ? [
         sessionCount ? `${sessionCount} séances générées` : "Ton programme sur mesure, déjà généré",
-        focus ? FOCUS_BULLET[focus] : "Adapté à ton objectif d'entraînement",
+        ...(weaknessLabels?.length ? [`Ciblé sur ta faiblesse : ${weaknessLabels.join(" et ")}`] : []),
         ...BULLETS.athlete,
       ]
     : BULLETS.coach;

@@ -1681,3 +1681,55 @@ Demande séparée de Gildas : la section "Aperçu des modifications" (liste vert
 **Piège de service worker rencontré une nouvelle fois pendant les tests** (déjà documenté ailleurs dans ce fichier) : avant toute vérification visuelle en local, désenregistrer le SW + vider les caches dans la console du navigateur, sinon un ancien bundle JS peut rester servi malgré un `npm run dev` frais.
 
 Déployé en prod le 2026-08-16 (commit `7ca6574`, push direct sur `main`).
+
+## Refonte onboarding "zéro problem awareness" (2026-08-17)
+
+Point de départ : discussion de fond sur le funnel (voir conversation dédiée) — analyse chiffrée directe sur PostHog (HogQL) montrant que l'attrition du funnel n'est pas concentrée sur une seule étape mais cumulative sur une trop longue chaîne de diagnostic auto-déclaré (pain points → score d'autorégulation → concept → profil). Décision : retirer entièrement le diagnostic self-report et le remplacer par un aha moment vécu (déjà construit le 2026-08-14, voir section dédiée plus haut) déplacé plus tôt dans le funnel, avec le signup fixé juste après le rôle dans toutes les variantes (position déjà éprouvée par l'A/B test `short-onboarding-signup`, qui perd donc sa raison d'être — bras convergés, flag laissé inerte plutôt que retiré du code).
+
+### Nouveau parcours (sportif ET coach, classique et programme claimé convergés)
+
+```
+value_intro (rôle) → account → sport_2a → level_2a (faiblesses) → days_2a
+→ week_preview_2a/2b (programme réel, aucune trace de wellness)
+→ [transition auto "reconduction", ~3,4s]
+→ wellness_check_2a/2b ("Ta forme")
+→ [animation de fusion physique, dans WellnessCheckStep]
+→ decision_2a/2b (Coach Control révélé, décision + célébration)
+→ paywall_priming → paywall_form → celebration → activation post-paiement
+```
+
+Programme claimé (`PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH`) : saute uniquement `sport_2a` (sport déjà déduit du claim) — `level_2a`/`days_2a` restent posés, personnalisent réellement le programme régénéré plutôt que de copier le template public tel quel (mécanisme déjà en place depuis le 2026-08-05, inchangé). `SHORT_*` (ancien bras "test" de l'A/B) sont maintenant de simples alias (`const SHORT_ATHLETE_PATH = ATHLETE_PATH`) — `getPath()`/`assignedVariant` continuent de résoudre un bras sans effet observable, non retiré du code pour limiter le risque.
+
+**Retiré de tous les paths actifs** (JSX/state conservés, dead code assumé — même principe que `context_2b`/`sport_2b` déjà toléré) : `frustration_2a`/`overload_2a`/`planning_2a`/`fatigue_2a` (et équivalents coach), `autoreg_score`/`autoreg_score_coach`, `concept_autoreg`, `profile_recap`, `goal_2a`. `focus` retombe systématiquement sur `"mixte"` (repli déjà existant).
+
+### Composants neufs, construits sur des briques déjà réelles
+
+- **`WeekPreviewStep.tsx` (réécrit)** — pur aperçu programme, plus aucune trace de wellness. N'utilise plus `DayColumn` (composant calendaire — ring, numéro de jour) mais importe directement `SessionTemplateCard` depuis `ProgramBuilderModal.tsx` (même carte que le vrai program builder, "+ Ajouter une séance"/icône dupliquer inertes mais visuellement fidèles) sous un encart charge (`loadRule`) — retour explicite de Gildas : "ça devient le même affichage que dans les programmes", pas un planning calendaire.
+- **`WellnessCheckStep.tsx` (nouveau)** — carte "Ta forme" (Sommeil/Stress/Courbatures/Fatigue + 4 badges de comportements réels via `BEHAVIOR_META`) au-dessus d'un exemple de séance nu, déjà visible avant le clic. Le CTA déclenche une **vraie animation physique** : mesure les positions réelles (`getBoundingClientRect`) de la carte wellness et de la carte séance (toutes deux dans le même DOM), anime un `translate+scale` de l'une vers l'autre en mutant directement le style (comme le prototype `theperfclub_onboarding_v3.html`, `playWellnessIntegration()`), puis navigue vers l'écran suivant.
+- **`DecisionStep.tsx` (nouveau)** — arrive déjà révélé (ring + décision), le changement d'écran EST la transition. Réutilise le vrai `CoachCard` pour les 2 rôles (1 carte "Toi" pour le sportif — nouveau prop `selfView` sur `CoachCard`, voir plus bas —, 3 cartes en grille 2 colonnes pour le coach, comme `/coach` réel). Célébration en place (confettis) à la première décision, **n'avance plus automatiquement** (retour explicite de Gildas : "seul le CTA sticky en bas fait avancer") — se referme seule, le CTA (jamais grisé, même sans décision prise) reste cliquable.
+- **`ReconductionTeaserScreen`/`GenerationLoadingScreen` (OnboardingFlow.tsx)** — transitions automatiques cosmétiques entre écrans (génération du programme, valeur de la reconduction sans la nommer), même pattern que les transitions déjà existantes.
+- **Bouton retour réintroduit** — supprimé partout le 2026-07-13 ("pour forcer l'avancement"), remis à la demande explicite de Gildas. Nouveau prop `onBack` sur `Actions.tsx` (petit bouton "←" à gauche du CTA principal, dans la même rangée sticky — pas flottant en haut, 1er essai corrigé). Navigation visuelle pure, ne défait aucun effet de bord déjà survenu (compte créé, programme généré restent en l'état).
+
+### Bugs réels trouvés en itérant (pas anticipés au départ)
+
+1. **Coach Control pas toujours 3 issues distinctes** (Alléger/Surcharger/Maintenir) — restreindre la recherche de séance démo à la semaine 1 (pour la continuité avec `week_preview`) pouvait priver le pool d'un vrai jour dur (≥7) ou léger (≤4), seuils réels exigés par `computeAutoregSuggestion` qu'aucun wellness forcé ne peut compenser. Fix : sélection centralisée dans `OnboardingFlow` (`pickHardest()`/`pickLightest()`), repli sur tout le programme UNIQUEMENT si la semaine 1 n'atteint pas le seuil — jamais l'inverse, préserve la continuité la plupart du temps.
+2. **Séances "test" (Bilan de cycle, tentatives de max) sans token numérique** — difficulté élevée mais aucun chiffre à ajuster visiblement, l'Alléger/Surcharger ne se voyait pas. Exclues du pool de sélection (`type !== "test"`).
+3. **`CoachCard` réutilisé pour la carte "Toi" générait du texte à la 3e personne** ("vérifier avec lui avant", `autoregAdvice()` injectant toujours le prénom). Nouveau prop `selfView` sur `CoachCard`/`decisionText()` (`CoachAthleteCard.tsx`) — bascule en 2e personne uniquement quand demandé, zéro impact sur le vrai `/coach`.
+4. **Chip "Intermédiaire" sur l'écran de célébration affiché pour tout sportif**, pas seulement les programmes claimés — `level` reste figé à sa valeur neutre par défaut depuis que `level_2a` ne fait plus choisir de niveau. Le garde-fou (`showLevel = hasClaimedProgram === true && !!level`) existait déjà pour l'ancien `ProfileRecapStep` (mort) mais n'avait jamais été branché sur `CelebrationScreen` — corrigé.
+5. **Headline paywall non personnalisé** ("Ta charge d'entraînement irrégulière limite ta progression en endurance.", statique par rôle, provenait des pain points retirés) — remplacé par le même headline honnête déjà utilisé par `PrimingJourneyModal.tsx` ("Améliore tes performances maintenant."), cohérent entre les 2 surfaces.
+6. **Bullet paywall "Adapté à ton objectif d'équilibre" toujours identique** (`focus` toujours `"mixte"` depuis le retrait de `goal_2a`, semblait personnalisé sans jamais varier) — remplacé par un bullet basé sur les vraies faiblesses choisies (`weaknessLabels`, résolu une seule fois dans `OnboardingFlow` et réutilisé). Ajusté deux fois sur retour de Gildas : d'abord ajouté aux 2 rôles (coach passait à 4 bullets), puis retiré côté coach (déjà mentionné sur `week_preview`, `BULLETS.coach` suffit à 3) et gardé côté sportif (sinon seulement 2 bullets) — les 2 rôles affichent maintenant exactement 3 checks chacun, par des chemins différents.
+
+### Wording — 3 rounds de retours
+
+- **Value-orienté plutôt que générique** : "Continuer →" → "Découvrir mon/leur programme →" (jours), "Personnaliser ce/leur programme →" (programme).
+- **Avant/après (problème/solution)** sur `wellness_check`/`decision` : "Un programme figé ne tient jamais compte de ta/leur forme réelle (sommeil, stress, courbatures)." → "ThePerfClub t'aide à ajuster tes/leurs séances pour optimiser tes/leurs résultats et ta/leur récupération." (raccourci après un 1er jet jugé "trop long").
+- **`week_preview` mentionne le vrai sport et les vraies faiblesses** ("Construit à partir de {sport}, {faiblesse(s)} et tes jours d'entraînement.") plutôt qu'une paraphrase générique — nouveau prop `sportLabel` (distinct de `sport`, qui reste vide pour un sport "Autre" personnalisé et sert uniquement à `/api/programs/generate`).
+- **Célébration** : "Bravo !" + phrase unique → "Première séance autorégulée !" + 2 bénéfices en checklist ("Moins de blessures" / "Plus de performances").
+
+### Non testé par Claude
+
+Aucun clic réel dans le navigateur sur ce chantier (contrairement à la plupart des autres chantiers de ce fichier) — Gildas a testé lui-même en local à chaque round et remonté les corrections en direct. `tsc --noEmit` + `npm run build` propres après chaque édition, mais les parcours complets (sportif/coach, classique/programme claimé, retour arrière, animation de fusion, 3 issues Coach Control) restent à valider par Gildas en conditions réelles avant un trafic significatif.
+
+### PostHog — funnels à reconstruire
+
+Les 4 anciens funnels historiques + `Funnel Sportif`/`Funnel Coach` (dashboard 706709) référencent des steps désormais retirés du path (`autoreg_score`, `concept_autoreg`, `profile_recap`, pain points) et pas les nouveaux (`wellness_check_2a`/`2b`, `decision_2a`/`2b`, `level_2a`/`days_2a` réintégrés au chemin classique). `short-onboarding-signup` n'a plus de sens comme expérience (bras convergés) — flag laissé actif mais inerte, à désactiver côté PostHog quand Gildas le souhaite (pas fait ici, décision produit pas uniquement technique).
