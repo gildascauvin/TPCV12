@@ -26,48 +26,76 @@ async function uploadExerciseVideo(file: File): Promise<string> {
   return data.publicUrl;
 }
 
-/* Bibliothèque vidéo par nom d'exercice (token "nom", pas la ligne entière — les séries/charges
+/* Bibliothèque vidéo+photo par nom d'exercice (token "nom", pas la ligne entière — les séries/charges
    changent à chaque occurrence, le nom seul est stable). Une bibliothèque par personne authentifiée
-   (RLS auth.uid() = owner_id) — coach ou sportif en auto-édition. */
-async function lookupLibraryVideo(name: string): Promise<string | null> {
+   (RLS auth.uid() = owner_id) — coach ou sportif en auto-édition. Source unique : chaque ligne du
+   même nom LIT cette table en live à chaque rendu (voir l'effet dans ExerciseCard) plutôt que de
+   garder une copie figée — modifier/retirer à un endroit se reflète donc sur toutes les autres
+   occurrences du même nom, pas seulement les futures. */
+type LibraryField = "video_url" | "photo_url";
+
+/* Toutes les fonctions ci-dessous journalisent leurs erreurs (`console.error`) — un échec Supabase
+   (`.upsert()`/`.update()`/`.delete()`) ne lève jamais d'exception JS, il faut lire `.error`
+   explicitement sinon l'écriture peut échouer en silence (RLS, contrainte...) sans aucune trace. */
+async function lookupLibraryMedia(name: string): Promise<{ videoUrl: string | null; photoUrl: string | null }> {
   const supabase = createClient();
   const key = name.trim().toLowerCase();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("exercise_video_library")
-    .select("video_url")
+    .select("video_url, photo_url")
     .eq("exercise_name_key", key)
     .maybeSingle();
-  return data?.video_url ?? null;
+  if (error) console.error("[exercise_video_library] lookup a échoué pour", JSON.stringify(key), error);
+  return { videoUrl: data?.video_url ?? null, photoUrl: data?.photo_url ?? null };
 }
 
-async function saveLibraryVideo(name: string, url: string): Promise<void> {
+async function saveLibraryMedia(name: string, field: LibraryField, url: string): Promise<void> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) console.error("[exercise_video_library] getUser a échoué:", userError);
+  if (!user) { console.error("[exercise_video_library] save annulé : aucun utilisateur authentifié"); return; }
   const key = name.trim().toLowerCase();
-  await supabase.from("exercise_video_library").upsert(
-    { owner_id: user.id, exercise_name: name.trim(), exercise_name_key: key, video_url: url },
+  const { error } = await supabase.from("exercise_video_library").upsert(
+    { owner_id: user.id, exercise_name: name.trim(), exercise_name_key: key, [field]: url },
     { onConflict: "owner_id,exercise_name_key" }
   );
+  if (error) console.error("[exercise_video_library] save a échoué pour", JSON.stringify(key), field, error);
 }
 
-/* Retirer une vidéo de la ligne doit aussi la retirer de la bibliothèque par nom — sinon elle
-   réapparaît silencieusement (auto-remplissage) au prochain montage d'une ligne du même nom. */
-async function deleteLibraryVideo(name: string): Promise<void> {
+/* Retire un seul champ (vidéo ou photo) — supprime la ligne entière seulement si l'autre champ est
+   aussi vide (contrainte `exercise_video_library_has_media`, au moins l'un des deux non-null). */
+async function deleteLibraryMedia(name: string, field: LibraryField): Promise<void> {
   const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) console.error("[exercise_video_library] getUser a échoué:", userError);
+  if (!user) { console.error("[exercise_video_library] delete annulé : aucun utilisateur authentifié"); return; }
   const key = name.trim().toLowerCase();
-  await supabase.from("exercise_video_library").delete().eq("owner_id", user.id).eq("exercise_name_key", key);
+  const otherField: LibraryField = field === "video_url" ? "photo_url" : "video_url";
+  const { data: existing, error: selectError } = await supabase
+    .from("exercise_video_library")
+    .select(otherField)
+    .eq("owner_id", user.id)
+    .eq("exercise_name_key", key)
+    .maybeSingle();
+  if (selectError) console.error("[exercise_video_library] delete: lecture préalable a échoué pour", JSON.stringify(key), selectError);
+  const otherValue = existing ? (existing as Record<LibraryField, string | null>)[otherField] : null;
+  if (otherValue) {
+    const { error } = await supabase.from("exercise_video_library").update({ [field]: null }).eq("owner_id", user.id).eq("exercise_name_key", key);
+    if (error) console.error("[exercise_video_library] delete (update) a échoué pour", JSON.stringify(key), field, error);
+  } else {
+    const { error } = await supabase.from("exercise_video_library").delete().eq("owner_id", user.id).eq("exercise_name_key", key);
+    if (error) console.error("[exercise_video_library] delete (row) a échoué pour", JSON.stringify(key), error);
+  }
 }
 
 /* Éditeur de séance façon Notion — remplace ExerciseGhostEditor dans AddSessionModal/CoachSessionModal.
    `value`/`onChange` restent du texte simple `\n`-séparé (même format que sessions.notes partout
    ailleurs) : chaque ligne devient une mini-carte à la validation (Entrée), avec autocomplete
-   token-aware identique à l'ancien éditeur. Vidéo/photo/commentaires par ligne sont conservés par
-   l'id client de la ligne (stable au drag & drop), disponibles dès la frappe — même avant le tout
-   premier "Enregistrer" — et remontés au parent via `onMediaChange` (état local, sérialisé en
-   `exercise_media` par le parent au moment de la sauvegarde, comme le reste du formulaire). */
+   token-aware identique à l'ancien éditeur. Commentaires par ligne sont conservés par l'id client de
+   la ligne (stable au drag & drop) et remontés au parent via `onMediaChange` (état local, sérialisé
+   en `exercise_media` par le parent au moment de la sauvegarde) — vidéo/photo, elles, sont lues en
+   live depuis la bibliothèque par nom (voir plus haut) et n'existent dans `exercise_media` que comme
+   miroir local pour les lignes sans nom résolvable (aucune clé à laquelle les rattacher). */
 
 const AC_BADGE_LABEL: Record<TokenType, string> = { name: "Exercice", volume: "Volume", intensity: "Intensité", constraint: "Contrainte" };
 const AC_BADGE_STYLE: Record<TokenType, React.CSSProperties> = {
@@ -611,13 +639,19 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
     onUpdateAttachments({ ...next, updatedAt: new Date().toISOString(), updatedBy: authorRole });
   }
 
-  /* Réutilisation automatique par nom d'exercice — sans confirmation, c'est le but de la
-     bibliothèque : le même token "nom" (ex. "Back squat") retrouve directement sa vidéo. */
+  /* Lecture live de la bibliothèque par nom d'exercice — pas un simple pré-remplissage une fois
+     pour toutes : écrase toujours la valeur locale (même si déjà renseignée) pour refléter la
+     dernière modification/suppression faite ailleurs sur une autre occurrence du même nom. Se
+     déclenche au montage et à chaque fois que le nom résolu change (édition du texte) — pas de
+     canal temps réel : deux occurrences déjà montées simultanément dans le même éditeur ne se
+     poussent pas leurs changements l'une à l'autre tant qu'aucune des deux ne remonte. */
   useEffect(() => {
-    if (attachments.videoUrl || !exerciseName) return;
+    if (!exerciseName) return;
     let cancelled = false;
-    lookupLibraryVideo(exerciseName).then(url => {
-      if (!cancelled && url) stampedUpdate({ ...attachments, videoUrl: url });
+    lookupLibraryMedia(exerciseName).then(({ videoUrl, photoUrl }) => {
+      if (cancelled) return;
+      if (videoUrl === (attachments.videoUrl ?? null) && photoUrl === (attachments.photoUrl ?? null)) return;
+      stampedUpdate({ ...attachments, videoUrl: videoUrl ?? undefined, photoUrl: photoUrl ?? undefined });
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -843,19 +877,25 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
               label="Lien vidéo (Loom, YouTube…)" icon={<VideoIcon />} url={attachments.videoUrl} kind="video"
               onSet={url => {
                 stampedUpdate({ ...attachments, videoUrl: url });
-                if (exerciseName) saveLibraryVideo(exerciseName, url);
+                if (exerciseName) saveLibraryMedia(exerciseName, "video_url", url);
               }}
               onClear={() => {
                 stampedUpdate({ ...attachments, videoUrl: undefined });
-                if (exerciseName) deleteLibraryVideo(exerciseName);
+                if (exerciseName) deleteLibraryMedia(exerciseName, "video_url");
               }}
             />
           )}
           {(attachments.photoUrl || open === "media") && (
             <AttachField
               label="Lien photo" icon={<PhotoIcon />} url={attachments.photoUrl} kind="photo"
-              onSet={url => stampedUpdate({ ...attachments, photoUrl: url })}
-              onClear={() => stampedUpdate({ ...attachments, photoUrl: undefined })}
+              onSet={url => {
+                stampedUpdate({ ...attachments, photoUrl: url });
+                if (exerciseName) saveLibraryMedia(exerciseName, "photo_url", url);
+              }}
+              onClear={() => {
+                stampedUpdate({ ...attachments, photoUrl: undefined });
+                if (exerciseName) deleteLibraryMedia(exerciseName, "photo_url");
+              }}
             />
           )}
         </div>
