@@ -106,7 +106,7 @@ const PHASE_1_STEPS: StepId[] = ["role", "account"];
 const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
 const PHASE_3_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
 const PHASE_4_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
-const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration"];
+const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "account"];
 
 /* Rendu de la frise, extrait en composant pour pouvoir être affiché soit à sa position par défaut
    (au-dessus du step), soit injecté par WeekPreviewStep dans son propre héros sombre. */
@@ -2112,20 +2112,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     </div>
                   ))}
                 </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
-                  <div style={{ display: "flex" }}>
-                    {PAYWALL_AVATARS.map((src, i) => (
-                      <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #232323", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                        <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", lineHeight: 1.25 }}>+600 sportifs, coachs et clubs</div>
-                    <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.5)", marginTop: 1 }}>font confiance à ThePerfClub</div>
-                  </div>
-                </div>
               </div>
 
               <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
@@ -2627,18 +2613,40 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              problem awareness" en tête de fichier) — plus de "bilan"/Score à promettre à ce
              stade (rien n'est encore construit), le cadrage vend la construction à venir plutôt
              qu'un résultat déjà là. `assignedVariant` continue de se résoudre (tagging analytics
-             inchangé) mais ne pilote plus ce wording. */
+             inchangé) mais ne pilote plus ce wording.
+
+             Refonte visuelle 2026-08-18 (POC signup v3, theperfclub-signup-v3.html) : plus
+             d'eyebrow pill ni de frise au-dessus (retirée via HIDE_FRISE_STEPS). Champs regroupés
+             dans un unique bloc blanc (form-card) comme le reste des cartes de l'onboarding,
+             réassurance = la même bande de confiance que paywall_priming (PAYWALL_AVATARS,
+             réutilisée telle quelle plutôt que dupliquée), placée sous le titre — avant la carte,
+             comme le "social-proof" du POC. Retirée de value_intro le même jour (redondante avec
+             celle-ci, 2 écrans plus tôt).
+
+             Titre = ligne de positionnement identitaire ("Le programme de ceux qui...", benchmark
+             Claude "l'IA de ceux qui résolvent des problèmes"), pas une promesse produit —
+             délibérément différent du hook "pas l'inverse" de value_intro (même écran + role entre
+             les deux, un titre qui l'aurait repris aurait juste dilué la même accroche). */
           return (
           <div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#d44000", background: "rgba(212,64,0,.08)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-              Ton compte
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16, lineHeight: 1.2 }}>
+              {role === "coach" ? "Le système d'entraînement des coachs professionnels." : "Le programme de ceux qui refusent de stagner."}
             </div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "On construit le programme de tes sportifs." : "On construit ton programme."}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+              <div style={{ display: "flex" }}>
+                {PAYWALL_AVATARS.map((src, i) => (
+                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+                <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+              </div>
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 20 }}>
-              Crée ton compte pour le garder et le retrouver, où que tu sois.
-            </div>
+
             {error && (
               <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
                 {error}{" "}
@@ -2648,25 +2656,28 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            <button
-              type="button" onClick={handleGoogleRegister} disabled={saving}
-              style={{ width: "100%", height: 48, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 16 }}
-            >
-              <GoogleIcon />
-              Continuer avec Google
-            </button>
+            <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
+              <button
+                type="button" onClick={handleGoogleRegister} disabled={saving}
+                style={{ width: "100%", height: 48, borderRadius: 16, border: "none", background: "#171b1f", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 18 }}
+              >
+                <GoogleIcon />
+                Continuer avec Google
+              </button>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
-              <span style={{ fontSize: 12, color: "#8a8f94" }}>ou avec email</span>
-              <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+                <span style={{ fontSize: 12, color: "#8a8f94" }}>ou avec email</span>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+              </div>
+
+              <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
+              <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
             </div>
 
-            <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
-            <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 8 }} />
-            <Actions onBack={canGoBack ? goBack : undefined} onNext={handleFinish} nextLabel={saving ? "Création…" : "Créer mon compte →"} nextDisabled={saving || !name.trim() || !email.trim()} />
+            <Actions onBack={canGoBack ? goBack : undefined} onNext={handleFinish} nextLabel={saving ? "Création…" : (role === "coach" ? "Créer mon espace coach →" : "Créer mon espace sportif →")} nextDisabled={saving || !name.trim() || !email.trim()} />
             <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
               Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
             </div>
