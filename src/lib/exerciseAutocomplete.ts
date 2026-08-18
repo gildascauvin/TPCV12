@@ -329,35 +329,71 @@ function extractNameCandidate(line: string): string | null {
   return null;
 }
 
-/** Nom canonique d'un exercice pour une ligne donnée — même résolution que buildUserHistory
-    (banque HISTORY d'abord, repli sur extractNameCandidate), exposée séparément pour la
-    bibliothèque vidéo par nom (rattacher une démo au token "nom", pas à la ligne entière avec ses
-    séries/charges qui changent à chaque occurrence). */
+/** Nom canonique d'un exercice pour une ligne donnée — priorité à la phrase réellement tapée
+    (extractNameCandidate, règle universelle : "Hang snatch" reste "Hang snatch" même si seul
+    "Snatch" est une clé HISTORY connue — un scan par sous-chaîne collapsait auparavant toute
+    variante non enregistrée mot pour mot sur la clé connue la plus longue qu'elle contient).
+    La banque HISTORY ne sert plus qu'à canoniser la casse/le libellé quand la phrase tapée
+    correspond EXACTEMENT à une clé connue (pas juste "contient") — sinon le texte tapé est
+    gardé tel quel. Repli sur l'ancien scan par confinement seulement si la ligne n'a aucune
+    portion non-chiffrée en tête (cas dégénéré, ex. ligne qui commence directement par un motif
+    non couvert par extractNameCandidate). Exposée séparément pour la bibliothèque vidéo par nom
+    (rattacher une démo au token "nom", pas à la ligne entière avec ses séries/charges qui
+    changent à chaque occurrence). */
 export function resolveExerciseName(line: string): string | null {
+  const candidate = extractNameCandidate(line);
+  if (candidate) {
+    const exactKey = HISTORY_KEYS.find(key => key === candidate.toLowerCase());
+    return exactKey ? HISTORY[exactKey].name : candidate;
+  }
   const lower = line.toLowerCase();
   for (const key of HISTORY_KEYS) {
     if (lower.includes(key)) return HISTORY[key].name;
   }
-  return extractNameCandidate(line);
+  return null;
 }
 
-/** Bornes exactes (dans la casse d'origine) du nom d'exercice au sein d'une ligne — même
-    résolution que detectName/analyzeLineContext (banque active en premier, ACTIVE_HISTORY_KEYS
-    déjà triée par pertinence/longueur), pour que le nom cliqué en lecture (Tokenized) et les
-    suggestions générées au clic (generateSuggestionsClickMode) portent sur exactement le même
-    texte. Retourne null si aucun nom n'est identifiable (ligne réduite à un volume/intensité sans
-    aucun mot devant, ex. juste "4x5 @150kg"). */
-export function findNameSpan(line: string): { start: number; end: number } | null {
+/** Bornes exactes (dans la casse d'origine) du/des nom(s) d'exercice au sein d'une ligne — même
+    règle universelle que resolveExerciseName ci-dessus (phrase tapée en priorité, banque en repli
+    seulement si aucune portion non-chiffrée n'est trouvée en tête de ligne) : le nom cliqué en
+    lecture (Tokenized) et les suggestions générées au clic (generateSuggestionsClickMode)
+    portent donc toujours sur la phrase entière tapée, jamais un sous-mot connu qu'elle contient.
+    Un "+" dans cette portion sépare des exercices combinés sur une même ligne (ex. "Power clean +
+    Split jerk") — chacun devient son propre token nom, le "+" restant du texte simple entre les
+    deux pastilles plutôt que de faire partie de l'une d'elles. Retourne un tableau vide si aucun
+    nom n'est identifiable (ligne réduite à un volume/intensité sans aucun mot devant, ex. juste
+    "4x5 @150kg"). */
+export function findNameSpans(line: string): { start: number; end: number }[] {
+  const outer = findNameSpanRaw(line);
+  if (!outer) return [];
+  const segment = line.slice(outer.start, outer.end);
+  if (!segment.includes("+")) return [outer];
+  const spans: { start: number; end: number }[] = [];
+  let cursor = 0;
+  segment.split("+").forEach(part => {
+    const rawStart = cursor;
+    cursor += part.length + 1; // +1 pour le "+" consommé entre les parties
+    const trimmed = part.trim();
+    if (!trimmed) return;
+    const leadingWs = part.length - part.trimStart().length;
+    const absStart = outer.start + rawStart + leadingWs;
+    spans.push({ start: absStart, end: absStart + trimmed.length });
+  });
+  return spans;
+}
+
+function findNameSpanRaw(line: string): { start: number; end: number } | null {
+  const name = extractNameCandidate(line);
+  if (name) {
+    const idx = line.indexOf(name);
+    if (idx !== -1) return { start: idx, end: idx + name.length };
+  }
   const lower = line.toLowerCase();
   for (const key of ACTIVE_HISTORY_KEYS) {
     const idx = lower.indexOf(key);
     if (idx !== -1) return { start: idx, end: idx + key.length };
   }
-  const name = extractNameCandidate(line);
-  if (!name) return null;
-  const idx = line.indexOf(name);
-  if (idx === -1) return null;
-  return { start: idx, end: idx + name.length };
+  return null;
 }
 
 /** Construit un dictionnaire d'historique à partir des vraies séances de l'utilisateur (les plus

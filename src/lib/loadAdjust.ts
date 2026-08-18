@@ -1,5 +1,6 @@
 // Applique un delta % aux charges ET au volume d'une ligne d'exercice (feature "Reconduire").
-// Charges : "@ Xkg", "@ X,X", "@ X kg", "Xkg" standalone — arrondi au 0.5 kg le plus proche.
+// Charges : "@ Xkg", "@ X,X", "@ X kg", "Xkg" standalone — arrondi au 2,5 kg le plus proche
+// (incréments réalistes de chargement barre, pas un multiple de 0,5 kg difficile à charger).
 // Volume : reps (dans un NxM ou seules), distance (m/km), durée (min/h/s, "1h30"), rounds/tours,
 // OTM/EMOM/AMRAP — chacun arrondi à un incrément "propre" pour son échelle plutôt qu'à l'unité.
 // Ne modifie JAMAIS : le nombre de séries dans un NxM (seules les reps bougent), RPE, %.
@@ -21,7 +22,7 @@ export function parseAndApply(text: string, pct: number): string {
   let result = text.replace(/@\s*(\d+(?:[.,]\d+)?)\s*(kg)?(?=\b|$)/g, (match, num: string, unit?: string) => {
     const val = parseFloat(num.replace(",", "."));
     if (isNaN(val)) return match;
-    const rounded = Math.round(val * factor * 2) / 2;
+    const rounded = roundToStep(val * factor, 2.5);
     const str = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1).replace(".", ",");
     return "@ " + str + (unit ? " kg" : "");
   });
@@ -32,7 +33,7 @@ export function parseAndApply(text: string, pct: number): string {
   result = result.replace(/(?<!@\s{0,5})(?<![.,])\b(\d+(?:[.,]\d+)?)\s*(kg)\b/g, (match, num: string, unit: string) => {
     const val = parseFloat(num.replace(",", "."));
     if (isNaN(val)) return match;
-    const rounded = Math.round(val * factor * 2) / 2;
+    const rounded = roundToStep(val * factor, 2.5);
     const str = rounded % 1 === 0 ? String(rounded) : rounded.toFixed(1).replace(".", ",");
     return str + " " + unit;
   });
@@ -61,11 +62,11 @@ export function parseAndApply(text: string, pct: number): string {
     return `${scaleInt(parseFloat(num), factor)} ${unit}`;
   });
 
-  // ── Distance (km/m) — arrondi au 0,5 km ou au 5 m le plus proche ──
+  // ── Distance (km/m) — arrondi au 5 (km ou m) le plus proche ──
   result = result.replace(/\b(\d+(?:[.,]\d+)?)\s*(km|m)\b/gi, (match, num: string, unit: string) => {
     const val = parseFloat(num.replace(",", "."));
     if (isNaN(val)) return match;
-    const scaled = unit.toLowerCase() === "km" ? roundToStep(val * factor, 0.5) : roundToStep(val * factor, 5);
+    const scaled = roundToStep(val * factor, 5);
     const str = scaled % 1 === 0 ? String(scaled) : String(scaled).replace(".", ",");
     return `${str}${unit}`;
   });

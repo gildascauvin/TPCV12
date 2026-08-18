@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   type TokenSuggestion, type TokenType, TOKEN_RE,
-  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, getClickToken, resolveExerciseName, findNameSpan,
+  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, getClickToken, resolveExerciseName, findNameSpans,
 } from "@/lib/exerciseAutocomplete";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -255,8 +255,11 @@ function ActionMenu({ rows, onClose, anchorRect }: { rows: MenuRow[]; onClose: (
   );
 }
 
-function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus }: {
+function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus, isPanelOwner, requestPanel, releasePanel }: {
   value: string; onChange: (v: string) => void; onCommit: () => void; onCancel?: () => void; placeholder?: string; autoFocus?: boolean;
+  /* Même mécanisme de panneau exclusif que ExerciseCard (cf. CardProps) — un seul panneau ouvert
+     à la fois, tous exercices confondus (lignes existantes + composeur "+ Ajouter une séance"). */
+  isPanelOwner: boolean; requestPanel: () => void; releasePanel: () => void;
 }) {
   const { isMd } = useBreakpoint();
   const [ac, setAc] = useState<AcState | null>(null);
@@ -278,10 +281,18 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
-  function closeAc() { setAc(null); }
+  // Un autre token/champ (ailleurs dans la liste) a pris possession du panneau partagé — ferme le
+  // nôtre plutôt que de laisser 2 panneaux ouverts en même temps.
+  useEffect(() => {
+    if (!isPanelOwner && ac) closeAc();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPanelOwner]);
+
+  function closeAc() { setAc(null); releasePanel(); }
   function openAc(suggestions: TokenSuggestion[], replaceStart: number | null, replaceEnd: number | null) {
     const el = ref.current;
     if (!el || !suggestions.length) { closeAc(); return; }
+    requestPanel();
     setAc({ suggestions, selectedIdx: 0, replaceStart, replaceEnd, rect: el.getBoundingClientRect() });
   }
   function refreshSuggestions(text: string, pos: number) {
@@ -367,7 +378,7 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
           whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.4,
         }}
       />
-      {ac && (
+      {ac && isPanelOwner && (
         <TokenSuggestionPanel
           suggestions={ac.suggestions} selectedIdx={ac.selectedIdx} onAccept={acceptSuggestion}
           onCancelBlur={() => { if (blurTimeout.current) clearTimeout(blurTimeout.current); }}
@@ -400,11 +411,15 @@ function Tokenized({ text, onTokenClick, activeSpan }: {
   // Le nom de l'exercice est aussi un token cliquable (demande explicite : "les exercices ne sont
   // pas tokénisés") — jamais ajouté s'il chevauche un token numérique déjà trouvé (arrive quand le
   // nom EST une distance/durée, ex. "400m" reconnu à la fois comme nom et comme volume — un seul
-  // span suffit dans ce cas, inutile de le dupliquer).
-  const nameSpan = findNameSpan(text);
-  if (nameSpan && !spans.some(s => nameSpan.start < s.end && nameSpan.end > s.start)) {
-    spans.push({ ...nameSpan, kind: "name" });
-  }
+  // span suffit dans ce cas, inutile de le dupliquer). Plusieurs spans "name" possibles quand la
+  // ligne combine plusieurs exercices avec "+" (ex. "Power clean + Split jerk") — chacun devient
+  // sa propre pastille cliquable, le "+" restant du texte simple entre les deux.
+  const nameSpans = findNameSpans(text);
+  nameSpans.forEach(nameSpan => {
+    if (!spans.some(s => nameSpan.start < s.end && nameSpan.end > s.start)) {
+      spans.push({ ...nameSpan, kind: "name" });
+    }
+  });
   spans.sort((a, b) => a.start - b.start);
 
   const parts: { text: string; isToken: boolean; start: number; end: number; kind?: "numeric" | "name" }[] = [];
@@ -555,9 +570,15 @@ interface CardProps {
   authorRole: "coach" | "athlete";
   authorName: string;
   onUpdateAttachments: (next: ExerciseAttachments) => void;
+  /* Un seul panneau de suggestions ouvert à la fois, tous exercices confondus (cf. ExerciseBlockEditor,
+     `openPanelId` partagé) — sans ça, cliquer un token pendant qu'un autre panneau est déjà ouvert les
+     empilait tous les deux au lieu de fermer le premier. */
+  isPanelOwner: boolean;
+  requestPanel: () => void;
+  releasePanel: () => void;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments }: CardProps) {
+function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
@@ -651,10 +672,21 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clickTok?.start, clickTok?.end, isMd]);
 
+  // Un autre token (sur cette carte ou une autre) a pris possession du panneau partagé — ferme le
+  // nôtre silencieusement (même chemin que la fermeture normale) plutôt que de laisser 2 panneaux
+  // ouverts en même temps (cascade).
+  useEffect(() => {
+    if (!isPanelOwner && clickTok) closeClickTok();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPanelOwner]);
+
   /* Clic sur un token en lecture — ouvre le panneau directement sur ce token, sans jamais passer
      par onStartEdit (qui activerait toute la ligne en texte libre). `start`/`end` viennent
-     directement de Tokenized (même regex que l'affichage), jamais recalculés autrement. */
+     directement de Tokenized (même regex que l'affichage), jamais recalculés autrement.
+     requestPanel() prend possession du panneau partagé — ferme automatiquement tout autre panneau
+     déjà ouvert (cf. l'effet ci-dessus, côté de la carte qui le perd). */
   function openTokenClick(start: number, end: number, rect: DOMRect) {
+    requestPanel();
     const snapshot = line.text;
     const value = snapshot.slice(start, end);
     setClickTok({ start, end, snapshot, value, rect });
@@ -681,11 +713,13 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
     onCommitEdit(newLineText);
     setClickTok(null);
     setClickAc(null);
+    releasePanel();
   }
   function closeClickTok() {
     if (clickTok && !line.text.trim()) onDeleteEmpty();
     setClickTok(null);
     setClickAc(null);
+    releasePanel();
   }
   function cancelClickTok() {
     if (clickTok) onCommitEdit(clickTok.snapshot);
@@ -734,6 +768,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenInput
               value={draftText} onChange={setDraftText} autoFocus
+              isPanelOwner={isPanelOwner} requestPanel={requestPanel} releasePanel={releasePanel}
               onCommit={() => {
                 const trimmed = draftText.trim();
                 if (!trimmed) { onDeleteEmpty(); return; }
@@ -754,7 +789,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
             />
           </div>
         )}
-        {clickTok && clickAc && (
+        {clickTok && clickAc && isPanelOwner && (
           <TokenSuggestionPanel
             suggestions={clickAc.suggestions} selectedIdx={clickAc.selectedIdx} onAccept={acceptClickSuggestion}
             onCancelBlur={() => { if (clickBlurTimeout.current) clearTimeout(clickBlurTimeout.current); }}
@@ -952,6 +987,17 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
   const [draft, setDraft] = useState("");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  /* Panneau de suggestions exclusif : un seul ouvert à la fois, tous exercices confondus (lignes +
+     composeur "+ Ajouter une séance") — remplace l'état local par carte qui laissait plusieurs
+     panneaux s'empiler quand on cliquait un token pendant qu'un autre était déjà ouvert. `null` =
+     rien d'ouvert ; sinon l'id du "propriétaire" courant (line.id, ou "composer"). Le releasePanel
+     passé à chaque enfant est pré-lié à son propre id (via releasePanelFor), donc toujours sûr à
+     appeler même si cet enfant n'est plus le propriétaire courant (no-op dans ce cas). */
+  const [openPanelId, setOpenPanelId] = useState<string | null>(null);
+  function releasePanelFor(id: string) {
+    setOpenPanelId(prev => (prev === id ? null : prev));
+  }
+
   function commitLines(next: Line[]) {
     setLines(next);
     onChange(next.map(l => l.text).join("\n"));
@@ -1028,6 +1074,9 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
                 authorRole={authorRole}
                 authorName={authorName}
                 onUpdateAttachments={next => updateAttachments(l.id, next)}
+                isPanelOwner={openPanelId === l.id}
+                requestPanel={() => setOpenPanelId(l.id)}
+                releasePanel={() => releasePanelFor(l.id)}
               />
             ))}
           </SortableContext>
@@ -1039,10 +1088,20 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
             <TokenInput
               value={draft} onChange={setDraft} onCommit={addLine}
               placeholder="Écris un exercice, Entrée pour l'ajouter…"
+              isPanelOwner={openPanelId === "composer"}
+              requestPanel={() => setOpenPanelId("composer")}
+              releasePanel={() => releasePanelFor("composer")}
             />
           </div>
         </div>
       </div>
+
+      {/* Backdrop invisible, même mécanisme que celui d'ActionMenu (clic hors du panneau = ferme).
+          z-index juste sous celui de TokenSuggestionPanel (2147483200) — le panneau reste toujours
+          visuellement au-dessus, donc un clic dedans ne peut jamais atteindre ce backdrop. */}
+      {openPanelId !== null && (
+        <div onClick={() => setOpenPanelId(null)} style={{ position: "fixed", inset: 0, zIndex: 2147483150 }} />
+      )}
     </div>
   );
 }
