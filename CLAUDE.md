@@ -1774,3 +1774,63 @@ Vivait avant dans `ExerciseBlockEditor.tsx` (affichage seul) pendant que `getCli
 `tsc --noEmit` + `npm run build` propres après chaque round. Testé en clic réel sur le compte de Gildas (desktop) : panneau ancré sous le token, valeur pré-remplie + focus auto, suggestions NxM correctes, application instantanée sans bouton "Enregistrer". **Incident pendant la vérification, sans lien avec le code** : un test a montré une valeur qui semblait "revenir en arrière" et une ligne d'exercice apparue sans avoir été tapée par Claude — investigation a conclu que Gildas testait probablement en parallèle sur le même compte au même moment (un realtime/refetch a écrasé un état local non sauvegardé côté navigateur automatisé) ; Claude a fermé sans sauvegarder et arrêté les tests en direct par prudence plutôt que de risquer d'écraser du vrai travail. Confirmé ensuite par Gildas lui-même ("c'est moi qui testais"). Le reste des correctifs (mobile bottom sheet, tokénisation du nom, formats de suggestion, incréments 5) a été testé et confirmé directement par Gildas en conditions réelles, pas par Claude.
 
 Déployé en prod le 2026-08-17 (commit `a2dfb28`, push direct sur `main`).
+
+## Refonte signup — wording, réassurance, bouton Google (2026-08-18)
+
+Point de départ : POC fourni par Gildas (`theperfclub-signup-v3.html`) pour inspirer la page signup existante (`OnboardingFlow.tsx`, step `account`) — wording, retrait de la frise avant les steps signup, champs regroupés dans un bloc blanc, réassurance réutilisée du priming. Le POC illustre 2 variantes (sportif/coach) via un toggle, non implémenté (juste pour comparer visuellement les deux).
+
+### Frise masquée sur `role`/`account`
+`HIDE_FRISE_STEPS` (déjà existant, gérait `value_intro`/`celebration`) étendu à `role`/`account` — ces deux steps n'ont plus de repère de progression au-dessus.
+
+### `account` — carte blanche + réassurance réutilisée de `paywall_priming`
+Champs (bouton Google, séparateur "ou avec email", Prénom, Email) regroupés dans un unique bloc blanc (`borderRadius:20`, `boxShadow`) comme le reste des cartes de l'onboarding. Réassurance ("+600 sportifs, coachs et clubs / font confiance à ThePerfClub") = exactement le même bloc que `paywall_priming` (`PAYWALL_AVATARS`, réutilisé tel quel plutôt que dupliqué), déplacée depuis `value_intro` (voir plus bas) vers ce step-ci.
+
+### Titre — repositionnement, pas répétition de `value_intro`
+1re version proposée ("Ton programme s'adapte à toi, pas l'inverse.") s'est révélée redondante avec le hook déjà utilisé sur `value_intro` ("Des séances qui s'adaptent enfin aux sportifs, pas l'inverse.") — seulement 1 écran d'intervalle (`role` entre les deux), repéré par Gildas. Remplacé par une ligne de positionnement identitaire (benchmark Claude "l'IA de ceux qui résolvent des problèmes") :
+- Sportif : **"Le programme de ceux qui refusent de stagner."**
+- Coach : **"Le système d'entraînement des coachs professionnels."** (raccourci après un 1er jet plus long — "... qui font progresser leurs sportifs." — jugé trop long en mobile).
+
+### Réassurance retirée de `value_intro`
+Le même bloc `PAYWALL_AVATARS` ("+600...") apparaissait déjà sur `value_intro` — retiré de cet écran pour ne plus le montrer 2 fois à 1 step d'intervalle, gardé uniquement sur `account`.
+
+### CTA final role-aware
+"Créer mon compte →" (générique) → **"Créer mon espace sportif →"** / **"Créer mon espace coach →"**.
+
+### Bouton Google — 3 itérations sur la couleur
+1. **Blanc-sur-blanc invisible** : signalé par Gildas une fois les champs regroupés dans la carte blanche (le bouton, blanc avec bordure 12% opacité, se distinguait avant sur le fond de page `#f1f0ee`, plus une fois posé sur une carte blanche).
+2. **1er essai : fond gris clair** (`#f7f8f9`, même que les inputs) — refusé par Gildas ("on va croire que le bouton est désactivé en gris").
+3. **Fond noir plein** (`#171b1f`), accepté explicitement "même s'il compete" avec le CTA orange du bas — icône Google d'abord posée sur un chip blanc (convention Google pour bouton sombre), puis ce chip retiré à la demande de Gildas (icône multicolore directement sur le noir).
+
+### Vérifié
+`tsc --noEmit` propre après chaque round. Dev server redémarré à plusieurs reprises (`.next` vidé) pour forcer une recompilation propre — plusieurs vérifications visuelles sont d'abord tombées sur un bundle stale malgré les edits déjà sur disque, cache webpack/service worker déjà documenté ailleurs dans ce fichier. Testé en clic-à-clic via `?dbgstep=` sur les 2 rôles (titre, carte blanche, réassurance, CTA, bouton Google) — jamais avec un vrai compte (règle permanente : jamais de connexion Google en local).
+
+Déployé en prod le 2026-08-18 (commit `d12901c`, push direct sur `main`).
+
+## Éditeur d'exercices — tokenisation universelle, incréments Reconduire, panel exclusif (2026-08-18)
+
+Suite directe du chantier "sheet de suggestions façon Notion" (2026-08-17, section précédente) — 3 retours distincts de Gildas après avoir testé en local.
+
+### Tokenisation du nom — règle universelle plutôt que dépendante de la banque
+Repéré par Gildas : "Hang snatch" tapé dans une ligne ne tokénisait que "Snatch" (le mot connu le plus court contenu dedans), pas la phrase entière tapée. Root cause (recherche dédiée avant tout fix) : `findNameSpan`/`resolveExerciseName` (`exerciseAutocomplete.ts`) scannaient `ACTIVE_HISTORY_KEYS`/`HISTORY_KEYS` (banque de ~190 entrées) par **containment** (`lower.includes(key)`) — toute variante non enregistrée mot pour mot dans la banque s'effondrait donc sur la clé connue la plus longue qu'elle contenait, jamais sur la phrase réellement tapée. Confirmé que ce n'est pas isolé à l'haltérophilie — le même mécanisme touche n'importe quel sport.
+
+Choix retenu (demandé explicitement par Gildas : "les deux") :
+- **Règle universelle** — `findNameSpan(s)`/`resolveExerciseName` priorisent désormais `extractNameCandidate` (tout ce qui précède le 1er chiffre, déjà existant comme simple repli avant ce chantier) : le nom devient toujours ce qui a été réellement tapé, peu importe s'il matche une entrée de banque. La banque `HISTORY` ne sert plus qu'aux **suggestions** pendant la frappe (`detectName`/`analyzeLineContext`, non touchées — donc "Hang snatch" continue de proposer les suggestions volume/intensité de "Snatch" si "Hang snatch" lui-même n'est pas une entrée connue) et à la **canonisation** du libellé quand la phrase tapée correspond EXACTEMENT (pas juste "contient") à une clé connue.
+- **Le champ de recherche du panel reste le point d'entrée pour un nom personnalisé** — déjà fonctionnel mécaniquement avant ce chantier (`updateClickValue` écrit déjà le texte tapé directement dans `line.text` à chaque frappe), seule la re-tokénisation au rendu suivant le collapsait ; corrigé par le point précédent, aucun code de "création" séparé n'a été nécessaire.
+
+### `+` sépare 2 exercices combinés sur une même ligne
+`findNameSpan` (singulier) devient `findNameSpans` (pluriel, seul point d'appel : `Tokenized`) — si la portion nom contient un `+` (ex. "Power clean + Split jerk"), elle est découpée en autant de spans "name" indépendants, chacun devenant sa propre pastille cliquable/éditable ; le `+` reste du texte simple entre les deux, jamais inclus dans l'un des tokens.
+
+### Reconduire — incréments par unité (`loadAdjust.ts`)
+Vérifié avant de changer quoi que ce soit : contrairement à la prémisse initiale de Gildas ("ça ne respecte pas les incréments 2,5kg/5m/5km"), l'arrondi était déjà unit-aware — juste sur de mauvaises valeurs pour kg et km. kg passe de 0,5 à **2,5** (chargement barre réaliste — 0,5kg n'est pas toujours chargeable). km passe de 0,5 à **5** (confirmé explicitement par Gildas après question directe, malgré l'écart avec le 0,5km déjà utilisé ailleurs dans l'app pour l'autorégulation — décision assumée, pas un oubli). m reste à 5 (déjà correct).
+
+### Panel de suggestions exclusif + fermeture au clic extérieur
+2 bugs réels confirmés avant fix (recherche dédiée, pas supposés) :
+- **Cascade** : chaque `ExerciseCard`/`TokenInput` avait son propre state local (`clickTok`/`clickAc`, ou `ac`) sans aucune coordination — cliquer un token pendant qu'un autre panel était ouvert ouvrait les deux en même temps au lieu de fermer le premier.
+- **Aucun backdrop** : contrairement au menu "⋯" (`ActionMenu`, qui a son propre backdrop `onClick={onClose}`), `TokenSuggestionPanel` n'en avait aucun — sur mobile, comme le champ n'est jamais auto-focus (exprès, pour ne pas ouvrir le clavier), rien ne déclenchait jamais de fermeture par blur au clic ailleurs sur la page.
+
+Fix : `openPanelId` unique remonté dans `ExerciseBlockEditor` (id = `line.id` par carte, `"composer"` pour le champ "+ Ajouter une séance"). `isPanelOwner`/`requestPanel`/`releasePanel` threadés en props vers `ExerciseCard` et `TokenInput` (les 2 usages, ligne éditée + composeur) — `requestPanel()` prend possession au moment d'ouvrir, un `useEffect` local ferme silencieusement le panel dès qu'il perd la propriété (`!isPanelOwner`), `releasePanel()` est auto-guardé (`prev === id ? null : prev`) donc toujours sûr à appeler même hors propriété. Backdrop invisible ajouté une seule fois dans `ExerciseBlockEditor` (`position:fixed inset:0`, `zIndex:2147483150` — même valeur que celui d'`ActionMenu`, toujours sous le panel lui-même à `2147483200`), rendu conditionnellement dès qu'un panel est ouvert.
+
+### Vérifié
+`tsc --noEmit` propre après chaque round. **Non testé en clic réel par Claude** — Gildas a explicitement demandé de garder le serveur local à disposition pour tester lui-même plutôt que Claude n'y touche ("je vais tester moi-même laisse le serveur local à disposition"). À confirmer par Gildas.
+
+Déployé en prod le 2026-08-18 (commit `3672ed2`, push direct sur `main`).
