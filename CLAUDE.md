@@ -1834,3 +1834,30 @@ Fix : `openPanelId` unique remonté dans `ExerciseBlockEditor` (id = `line.id` p
 `tsc --noEmit` propre après chaque round. **Non testé en clic réel par Claude** — Gildas a explicitement demandé de garder le serveur local à disposition pour tester lui-même plutôt que Claude n'y touche ("je vais tester moi-même laisse le serveur local à disposition"). À confirmer par Gildas.
 
 Déployé en prod le 2026-08-18 (commit `3672ed2`, push direct sur `main`).
+
+## Bibliothèque vidéo/photo — vraie synchro par nom d'exercice, pas une copie figée (2026-08-18, suite)
+
+Point de départ : question de Gildas sur le comportement réel de `exercise_video_library` (2026-08-14) — modifier/retirer une vidéo sur une occurrence d'un exercice devait se répercuter sur toutes les autres occurrences du même nom, pas juste pré-remplir les nouvelles lignes vides. Ce n'était pas le cas : l'ancien mécanisme (`lookupLibraryVideo`/`saveLibraryVideo`/`deleteLibraryVideo`) ne lisait la bibliothèque qu'une fois, au montage, et **seulement si la ligne n'avait pas déjà de vidéo** (`if (attachments.videoUrl || !exerciseName) return;`) — une fois une ligne remplie (par saisie manuelle ou par cet auto-remplissage), elle restait figée indéfiniment, ignorant tout changement fait ailleurs.
+
+**Décisions prises avec Gildas avant d'exécuter** (`AskUserQuestion`) :
+- Ligne combinée (circuit/complex, ex. "Squat + Fentes") : reste **une seule vidéo pour toute la ligne** (clé bibliothèque = texte combiné entier), pas de synchro par sous-exercice — une démo de complex montre en général l'enchaînement complet, pas chaque mouvement isolé.
+- Retrait d'une vidéo synchronisée : **sans confirmation**, même si ça l'enlève désormais de toutes les occurrences existantes du même nom (pas juste la ligne courante) — cohérent avec le refus déjà acté de confirmer la suppression d'un exercice.
+- **Photo gagne le même mécanisme** que la vidéo — jusqu'ici 100% locale à la ligne, aucune bibliothèque.
+
+### Migration `015_exercise_media_library.sql`
+`exercise_video_library` : `video_url` passe en nullable, nouvelle colonne `photo_url` (nullable aussi), contrainte `check (video_url is not null or photo_url is not null)` — une ligne peut n'avoir que l'un des deux, jamais aucun.
+
+### `ExerciseBlockEditor.tsx` — lecture live au lieu d'un pré-remplissage figé
+`lookup/save/deleteLibraryVideo` → `lookup/save/deleteLibraryMedia` (génériques, paramètre `field: "video_url" | "photo_url"`). L'effet de montage dans `ExerciseCard` **écrase désormais toujours** la valeur locale (vidéo ET photo) avec le contenu de la bibliothèque, au lieu de ne combler que le vide — se déclenche au montage et à chaque changement du nom résolu (édition du texte), jamais en continu. **Limite assumée, documentée dans le code** : deux occurrences du même nom déjà montées simultanément dans le même éditeur (ex. exercice répété 2× dans la même séance, les 2 lignes déjà affichées) ne se poussent pas leurs changements l'une à l'autre tant qu'aucune des deux ne remonte — pas de canal temps réel, jugé inutile pour l'usage réel (les occurrences dupliquées dans une même séance ouverte simultanément sont rares ; le cas courant est "séances différentes, ouvertes à des moments différents", qui fonctionne nativement via un montage frais).
+
+`deleteLibraryMedia` retire un seul champ (vidéo ou photo) — supprime la ligne de bibliothèque entière seulement si l'autre champ est aussi vide (respecte la contrainte CHECK).
+
+**Toutes les fonctions journalisent désormais leurs erreurs Supabase** (`console.error`) — l'ancien code n'a jamais vérifié `.error` sur les appels `.upsert()`/`.update()`/`.delete()`, qui ne lèvent pas d'exception JS en cas d'échec (RLS, contrainte...). C'est très probablement la cause du premier échec constaté en test réel (table `exercise_video_library` totalement vide malgré plusieurs vidéos "ajoutées avec succès" à l'écran sur 2 séances différentes — confirmé en interrogeant directement la base, pas supposé) : l'écriture échouait en silence, sans jamais remonter d'erreur visible.
+
+### Bug de test réel trouvé et corrigé en cours de route : `findNameSpans is not a function`
+Après le fix ci-dessus, Gildas a testé "retirer une vidéo → ouvrir une autre séance fraîchement" et obtenu une erreur runtime (`TypeError: findNameSpans is not a function`) — pas un vrai bug de code (`tsc --noEmit` propre, la fonction est bien exportée depuis le chantier du 2026-08-18 précédent), mais le piège de cache navigateur déjà documenté ailleurs dans ce fichier (bundle webpack périmé), qui a résisté à un simple vidage de service worker + hard reload cette fois. **Fix : arrêt complet du dev server + `rm -rf .next` + redémarrage** (même remède que documenté ailleurs pour ce piège, appliqué directement par Claude puisque le serveur local était bloqué pour Gildas plutôt que de le laisser deviner la commande).
+
+### Vérifié
+`tsc --noEmit` propre après chaque round. **Vérifié en base directement (pas juste à l'écran)** à 3 reprises pendant l'investigation : confirmation que la table était vide malgré des vidéos visuellement "ajoutées" (repéré le bug silencieux), confirmation qu'une ligne "Snatch pull" existait bien après un ajout réussi (fix validé), confirmation qu'elle avait bien disparu après un retrait (fix de suppression validé) — a aussi révélé au passage que Gildas avait testé un cas de ligne combinée ("Snatch pull + snatch", clé différente de "Snatch pull" seule) qui a servi à confirmer le comportement voulu pour les circuits/complex. **Testé en clic réel par Gildas lui-même** (ajout croisé entre 2 séances, retrait croisé) — confirmé fonctionnel après le fix du cache.
+
+Déployé en prod le 2026-08-18 (commit `1c15641`, push direct sur `main`).
