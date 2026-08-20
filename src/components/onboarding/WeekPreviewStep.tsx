@@ -137,19 +137,24 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     });
   }
 
+  /* Wording générique coach/sportif (2026-08-19) — "role" n'est pas encore connu à ce stade pour
+     un visiteur sans ?role= (choisi après week_preview désormais, voir OnboardingFlow.tsx) : plus
+     de ternaire par rôle sur les textes ci-dessous, même principe que sport_2a/level_2a/days_2a.
+     headerTitle garde "Ton programme" (retour explicite de Gildas — "ton" reste l'adresse générique
+     de tout le flow, pas une adresse spécifiquement sportif) plutôt que "Ce programme". headerSub
+     précise que le programme reste modifiable, pour rassurer avant le choix de rôle qui suit
+     immédiatement (pas encore de vrai éditeur accessible à ce stade de l'onboarding). */
   const headerTitle = programFlow
     ? (displayName ?? "Chargement…")
-    : (role === "coach" ? "Le programme de ton premier sportif est prêt." : "Ton programme est prêt.");
+    : "Ton programme est prêt.";
   // Mentionne le sport et les faiblesses réellement choisis, pas une paraphrase générique (retour
   // de Gildas, 2026-08-17). weaknessLabels vide (facultatif) → phrase sans cette partie.
   const sportForSentence = sportLabel || sport;
   const weaknessPart = weaknessLabels?.length ? weaknessLabels.join(" et ") : null;
   const headerSub = programFlow
     ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
-    : (role === "coach"
-        ? (weaknessPart ? `Construit à partir de ${sportForSentence} et ${weaknessPart}.` : `Construit à partir de ${sportForSentence}.`)
-        : (weaknessPart ? `Construit à partir de ${sportForSentence}, ${weaknessPart} et tes jours d'entraînement.` : `Construit à partir de ${sportForSentence} et tes jours d'entraînement.`));
-  const nextLabel = role === "coach" ? "Personnaliser leur programme →" : "Personnaliser ce programme →";
+    : `${weaknessPart ? `Construit à partir de ${sportForSentence}, ${weaknessPart} et tes jours d'entraînement.` : `Construit à partir de ${sportForSentence} et tes jours d'entraînement.`} Personnalisable à tout moment.`;
+  const nextLabel = "Personnaliser ce programme →";
 
   const heroBlock = (
     <div style={{
@@ -159,7 +164,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
     }}>
       <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px" }}>
         {frise}
-        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
+        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 4, color: "#fff" }}>
           {sportEmoji} {headerTitle}
         </div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45 }}>

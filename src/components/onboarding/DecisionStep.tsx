@@ -67,7 +67,7 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
     }}>
       <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px" }}>
         {frise}
-        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
+        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 4, color: "#fff" }}>
           {role === "coach" ? "⚡ Voici comment ThePerfClub simplifie tes décisions de coaching." : "⚡ Voici comment ton programme s'adapte à ta forme."}
         </div>
         {/* Wording "solution" (2026-08-17, retour explicite de Gildas) — répond directement au
@@ -140,7 +140,7 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
           )}
         </div>
         <Actions onNext={onNext} onBack={onBack} nextLabel={nextLabel} />
-        {celebrating && <CelebrationOverlay title="Première séance autorégulée !" benefits={["Moins de blessures", "Plus de performances"]} />}
+        {celebrating && <CelebrationOverlay title="Première séance adaptée à la forme du jour !" benefits={["Moins de blessures", "Plus de performances"]} />}
       </div>
     );
   }

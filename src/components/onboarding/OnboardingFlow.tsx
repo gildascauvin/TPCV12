@@ -57,35 +57,43 @@ type PendingData = {
 interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role }
 
 /* Refonte "zéro problem awareness" (2026-08-17) — remplace l'ancien diagnostic self-report
-   (pain points → score → concept) par une construction directe : rôle → compte → sport+faiblesses
-   (un seul écran, fusionnés) → jours → programme réel + décision d'autorégulation vécue
-   (week_preview_2a/2b, déjà l'aha réel depuis le 2026-08-14) → formule. Signup juste après le
-   rôle dans TOUTES les variantes désormais (ancienne distinction control/test "position du
-   signup" n'a plus lieu d'être — voir discussion funnel du 2026-08-16/17, la position ne change
-   pas le taux de conversion à l'écran compte lui-même, seulement combien de monde l'atteint).
+   (pain points → score → concept) par une construction directe : sport+faiblesses (un seul écran,
+   fusionnés) → jours → programme réel (aperçu éphémère, aucun compte requis) → rôle → décision
+   d'autorégulation vécue (week_preview_2a/2b, déjà l'aha réel depuis le 2026-08-14) → compte →
+   formule. Rôle et Signup repositionnés le 2026-08-18/19 (voir discussion funnel du 2026-08-16→19) :
+   le rôle attend d'avoir montré un programme concret ("Pour moi / Pour mes sportifs" plutôt qu'une
+   catégorisation à froid), le signup attend le vrai AHA (decision_2a/2b) — seul moment où il y a
+   quelque chose de réel à vouloir sauvegarder. Ancienne distinction control/test "position du
+   signup" abandonnée pour tous (plus de bras A/B sur cette question, tranché sans test formel —
+   volume historiquement trop faible pour en tirer une conclusion propre sur ce funnel, voir les 2
+   tests précédents `short-onboarding-signup`/`skip-value-intro`).
    Les anciens écrans (frustration_2a/overload_2a/planning_2a/fatigue_2a, autoreg_score,
    concept_autoreg, profile_recap, goal_2a, et leurs équivalents coach) restent dans le fichier
    (JSX + state) mais ne sont plus référencés par aucun path actif — dead code assumé, même
    principe que context_2b/sport_2b/count_2b/tool_2b déjà toléré ailleurs dans ce fichier. */
 const ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro",
   "sport_2a",
   "level_2a",
   "days_2a",
   "week_preview_2a",
+  "role",
   "wellness_check_2a",
   "decision_2a",
+  "account",
   "paywall_priming", "paywall_form",
   "celebration",
 ];
 const COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro",
   "sport_2a",
   "level_2a",
   "days_2a",
   "week_preview_2b",
+  "role",
   "wellness_check_2b",
   "decision_2b",
+  "account",
   "paywall_priming", "paywall_form",
   "celebration",
 ];
@@ -97,15 +105,19 @@ const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coa
    WeekPreviewStep, qui reçoit aussi la frise en prop pour l'afficher dans ce même bloc sombre. */
 const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
 
-/* Frise 4 étapes (Profil/Programme/Adaptation/Formule, 2026-08-17 — remplace l'ancienne frise à 3
-   phases) — regroupe les steps réels par phase pour calculer une progression persistante.
-   "Adaptation" isole week_preview_2a/2b (l'aha réel : programme + décision d'autorégulation
-   vécue) comme sa propre phase plutôt que de le noyer dans "Programme". Filtré par le `path`
-   actif pour rester cohérent avec les variantes (programme claimé, etc.) qui sautent des steps. */
-const PHASE_1_STEPS: StepId[] = ["role", "account"];
-const PHASE_2_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
-const PHASE_3_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
-const PHASE_4_STEPS: StepId[] = ["paywall_priming", "paywall_form"];
+/* Frise 4 étapes (Programme/Aperçu/Adaptation/Formule, 2026-08-19 — remplace le regroupement
+   Profil/Programme/Adaptation/Formule du 2026-08-17) — regroupe les steps réels par phase pour
+   calculer une progression persistante. Réordonnancement rôle/signup (voir doc des paths
+   ci-dessus) : "role" rejoint la phase "Aperçu" (juste après avoir vu le programme, avant de
+   vivre l'adaptation) et "account" rejoint "Formule" (juste avant le paywall, plus au tout début)
+   — les deux restent de toute façon masqués de la frise elle-même (HIDE_FRISE_STEPS), ce
+   regroupement ne pilote que le calcul de progression affiché sur les écrans adjacents. Filtré
+   par le `path` actif pour rester cohérent avec les variantes (programme claimé, etc.) qui sautent
+   des steps. */
+const PHASE_1_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
+const PHASE_2_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "role"];
+const PHASE_3_STEPS: StepId[] = ["wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
+const PHASE_4_STEPS: StepId[] = ["account", "paywall_priming", "paywall_form"];
 const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "account"];
 
 /* Rendu de la frise, extrait en composant pour pouvoir être affiché soit à sa position par défaut
@@ -113,7 +125,7 @@ const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "accou
 function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct: number[]; dark: boolean }) {
   return (
     <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-      {["Profil", "Programme", "Adaptation", "Formule"].map((label, i) => (
+      {["Programme", "Aperçu", "Adaptation", "Formule"].map((label, i) => (
         <div key={label} style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontSize: 8, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 5,
@@ -150,8 +162,8 @@ function GenerationLoadingScreen({ role }: { role: Role | null }) {
     ? ["Analyse du profil de tes sportifs", "Construction du cycle d'entraînement", "Génération des séances"]
     : ["Analyse de ton profil", "Construction du cycle d'entraînement", "Génération de tes séances"];
   return (
-    <OnboardingBackground variant="dark">
-      <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 260, margin: "40px auto 0" }}>
+    <OnboardingBackground variant="dark" center>
+      <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 260, margin: "0 auto" }}>
         {labels.map((label, i) => {
           const done = doneCount > i;
           return (
@@ -183,8 +195,8 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
   }, []);
   const bars = [42, 64, 88];
   return (
-    <OnboardingBackground variant="dark">
-      <div style={{ textAlign: "center", maxWidth: 280, margin: "24px auto 0" }}>
+    <OnboardingBackground variant="dark" center>
+      <div style={{ textAlign: "center", maxWidth: 280, margin: "0 auto" }}>
         <div style={{ fontSize: 19, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff", marginBottom: 8 }}>
           Et ton programme continue d&apos;évoluer.
         </div>
@@ -214,20 +226,20 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
    sur le rôle). Convergé avec la version courte : plus de distinction control/test, une seule
    forme par rôle. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2a", "wellness_check_2a", "decision_2a", "paywall_priming", "paywall_form", "celebration",
+  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "paywall_priming", "paywall_form", "celebration",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro", "role", "account",
+  "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2b", "wellness_check_2b", "decision_2b", "paywall_priming", "paywall_form", "celebration",
+  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "paywall_priming", "paywall_form", "celebration",
 ];
 
 /* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
-   paths ci-dessus (le signup juste après le rôle est devenu le seul comportement, plus un bras de
-   test), conservées comme alias pour ne pas toucher getPath()/assignedVariant qui continuent de
-   résoudre un bras sans effet observable. */
+   paths ci-dessus (plus qu'une seule position de signup, sans bras de test — voir doc des paths
+   plus haut), conservées comme alias pour ne pas toucher getPath()/assignedVariant qui continuent
+   de résoudre un bras sans effet observable. */
 const SHORT_ATHLETE_PATH: StepId[] = ATHLETE_PATH;
 const SHORT_COACH_PATH: StepId[] = COACH_PATH;
 const SHORT_PROGRAM_ATHLETE_PATH: StepId[] = PROGRAM_ATHLETE_PATH;
@@ -1154,12 +1166,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const [currentTool, setCurrentTool]             = useState(pendingData?.currentTool || "");
   const [trainingStyle, setTrainingStyle]         = useState(pendingData?.trainingStyle || "");
 
-  // Coach : days_2a ne fait plus choisir de jours (remplacé par "comment s'entraînent-ils", voir
-  // plus bas) — 4 séances/semaine par défaut pour alimenter generateAndAssignProgram() à
-  // profile_recap sans question supplémentaire (décision de Gildas, 2026-08-14). Lun/Mar/Jeu/Ven.
-  useEffect(() => {
-    if (role === "coach") setTrainingDays([1, 2, 4, 5]);
-  }, [role]);
+  /* Ancien fallback "coach → 4 jours par défaut, pas de sélecteur" (2026-08-14) supprimé le
+     2026-08-19 : déjà mort en pratique depuis la 3e itération du 2026-08-17 (days_2a redemande de
+     vrais jours aux deux rôles, voir sa doc plus bas — "ce choix réel le remplace"), mais inoffensif
+     tant que "role" restait choisi AVANT "days_2a" (l'effet ne se redéclenchait plus après coup).
+     Depuis le repositionnement de "role" après "days_2a" (voir doc des paths en tête de fichier),
+     cet effet serait redevenu actif et aurait écrasé les vrais jours choisis par un coach dès que
+     son rôle serait confirmé — supprimé plutôt que réordonné, puisqu'il ne sert plus à rien. */
 
   /* account */
   const [name, setName]         = useState(pendingData?.name || "");
@@ -1332,18 +1345,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (pendingData?.role && !initialRole) {
       /* Continuation Google (pendingData) : ce montage démarre à stepIdx=0, donc value_intro se
          déclenche normalement (effet ci-dessus) — mais l'effet plus bas (deps [googleInitDone])
-         saute directement après "account" sans jamais re-render "role"/"account" sur cette passe,
-         puisque ces réponses sont déjà connues. Résultat : le funnel ordonné value_intro→Rôle→
-         Formulaire compte→Compte créé ne peut jamais se chaîner pour ces sessions (repéré sur un
-         coach payant réel, mezghadsport@gmail.com, 2026-07-28 — reproductible pour toute
-         inscription via Google qui redémarre après le redirect OAuth). Même principe que le
-         synthétique ?role= plus haut : on rejoue les 2 events manqués juste après value_intro,
-         avant que account_created (async, ~800ms plus tard dans l'effet pendingData/userId) ne
-         parte. */
-      const roleProps = { step: "role", step_index: 0, role: pendingData.role, mode: isRegisterMode ? "register" : "auth" };
+         saute directement après "account" sans jamais re-render ce step sur cette passe, puisque
+         cette réponse est déjà connue (le clic "Continuer avec Google" a eu lieu SUR l'écran
+         "account" réel, dans la session précédant le redirect OAuth). Résultat : le funnel ordonné
+         ...→Formulaire compte→Compte créé ne peut jamais se chaîner pour ces sessions (repéré sur
+         un coach payant réel, mezghadsport@gmail.com, 2026-07-28). On rejoue l'event manqué juste
+         après value_intro, avant que account_created (async, ~800ms plus tard dans l'effet
+         pendingData/userId) ne parte.
+         Depuis le repositionnement de "role" après week_preview (2026-08-19, voir doc des paths en
+         tête de fichier), "role" n'est PLUS un step sauté par ce mécanisme — il a été réellement
+         vu et cliqué dans la session AVANT le redirect OAuth (contrairement à l'ancien ordre, où
+         "role" et "account" étaient adjacents et tous deux sautés ensemble) : son event
+         onboarding_role_viewed part déjà normalement via l'effet générique plus haut, pendant
+         cette session-là. Rejouer un 2e "role_viewed" synthétique ici le compterait en double —
+         seul "account" reste synthétique. */
       const accountProps = { step: "account", step_index: 0, role: pendingData.role, mode: isRegisterMode ? "register" : "auth" };
-      posthog.capture("onboarding_step_viewed", roleProps);
-      posthog.capture("onboarding_role_viewed", roleProps);
       posthog.capture("onboarding_step_viewed", accountProps);
       posthog.capture("onboarding_account_viewed", accountProps);
     }
@@ -1351,24 +1367,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, []);
 
 
-  /* Le Signup (step "account") arrive avant sport/faiblesses/jours dans tous les paths — c'est ici
-     que le profil est complété (sessions, wellness baseline, démo coach, génération réelle du
-     programme). Déclenché à l'entrée de week_preview_2a/2b (2026-08-17 — remplace l'ancien
-     déclenchement à l'entrée de profile_recap, retiré de tous les paths actifs) : c'est le premier
-     step qui a réellement besoin du programme généré, et le dernier step d'input avant lui (days_2a
-     ou sport_2a côté coach) vient de finir de collecter sport/faiblesses/jours. Pour le rôle coach,
-     la branche coach de completeProfile() gère déjà le cas "programme claimé" (sport/niveau déduits
-     du claim, faiblesses/jours collectés via les nouveaux écrans). */
-  useEffect(() => {
-    if ((currentStep !== "week_preview_2a" && currentStep !== "week_preview_2b") || profileCompleteGuardRef.current) return;
-    profileCompleteGuardRef.current = true;
-    const uid = userId || newUserId;
-    if (!uid) return;
-    (async () => {
-      await completeProfile(uid);
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep]);
+  /* Le Signup (step "account") arrive désormais APRÈS week_preview/role/wellness_check/decision
+     (2026-08-19, voir doc des paths en tête de fichier) — sport/faiblesses/jours/rôle sont donc
+     déjà connus au moment où le compte est créé, plus besoin d'attendre un step ultérieur pour
+     déclencher la vraie complétion de profil (sessions, wellness baseline, démo coach, génération
+     réelle du programme). completeProfile() est appelée directement, une seule fois, juste après
+     createAccount() dans handleFinish() (les 2 branches : nouvelle inscription et reprise
+     "auth mode") et dans l'effet d'init de la continuation Google — gardée par profileCompleteGuardRef
+     à chacun de ces 3 points d'appel plutôt que par un effet séparé sur currentStep. Pour le rôle
+     coach, la branche coach de completeProfile() gère déjà le cas "programme claimé" (sport/niveau
+     déduits du claim, faiblesses/jours collectés via les écrans dédiés). Ne s'exécute jamais pour
+     INVITE_ATHLETE_PATH (aucun diagnostic sur ce chemin) — gardé par un simple `path.includes(...)`
+     aux 3 points d'appel, qui reproduit exactement le gate de l'ancien effet (`currentStep ===
+     "week_preview_2a"/"week_preview_2b"`, jamais atteint sur ce path). */
 
   /* Depuis le réordonnancement Paywall → Célébration → Activation, la dernière étape du path
      est désormais wellness_q/wellness_reveal (sportif) ou invite_team (coach) — plus celebration.
@@ -1411,8 +1422,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   }
 
-  /* Même principe qu'advanceMaybeGenerating(), pour la transition entre le programme (pur) et
-     l'écran de décision — voir ReconductionTeaserScreen. Appelée par le onNext de week_preview_2a/2b. */
+  /* Même principe qu'advanceMaybeGenerating(), pour la transition entre le choix du rôle et
+     l'écran de décision — voir ReconductionTeaserScreen. Générique (regarde path[stepIdx+1], pas
+     le step courant) : fonctionne sans changement depuis que "role" (pas "week_preview_2a/2b")
+     précède directement wellness_check_2a/2b (2026-08-19) — appelée par le clic sur une carte de
+     l'écran "role". */
   function advanceMaybeReconduction() {
     if (path[stepIdx + 1] === "wellness_check_2a" || path[stepIdx + 1] === "wellness_check_2b") {
       setReconLoading(true);
@@ -1650,9 +1664,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           }
         }
         if (!data.session) {
+          /* Pas de session active tant que l'email n'est pas confirmé — completeProfile() écrit
+             via le client Supabase normal (RLS auth.uid()), une tentative ici échouerait en
+             silence sans session (voir feedback_supabase_silent_write_errors). Comportement déjà
+             identique avant ce chantier : l'ancien déclenchement à l'entrée de week_preview_2a/2b
+             n'était de toute façon jamais atteint dans ce cas (retour anticipé au même endroit,
+             juste après createAccount()) — pas une régression introduite ici. */
           setEmailSent(true);
           setSaving(false);
           return;
+        }
+        if (!profileCompleteGuardRef.current && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+          profileCompleteGuardRef.current = true;
+          await completeProfile(uid);
         }
         supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
@@ -1661,6 +1685,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         next();
       } else {
         await createAccount(userId!);
+        if (!profileCompleteGuardRef.current && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+          profileCompleteGuardRef.current = true;
+          await completeProfile(userId!);
+        }
         setSaving(false);
         next();
       }
@@ -1839,6 +1867,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      s'exécute. */
   useEffect(() => {
     if (!googleInitDone) return;
+    /* completeProfile() ici plutôt que dans init() ci-dessus (deps []) — même raison que le saut
+       de stepIdx juste en dessous : ce useEffect relit path/userId à jour au moment où il
+       s'exécute, alors que la closure de init() est figée au tout premier render, avant que
+       hasClaimedProgram ait pu résoudre. userId est garanti non-null ici (googleInitDone ne passe
+       à true qu'après la fin de init(), qui a déjà créé le compte). */
+    if (!profileCompleteGuardRef.current && userId && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+      profileCompleteGuardRef.current = true;
+      completeProfile(userId);
+    }
     /* next() suppose un stepIdx figé à 0 et avance d'une seule position — ça atterrissait
        systématiquement sur "role" (juste après value_intro) depuis que "account" a été
        repositionné plus tôt dans le path (variantes A/B, voir refonte onboarding v2). On saute
@@ -1989,26 +2026,31 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {showFrise && <ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark={isDarkStep} />}
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
-        {/* ── ROLE — restauré le 2026-08-06 (supprimé le 31/07, fusionné dans value_intro).
-            Écran séparé, style d'origine (cartes) restauré tel quel : mesuré à 63-68% de
-            clic-through avant sa suppression, contre 55-56% pour le CTA fusionné à 2 cartes sur
-            value_intro — et surtout, un rôle demandé ici convertit nettement mieux qu'un rôle
-            pré-rempli silencieusement via ?role= (65,0% vs 34,6%, même canal programme claimé,
-            même semaine). Ne s'affiche que si roleChosen est encore faux à ce stade (une
-            continuation Google avec pendingData.role saute ce step normalement, puisqu'il est
-            absent de son path effectif à ce point — voir googleInitDone plus bas). */}
+        {/* ── ROLE — repositionné le 2026-08-19 (voir doc des paths en tête de fichier) : n'arrive
+            plus juste après value_intro, mais juste après avoir vu le programme (week_preview),
+            avant de vivre l'adaptation (wellness_check/decision) — l'utilisateur choisit comment
+            utiliser CE qu'il vient de voir, pas comment se catégoriser à froid. Wording changé en
+            conséquence ("Pour moi"/"Pour mes sportifs", contextuel au programme déjà généré) —
+            mécanique de cartes inchangée (toujours un vrai choix explicite, jamais présélectionné :
+            l'enjeu prix 9€/49€ reste le même qu'avant ce repositionnement). L'avance après clic
+            passe par advanceMaybeReconduction() (pas next() ni nextAfterChoice) pour jouer la
+            transition "reconduction" juste avant wellness_check, exactement comme le faisait
+            auparavant le onNext de week_preview — voir la doc d'advanceMaybeReconduction(). */}
         {currentStep === "role" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>Essayer ThePerfClub en tant que</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.55, marginBottom: 24 }}>
-              On personnalise ton expérience.
-            </div>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 24 }}>Pour qui construis-tu ce programme ?</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
               {[
-                { r: "athlete" as Role, icon: "🏋️", label: "Sportif",  sub: "Je suis mon propre entraînement", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
-                { r: "coach"   as Role, icon: "📋", label: "Coach",    sub: "Je gère des sportifs", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
+                { r: "athlete" as Role, icon: "🏋️", label: "Pour moi",         sub: "Je veux adapter mes séances à mon niveau de forme.", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
+                { r: "coach"   as Role, icon: "📋", label: "Pour mes sportifs", sub: "Je veux ajuster les séances de mes sportifs.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
               ].map(({ r, icon, label, sub, badgeBg }) => (
-                <div key={r} onClick={() => nextAfterChoice(() => { setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r }); if (abEligible && !assignedVariant) setAssignedVariant("control"); })}
+                <div key={r} onClick={() => {
+                  if (advancingRef.current) return;
+                  advancingRef.current = true;
+                  setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r });
+                  if (abEligible && !assignedVariant) setAssignedVariant("control");
+                  setTimeout(() => advanceMaybeReconduction(), 300);
+                }}
                   style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "18px 18px", border: roleChosen && role === r ? "2px solid #d44000" : "1.5px solid rgba(0,0,0,.08)", background: roleChosen && role === r ? "rgba(212,64,0,.05)" : "#fff", transition: "all .15s", boxShadow: roleChosen && role === r ? "none" : "0 2px 10px rgba(0,0,0,.04)" }}>
                   <div style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>{icon}</div>
                   <div style={{ flex: 1 }}>
@@ -2129,14 +2171,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {/* ── SPORT — de nouveau séparé des faiblesses (2026-08-17, 2e itération) : le retour de
              Gildas sur la fusion précédente ("on voit pas les faiblesses en mobile en bas") a
              montré que l'écran combiné dépassait l'écran sur mobile. Redevient sport seul, avec
-             l'auto-advance au tap d'une carte (comme avant la fusion). ── */}
+             l'auto-advance au tap d'une carte (comme avant la fusion).
+             Wording générique coach/sportif depuis le 2026-08-19 (plus de ternaire par rôle sur ce
+             step, ni sur level_2a/days_2a/WeekPreviewStep juste après) — "role" n'est plus connu à
+             ce stade, choisi après week_preview désormais (voir doc des paths en tête de fichier).
+             "role" reste utilisé plus bas dans ce fichier (frise, décision, wellness_check...), ce
+             n'est que sur ces écrans d'input pré-rôle que le ternaire a été retiré. ── */}
         {currentStep === "sport_2a" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Le sport de tes sportifs ?" : "Ton sport principal ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
+              Pour quel sport construisons-nous ce programme ?
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              {role === "coach" ? "On génère les séances de ton premier programme." : "On génère des séances adaptées à ta discipline."}
+              Un programme personnalisé, spécifique à ta discipline.
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
@@ -2188,10 +2235,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              sport déjà connu (choisi sur sport_2a, ou déduit d'un programme claimé). ── */}
         {currentStep === "level_2a" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Le point faible à travailler pour eux ?" : "Ton point faible en priorité ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
+              Quelle priorité donner à ce programme ?
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On ajoute les bons exercices à ton programme pour ça — jusqu&apos;à 2, facultatif.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>On adapte les séances pour cibler ces faiblesses — jusqu&apos;à 2, facultatif.</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
               {weaknessOptions.map(w => (
                 <Chip key={w.key} label={w.label} checkmark selected={weaknesses.includes(w.key)}
@@ -2251,21 +2298,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── 2A-5. JOURS D'ENTRAÎNEMENT (sportif) / ENTRAÎNEMENT ÉQUIPE (coach) — même step ID
-             days_2a. Côté coach, plus de sélecteur de jours : 4 séances/semaine par défaut (voir
-             l'effet qui pose trainingDays au choix du rôle), cette étape sert le contraste de
-             profile_recap juste après. ── */}
-        {/* ── JOURS D'ENTRAÎNEMENT — de nouveau demandé au coach aussi (2026-08-17, 3e itération,
-             retour explicite de Gildas) : réutilise le même sélecteur que le sportif, plus la vieille
-             question "Comment tes sportifs s'entraînent-ils" (self-report, retirée avec le reste du
-             diagnostic — voir refonte "zéro problem awareness" en tête de fichier). Ne pilote plus
-             le fallback [1,2,4,5] posé par l'effet [role] : ce choix réel le remplace. ── */}
+        {/* ── JOURS D'ENTRAÎNEMENT — même step ID days_2a pour les deux rôles, même sélecteur.
+             Wording générique coach/sportif depuis le 2026-08-19 (voir sport_2a/level_2a plus haut,
+             même principe) : "role" n'est pas encore connu à ce stade (choisi après week_preview
+             désormais), donc plus de ternaire par rôle sur ce step non plus. ── */}
         {currentStep === "days_2a" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10 }}>
-              {role === "coach" ? "Sur quels jours entraînes-tu tes sportifs ?" : "Quels sont tes jours d'entraînement ?"}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
+              Quels jours d&apos;entraînement pour ce programme ?
             </div>
-            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>Dernière info avant de générer {role === "coach" ? "leur programme réel" : "ton programme réel"}.</div>
+            <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 22 }}>Dernière étape avant de générer ce programme.</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 8 }}>
               {([
                 { dow: 1, full: "Lundi" },
@@ -2609,11 +2651,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         {/* ── 3. ACCOUNT ── */}
         {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (() => {
-          /* Position early du signup devenue la seule forme (2026-08-17, voir refonte "zéro
-             problem awareness" en tête de fichier) — plus de "bilan"/Score à promettre à ce
-             stade (rien n'est encore construit), le cadrage vend la construction à venir plutôt
-             qu'un résultat déjà là. `assignedVariant` continue de se résoudre (tagging analytics
-             inchangé) mais ne pilote plus ce wording.
+          /* Repositionné le 2026-08-19 (voir doc des paths en tête de fichier) : arrive désormais
+             après decision_2a/2b (l'AHA vécu), plus juste après le rôle — le signup demande de
+             sauvegarder ce qui vient d'être construit et décidé, pas de s'inscrire à froid pour
+             débloquer un "bilan" pas encore construit. `assignedVariant` continue de se résoudre
+             (tagging analytics inchangé) mais ne pilote plus ce wording (aucun A/B formel sur la
+             position du signup — tranché sans test, voir la doc des paths).
 
              Refonte visuelle 2026-08-18 (POC signup v3, theperfclub-signup-v3.html) : plus
              d'eyebrow pill ni de frise au-dessus (retirée via HIDE_FRISE_STEPS). Champs regroupés
@@ -2621,15 +2664,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              réassurance = la même bande de confiance que paywall_priming (PAYWALL_AVATARS,
              réutilisée telle quelle plutôt que dupliquée), placée sous le titre — avant la carte,
              comme le "social-proof" du POC. Retirée de value_intro le même jour (redondante avec
-             celle-ci, 2 écrans plus tôt).
+             celle-ci).
 
              Titre = ligne de positionnement identitaire ("Le programme de ceux qui...", benchmark
-             Claude "l'IA de ceux qui résolvent des problèmes"), pas une promesse produit —
-             délibérément différent du hook "pas l'inverse" de value_intro (même écran + role entre
-             les deux, un titre qui l'aurait repris aurait juste dilué la même accroche). */
+             Claude "l'IA de ceux qui résolvent des problèmes"), pas une promesse produit — reste
+             pertinent maintenant que ce step arrive après l'AHA plutôt que juste après le rôle
+             (plus de risque de diluer le hook de value_intro, les deux sont maintenant séparés par
+             tout le reste du flow). */
           return (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16, lineHeight: 1.2 }}>
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16, lineHeight: "normal" }}>
               {role === "coach" ? "Le système d'entraînement des coachs professionnels." : "Le programme de ceux qui refusent de stagner."}
             </div>
 
@@ -2745,7 +2789,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={advanceMaybeReconduction} onBack={canGoBack ? goBack : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {currentStep === "wellness_check_2a" && (
@@ -2764,7 +2808,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={advanceMaybeReconduction} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {currentStep === "wellness_check_2b" && (

@@ -69,8 +69,8 @@ export default function WellnessCheckStep({ demoSession: hardest, role, frise, o
     }}>
       <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px" }}>
         {frise}
-        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 4, color: "#fff" }}>
-          {role === "coach" ? "La forme de tes sportifs compte autant que le programme." : "Ta forme compte autant que le programme."}
+        <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 4, color: "#fff" }}>
+          {role === "coach" ? "La forme des sportifs compte autant que ton programme." : "Ta forme compte autant que ton programme."}
         </div>
         {/* Wording "problème" (2026-08-17, raccourci après retour de Gildas — "c'est trop long") —
             constat resserré à l'essentiel : sommeil/stress/courbatures, jamais pris en compte par
@@ -117,7 +117,7 @@ function WellnessCard({ athleteName }: { athleteName?: string }) {
       padding: "16px 17px", color: "#fff", boxShadow: "0 14px 30px rgba(0,0,0,.28)",
     }}>
       <div style={{ fontSize: 10.5, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255,255,255,.55)", marginBottom: 9 }}>
-        {athleteName ? `Forme de ${athleteName}` : "Ta forme"}
+        {athleteName ? `Forme de ${athleteName}` : "Ta forme aujourd'hui"}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12.5, marginBottom: 12 }}>
         <MetricRow label="😴 Sommeil" value="Mauvais" />
