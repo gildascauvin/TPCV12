@@ -27,6 +27,7 @@ import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import type { Session, WellnessDaily, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
@@ -38,14 +39,14 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; initialDate?: string; }
+interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, initialDate }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus, hasCoach);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -342,6 +343,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
   return (
     <>
+      {!isActive && <UnsavedBanner onAction={() => requireSubscription(() => {})} />}
+
       <CalendarHeader
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
@@ -357,7 +360,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         currentWeek={activeProgramWeek}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
-        onReconduire={() => requireSubscription(() => setShowReconduire(true))}
+        onReconduire={() => setShowReconduire(true)}
       />
 
       <div ref={weekGridRef} data-tour="week-sessions">
@@ -448,16 +451,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     key={s.id}
                     session={s}
                     viewerRole="athlete"
-                    onComplete={(sess) => requireSubscription(() => handleTerminer(sess))}
-                    onEdit={(sess) => requireSubscription(() => setEditing(sess))}
-                    onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
+                    onComplete={(sess) => handleTerminer(sess)}
+                    onEdit={(sess) => setEditing(sess)}
+                    onDuplicate={(sess) => setDuplicating(sess)}
                   />
                 )}
-                onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
-                onComplete={(s) => requireSubscription(() => handleTerminer(s))}
-                onEdit={(s) => requireSubscription(() => setEditing(s))}
-                onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
-                onWellness={() => requireSubscription(() => setShowWellness(true))}
+                onAddSession={(d) => setAddingDate(d)}
+                onComplete={(s) => handleTerminer(s)}
+                onEdit={(s) => setEditing(s)}
+                onDuplicate={(s) => setDuplicating(s)}
+                onWellness={() => setShowWellness(true)}
               />
               </DroppableDay>
               </div>
@@ -554,7 +557,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                             return (
                               <div
                                 key={s.id}
-                                onClick={e => { e.stopPropagation(); requireSubscription(() => setEditing(s)); }}
+                                onClick={e => { e.stopPropagation(); setEditing(s); }}
                                 style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
                               >
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
@@ -574,7 +577,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                           )}
                           {inMonth && (
                             <div
-                              onClick={e => { e.stopPropagation(); requireSubscription(() => setAddingDate(dstr)); }}
+                              onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
                               style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
                             >
                               +
@@ -594,15 +597,17 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         </div>{/* animation wrapper */}
       </div>{/* weekGridRef */}
 
-      {/* Modals */}
+      {/* Modals — ouverture toujours libre (voir onClick plus haut), seule la persistance réelle
+          (onSave/onConfirm/onDuplicate/onDelete) est gatée derrière requireSubscription()
+          (2026-08-19). */}
       {addingDate && (
-        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={addSession} onClose={() => setAddingDate(null)} />
+        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={data => requireSubscription(() => addSession(data))} onClose={() => setAddingDate(null)} />
       )}
       {showReconduire && (
         <ReconduireModal
           daySlots={dates.map(d => ({ sessions: sessions.filter(s => s.date === format(d, "yyyy-MM-dd")) }))}
           onClose={() => setShowReconduire(false)}
-          onConfirm={async (weeksOut) => {
+          onConfirm={weeksOut => requireSubscription(async () => {
             const inserts = weeksOut.flatMap((rows, w) => rows.map(r => ({
               user_id: userId,
               name: r.name,
@@ -616,7 +621,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
             setShowReconduire(false);
             if (inserts.length) handleDateChange(inserts[0].date);
             router.refresh();
-          }}
+          })}
         />
       )}
       {adjustCtx && (
@@ -628,7 +633,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
           advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6)}
           onClose={() => setAdjustCtx(null)}
-          onConfirm={async (pct) => {
+          onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
             const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
             const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", adjustCtx.session.id).select().single();
@@ -636,25 +641,25 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
             setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
             setDecisionTick(t => t + 1);
             setAdjustCtx(null);
-          }}
+          })}
         />
       )}
       {completing && (
-        <CompleteModal session={completing} onSave={saveComplete} onClose={() => setCompleting(null)} />
+        <CompleteModal session={completing} onSave={data => requireSubscription(() => saveComplete(data))} onClose={() => setCompleting(null)} />
       )}
       {editing && (
         <AddSessionModal
           date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"}
-          onSave={saveEdit}
-          onDelete={async () => deleteSession(editing)}
+          onSave={data => requireSubscription(() => saveEdit(data))}
+          onDelete={() => requireSubscription(() => deleteSession(editing))}
           onClose={() => setEditing(null)}
         />
       )}
       {duplicating && (
-        <DuplicateModal session={duplicating} onDuplicate={duplicateSession} onClose={() => setDuplicating(null)} />
+        <DuplicateModal session={duplicating} onDuplicate={date => requireSubscription(() => duplicateSession(date))} onClose={() => setDuplicating(null)} />
       )}
       {showWellness && (
-        <WellnessModal date={todayStr} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={todayStr} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showLibrary && (
         <ProgramLibraryPage
@@ -663,6 +668,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           activeProgram={activeProgram}
           activeProgramWeek={activeProgramWeek}
           requireSubscription={requireSubscription}
+          isActive={isActive}
           onClose={async () => { setShowLibrary(false); await fetchActiveProgram(); router.refresh(); }}
         />
       )}

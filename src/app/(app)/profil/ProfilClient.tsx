@@ -7,6 +7,7 @@ import EditProfileModal from "@/components/profile/EditProfileModal";
 import NotificationToggle from "@/components/profile/NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import type { Profile, Session, WellnessDaily, Objective } from "@/types";
 
 const OBJ_LABELS: Record<string, string> = {
@@ -36,9 +37,10 @@ interface Props {
   avgRpe: number | null;
   avgWellness: number | null;
   allBehaviors: string[];
+  hasActiveCoach: boolean;
 }
 
-export default function ProfilClient({ profile: initialProfile, email, doneSessions, avgRpe, avgWellness, allBehaviors }: Props) {
+export default function ProfilClient({ profile: initialProfile, email, doneSessions, avgRpe, avgWellness, allBehaviors, hasActiveCoach }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
@@ -49,6 +51,8 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
   const initials = profile.name
     ? profile.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?";
+
+  const isActive = profile.subscription_status === "athlete" || profile.subscription_status === "coach" || (profile.subscription_status === "free" && hasActiveCoach);
 
   async function handleSaveProfile(data: { name: string; sport: string; objective: Objective; freq_target: number }) {
     const { data: saved } = await supabase.from("profiles").update(data).eq("user_id", profile.user_id).select().single();
@@ -67,6 +71,12 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
 
   return (
     <>
+      {!isActive && (
+        <UnsavedBanner
+          message="Mode démo · débloque l'accès complet à ThePerfClub."
+          onAction={() => setPaywallOpen(true)}
+        />
+      )}
       <div className="page-shell">
 
         {/* Header */}

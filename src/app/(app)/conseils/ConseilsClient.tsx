@@ -1,15 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
+import PaywallModal from "@/components/paywall/PaywallModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
+import { usePaywall } from "@/hooks/usePaywall";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
+import type { SubscriptionStatus } from "@/types";
 
 function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
   const MIN_DAYS = 10;
@@ -124,10 +130,12 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   );
 }
 
-export default function ConseilsClient({ initialData }: { initialData: ConseilsData }) {
+export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean }) {
+  const router = useRouter();
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
 
   async function handleDateChange(date: string) {
     setLoading(true);
@@ -169,6 +177,12 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
 
   return (
     <>
+      {!isActive && (
+        <UnsavedBanner
+          message="Mode démo · débloque le suivi complet de ta récupération."
+          onAction={() => setPaywallStep("priming")}
+        />
+      )}
       <CalendarHeader
         selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap}
         extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
@@ -360,6 +374,15 @@ export default function ConseilsClient({ initialData }: { initialData: ConseilsD
         )}
 
       </div>
+      {paywallStep === "priming" && (
+        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+      )}
+      {paywallStep === "paywall" && (
+        <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
+          onClose={() => setPaywallStep("priming")}
+          onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
+      )}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { coachIsPaying } from "@/lib/access";
 import TodayClient from "./TodayClient";
 import { format } from "date-fns";
 import { redirect } from "next/navigation";
@@ -21,7 +22,9 @@ export default async function TodayPage() {
     supabase.from("program_assignments").select("start_date, programs(name)").eq("user_id", user!.id).eq("status", "active").maybeSingle(),
   ]);
 
-  const hasCoach = !!(profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id;
+  const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
+  const hasCoach = !!invitedByCoachId;
+  const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
 
   type ActiveProgram = { start_date: string; name: string } | null;
   const programsData = activeAssignment?.programs;
@@ -41,6 +44,7 @@ export default async function TodayPage() {
       initialSessions={sessions ?? []}
       subscriptionStatus={profileCheck?.subscription_status ?? "free"}
       hasCoach={hasCoach}
+      hasActiveCoach={hasActiveCoach}
       activeProgram={activeProgram}
     />
   );

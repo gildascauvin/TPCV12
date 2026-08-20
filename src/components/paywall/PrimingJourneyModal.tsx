@@ -32,34 +32,27 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     fontSize: 14, fontWeight: 900, cursor: "pointer",
     boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10,
   };
-  const skipBtn: React.CSSProperties = {
-    width: "100%", background: "none", border: "none",
-    fontSize: 12, color: "#8a8f94", cursor: "pointer", padding: "4px 0",
-  };
 
   return (
-    <div onClick={(e) => { if (allowDismiss && e.target === e.currentTarget) onDismiss(); }} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
-      <div style={{ position: "relative", background: "#fff", borderRadius: 30, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
-        {allowDismiss && (
-          <button onClick={onDismiss} style={{ position: "absolute", top: 14, right: 14, width: 30, height: 30, borderRadius: "50%", background: "rgba(0,0,0,.06)", border: "none", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
-        )}
+    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto" }}>
+      {allowDismiss && (
+        <button onClick={onDismiss} style={{ position: "fixed", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
+      )}
 
-        <div style={{ overflowY: "auto", padding: 28 }}>
+      <div style={{ minHeight: "100%", display: "flex", justifyContent: "center" }}>
+        <div style={{ width: "100%", maxWidth: 640, padding: "36px 20px 140px" }}>
           <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} />
         </div>
+      </div>
 
-        <div style={{ padding: "20px 28px 20px", background: "#fff", flexShrink: 0 }}>
+      <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: "#f1f0ee", padding: "16px 20px 20px" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
             {PAYWALL_CTA_LABEL[mode]}
           </button>
-          <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600, marginBottom: allowDismiss ? 4 : 0 }}>
+          <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
             {PRICING_PRIMING_GUARANTEE_CAPTION}
           </div>
-          {allowDismiss && (
-            <button onClick={() => { posthog.capture("paywall_skipped", { plan: mode, billing }); onDismiss(); }} style={skipBtn}>
-              Accéder sans abonnement →
-            </button>
-          )}
         </div>
       </div>
     </div>

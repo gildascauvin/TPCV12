@@ -243,12 +243,15 @@ interface Props {
   assignmentCount?: number;
   userName?: string;
   requireSubscription?: (fn: () => void) => void;
+  /* Vue au-delà de S1 gatée (2026-08-19) — voir doc dans ProgramLibraryPage.tsx. Absent = jamais
+     floué (repli permissif). */
+  isActive?: boolean;
   onSaveToLibrary: (name: string, template: ProgramTemplate) => Promise<void>;
   onSaveAndAssign: (name: string, template: ProgramTemplate) => Promise<void>;
   onBack: () => void;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
@@ -260,6 +263,11 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const week = template.weeks[weekIdx];
+  /* Flou + overlay au-delà de S1 pour un compte non actif — même pattern que /p/[id]
+     (PublicProgramView.tsx) : le contenu réel reste rendu (pas de troncature serveur), juste
+     flouté/inerte visuellement, avec un CTA par-dessus. Les onglets de semaine restent cliquables
+     (pas de raison de les cacher, seul le contenu se floute une fois dessus). */
+  const weekLocked = isActive === false && weekIdx > 0;
   const weekAvgLoads = template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
   const maxAvgLoad = Math.max(...weekAvgLoads, 0.01);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -435,7 +443,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 <span onClick={() => setWeekIdx(i)} style={{ fontSize: 11, fontWeight: isActive ? 800 : 500, color: isActive ? "#171b1f" : "#8a8f94", cursor: "pointer", padding: "0 4px" }}>S{i + 1}</span>
                 {isActive && template.weeks.length > 1 && (
                   <button
-                    onClick={e => { e.stopPropagation(); gate(() => deleteWeek(i)); }}
+                    onClick={e => { e.stopPropagation(); deleteWeek(i); }}
                     title="Supprimer cette semaine"
                     style={{ width: 14, height: 14, borderRadius: "50%", border: "none", background: "rgba(212,64,0,.15)", color: "#d44000", fontSize: 9, fontWeight: 900, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, lineHeight: 1, flexShrink: 0 }}
                   >×</button>
@@ -446,7 +454,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
         })}
         <div style={{ flex: 1, minWidth: 12 }} />
         <button
-          onClick={() => gate(() => setShowReconduire(true))}
+          onClick={() => setShowReconduire(true)}
           style={{
             margin: "0 0 12px", padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)",
             cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11,
@@ -464,19 +472,25 @@ export default function ProgramBuilderModal({ programName: initialName, template
         </div>
       )}
 
-      {/* 7-column grid — same layout as planning */}
+      {/* 7-column grid — same layout as planning. Flouté au-delà de S1 pour un compte non actif
+          (même pattern que /p/[id]/PublicProgramView.tsx : contenu réel toujours rendu, juste
+          flouté/inerte, overlay CTA par-dessus — jamais de troncature côté données). */}
+      <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div style={{
-        flex: 1,
         display: "grid",
         gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",
         overflowY: "auto",
+        height: "100%",
         padding: "14px 16px 18px",
         scrollSnapType: "x proximity",
         scrollbarWidth: "thin",
+        filter: weekLocked ? "blur(7px)" : "none",
+        pointerEvents: weekLocked ? "none" : "auto",
+        userSelect: weekLocked ? "none" : "auto",
       }}>
         {DAYS.map((day, dayIdx) => {
           const daySessions = (week[day] ?? []) as SessionTemplate[];
@@ -519,19 +533,19 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 {daySessions.map((s, sIdx) => (
                   <DraggableProgramSession
                     key={sIdx} day={day} sIdx={sIdx} session={s}
-                    onClick={() => gate(() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx }))}
+                    onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
                   />
                 ))}
                 <div style={{ display: "flex", gap: 5 }}>
                   <div
-                    onClick={() => gate(() => addSession(day))}
+                    onClick={() => addSession(day)}
                     style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
                   >
                     + Ajouter une séance
                   </div>
                   {daySessions.length > 0 && (
                     <button
-                      onClick={() => gate(() => setDuplicateDay({ weekIdx, day }))}
+                      onClick={() => setDuplicateDay({ weekIdx, day })}
                       title="Dupliquer"
                       style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                     >⎘</button>
@@ -545,6 +559,18 @@ export default function ProgramBuilderModal({ programName: initialName, template
         })}
       </div>
       </DndContext>
+      {weekLocked && (
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
+            <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
+            <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Visualise et personnalise l&apos;intégralité du programme généré, pas seulement la première semaine.</div>
+            <button onClick={() => gate(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+              Débloquer →
+            </button>
+          </div>
+        </div>
+      )}
+      </div>
 
       {/* Bottom */}
       {saveError && (

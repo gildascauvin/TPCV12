@@ -13,6 +13,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import InviteModal from "@/components/coach/InviteModal";
@@ -72,7 +73,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
@@ -349,6 +350,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   return (
     <>
+      {!isActive && <UnsavedBanner message="Mode démo · l'ajustement des séances de tes sportifs n'est pas encore sauvegardé." onAction={() => requireSubscription(() => {})} />}
+
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
 
       <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
@@ -369,24 +372,24 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <button
-                onClick={() => requireSubscription(() => {
+                onClick={() => {
                   posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "copy_link" });
                   navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
                   setLinkCopied(true);
                   setTimeout(() => setLinkCopied(false), 2500);
                   localStorage.setItem(`activation_shown_coach_${userId}`, "1");
                   setShowActivation(false);
-                })}
+                }}
                 style={{ flex: 1, height: 42, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", transition: "background .2s" }}
               >
                 {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
               </button>
               <button
-                onClick={() => requireSubscription(() => {
+                onClick={() => {
                   posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "whatsapp" });
                   const msg = encodeURIComponent(`Salut ! Rejoins mon espace ThePerfClub ici : https://go.theperfclub.com/join/${inviteCode}`);
                   window.open(`https://wa.me/?text=${msg}`, "_blank");
-                })}
+                }}
                 style={{ height: 42, width: 42, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 📲
@@ -457,7 +460,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   return first ? (
                     <button
                       data-tour="decider-btn"
-                      onClick={() => requireSubscription(() => handleDecide(first))}
+                      onClick={() => handleDecide(first)}
                       style={{ marginTop: 12, width: "100%", height: 44, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 20px rgba(212,64,0,.35)", letterSpacing: "-0.01em" }}
                     >
                       Traiter les décisions ({decisionCount}) →<span className="tour-lock">🔒</span>
@@ -556,9 +559,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
                     coachName={coachName ?? "Coach"}
-                    onDecide={() => requireSubscription(() => handleDecide(a))}
-                    onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
-                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                    onDecide={() => handleDecide(a)}
+                    onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
+                    onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
                     onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
@@ -582,9 +585,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={false}
                     trend={trends[a.id]}
                     coachName={coachName ?? "Coach"}
-                    onDecide={() => requireSubscription(() => router.push(`/coach/planning?athlete=${a.id}`))}
-                    onApplyAdjust={(session, pct) => applyAutoregAdjust(a.id, session, pct)}
-                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                    onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)}
+                    onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
+                    onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
                     onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
@@ -600,10 +603,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         <div data-tour="invite-section" style={{ marginTop: 16 }}>
           <button
             data-tour="invite-btn"
-            onClick={() => requireSubscription(() => setShowInviteModal(true))}
+            onClick={() => setShowInviteModal(true)}
             style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
           >
-            + Inviter des sportifs<span className="tour-lock">🔒</span>
+            + Inviter des sportifs
           </button>
         </div>
       </div>
@@ -636,7 +639,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             queueTotal: sortedPriority.length,
             trend: trends[reviewAthlete.id],
           }}
-          onSave={handleSaveReview}
+          onSave={(data, athleteIds) => requireSubscription(() => handleSaveReview(data, athleteIds))}
           onClose={handleCloseReview}
           onMarkViewed={() => {
             if (!reviewSession) return;
@@ -657,7 +660,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           chainTotal={sortedPriority.length}
           onSkip={handleAdjustChainSkip}
           onClose={handleCloseReview}
-          onConfirm={handleAdjustChainConfirm}
+          onConfirm={pct => requireSubscription(() => handleAdjustChainConfirm(pct))}
         />
       )}
 

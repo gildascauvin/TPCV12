@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { coachIsPaying } from "@/lib/access";
 import { startOfWeek, endOfWeek, format } from "date-fns";
 import WeekClient from "./WeekClient";
 
@@ -20,7 +21,9 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
     supabase.from("profiles").select("subscription_status, invited_by_coach_id, name").eq("user_id", user!.id).single(),
   ]);
 
-  const hasCoach = !!(profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id;
+  const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
+  const hasCoach = !!invitedByCoachId;
+  const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
 
   return (
     <WeekClient
@@ -30,6 +33,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       initialWellness={wellness ?? []}
       subscriptionStatus={profile?.subscription_status ?? "free"}
       hasCoach={hasCoach}
+      hasActiveCoach={hasActiveCoach}
       initialDate={searchParams.date}
     />
   );

@@ -57,6 +57,11 @@ interface Props {
   activeProgram?: Program | null;
   activeProgramWeek?: number;
   requireSubscription?: (fn: () => void) => void;
+  /* Vue au-delà de S1 gatée dans le builder (2026-08-19) — même principe que /p/[id] (flou +
+     overlay, jamais les onglets de semaine eux-mêmes) : sans ça, un free peut générer et
+     consulter des programmes complets à l'infini. Absent = jamais floué (repli permissif,
+     cohérent avec requireSubscription optionnel juste au-dessus). */
+  isActive?: boolean;
   onClose: () => void;
 }
 
@@ -68,7 +73,7 @@ type UIStep =
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, onClose }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -175,6 +180,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         template={step.template}
         assignmentCount={step.assignmentCount ?? 0}
         requireSubscription={requireSubscription}
+        isActive={isActive}
         onBack={() => setStep(isEdit ? { type: "list" } : { type: "criteria" })}
         onSaveToLibrary={async (name, template) => {
           if (isEdit) await updateProgram(step.programId!, name, template);
@@ -217,8 +223,12 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>←</button>
           <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
         </div>
+        {/* Générer/visualiser/modifier un programme reste libre (voir spec gating save,
+            2026-08-19) — seuls "Enregistrer en librairie"/"Assigner" dans ProgramBuilderModal
+            sont gatés (gate() y est déjà câblé). Ouvrir le générateur ne doit jamais bloquer,
+            sinon un free ne voit jamais la valeur du générateur. */}
         <button
-          onClick={() => gate(() => setStep({ type: "criteria" }))}
+          onClick={() => setStep({ type: "criteria" })}
           style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
         >
           + Nouveau

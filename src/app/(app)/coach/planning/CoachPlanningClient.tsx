@@ -10,6 +10,7 @@ import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import WelcomeModal from "@/components/onboarding/WelcomeModal";
@@ -69,7 +70,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
@@ -424,6 +425,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   return (
     <>
+      {!isActive && <UnsavedBanner message="Mode démo · l'ajustement des séances n'est pas encore sauvegardé." onAction={() => requireSubscription(() => {})} />}
+
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
 
       {/* Athlete tabs bar */}
@@ -455,7 +458,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         currentWeek={activeProgramWeek}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
-        onReconduire={athlete ? () => requireSubscription(() => setShowReconduire(true)) : undefined}
+        onReconduire={athlete ? () => setShowReconduire(true) : undefined}
       />
 
       {/* Empty state — aucune séance cette semaine pour cet athlète */}
@@ -464,7 +467,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           <EmptySessionState
             sport={athlete.sport}
             label={`Créer une séance pour ${athlete.name}`}
-            onAdd={() => requireSubscription(() => setAddingDate(todayStr))}
+            onAdd={() => setAddingDate(todayStr)}
           />
         </div>
       )}
@@ -560,7 +563,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                             return (
                               <div
                                 key={s.id}
-                                onClick={e => { e.stopPropagation(); requireSubscription(() => setEditingSession(s)); }}
+                                onClick={e => { e.stopPropagation(); setEditingSession(s); }}
                                 style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
                               >
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
@@ -578,7 +581,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                           )}
                           {inMonth && (
                             <div
-                              onClick={e => { e.stopPropagation(); requireSubscription(() => setAddingDate(dstr)); }}
+                              onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
                               style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 11, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
                             >
                               +
@@ -684,15 +687,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     key={s.id}
                     session={s}
                     viewerRole="coach"
-                    onComplete={(sess) => requireSubscription(() => setCompleting(sess))}
-                    onEdit={(sess) => requireSubscription(() => setEditingSession(sess))}
-                    onDuplicate={(sess) => requireSubscription(() => setDuplicating(sess))}
+                    onComplete={(sess) => setCompleting(sess)}
+                    onEdit={(sess) => setEditingSession(sess)}
+                    onDuplicate={(sess) => setDuplicating(sess)}
                   />
                 )}
-                onAddSession={(d) => requireSubscription(() => setAddingDate(d))}
-                onComplete={(s) => requireSubscription(() => setCompleting(s))}
-                onEdit={(s) => requireSubscription(() => setEditingSession(s))}
-                onDuplicate={(s) => requireSubscription(() => setDuplicating(s))}
+                onAddSession={(d) => setAddingDate(d)}
+                onComplete={(s) => setCompleting(s)}
+                onEdit={(s) => setEditingSession(s)}
+                onDuplicate={(s) => setDuplicating(s)}
                 onWellness={() => {}}
               />
               </DroppableDay>
@@ -724,8 +727,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           } : null}
           athletes={athletes}
           initialAthleteId={athlete.id}
-          onSave={editingSession ? saveEdit : addSession}
-          onDelete={editingSession ? deleteSession : undefined}
+          onSave={(data, athleteIds) => requireSubscription(() => (editingSession ? saveEdit(data, athleteIds) : addSession(data, athleteIds)))}
+          onDelete={editingSession ? (() => requireSubscription(() => deleteSession())) : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
           onMarkViewed={() => {
             if (!editingSession) return;
@@ -735,7 +738,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       {duplicating && athlete && (
-        <DuplicateModal session={duplicating} onDuplicate={duplicateSessionToDate} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
+        <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds) => requireSubscription(() => duplicateSessionToDate(date, targetAthleteIds))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
       )}
       {showReconduire && athlete && (
         <ReconduireModal
@@ -743,7 +746,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           athletes={athletes}
           sourceAthleteId={athlete.id}
           onClose={() => setShowReconduire(false)}
-          onConfirm={async (weeksOut, targetAthleteIds) => {
+          onConfirm={(weeksOut, targetAthleteIds) => requireSubscription(async () => {
             const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
             const allRows = weeksOut.flatMap((rows, w) => rows.map(r => ({
               name: r.name, notes: r.notes, target_difficulty: r.target_difficulty,
@@ -757,7 +760,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
             setSessions(prev => [...prev, ...created]);
             setShowReconduire(false);
-          }}
+          })}
         />
       )}
 
@@ -770,7 +773,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           behaviors={athlete.behaviors ?? []}
           advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0])}
           onClose={() => setAdjustCtx(null)}
-          onConfirm={async (pct) => {
+          onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
             const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
             const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: adjustCtx.session.id, data: { notes, target_difficulty } });
@@ -780,7 +783,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
             setDecisionTick(t => t + 1);
             setAdjustCtx(null);
-          }}
+          })}
         />
       )}
 
@@ -794,6 +797,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         <ProgramLibraryPage
           athletes={athletes}
           requireSubscription={requireSubscription}
+          isActive={isActive}
           onClose={() => setShowLibrary(false)}
         />
       )}
@@ -823,7 +827,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             created_at: completing.created_at,
           }}
           athleteName={athlete.name}
-          onSave={completeSession}
+          onSave={data => requireSubscription(() => completeSession(data))}
           onClose={() => setCompleting(null)}
         />
       )}

@@ -11,6 +11,7 @@ import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
@@ -183,7 +184,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -205,20 +206,28 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   }
 
   async function handleDelete(athlete: CoachAthlete) {
-    const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
-    if (!confirm(label)) return;
-    setDeleting(athlete.id);
-    await fetch("/api/athlete/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coachAthleteId: athlete.id }),
+    await requireSubscription(async () => {
+      const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
+      if (!confirm(label)) return;
+      setDeleting(athlete.id);
+      await fetch("/api/athlete/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coachAthleteId: athlete.id }),
+      });
+      setAthletes(prev => prev.filter(a => a.id !== athlete.id));
+      setDeleting(null);
     });
-    setAthletes(prev => prev.filter(a => a.id !== athlete.id));
-    setDeleting(null);
   }
 
   return (
     <>
+      {!isActive && (
+        <UnsavedBanner
+          message="Mode démo · le suivi de tes sportifs n'est pas encore sauvegardé."
+          onAction={() => setPaywallStep("priming")}
+        />
+      )}
       <CalendarHeader
         selectedDate={selectedDate} onDateChange={handleDateChange}
         extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
@@ -236,10 +245,10 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
           </div>
           <button
             data-tour="invite-btn"
-            onClick={() => requireSubscription(() => setShowInvite(true))}
+            onClick={() => setShowInvite(true)}
             style={{ height: 40, paddingLeft: 18, paddingRight: 18, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", flexShrink: 0, marginTop: 4 }}
           >
-            + Inviter<span className="tour-lock">🔒</span>
+            + Inviter
           </button>
         </div>
 
@@ -252,10 +261,10 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
             </div>
             <button
               data-tour="invite-btn"
-              onClick={() => requireSubscription(() => setShowInvite(true))}
+              onClick={() => setShowInvite(true)}
               style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
             >
-              Inviter un sportif →<span className="tour-lock">🔒</span>
+              Inviter un sportif →
             </button>
           </div>
         ) : (

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
+import { coachIsPaying } from "@/lib/access";
 import ProfilClient from "./ProfilClient";
 import type { Session, WellnessDaily } from "@/types";
 
@@ -33,6 +34,8 @@ export default async function ProfilPage() {
     ? Math.round(wellness.reduce((a, w) => a + (w.score ?? w.base_score ?? 0), 0) / wellness.length)
     : null;
   const allBehaviors = Array.from(new Set(wellness.flatMap(w => w.behaviors || [])));
+  const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
+  const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
 
   return (
     <ProfilClient
@@ -42,6 +45,7 @@ export default async function ProfilPage() {
       avgRpe={avgRpe}
       avgWellness={avgWellness}
       allBehaviors={allBehaviors}
+      hasActiveCoach={hasActiveCoach}
     />
   );
 }

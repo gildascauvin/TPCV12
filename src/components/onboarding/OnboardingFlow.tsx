@@ -81,8 +81,8 @@ const ATHLETE_PATH: StepId[] = [
   "wellness_check_2a",
   "decision_2a",
   "account",
-  "paywall_priming", "paywall_form",
   "celebration",
+  "wellness_q", "wellness_reveal",
 ];
 const COACH_PATH: StepId[] = [
   "value_intro",
@@ -94,8 +94,8 @@ const COACH_PATH: StepId[] = [
   "wellness_check_2b",
   "decision_2b",
   "account",
-  "paywall_priming", "paywall_form",
   "celebration",
+  "invite_team",
 ];
 
 const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
@@ -125,19 +125,9 @@ const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "accou
 function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct: number[]; dark: boolean }) {
   return (
     <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-      {["Programme", "Aperçu", "Adaptation", "Formule"].map((label, i) => (
-        <div key={label} style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 8, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 5,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            color: i === currentPhase ? (dark ? "#ff8a55" : "#d44000") : (dark ? "rgba(255,255,255,.5)" : "rgba(0,0,0,.35)"),
-            opacity: i < currentPhase ? (dark ? 0.85 : 0.55) : 1,
-          }}>
-            {i + 1} · {label}
-          </div>
-          <div style={{ height: 3, borderRadius: 2, background: dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)", overflow: "hidden" }}>
-            <div style={{ height: "100%", borderRadius: 2, background: "#d44000", width: `${Math.round(pct[i] * 100)}%`, transition: "width .3s" }} />
-          </div>
+      {pct.map((p, i) => (
+        <div key={i} style={{ flex: 1, minWidth: 0, height: 3, borderRadius: 2, background: dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)", overflow: "hidden" }}>
+          <div style={{ height: "100%", borderRadius: 2, background: "#d44000", width: `${Math.round(p * 100)}%`, transition: "width .3s" }} />
         </div>
       ))}
     </div>
@@ -228,12 +218,12 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "paywall_priming", "paywall_form", "celebration",
+  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "celebration", "wellness_q", "wellness_reveal",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "paywall_priming", "paywall_form", "celebration",
+  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "celebration", "invite_team",
 ];
 
 /* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
@@ -1240,13 +1230,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (assignedValueVariant === "test" && base !== INVITE_ATHLETE_PATH) {
       base = base.filter(s => s !== "value_intro");
     }
-    /* Activation (wellness_q/wellness_reveal sportif, invite_team coach) réservée aux payeurs :
-       insérée après "celebration" seulement une fois trial_started réussi (voir paidExtras,
-       posé dans paywall_form au succès du paiement). */
-    if (!paidExtras) return base;
-    const celebIdx = base.indexOf("celebration");
-    if (celebIdx === -1) return base;
-    return [...base.slice(0, celebIdx + 1), ...paidExtras];
+    return base;
   };
   const path         = getPath(role);
   /* Filet de sécurité : si stepIdx dépasse jamais path.length (double-invocation d'un handler,
@@ -1602,7 +1586,24 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       );
       const wellnessAdjustment = score < 45 ? -1 : 0;
       await claimAndAssignProgram(uid, wellnessAdjustment);
+      /* Retrait du paywall obligatoire de l'onboarding (2026-08-19, chantier gating save) :
+         onboarding_done ne dépend plus d'un paiement (handlePaymentSuccess(), plus jamais atteint
+         depuis que paywall_priming/paywall_form sont sortis des paths actifs) — le vrai jalon de
+         fin d'onboarding redevient l'activation elle-même, comme avant l'introduction du paywall
+         obligatoire. Ce premier wellness reste la seule sauvegarde gratuite du compte (voir
+         requireSubscription() sur /today, /week — tout wellness suivant est gaté). */
+      await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
     }
+    next();
+  }
+
+  /* Pendant "invite_team" (dernier step du path coach) — même principe que
+     finishAthleteActivation() ci-dessus, 3 points de sortie (invite envoyée, "Continuer" après
+     succès, "Plus tard — me le rappeler"). L'invitation elle-même reste gratuite et illimitée
+     (voir CoachClient.tsx/AthletesClient.tsx, aucun requireSubscription dessus). */
+  async function finishCoachActivation() {
+    const uid = userId || newUserId;
+    if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
     next();
   }
 
@@ -3115,7 +3116,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               <Actions
                 variant="modal-light"
                 nextLabel="Continuer →"
-                onNext={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; next(); }}
+                onNext={() => { if (finishGuardRef.current) return; finishGuardRef.current = true; finishCoachActivation(); }}
               />
             ) : (
               <div style={{ padding: "20px 28px 20px", background: "#fff", flexShrink: 0 }}>
@@ -3125,7 +3126,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     finishGuardRef.current = true;
                     const hasEmail = inviteEmail.trim() || extraInviteEmails.some(e => e.trim());
                     if (hasEmail && !inviteSending) await handleInviteSend();
-                    next();
+                    finishCoachActivation();
                   }}
                   disabled={inviteSending}
                   style={{ width: "100%", height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: inviteSending ? "default" : "pointer", opacity: inviteSending ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
@@ -3138,7 +3139,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                       if (finishGuardRef.current) return;
                       finishGuardRef.current = true;
                       if (!pushBlockedIOS) subscribeToPush().catch(() => {});
-                      next();
+                      finishCoachActivation();
                     }}
                     style={{ background: "none", border: "none", color: "#d44000", fontSize: 12, fontWeight: 800, cursor: "pointer", padding: "10px 0 0" }}
                   >

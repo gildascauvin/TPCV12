@@ -14,6 +14,7 @@ import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
+import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
@@ -268,15 +269,19 @@ interface Props {
   initialSessions: Session[];
   subscriptionStatus: SubscriptionStatus;
   hasCoach?: boolean;
+  /* Distinct de hasCoach (qui reste "un coach existe", utilisé pour le rattrapage d'invitation
+     plus bas) — hasActiveCoach = "ce coach paie", seule condition qui débloque un accès gratuit
+     réel désormais (voir src/lib/access.ts, 2026-08-19). */
+  hasActiveCoach?: boolean;
   activeProgram?: { start_date: string; name: string } | null;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, activeProgram }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss } = usePaywall(subscriptionStatus, hasCoach);
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -508,6 +513,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   return (
     <>
+      {!isActive && <UnsavedBanner onAction={() => requireSubscription(() => {})} />}
+
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} />
 
       <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
@@ -535,9 +542,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     const ctaType = todaySession ? "start_session" : hasWeekSession ? "view_planning" : "add_session";
                     posthog.capture("activation_banner_cta_clicked", { mode: "athlete", cta_type: ctaType });
                     dismissActivation();
-                    if (todaySession) requireSubscription(() => handleTerminer(todaySession));
+                    if (todaySession) handleTerminer(todaySession);
                     else if (hasWeekSession) router.push("/week");
-                    else requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); });
+                    else { setAddSessionInitialName(undefined); setShowAddSession(true); }
                   }}
                   style={{ flex: 1, height: 42, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
                 >
@@ -611,7 +618,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               {/* Ring + status — seule zone cliquable pour ouvrir le formulaire wellness (le reste
                  de la carte contient la séance, avec ses propres actions Terminer/éditer). */}
               <div
-                onClick={() => requireSubscription(() => setShowWellness(true))}
+                onClick={() => setShowWellness(true)}
                 style={{ display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18, cursor: "pointer" }}
               >
                 <WellnessRingPOC score={displayScore} size={ringSize} />
@@ -650,7 +657,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             };
             const openWellness = (e: React.MouseEvent) => {
               e.stopPropagation();
-              requireSubscription(() => setShowWellness(true));
+              setShowWellness(true);
             };
 
             const row = (
@@ -684,6 +691,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   sessionLabel={autoregTarget.name}
                   onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                   onApply={async (pct) => {
+                    /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
+                       est gatée (voir chantier gating save, 2026-08-19). isActive vient
+                       directement de usePaywall() : requireSubscription() ne peut pas envelopper
+                       ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
+                    if (!isActive) { setPaywallStep("priming"); return; }
                     const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                     const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                     const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
@@ -773,7 +785,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                         {(() => {
                           const [, m, d] = activeProgram.start_date.split("-").map(Number);
                           const MONTHS = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
-                          return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Semaine.`;
+                          return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Planning.`;
                         })()}
                       </div>
                     </div>
@@ -781,7 +793,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     <EmptySessionState
                       sport={profile.sport}
                       label="Créer ma première séance"
-                      onAdd={(name) => { setAddSessionInitialName(name); requireSubscription(() => setShowAddSession(true)); }}
+                      onAdd={(name) => { setAddSessionInitialName(name); setShowAddSession(true); }}
                     />
                   )
                 ) : todaySessions.length === 0 ? (
@@ -793,8 +805,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   <TodaySessionCard
                     key={s.id}
                     session={s}
-                    onComplete={(s) => requireSubscription(() => handleTerminer(s))}
-                    onEdit={(s) => requireSubscription(() => setEditing(s))}
+                    onComplete={(s) => handleTerminer(s)}
+                    onEdit={(s) => setEditing(s)}
                     onDelete={(s) => requireSubscription(() => deleteSession(s))}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     onReorderExercises={reorderTodayExercises}
@@ -808,7 +820,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
         <div
           data-tour="add-session-btn"
-          onClick={() => requireSubscription(() => { setAddSessionInitialName(undefined); setShowAddSession(true); })}
+          onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
           style={{
             border: "0.5px dashed rgba(212,64,0,0.34)",
             color: "var(--accent)", background: "#fff",
@@ -821,23 +833,24 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Modals — ouverture toujours libre (voir les onClick plus haut), seule la persistance
+          réelle (onSave/onDelete) est gatée derrière requireSubscription() (2026-08-19). */}
       {showWellness && (
-        <WellnessModal date={selectedDate} onSave={saveWellness} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={selectedDate} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={addSession} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={data => requireSubscription(() => addSession(data))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
       )}
       {completing && (
-        <CompleteModal session={completing} onSave={saveComplete} onClose={() => setCompleting(null)} />
+        <CompleteModal session={completing} onSave={data => requireSubscription(() => saveComplete(data))} onClose={() => setCompleting(null)} />
       )}
       {editing && (
         <AddSessionModal
           date={editing.date}
           session={editing}
           userName={profile.name ?? "Toi"}
-          onSave={saveEdit}
-          onDelete={async () => { await deleteSession(editing); setEditing(null); }}
+          onSave={data => requireSubscription(() => saveEdit(data))}
+          onDelete={() => requireSubscription(async () => { await deleteSession(editing); setEditing(null); })}
           onClose={() => setEditing(null)}
         />
       )}
