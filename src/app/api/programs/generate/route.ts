@@ -266,7 +266,7 @@ const SESSION_NAMES: Record<SessionType, string[]> = {
 
 // Exportés (2026-08-06) pour réutilisation par /api/sports/custom/route.ts — évite de dupliquer
 // le routage par mots-clés pour décider si un sport libre matche déjà un curriculum existant.
-export type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "gendarmerie" | "sapeur_pompier" | "armee_tap" | "police_nationale" | "gign" | "escalade" | "autre";
+export type SportCategory = "halterophilie" | "halterophilie_snatch" | "powerlifting" | "powerlifting_squat" | "powerlifting_bench" | "powerlifting_deadlift" | "musculation" | "puissance" | "perte_de_poids" | "sprint" | "athletisme_sauts" | "combat" | "fitness" | "hyrox" | "calisthenics" | "collectif" | "endurance" | "endurance_10k" | "endurance_semi" | "endurance_marathon" | "trail" | "triathlon" | "cyclisme" | "natation" | "ski" | "aviron" | "gymnastique" | "reeducation_cheville" | "reeducation_epaule" | "reeducation_genou" | "reeducation_genou_rotulien" | "reeducation_genou_lca" | "reeducation_lombaire" | "reeducation_tendon_achille" | "reeducation_periostite" | "reeducation_generale" | "gendarmerie" | "sapeur_pompier" | "armee_tap" | "police_nationale" | "gign" | "escalade" | "pliometrie" | "golf" | "equitation" | "hockey_glace" | "baseball" | "voile" | "bmx" | "autre";
 
 export function getSportCategory(sport: string): SportCategory {
   const s = (sport ?? "").toLowerCase();
@@ -313,6 +313,17 @@ export function getSportCategory(sport: string): SportCategory {
   // Claude (customExercises) dépend d'un appel IA en prod uniquement (ANTHROPIC_API_KEY absente en
   // local), impossible à utiliser pour construire un programme de bibliothèque publique hors prod.
   if (s.includes("escalade") || s.includes("grimpe") || s.includes("bloc")) return "escalade";
+  // Pliométrie : qualité transversale (pas un sport), vérifiée avant "puissance"/"explosiv" —
+  // "pliométrie"/"plyo" ne collisionne avec aucun mot-clé déjà présent plus haut.
+  if (s.includes("pliomé") || s.includes("plyo")) return "pliometrie";
+  if (s.includes("golf")) return "golf";
+  if (s.includes("équitation") || s.includes("equitation") || s.includes("cheval") || s.includes("équestre") || s.includes("equestre")) return "equitation";
+  // Hockey sur glace uniquement (voir décision explicite avec Gildas) — "hockey" seul suffit,
+  // aucun programme hockey gazon dans la bibliothèque à distinguer pour l'instant.
+  if (s.includes("hockey")) return "hockey_glace";
+  if (s.includes("baseball")) return "baseball";
+  if (s.includes("voile") || s.includes("sailing")) return "voile";
+  if (s.includes("bmx")) return "bmx";
   // Hyrox : format de course spécifique (8km course + 8 stations) — vérifié AVANT le générique
   // "fitness" (le sport-field "Fitness/Hyrox" contient les deux mots-clés).
   if (s.includes("hyrox")) return "hyrox";
@@ -858,6 +869,222 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Bloc test : niveau limite chronométré",
       "Voie test à vue : niveau atteint",
       "Bilan technique vidéo",
+    ],
+  },
+
+  pliometrie: {
+    technique: [
+      "Réception unipodale contrôlée — 3×8 par jambe",
+      "Gainage anti-rotation — 3×40s",
+      "Proprioception plateau instable — 3×30s",
+    ],
+    volume: [
+      "Medicine ball chest pass — 4×8",
+      "Pompes plyométriques — 3×8",
+      "Medicine ball rotation lancée — 3×10 par côté",
+    ],
+    intensite: [
+      "Squat jump — 4×6",
+      "Box jump — 4×5",
+      "Sauts en contrebas (depth jump) — 4×5",
+      "Sauts de haies — 4×8 (récup 2 min)",
+      "Bondissements alternés — 4×20m",
+    ],
+    recuperation: [
+      "Mobilité chevilles et hanches — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage mollets et quadriceps — 10 min",
+    ],
+    test: [
+      "Test de détente verticale (squat jump)",
+      "Test de saut en longueur sans élan",
+      "Bilan technique vidéo réception",
+    ],
+  },
+
+  golf: {
+    technique: [
+      "Mobilité thoracique et hanches — 20 min",
+      "Étirements dynamiques épaules/dos — 15 min",
+      "Rotation thoracique sur banc — 3×10 par côté",
+      "Stabilité unipodale (position de swing) — 3×8 par jambe",
+    ],
+    volume: [
+      "Squat — 4×8@70%",
+      "Soulevé de terre roumain — 3×10",
+      "Gainage anti-rotation — 3×40s",
+    ],
+    intensite: [
+      "Rotation chargée medicine ball — 4×8 par côté",
+      "Swing résisté avec élastique — 4×10",
+      "Lancers rotatifs explosifs — 3×8 par côté",
+    ],
+    recuperation: [
+      "Mobilité thoracique et hanches — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage dos et épaules — 10 min",
+    ],
+    test: [
+      "Test de mobilité rotation thoracique",
+      "Test de gainage (planche max)",
+      "Bilan technique vidéo swing",
+    ],
+  },
+
+  equitation: {
+    technique: [
+      "Renforcement unipodal — 3×10 par jambe",
+      "Mobilité bassin et hanches — 20 min",
+      "Correction posturale (dos/épaules) — 15 min",
+      "Proprioception plateau instable — 3×30s",
+    ],
+    volume: [
+      "Gainage complet (planche + latéral) — 3×45s",
+      "Gainage dynamique dead bug — 3×12",
+      "Anti-rotation Pallof press — 3×10 par côté",
+      "Cardio léger continu (vélo/course) — 30 min",
+      "Squats + fentes — 3×12",
+    ],
+    intensite: [
+      "Circuit fonctionnel modéré — 4 tours",
+      "Gainage dynamique chronométré — 3×45s effort",
+    ],
+    recuperation: [
+      "Mobilité bassin et hanches — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage lombaires — 10 min",
+    ],
+    test: [
+      "Test de gainage (planche max)",
+      "Test d'équilibre unipodal chronométré",
+      "Bilan postural",
+    ],
+  },
+
+  hockey_glace: {
+    technique: [
+      "Renforcement adducteurs/abducteurs — 3×12",
+      "Gainage complet — 3×40s",
+      "Proprioception chevilles — 3×10",
+    ],
+    volume: [
+      "Rotation chargée medicine ball — 4×8 par côté",
+      "Développé couché — 4×6@75%",
+      "Squat — 4×6@75%",
+    ],
+    intensite: [
+      "Sprints latéraux explosifs — 6×15m (récup 90s)",
+      "Départs explosifs en carre — 6 reps",
+      "Changements de direction — 4×20m",
+      "Fractionné intermittent 30s effort / 30s récup — 10 répétitions",
+    ],
+    recuperation: [
+      "Mobilité hanches et chevilles — 15 min",
+      "Étirements globaux — 15 min",
+      "Vélo doux — 20 min",
+      "Auto-massage adducteurs et mollets — 10 min",
+    ],
+    test: [
+      "Test de vitesse sur 20m",
+      "Test intermittent (type Yo-Yo)",
+      "Bilan force membres inférieurs",
+    ],
+  },
+
+  baseball: {
+    technique: [
+      "Stabilité de la coiffe des rotateurs — 3×12",
+      "Mobilité épaule et rotation externe — 15 min",
+      "Renforcement scapulaire — 3×12",
+    ],
+    volume: [
+      "Squat — 4×6@75%",
+      "Développé couché — 4×6@75%",
+      "Fentes marchées — 3×12",
+    ],
+    intensite: [
+      "Rotation chargée medicine ball — 4×8 par côté",
+      "Lancers rotatifs explosifs — 4×8 par côté",
+      "Swing résisté avec élastique — 3×10",
+      "Sprints courts 10-20m — 6 reps (récup 3 min)",
+      "Départs explosifs — 5 reps",
+    ],
+    recuperation: [
+      "Mobilité épaule et rotation externe — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage épaule et dos — 10 min",
+    ],
+    test: [
+      "Test de mobilité épaule",
+      "Test de vitesse de lancer (si radar dispo)",
+      "Bilan technique vidéo swing / lancer",
+    ],
+  },
+
+  voile: {
+    technique: [
+      "Tirage horizontal — 3×10",
+      "Traction assistée — 3×8",
+      "Gainage anti-rotation — 3×40s",
+    ],
+    volume: [
+      "Gainage complet — 3×45s",
+      "Gainage latéral — 3×40s par côté",
+      "Hollow body hold — 3×30s",
+      "Cardio continu (rameur/vélo) — 30 min",
+      "Circuit fonctionnel — 4 tours",
+    ],
+    intensite: [
+      "Position de rappel (hiking) tenue — 4×45s",
+      "Squat isométrique mur — 3×45s",
+      "Extension de hanches tenue — 3×40s",
+    ],
+    recuperation: [
+      "Mobilité dos et hanches — 15 min",
+      "Étirements globaux — 15 min",
+      "Marche active — 20 min",
+      "Auto-massage lombaires et quadriceps — 10 min",
+    ],
+    test: [
+      "Test de gainage (planche max)",
+      "Test de tenue position hiking chronométré",
+      "Bilan endurance cardio",
+    ],
+  },
+
+  bmx: {
+    technique: [
+      "Sauts réactifs (rebonds) — 4×8",
+      "Proprioception plateau instable — 3×30s",
+      "Mobilité chevilles et hanches — 15 min",
+    ],
+    volume: [
+      "Gainage complet — 3×45s",
+      "Gainage dynamique — 3×12",
+      "Anti-rotation Pallof press — 3×10 par côté",
+      "Squat — 4×6@75%",
+      "Fentes sautées — 3×10",
+      "Soulevé de terre — 3×6@75%",
+    ],
+    intensite: [
+      "Départs explosifs porte — 6 reps (récup 3 min)",
+      "Squat jump — 4×6",
+      "Sprint 10m départ arrêté — 6 reps",
+    ],
+    recuperation: [
+      "Mobilité chevilles et hanches — 15 min",
+      "Étirements globaux — 15 min",
+      "Vélo doux — 15 min",
+      "Auto-massage quadriceps et mollets — 10 min",
+    ],
+    test: [
+      "Test de temps de réaction au départ",
+      "Test de sprint 10m départ arrêté",
+      "Bilan force et détente",
     ],
   },
 
@@ -2150,6 +2377,144 @@ function selectEscalade(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => ESCALADE_PRIORITY[i % ESCALADE_PRIORITY.length]);
 }
 
+// ---- Pliométrie : qualité transversale (bas du corps → réactivité → haut du corps → stabilisation
+// à l'atterrissage), priorité décroissante — le bas du corps (sauts verticaux/horizontaux) reste
+// le pilier n°1 de toute prépa pliométrique généraliste.
+const PLIO_BAS_CORPS: Archetype = { name: "Bas du corps", type: "intensite", exercises: [
+  "Squat jump — 4×6", "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5",
+]};
+const PLIO_REACTIVITE: Archetype = { name: "Réactivité", type: "intensite", exercises: [
+  "Sauts de haies — 4×8 (récup 2 min)", "Bondissements alternés — 4×20m", "Skipping bas — 3×20m",
+]};
+const PLIO_HAUT_CORPS: Archetype = { name: "Haut du corps", type: "volume", exercises: [
+  "Medicine ball chest pass — 4×8", "Pompes plyométriques — 3×8", "Medicine ball rotation lancée — 3×10 par côté",
+]};
+const PLIO_STABILISATION: Archetype = { name: "Stabilisation & atterrissage", type: "technique", exercises: [
+  "Réception unipodale contrôlée — 3×8 par jambe", "Gainage anti-rotation — 3×40s", "Proprioception plateau instable — 3×30s",
+]};
+const PLIO_PRIORITY: Archetype[] = [PLIO_BAS_CORPS, PLIO_REACTIVITE, PLIO_HAUT_CORPS, PLIO_STABILISATION];
+function selectPliometrie(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => PLIO_PRIORITY[i % PLIO_PRIORITY.length]);
+}
+
+// ---- Golf : rotation chargée (puissance de swing) > mobilité thoracique/hanches (amplitude du
+// geste) > force générale (chaîne postérieure) > stabilité unipodale (transfert de poids au swing).
+const GOLF_ROTATION: Archetype = { name: "Rotation & puissance de swing", type: "intensite", exercises: [
+  "Rotation chargée medicine ball — 4×8 par côté", "Swing résisté avec élastique — 4×10", "Lancers rotatifs explosifs — 3×8 par côté",
+]};
+const GOLF_MOBILITE: Archetype = { name: "Mobilité thoracique & hanches", type: "technique", exercises: [
+  "Mobilité thoracique et hanches — 20 min", "Étirements dynamiques épaules/dos — 15 min", "Rotation thoracique sur banc — 3×10 par côté",
+]};
+const GOLF_FORCE: Archetype = { name: "Force générale", type: "volume", exercises: [
+  "Squat — 4×8@70%", "Soulevé de terre roumain — 3×10", "Gainage anti-rotation — 3×40s",
+]};
+const GOLF_STABILITE: Archetype = { name: "Stabilité & transfert de poids", type: "technique", exercises: [
+  "Stabilité unipodale (position de swing) — 3×8 par jambe", "Proprioception plateau instable — 3×30s",
+]};
+const GOLF_PRIORITY: Archetype[] = [GOLF_ROTATION, GOLF_MOBILITE, GOLF_FORCE, GOLF_STABILITE];
+function selectGolf(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => GOLF_PRIORITY[i % GOLF_PRIORITY.length]);
+}
+
+// ---- Équitation : gainage (stabilité du buste en selle) > symétrie & posture (déséquilibres
+// gauche/droite) > cardio léger (endurance générale du cavalier) > stabilité (proprioception,
+// équilibre dynamique).
+const EQUITATION_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
+  "Gainage complet (planche + latéral) — 3×45s", "Gainage dynamique dead bug — 3×12", "Anti-rotation Pallof press — 3×10 par côté",
+]};
+const EQUITATION_SYMETRIE: Archetype = { name: "Symétrie & posture", type: "technique", exercises: [
+  "Renforcement unipodal — 3×10 par jambe", "Mobilité bassin et hanches — 20 min", "Correction posturale (dos/épaules) — 15 min",
+]};
+const EQUITATION_CARDIO: Archetype = { name: "Cardio léger", type: "volume", exercises: [
+  "Cardio léger continu (vélo/course) — 30 min", "Squats + fentes — 3×12",
+]};
+const EQUITATION_STABILITE: Archetype = { name: "Stabilité & équilibre", type: "technique", exercises: [
+  "Proprioception plateau instable — 3×30s", "Gainage sur swiss ball — 3×30s",
+]};
+const EQUITATION_PRIORITY: Archetype[] = [EQUITATION_GAINAGE, EQUITATION_SYMETRIE, EQUITATION_CARDIO, EQUITATION_STABILITE];
+function selectEquitation(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => EQUITATION_PRIORITY[i % EQUITATION_PRIORITY.length]);
+}
+
+// ---- Hockey sur glace : patinage (explosivité en carre, changements de direction) > puissance de
+// tir (rotation chargée, force générale) > endurance intermittente (répétition d'efforts courts,
+// caractéristique du hockey) > renfo/prévention (adducteurs, chevilles).
+const HOCKEY_PATINAGE: Archetype = { name: "Patinage & explosivité", type: "intensite", exercises: [
+  "Sprints latéraux explosifs — 6×15m (récup 90s)", "Départs explosifs en carre — 6 reps", "Changements de direction — 4×20m",
+]};
+const HOCKEY_PUISSANCE_TIR: Archetype = { name: "Puissance de tir", type: "volume", exercises: [
+  "Rotation chargée medicine ball — 4×8 par côté", "Développé couché — 4×6@75%", "Squat — 4×6@75%",
+]};
+const HOCKEY_ENDURANCE_INTERMITTENTE: Archetype = { name: "Endurance intermittente", type: "intensite", exercises: [
+  "Fractionné intermittent 30s effort / 30s récup — 10 répétitions", "Circuit intermittent haute intensité — 6 tours",
+]};
+const HOCKEY_RENFO: Archetype = { name: "Renfo & prévention", type: "technique", exercises: [
+  "Renforcement adducteurs/abducteurs — 3×12", "Gainage complet — 3×40s", "Proprioception chevilles — 3×10",
+]};
+const HOCKEY_PRIORITY: Archetype[] = [HOCKEY_PATINAGE, HOCKEY_PUISSANCE_TIR, HOCKEY_ENDURANCE_INTERMITTENTE, HOCKEY_RENFO];
+function selectHockeyGlace(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => HOCKEY_PRIORITY[i % HOCKEY_PRIORITY.length]);
+}
+
+// ---- Baseball : rotation & puissance (swing/lancer) > santé d'épaule (coiffe des rotateurs,
+// la zone la plus à risque du sport) > puissance générale (squat/bench) > vitesse (sprints courts,
+// course entre les bases).
+const BASEBALL_ROTATION: Archetype = { name: "Rotation & puissance", type: "intensite", exercises: [
+  "Rotation chargée medicine ball — 4×8 par côté", "Lancers rotatifs explosifs — 4×8 par côté", "Swing résisté avec élastique — 3×10",
+]};
+const BASEBALL_EPAULE: Archetype = { name: "Santé d'épaule", type: "technique", exercises: [
+  "Stabilité de la coiffe des rotateurs — 3×12", "Mobilité épaule et rotation externe — 15 min", "Renforcement scapulaire — 3×12",
+]};
+const BASEBALL_PUISSANCE: Archetype = { name: "Puissance générale", type: "volume", exercises: [
+  "Squat — 4×6@75%", "Développé couché — 4×6@75%", "Fentes marchées — 3×12",
+]};
+const BASEBALL_VITESSE: Archetype = { name: "Vitesse", type: "intensite", exercises: [
+  "Sprints courts 10-20m — 6 reps (récup 3 min)", "Départs explosifs — 5 reps",
+]};
+const BASEBALL_PRIORITY: Archetype[] = [BASEBALL_ROTATION, BASEBALL_EPAULE, BASEBALL_PUISSANCE, BASEBALL_VITESSE];
+function selectBaseball(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => BASEBALL_PRIORITY[i % BASEBALL_PRIORITY.length]);
+}
+
+// ---- Voile : gainage (tenue du buste sous charge) > hiking (position de rappel isométrique,
+// spécifique dériveur/habitable léger) > endurance (efforts longs en régate) > force du haut du
+// corps (winch, bordage).
+const VOILE_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
+  "Gainage complet — 3×45s", "Gainage latéral — 3×40s par côté", "Hollow body hold — 3×30s",
+]};
+const VOILE_HIKING: Archetype = { name: "Hiking & position de rappel", type: "intensite", exercises: [
+  "Position de rappel (hiking) tenue — 4×45s", "Squat isométrique mur — 3×45s", "Extension de hanches tenue — 3×40s",
+]};
+const VOILE_ENDURANCE: Archetype = { name: "Endurance", type: "volume", exercises: [
+  "Cardio continu (rameur/vélo) — 30 min", "Circuit fonctionnel — 4 tours",
+]};
+const VOILE_FORCE_HAUT_CORPS: Archetype = { name: "Force du haut du corps", type: "technique", exercises: [
+  "Tirage horizontal — 3×10", "Traction assistée — 3×8", "Gainage anti-rotation — 3×40s",
+]};
+const VOILE_PRIORITY: Archetype[] = [VOILE_GAINAGE, VOILE_HIKING, VOILE_ENDURANCE, VOILE_FORCE_HAUT_CORPS];
+function selectVoile(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => VOILE_PRIORITY[i % VOILE_PRIORITY.length]);
+}
+
+// ---- BMX : départ (explosivité pure, le facteur le plus déterminant en course) > gainage (position
+// basse sur le vélo) > force des jambes (relances, franchissements) > réactivité (sauts, réception).
+const BMX_DEPART: Archetype = { name: "Départ & explosivité", type: "intensite", exercises: [
+  "Départs explosifs porte — 6 reps (récup 3 min)", "Squat jump — 4×6", "Sprint 10m départ arrêté — 6 reps",
+]};
+const BMX_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
+  "Gainage complet — 3×45s", "Gainage dynamique — 3×12", "Anti-rotation Pallof press — 3×10 par côté",
+]};
+const BMX_FORCE_JAMBES: Archetype = { name: "Force des jambes", type: "volume", exercises: [
+  "Squat — 4×6@75%", "Fentes sautées — 3×10", "Soulevé de terre — 3×6@75%",
+]};
+const BMX_REACTIVITE: Archetype = { name: "Réactivité", type: "technique", exercises: [
+  "Sauts réactifs (rebonds) — 4×8", "Proprioception plateau instable — 3×30s", "Mobilité chevilles et hanches — 15 min",
+]};
+const BMX_PRIORITY: Archetype[] = [BMX_DEPART, BMX_GAINAGE, BMX_FORCE_JAMBES, BMX_REACTIVITE];
+function selectBmx(n: number): Archetype[] {
+  return Array.from({ length: n }, (_, i) => BMX_PRIORITY[i % BMX_PRIORITY.length]);
+}
+
 // ---- Hyrox : distinct de "fitness"/CrossFit générique — format de course fixe (8km course + 8
 // stations : SkiErg, sled push/pull, burpee broad jumps, row, farmers carry, sandbag lunges,
 // wall balls). 4 jours demandés explicitement : 2 cardio (course + machines, pour varier les
@@ -2504,6 +2869,13 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Arch
   police_nationale: selectPoliceNationale,
   gign: selectGign,
   escalade: selectEscalade,
+  pliometrie: selectPliometrie,
+  golf: selectGolf,
+  equitation: selectEquitation,
+  hockey_glace: selectHockeyGlace,
+  baseball: selectBaseball,
+  voile: selectVoile,
+  bmx: selectBmx,
   athletisme_sauts: selectAthletismeSauts,
   aviron: selectAviron,
   gymnastique: selectGymnastique,
