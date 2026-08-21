@@ -10,6 +10,8 @@ import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -62,15 +64,19 @@ interface Props {
   initialWellnessMap: Record<string, Record<string, number>>;
   subscriptionStatus: SubscriptionStatus;
   initialDate?: string;
+  /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
+  sandboxMode?: boolean;
 }
 
-export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate }: Props) {
+export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
+  const realPaywall = usePaywall(subscriptionStatus);
+  const sandboxPaywall = useSandboxGate("coach");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
@@ -178,6 +184,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   async function handleDateChange(date: string) {
     setSelectedDate(date);
+    // Sandbox : le fixture initial couvre déjà -14/+14 jours (voir sandboxFixtures.ts) — un
+    // refetch réseau écraserait cette fenêtre avec un résultat vide pour un coach_id fictif.
+    if (sandboxMode) return;
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
 
@@ -326,6 +335,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   async function loadMonth(anchor: string, athleteObj: CoachAthlete) {
+    if (sandboxMode) return;
     const base = new Date(anchor + "T12:00:00");
     const start = format(startOfMonth(base), "yyyy-MM-dd");
     const end = format(endOfMonth(base), "yyyy-MM-dd");
@@ -414,7 +424,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
-          <button onClick={() => router.push("/coach/athletes")}
+          <button onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes")}
             style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
             Ajouter un sportif →
           </button>
@@ -425,7 +435,13 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   return (
     <>
-      {!isActive && <UnsavedBanner message="Mode démo · l'ajustement des séances n'est pas encore sauvegardé." onAction={() => requireSubscription(() => {})} />}
+      {!isActive && (
+        <UnsavedBanner
+          message="Mode démo · l'ajustement des séances n'est pas encore sauvegardé."
+          onAction={() => requireSubscription(() => {})}
+          roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
+        />
+      )}
 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
 
@@ -798,14 +814,19 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           athletes={athletes}
           requireSubscription={requireSubscription}
           isActive={isActive}
+          sandboxMode={sandboxMode}
           onClose={() => setShowLibrary(false)}
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="coach" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

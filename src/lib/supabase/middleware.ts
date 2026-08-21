@@ -8,7 +8,10 @@ export async function updateSession(request: NextRequest) {
      mobile p90). Restreint à /p/ (pas tous les publicPaths) pour limiter le risque.
      /share/* suit le même principe : public par design (snapshot sans donnée sensible,
      ouvert directement quel que soit le statut de connexion, voir CLAUDE.md). */
-  if (request.nextUrl.pathname.startsWith("/p/") || request.nextUrl.pathname.startsWith("/share/")) {
+  /* /sandbox/* suit le même principe (2026-08-19) : visiteur anonyme par construction, jamais de
+     session à résoudre, potentiellement fort trafic depuis WP (2 URL copiables-collées par rôle,
+     voir CLAUDE.md "Sandbox PLG"). */
+  if (request.nextUrl.pathname.startsWith("/p/") || request.nextUrl.pathname.startsWith("/share/") || request.nextUrl.pathname.startsWith("/sandbox/")) {
     return NextResponse.next({ request });
   }
 
@@ -44,7 +47,7 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/login", "/register", "/auth/callback", "/api/", "/join/", "/p/", "/share/"];
+  const publicPaths = ["/login", "/register", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {

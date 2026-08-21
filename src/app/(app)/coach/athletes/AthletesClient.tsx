@@ -13,6 +13,8 @@ import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
@@ -171,9 +173,11 @@ interface Props {
   initialTrendInsights: Record<string, AthleteTrendInsight>;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
+  /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
+  sandboxMode?: boolean;
 }
 
-export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, subscriptionStatus, inviteCode }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
@@ -184,7 +188,9 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
+  const realPaywall = usePaywall(subscriptionStatus);
+  const sandboxPaywall = useSandboxGate("coach");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   function toggleExpanded(id: string) {
     setExpandedIds(prev => {
@@ -196,6 +202,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
 
   async function handleDateChange(date: string) {
     setSelectedDate(date);
+    if (sandboxMode) return;
     const res = await fetch(`/api/coach/athletes?date=${date}`);
     if (res.ok) {
       const { signatures: s, trends: t, trendInsights: ti } = await res.json();
@@ -226,6 +233,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         <UnsavedBanner
           message="Mode démo · le suivi de tes sportifs n'est pas encore sauvegardé."
           onAction={() => setPaywallStep("priming")}
+          roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
       )}
       <CalendarHeader
@@ -300,7 +308,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                     <button
                       data-tour="voir-planning-btn"
-                      onClick={() => router.push(`/coach/planning?athlete=${a.id}`)}
+                      onClick={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}
                       style={{ height: 34, paddingLeft: 13, paddingRight: 13, borderRadius: 10, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", whiteSpace: "nowrap" }}
                     >
                       Voir planning<span className="tour-lock">🔒</span>
@@ -349,13 +357,18 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
           onClose={() => setShowInvite(false)}
           onLinked={() => router.refresh()}
           inviteCode={inviteCode}
+          sandboxMode={sandboxMode}
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="coach" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

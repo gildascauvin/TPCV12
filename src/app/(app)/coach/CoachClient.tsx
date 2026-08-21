@@ -13,6 +13,8 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
@@ -32,6 +34,9 @@ interface Props {
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
   trends: Record<string, TrendCode | null>;
+  /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
+  sandboxMode?: boolean;
+  sandboxSessionsByDate?: Record<string, CoachViewSession[]>;
 }
 
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
@@ -68,12 +73,14 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
 }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, sandboxMode = false, sandboxSessionsByDate }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus);
+  const realPaywall = usePaywall(subscriptionStatus);
+  const sandboxPaywall = useSandboxGate("coach");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
@@ -148,6 +155,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const handleDateChange = useCallback(async (date: string) => {
     setSelectedDate(date);
+
+    // Sandbox : le fixture initial fournit déjà toutes les séances par date (5 sportifs démo, voir
+    // sandboxFixtures.ts) — aucun compte réel derrière userId/coach_id pour un refetch réseau.
+    if (sandboxMode) {
+      setSessions(sandboxSessionsByDate?.[date] ?? []);
+      return;
+    }
 
     const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
     const demoAthleteIds = athletes.filter(a => !a.user_id).map(a => a.id);
@@ -350,7 +364,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   return (
     <>
-      {!isActive && <UnsavedBanner message="Mode démo · l'ajustement des séances de tes sportifs n'est pas encore sauvegardé." onAction={() => requireSubscription(() => {})} />}
+      {!isActive && (
+        <UnsavedBanner
+          message="Mode démo · l'ajustement des séances de tes sportifs n'est pas encore sauvegardé."
+          onAction={() => requireSubscription(() => {})}
+          roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
+        />
+      )}
 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
 
@@ -530,7 +550,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               )}
               <div style={{ textAlign: "center", marginTop: 16 }}>
                 <button
-                  onClick={() => router.push("/coach/athletes")}
+                  onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes")}
                   style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
                 >
                   Gérer les sportifs →
@@ -559,6 +579,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
                     coachName={coachName ?? "Coach"}
+                    isActive={isActive}
                     onDecide={() => handleDecide(a)}
                     onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                     onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
@@ -585,7 +606,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={false}
                     trend={trends[a.id]}
                     coachName={coachName ?? "Coach"}
-                    onDecide={() => router.push(`/coach/planning?athlete=${a.id}`)}
+                    isActive={isActive}
+                    onDecide={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}
                     onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                     onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -673,13 +695,18 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           onClose={() => setShowInviteModal(false)}
           onLinked={() => router.refresh()}
           inviteCode={inviteCode}
+          sandboxMode={sandboxMode}
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="coach" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="coach" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

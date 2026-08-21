@@ -8,6 +8,7 @@ import NotificationToggle from "@/components/profile/NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import type { Profile, Session, WellnessDaily, Objective } from "@/types";
 
 const OBJ_LABELS: Record<string, string> = {
@@ -38,15 +39,20 @@ interface Props {
   avgWellness: number | null;
   allBehaviors: string[];
   hasActiveCoach: boolean;
+  /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. Pas de
+     usePaywall/useSandboxGate ici (cette page n'a jamais utilisé usePaywall — isActive est déjà
+     calculé à la main plus bas) : seule la destination du bouton "Débloquer"/"S'abonner" change. */
+  sandboxMode?: boolean;
 }
 
-export default function ProfilClient({ profile: initialProfile, email, doneSessions, avgRpe, avgWellness, allBehaviors, hasActiveCoach }: Props) {
+export default function ProfilClient({ profile: initialProfile, email, doneSessions, avgRpe, avgWellness, allBehaviors, hasActiveCoach, sandboxMode = false }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const [profile, setProfile] = useState(initialProfile);
   const [editOpen, setEditOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [sandboxGateOpen, setSandboxGateOpen] = useState(false);
 
   const initials = profile.name
     ? profile.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -54,7 +60,14 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
 
   const isActive = profile.subscription_status === "athlete" || profile.subscription_status === "coach" || (profile.subscription_status === "free" && hasActiveCoach);
 
+  function goToSignup() { router.push(`/register?role=${profile.mode}`); }
+
   async function handleSaveProfile(data: { name: string; sport: string; objective: Objective; freq_target: number }) {
+    if (sandboxMode) {
+      setProfile(prev => ({ ...prev, ...data }));
+      setEditOpen(false);
+      return;
+    }
     const { data: saved } = await supabase.from("profiles").update(data).eq("user_id", profile.user_id).select().single();
     if (saved) setProfile(saved as Profile);
     setEditOpen(false);
@@ -74,7 +87,8 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
       {!isActive && (
         <UnsavedBanner
           message="Mode démo · débloque l'accès complet à ThePerfClub."
-          onAction={() => setPaywallOpen(true)}
+          onAction={() => (sandboxMode ? setSandboxGateOpen(true) : setPaywallOpen(true))}
+          roleToggle={sandboxMode ? { role: profile.mode, onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
       )}
       <div className="page-shell">
@@ -168,7 +182,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
                   </button>
                 ) : (
                   <button
-                    onClick={() => setPaywallOpen(true)}
+                    onClick={() => (sandboxMode ? setSandboxGateOpen(true) : setPaywallOpen(true))}
                     style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
                   >
                     S'abonner
@@ -217,6 +231,9 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
           onClose={() => setPaywallOpen(false)}
           onSuccess={() => { setPaywallOpen(false); router.refresh(); }}
         />
+      )}
+      {sandboxGateOpen && (
+        <SandboxGateModal role={profile.mode} onClose={() => setSandboxGateOpen(false)} onSignup={goToSignup} />
       )}
     </>
   );

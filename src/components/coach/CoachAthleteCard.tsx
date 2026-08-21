@@ -95,7 +95,7 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView, isActive }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -121,6 +121,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      decisionText()/autoregAdvice() en 2e personne. Voir décisionText() ci-dessus. `undefined` par
      défaut, zéro impact sur /coach et /coach/planning. */
   selfView?: boolean;
+  /* Passé tel quel à AutoregButtons — évite de marquer "traité" localement quand onApplyAdjust
+     n'a en réalité rien écrit (compte non actif, requireSubscription a juste déclenché le
+     paywall/signup). `undefined`/absent = toujours considéré actif (usages onboarding/aperçus,
+     jamais réellement gatés — voir AutoregButtons.tsx). */
+  isActive?: boolean;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
@@ -260,7 +265,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             onApply={async (pct) => {
               const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
               await onApplyAdjust(topSession, pct);
-              onAutoregDecided();
+              // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
+              // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
+              if (isActive !== false) onAutoregDecided();
               return original;
             }}
             onMaintenir={onAutoregDecided}
@@ -268,6 +275,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               if (original) await onUndoAdjust(topSession, original);
               onAutoregUndone();
             }}
+            isActive={isActive}
           />
         ) : (
           <>

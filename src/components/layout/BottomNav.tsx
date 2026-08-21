@@ -109,9 +109,20 @@ const coachTabs = [
 
 interface Props {
   role?: "athlete" | "coach";
+  /* Sandbox uniquement (2026-08-19) : préfixe les hrefs vers /sandbox/[role]/... au lieu des
+     routes réelles /today, /coach... — le tab "home" (/today ou /coach) devient basePath lui-même
+     (Today/Coach Control = page d'accueil de la sandbox pour ce rôle), les autres tabs deviennent
+     `${basePath}/planning`, `${basePath}/athletes` etc. (suffixe après le préfixe réel /coach
+     retiré). undefined = comportement inchangé (app réelle). */
+  basePath?: string;
 }
 
-export default function BottomNav({ role = "athlete" }: Props) {
+function sandboxHref(href: string, basePath: string) {
+  if (href === "/today" || href === "/coach") return basePath;
+  return basePath + href.replace("/coach", "");
+}
+
+export default function BottomNav({ role = "athlete", basePath }: Props) {
   const pathname = usePathname();
   const tabs = role === "coach" ? coachTabs : athleteTabs;
 
@@ -140,15 +151,23 @@ export default function BottomNav({ role = "athlete" }: Props) {
         WebkitBackdropFilter: "blur(18px)",
       }}>
         {tabs.map((tab) => {
+          const href = basePath ? sandboxHref(tab.href, basePath) : tab.href;
           const isCoachTab = "matchExact" in tab;
-          const active = isCoachTab
-            ? (tab.matchExact ? pathname === tab.href : pathname.startsWith(tab.href))
-            : (pathname === tab.href || pathname.startsWith(tab.href + "/"));
+          /* Sandbox : le tab "home" (Aujourd'hui/Dashboard) a pour href basePath lui-même, qui est
+             aussi le préfixe de TOUTES les autres sous-routes de ce rôle (/sandbox/athlete/week,
+             /sandbox/athlete/conseils...) — un simple startsWith(href+"/") le faisait donc matcher
+             en permanence, quelle que soit la page réellement affichée. Toujours exact pour ce cas. */
+          const isSandboxHomeTab = !!basePath && href === basePath;
+          const active = isSandboxHomeTab
+            ? pathname === href
+            : isCoachTab
+            ? (tab.matchExact ? pathname === href : pathname.startsWith(href))
+            : (pathname === href || pathname.startsWith(href + "/"));
           const tourId = "tourId" in tab ? tab.tourId : undefined;
           return (
             <Link
               key={tab.href}
-              href={tab.href}
+              href={href}
               {...(tourId ? { "data-tour": tourId } : {})}
               style={{
                 display: "flex",

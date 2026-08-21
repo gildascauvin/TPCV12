@@ -7,20 +7,22 @@
    actifs) — rend visible en continu ce que le mur au clic sur "Enregistrer" ne dit qu'au moment
    où on le déclenche.
 
-   Conçue pour être réutilisée telle quelle par la sandbox (visiteurs non connectés, chantier
-   séparé, pas encore construit) — seuls `message`/`ctaLabel`/`onAction` changeraient (ex.
-   "Crée ton compte pour sauvegarder" au lieu de "Débloque ton compte"), la structure reste
-   identique. */
+   Réutilisée telle quelle par la sandbox (2026-08-19, visiteurs non connectés) — `onAction`
+   pointe vers /register au lieu de setPaywallStep("priming"), et le nouveau prop optionnel
+   `roleToggle` (absent partout ailleurs dans l'app) ajoute un petit sélecteur Sportif/Coach pour
+   basculer entre les 2 URLs de la sandbox sans changer de structure. */
 interface Props {
   message?: string;
   ctaLabel?: string;
   onAction: () => void;
+  roleToggle?: { role: "athlete" | "coach"; onToggle: (role: "athlete" | "coach") => void };
 }
 
 export default function UnsavedBanner({
   message = "Mode démo · rien de ce que tu fais n'est encore sauvegardé.",
   ctaLabel = "Débloquer →",
   onAction,
+  roleToggle,
 }: Props) {
   return (
     <div
@@ -33,6 +35,24 @@ export default function UnsavedBanner({
         textAlign: "center",
       }}
     >
+      {roleToggle && (
+        <div style={{ display: "flex", flexShrink: 0, gap: 2, background: "rgba(255,255,255,.08)", borderRadius: 999, padding: 2 }}>
+          {(["athlete", "coach"] as const).map(r => (
+            <button
+              key={r}
+              onClick={() => roleToggle.onToggle(r)}
+              style={{
+                height: 22, padding: "0 10px", borderRadius: 999, border: "none", cursor: "pointer",
+                fontSize: 10.5, fontWeight: 900, letterSpacing: "0.02em",
+                background: roleToggle.role === r ? "#fff" : "transparent",
+                color: roleToggle.role === r ? "#171b1f" : "rgba(255,255,255,.6)",
+              }}
+            >
+              {r === "athlete" ? "Sportif" : "Coach"}
+            </button>
+          ))}
+        </div>
+      )}
       <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.88)", lineHeight: 1.4 }}>
         🔓 {message}
       </span>

@@ -27,6 +27,8 @@ import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
@@ -39,14 +41,16 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; }
+interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
+  const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
+  const sandboxPaywall = useSandboxGate("athlete");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -99,7 +103,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     }
   }
 
-  useEffect(() => { fetchActiveProgram(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!sandboxMode) fetchActiveProgram(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur weekBase)
   const weekBaseRef = useRef(weekBase);
@@ -159,6 +163,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   })();
 
   async function loadWeek(base: Date) {
+    // Sandbox : le fixture initial couvre déjà -41/+21 jours (voir sandboxFixtures.ts) — un
+    // refetch réseau écraserait cette fenêtre avec un résultat vide pour un userId fictif.
+    if (sandboxMode) return;
     const mon = format(startOfWeek(base, { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(base, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
     const [{ data: s }, { data: w }] = await Promise.all([
@@ -170,6 +177,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   }
 
   async function loadMonth(anchor: string) {
+    if (sandboxMode) return;
     const base = new Date(anchor + "T12:00:00");
     const start = format(startOfMonth(base), "yyyy-MM-dd");
     const end = format(endOfMonth(base), "yyyy-MM-dd");
@@ -343,7 +351,12 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
   return (
     <>
-      {!isActive && <UnsavedBanner onAction={() => requireSubscription(() => {})} />}
+      {!isActive && (
+        <UnsavedBanner
+          onAction={() => requireSubscription(() => {})}
+          roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
+        />
+      )}
 
       <CalendarHeader
         selectedDate={selectedDate}
@@ -669,14 +682,19 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           activeProgramWeek={activeProgramWeek}
           requireSubscription={requireSubscription}
           isActive={isActive}
-          onClose={async () => { setShowLibrary(false); await fetchActiveProgram(); router.refresh(); }}
+          sandboxMode={sandboxMode}
+          onClose={async () => { setShowLibrary(false); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

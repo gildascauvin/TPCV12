@@ -14,6 +14,8 @@ import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
@@ -274,14 +276,23 @@ interface Props {
      réel désormais (voir src/lib/access.ts, 2026-08-19). */
   hasActiveCoach?: boolean;
   activeProgram?: { start_date: string; name: string } | null;
+  /* Sandbox uniquement (2026-08-19) : quand true, remplace usePaywall par useSandboxGate (même
+     interface, destination = signup au lieu de priming/paywall) et neutralise les effets qui
+     rafraîchiraient les données via Supabase (le fixture initial couvre déjà toute la fenêtre
+     navigable, voir sandboxWellnessByDate). Aucun impact sur l'app réelle (prop absente partout
+     ailleurs). */
+  sandboxMode?: boolean;
+  sandboxWellnessByDate?: Record<string, WellnessDaily>;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
+  const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
+  const sandboxPaywall = useSandboxGate("athlete");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
@@ -295,15 +306,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // Rattrape une invitation coach en attente pour un compte déjà inscrit (créée après
   // l'onboarding, jamais consommée sinon — /api/invite/link n'était appelé qu'à l'inscription)
   useEffect(() => {
-    if (hasCoach) return;
+    if (sandboxMode || hasCoach) return;
     fetch("/api/invite/link", { method: "POST" })
       .then(r => r.json())
       .then(d => { if (d.ok) router.refresh(); })
       .catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Recharge wellness + sessions quand on change de semaine
+  // Recharge wellness + sessions quand on change de semaine — pas en sandbox (le fixture initial
+  // couvre déjà toute la fenêtre navigable, voir sandboxFixtures.ts, aucune donnée réelle à aller
+  // chercher pour un userId fictif).
   useEffect(() => {
+    if (sandboxMode) return;
     const weekStart = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     if (weekStart === prevWeekRef.current) return;
     prevWeekRef.current = weekStart;
@@ -422,6 +436,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   async function handleDateChange(date: string) {
     setSelectedDate(date);
+    if (sandboxMode) {
+      setWellness(sandboxWellnessByDate?.[date] ?? null);
+      return;
+    }
     const [{ data: w }] = await Promise.all([
       supabase.from("wellness_daily").select("*").eq("user_id", userId).eq("date", date).maybeSingle(),
     ]);
@@ -513,7 +531,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   return (
     <>
-      {!isActive && <UnsavedBanner onAction={() => requireSubscription(() => {})} />}
+      {!isActive && (
+        <UnsavedBanner
+          onAction={() => requireSubscription(() => {})}
+          roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
+        />
+      )}
 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} />
 
@@ -543,7 +566,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     posthog.capture("activation_banner_cta_clicked", { mode: "athlete", cta_type: ctaType });
                     dismissActivation();
                     if (todaySession) handleTerminer(todaySession);
-                    else if (hasWeekSession) router.push("/week");
+                    else if (hasWeekSession) router.push(sandboxMode ? "/sandbox/athlete/week" : "/week");
                     else { setAddSessionInitialName(undefined); setShowAddSession(true); }
                   }}
                   style={{ flex: 1, height: 42, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
@@ -689,6 +712,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   reco={suggestion.reco}
                   advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`}
                   sessionLabel={autoregTarget.name}
+                  isActive={isActive}
                   onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                   onApply={async (pct) => {
                     /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
@@ -855,10 +879,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         />
       )}
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

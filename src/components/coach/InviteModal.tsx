@@ -6,9 +6,14 @@ interface Props {
   onClose: () => void;
   onLinked: () => void;
   inviteCode?: string | null;
+  /* Sandbox uniquement (2026-08-19) : aucun compte coach réel n'existe encore, donc aucune ligne
+     coach_invites/coach_athletes ne peut être créée — POST /api/sandbox/invite envoie juste un
+     email "comme si le sportif s'était inscrit lui-même" (lien vers /register, pas de lien
+     coach↔sportif enregistré, voir la route pour le détail). */
+  sandboxMode?: boolean;
 }
 
-export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
+export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode = false }: Props) {
   const [email, setEmail] = useState("");
   const [extraEmails, setExtraEmails] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -22,14 +27,15 @@ export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
     if (!emails.length) return;
     setSaving(true);
     setError(null);
+    const endpoint = sandboxMode ? "/api/sandbox/invite" : "/api/invite/create";
     const results = await Promise.all(emails.map(async athleteEmail => {
-      const res = await fetch("/api/invite/create", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ athleteEmail }),
       });
       const json = await res.json().catch(() => ({}));
-      return { ok: res.ok, linked: json.linked as boolean | undefined, error: json.error as string | undefined };
+      return { ok: res.ok, linked: sandboxMode ? false : (json.linked as boolean | undefined), error: json.error as string | undefined };
     }));
     setSaving(false);
     const sent = results.filter(r => r.ok);
@@ -60,7 +66,11 @@ export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
               {sentCount > 1 ? "Invitations enregistrées !" : result === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.6, marginBottom: 24 }}>
-              {sentCount > 1
+              {sandboxMode
+                ? (sentCount > 1
+                    ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> viennent de recevoir un lien pour créer leur compte.</>
+                    : <><strong style={{ color: "#171b1f" }}>{email}</strong> vient de recevoir un lien pour créer son compte.</>)
+                : sentCount > 1
                 ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> rejoindront ton espace dès qu&apos;ils créeront leur compte.</>
                 : result === "linked"
                 ? <><strong style={{ color: "#171b1f" }}>{email}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
@@ -114,7 +124,9 @@ export default function InviteModal({ onClose, onLinked, inviteCode }: Props) {
             )}
 
             <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
-              Ou invite par email — le sportif sera lié dès qu'il créera son compte.
+              {sandboxMode
+                ? "Il recevra un email avec un lien pour créer son compte."
+                : "Ou invite par email — le sportif sera lié dès qu'il créera son compte."}
             </div>
 
             {error && (

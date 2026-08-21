@@ -36,9 +36,18 @@ interface Props {
      Le "traité" reste géré ici (localStorage) ; le parent doit rappeler setAutoregDecision() lui-même
      une fois le modal confirmé (voir WeekClient.tsx/CoachPlanningClient.tsx). */
   onOpenModal?: () => void;
+  /* Bug réel trouvé en testant la sandbox (2026-08-19) : `onApply` renvoie systématiquement
+     `undefined` à la fois quand il gate (compte non actif, redirection paywall/signup) ET parfois
+     quand il réussit (certains appelants ne renvoient rien d'explicite) — `apply()` ne pouvait donc
+     jamais distinguer "gaté, rien d'écrit" de "réussi" et marquait toujours la décision "traitée"
+     en localStorage, y compris quand rien n'avait été sauvegardé (un compte free/expired qui
+     clique "Appliquer" voyait "✓ appliqué" alors que la DB n'avait pas bougé). Prop optionnelle,
+     absente = comportement historique inchangé (ancien code sans gating) ; tous les appelants
+     réels doivent désormais la passer. */
+  isActive?: boolean;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal, isActive }: Props) {
   const [mode, setMode] = useState<"idle" | "open" | "decided">("idle");
   const [selectedPct, setSelectedPct] = useState(reco);
   const [decidedPct, setDecidedPct] = useState<number | null>(null);
@@ -84,6 +93,10 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
     setApplying(true);
     const original = await onApply(selectedPct);
     setApplying(false);
+    // isActive === false : le compte n'est pas actif, onApply n'a fait que déclencher le
+    // paywall/signup (rien d'écrit) — ne jamais marquer "traité" dans ce cas (voir commentaire du
+    // prop isActive plus haut). Les chips restent ouvertes, prêtes à réessayer après connexion.
+    if (isActive === false) return;
     setAutoregDecision(sessionId, dir, selectedPct, original ?? undefined);
     setMode("decided");
     setDecidedPct(selectedPct);

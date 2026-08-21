@@ -12,6 +12,8 @@ import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
+import { useSandboxGate } from "@/hooks/useSandboxGate";
+import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
@@ -130,14 +132,19 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   );
 }
 
-export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean }) {
+export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, sandboxMode = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; sandboxMode?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
-  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = usePaywall(subscriptionStatus, hasActiveCoach);
+  const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
+  const sandboxPaywall = useSandboxGate("athlete");
+  const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   async function handleDateChange(date: string) {
+    // Sandbox : le fixture initial couvre déjà 42 jours (computeConseilsData), pas de refetch réseau
+    // pour un userId fictif — la navigation par date de /conseils reste donc figée sur "aujourd'hui".
+    if (sandboxMode) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/conseils?date=${date}`);
@@ -181,6 +188,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
         <UnsavedBanner
           message="Mode démo · débloque le suivi complet de ta récupération."
           onAction={() => setPaywallStep("priming")}
+          roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
       )}
       <CalendarHeader
@@ -375,10 +383,14 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
 
       </div>
       {paywallStep === "priming" && (
-        <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-          onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        sandboxMode ? (
+          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+        ) : (
+          <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+        )
       )}
-      {paywallStep === "paywall" && (
+      {!sandboxMode && paywallStep === "paywall" && (
         <PaywallModal mode="athlete" allowDismiss={allowDismiss} initialBilling={billing}
           onClose={() => setPaywallStep("priming")}
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />

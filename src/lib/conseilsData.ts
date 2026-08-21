@@ -98,16 +98,7 @@ export async function getConseilsData(
   referenceDate: string
 ): Promise<ConseilsData> {
   const anchor = new Date(referenceDate + "T12:00:00");
-  /* 42 jours fetchés (pas 28) pour que la vue "Mois" du chart (28 derniers jours affichés) ait un
-     ACWR valide sur toute sa largeur — acuteChronicAt() (trainingLoad.ts) exige au moins 14 jours
-     d'historique AVANT un point donné pour lui donner une valeur non-nulle ; avec seulement 28
-     jours fetchés, les 13 premiers jours affichés en vue Mois n'auraient jamais assez de recul et
-     resteraient nuls (ligne du chart tronquée aux ~15 derniers jours seulement — bug réel constaté
-     par Gildas). Les 14 jours de marge servent uniquement de recul de calcul, jamais affichés tels
-     quels (voir last28/last7 plus bas). */
   const since42 = daysAgoStr(42, anchor);
-  const since7  = daysAgoStr(7, anchor);
-  const tomorrowStr = daysAgoStr(-1, anchor);
 
   const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).single(),
@@ -115,9 +106,31 @@ export async function getConseilsData(
     supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
   ]);
 
-  const profile     = rawProfile as Profile | null;
-  const allSessions = (rawSessions || []) as Session[];
-  const allWellness = (rawWellness || []) as WellnessDaily[];
+  return computeConseilsData(referenceDate, rawProfile as Profile | null, (rawSessions || []) as Session[], (rawWellness || []) as WellnessDaily[]);
+}
+
+/* Extrait de getConseilsData() (2026-08-19, chantier sandbox) — pure, ne dépend plus d'un client
+   Supabase, réutilisable directement par la sandbox (fixtures locales) sans dupliquer la logique.
+   getConseilsData() reste le seul appelant réel de l'app (fetch), cette fonction ne fait que le
+   calcul. Les 42 jours d'historique (mêmes commentaires que dans getConseilsData avant ce refactor)
+   doivent déjà être fournis par l'appelant dans allSessions/allWellness. */
+export function computeConseilsData(
+  referenceDate: string,
+  profile: Profile | null,
+  allSessions: Session[],
+  allWellness: WellnessDaily[]
+): ConseilsData {
+  const anchor = new Date(referenceDate + "T12:00:00");
+  /* 42 jours attendus en entrée (pas 28) pour que la vue "Mois" du chart (28 derniers jours
+     affichés) ait un ACWR valide sur toute sa largeur — acuteChronicAt() (trainingLoad.ts) exige
+     au moins 14 jours d'historique AVANT un point donné pour lui donner une valeur non-nulle ; avec
+     seulement 28 jours, les 13 premiers jours affichés en vue Mois n'auraient jamais assez de recul
+     et resteraient nuls (ligne du chart tronquée aux ~15 derniers jours seulement — bug réel
+     constaté par Gildas). Les 14 jours de marge servent uniquement de recul de calcul, jamais
+     affichés tels quels (voir last28/last7 plus bas). getConseilsData() fetch bien 42 jours ; la
+     sandbox (fixtures locales) doit faire de même. */
+  const since7  = daysAgoStr(7, anchor);
+  const tomorrowStr = daysAgoStr(-1, anchor);
 
   const refWellness = allWellness.find(w => w.date === referenceDate);
   const wellnessScore = refWellness?.score ?? refWellness?.base_score ?? null;

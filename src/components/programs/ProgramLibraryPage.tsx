@@ -63,6 +63,11 @@ interface Props {
      cohérent avec requireSubscription optionnel juste au-dessus). */
   isActive?: boolean;
   onClose: () => void;
+  /* Sandbox uniquement (2026-08-20) : la bibliothèque ne peut pas être "la tienne" (visiteur
+     anonyme) — fetchPrograms() lit /api/sandbox/library (8 programmes publics réels, un par
+     grande famille de curriculum) au lieu de /api/programs (bibliothèque du compte courant).
+     Aucun autre changement : même liste, même builder, mêmes gates (Enregistrer/Assigner). */
+  sandboxMode?: boolean;
 }
 
 type UIStep =
@@ -73,7 +78,7 @@ type UIStep =
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -83,7 +88,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
 
   async function fetchPrograms() {
-    const res = await fetch("/api/programs");
+    const res = await fetch(sandboxMode ? "/api/sandbox/library" : "/api/programs");
     if (res.ok) {
       const d = await res.json();
       setPrograms(d.programs ?? []);
