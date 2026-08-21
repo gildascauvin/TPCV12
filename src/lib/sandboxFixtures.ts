@@ -16,13 +16,46 @@ function dstr(base: Date, offset: number) {
 }
 
 /* Oscillation déterministe (pas de Math.random — reproductible entre renders serveur/client) pour
-   un historique de récupération réaliste sans données inventées "au pif" à chaque jour. */
+   un historique de récupération réaliste sans données inventées "au pif" à chaque jour.
+
+   10 "gabarits" jour (score + comportements) qui cyclent sur l'historique — chaque comportement
+   apparaît ~4x sur les 39 jours cyclés (offset -3 à -41), largement au-dessus du seuil minimal de
+   computeBehaviorCorrelations() (≥2 jours avec ET ≥2 jours sans, voir conseilsData.ts) — sans quoi
+   la carte "Impact comportements" reste vide (comportements vus une seule fois chacun dans la 1ère
+   version de ce fichier, jamais assez pour calculer une corrélation). Score et comportement du même
+   gabarit sont volontairement cohérents (comportements négatifs → score bas, positifs → score haut)
+   pour que la corrélation calculée soit réellement lisible, pas juste présente. offset 0/-1/-2 restent
+   fixes (42/50/58, voir CROSSFIT_TODAY) — c'est la tendance récente qui alimente l'AHA autorégulation,
+   inchangée par cet enrichissement. */
+const DAY_TEMPLATES: { score: number; behaviors: string[] }[] = [
+  { score: 48, behaviors: ["late_sleep"] },
+  { score: 82, behaviors: ["hydration"] },
+  { score: 45, behaviors: ["social_out", "screen_late"] },
+  { score: 75, behaviors: [] },
+  { score: 88, behaviors: ["stretching", "meditation"] },
+  { score: 52, behaviors: ["alcohol"] },
+  { score: 70, behaviors: [] },
+  { score: 85, behaviors: ["walk"] },
+  { score: 50, behaviors: ["heavy_meal", "caffeine_late"] },
+  { score: 78, behaviors: ["cold_shower"] },
+];
+
+function dayTemplateFor(offset: number) {
+  return DAY_TEMPLATES[Math.abs(offset) % DAY_TEMPLATES.length];
+}
+
 function wellnessScoreFor(offset: number): number {
   if (offset === 0) return 42;   // aujourd'hui — volontairement bas, voir CROSSFIT_TODAY plus bas
   if (offset === -1) return 50;
   if (offset === -2) return 58;
-  const wave = Math.round(75 + 9 * Math.sin(offset / 2.3));
-  return Math.min(88, Math.max(58, wave));
+  return dayTemplateFor(offset).score;
+}
+
+function behaviorsFor(offset: number): string[] {
+  if (offset === 0) return ["late_sleep", "social_out"];
+  if (offset === -1) return ["screen_late"];
+  if (offset === -2) return [];
+  return dayTemplateFor(offset).behaviors;
 }
 
 /* ============================= SPORTIF — 1 profil CrossFit ============================= */
@@ -101,7 +134,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
         id: sid("wellness"), user_id: userId, date: dateStr,
         sleep: score < 50 ? 3 : score < 70 ? 5 : 7, stress: score < 50 ? 7 : 4, recovery: score < 50 ? 3 : 6, motivation: score < 50 ? 4 : 7,
         base_score: score, score,
-        behaviors: offset === 0 ? ["late_sleep", "social_out"] : offset === -1 ? ["screen_late"] : [],
+        behaviors: behaviorsFor(offset),
         bedtime: "23:30", created_at: new Date().toISOString(),
       };
     }
@@ -116,7 +149,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
     wellnessByDate[dateStr] = {
       id: sid("wellness"), user_id: userId, date: dateStr,
       sleep: 6, stress: 4, recovery: 6, motivation: 6, base_score: score, score,
-      behaviors: [], bedtime: "23:00", created_at: new Date().toISOString(),
+      behaviors: behaviorsFor(offset), bedtime: "23:00", created_at: new Date().toISOString(),
     };
   }
 
