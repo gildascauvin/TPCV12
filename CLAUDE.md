@@ -1987,3 +1987,24 @@ Contrairement à la quasi-totalité des autres chantiers de ce fichier, la sandb
 **Non testé** : l'envoi réel d'email d'invitation (évité volontairement — jamais de test avec une adresse factice `@example.com` contre un vrai provider transactionnel, même principe que la règle "jamais d'email de test factice" déjà documentée pour Supabase Auth ailleurs dans ce fichier, bien que `/api/sandbox/invite` ne touche pas Supabase).
 
 Déployé en prod le 2026-08-20 (commit `8531e5c`, push direct sur `main`), confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
+
+## Semaine vide avant démarrage du programme — /week, /coach/planning, /today (2026-08-22)
+
+Point de départ : discussion sur l'activation post-onboarding — le programme démarre toujours le lundi suivant l'inscription (`getNextMonday()`), donc un nouvel utilisateur arrivant sur `/week`/`/coach/planning` voyait une semaine calendaire vide avec juste "Hors cycle" en haut de bandeau et des jours "Repos / libre" indistinguables de vrais jours de repos — rien n'indiquait que c'était normal ni ce qui arrivait.
+
+### `ProgramBanner.tsx` — simplifié
+N'affiche plus jamais "Hors cycle" : bascule directement sur le même bandeau "Aucun programme actif / Les séances libres restent disponibles / Reconduire la semaine → / 📚 Programmes" (déjà existant pour le cas sans programme du tout) dès que la semaine **affichée** ne correspond pas à une semaine active du programme — avant le démarrage ou après la fin, qu'un programme soit assigné ou non. `currentWeek` reflète désormais la semaine réellement affichée (navigation), pas la position d'"aujourd'hui" dans le programme — naviguer jusqu'à S1 affiche "S1/8" même si le calendrier réel n'y est pas encore.
+
+### `/week` (`WeekClient.tsx`) et `/coach/planning` (`CoachPlanningClient.tsx`)
+Nouvelle carte, visible **uniquement sur la semaine calendaire réelle en cours** (jamais sur les autres semaines hors-cycle, y compris S1 une fois qu'on y a navigué), quand un programme est assigné avec un `start_date` futur — remplace le flou "Hors cycle" + "Repos/libre" par un message concret et un CTA vers la semaine 1. Style repris à l'identique d'`EmptySessionState` (bordure pointillée, titre 15px/900, bouton pleine largeur dégradé), demandé explicitement par Gildas pour cohérence visuelle plutôt qu'un nouveau pattern de carte. Wording 1re personne côté sportif ("Ta semaine 1 démarre lundi"), 3e personne côté coach ("La semaine 1 de {prénom}..."). CTA `navigatePeriod("next")` — reste sur la même page, atterrit sur la vraie semaine 1 avec le vrai contenu du programme plutôt que de rediriger ailleurs. `activeProgramWeek` (state basé sur la vraie date du jour, utilisé ailleurs — ex. `ProgramLibraryPage` côté sportif) reste inchangé ; le numéro affiché dans le bandeau vient d'un calcul séparé (`viewedProgramWeek`), basé sur le lundi de la semaine réellement affichée.
+
+### `/today` (`TodayClient.tsx`)
+Nouvelle 4e branche dans la carte d'activation J0 (`showActivation`, visible une seule fois via `activation_shown_athlete_{userId}` en localStorage), jusque-là seulement `todaySession`/`hasWeekSession`/repli générique ("Lance-toi dès maintenant" + "+ Planifier une séance" — contradictoire avec un programme déjà assigné). Quand `activeProgram.start_date` est futur et qu'aucune séance n'existe cette semaine : "Ta semaine 1 démarre {date}" + CTA "Voir ma semaine 1 →" qui navigue directement vers `/week?date={start_date}` (le query param `date` est déjà lu par `page.tsx` et transmis comme `initialDate`, mécanisme préexistant).
+
+### Décision de conception
+Le CTA pointe systématiquement vers un aperçu réel du contenu du programme (semaine 1), jamais vers la création d'une séance libre — contrairement au pattern par défaut d'`EmptySessionState` ("+ Créer une séance"), jugé contradictoire avec un programme déjà personnalisé assigné à l'utilisateur : proposer une séance libre en CTA principal aurait dilué le message "ton programme sur-mesure arrive lundi".
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres après chaque round. Pas de clic réel par Claude — testé par Gildas lui-même en local (`next dev` lancé par Claude à sa demande, service worker/cache à vider avant vérification visuelle comme d'habitude), qui a demandé 2 itérations sur le rendu (restyling façon `EmptySessionState`, puis fix du numéro de semaine suivant la navigation plutôt qu'"aujourd'hui" + carte restreinte à la semaine calendaire réelle).
+
+Déployé en prod le 2026-08-22 (commit `1906e31`, push direct sur `main`), confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
