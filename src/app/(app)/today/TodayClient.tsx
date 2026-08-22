@@ -551,27 +551,33 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           const weekStart = format(startOfWeek(new Date(initialDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
           const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
           const hasWeekSession = allSessions.some(s => s.date >= weekStart && s.date <= weekEnd);
+          const programPending = !todaySession && !hasWeekSession && !!activeProgram
+            && new Date(activeProgram.start_date + "T12:00:00").getTime() > Date.now();
+          const programStartLabel = programPending
+            ? new Date(activeProgram!.start_date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+            : null;
           return (
             <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
               <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
                 Ton espace est prêt, à toi de jouer 💪
               </div>
               <div style={{ fontSize: 12, color: "#62686e", marginBottom: 14, lineHeight: 1.5 }}>
-                {todaySession ? `Séance du jour : ${todaySession.name}` : hasWeekSession ? "Tes séances de la semaine sont planifiées." : "Lance-toi dès maintenant."}
+                {todaySession ? `Séance du jour : ${todaySession.name}` : hasWeekSession ? "Tes séances de la semaine sont planifiées." : programPending ? `Ta semaine 1 démarre ${programStartLabel}.` : "Lance-toi dès maintenant."}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => {
-                    const ctaType = todaySession ? "start_session" : hasWeekSession ? "view_planning" : "add_session";
+                    const ctaType = todaySession ? "start_session" : hasWeekSession ? "view_planning" : programPending ? "view_week1" : "add_session";
                     posthog.capture("activation_banner_cta_clicked", { mode: "athlete", cta_type: ctaType });
                     dismissActivation();
                     if (todaySession) handleTerminer(todaySession);
                     else if (hasWeekSession) router.push(sandboxMode ? "/sandbox/athlete/week" : "/week");
+                    else if (programPending) router.push(sandboxMode ? "/sandbox/athlete/week" : `/week?date=${activeProgram!.start_date}`);
                     else { setAddSessionInitialName(undefined); setShowAddSession(true); }
                   }}
                   style={{ flex: 1, height: 42, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
                 >
-                  {todaySession ? "▶ Démarrer ma séance" : hasWeekSession ? "Voir mon planning →" : "+ Planifier une séance"}
+                  {todaySession ? "▶ Démarrer ma séance" : hasWeekSession ? "Voir mon planning →" : programPending ? "Voir ma semaine 1 →" : "+ Planifier une séance"}
                 </button>
                 <button
                   onClick={dismissActivation}

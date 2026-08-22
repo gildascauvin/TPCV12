@@ -104,6 +104,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+  const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
 
   useEffect(() => {
     const id = searchParams.get("athlete");
@@ -120,7 +121,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   // Fetch active program for selected athlete
   useEffect(() => {
-    if (!athlete) { setActiveProgram(null); setActiveProgramWeek(-1); return; }
+    if (!athlete) { setActiveProgram(null); setActiveProgramWeek(-1); setActiveProgramStartDate(null); return; }
     async function fetchAthleteProgram() {
       let q = supabase
         .from("program_assignments")
@@ -135,11 +136,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         const prog = data.programs as Program;
         setActiveProgram(prog);
         setActiveAssignmentId(data.id);
+        setActiveProgramStartDate(data.start_date);
         const diffMs = Date.now() - new Date(data.start_date + "T12:00:00").getTime();
         const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
         setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
       } else {
-        setActiveProgram(null); setActiveProgramWeek(-1); setActiveAssignmentId(null);
+        setActiveProgram(null); setActiveProgramWeek(-1); setActiveAssignmentId(null); setActiveProgramStartDate(null);
       }
     }
     fetchAthleteProgram();
@@ -471,22 +473,65 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {/* Programme banner — full width */}
       <ProgramBanner
         program={activeProgram}
-        currentWeek={activeProgramWeek}
+        currentWeek={(() => {
+          if (!activeProgram || !activeProgramStartDate) return -1;
+          const startDate = new Date(activeProgramStartDate + "T12:00:00");
+          const weekIdx = Math.round((weekStart.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+          return weekIdx >= 0 && weekIdx < activeProgram.weeks_count ? weekIdx : -1;
+        })()}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
         onReconduire={athlete ? () => setShowReconduire(true) : undefined}
       />
 
-      {/* Empty state — aucune séance cette semaine pour cet athlète */}
-      {viewMode === "week" && athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0 && (
-        <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
-          <EmptySessionState
-            sport={athlete.sport}
-            label={`Créer une séance pour ${athlete.name}`}
-            onAdd={() => setAddingDate(todayStr)}
-          />
-        </div>
-      )}
+      {(() => {
+        const isViewingCurrentWeek = weekDates.some(d => format(d, "yyyy-MM-dd") === todayStr);
+        const programPending = !!activeProgram && activeProgramWeek === -1 && !!activeProgramStartDate
+          && new Date(activeProgramStartDate + "T12:00:00").getTime() > Date.now()
+          && isViewingCurrentWeek;
+        if (viewMode === "week" && athlete && programPending) {
+          return (
+            <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
+              <div style={{
+                textAlign: "center", padding: "28px 20px",
+                border: "0.5px dashed rgba(212,64,0,.28)",
+                borderRadius: 20, background: "#fff",
+              }}>
+                <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
+                  La semaine 1 de {athlete.name.split(" ")[0]} démarre lundi
+                </div>
+                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
+                  {activeProgram!.name} l&apos;attend.
+                </div>
+                <button
+                  onClick={() => navigatePeriod("next")}
+                  style={{
+                    width: "100%", height: 48, borderRadius: 14,
+                    background: "linear-gradient(180deg,#f04a08,#d44000)",
+                    color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
+                    cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
+                  }}
+                >
+                  Voir la semaine 1 →
+                </button>
+              </div>
+            </div>
+          );
+        }
+        if (viewMode === "week" && athlete && !programPending && sessions.filter(s => s.athlete_id === athlete.id).length === 0) {
+          return (
+            <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
+              <EmptySessionState
+                sport={athlete.sport}
+                label={`Créer une séance pour ${athlete.name}`}
+                onAdd={() => setAddingDate(todayStr)}
+              />
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       <div ref={calGridRef} data-tour="coach-planning">
       <div key={`cal-${navKey}`} style={{

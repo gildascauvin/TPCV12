@@ -42,8 +42,10 @@ interface Props {
 
 export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire }: Props) {
   const { isMd } = useBreakpoint();
+  const curWi = currentWeek ?? -1;
+  const isActiveWeek = !!program && curWi >= 0 && curWi < program.weeks_count;
 
-  if (!program) {
+  if (!isActiveWeek) {
     return (
       <div style={{
         background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px",
@@ -70,23 +72,22 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
     );
   }
 
-  const bars = program.template.weeks.map(w => avgWeekRpe(w as Record<string, { target_difficulty: number }[]>));
+  const bars = program!.template.weeks.map(w => avgWeekRpe(w as Record<string, { target_difficulty: number }[]>));
   const maxBar = Math.max(...bars, 1);
-  const curWi = currentWeek ?? -1;
-  const levelLabel = program.level ? LEVEL_LABELS[program.level] : null;
-  const focusLabel = curWi >= 0 && curWi < program.weeks_count ? `S${curWi + 1}/${program.weeks_count}` : "Hors cycle";
+  const levelLabel = program!.level ? LEVEL_LABELS[program!.level] : null;
+  const focusLabel = `S${curWi + 1}/${program!.weeks_count}`;
 
   return (
     <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       {/* Sport icon */}
       <div style={{ width: 38, height: 38, borderRadius: 11, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-        {sportEmoji(program.sport)}
+        {sportEmoji(program!.sport)}
       </div>
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em" }}>
-          {program.name}
+          {program!.name}
         </div>
         <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>
           {[focusLabel, levelLabel].filter(Boolean).join(" · ")}

@@ -78,6 +78,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
+  const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
 
   async function fetchActiveProgram() {
     const { data } = await supabase
@@ -92,6 +93,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       const prog = data.programs as Program;
       setActiveProgram(prog);
       setActiveAssignmentId(data.id);
+      setActiveProgramStartDate(data.start_date);
       const startDate = new Date(data.start_date + "T12:00:00");
       const diffMs = Date.now() - startDate.getTime();
       const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
@@ -100,6 +102,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       setActiveProgram(null);
       setActiveProgramWeek(-1);
       setActiveAssignmentId(null);
+      setActiveProgramStartDate(null);
     }
   }
 
@@ -349,6 +352,17 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     wellnessMapForHeader[iso] = wellnessList.find(w => w.date === iso)?.score ?? null;
   });
 
+  // Semaine du programme correspondant à la semaine actuellement affichée (navigation),
+  // distincte de `activeProgramWeek` (position réelle d'aujourd'hui dans le programme).
+  const viewedProgramWeek = (() => {
+    if (!activeProgram || !activeProgramStartDate) return -1;
+    const viewedMonday = new Date(format(dates[0], "yyyy-MM-dd") + "T12:00:00");
+    const startDate = new Date(activeProgramStartDate + "T12:00:00");
+    const weekIdx = Math.round((viewedMonday.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return weekIdx >= 0 && weekIdx < activeProgram.weeks_count ? weekIdx : -1;
+  })();
+  const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
+
   return (
     <>
       {!isActive && (
@@ -370,11 +384,42 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
       <ProgramBanner
         program={activeProgram}
-        currentWeek={activeProgramWeek}
+        currentWeek={viewedProgramWeek}
         onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
         onReconduire={() => setShowReconduire(true)}
       />
+
+      {activeProgram && activeProgramWeek === -1 && activeProgramStartDate
+        && new Date(activeProgramStartDate + "T12:00:00").getTime() > Date.now()
+        && isViewingCurrentWeek && (
+        <div style={{ margin: isMd ? "14px 20px 0" : "14px 14px 0" }}>
+          <div style={{
+            textAlign: "center", padding: "28px 20px",
+            border: "0.5px dashed rgba(212,64,0,.28)",
+            borderRadius: 20, background: "#fff",
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
+            <div style={{ fontSize: 15, fontWeight: 900, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
+              Ta semaine 1 démarre lundi
+            </div>
+            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
+              {activeProgram.name} t&apos;attend.
+            </div>
+            <button
+              onClick={() => navigatePeriod("next")}
+              style={{
+                width: "100%", height: 48, borderRadius: 14,
+                background: "linear-gradient(180deg,#f04a08,#d44000)",
+                color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
+                cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
+              }}
+            >
+              Voir la semaine 1 →
+            </button>
+          </div>
+        </div>
+      )}
 
       <div ref={weekGridRef} data-tour="week-sessions">
         <div key={`cal-${navKey}`} style={{
