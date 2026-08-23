@@ -23,6 +23,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { pickRelevantAssignment } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -79,22 +80,25 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
+  // Tous les assignments actifs du sportif (il peut en enchaîner plusieurs dans le futur) —
+  // sert à trouver quel programme couvre la semaine réellement affichée (navigation),
+  // distinct de `activeProgram` ci-dessus qui reste "le programme pertinent aujourd'hui".
+  const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
 
   async function fetchActiveProgram() {
     const { data } = await supabase
       .from("program_assignments")
       .select("*, programs(*)")
       .eq("user_id", userId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data?.programs) {
-      const prog = data.programs as Program;
+      .eq("status", "active");
+    setActiveAssignments(data ?? []);
+    const picked = pickRelevantAssignment(data ?? []);
+    if (picked?.programs) {
+      const prog = (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) as Program;
       setActiveProgram(prog);
-      setActiveAssignmentId(data.id);
-      setActiveProgramStartDate(data.start_date);
-      const startDate = new Date(data.start_date + "T12:00:00");
+      setActiveAssignmentId(picked.id);
+      setActiveProgramStartDate(picked.start_date);
+      const startDate = new Date(picked.start_date + "T12:00:00");
       const diffMs = Date.now() - startDate.getTime();
       const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
       setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
@@ -182,8 +186,13 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   async function loadMonth(anchor: string) {
     if (sandboxMode) return;
     const base = new Date(anchor + "T12:00:00");
-    const start = format(startOfMonth(base), "yyyy-MM-dd");
-    const end = format(endOfMonth(base), "yyyy-MM-dd");
+    // La grille Mois affiche aussi les jours de bord des semaines qui chevauchent le mois
+    // (eachWeekOfInterval) — le fetch doit couvrir la même plage, pas le mois strict,
+    // sinon les séances de ces jours de bord n'apparaissent jamais.
+    const gridStart = startOfWeek(startOfMonth(base), { weekStartsOn: 1 });
+    const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
+    const start = format(gridStart, "yyyy-MM-dd");
+    const end = format(gridEnd, "yyyy-MM-dd");
     const [{ data: s }, { data: w }] = await Promise.all([
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
@@ -352,14 +361,21 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     wellnessMapForHeader[iso] = wellnessList.find(w => w.date === iso)?.score ?? null;
   });
 
-  // Semaine du programme correspondant à la semaine actuellement affichée (navigation),
-  // distincte de `activeProgramWeek` (position réelle d'aujourd'hui dans le programme).
-  const viewedProgramWeek = (() => {
-    if (!activeProgram || !activeProgramStartDate) return -1;
-    const viewedMonday = new Date(format(dates[0], "yyyy-MM-dd") + "T12:00:00");
-    const startDate = new Date(activeProgramStartDate + "T12:00:00");
-    const weekIdx = Math.round((viewedMonday.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
-    return weekIdx >= 0 && weekIdx < activeProgram.weeks_count ? weekIdx : -1;
+  // Programme + semaine correspondant à la semaine actuellement affichée (navigation) —
+  // un sportif pouvant enchaîner plusieurs programmes actifs, celui pertinent pour la
+  // semaine affichée n'est pas forcément `activeProgram` (qui reste "pertinent aujourd'hui").
+  const { program: viewedProgram, week: viewedProgramWeek } = (() => {
+    const viewedMonday = new Date(format(dates[0], "yyyy-MM-dd") + "T12:00:00").getTime();
+    for (const a of activeAssignments) {
+      const prog = (Array.isArray(a.programs) ? a.programs[0] : a.programs) as Program | undefined;
+      if (!prog) continue;
+      const start = new Date(a.start_date + "T12:00:00").getTime();
+      const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
+      if (viewedMonday >= start && viewedMonday < end) {
+        return { program: prog, week: Math.round((viewedMonday - start) / (7 * 24 * 60 * 60 * 1000)) };
+      }
+    }
+    return { program: null as Program | null, week: -1 };
   })();
   const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
 
@@ -383,9 +399,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       />
 
       <ProgramBanner
-        program={activeProgram}
+        program={viewedProgram}
         currentWeek={viewedProgramWeek}
-        onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
+        onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
         onReconduire={() => setShowReconduire(true)}
       />

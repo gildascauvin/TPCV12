@@ -37,6 +37,7 @@ import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { pickRelevantAssignment } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 
 function dayWellness(
@@ -105,11 +106,18 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
+  // Tous les assignments actifs de l'athlète (il peut en enchaîner plusieurs dans le futur) —
+  // sert à trouver quel programme couvre la semaine réellement affichée (navigation).
+  const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
 
   useEffect(() => {
     const id = searchParams.get("athlete");
     if (id && athletes.find(a => a.id === id)) setSelectedAthleteId(id);
-  }, [searchParams, athletes]);
+    // `athletes` volontairement absent des deps : cet effet ne doit resynchroniser la
+    // sélection que sur un vrai changement d'URL (?athlete=), jamais quand seule la
+    // référence du tableau change (ex. router.refresh() au retour de focus fenêtre) —
+    // sinon un clic manuel sur un autre onglet sportif se fait silencieusement écraser.
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const fromOnboarding = searchParams.get("welcome") === "1";
@@ -121,23 +129,23 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   // Fetch active program for selected athlete
   useEffect(() => {
-    if (!athlete) { setActiveProgram(null); setActiveProgramWeek(-1); setActiveProgramStartDate(null); return; }
+    if (!athlete) { setActiveProgram(null); setActiveProgramWeek(-1); setActiveProgramStartDate(null); setActiveAssignments([]); return; }
     async function fetchAthleteProgram() {
       let q = supabase
         .from("program_assignments")
         .select("*, programs(*)")
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .eq("status", "active");
       if (athlete!.user_id) q = q.eq("user_id", athlete!.user_id);
       else q = q.eq("athlete_id", athlete!.id);
-      const { data } = await q.maybeSingle();
-      if (data?.programs) {
-        const prog = data.programs as Program;
+      const { data } = await q;
+      setActiveAssignments(data ?? []);
+      const picked = pickRelevantAssignment(data ?? []);
+      if (picked?.programs) {
+        const prog = (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) as Program;
         setActiveProgram(prog);
-        setActiveAssignmentId(data.id);
-        setActiveProgramStartDate(data.start_date);
-        const diffMs = Date.now() - new Date(data.start_date + "T12:00:00").getTime();
+        setActiveAssignmentId(picked.id);
+        setActiveProgramStartDate(picked.start_date);
+        const diffMs = Date.now() - new Date(picked.start_date + "T12:00:00").getTime();
         const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
         setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
       } else {
@@ -189,6 +197,13 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // Sandbox : le fixture initial couvre déjà -14/+14 jours (voir sandboxFixtures.ts) — un
     // refetch réseau écraserait cette fenêtre avec un résultat vide pour un coach_id fictif.
     if (sandboxMode) return;
+    // En vue Mois, naviguer (flèches ‹/›) doit recharger `monthSessions` pour le nouveau
+    // mois — sinon la grille affiche un mois différent avec les données de l'ancien
+    // (jamais rafraîchies par le fetch semaine ci-dessous, qui ignore `viewMode`).
+    if (viewMode === "month") {
+      if (athlete) await loadMonth(date, athlete);
+      return;
+    }
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
 
@@ -339,8 +354,13 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   async function loadMonth(anchor: string, athleteObj: CoachAthlete) {
     if (sandboxMode) return;
     const base = new Date(anchor + "T12:00:00");
-    const start = format(startOfMonth(base), "yyyy-MM-dd");
-    const end = format(endOfMonth(base), "yyyy-MM-dd");
+    // La grille Mois affiche aussi les jours de bord des semaines qui chevauchent le mois
+    // (eachWeekOfInterval) — le fetch doit couvrir la même plage, pas le mois strict,
+    // sinon les séances de ces jours de bord n'apparaissent jamais.
+    const gridStart = startOfWeek(startOfMonth(base), { weekStartsOn: 1 });
+    const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
+    const start = format(gridStart, "yyyy-MM-dd");
+    const end = format(gridEnd, "yyyy-MM-dd");
 
     if (athleteObj.user_id) {
       const [realRes, demoRes, wellRes] = await Promise.all([
@@ -470,19 +490,37 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         ))}
       </div>
 
-      {/* Programme banner — full width */}
-      <ProgramBanner
-        program={activeProgram}
-        currentWeek={(() => {
-          if (!activeProgram || !activeProgramStartDate) return -1;
-          const startDate = new Date(activeProgramStartDate + "T12:00:00");
-          const weekIdx = Math.round((weekStart.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
-          return weekIdx >= 0 && weekIdx < activeProgram.weeks_count ? weekIdx : -1;
-        })()}
-        onEdit={activeProgram ? () => setShowLibrary(true) : undefined}
-        onOpenLibrary={() => setShowLibrary(true)}
-        onReconduire={athlete ? () => setShowReconduire(true) : undefined}
-      />
+      {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
+          on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
+          (qui reste "le programme pertinent aujourd'hui"). */}
+      {(() => {
+        let viewedProgram: Program | null = null;
+        let viewedWeek = -1;
+        // `weekStart` (startOfWeek) tombe à minuit heure locale — reformaté à midi pour
+        // rester comparable aux dates de démarrage des programmes, toujours construites
+        // en "T12:00:00" (convention anti-DST déjà utilisée partout ailleurs dans ce fichier).
+        const weekStartNoon = new Date(format(weekStart, "yyyy-MM-dd") + "T12:00:00").getTime();
+        for (const a of activeAssignments) {
+          const prog = (Array.isArray(a.programs) ? a.programs[0] : a.programs) as Program | undefined;
+          if (!prog) continue;
+          const start = new Date(a.start_date + "T12:00:00").getTime();
+          const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
+          if (weekStartNoon >= start && weekStartNoon < end) {
+            viewedProgram = prog;
+            viewedWeek = Math.round((weekStartNoon - start) / (7 * 24 * 60 * 60 * 1000));
+            break;
+          }
+        }
+        return (
+          <ProgramBanner
+            program={viewedProgram}
+            currentWeek={viewedWeek}
+            onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
+            onOpenLibrary={() => setShowLibrary(true)}
+            onReconduire={athlete ? () => setShowReconduire(true) : undefined}
+          />
+        );
+      })()}
 
       {(() => {
         const isViewingCurrentWeek = weekDates.some(d => format(d, "yyyy-MM-dd") === todayStr);

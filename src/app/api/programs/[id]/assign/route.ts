@@ -42,6 +42,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data: existing } = await existingQuery.maybeSingle();
     if (existing) return Response.json({ error: "Un assignment actif existe déjà" }, { status: 409 });
 
+    // Nettoie les assignments déjà terminés de ce sportif (hygiène) — jamais un programme
+    // en cours ou programmé à l'avance, pour permettre d'enchaîner plusieurs programmes
+    // futurs sans que le nouveau n'écrase un programme pas encore commencé/pas encore fini.
+    if (athlete_id || user_id) {
+      let staleQuery = admin
+        .from("program_assignments")
+        .select("id, start_date, programs(weeks_count)")
+        .eq("status", "active");
+      if (athlete_id) staleQuery = staleQuery.eq("athlete_id", athlete_id);
+      if (user_id) staleQuery = staleQuery.eq("user_id", user_id);
+      const { data: existingActive } = await staleQuery;
+      const todayStr = new Date().toISOString().split("T")[0];
+      const staleIds = (existingActive ?? [])
+        .filter((a: { start_date: string; programs: { weeks_count: number } | { weeks_count: number }[] | null }) => {
+          const weeksCount = Array.isArray(a.programs) ? a.programs[0]?.weeks_count : a.programs?.weeks_count;
+          const endDate = addDays(a.start_date, (weeksCount ?? 0) * 7);
+          return endDate <= todayStr;
+        })
+        .map((a: { id: string }) => a.id);
+      if (staleIds.length > 0) {
+        await admin.from("program_assignments").update({ status: "inactive" }).in("id", staleIds);
+      }
+    }
+
     const { data: assignment, error: assignError } = await admin
       .from("program_assignments")
       .insert({ program_id: id, coach_id: user.id, athlete_id: athlete_id ?? null, user_id: user_id ?? null, start_date })

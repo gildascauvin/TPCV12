@@ -33,41 +33,63 @@ function fmtDate(iso: string): string {
 export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned }: Props) {
   const isSelfMode = athletes.length === 0 && !!selfUserId;
   const monNext = nextMonday();
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(athletes[0]?.id ?? "");
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>(athletes[0] ? [athletes[0].id] : []);
   const [startDate, setStartDate] = useState(monNext);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const selectedAthlete = athletes.find(a => a.id === selectedAthleteId);
+  function toggleAthlete(id: string) {
+    setSelectedAthleteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function assignOne(body: Record<string, string>): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const res = await fetch(`/api/programs/${programId}/assign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true };
+    if (res.status === 409) return { ok: false, reason: "déjà assigné" };
+    const d = await res.json().catch(() => ({}));
+    return { ok: false, reason: d.error ?? "erreur" };
+  }
 
   async function handleAssign() {
-    if (!isSelfMode && !selectedAthleteId) return;
+    if (!isSelfMode && selectedAthleteIds.length === 0) return;
     if (!startDate) return;
     setLoading(true);
     setError("");
     try {
-      const body: Record<string, string> = { start_date: startDate };
       if (isSelfMode) {
-        body.user_id = selfUserId!;
-      } else {
-        body.athlete_id = selectedAthleteId;
-        if (selectedAthlete?.user_id) body.user_id = selectedAthlete.user_id;
-      }
-
-      const res = await fetch(`/api/programs/${programId}/assign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (res.status === 409) { setError("Ce sportif suit déjà ce programme."); return; }
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError(d.error ?? "Erreur lors de l'assignation.");
+        const result = await assignOne({ start_date: startDate, user_id: selfUserId! });
+        if (!result.ok) {
+          setError(result.reason === "déjà assigné" ? "Ce sportif suit déjà ce programme." : result.reason);
+          return;
+        }
+        setSuccess(true);
+        setTimeout(() => { onAssigned(); onClose(); }, 1400);
         return;
       }
-      setSuccess(true);
-      setTimeout(() => { onAssigned(); onClose(); }, 1400);
+
+      const results = await Promise.all(selectedAthleteIds.map(async id => {
+        const athlete = athletes.find(a => a.id === id);
+        const body: Record<string, string> = { start_date: startDate, athlete_id: id };
+        if (athlete?.user_id) body.user_id = athlete.user_id;
+        const r = await assignOne(body);
+        return { name: athlete?.name ?? "—", ...r };
+      }));
+      const failed = results.filter(r => !r.ok) as { name: string; reason: string }[];
+      const succeeded = results.filter(r => r.ok);
+
+      if (failed.length === 0) {
+        setSuccess(true);
+        setTimeout(() => { onAssigned(); onClose(); }, 1400);
+      } else {
+        onAssigned(); // rafraîchit la liste — les réussites restent acquises même si certaines ont échoué
+        const failText = failed.map(f => `${f.name} (${f.reason})`).join(", ");
+        setError(succeeded.length > 0 ? `Assigné à ${succeeded.length} sportif(s). Échec pour ${failText}.` : `Échec pour ${failText}.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -98,7 +120,9 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
         {success ? (
           <div style={{ textAlign: "center", padding: "30px 0 40px" }}>
             <div style={{ fontSize: 36 }}>✅</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#2f9e44", marginTop: 10 }}>Programme assigné !</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#2f9e44", marginTop: 10 }}>
+              {isSelfMode || selectedAthleteIds.length <= 1 ? "Programme assigné !" : `Programme assigné à ${selectedAthleteIds.length} sportifs !`}
+            </div>
             <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6 }}>Les séances ont été générées dans le planning.</div>
           </div>
         ) : (
@@ -113,28 +137,38 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
               ) : (
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-                    Sportif
+                    Sportif{selectedAthleteIds.length > 1 ? "s" : ""} {selectedAthleteIds.length > 0 && `(${selectedAthleteIds.length})`}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {athletes.map(a => (
-                      <button
-                        key={a.id}
-                        onClick={() => setSelectedAthleteId(a.id)}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "11px 14px", borderRadius: 12, cursor: "pointer",
-                          border: selectedAthleteId === a.id ? "2px solid #d44000" : "2px solid #e8e4df",
-                          background: selectedAthleteId === a.id ? "#fff4f0" : "#faf9f7",
-                          textAlign: "left",
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{a.name}</div>
-                          {a.sport && <div style={{ fontSize: 11, color: "#8a8f94" }}>{a.sport}</div>}
-                        </div>
-                        {selectedAthleteId === a.id && <span style={{ color: "#d44000", fontSize: 16 }}>✓</span>}
-                      </button>
-                    ))}
+                    {athletes.map(a => {
+                      const checked = selectedAthleteIds.includes(a.id);
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => toggleAthlete(a.id)}
+                          style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "11px 14px", borderRadius: 12, cursor: "pointer",
+                            border: checked ? "2px solid #d44000" : "2px solid #e8e4df",
+                            background: checked ? "#fff4f0" : "#faf9f7",
+                            textAlign: "left",
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{a.name}</div>
+                            {a.sport && <div style={{ fontSize: 11, color: "#8a8f94" }}>{a.sport}</div>}
+                          </div>
+                          <div style={{
+                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                            border: checked ? "none" : "2px solid #d8d3cc",
+                            background: checked ? "#d44000" : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}>
+                            {checked && <span style={{ color: "#fff", fontSize: 12, fontWeight: 900 }}>✓</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -185,16 +219,22 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
             }}>
               <button
                 onClick={handleAssign}
-                disabled={(!isSelfMode && !selectedAthleteId) || !startDate || loading}
+                disabled={(!isSelfMode && selectedAthleteIds.length === 0) || !startDate || loading}
                 style={{
                   width: "100%", padding: "14px", borderRadius: 26, border: "none",
-                  cursor: (isSelfMode || selectedAthleteId) && !loading ? "pointer" : "not-allowed",
-                  background: (isSelfMode || selectedAthleteId) && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
-                  color: (isSelfMode || selectedAthleteId) && !loading ? "#fff" : "#aaa",
+                  cursor: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "pointer" : "not-allowed",
+                  background: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
+                  color: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "#fff" : "#aaa",
                   fontWeight: 700, fontSize: 14,
                 }}
               >
-                {loading ? "Génération des séances…" : isSelfMode ? "Démarrer ce programme" : "Assigner le programme"}
+                {loading
+                  ? "Génération des séances…"
+                  : isSelfMode
+                    ? "Démarrer ce programme"
+                    : selectedAthleteIds.length > 1
+                      ? `Assigner à ${selectedAthleteIds.length} sportifs`
+                      : "Assigner le programme"}
               </button>
             </div>
           </>

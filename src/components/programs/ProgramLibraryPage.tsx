@@ -284,7 +284,14 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               const bars = weekAvgRpes(p);
               const maxBar = Math.max(...bars, 1);
               const emoji = sportEmoji(p.sport);
-              const programAssignments = assignments.filter(a => a.program_id === p.id && a.status === "active");
+              const programAssignments = assignments.filter(a => {
+                if (a.program_id !== p.id || a.status !== "active") return false;
+                // N'affiche que les sportifs dont le programme n'est pas encore terminé
+                // (en cours ou à venir) — un programme déjà fait n'a plus d'intérêt ici.
+                const start = new Date(a.start_date + "T12:00:00").getTime();
+                const end = start + p.weeks_count * 7 * 24 * 60 * 60 * 1000;
+                return Date.now() < end;
+              });
 
               return (
                 <div key={p.id} style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: "1px solid rgba(0,0,0,.07)", boxShadow: "0 2px 12px rgba(0,0,0,.04)" }}>
@@ -322,7 +329,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {programAssignments.map((a, ai) => {
                           const isSelf = selfUserId && a.user_id === selfUserId;
-                          const athlete = athletes.find(x => x.id === a.athlete_id || x.user_id === a.user_id);
+                          const athlete = athletes.find(x => x.id === a.athlete_id || (!!a.user_id && x.user_id === a.user_id));
                           const displayName = isSelf ? "Moi" : (athlete?.name ?? "—");
                           const color = AVATAR_COLORS[ai % AVATAR_COLORS.length];
                           return (
