@@ -315,11 +315,35 @@ function formatRelativeDate(dateStr: string): string {
 // avant "m", "sec(ondes)?" avant "s") pour ne jamais matcher un préfixe trop court par erreur.
 const LEADING_QUANTITY_RE = /^(\d+(?:[.,]\d+)?\s*(?:km|min|h\d*|sec(?:ondes?)?|s|m)\b|\d+:\d+\s*\/\s*km)/i;
 
+/* Volume en tête de ligne — mêmes 2 premières alternatives que TOKEN_RE (complexe "3x(1+1+1)" et
+   NxM simple), utilisé pour sauter par-dessus avant de chercher le nom. Bug trouvé par Gildas :
+   une ligne d'haltérophilie type "3X(1+1+1) Hang power clean + Push press + Split jerk 90kg"
+   (convention normale pour un complexe) ne tokénisait que "Power clean", perdant "Hang" — la
+   ligne commence par un chiffre, donc l'ancien extractNameCandidate (qui n'a jamais cherché le nom
+   qu'au tout début de la ligne) retombait direct sur l'ancien scan par confinement (voir
+   resolveExerciseName/findNameSpanRaw ci-dessous), qui ne garde que la clé HISTORY la plus longue
+   trouvée n'importe où dans la ligne. Consomme aussi un éventuel séparateur tiret/deux-points entre
+   le volume et le nom, pour ne pas le laisser traîner en tête du candidat. */
+const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?)\s*[-–:·]?\s*/i;
+
+/* Un candidat est plausible si CHAQUE exercice combiné par "+" reste court (<=5 mots) — évalué
+   segment par segment, pas sur la longueur totale. Un complexe à 3 mouvements ("Hang power clean +
+   Push press + Split jerk", 9 mots au total) dépasserait un plafond global alors que chaque morceau
+   pris seul reste un nom d'exercice tout à fait plausible. */
+function isPlausibleNameCandidate(name: string): boolean {
+  if (name.length < 2) return false;
+  const segments = name.split("+").map(s => s.trim()).filter(Boolean);
+  if (!segments.length) return false;
+  return segments.every(seg => seg.length >= 2 && seg.split(/\s+/).length <= 5);
+}
+
 function extractNameCandidate(line: string): string | null {
-  const m = line.match(/^([^\d]+)/);
+  const afterVolume = line.replace(LEADING_VOLUME_RE, "");
+  const base = afterVolume.length !== line.length ? afterVolume : line;
+  const m = base.match(/^([^\d]+)/);
   if (m) {
     const name = m[1].trim().replace(/[-–:·]+$/, "").trim();
-    if (name.length >= 2 && name.split(/\s+/).length <= 5) return name;
+    if (isPlausibleNameCandidate(name)) return name;
   }
   // Une ligne qui commence directement par une distance/durée/allure ("400m", "30 min", "4:30/km")
   // est fréquente en course à pied/natation/vélo — ce token EST l'identité de l'exercice, pas
