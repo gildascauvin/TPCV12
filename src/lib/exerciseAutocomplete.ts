@@ -299,8 +299,12 @@ const INTENSITY_TOKEN_RE = /@\s*\d+(?:[.,]\d+)?\s*(kg)?|RPE\s*\d+(?:\.\d+)?|\d+\
      tokénisé avant ce chantier (aucune des 3 autres alternatives ne couvre un token qui commence
      par des lettres).
    - 5e alternative : nombre + unité (km/kg/min/m/s/%), espace optionnel entre les deux — couvre
-     "5kg" et "5 kg" identiquement, unité toujours prise avec la valeur dans le même token. */
-export const TOKEN_RE = /(\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|(?:RPE|RIR)\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/gi;
+     "5kg" et "5 kg" identiquement, unité toujours prise avec la valeur dans le même token.
+   - 2e alternative, décimale sur le 2e nombre ("2x92.5", "2X92,5") : trouvé par Gildas — sans le
+     groupe décimal optionnel, "2X92,5" ne matchait que "2X92", laissant ",5" en texte brut, qui se
+     faisait ensuite happer comme un faux nom d'exercice par extractNameCandidate (voir
+     LEADING_VOLUME_RE ci-dessous, qui partage cette même alternative). */
+export const TOKEN_RE = /(\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|(?:RPE|RIR)\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/gi;
 
 function formatRelativeDate(dateStr: string): string {
   const diffMs = Date.now() - new Date(dateStr + "T12:00:00").getTime();
@@ -324,7 +328,7 @@ const LEADING_QUANTITY_RE = /^(\d+(?:[.,]\d+)?\s*(?:km|min|h\d*|sec(?:ondes?)?|s
    resolveExerciseName/findNameSpanRaw ci-dessous), qui ne garde que la clé HISTORY la plus longue
    trouvée n'importe où dans la ligne. Consomme aussi un éventuel séparateur tiret/deux-points entre
    le volume et le nom, pour ne pas le laisser traîner en tête du candidat. */
-const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?)\s*[-–:·]?\s*/i;
+const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?)\s*[-–:·]?\s*/i;
 
 /* Label de superset en tête de ligne ("A – ", "B – ", "A1 – "...) — même convention déjà utilisée
    ailleurs dans ce fichier pour les suggestions de contrainte (cote()/complete Cote : "A1"/"A2"/
