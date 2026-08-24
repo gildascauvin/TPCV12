@@ -326,6 +326,17 @@ const LEADING_QUANTITY_RE = /^(\d+(?:[.,]\d+)?\s*(?:km|min|h\d*|sec(?:ondes?)?|s
    le volume et le nom, pour ne pas le laisser traîner en tête du candidat. */
 const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?)\s*[-–:·]?\s*/i;
 
+/* Label de superset en tête de ligne ("A – ", "B – ", "A1 – "...) — même convention déjà utilisée
+   ailleurs dans ce fichier pour les suggestions de contrainte (cote()/complete Cote : "A1"/"A2"/
+   "B1"/"B2"). Volontairement restreint à UNE SEULE lettre (+ un chiffre optionnel) suivie
+   immédiatement d'un séparateur — un vrai nom d'exercice abrégé ("RDL", "OHP", "HS FS"...) a
+   toujours au moins 2 lettres avant tout séparateur, donc ne matche jamais ce motif : pas de risque
+   de confondre un label avec le début d'un nom réel. Bug trouvé par Gildas : "A – 2X8 Bulgarian
+   split squat + 1 arm press 20kg" ne tokénisait que "squat" (scan par confinement, cf.
+   LEADING_VOLUME_RE ci-dessus) car la ligne ne commence pas directement par le volume — LEADING_
+   VOLUME_RE seul ne s'y appliquait donc jamais. */
+const LEADING_LABEL_RE = /^\s*[A-Za-z]\d?\s*[-–:]\s*/;
+
 /* Un candidat est plausible si CHAQUE exercice combiné par "+" reste court (<=5 mots) — évalué
    segment par segment, pas sur la longueur totale. Un complexe à 3 mouvements ("Hang power clean +
    Push press + Split jerk", 9 mots au total) dépasserait un plafond global alors que chaque morceau
@@ -337,12 +348,27 @@ function isPlausibleNameCandidate(name: string): boolean {
   return segments.every(seg => seg.length >= 2 && seg.split(/\s+/).length <= 5);
 }
 
+/* Portion de texte avant le prochain token RECONNU (volume/intensité, via TOKEN_RE) — remplace un
+   simple arrêt au premier chiffre venu. Bug trouvé sur "... Bulgarian split squat + 1 arm press
+   20kg" (le "1" de "1 arm press" n'est pas un token, juste un qualificatif dans le 2e nom combiné) :
+   s'arrêter au premier chiffre tronquait le candidat à "Bulgarian split squat +", perdant "1 arm
+   press" et laissant un "+" en trop. TOKEN_RE.exec trouve le prochain VRAI token (ex. "20kg"),
+   pas n'importe quel chiffre isolé — nécessite de réinitialiser lastIndex (regex globale/mutable
+   partagée par le module, même précaution que getClickToken plus bas dans ce fichier). */
+function untilNextToken(text: string): string {
+  TOKEN_RE.lastIndex = 0;
+  const m = TOKEN_RE.exec(text);
+  return m ? text.slice(0, m.index) : text;
+}
+
 function extractNameCandidate(line: string): string | null {
-  const afterVolume = line.replace(LEADING_VOLUME_RE, "");
-  const base = afterVolume.length !== line.length ? afterVolume : line;
-  const m = base.match(/^([^\d]+)/);
-  if (m) {
-    const name = m[1].trim().replace(/[-–:·]+$/, "").trim();
+  const afterLabel = line.replace(LEADING_LABEL_RE, "");
+  const preVolume = afterLabel.length !== line.length ? afterLabel : line;
+  const afterVolume = preVolume.replace(LEADING_VOLUME_RE, "");
+  const base = afterVolume.length !== preVolume.length ? afterVolume : preVolume;
+  const raw = untilNextToken(base);
+  if (raw) {
+    const name = raw.trim().replace(/[-–:·]+$/, "").trim();
     if (isPlausibleNameCandidate(name)) return name;
   }
   // Une ligne qui commence directement par une distance/durée/allure ("400m", "30 min", "4:30/km")
