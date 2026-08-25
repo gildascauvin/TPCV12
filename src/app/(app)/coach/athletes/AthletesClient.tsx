@@ -7,6 +7,8 @@ import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
+import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
+import TestsPanel from "@/components/tests/TestsPanel";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
@@ -21,15 +23,20 @@ import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, MET
 import { fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
+import type { LastTestByAthlete } from "@/lib/testSummary";
 
-// Reste en Status (rouge/orange/vert) — colore le libellé d'état "Disponible"/"Stable"/"À
-// surveiller" (statusLabel), pas un ring : job Status légitime (texte+couleur = état, pas
-// magnitude). AthleteRing plus bas utilise wellnessColor (Sequential bleu) pour le ring lui-même.
-function scoreColor(s: number) { return s >= 75 ? "#2f9e44" : s >= 55 ? "#f28a00" : "#d10000"; }
+// Reste en Status (rouge/orange/vert) — colore le badge d'état "Disponible"/"Stable"/"À
+// surveiller", pas un ring : job Status légitime (texte+couleur = état, pas magnitude).
+// AthleteRing plus bas utilise wellnessColor (Sequential bleu) pour le ring lui-même.
+// Label ET couleur dans une seule fonction (pas 2 séparées) — bug réel trouvé par Gildas sinon :
+// l'ancienne scoreColor(s) ignorait le paramètre trend, donc un score élevé (vert) avec un trend
+// "accumulation"/"fatigue_persistante" affichait "À surveiller" en vert au lieu de rouge.
 const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
-function statusLabel(s: number, trend?: TrendCode | null) {
-  if (trend && TREND_WATCH.has(trend)) return "À surveiller";
-  return s >= 75 ? "Disponible" : s >= 60 ? "Stable" : "À surveiller";
+function athleteStatus(s: number, trend?: TrendCode | null): { label: string; color: string } {
+  if (trend && TREND_WATCH.has(trend)) return { label: "À surveiller", color: "#d10000" };
+  if (s >= 75) return { label: "Disponible", color: "#2f9e44" };
+  if (s >= 60) return { label: "Stable", color: "#f28a00" };
+  return { label: "À surveiller", color: "#d10000" };
 }
 
 // Mêmes charts que /conseils (ZoneSparkline + SparkLineClient) — un seul point de vérité, plus de
@@ -164,6 +171,57 @@ function AthleteRing({ score }: { score: number }) {
   );
 }
 
+/* Badge "Charge" compact pour la ligne repliée — reprend sigDimInfo("load",...) déjà calculé pour
+   le chart détaillé (AthleteSignatureBlock), juste le libellé de zone ACWR du jour, pas de chiffre
+   0-100 inventé (contrairement au POC dont les scores "Charge 72/91/58" sont des exemples fictifs
+   sans équivalent direct dans notre modèle réel). */
+function loadBadge(signature: AthleteSignature): { label: string; color: string } | null {
+  if (signature.kind !== "ok") return null;
+  const todayAcwr = signature.series[signature.series.length - 1]?.acwr ?? null;
+  if (todayAcwr === null) return null;
+  return sigDimInfo("load", todayAcwr, "coach");
+}
+
+/* Badge "Dernier test" visible même carte repliée (principe POC : scan rapide sans ouvrir la
+   carte) — nom du test + tendance ↑/↓/→, couleur dérivée de "amélioration" (tient déjà compte du
+   sens de l'unité côté testSummary.ts), pas du sens brut de la valeur. */
+function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
+  if (!summary) return null;
+  const arrow = summary.improved === true ? "↑" : summary.improved === false ? "↓" : "→";
+  const color = summary.improved === true ? "#2f9e44" : summary.improved === false ? "#d10000" : "#8a8f94";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
+      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Dernier test</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "#1f2428" }}>
+        {summary.name}{" "}
+        <span style={{ color, fontWeight: 800 }}>{arrow}{summary.deltaPct !== null ? ` ${summary.deltaPct > 0 ? "+" : ""}${summary.deltaPct}%` : ""}</span>
+      </span>
+    </div>
+  );
+}
+
+/* Panneau déplié — tabs "Charge & Récupération / Tests de performance" propres à CET athlète (état
+   local, se réinitialise naturellement à chaque ouverture puisque démonté à la fermeture — un seul
+   panneau ouvert à la fois, voir expandedId dans AthletesClient). */
+function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsight }: {
+  userId: string; athlete: CoachAthlete; signature: AthleteSignature; rangeMode: RangeMode; trendInsight: AthleteTrendInsight;
+}) {
+  const [section, setSection] = useState<TestsSection>("load");
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,.08)" }}>
+      <SectionTabs active={section} onChange={setSection} />
+      {section === "tests" ? (
+        <TestsPanel
+          ownerId={userId} subject={{ subjectCoachAthleteId: athlete.id }} linkedUserId={athlete.user_id}
+          emptyHint={`Aucun test enregistré pour ${athlete.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
+        />
+      ) : (
+        <AthleteSignatureBlock signature={signature} athleteId={athlete.id} athleteName={athlete.name} rangeMode={rangeMode} trendInsight={trendInsight} />
+      )}
+    </div>
+  );
+}
+
 interface Props {
   userId: string;
   initialAthletes: CoachAthlete[];
@@ -171,14 +229,16 @@ interface Props {
   initialSignatures: Record<string, AthleteSignature>;
   initialTrends: Record<string, TrendCode | null>;
   initialTrendInsights: Record<string, AthleteTrendInsight>;
+  initialLastTests: LastTestByAthlete;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
 }
 
-export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialLastTests, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
+  const { isMd } = useBreakpoint();
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -186,18 +246,19 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [signatures, setSignatures] = useState(initialSignatures);
   const [trends, setTrends] = useState(initialTrends);
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [lastTests] = useState(initialLastTests);
+  // Une seule carte ouverte à la fois (évite le chaos — principe repris d'un POC UX fourni par
+  // Gildas) : remplace l'ancien Set multi-expand. Les tabs Charge/Tests vivent maintenant PAR carte
+  // (ExpandedAthletePanel, état local) — plus de mode de page unique à gérer ici.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const realPaywall = usePaywall(subscriptionStatus);
   const sandboxPaywall = useSandboxGate("coach");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   function toggleExpanded(id: string) {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setExpandedId(prev => (prev === id ? null : id));
   }
 
   async function handleDateChange(date: string) {
@@ -286,11 +347,23 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 borderRadius: 26, padding: 18,
                 boxShadow: a.user_id ? "0 8px 24px rgba(47,158,68,.07)" : "0 12px 32px rgba(32,59,43,.08)",
               }}>
-                <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+                <div
+                  onClick={isPending ? undefined : () => toggleExpanded(a.id)}
+                  style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap", cursor: isPending ? "default" : "pointer" }}
+                >
                   <AthleteRing score={a.wellness_score} />
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428" }}>{a.name}</div>
+                      {isPending ? (
+                        <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428" }}>{a.name}</div>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`); }}
+                          style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(31,36,40,.18)", textUnderlineOffset: 3 }}
+                        >
+                          {a.name}<span className="tour-lock">🔒</span>
+                        </button>
+                      )}
                       {a.user_id && (
                         <div style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(47,158,68,.12)", color: "#2f9e44", fontSize: 9, fontWeight: 900, letterSpacing: "0.08em" }}>RÉEL</div>
                       )}
@@ -299,33 +372,61 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>
-                      {isPending
-                        ? <span style={{ color: "#f28a00" }}>{a.invite_email}</span>
-                        : <>{a.sport}{a.sport ? " · " : ""}<span style={{ color: scoreColor(a.wellness_score), fontWeight: 700 }}>{statusLabel(a.wellness_score, trends[a.id])}</span></>
-                      }
+                      {isPending ? <span style={{ color: "#f28a00" }}>{a.invite_email}</span> : a.sport}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {isMd && !isPending && (() => {
+                    const badge = loadBadge(signatures[a.id] ?? { kind: "manual" });
+                    const test = lastTests[a.id];
+                    const status = athleteStatus(a.wellness_score, trends[a.id]);
+                    return (
+                      <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
+                        {badge && (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
+                            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: badge.color, whiteSpace: "nowrap" }}>{badge.label}</span>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
+                          <span style={{ fontSize: 11.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
+                        </div>
+                        <TestBadge summary={test} />
+                      </div>
+                    );
+                  })()}
+                  {!isPending && (
+                    <span style={{ color: "#8a8f94", fontSize: 13, flexShrink: 0, transform: expandedId === a.id ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+                  )}
+                  <div style={{ position: "relative", flexShrink: 0 }}>
                     <button
-                      data-tour="voir-planning-btn"
-                      onClick={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}
-                      style={{ height: 34, paddingLeft: 13, paddingRight: 13, borderRadius: 10, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", whiteSpace: "nowrap" }}
+                      onClick={e => { e.stopPropagation(); setMenuOpenId(prev => (prev === a.id ? null : a.id)); }}
+                      aria-label="Options"
+                      style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid rgba(0,0,0,.08)", background: "#fff", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "#8a8f94", display: "flex", alignItems: "center", justifyContent: "center" }}
                     >
-                      Voir planning<span className="tour-lock">🔒</span>
+                      ⋯
                     </button>
-                    <button
-                      data-tour="supprimer-btn"
-                      onClick={() => handleDelete(a)}
-                      style={{ height: 34, paddingLeft: 12, paddingRight: 12, borderRadius: 10, background: "#fff8f8", border: "1px solid rgba(200,30,30,.20)", color: "#c81e1e", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: deleting === a.id ? 0.5 : 1, whiteSpace: "nowrap" }}
-                    >
-                      {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
-                    </button>
+                    {menuOpenId === a.id && (
+                      <>
+                        <div onClick={e => { e.stopPropagation(); setMenuOpenId(null); }} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
+                        <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 40, right: 0, background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12, boxShadow: "0 10px 28px rgba(0,0,0,.16)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
+                          <button
+                            data-tour="supprimer-btn"
+                            onClick={() => { setMenuOpenId(null); handleDelete(a); }}
+                            disabled={deleting === a.id}
+                            style={{ width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#c81e1e", opacity: deleting === a.id ? 0.5 : 1 }}
+                          >
+                            {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {!isPending && (() => {
                   const insight = trendInsights[a.id];
-                  const isExpanded = expandedIds.has(a.id);
+                  const isExpanded = expandedId === a.id;
                   return (
                     <>
                       {insight && (
@@ -333,14 +434,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                           {insight.emoji} <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
                         </div>
                       )}
-                      <button
-                        onClick={() => toggleExpanded(a.id)}
-                        style={{ marginTop: 10, background: "none", border: "none", padding: 0, color: "#d44000", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}
-                      >
-                        {isExpanded ? "Masquer le détail ▴" : "Voir charge & récupération ▾"}
-                      </button>
                       {isExpanded && (
-                        <AthleteSignatureBlock signature={signatures[a.id] ?? { kind: "manual" }} athleteId={a.id} athleteName={a.name} rangeMode={rangeMode} trendInsight={insight} />
+                        <ExpandedAthletePanel
+                          userId={userId} athlete={a} signature={signatures[a.id] ?? { kind: "manual" }}
+                          rangeMode={rangeMode} trendInsight={insight}
+                        />
                       )}
                     </>
                   );

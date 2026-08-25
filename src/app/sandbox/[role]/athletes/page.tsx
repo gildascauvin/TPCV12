@@ -20,6 +20,7 @@ export default function SandboxAthletesPage({ params }: { params: { role: string
       initialSignatures={signatures}
       initialTrends={trends}
       initialTrendInsights={trendInsights}
+      initialLastTests={{}}
       subscriptionStatus="free"
       inviteCode={null}
       sandboxMode

@@ -11,6 +11,11 @@ import { CSS } from "@dnd-kit/utilities";
 import type { ExerciseAttachments, ExerciseComment } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import {
+  TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTestResults, deleteTestResult,
+  type TestSubject, type TestResultRow,
+} from "@/lib/testResults";
+import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -494,6 +499,9 @@ function PhotoIcon() {
 function CommentIcon() {
   return <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.4 8.4H4l1.6-3.8a8.4 8.4 0 1 1 15.4-4.6z" /></svg>;
 }
+function TestIcon() {
+  return <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M9 2h6M10 2v6.5L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 8.5V2" /><path d="M7.5 14h9" /></svg>;
+}
 function GripIcon() {
   return (
     <svg width={11} height={16} viewBox="0 0 11 16" fill="currentColor">
@@ -604,9 +612,16 @@ interface CardProps {
   isPanelOwner: boolean;
   requestPanel: () => void;
   releasePanel: () => void;
+  /* Suivi de tests — voir Props d'ExerciseBlockEditor plus bas pour le détail. `null` = écriture
+     live désactivée (contexte ambigu ou template) : la carte reste utilisable, juste sans
+     synchronisation immédiate vers tests/test_results (le résultat part quand même dans
+     exercise_media, resynchronisé au save de la séance comme avant). */
+  ownerId: string | null;
+  testSubject: TestSubject | null;
+  sessionDate: string;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel }: CardProps) {
+function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
@@ -630,8 +645,76 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
 
   const hasMedia = !!(attachments.videoUrl || attachments.photoUrl);
   const hasComments = attachments.comments.length > 0;
+  const hasResult = !!attachments.result;
   const commentCount = attachments.comments.length;
   const exerciseName = resolveExerciseName(line.text);
+  const canSyncResult = !!(ownerId && testSubject);
+
+  /* Résultat de test — composeur avec CTA "Valider" explicite (pas d'auto-save au caractère près,
+     contrairement au champ vidéo/photo) : la validation déclenche une écriture immédiate dans
+     tests/test_results (pas seulement au save de la séance, voir syncTestResultsFromSession) pour
+     que le mini-graphe apparaisse tout de suite dans la carte. */
+  const [resultEditing, setResultEditing] = useState(false);
+  const [resultDraftValue, setResultDraftValue] = useState("");
+  const [resultDraftUnit, setResultDraftUnit] = useState("kg");
+  const [resultHistory, setResultHistory] = useState<TestResultRow[] | null>(null);
+  const [resultTestId, setResultTestId] = useState<string | null>(null);
+  const [savingResult, setSavingResult] = useState(false);
+
+  // Charge l'historique une fois si la ligne est déjà marquée comme test au montage (séance rouverte)
+  // — jamais pendant l'édition du composeur, jamais si la synchro live est indisponible.
+  useEffect(() => {
+    if (!hasResult || resultEditing || resultHistory !== null || !canSyncResult || !exerciseName) return;
+    let cancelled = false;
+    (async () => {
+      const test = await resolveTest(ownerId!, exerciseName, attachments.result?.unit ?? "kg");
+      if (cancelled || !test) return;
+      setResultTestId(test.id);
+      const rows = await listTestResults(test.id, testSubject!);
+      if (!cancelled) setResultHistory(rows);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasResult, resultEditing, exerciseName, canSyncResult]);
+
+  async function handleValidateResult() {
+    const value = parseResultValue(resultDraftValue);
+    if (value === null) return;
+    const unit = resultDraftUnit;
+    stampedUpdate({ ...attachments, result: { value: resultDraftValue, unit } });
+    if (canSyncResult && exerciseName) {
+      setSavingResult(true);
+      await upsertTestResult(ownerId!, testSubject!, { name: exerciseName, unit, value, date: sessionDate });
+      const test = await resolveTest(ownerId!, exerciseName, unit);
+      if (test) {
+        setResultTestId(test.id);
+        setResultHistory(await listTestResults(test.id, testSubject!));
+      }
+      setSavingResult(false);
+    }
+    setResultEditing(false);
+  }
+
+  function handleEditResult() {
+    setResultDraftValue(attachments.result?.value ?? "");
+    setResultDraftUnit(attachments.result?.unit ?? "kg");
+    setResultEditing(true);
+  }
+
+  async function handleDeleteResult() {
+    if (canSyncResult && resultTestId) await deleteTestResult(resultTestId, sessionDate, testSubject!);
+    stampedUpdate({ ...attachments, result: undefined });
+    setResultHistory(null);
+    setResultTestId(null);
+    setResultEditing(false);
+  }
+
+  function handleMarkAsTest() {
+    stampedUpdate({ ...attachments, result: { value: "", unit: "kg" } });
+    setResultDraftValue("");
+    setResultDraftUnit("kg");
+    setResultEditing(true);
+  }
 
   /* Toute mutation (média ou commentaire) est horodatée + attribuée — pilote le point de
      notification dans les vues de lecture (UnseenDot.tsx). */
@@ -842,6 +925,10 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
           />
         )}
 
+        {hasResult && !editing && (
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, color: "#d44000", background: "rgba(212,64,0,.1)", borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap" }}>🧪 Test</span>
+        )}
+
         <button
           ref={moreRef}
           onClick={() => setMenuOpen(v => !v)}
@@ -862,6 +949,10 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
             rows={[
               { key: "media", label: hasMedia ? "Vidéo démo · ajoutée" : "Ajouter une vidéo démo", icon: <VideoIcon />, onSelect: () => setOpen("media") },
               { key: "comments", label: commentCount > 0 ? `Commentaires · ${commentCount}` : "Laisser un commentaire", icon: <CommentIcon />, onSelect: () => setOpen("comments") },
+              {
+                key: "test", label: hasResult ? "Retirer le test" : "Marquer comme test", icon: <TestIcon />,
+                onSelect: () => { if (hasResult) handleDeleteResult(); else handleMarkAsTest(); },
+              },
               { key: "delete", label: "Supprimer l'exercice", icon: (
                 <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
               ), danger: true, onSelect: onDelete },
@@ -869,6 +960,60 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
           />
         )}
       </div>
+
+      {hasResult && (
+        <div style={{ marginTop: 8, marginLeft: 18 }}>
+          {resultEditing ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#9a9ea1", flexShrink: 0 }}>Résultat</span>
+              <input
+                type="text" inputMode="decimal" autoFocus
+                value={resultDraftValue}
+                onChange={e => setResultDraftValue(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handleValidateResult(); }}
+                placeholder="Ex. 12,5"
+                style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, padding: "6px 9px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#171b1f" }}
+              />
+              <select
+                value={resultDraftUnit} onChange={e => setResultDraftUnit(e.target.value)}
+                style={{ fontSize: 13, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#5b5f62", flexShrink: 0 }}
+              >
+                {TEST_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+              <button
+                onClick={handleValidateResult}
+                disabled={parseResultValue(resultDraftValue) === null || savingResult}
+                style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#d44000", border: "none", borderRadius: 8, height: 32, padding: "0 10px", cursor: "pointer", flexShrink: 0, opacity: parseResultValue(resultDraftValue) === null ? 0.5 : 1 }}
+              >
+                {savingResult ? "…" : "Valider"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f" }}>
+                  {attachments.result?.value || "—"} {attachments.result?.unit}
+                </span>
+                <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                  <button onClick={handleEditResult} style={{ fontSize: 11, fontWeight: 700, color: "#62686e", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Modifier</button>
+                  <button onClick={handleDeleteResult} style={{ fontSize: 11, fontWeight: 700, color: "#c81e1e", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Supprimer</button>
+                </div>
+              </div>
+              {resultHistory && resultHistory.length >= 2 && (
+                <div style={{ marginTop: 8 }}>
+                  <TestEvolutionChart points={resultHistory.map(r => ({ date: r.date, value: r.value }))} height={54} />
+                </div>
+              )}
+              {resultHistory && resultHistory.length === 1 && (
+                <div style={{ fontSize: 11, color: "#9a9ea1", marginTop: 4 }}>Premier résultat enregistré pour ce test.</div>
+              )}
+              {!canSyncResult && (
+                <div style={{ fontSize: 11, color: "#c99", marginTop: 4 }}>Historique indisponible ici — sera enregistré à la sauvegarde de la séance.</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {(hasMedia || open === "media") && (
         <div style={{ marginTop: 8, marginLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1008,12 +1153,35 @@ interface Props {
   authorName: string;
   initialMedia?: Record<string, ExerciseAttachments> | null;
   onMediaChange?: (media: Record<string, ExerciseAttachments>) => void;
+  /* Suivi de tests — date de la séance (horodate un résultat validé), sujet explicite côté coach
+     (quel coach_athlete précis, sinon ambiguïté quand plusieurs destinataires sont possibles — voir
+     CoachSessionModal) et un flag pour couper entièrement l'écriture live (ProgramBuilderModal :
+     édition d'un template, pas la séance d'un utilisateur réel — attribuer un résultat au compte
+     réellement authentifié serait faux dans ce contexte). Côté sportif (authorRole="athlete"),
+     `testSubject` non fourni retombe par défaut sur "soi-même" une fois l'utilisateur résolu. */
+  sessionDate: string;
+  testSubject?: TestSubject;
+  disableLiveTestSync?: boolean;
 }
 
-export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange }: Props) {
+export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange, sessionDate, testSubject, disableLiveTestSync }: Props) {
   const [lines, setLines] = useState<Line[]>(() =>
     value.split("\n").filter(l => l.trim()).map(text => ({ id: crypto.randomUUID(), text }))
   );
+  // Résolu une fois pour toutes les cartes de cet éditeur — auth.uid() courant, toujours le bon
+  // owner_id que ce soit un sportif qui édite sa propre séance ou un coach qui édite celle d'un
+  // sportif (owner_id = qui écrit, pas forcément le sujet du résultat — voir CardProps.testSubject).
+  const [resolvedOwnerId, setResolvedOwnerId] = useState<string | null>(null);
+  useEffect(() => {
+    if (disableLiveTestSync) return;
+    let cancelled = false;
+    createClient().auth.getUser().then(({ data: { user } }) => { if (!cancelled) setResolvedOwnerId(user?.id ?? null); });
+    return () => { cancelled = true; };
+  }, [disableLiveTestSync]);
+  const effectiveOwnerId = disableLiveTestSync ? null : resolvedOwnerId;
+  const effectiveTestSubject: TestSubject | null = disableLiveTestSync
+    ? null
+    : testSubject ?? (authorRole === "athlete" && resolvedOwnerId ? { subjectUserId: resolvedOwnerId } : null);
   const [mediaById, setMediaById] = useState<Record<string, ExerciseAttachments>>(() => {
     const initLines = value.split("\n").filter(l => l.trim());
     const out: Record<string, ExerciseAttachments> = {};
@@ -1117,6 +1285,9 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
                 isPanelOwner={openPanelId === l.id}
                 requestPanel={() => setOpenPanelId(l.id)}
                 releasePanel={() => releasePanelFor(l.id)}
+                ownerId={effectiveOwnerId}
+                testSubject={effectiveTestSubject}
+                sessionDate={sessionDate}
               />
             ))}
           </SortableContext>

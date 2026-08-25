@@ -20,5 +20,5 @@ export default async function ConseilsPage() {
   const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
   const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
 
-  return <ConseilsClient initialData={data} subscriptionStatus={subscriptionStatus} hasActiveCoach={hasActiveCoach} />;
+  return <ConseilsClient initialData={data} subscriptionStatus={subscriptionStatus} hasActiveCoach={hasActiveCoach} userId={user!.id} />;
 }

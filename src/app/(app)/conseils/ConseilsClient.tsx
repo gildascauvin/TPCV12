@@ -8,6 +8,8 @@ import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
+import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
+import TestsPanel from "@/components/tests/TestsPanel";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -132,11 +134,12 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   );
 }
 
-export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, sandboxMode = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; sandboxMode?: boolean }) {
+export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+  const [section, setSection] = useState<TestsSection>("load");
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
@@ -193,11 +196,21 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       )}
       <CalendarHeader
         selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap}
-        extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
+        extraControls={section === "load" ? <RangeToggle mode={rangeMode} onChange={setRangeMode} /> : undefined}
       />
 
       <div className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
 
+        <SectionTabs active={section} onChange={setSection} />
+
+        {section === "tests" ? (
+          userId ? (
+            <TestsPanel ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach />
+          ) : (
+            <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, padding: "8px 2px" }}>Le suivi de tests n'est pas disponible en mode démo.</div>
+          )
+        ) : (
+        <>
         {/* Signature de fatigue + Entraînement */}
         <div data-tour="fatigue-signature" style={{
           background: "linear-gradient(135deg,#161616,#333 64%,#111)",
@@ -379,6 +392,8 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
               Renseigné {recentBehaviors.length} jour{recentBehaviors.length > 1 ? "s" : ""} sur 7.
             </div>
           </div>
+        )}
+        </>
         )}
 
       </div>

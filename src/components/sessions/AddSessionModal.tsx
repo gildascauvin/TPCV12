@@ -5,6 +5,7 @@ import type { Session, ExerciseAttachments } from "@/types";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
+import { syncTestResultsFromSession } from "@/lib/testResults";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
@@ -67,6 +68,13 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
     setSaving(true);
     const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
     await onSave({ name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff, exercise_media: exerciseMedia });
+    // Écriture double vers tests/test_results — jamais pour un template (ProgramBuilderModal,
+    // session?.user_id === "template", pas un vrai sportif authentifié).
+    if (session?.user_id !== "template") {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await syncTestResultsFromSession(user.id, { subjectUserId: user.id }, notes, exerciseMedia, selectedDate);
+    }
     setSaving(false);
   }
 
@@ -164,6 +172,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             authorName={userName ?? "Toi"}
             initialMedia={session?.exercise_media}
             onMediaChange={setExerciseMedia}
+            sessionDate={selectedDate}
+            disableLiveTestSync={session?.user_id === "template"}
           />
         </div>
 

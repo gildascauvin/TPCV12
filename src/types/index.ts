@@ -98,10 +98,20 @@ export interface ExerciseComment {
   createdAt: string;
 }
 
+export interface ExerciseResult {
+  value: string;
+  unit: string;
+}
+
 export interface ExerciseAttachments {
   videoUrl?: string;
   photoUrl?: string;
   comments: ExerciseComment[];
+  /* Résultat de test (valeur+unité) — présence = ligne marquée comme test, absence = exercice
+     normal. Vit ici comme vidéo/photo (état local, sérialisé dans exercise_media au moment de la
+     sauvegarde de la séance) ; en plus de ça, la séance écrit aussi une copie datée dans les tables
+     `tests`/`test_results` pour permettre l'historique (voir src/lib/testResults.ts). */
+  result?: ExerciseResult;
   /* Dernière modification (vidéo/photo ajoutée ou retirée, commentaire ajouté/modifié/supprimé) —
      pilote le point de notification sur la ligne dans les vues de lecture. */
   updatedAt?: string;

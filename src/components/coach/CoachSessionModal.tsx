@@ -7,6 +7,8 @@ import { wellnessColor } from "@/lib/wellness";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
+import { syncTestResultsFromSession } from "@/lib/testResults";
+import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 export interface ReviewContext {
@@ -123,6 +125,11 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
     const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
     const ids = isEdit && initialAthleteId ? [initialAthleteId] : recipients;
     await onSave({ name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty, exercise_media: exerciseMedia }, ids);
+    // Écriture double vers tests/test_results, une fois par destinataire (owner = le coach, sujet =
+    // ce coach_athlete précis — voir src/lib/testResults.ts pour la portée MVP).
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await Promise.all(ids.map(id => syncTestResultsFromSession(user.id, { subjectCoachAthleteId: id }, notes, exerciseMedia, sessionDate)));
     setSaving(false);
   }
 
@@ -287,6 +294,8 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             authorName={coachName}
             initialMedia={session?.exercise_media}
             onMediaChange={setExerciseMedia}
+            sessionDate={sessionDate}
+            testSubject={initialAthleteId ? { subjectCoachAthleteId: initialAthleteId } : undefined}
           />
         </div>
 
