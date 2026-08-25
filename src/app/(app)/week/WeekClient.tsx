@@ -749,7 +749,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       )}
       {paywallStep === "priming" && (
         sandboxMode ? (
-          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+          <SandboxGateModal role="athlete" page="week" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
             onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />

@@ -399,7 +399,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       </div>
       {paywallStep === "priming" && (
         sandboxMode ? (
-          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+          <SandboxGateModal role="athlete" page="conseils" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
             onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />

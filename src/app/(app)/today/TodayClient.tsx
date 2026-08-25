@@ -886,7 +886,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       )}
       {paywallStep === "priming" && (
         sandboxMode ? (
-          <SandboxGateModal role="athlete" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+          <SandboxGateModal role="athlete" page="today" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
             onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />

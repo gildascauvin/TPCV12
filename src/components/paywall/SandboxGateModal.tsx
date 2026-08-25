@@ -1,19 +1,33 @@
 "use client";
 
+import { useEffect } from "react";
+import posthog from "posthog-js";
+
 /* Sandbox uniquement (2026-08-20) — remplace la redirection directe vers /register par un palier
    plus doux, demandé explicitement par Gildas ("plutot que rediriger vers /register pour la gate,
    je préférerait une modale avec BG flouté comme on fait pour les iframes de programme après S1.
    Comme ca c'est moins brutal comme transition"). Même langage visuel que le verrou S2+ du
    program builder (fond flouté + carte blanche centrée, voir ProgramBuilderModal.tsx) mais en
    position:fixed plein écran puisque déclenché depuis n'importe quelle action gatée (Appliquer,
-   Supprimer, Débloquer, S'abonner...), pas juste une zone de contenu localisée. */
+   Supprimer, Débloquer, S'abonner...), pas juste une zone de contenu localisée.
+
+   2026-08-25 — tracking PostHog ("Leads from WP", dashboard 706709) : ce composant est le seul
+   point de rendu des 7 gates de la sandbox (today/week/conseils/coach/athletes/planning/profil,
+   même mécanisme partagé), donc le seul endroit à instrumenter pour couvrir "toutes les gates" en
+   un coup — pas besoin de patcher chaque call site individuellement. `page` identifie la gate
+   précise qui a déclenché l'ouverture. */
 interface Props {
   role: "athlete" | "coach";
+  page: string;
   onClose: () => void;
   onSignup: () => void;
 }
 
-export default function SandboxGateModal({ role, onClose, onSignup }: Props) {
+export default function SandboxGateModal({ role, page, onClose, onSignup }: Props) {
+  useEffect(() => {
+    posthog.capture("sandbox_gate_viewed", { role, page, sandbox: true });
+  }, [role, page]);
+
   return (
     <div
       style={{
@@ -34,13 +48,13 @@ export default function SandboxGateModal({ role, onClose, onSignup }: Props) {
             : "Crée ton compte gratuit pour garder cet ajustement et suivre réellement ta progression."}
         </div>
         <button
-          onClick={onSignup}
+          onClick={() => { posthog.capture("sandbox_gate_signup_clicked", { role, page, sandbox: true }); onSignup(); }}
           style={{ width: "100%", height: 46, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", marginBottom: 8 }}
         >
           Créer mon compte →
         </button>
         <button
-          onClick={onClose}
+          onClick={() => { posthog.capture("sandbox_gate_dismissed", { role, page, sandbox: true }); onClose(); }}
           style={{ width: "100%", height: 38, borderRadius: 12, border: "none", background: "none", color: "#8a8f94", fontWeight: 700, fontSize: 12.5, cursor: "pointer" }}
         >
           Continuer en mode démo

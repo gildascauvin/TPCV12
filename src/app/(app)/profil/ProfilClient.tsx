@@ -233,7 +233,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
         />
       )}
       {sandboxGateOpen && (
-        <SandboxGateModal role={profile.mode} onClose={() => setSandboxGateOpen(false)} onSignup={goToSignup} />
+        <SandboxGateModal role={profile.mode} page="profil" onClose={() => setSandboxGateOpen(false)} onSignup={goToSignup} />
       )}
     </>
   );

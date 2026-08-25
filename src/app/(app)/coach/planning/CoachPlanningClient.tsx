@@ -903,7 +903,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
       {paywallStep === "priming" && (
         sandboxMode ? (
-          <SandboxGateModal role="coach" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
+          <SandboxGateModal role="coach" page="planning" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode="coach" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
             onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
