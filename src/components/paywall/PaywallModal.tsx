@@ -239,6 +239,10 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const [billing, setBilling] = useState<Billing>(initialBilling ?? "annual");
 
   useEffect(() => {
+    posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     fetch("/api/stripe/setup-intent", { method: "POST" })
       .then(r => r.json())
       .then((json) => {
