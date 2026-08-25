@@ -32,11 +32,25 @@ import type { LastTestByAthlete } from "@/lib/testSummary";
 // l'ancienne scoreColor(s) ignorait le paramètre trend, donc un score élevé (vert) avec un trend
 // "accumulation"/"fatigue_persistante" affichait "À surveiller" en vert au lieu de rouge.
 const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
-function athleteStatus(s: number, trend?: TrendCode | null): { label: string; color: string } {
+function athleteStatus(s: number | null, trend?: TrendCode | null): { label: string; color: string } {
+  if (s === null) return { label: "Non renseigné", color: "#8a8f94" };
   if (trend && TREND_WATCH.has(trend)) return { label: "À surveiller", color: "#d10000" };
   if (s >= 75) return { label: "Disponible", color: "#2f9e44" };
   if (s >= 60) return { label: "Stable", color: "#f28a00" };
   return { label: "À surveiller", color: "#d10000" };
+}
+
+/* Bug réel signalé par Gildas : la ring affichait `coach_athletes.wellness_score`, une colonne
+   dénormalisée qui garde la dernière valeur jamais écrite pour ce sportif, sans lien garanti avec
+   le jour affiché (même classe de bug déjà trouvée et corrigée sur /coach et /coach/planning le
+   2026-07-23 — cette page-ci n'avait jamais reçu le même correctif). `signature.series` (déjà
+   calculé, wellness_daily réel sur 42j) donne le vrai score du jour, ou `null` — jamais un chiffre
+   périmé. Pour un sportif démo (`user_id` null), `wellness_score` reste la valeur légitime : pas de
+   notion de jour pour lui. */
+function todayRecovery(athlete: CoachAthlete, signature: AthleteSignature): number | null {
+  if (!athlete.user_id) return athlete.wellness_score;
+  if (signature.kind !== "ok") return null;
+  return signature.series[signature.series.length - 1]?.recovery ?? null;
 }
 
 // Mêmes charts que /conseils (ZoneSparkline + SparkLineClient) — un seul point de vérité, plus de
@@ -152,19 +166,20 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
   );
 }
 
-function AthleteRing({ score }: { score: number }) {
+function AthleteRing({ score }: { score: number | null }) {
   const r = 20;
   const circ = +(2 * Math.PI * r).toFixed(1);
-  const offset = +(circ * (1 - score / 100)).toFixed(1);
+  const offset = score === null ? circ : +(circ * (1 - score / 100)).toFixed(1);
+  const color = score === null ? "rgba(255,255,255,0.28)" : wellnessColor(score);
   return (
     <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0, borderRadius: 999, background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 6px 14px rgba(0,0,0,.14))" }}>
       <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: "rotate(-90deg)", display: "block" }}>
         <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-        <circle cx="26" cy="26" r={r} fill="none" stroke={wellnessColor(score)} strokeWidth="5"
+        <circle cx="26" cy="26" r={r} fill="none" stroke={color} strokeWidth="5"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color: wellnessColor(score) }}>{score}</span>
+        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score !== null ? score : "—"}</span>
         <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
       </div>
     </div>
@@ -340,6 +355,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {athletes.map(a => {
               const isPending = !a.user_id && !!a.invite_email;
+              const recovery = todayRecovery(a, signatures[a.id] ?? { kind: "manual" });
               return (
               <div key={a.id} style={{
                 background: a.user_id ? "#fff" : isPending ? "rgba(255,245,230,.85)" : "rgba(255,255,255,.72)",
@@ -351,7 +367,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   onClick={isPending ? undefined : () => toggleExpanded(a.id)}
                   style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap", cursor: isPending ? "default" : "pointer" }}
                 >
-                  <AthleteRing score={a.wellness_score} />
+                  <AthleteRing score={recovery} />
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {isPending ? (
@@ -378,7 +394,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   {isMd && !isPending && (() => {
                     const badge = loadBadge(signatures[a.id] ?? { kind: "manual" });
                     const test = lastTests[a.id];
-                    const status = athleteStatus(a.wellness_score, trends[a.id]);
+                    const status = athleteStatus(recovery, trends[a.id]);
                     return (
                       <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
                         {badge && (
