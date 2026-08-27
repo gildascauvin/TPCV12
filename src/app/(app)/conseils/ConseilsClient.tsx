@@ -134,7 +134,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   );
 }
 
-export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean }) {
+export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, isDemoData = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; isDemoData?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
@@ -226,10 +226,15 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
             <div>
               <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>Ta signature de fatigue</div>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginTop: 4 }}>
-                Charge et Récupération sur les 7 derniers jours
+                {isDemoData ? "Exemple — ton historique réel remplacera ceci dès tes premières séances" : "Charge et Récupération sur les 7 derniers jours"}
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              {isDemoData && (
+                <div style={{ background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" as const }}>
+                  🔎 Exemple
+                </div>
+              )}
               <div style={{ background: sig.signals ? "#d44000" : "rgba(255,255,255,.10)", color: "#fff", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 1000, whiteSpace: "nowrap" as const }}>
                 {sig.signals ? `${sig.signals} séances` : "À construire"}
               </div>

@@ -1,13 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { COACH_UNLIMITED_ATHLETES_PITCH } from "@/lib/primingCopy";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import Actions from "@/components/onboarding/Actions";
 
 type Role = "athlete" | "coach";
-type Level = "beginner" | "intermediate" | "elite";
 
-const LEVEL_LABELS: Record<Level, string> = { beginner: "Débutant", intermediate: "Intermédiaire", elite: "Compétiteur" };
+/* Mêmes calculs que ProgramAssignModal.tsx (3 raccourcis identiques) — pas partagés entre les 2
+   fichiers, même choix déjà fait ailleurs dans ce repo pour ce genre de petit helper de date. */
+function nextMonday(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? 1 : 8 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split("T")[0];
+}
+function addWeeks(dateStr: string, weeks: number): string {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + weeks * 7);
+  return d.toISOString().split("T")[0];
+}
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
 
 function getAthletePreviews(sport: string) {
   return [
@@ -29,22 +45,26 @@ interface Props {
   role: Role;
   name: string;
   sport: string;
-  level: Level;
-  /* N'affiche le chip niveau que si un vrai choix existe derrière (programme claimé — voir
-     showLevel dans OnboardingFlow, même règle que ProfileRecapStep). Sur le chemin classique,
-     `level` reste figé à sa valeur neutre par défaut ("intermediate") jamais choisie par
-     l'utilisateur depuis que level_2a a été remplacé par les faiblesses — l'afficher sous "On a
-     compris ton profil" aurait affirmé un fait jamais recueilli (bug réel trouvé par Gildas,
-     2026-08-17, même catégorie que le headline paywall non personnalisé). */
-  showLevel: boolean;
-  goal: string;
-  coachingChallenge: string;
-  wScore: number | null;
-  wellnessTip?: string | null;
   claimedProgramName?: string | null;
   claimedProgramWeeks?: number | null;
-  showProfile: boolean;
-  showWellness: boolean;
+  /* Sportif (claimé ou non — même écran pour les deux depuis le 2026-08-27, voir OnboardingFlow.tsx)
+     — remplace le bloc score wellness (retiré, déjà montré à l'étape décision juste avant). */
+  showDatePicker: boolean;
+  startDate: string;
+  onStartDateChange: (date: string) => void;
+  /* Sportif uniquement — toggle actif par défaut, contrôlé par le parent (même pattern que
+     startDate/onStartDateChange) : la vraie demande de permission (Notification.requestPermission)
+     ne part qu'au clic sur le CTA principal si le toggle est encore activé à ce moment-là, jamais
+     au montage — ne change jamais la destination du CTA (wellness_q reste obligatoire quoi qu'il
+     arrive). undefined = rien affiché (coach). */
+  pushEnabled?: boolean;
+  onPushEnabledChange?: (enabled: boolean) => void;
+  /* Coach uniquement — formulaire d'invitation composé dans OnboardingFlow.tsx (tout son state y
+     vit déjà), inséré tel quel plutôt que de faire remonter une dizaine de props individuelles. */
+  coachInviteSlot?: React.ReactNode;
+  nextLabel: string;
+  onSkip?: () => void;
+  skipLabel?: string;
   saving: boolean;
   /* Le paiement a déjà eu lieu avant cet écran (paywall_priming/paywall_form précèdent
      désormais celebration) — ce CTA avance simplement vers l'activation, il ne déclenche plus
@@ -52,24 +72,20 @@ interface Props {
   onNext: () => void;
 }
 
-function Chip({ label }: { label: string }) {
-  return (
-    <div style={{
-      display: "inline-flex", alignItems: "center", padding: "7px 12px", borderRadius: 999,
-      background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
-      fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.88)",
-    }}>
-      {label}
-    </div>
-  );
-}
-
 export default function CelebrationScreen({
-  role, name, sport, level, showLevel, goal, coachingChallenge, wScore, wellnessTip,
+  role, name, sport,
   claimedProgramName, claimedProgramWeeks,
-  showProfile, showWellness, saving, onNext,
+  showDatePicker, startDate, onStartDateChange, pushEnabled, onPushEnabledChange, coachInviteSlot,
+  nextLabel, onSkip, skipLabel, saving, onNext,
 }: Props) {
   const previews = role === "coach" ? getCoachPreviews(sport) : getAthletePreviews(sport);
+  const monNext = nextMonday();
+  const dateOptions = [
+    { label: "Lundi prochain", value: monNext },
+    { label: "Dans 2 sem.", value: addWeeks(monNext, 2) },
+    { label: "Dans 1 mois", value: addWeeks(monNext, 4) },
+  ];
+  const [otherOpen, setOtherOpen] = useState(() => !dateOptions.some(o => o.value === startDate));
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(16px)" }}>
@@ -91,31 +107,87 @@ export default function CelebrationScreen({
             {name ? `Bienvenue, ${name} ! 🎉` : "Bienvenue ! 🎉"}
           </div>
 
-          {/* Recap profil */}
-          {showProfile && (
-            <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.16em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 8 }}>
-                On a compris ton profil
+          {/* Choix de date de départ (sportif, claimé ou non) — remplace le score wellness, déjà
+              montré à l'étape décision juste avant. Même mécanisme que ProgramAssignModal en
+              self-assign, l'écriture réelle part à la fin de wellness_q (voir OnboardingFlow.tsx,
+              finishAthleteActivation). */}
+          {showDatePicker && (
+            <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16, padding: "14px 15px", marginBottom: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", marginBottom: 3 }}>Choisis ton départ</div>
+              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.5, marginBottom: 13 }}>
+                Tu pourras toujours changer cette date depuis ton programme.
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {sport && <Chip label={sport} />}
-                {role === "athlete" && showLevel && <Chip label={LEVEL_LABELS[level]} />}
-                {role === "athlete" && goal && <Chip label={goal} />}
-                {role === "coach" && coachingChallenge && <Chip label={coachingChallenge} />}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7, marginBottom: 9 }}>
+                {dateOptions.map(opt => {
+                  const selected = !otherOpen && startDate === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setOtherOpen(false); onStartDateChange(opt.value); }}
+                      style={{
+                        appearance: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "center",
+                        borderRadius: 12, padding: "9px 6px 8px",
+                        border: selected ? "1.5px solid #f04a08" : "1.5px solid rgba(255,255,255,0.14)",
+                        background: selected ? "rgba(240,74,8,0.14)" : "rgba(255,255,255,0.04)",
+                        color: "#fff",
+                      }}
+                    >
+                      <span style={{ display: "block", fontSize: 11, fontWeight: 800, marginBottom: 2 }}>{opt.label}</span>
+                      <span style={{ display: "block", fontSize: 10, color: selected ? "rgba(255,197,163,0.9)" : "rgba(255,255,255,0.5)" }}>{fmtDate(opt.value)}</span>
+                    </button>
+                  );
+                })}
               </div>
+              <button
+                type="button"
+                onClick={() => setOtherOpen(o => !o)}
+                style={{
+                  width: "100%", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 11.5, fontWeight: 700, textAlign: "left", padding: "6px 2px",
+                  color: "rgba(255,255,255,0.6)", textDecoration: "underline", textDecorationColor: "rgba(255,255,255,0.25)", textUnderlineOffset: 2,
+                }}
+              >
+                {otherOpen ? "Utiliser une date suggérée" : "Choisir une autre date"}
+              </button>
+              {otherOpen && (
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => onStartDateChange(e.target.value)}
+                  style={{
+                    width: "100%", marginTop: 8, background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.16)",
+                    borderRadius: 10, padding: "9px 10px", color: "#fff", fontFamily: "inherit", fontSize: 13, colorScheme: "dark",
+                  }}
+                />
+              )}
             </div>
           )}
 
-          {/* Score wellness (sportif) */}
-          {showWellness && wScore != null && (
-            <div style={{ display: "flex", alignItems: "center", gap: 14, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16, padding: "14px 16px", marginBottom: 18 }}>
-              <WellnessRing dark score={wScore} size={64} strokeWidth={6} />
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>Score de récupération</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", lineHeight: 1.5 }}>
-                  {wellnessTip || "Ton programme tient compte de ta récupération réelle, pas d'un plan générique."}
-                </div>
-              </div>
+          {/* Rappel notif (sportif) — toggle actif par défaut (voir pushEnabled dans OnboardingFlow),
+              même style que NotificationToggle.tsx (/profil). Un seul bouton affirmatif sans façon
+              de dire "non" pouvait donner l'impression d'être obligatoire, même si ignorer le
+              bouton fonctionnait déjà (retour de Gildas, 2026-08-27) — le toggle rend le refus
+              aussi visible/facile que l'acceptation. */}
+          {onPushEnabledChange && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: "11px 14px", marginBottom: 18 }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>🔔</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,0.8)", flex: 1 }}>Reçois un rappel chaque jour</span>
+              <button
+                type="button"
+                onClick={() => onPushEnabledChange(!pushEnabled)}
+                aria-pressed={!!pushEnabled}
+                style={{
+                  width: 46, height: 28, borderRadius: 999, border: "none", flexShrink: 0, cursor: "pointer",
+                  padding: 3, background: pushEnabled ? "#f04a08" : "rgba(255,255,255,0.14)",
+                  transition: "background .2s", position: "relative",
+                }}
+              >
+                <div style={{
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.25)",
+                  transform: pushEnabled ? "translateX(18px)" : "translateX(0)", transition: "transform .2s",
+                }} />
+              </button>
             </div>
           )}
 
@@ -131,6 +203,9 @@ export default function CelebrationScreen({
               </div>
             </div>
           )}
+
+          {/* Formulaire d'invitation (coach) — composé dans OnboardingFlow.tsx */}
+          {coachInviteSlot}
 
           {/* Programme claimé */}
           {claimedProgramName && (
@@ -168,7 +243,7 @@ export default function CelebrationScreen({
       </div>
 
         {/* CTA */}
-        <Actions variant="modal-dark" onNext={onNext} nextDisabled={saving} nextLabel="Continuer →" />
+        <Actions variant="modal-dark" onNext={onNext} nextDisabled={saving} nextLabel={nextLabel} onSkip={onSkip} skipLabel={skipLabel} />
       </div>
     </div>
   );

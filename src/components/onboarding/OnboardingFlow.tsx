@@ -71,6 +71,11 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    concept_autoreg, profile_recap, goal_2a, et leurs équivalents coach) restent dans le fichier
    (JSX + state) mais ne sont plus référencés par aucun path actif — dead code assumé, même
    principe que context_2b/sport_2b/count_2b/tool_2b déjà toléré ailleurs dans ce fichier. */
+/* wellness_reveal / invite_team retirés des paths (2026-08-27) — leur contenu unique (rappel
+   notification, formulaire d'invitation) est désormais dans celebration elle-même, voir son rendu
+   plus bas. JSX/state des deux steps gardés intacts mais jamais atteints (dead code assumé, même
+   principe que context_2b/sport_2b déjà toléré ailleurs dans ce fichier) — pas supprimés pour
+   limiter le risque de ce changement. */
 const ATHLETE_PATH: StepId[] = [
   "value_intro",
   "sport_2a",
@@ -82,7 +87,7 @@ const ATHLETE_PATH: StepId[] = [
   "decision_2a",
   "account",
   "celebration",
-  "wellness_q", "wellness_reveal",
+  "wellness_q",
 ];
 const COACH_PATH: StepId[] = [
   "value_intro",
@@ -95,7 +100,6 @@ const COACH_PATH: StepId[] = [
   "decision_2b",
   "account",
   "celebration",
-  "invite_team",
 ];
 
 const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
@@ -218,12 +222,12 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "celebration", "wellness_q", "wellness_reveal",
+  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "celebration", "wellness_q",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "celebration", "invite_team",
+  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "celebration",
 ];
 
 /* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
@@ -266,7 +270,7 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>; customSessionLabels?: Record<string, string> }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>; customSessionLabels?: Record<string, string>; startDate?: string }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
@@ -305,7 +309,7 @@ async function generateAndAssignProgram(
     const { program } = await progRes.json() as { program: { id: string } };
 
     const assignBody: Record<string, unknown> = {
-      start_date: getNextMonday(),
+      start_date: opts.startDate ?? getNextMonday(),
       ...("athlete_id" in opts.target ? { athlete_id: opts.target.athlete_id } : { user_id: opts.target.user_id }),
       ...(typeof opts.wellnessAdjustment === "number" ? { wellnessAdjustment: opts.wellnessAdjustment } : {}),
     };
@@ -1208,6 +1212,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const finishGuardRef = useRef(false);
   /* guard contre un double déclenchement de completeProfile() à l'entrée de profile_recap (voir effet dédié plus bas) */
   const profileCompleteGuardRef = useRef(false);
+  /* Sportif non-claimé : le programme n'est plus généré+assigné immédiatement dans completeProfile()
+     (voir sa doc) — les opts sont mémorisées ici, le vrai appel generateAndAssignProgram() part à la
+     fin de wellness_q (voir finishAthleteActivation), avec la date choisie en célébration. null pour
+     le programme claimé (assigné via claimAndAssignProgram, même point d'appel, même date). */
+  const pendingAthleteProgramOptsRef = useRef<Parameters<typeof generateAndAssignProgram>[1] | null>(null);
+  const [chosenStartDate, setChosenStartDate] = useState<string>(() => getNextMonday());
+  /* Toggle notif de la célébration sportif — actif par défaut (voir CelebrationScreen), lu au clic
+     du CTA principal (handleCelebrationAthleteNext), jamais au montage. */
+  const [wantsPushReminder, setWantsPushReminder] = useState(true);
 
   function toggleBehavior(key: string) {
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -1497,12 +1510,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
-      await Promise.all([
-        ...(!hasClaimedProgram ? [generateAndAssignProgram(uid, {
+      /* Programme non-claimé : plus généré+assigné ici — l'assignation immédiate à "lundi prochain"
+         empêchait tout choix de date réel en célébration (route assign INSERT-only, 409 si on la
+         rappelait sur une assignation déjà active). Les opts sont mémorisées, le vrai appel part à
+         la fin de wellness_q (finishAthleteActivation), même point d'appel et même date que le
+         programme claimé (claimAndAssignProgram) — plus de différence entre les deux au-delà du
+         sport déjà déduit ou non. */
+      if (!hasClaimedProgram) {
+        pendingAthleteProgramOptsRef.current = {
           sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
           ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
-        })] : []),
+        };
+      }
+      await Promise.all([
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
@@ -1514,12 +1535,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       setInviteCode(code);
       await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
 
+      // 3 profils (pas 5) garantissant les 3 issues réelles de computeAutoregSuggestion
+      // (Alléger/Maintenir/Surcharger) — même mapping wellness/difficulté que les 3 sportifs de
+      // preview de DecisionStep.tsx (Thomas=alléger sévère, Emma=cohérent, Pierre=surcharger),
+      // pour que le tableau de bord réel raconte la même histoire que l'aperçu déjà vu à l'onboarding.
       const DEMO_ATHLETES = [
-        { name: "Thomas M.", wellness_score: 82, rpeBase: 7 },
-        { name: "Emma L.",   wellness_score: 67, rpeBase: 8 },
-        { name: "Pierre D.", wellness_score: 43, rpeBase: 9 },
-        { name: "Sofia R.",  wellness_score: 71, rpeBase: 7 },
-        { name: "Lucas B.",  wellness_score: 28, rpeBase: 8 },
+        { name: "Thomas M. (démo)", wellness_score: 35, rpeBase: 9 },
+        { name: "Emma L. (démo)",   wellness_score: 70, rpeBase: 6 },
+        { name: "Pierre D. (démo)", wellness_score: 85, rpeBase: 3 },
       ];
       const demoAthleteIds: string[] = [];
       for (const demo of DEMO_ATHLETES) {
@@ -1549,23 +1572,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   }
 
-  /* Claim + assign du programme claimé, partagé entre le flow classique (wellnessAdjustment réel,
-     calculé à la fin de wellness_q) et le path court de l'A/B test (wellnessAdjustment=0, aucune
-     donnée wellness collectée dans ce path — voir handleFinish()). */
-  /* Copie brute du template public → génération personnalisée (2026-08-05) : le programme claimé
-     n'est plus recopié tel quel, il sert de seed (sport/niveau déjà déduits, voir l'effet qui lit
-     ?claim=) — faiblesses/objectif/jours collectés via les nouveaux écrans (PROGRAM_ATHLETE_PATH
-     etc.) pilotent une vraie régénération via generateAndAssignProgram(), exactement le même
-     pipeline que le chemin non-claimé. Reste le point d'appel dédié (après wellness_q) plutôt que
-     déplacé dans completeProfile() : c'est le seul chemin qui applique un vrai wellnessAdjustment
-     (le chemin non-claimé ne l'a jamais fait, comportement existant non touché ici). */
+  /* Claim + assign du programme claimé — appelé depuis finishAthleteActivation() (fin de
+     wellness_q), avec un vrai wellnessAdjustment calculé à ce moment-là. Copie brute du template
+     public → génération personnalisée (2026-08-05) : le programme claimé n'est plus recopié tel
+     quel, il sert de seed (sport/niveau déjà déduits, voir l'effet qui lit ?claim=) — faiblesses/
+     objectif/jours collectés via les nouveaux écrans (PROGRAM_ATHLETE_PATH etc.) pilotent une vraie
+     régénération via generateAndAssignProgram(), exactement le même pipeline que le chemin
+     non-claimé (voir finishAthleteActivation() — les deux appels partagent maintenant startDate ET
+     wellnessAdjustment, plus d'asymétrie entre les deux chemins, 2026-08-27). */
   async function claimAndAssignProgram(uid: string, wellnessAdjustment: number) {
     const claimId = typeof window !== "undefined" ? localStorage.getItem("claim_program_id") : null;
     if (!claimId) return;
     try {
       const ok = await generateAndAssignProgram(uid, {
         sport, level, days: trainingDays, target: { user_id: uid },
-        focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, wellnessAdjustment,
+        focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses, wellnessAdjustment, startDate: chosenStartDate,
         duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
       });
       if (!ok) throw new Error("generate");
@@ -1585,7 +1606,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         { onConflict: "user_id,date" }
       );
       const wellnessAdjustment = score < 45 ? -1 : 0;
-      await claimAndAssignProgram(uid, wellnessAdjustment);
+      /* Programme claimé : claimAndAssignProgram (no-op si pas de claim_program_id). Programme
+         non-claimé : opts mémorisées par completeProfile() (voir sa doc) — même wellnessAdjustment
+         et même chosenStartDate que le chemin claimé, un seul point d'écriture pour les deux, plus
+         de différence entre les deux chemins au-delà du sport déjà déduit ou non (2026-08-27). */
+      if (hasClaimedProgram) {
+        await claimAndAssignProgram(uid, wellnessAdjustment);
+      } else if (pendingAthleteProgramOptsRef.current) {
+        await generateAndAssignProgram(uid, { ...pendingAthleteProgramOptsRef.current, startDate: chosenStartDate, wellnessAdjustment });
+        pendingAthleteProgramOptsRef.current = null;
+      }
       /* Retrait du paywall obligatoire de l'onboarding (2026-08-19, chantier gating save) :
          onboarding_done ne dépend plus d'un paiement (handlePaymentSuccess(), plus jamais atteint
          depuis que paywall_priming/paywall_form sont sortis des paths actifs) — le vrai jalon de
@@ -1597,13 +1627,45 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     next();
   }
 
-  /* Pendant "invite_team" (dernier step du path coach) — même principe que
-     finishAthleteActivation() ci-dessus, 3 points de sortie (invite envoyée, "Continuer" après
-     succès, "Plus tard — me le rappeler"). L'invitation elle-même reste gratuite et illimitée
-     (voir CoachClient.tsx/AthletesClient.tsx, aucun requireSubscription dessus). */
+  /* Appelé depuis la célébration coach (2026-08-27 — remplace l'ancien step "invite_team" séparé,
+     désormais fondu dans celebration). L'invitation elle-même reste gratuite et illimitée (voir
+     CoachClient.tsx/AthletesClient.tsx, aucun requireSubscription dessus). */
   async function finishCoachActivation() {
     const uid = userId || newUserId;
     if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    next();
+  }
+
+  /* CTA principal de la célébration coach : envoie l'invitation si un email a été saisi, puis
+     termine — pas d'écran de confirmation séparé (contrairement à l'ancien invite_team), le coach
+     verra le résultat directement sur /coach. Guardé par finishGuardRef. */
+  async function handleCelebrationCoachNext() {
+    if (finishGuardRef.current) return;
+    finishGuardRef.current = true;
+    const hasEmail = inviteEmail.trim() || extraInviteEmails.some(e => e.trim());
+    if (hasEmail && !inviteSending) await handleInviteSend();
+    finishCoachActivation();
+  }
+
+  /* CTA secondaire "🔔 Plus tard" — même mécanisme que l'ancien invite_team : saute l'envoi de
+     l'invitation, active la notif à la place. Contrairement au sportif (wellness_q reste obligatoire
+     quoi qu'il arrive, voir CelebrationScreen), ici il n'y a rien après célébration à forcer — le
+     "OU" a du sens : sans lui, un coach pourrait ne rien faire du tout. */
+  function handleCelebrationCoachSkip() {
+    if (finishGuardRef.current) return;
+    finishGuardRef.current = true;
+    if (!pushBlockedIOS) subscribeToPush().catch(() => {});
+    finishCoachActivation();
+  }
+
+  /* CTA principal de la célébration sportif — la demande de permission notification (déclenche la
+     boîte native du navigateur) ne part que si le toggle est encore actif à ce moment-là, jamais au
+     montage de l'écran ni au toggle lui-même. wellness_q suit dans tous les cas. Guardé comme les
+     autres CTA de fin de step (double-clic rapide sinon = next() appelé 2x = saute wellness_q). */
+  function handleCelebrationAthleteNext() {
+    if (finishGuardRef.current) return;
+    finishGuardRef.current = true;
+    if (wantsPushReminder && !pushBlockedIOS) subscribeToPush().catch(() => {});
     next();
   }
 
@@ -3251,25 +3313,101 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         })()}
 
         {/* ── CÉLÉBRATION + UPGRADE PITCH ── */}
-        {currentStep === "celebration" && (
-          <CelebrationScreen
-            role={role}
-            name={name}
-            sport={!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre"}
-            level={level}
-            showLevel={hasClaimedProgram === true && !!level}
-            goal={goal}
-            coachingChallenge={coachingChallenge}
-            wScore={wScore}
-            wellnessTip={wellnessTip}
-            claimedProgramName={claimedProgramName}
-            claimedProgramWeeks={claimedProgramWeeks}
-            showProfile={path.includes("sport_2a")}
-            showWellness={path.includes("wellness_q")}
-            saving={saving}
-            onNext={next}
-          />
-        )}
+        {currentStep === "celebration" && (() => {
+          /* Formulaire d'invitation coach (2026-08-27, ex-step "invite_team") — composé ici, tout
+             son state vit déjà dans ce fichier, plutôt que de le faire remonter via une dizaine de
+             props individuelles vers CelebrationScreen. Restylé dark pour matcher la carte. */
+          const coachInviteSlot = role === "coach" ? (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.16em", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 8 }}>
+                Invite tes premiers sportifs
+              </div>
+              {inviteCode && (
+                <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 16, padding: "14px 15px", marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: "#ff8a55", fontWeight: 700, wordBreak: "break-all", marginBottom: 10 }}>
+                    go.theperfclub.com/join/{inviteCode}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+                        setInviteLinkCopied(true);
+                        setTimeout(() => setInviteLinkCopied(false), 2500);
+                      }}
+                      style={{ flex: 1, height: 38, borderRadius: 11, background: inviteLinkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer" }}
+                    >
+                      {inviteLinkCopied ? "✓ Copié !" : "📋 Copier le lien"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+                        window.open(`https://wa.me/?text=${msg}`, "_blank");
+                      }}
+                      style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 11, border: "1.5px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.06)", fontSize: 18, cursor: "pointer" }}
+                    >
+                      📲
+                    </button>
+                  </div>
+                </div>
+              )}
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="sportif@exemple.com"
+                style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.16)", borderRadius: 12, padding: "11px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", color: "#fff", marginBottom: 8 }}
+              />
+              {extraInviteEmails.map((emailVal, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input
+                    type="email"
+                    value={emailVal}
+                    onChange={e => setExtraInviteEmails(arr => arr.map((v, idx) => idx === i ? e.target.value : v))}
+                    placeholder="sportif@exemple.com"
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.16)", borderRadius: 12, padding: "11px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", color: "#fff" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtraInviteEmails(arr => arr.filter((_, idx) => idx !== i))}
+                    style={{ width: 38, borderRadius: 12, border: "1.5px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.6)", fontSize: 15, cursor: "pointer" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraInviteEmails(arr => [...arr, ""])}
+                style={{ background: "none", border: "none", color: "#ff8a55", fontSize: 12.5, fontWeight: 800, cursor: "pointer", padding: 0 }}
+              >
+                + Inviter un autre sportif
+              </button>
+            </div>
+          ) : undefined;
+
+          return (
+            <CelebrationScreen
+              role={role}
+              name={name}
+              sport={!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre"}
+              claimedProgramName={claimedProgramName}
+              claimedProgramWeeks={claimedProgramWeeks}
+              showDatePicker={role === "athlete"}
+              startDate={chosenStartDate}
+              onStartDateChange={setChosenStartDate}
+              pushEnabled={wantsPushReminder}
+              onPushEnabledChange={role === "athlete" ? setWantsPushReminder : undefined}
+              coachInviteSlot={coachInviteSlot}
+              nextLabel={role === "coach" ? "Inviter mes sportifs →" : "Renseigner mon état de forme →"}
+              onSkip={role === "coach" ? handleCelebrationCoachSkip : undefined}
+              skipLabel={role === "coach" ? "🔔 Plus tard — me le rappeler" : undefined}
+              saving={saving || inviteSending}
+              onNext={role === "coach" ? handleCelebrationCoachNext : handleCelebrationAthleteNext}
+            />
+          );
+        })()}
 
         </div>
       </div>

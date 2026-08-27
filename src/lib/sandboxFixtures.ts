@@ -210,7 +210,7 @@ export interface CoachFixture {
 
 // Même principe que wellnessScoreFor (profil sportif) mais paramétré par le score "aujourd'hui" de
 // chaque sportif — oscillation déterministe convergeant vers ce score, jamais de Math.random.
-function coachWellnessScoreFor(offset: number, todayScore: number): number {
+export function coachWellnessScoreFor(offset: number, todayScore: number): number {
   if (offset === 0) return todayScore;
   if (offset === -1) return Math.round((todayScore + 70) / 2);
   if (offset === -2) return Math.round((todayScore + 75) / 2);
