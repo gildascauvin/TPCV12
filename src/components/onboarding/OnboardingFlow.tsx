@@ -76,6 +76,10 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    plus bas. JSX/state des deux steps gardés intacts mais jamais atteints (dead code assumé, même
    principe que context_2b/sport_2b déjà toléré ailleurs dans ce fichier) — pas supprimés pour
    limiter le risque de ce changement. */
+/* wellness_check_2a/2b retiré des paths actifs (2026-08-28) — fusionné dans week_preview_2a/2b
+   (simulation de forme + reco déjà intégrées à l'aperçu du programme, voir WeekPreviewStep.tsx).
+   StepId/JSX/state gardés intacts (dead code assumé, même principe que les autres steps dépréciés
+   documentés en tête de ce bloc). */
 const ATHLETE_PATH: StepId[] = [
   "value_intro",
   "sport_2a",
@@ -83,7 +87,6 @@ const ATHLETE_PATH: StepId[] = [
   "days_2a",
   "week_preview_2a",
   "role",
-  "wellness_check_2a",
   "decision_2a",
   "account",
   "celebration",
@@ -96,7 +99,6 @@ const COACH_PATH: StepId[] = [
   "days_2a",
   "week_preview_2b",
   "role",
-  "wellness_check_2b",
   "decision_2b",
   "account",
   "celebration",
@@ -107,7 +109,7 @@ const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal",
 const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
 /* week_preview_2a/2b restent en fond clair (page) : leur héros sombre est géré localement par
    WeekPreviewStep, qui reçoit aussi la frise en prop pour l'afficher dans ce même bloc sombre. */
-const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
+const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "decision_2a", "decision_2b"];
 
 /* Frise 4 étapes (Programme/Aperçu/Adaptation/Formule, 2026-08-19 — remplace le regroupement
    Profil/Programme/Adaptation/Formule du 2026-08-17) — regroupe les steps réels par phase pour
@@ -120,7 +122,7 @@ const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "wel
    des steps. */
 const PHASE_1_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
 const PHASE_2_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "role"];
-const PHASE_3_STEPS: StepId[] = ["wellness_check_2a", "wellness_check_2b", "decision_2a", "decision_2b"];
+const PHASE_3_STEPS: StepId[] = ["decision_2a", "decision_2b"];
 const PHASE_4_STEPS: StepId[] = ["account", "paywall_priming", "paywall_form"];
 const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "account"];
 
@@ -222,12 +224,12 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2a", "role", "wellness_check_2a", "decision_2a", "account", "celebration", "wellness_q",
+  "week_preview_2a", "role", "decision_2a", "account", "celebration", "wellness_q",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
   "level_2a", "days_2a",
-  "week_preview_2b", "role", "wellness_check_2b", "decision_2b", "account", "celebration",
+  "week_preview_2b", "role", "decision_2b", "account", "celebration",
 ];
 
 /* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
@@ -1364,8 +1366,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, []);
 
 
-  /* Le Signup (step "account") arrive désormais APRÈS week_preview/role/wellness_check/decision
-     (2026-08-19, voir doc des paths en tête de fichier) — sport/faiblesses/jours/rôle sont donc
+  /* Le Signup (step "account") arrive désormais APRÈS week_preview/role/decision (2026-08-19,
+     voir doc des paths en tête de fichier) — sport/faiblesses/jours/rôle sont donc
      déjà connus au moment où le compte est créé, plus besoin d'attendre un step ultérieur pour
      déclencher la vraie complétion de profil (sessions, wellness baseline, démo coach, génération
      réelle du programme). completeProfile() est appelée directement, une seule fois, juste après
@@ -1421,11 +1423,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
   /* Même principe qu'advanceMaybeGenerating(), pour la transition entre le choix du rôle et
      l'écran de décision — voir ReconductionTeaserScreen. Générique (regarde path[stepIdx+1], pas
-     le step courant) : fonctionne sans changement depuis que "role" (pas "week_preview_2a/2b")
-     précède directement wellness_check_2a/2b (2026-08-19) — appelée par le clic sur une carte de
-     l'écran "role". */
+     le step courant) : "role" précède désormais directement decision_2a/2b (2026-08-28,
+     wellness_check_2a/2b fusionné dans week_preview et retiré des paths, voir doc en tête de
+     fichier) — appelée par le clic sur une carte de l'écran "role". */
   function advanceMaybeReconduction() {
-    if (path[stepIdx + 1] === "wellness_check_2a" || path[stepIdx + 1] === "wellness_check_2b") {
+    if (path[stepIdx + 1] === "decision_2a" || path[stepIdx + 1] === "decision_2b") {
       setReconLoading(true);
       // 3,4s (retour de Gildas : 1,9s "tellement courte qu'on a pas le temps de lire") — assez pour
       // lire le texte + voir les 3 barres monter en cascade (dernière barre finit vers ~2,1s).
@@ -1969,7 +1971,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      censé produire le même résultat, mais deux appels réseau indépendants plutôt qu'UNE vraie
      séance partagée entre les deux écrans (retour de Gildas : "je veux une vraie séance du
      programme créée... sinon ça defeat the purpose"). Un seul fetch ici, passé en prop aux deux
-     composants — garantit la même référence d'objet, pas seulement "la même valeur en théorie". */
+     composants — garantit la même référence d'objet, pas seulement "la même valeur en théorie".
+     Depuis la fusion de wellness_check dans week_preview (2026-08-28), ce fetch n'alimente plus
+     que DecisionStep (demoHardest/demoLightest/demoMiddle) — WeekPreviewStep.tsx fait son propre
+     appel indépendant pour sa grille 7 jours (jamais consolidé avec celui-ci, cf. sa propre doc). */
   const [previewTemplate, setPreviewTemplate] = useState<ProgramTemplate | null>(null);
   useEffect(() => {
     if (!trainingDays.length) return;
@@ -1993,9 +1998,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sport, level, JSON.stringify(trainingDays), goal, JSON.stringify(weaknesses), claimedProgramWeeks, JSON.stringify(customSport)]);
 
-  /* Sélection des séances démo — centralisée ici (2026-08-17, 5e itération) pour que
-     WellnessCheckStep et DecisionStep pointent vers EXACTEMENT le même objet (continuité déjà
-     demandée : "les séances... soient les mêmes que celles vues à week preview"). Bug réel trouvé
+  /* Sélection des séances démo pour DecisionStep — centralisée ici (2026-08-17, 5e itération,
+     à l'origine pour que WellnessCheckStep et DecisionStep pointent vers EXACTEMENT le même objet ;
+     WellnessCheckStep fusionné dans week_preview le 2026-08-28, seul DecisionStep consomme encore
+     demoHardest/demoLightest/demoMiddle). Bug réel trouvé
      par Gildas en testant ("j'ai pas toujours un sportif à alléger et un sportif à surcharger") :
      restreindre la recherche à la semaine 1 (pour cette continuité) peut la priver d'un vrai jour
      difficile (diff≥7) ou léger (diff≤4) — computeAutoregSuggestion exige ces seuils réels, aucun
@@ -2090,15 +2096,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
         {/* ── ROLE — repositionné le 2026-08-19 (voir doc des paths en tête de fichier) : n'arrive
-            plus juste après value_intro, mais juste après avoir vu le programme (week_preview),
-            avant de vivre l'adaptation (wellness_check/decision) — l'utilisateur choisit comment
+            plus juste après value_intro, mais juste après avoir vu le programme (week_preview, qui
+            intègre depuis le 2026-08-28 la simulation de forme — voir WeekPreviewStep.tsx),
+            avant de vivre l'adaptation réelle (decision) — l'utilisateur choisit comment
             utiliser CE qu'il vient de voir, pas comment se catégoriser à froid. Wording changé en
             conséquence ("Pour moi"/"Pour mes sportifs", contextuel au programme déjà généré) —
             mécanique de cartes inchangée (toujours un vrai choix explicite, jamais présélectionné :
             l'enjeu prix 9€/49€ reste le même qu'avant ce repositionnement). L'avance après clic
             passe par advanceMaybeReconduction() (pas next() ni nextAfterChoice) pour jouer la
-            transition "reconduction" juste avant wellness_check, exactement comme le faisait
-            auparavant le onNext de week_preview — voir la doc d'advanceMaybeReconduction(). */}
+            transition "reconduction" juste avant decision — voir sa doc. */}
         {currentStep === "role" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 24 }}>Pour qui construis-tu ce programme ?</div>
@@ -2238,8 +2244,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              Wording générique coach/sportif depuis le 2026-08-19 (plus de ternaire par rôle sur ce
              step, ni sur level_2a/days_2a/WeekPreviewStep juste après) — "role" n'est plus connu à
              ce stade, choisi après week_preview désormais (voir doc des paths en tête de fichier).
-             "role" reste utilisé plus bas dans ce fichier (frise, décision, wellness_check...), ce
-             n'est que sur ces écrans d'input pré-rôle que le ternaire a été retiré. ── */}
+             "role" reste utilisé plus bas dans ce fichier (frise, decision...), ce n'est que sur
+             ces écrans d'input pré-rôle que le ternaire a été retiré. ── */}
         {currentStep === "sport_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
@@ -2855,6 +2861,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
+        {/* Dead code depuis le 2026-08-28 (fusionné dans week_preview_2a) — jamais atteint,
+            "wellness_check_2a" n'est plus dans aucun path actif. */}
         {currentStep === "wellness_check_2a" && (
           <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
@@ -2874,6 +2882,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
+        {/* Dead code depuis le 2026-08-28 (fusionné dans week_preview_2b) — jamais atteint,
+            "wellness_check_2b" n'est plus dans aucun path actif. */}
         {currentStep === "wellness_check_2b" && (
           <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}

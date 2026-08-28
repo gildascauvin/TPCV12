@@ -68,14 +68,23 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
       <div style={{ maxWidth: heroMaxWidth, margin: "0 auto", padding: "0 20px" }}>
         {frise}
         <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 4, color: "#fff" }}>
-          {role === "coach" ? "⚡ Voici comment ThePerfClub simplifie tes décisions de coaching." : "⚡ Voici comment ton programme s'adapte à ta forme."}
+          {role === "coach" ? "⚡ Ajuste la charge selon la forme de tes sportifs." : "⚡ Ajuste la charge selon ta forme."}
         </div>
-        {/* Wording "solution" (2026-08-17, retour explicite de Gildas) — répond directement au
-            constat posé sur l'écran précédent (WellnessCheckStep). */}
+        {/* Wording "zoom in" (2026-08-28, retour explicite de Gildas) — week_preview est la vue
+            large/immersive du programme ; cet écran est le moment resserré où une vraie décision se
+            prend. Titre = verbe d'action en ouverture ("Ajuste..."), inversé par rapport à une
+            itération précédente (constat "Le programme ne sait pas comment tu te sens" en titre,
+            action en sous-titre) — retour explicite de Gildas préférant l'inverse, le titre pointe
+            directement vers la carte cliquable juste en dessous plutôt que d'ouvrir sur le manque.
+            Sous-titre : "Le plan, lui, ne bouge pas" reste la réassurance clé — évite que
+            l'autorégulation ne sonne comme un choix libre/arbitraire (retour Gildas sur une version
+            antérieure, "À toi de choisir : la garder, l'alléger, ou pousser plus fort.", jugée pas
+            assez orientée action ET sous-entendant à tort qu'on se fiche du programme) : c'est une
+            reco calculée sur un signal réel (forme + difficulté prévue), jamais l'objectif du cycle
+            qui bouge. Le constat ("le programme ne sait pas...") reste implicite plutôt que redit. */}
         <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45 }}>
-          {role === "coach"
-            ? "ThePerfClub t'aide à ajuster leurs séances pour optimiser leurs résultats et leur récupération."
-            : "ThePerfClub t'aide à ajuster tes séances pour optimiser tes résultats et ta récupération."}
+          {/* Identique pour les 2 rôles — rien dans cette phrase ne dépend de "tu"/"tes sportifs". */}
+          Le plan, lui, ne bouge pas — seule la charge s&apos;ajuste.
         </div>
       </div>
     </div>
