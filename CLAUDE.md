@@ -443,7 +443,7 @@ src/components/
   sessions/
     AddSessionModal.tsx    # Créer/modifier séance (exercices, difficulté)
     CompleteModal.tsx      # Marquer séance terminée (RPE + durée)
-    DuplicateModal.tsx     # Dupliquer une séance sur une autre date
+    DuplicateModal.tsx     # Dupliquer une séance (drawer droit) avec charge décharge/maintien/surcharge
   wellness/
     WellnessModal.tsx      # Formulaire wellness 5 étapes
     WellnessRing.tsx       # Ring SVG réutilisable (score, dark?, infinite? — modes ajoutés 2026-07-12 pour CelebrationScreen). Today/Coach ont chacun leur propre copie locale du même ring (WellnessRingPOC/PlanningRing) — pas encore unifiées avec ce composant
@@ -2275,3 +2275,21 @@ Utilisait encore un ancien mapping à 2 teintes codées en dur (`isLow ? "#d4400
 `tsc --noEmit` + `npm run build` propres après chaque round. Vérifié en clic réel sur la sandbox (`/sandbox/athlete`, `/sandbox/coach`, `/sandbox/athlete/week`, `/register?dbgstep=4` pour l'aperçu onboarding — aucune manipulation d'un vrai compte) : les 3 teintes (rouge/orange/vert) confirmées sur les 4 surfaces, halo identique entre `/today` et Coach Control, CTA rouge confirmé sur le cas critique (Léa, wellness 35, Coach Control), bouton "Maintenir" lisible sur fond clair. Pas de clic réel sur un vrai compte (règle permanente).
 
 Déployé en prod le 2026-08-29, commit `583ce75`, push direct sur `main`.
+
+## Dupliquer une séance avec charge décharge/surcharge + drawer docké à droite (2026-08-29)
+
+Demande de Gildas : pouvoir dupliquer une séance (Planning + éditeur de programme) en l'ajustant à la baisse/hausse, même mécanisme que Reconduire une semaine — jusqu'ici `DuplicateModal.tsx`/`DuplicateTemplateModal` copiaient la séance à l'identique, sans notion de charge.
+
+### `DuplicateModal.tsx` (`/week`, `/coach/planning`)
+Ajoute les mêmes 3 cartes Décharge/Maintien/Surcharge + chips `±2,5/5/10/15/20%` que `ReconduireModal.tsx`, et un aperçu en direct de la copie (`WeekSessionCard`, même carte que le planning) avec la jauge de difficulté ajustée et chaque ligne d'exercice modifiée affichée en barré/gras — via `parseAndApply()`/`adjustDifficulty()` (`src/lib/loadAdjust.ts`, le même moteur que Reconduire, pas dupliqué). `onDuplicate` transmet désormais le `%` choisi (`0` en Maintien) en plus de la date et des destinataires coach — `duplicateSession()` (`WeekClient.tsx`) et `duplicateSessionToDate()` (`CoachPlanningClient.tsx`) appliquent l'ajustement au moment de l'insert/`callSessionAPI`.
+
+### `DuplicateTemplateModal` (`ProgramBuilderModal.tsx`)
+Même ajout (mode cards + chips + aperçu via `SessionTemplateCard`) — reste une modale locale distincte de `DuplicateModal.tsx` (raison déjà documentée plus haut dans ce fichier : position semaine+jour de template, pas de date réelle), mais gagne le même mécanisme de charge le même jour. `onConfirm` gagne un 4e paramètre `pct`, `duplicateSession()` (le handler local qui mute `template` via `setTemplate`) applique `parseAndApply()`/`adjustDifficulty()` avant d'insérer la copie — mutation locale pure, aucune écriture DB tant que le programme n'est pas enregistré (même principe que `applyReconduire()`).
+
+### Passage en drawer docké à droite (retour de Gildas après un 1er test)
+Les deux modales étaient d'abord des modales centrées classiques — Gildas a demandé le même traitement que l'édition de séance (`AddSessionModal`/`CoachSessionModal`/`ReconduireModal`, voir section "Drawer/right-panel" plus haut dans ce fichier) : desktop (`useBreakpoint().isMd`) → panneau docké à droite `width:"50vw"`, `height:"100dvh"`, `borderRadius:"28px 0 0 28px"` (arrondi uniquement côté extérieur gauche), animation `drawerInRight` ; mobile → plein écran, pas d'arrondi, `modalIn`. Header avec titre + bouton `✕`, contenu dans une région scrollable dédiée, footer non-scrollable (`flexShrink:0`, `borderTop`) — même architecture flex-column que les autres drawers de l'app (voir "Footer non-scrollable des modales" plus haut). `DuplicateTemplateModal` garde son `zIndex:2147483200` (plus élevé que `ProgramBuilderModal`/`ReconduireModal`/`AddSessionModal`, tous à `2147483100`, pour rester au-dessus quel que soit l'ordre de montage — convention déjà en place dans ce fichier avant ce chantier).
+
+### Vérifié
+`tsc --noEmit` propre après chaque round (vérifié via un tsconfig temporaire excluant `.next` — le `next dev` de Gildas restait actif en parallèle pour qu'il puisse tester en direct, piège de cache `.next/types` déjà documenté ailleurs dans ce fichier). Pas de `npm run build` local pour la version finale (dev server actif en continu). **Testé en clic réel par Gildas lui-même** en local (mode cards, chips, aperçu, passage en drawer) — pas par Claude (jamais de manipulation de son compte).
+
+Déployé en prod le 2026-08-29, commit `7ae2ab3`, push direct sur `main`.
