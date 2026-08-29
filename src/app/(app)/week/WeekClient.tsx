@@ -22,7 +22,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
-import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -482,10 +482,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 ? computeAutoregSuggestion(wellnessToday?.score ?? null, autoregTarget.target_difficulty)
                 : null;
               if (suggestion && autoregTarget) {
+                const severityColor = suggestionSeverityColor(suggestion);
                 alert = {
-                  border: suggestion.dir === "low" ? "rgba(242,138,0,.4)" : "rgba(47,158,68,.4)",
-                  glow: suggestion.dir === "low" ? "#f28a00" : "#2f9e44",
-                  text: `${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
+                  border: `${severityColor}66`,
+                  glow: severityColor,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
                 };
                 alertActions = (
                   <AutoregButtons
@@ -495,6 +496,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     reco={suggestion.reco}
                     advice=""
                     sessionLabel={autoregTarget.name}
+                    variant="light"
+                    severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
                     onUndo={async (original) => {

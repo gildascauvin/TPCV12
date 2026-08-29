@@ -45,9 +45,22 @@ interface Props {
      absente = comportement historique inchangé (ancien code sans gating) ; tous les appelants
      réels doivent désormais la passer. */
   isActive?: boolean;
+  /* Variante claire, pour rester lisible quand le parent (AlertBox, CoachAthleteCard) passe en
+     fond pastel plutôt que sombre. Toutes les couleurs codées en dur ici supposaient un parent
+     sombre (texte blanc, boutons translucides blancs) — défaut "dark" pour les appelants pas
+     concernés (AdjustSessionModal, FrisePreviews). */
+  variant?: "dark" | "light";
+  /* Couleur du CTA principal ("⬇ Alléger →"), dérivée de la vraie sévérité (suggestionSeverityColor,
+     autoregulation.ts) par l'appelant qui connaît la suggestion complète — le cas 🚨 critique a un
+     CTA rouge, cohérent avec le bandeau et le halo déjà rouges dans ce cas, pas seulement l'orange
+     générique du cas ⚠️ modéré. Absente = repli historique (orange fixe pour "low", vert fixe pour
+     "high") — utilisé par les appelants pas concernés par ce raffinement. */
+  severityColor?: string;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal, isActive }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal, isActive, variant = "dark", severityColor }: Props) {
+  const light = variant === "light";
+  const tint = dir === "low" ? "#8a2d00" : "#166534"; // même palette que AlertBox
   const [mode, setMode] = useState<"idle" | "open" | "decided">("idle");
   const [selectedPct, setSelectedPct] = useState(reco);
   const [decidedPct, setDecidedPct] = useState<number | null>(null);
@@ -118,23 +131,39 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
 
   return (
     <div>
-      {advice && (
-        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", marginBottom: mode === "idle" ? 10 : 9 }}>
-          {advice}
-        </div>
-      )}
+      {advice && (() => {
+        /* Même split titre/détail qu'AlertBox (AlertText) : "\n" sépare un titre court en gras
+           d'un détail en dessous. Un `advice` sans "\n" reste affiché tel quel, une seule ligne. */
+        const nl = advice.indexOf("\n");
+        const headline = nl === -1 ? advice : advice.slice(0, nl);
+        const detail = nl === -1 ? null : advice.slice(nl + 1);
+        return (
+          <div style={{ marginBottom: mode === "idle" ? 10 : 9 }}>
+            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.2, color: light ? tint : "#fff", marginBottom: detail ? 5 : 0 }}>
+              {headline}
+            </div>
+            {detail && (
+              <div style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.45, color: light ? tint : "#fff", opacity: light ? 1 : 0.85 }}>
+                {detail}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {mode === "idle" && (
         <div style={{ display: "flex", gap: 7 }}>
           <button
             onClick={maintenir}
-            style={{ flex: 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}
+            style={light
+              ? { flex: 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }
+              : { flex: 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}
           >
             → Maintenir
           </button>
           <button
             onClick={openChips}
-            style={{ flex: 1, border: "none", background: dir === "low" ? "#f28a00" : "#2a8045", color: "#fff", borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}
+            style={{ flex: 1, border: "none", background: severityColor ?? (dir === "low" ? "#f28a00" : "#2a8045"), color: "#fff", borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}
           >
             {autoregCtaLabel(dir)}
           </button>
@@ -143,8 +172,8 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
 
       {mode === "open" && (
         <div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,.12)", margin: "0 0 9px" }} />
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 8 }}>
+          <div style={{ borderTop: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, margin: "0 0 9px" }} />
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", marginBottom: 8 }}>
             {chipsLabel}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
@@ -155,9 +184,9 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
                   key={v}
                   onClick={() => selectChip(v)}
                   style={{
-                    border: `1px solid ${active ? "#E8571A" : "rgba(255,255,255,.18)"}`,
-                    background: active ? "#E8571A" : "rgba(255,255,255,.08)",
-                    color: active ? "#fff" : "rgba(255,255,255,.75)",
+                    border: `1px solid ${active ? "#E8571A" : light ? "rgba(0,0,0,.16)" : "rgba(255,255,255,.18)"}`,
+                    background: active ? "#E8571A" : light ? "rgba(0,0,0,.05)" : "rgba(255,255,255,.08)",
+                    color: active ? "#fff" : light ? "rgba(0,0,0,.6)" : "rgba(255,255,255,.75)",
                     borderRadius: 999, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer",
                   }}
                 >
@@ -167,7 +196,7 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
             })}
           </div>
           <div style={{ display: "flex", gap: 7 }}>
-            <button onClick={cancel} style={{ flex: 1, background: "rgba(255,255,255,.09)", color: "rgba(255,255,255,.6)", border: "none", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+            <button onClick={cancel} style={{ flex: 1, background: light ? "rgba(0,0,0,.06)" : "rgba(255,255,255,.09)", color: light ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.6)", border: "none", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
               Annuler
             </button>
             <button onClick={apply} disabled={applying} style={{ flex: 2, background: "#E8571A", color: "#fff", border: "none", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
@@ -178,12 +207,12 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
       )}
 
       {mode === "decided" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 10, padding: "8px 11px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
           <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
-          <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.9)", minWidth: 0 }}>
+          <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
             {decidedPct !== null ? `${formatAutoregPct(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
           </div>
-          <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
+          <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
             {undoing ? "..." : "Annuler"}
           </button>
         </div>

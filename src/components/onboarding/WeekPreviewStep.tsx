@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import Actions from "@/components/onboarding/Actions";
 import { SessionTemplateCard } from "@/components/programs/ProgramBuilderModal";
 import PlanningRing from "@/components/calendar/PlanningRing";
+import AlertBox from "@/components/calendar/AlertBox";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { computeAutoregSuggestion, qualitativeDifficulty, autoregAdvice } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, qualitativeDifficulty, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { zoneLabel } from "@/lib/wellness";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
@@ -278,17 +279,20 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
             const suggestion = computeAutoregSuggestion(score, dayMaxDiff);
             const pct = suggestion?.reco ?? 0;
             const needsAction = !!suggestion;
-            const isLow = suggestion?.dir === "low";
 
             let recoBox: React.ReactNode;
             if (suggestion) {
+              // Réutilise le vrai AlertBox (variant "light" par défaut, palette pastel + halo/
+              // pastille pulsants) — même composant que /week et /coach/planning pour ce type
+              // d'alerte, glow/border dérivés de la vraie sévérité (suggestionSeverityColor —
+              // 🚨 rouge / ⚠️ orange / 🚀 vert).
+              const severityColor = suggestionSeverityColor(suggestion);
               recoBox = (
-                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: isLow ? "#fff3ef" : "#eafaf0", border: `1px solid ${isLow ? "rgba(212,64,0,.14)" : "rgba(22,101,52,.14)"}` }}>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: isLow ? "#8a2d00" : "#166534", marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>{suggestion.icon}</span>{isLow ? "Alléger recommandé" : "Fenêtre de performance"}
-                  </div>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: isLow ? "#8a2d00" : "#166534" }}>{autoregAdvice(suggestion.dir, dayMaxDiff ?? 6)}</div>
-                </div>
+                <AlertBox alert={{
+                  border: `${severityColor}66`,
+                  glow: severityColor,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, dayMaxDiff ?? 6)}`,
+                }} />
               );
             } else {
               // Pas de suggestion forme (Alléger/Surcharger) sur ce jour → repli sur la vraie

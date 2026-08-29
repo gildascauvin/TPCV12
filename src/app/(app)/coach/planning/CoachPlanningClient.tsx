@@ -36,7 +36,7 @@ import { coachAlertFor } from "@/lib/alerts";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
-import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 
@@ -739,10 +739,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 ? computeAutoregSuggestion(wellness, autoregTarget.target_difficulty)
                 : null;
               if (suggestion && autoregTarget) {
+                const severityColor = suggestionSeverityColor(suggestion);
                 alert = {
-                  border: suggestion.dir === "low" ? "rgba(242,138,0,.4)" : "rgba(47,158,68,.4)",
-                  glow: suggestion.dir === "low" ? "#f28a00" : "#2f9e44",
-                  text: `${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0])}`,
+                  border: `${severityColor}66`,
+                  glow: severityColor,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0])}`,
                 };
                 alertActions = (
                   <AutoregButtons
@@ -752,6 +753,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     reco={suggestion.reco}
                     advice=""
                     sessionLabel={autoregTarget.name}
+                    variant="light"
+                    severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
                     onUndo={async (original) => {

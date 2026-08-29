@@ -3,12 +3,13 @@
 import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import AlertBox from "@/components/calendar/AlertBox";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
-import { computeAutoregSuggestion, autoregAdvice, type AutoregOriginal } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor, type AutoregOriginal } from "@/lib/autoregulation";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
 
@@ -147,13 +148,22 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     : null;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
 
+  /* Le halo pulsant "attention requise" vit sur le CONTOUR DE LA CARTE ENTIÈRE (pas sur l'encart de
+     suggestion interne, qui reste statique — un seul signal de mouvement par carte). Couleur du
+     pulse dérivée de la sévérité réelle (🚨 rouge / ⚠️ orange) quand une suggestion existe, repli
+     sur l'orange historique sinon (cas "attention requise" générique, hors mécanisme
+     computeAutoregSuggestion — ex. tendance de charge). Le surcharge (🚀 vert) ne déclenche jamais
+     showBadge (isPriority reste toujours faux pour une surcharge, par design — voir doc plus haut),
+     donc jamais de pulse vert ici. */
+  const badgeColor = suggestion ? suggestionSeverityColor(suggestion) : "#d44000";
+
   return (
     <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
       background: "linear-gradient(145deg,#1a1a1a,#282828)",
-      border: showBadge ? "3px solid rgba(212,64,0,.55)" : showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
+      border: showBadge ? `3px solid ${badgeColor}8c` : showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
       borderRadius: 26, padding: 18,
-      boxShadow: showBadge ? "0 0 0 0 rgba(212,64,0,0), 0 18px 46px rgba(212,64,0,.18)" : "0 14px 36px rgba(0,0,0,.28)",
+      boxShadow: showBadge ? `0 0 0 0 ${badgeColor}00, 0 18px 46px ${badgeColor}2e` : "0 14px 36px rgba(0,0,0,.28)",
       transition: "border 0.3s ease, box-shadow 0.3s ease",
       animation: showBadge ? "perf-border-pulse 1.8s ease-in-out infinite" : undefined,
       color: "#fff",
@@ -167,13 +177,13 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               50% { opacity: 0.55; transform: scale(1.35); }
             }
             @keyframes perf-border-pulse {
-              0%, 100% { border-color: rgba(212,64,0,.4); box-shadow: 0 0 0 0 rgba(212,64,0,0), 0 18px 46px rgba(212,64,0,.18); }
-              50% { border-color: rgba(212,64,0,1); box-shadow: 0 0 16px 3px rgba(212,64,0,.55), 0 18px 46px rgba(212,64,0,.4); }
+              0%, 100% { border-color: ${badgeColor}66; box-shadow: 0 0 0 0 ${badgeColor}00, 0 18px 46px ${badgeColor}2e; }
+              50% { border-color: ${badgeColor}; box-shadow: 0 0 16px 3px ${badgeColor}8c, 0 18px 46px ${badgeColor}66; }
             }
           `}</style>
           <div style={{
             position: "absolute", top: 14, right: 14,
-            width: 9, height: 9, borderRadius: "50%", background: "#d44000",
+            width: 9, height: 9, borderRadius: "50%", background: badgeColor,
             animation: "perf-pulse 1.8s ease-in-out infinite",
           }} />
         </>
@@ -245,40 +255,67 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       </div>
 
       {/* Encart décision — bloc décharge/surcharge 1-clic (AutoregButtons) quand une suggestion
-         existe, sinon l'encart "Décider/Voir" existant (inchangé, ouvre l'éditeur libre). */}
+         existe, sinon l'encart "Décider/Voir" existant (inchangé, ouvre l'éditeur libre). Réutilise
+         le vrai AlertBox (variant="darkColor", pulse={false} — le halo vit sur le contour de la
+         carte entière, pas ici) au lieu d'une copie locale de sa palette/bordure/padding, pour une
+         bordure strictement identique à celle de /today. `badgeColor` déjà calculé plus haut pour
+         le pulse du contour — réutilisé tel quel ici, une seule source de sévérité pour toute la
+         carte. */}
+      {suggestion && topSession ? (
+        <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
+          <AlertBox
+            variant="darkColor"
+            pulse={false}
+            alert={{
+              border: `${badgeColor}66`,
+              glow: badgeColor,
+              text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, selfView ? undefined : firstName)}`,
+            }}
+            actions={
+              <AutoregButtons
+                key={`${topSession.id}-${isReviewed}`}
+                sessionId={topSession.id}
+                dir={suggestion.dir}
+                reco={suggestion.reco}
+                advice=""
+                sessionLabel={topSession.name}
+                severityColor={badgeColor}
+                onPreviewChange={setPreviewPct}
+                onApply={async (pct) => {
+                  const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
+                  await onApplyAdjust(topSession, pct);
+                  // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
+                  // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
+                  if (isActive !== false) onAutoregDecided();
+                  return original;
+                }}
+                onMaintenir={onAutoregDecided}
+                onUndo={async (original) => {
+                  if (original) await onUndoAdjust(topSession, original);
+                  onAutoregUndone();
+                }}
+                isActive={isActive}
+              />
+            }
+          />
+        </div>
+      ) : (() => {
+        const DARK_COLOR_BG: Record<string, string> = {
+          "#dc2626": "linear-gradient(145deg,#3d0f0c,#521410)",
+          "#f28a00": "linear-gradient(145deg,#2e1608,#42200c)",
+          "#d44000": "linear-gradient(145deg,#33140a,#4a1c0c)",
+          "#2f9e44": "linear-gradient(145deg,#0f2417,#163a22)",
+        };
+        const severity = isPriority ? "#d44000" : "#2f9e44";
+        const encartBg = DARK_COLOR_BG[severity] ?? "linear-gradient(145deg,#1a1a1a,#282828)";
+        return (
       <div style={{
         padding: "12px 14px", borderRadius: 16,
-        background: isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
-        border: `1px solid ${isPriority ? "rgba(212,64,0,.30)" : "rgba(47,158,68,.30)"}`,
+        background: encartBg,
+        border: `1px solid ${severity}66`,
         marginBottom: todaySessions.length > 0 ? 12 : 0,
-        ...(suggestion ? {} : { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }),
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
       }}>
-        {suggestion && topSession ? (
-          <AutoregButtons
-            key={`${topSession.id}-${isReviewed}`}
-            sessionId={topSession.id}
-            dir={suggestion.dir}
-            reco={suggestion.reco}
-            advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, selfView ? undefined : firstName)}`}
-            sessionLabel={topSession.name}
-            onPreviewChange={setPreviewPct}
-            onApply={async (pct) => {
-              const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
-              await onApplyAdjust(topSession, pct);
-              // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
-              // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
-              if (isActive !== false) onAutoregDecided();
-              return original;
-            }}
-            onMaintenir={onAutoregDecided}
-            onUndo={async (original) => {
-              if (original) await onUndoAdjust(topSession, original);
-              onAutoregUndone();
-            }}
-            isActive={isActive}
-          />
-        ) : (
-          <>
             <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: "#fff", flex: 1, minWidth: 0 }}>
               {isPriority ? "⚠️" : "👌"} {decision}
             </div>
@@ -298,9 +335,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             >
               {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
             </button>
-          </>
-        )}
       </div>
+        );
+      })()}
 
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (previewPct). */}

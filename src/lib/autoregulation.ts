@@ -27,6 +27,18 @@ export function computeAutoregSuggestion(wellness: number | null, plannedDifficu
   return null;
 }
 
+/* Couleur de sévérité par palier réel de l'heuristique (🚨 critique / ⚠️ modéré / 🚀 surcharge),
+   source unique pour AlertBox.tsx, WeekClient.tsx, CoachPlanningClient.tsx, CoachAthleteCard.tsx
+   et AutoregButtons.tsx (CTA principal) — jamais une couleur inventée séparément par fichier.
+   Rouge jamais utilisé ailleurs dans l'app avant ce chantier (loadRule.ts réutilise l'orange
+   existant même pour son tag "🔴 Critique") — introduit ici spécifiquement pour distinguer
+   visuellement le cas 🚨 du cas ⚠️. */
+export function suggestionSeverityColor(s: AutoregSuggestion): string {
+  if (s.icon === "🚨") return "#dc2626";
+  if (s.icon === "⚠️") return "#f28a00";
+  return "#2f9e44"; // 🚀
+}
+
 /* Reprend les paliers déjà établis ailleurs dans l'app (DiffGauge, loadRule.ts : hard≥8/moderate≥5/
    easy<5) — jamais de nombre brut dans les textes d'autorégulation, uniquement ce vocabulaire. */
 export function qualitativeDifficulty(diff: number): "légère" | "modérée" | "dure" {
@@ -62,6 +74,13 @@ export function autoregAdvice(dir: AutoregDir, plannedDifficulty: number, subjec
 
 export function autoregTitle(dir: AutoregDir): string {
   return dir === "low" ? "Alléger la séance" : "Surcharger la séance";
+}
+
+/* Titre court utilisé en 1re ligne de l'encart de suggestion (AlertBox), la 2e ligne restant
+   autoregAdvice() (le détail). Distinct d'autoregTitle (utilisé ailleurs, ex. AdjustSessionModal)
+   qui garde son wording existant. */
+export function autoregHeadline(dir: AutoregDir): string {
+  return dir === "low" ? "Alléger recommandé" : "Surcharger recommandé";
 }
 
 export function autoregCtaLabel(dir: AutoregDir): string {

@@ -23,7 +23,8 @@ import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ShareButton from "@/components/sessions/ShareButton";
-import { computeAutoregSuggestion, autoregAdvice } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
+import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
@@ -406,6 +407,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const impacts = doneToday.map(s => computeFatigueImpact(s.rpe!, s.duration!));
   const displayScore = wellnessFilledToday && score !== null ? computeDisplayScore(score, impacts) : null;
   const displayWellness = wellnessFilledToday ? wellness : null;
+  /* Hissé ici (au lieu de recalculé dans l'IIFE plus bas) pour être accessible à la fois par la
+     carte "Score & conseils" (halo pulsant sur le CONTOUR de la carte, même mécanisme que Coach
+     Control/CoachAthleteCard.tsx — un seul signal de mouvement, pas un 2e sur l'encart interne) et
+     par l'encart lui-même. */
+  const autoregTargetTop = [...todaySessions].filter(s => !s.done)
+    .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+  const wellnessCardSuggestion = wellnessFilledToday && autoregTargetTop
+    ? computeAutoregSuggestion(displayScore, autoregTargetTop.target_difficulty)
+    : null;
+  const wellnessCardBadgeColor = wellnessCardSuggestion ? suggestionSeverityColor(wellnessCardSuggestion) : "#d44000";
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const yesterdaySessions = allSessions.filter(s => s.date === yesterdayDate);
@@ -598,21 +609,46 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         </div>
 
         {/* ── Wellness + séance du jour, carte unique ── */}
+        {/* Même mécanisme que CoachAthleteCard.tsx : halo pulsant sur le CONTOUR de la carte (pas
+            sur l'encart de suggestion interne) quand une décharge est suggérée (jamais pour une
+            surcharge — pas une alerte, par design), couleur dérivée de la vraie sévérité. */}
         <div
           data-tour="wellness-card"
           style={{
             position: "relative", overflow: "hidden",
             borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
             background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-            border: "1px solid rgba(255,255,255,0.13)",
-            boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
+            border: wellnessCardSuggestion?.dir === "low" ? `3px solid ${wellnessCardBadgeColor}8c` : "1px solid rgba(255,255,255,0.13)",
+            boxShadow: wellnessCardSuggestion?.dir === "low" ? `0 0 0 0 ${wellnessCardBadgeColor}00, 0 28px 72px rgba(0,0,0,0.28)` : "0 28px 72px rgba(0,0,0,0.28)",
+            animation: wellnessCardSuggestion?.dir === "low" ? "perf-border-pulse-wellness 1.8s ease-in-out infinite" : undefined,
             color: "#fff",
           }}
         >
+          {wellnessCardSuggestion?.dir === "low" && (
+            <>
+              <style>{`
+                @keyframes perf-pulse-wellness-dot {
+                  0%, 100% { opacity: 1; transform: scale(1); }
+                  50% { opacity: 0.55; transform: scale(1.35); }
+                }
+                @keyframes perf-border-pulse-wellness {
+                  0%, 100% { border-color: ${wellnessCardBadgeColor}66; box-shadow: 0 0 0 0 ${wellnessCardBadgeColor}00, 0 28px 72px rgba(0,0,0,0.28); }
+                  50% { border-color: ${wellnessCardBadgeColor}; box-shadow: 0 0 16px 3px ${wellnessCardBadgeColor}8c, 0 28px 72px rgba(0,0,0,0.28); }
+                }
+              `}</style>
+              {/* Même pastille pulsante que CoachAthleteCard.tsx (position/taille/rythme identiques) —
+                  "mêmes couleurs de halo" demandé par Gildas, un seul signal partagé entre les 2 cartes. */}
+              <div style={{
+                position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18,
+                width: 9, height: 9, borderRadius: "50%", background: wellnessCardBadgeColor,
+                animation: "perf-pulse-wellness-dot 1.8s ease-in-out infinite", zIndex: 4,
+              }} />
+            </>
+          )}
           <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
           {wellnessFilledToday && (
-            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18, zIndex: 3 }}>
+            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: wellnessCardSuggestion?.dir === "low" ? (isMd ? 44 : 34) : (isMd ? 24 : 18), zIndex: 3 }}>
               <ShareButton
                 resourceType="wellness"
                 variant="dark"
@@ -703,21 +739,26 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
             );
 
-            if (suggestion && autoregTarget) return (
-              <div
-                style={{
-                  position: "relative", zIndex: 2, borderRadius: 16, padding: "12px 14px", marginBottom: 12,
-                  background: suggestion.dir === "low" ? "rgba(242,138,0,.13)" : "rgba(42,128,69,.18)",
-                  border: `1px solid ${suggestion.dir === "low" ? "rgba(242,138,0,.22)" : "rgba(42,128,69,.28)"}`,
-                }}
-                onClick={e => e.stopPropagation()}
-              >
+            if (suggestion && autoregTarget) {
+              const severityColor = suggestionSeverityColor(suggestion);
+              return (
+              <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
+                <AlertBox
+                  variant="darkColor"
+                  pulse={false}
+                  alert={{
+                    border: `${severityColor}66`,
+                    glow: severityColor,
+                    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
+                  }}
+                  actions={
                 <AutoregButtons
                   sessionId={autoregTarget.id}
                   dir={suggestion.dir}
                   reco={suggestion.reco}
-                  advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`}
+                  advice=""
                   sessionLabel={autoregTarget.name}
+                  severityColor={severityColor}
                   isActive={isActive}
                   onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                   onApply={async (pct) => {
@@ -739,8 +780,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
                   }}
                 />
+                  }
+                />
               </div>
-            );
+              );
+            }
 
             if (!wellnessFilledToday) return row(
               "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
