@@ -1525,11 +1525,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
         };
       }
-      await Promise.all([
+      const [sessionsRes, baselineRes, historyRes] = await Promise.all([
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
         supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
       ]);
+      if (sessionsRes.error) console.error("[completeProfile] sessions insert error:", sessionsRes.error);
+      if (baselineRes.error) console.error("[completeProfile] wellness_daily baseline upsert error:", baselineRes.error);
+      if (historyRes.error) console.error("[completeProfile] wellness_daily history upsert error:", historyRes.error);
     }
     if (role === "coach") {
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -1603,10 +1606,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const uid = userId || newUserId;
     if (uid) {
       const today = new Date().toISOString().split("T")[0];
-      await supabase.from("wellness_daily").upsert(
-        { user_id: uid, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score },
-        { onConflict: "user_id,date" }
-      );
+      const wellnessPayload = { user_id: uid, date: today, sleep: wSleep, stress: wStress, recovery: wRecovery, motivation: wMotivation, behaviors: wBehaviors, bedtime: wBedtime, base_score, score };
+      let { error: wellnessError } = await supabase.from("wellness_daily").upsert(wellnessPayload, { onConflict: "user_id,date" });
+      if (wellnessError) {
+        console.error("[finishAthleteActivation] wellness_daily upsert error, retrying once:", wellnessError);
+        ({ error: wellnessError } = await supabase.from("wellness_daily").upsert(wellnessPayload, { onConflict: "user_id,date" }));
+        if (wellnessError) console.error("[finishAthleteActivation] wellness_daily upsert failed after retry — le score du jour reste le placeholder d'activation:", wellnessError);
+      }
       const wellnessAdjustment = score < 45 ? -1 : 0;
       /* Programme claimé : claimAndAssignProgram (no-op si pas de claim_program_id). Programme
          non-claimé : opts mémorisées par completeProfile() (voir sa doc) — même wellnessAdjustment

@@ -2,14 +2,25 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProgramTemplate, SessionTemplate } from "@/types";
 
-const DAY_OFFSETS: Record<string, number> = {
-  Lun: 0, Mar: 1, Mer: 2, Jeu: 3, Ven: 4, Sam: 5, Dim: 6,
+// Index calendaire réel (0=Dimanche...6=Samedi, comme Date.getDay()) — sert à calculer le
+// décalage d'un jour du template PAR RAPPORT AU VRAI JOUR DE LA SEMAINE de start_date, plutôt que
+// de supposer que start_date tombe toujours un lundi (bug corrigé le 2026-08-29 : depuis que la
+// date de départ est libre — cf. CelebrationScreen —, "Lun"=+0 assigné littéralement à start_date
+// produisait des séances aux mauvais jours calendaires dès que start_date n'était pas un lundi).
+const DOW_INDEX: Record<string, number> = {
+  Dim: 0, Lun: 1, Mar: 2, Mer: 3, Jeu: 4, Ven: 5, Sam: 6,
 };
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
+}
+
+function dayOffsetFromStart(day: string, startDate: string): number {
+  const startDow = new Date(`${startDate}T12:00:00`).getDay();
+  const targetDow = DOW_INDEX[day] ?? startDow;
+  return (targetDow - startDow + 7) % 7;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -84,7 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     template.weeks.forEach((week, weekIdx) => {
       Object.entries(week).forEach(([day, daySessionsRaw]) => {
         const daySessions = daySessionsRaw as SessionTemplate[];
-        const dayOffset = DAY_OFFSETS[day] ?? 0;
+        const dayOffset = dayOffsetFromStart(day, start_date);
         const date = addDays(start_date, weekIdx * 7 + dayOffset);
 
         daySessions.forEach((s) => {
