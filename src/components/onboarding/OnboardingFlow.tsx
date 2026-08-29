@@ -1143,6 +1143,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     | { status: "failed" };
   const [analyzingSport, setAnalyzingSport]       = useState(false);
   const [customSport, setCustomSport]             = useState<CustomSportState | null>(null);
+  /* "Autre" redevient un chip dans la grille (2026-08-29) plutôt qu'un champ toujours visible —
+     revient sur la décision du 2026-08-06, mais pour une vraie raison structurelle : avec l'import
+     ci-dessous comme 3e chemin, garder "Autre" toujours visible ET import caché derrière un clic
+     créait une asymétrie (2 mécaniques d'interaction différentes sur un même écran). Les deux sont
+     maintenant symétriques : un déclencheur toujours visible (chip ou carte), un clic, une zone de
+     révélation en dessous — jamais deux zones ouvertes en même temps (voir mutuelle exclusion sur
+     les onClick des chips/carte plus bas). */
+  const [autreChipSelected, setAutreChipSelected] = useState(false);
+  /* Import de programme existant (photo/texte) sur sport_2a — si réussi, saute level_2a/days_2a
+     directement vers week_preview (voir advanceToWeekPreviewViaImport ci-dessous) : jours et
+     structure sont déjà dans l'import, imposer des faiblesses sur un programme déjà figé n'a pas
+     de sens. Même route /api/programs/import que le program builder in-app (2026-08-29), rendue
+     publique le même jour pour cette raison précise (account n'existe pas encore à ce stade). */
+  const [importText, setImportText]               = useState("");
+  const [importPhotoFile, setImportPhotoFile]     = useState<File | null>(null);
+  const [importAnalyzing, setImportAnalyzing]     = useState(false);
+  const [importError, setImportError]             = useState<string | null>(null);
+  const [importedTemplate, setImportedTemplate]   = useState<ProgramTemplate | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
   /* Transition de génération (2026-08-17) — voir advanceMaybeGenerating() et GenerationLoadingScreen. */
   const [genLoading, setGenLoading]               = useState(false);
   /* Transition "reconduction" (2026-08-17) — voir advanceMaybeReconduction() et ReconductionTeaserScreen. */
@@ -1400,6 +1419,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
   const canGoBack = stepIdx > 0 && !["celebration", "wellness_q", "wellness_reveal", "invite_team"].includes(currentStep);
 
+  /* Retour depuis week_preview atteint via import (advanceToWeekPreviewViaImport a sauté
+     level_2a/days_2a) — goBack() décrémenterait stepIdx d'une seule position, ramenant sur
+     days_2a, un step jamais réellement vu sur ce chemin. Cherche sport_2a en arrière dans le path
+     résolu plutôt qu'un décalage fixe. */
+  function backToSportAfterImport() {
+    const idx = path.findIndex((s, i) => i < stepIdx && s === "sport_2a");
+    setStepIdx(idx === -1 ? Math.max(0, stepIdx - 1) : idx);
+  }
+
   function nextAfterChoice(setter: () => void) {
     if (advancingRef.current) return;
     advancingRef.current = true;
@@ -1418,6 +1446,70 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
       setTimeout(() => { setGenLoading(false); next(); }, 1700);
     } else {
       next();
+    }
+  }
+
+  /* Saute directement vers week_preview_2a/2b après un import réussi — contrairement à
+     advanceMaybeGenerating() (avance d'une seule position), il faut ici sauter par-dessus
+     level_2a/days_2a. Cherche l'index dans le path RÉSOLU plutôt qu'un décalage fixe (role n'est
+     pas encore connu à ce stade, donc pas de moyen de savoir a priori si c'est 2a ou 2b). Filet de
+     sécurité : si jamais aucun week_preview n'est trouvé après la position courante (ne devrait
+     jamais arriver), avance normalement plutôt que de ne rien faire. */
+  function advanceToWeekPreviewViaImport() {
+    const idx = path.findIndex((s, i) => i > stepIdx && (s === "week_preview_2a" || s === "week_preview_2b"));
+    if (idx === -1) { next(); return; }
+    setGenLoading(true);
+    setTimeout(() => { setGenLoading(false); setStepIdx(idx); }, 1700);
+  }
+
+  function fileToBase64(file: File): Promise<{ data: string; mediaType: string }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const match = result.match(/^data:([^;]+);base64,(.*)$/);
+        if (!match) { reject(new Error("Fichier illisible")); return; }
+        resolve({ mediaType: match[1], data: match[2] });
+      };
+      reader.onerror = () => reject(new Error("Fichier illisible"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Texte et fichier restent mutuellement exclusifs dans l'UI (voir sport_2a plus bas) — remplir
+  // l'un vide toujours l'autre, donc au plus un des deux est jamais non-vide ici. Priorité au
+  // fichier si jamais les deux étaient non-vides malgré tout (filet de sécurité, pas un cas normal).
+  const canSubmitImport = importText.trim().length > 0 || !!importPhotoFile;
+
+  async function handleImportNext() {
+    if (!canSubmitImport || importAnalyzing) return;
+    setImportAnalyzing(true);
+    setImportError(null);
+    try {
+      const body: { text?: string; imageBase64?: string; imageMediaType?: string } = {};
+      if (importPhotoFile) {
+        const { data, mediaType } = await fileToBase64(importPhotoFile);
+        body.imageBase64 = data;
+        body.imageMediaType = mediaType;
+      } else {
+        body.text = importText.trim();
+      }
+      const res = await fetch("/api/programs/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok || !data?.template) {
+        setImportError(data?.error ?? "On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
+        return;
+      }
+      setImportedTemplate(data.template as ProgramTemplate);
+      advanceToWeekPreviewViaImport();
+    } catch {
+      setImportError("On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
+    } finally {
+      setImportAnalyzing(false);
     }
   }
 
@@ -2255,10 +2347,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         {currentStep === "sport_2a" && (
           <div>
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
-              Pour quel sport construisons-nous ce programme ?
+              Crée ton programme
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              Un programme personnalisé, spécifique à ta discipline.
+              À partir de ton sport, ou importe celui que tu utilises déjà.
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
@@ -2269,39 +2361,133 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     setSportPrecision("");
                     setCustomSport(null);
                     setWeaknesses([]);
+                    setAutreChipSelected(false);
+                    setImportText("");
+                    setImportPhotoFile(null);
+                    setImportError(null);
                     if (!isSame && isRegisterMode) nextAfterChoice(() => {});
                   }} />
               ))}
+              {/* "Autre" redevient un chip (2026-08-29) — voir commentaire sur autreChipSelected
+                  plus haut dans ce fichier pour le pourquoi (symétrie avec le champ import
+                  ci-dessous, plutôt qu'un champ toujours visible). */}
+              <Chip icon="✍️" label="Autre" selected={autreChipSelected}
+                onClick={() => {
+                  const next = !autreChipSelected;
+                  setAutreChipSelected(next);
+                  setSport("");
+                  setWeaknesses([]);
+                  setImportText("");
+                  setImportPhotoFile(null);
+                  setImportError(null);
+                  if (!next) { setSportPrecision(""); setCustomSport(null); }
+                }} />
             </div>
-            {/* Champ libre toujours visible (2026-08-06, plus de badge "Autre" séparé à cliquer
-                pour le révéler — décision explicite de Gildas) : alternative aux cartes ci-dessus,
-                mutuellement exclusive (taper efface la carte sélectionnée et vice-versa). L'analyse
-                Claude n'est plus déclenchée par un bouton dédié mais par "Suivant" lui-même
-                (handleSportNext) — un sport choisi via une carte ne déclenche jamais Claude. */}
+
+            {autreChipSelected && (
+              <div style={{ marginBottom: 14 }}>
+                <input
+                  type="text" value={sportPrecision} autoFocus
+                  onChange={e => { setSportPrecision(e.target.value); if (customSport) setCustomSport(null); }}
+                  placeholder={role === "coach" ? "Précise le sport de tes sportifs (ex : rugby, kite-surf, cirque…)" : "Précise ton sport (ex : rugby, kite-surf, cirque…)"}
+                  style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none" }}
+                />
+                {customSport?.status === "matched" && (
+                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour &quot;{customSport.sportLabel}&quot;.</p>
+                )}
+                {customSport?.status === "generated" && (
+                  <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour &quot;{customSport.sportLabel}&quot;.</p>
+                )}
+                {customSport?.status === "failed" && (
+                  <p style={{ fontSize: 11, color: "#c0392b", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
+                )}
+              </div>
+            )}
+
+            {/* Diviseur "ou" — même style que le POC (theperfclub_poc_import_programme). */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#b5b0aa", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "16px 0" }}>
+              <div style={{ flex: 1, height: 1, background: "rgba(23,27,31,.10)" }} />
+              ou
+              <div style={{ flex: 1, height: 1, background: "rgba(23,27,31,.10)" }} />
+            </div>
+
+            {/* Import — plus de carte cliquable ni de tabs (2026-08-29, 2e itération) : trop de
+                bruit une fois révélé (tabs + dropzone bordée + erreur = 3 éléments). Benchmark
+                Levels ("What did you eat last?") : un textarea directement visible + un simple
+                badge pour le fichier, jamais de mode/tabs séparés. Le placeholder du textarea et
+                le libellé du badge portent l'explication, pas de titre/sous-titre séparé. Texte et
+                fichier restent mutuellement exclusifs (remplir l'un vide l'autre, même principe que
+                sport/Autre) — /api/programs/import n'accepte qu'un seul des deux à la fois.
+                Petit label ajouté au-dessus (2026-08-29, 2e retour) : contrairement au benchmark
+                Levels (chips + texte parlent du même sujet, couvert par le H1 de la page), ici le
+                H1 de sport_2a ne parle que du sport — passé le "ou" on change de sujet (le
+                programme), sans que rien ne le signale sans ce label. Même typographie que les
+                labels de section déjà utilisés ailleurs (petit, majuscules, discret). */}
             <div style={{ marginBottom: 14 }}>
-              <input
-                type="text" value={sportPrecision}
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#171b1f", marginBottom: 8 }}>
+                Importe ton programme
+              </div>
+              <textarea
+                value={importText}
                 onChange={e => {
-                  setSportPrecision(e.target.value);
-                  if (customSport) setCustomSport(null);
-                  if (sport) setSport("");
+                  setImportText(e.target.value);
+                  setImportError(null);
+                  if (e.target.value.trim()) {
+                    setSport(""); setAutreChipSelected(false); setSportPrecision(""); setCustomSport(null);
+                    if (importPhotoFile) setImportPhotoFile(null);
+                  }
                 }}
-                placeholder={role === "coach" ? "Ou précise le sport de tes sportifs (ex : rugby, kite-surf, cirque…)" : "Ou précise ton sport (ex : rugby, kite-surf, cirque…)"}
-                style={{ width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none" }}
+                placeholder={"Ou colle ton programme existant ici (ex : Lundi : Squat 5x5 @100kg...)"}
+                rows={4}
+                style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: 16, border: "1.5px solid rgba(0,0,0,.12)", fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical", outline: "none" }}
               />
-              {customSport?.status === "matched" && (
-                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour &quot;{customSport.sportLabel}&quot;.</p>
-              )}
-              {customSport?.status === "generated" && (
-                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour &quot;{customSport.sportLabel}&quot;.</p>
-              )}
-              {customSport?.status === "failed" && (
-                <p style={{ fontSize: 11, color: "#c0392b", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                <button
+                  onClick={() => importFileInputRef.current?.click()}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999,
+                    border: importPhotoFile ? "1.5px solid #2f9e44" : "1.5px solid rgba(212,64,0,.4)",
+                    background: "#fff", color: importPhotoFile ? "#2f9e44" : "#d44000",
+                    fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
+                  }}
+                >
+                  📷 {importPhotoFile ? importPhotoFile.name : "Importer un fichier"}
+                </button>
+                {importPhotoFile && (
+                  <button
+                    onClick={() => setImportPhotoFile(null)}
+                    style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 15, cursor: "pointer", padding: 0 }}
+                  >
+                    ✕
+                  </button>
+                )}
+                <input
+                  ref={importFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      setImportPhotoFile(f);
+                      setImportError(null);
+                      setSport(""); setAutreChipSelected(false); setSportPrecision(""); setCustomSport(null);
+                      if (importText.trim()) setImportText("");
+                    }
+                  }}
+                />
+              </div>
+              {importError && <p style={{ fontSize: 11, color: "#c0392b", marginTop: 8 }}>{importError}</p>}
             </div>
+
             {isRegisterMode
-              ? !sport && <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !sportPrecision.trim()} />
-              : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
+              ? !sport && (
+                  canSubmitImport
+                    ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
+                    : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !autreChipSelected || !sportPrecision.trim()} />
+                )
+              : (
+                  canSubmitImport
+                    ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
+                    : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
+                )
             }
           </div>
         )}
@@ -2864,7 +3050,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} importedTemplate={importedTemplate}
+            onNext={next} onBack={canGoBack ? (importedTemplate ? backToSportAfterImport : goBack) : undefined} programFlow={hasClaimedProgram} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* Dead code depuis le 2026-08-28 (fusionné dans week_preview_2a) — jamais atteint,
@@ -2885,7 +3072,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             customExercises={!sport && customSport?.status === "generated" ? customSport.exercises : undefined}
             customWeaknessMeta={!sport && customSport?.status === "generated" ? customSport.weaknessMeta : undefined}
             customSessionLabels={!sport && customSport?.status === "generated" ? customSport.sessionLabels : undefined}
-            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+            role={role} goalLower={GOAL_TO_LOWER[goal] ?? ""} weaknessLabels={weaknessLabels} sportLabel={sportSentenceLabel} importedTemplate={importedTemplate}
+            onNext={next} onBack={canGoBack ? (importedTemplate ? backToSportAfterImport : goBack) : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
         {/* Dead code depuis le 2026-08-28 (fusionné dans week_preview_2b) — jamais atteint,

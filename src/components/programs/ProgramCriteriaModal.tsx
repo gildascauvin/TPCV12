@@ -172,13 +172,14 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
   const [customSport, setCustomSport] = useState<CustomSportState | null>(null);
 
   // Import d'un programme existant (photo/texte) — voir `mode` ci-dessus pour le choix d'UX.
-  const [importTab, setImportTab] = useState<"text" | "photo">("text");
   const [importText, setImportText] = useState("");
   const [importPhotoFile, setImportPhotoFile] = useState<File | null>(null);
   const [importAnalyzing, setImportAnalyzing] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const importFileInputRef = useRef<HTMLInputElement>(null);
-  const canSubmitImport = importTab === "text" ? importText.trim().length > 0 : !!importPhotoFile;
+  // Mutuellement exclusifs dans l'UI (remplir l'un vide l'autre, voir plus bas) — priorité au
+  // fichier si jamais les deux étaient non-vides malgré tout, filet de sécurité pas un cas normal.
+  const canSubmitImport = importText.trim().length > 0 || !!importPhotoFile;
 
   async function handleImportAnalyze() {
     if (!canSubmitImport || importAnalyzing) return;
@@ -186,12 +187,12 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
     setImportError(null);
     try {
       const body: { text?: string; imageBase64?: string; imageMediaType?: string } = {};
-      if (importTab === "text") {
-        body.text = importText.trim();
-      } else if (importPhotoFile) {
+      if (importPhotoFile) {
         const { data, mediaType } = await fileToBase64(importPhotoFile);
         body.imageBase64 = data;
         body.imageMediaType = mediaType;
+      } else {
+        body.text = importText.trim();
       }
       const res = await fetch("/api/programs/import", {
         method: "POST",
@@ -333,51 +334,57 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>
         </div>
 
+        {/* Plus de tabs (2026-08-29, même simplification que l'onboarding — voir OnboardingFlow.tsx,
+            sport_2a) : un textarea toujours visible + un badge fichier à côté, texte et fichier
+            mutuellement exclusifs (remplir l'un vide l'autre). Le header du drawer en mode import
+            ("Importer un programme" / sous-titre) sert déjà de label pour cette section, pas besoin
+            d'un label supplémentaire ici contrairement à l'onboarding (où le H1 de l'écran ne parle
+            que du sport). */}
         {importMode && (
           <div>
-            <div style={{ display: "flex", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12, padding: 3, gap: 2, marginBottom: 16 }}>
+            <textarea
+              value={importText}
+              onChange={e => {
+                setImportText(e.target.value);
+                setImportError(null);
+                if (e.target.value.trim() && importPhotoFile) setImportPhotoFile(null);
+              }}
+              placeholder={"Lundi : Squat 5x5 @100kg, Leg press 3x10\nMercredi : Développé couché 5x5 @70kg\nVendredi : Soulevé de terre 3x5 @120kg\n..."}
+              rows={9}
+              style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: 16, border: "1.5px solid rgba(0,0,0,.12)", fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical", outline: "none" }}
+            />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
               <button
-                onClick={() => setImportTab("text")}
-                style={{ flex: 1, border: "none", background: importTab === "text" ? "#171b1f" : "transparent", color: importTab === "text" ? "#fff" : "#62686e", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "9px 6px", borderRadius: 9, cursor: "pointer" }}
-              >
-                📋 Coller le texte
-              </button>
-              <button
-                onClick={() => setImportTab("photo")}
-                style={{ flex: 1, border: "none", background: importTab === "photo" ? "#171b1f" : "transparent", color: importTab === "photo" ? "#fff" : "#62686e", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "9px 6px", borderRadius: 9, cursor: "pointer" }}
-              >
-                📷 Photo
-              </button>
-            </div>
-
-            {importTab === "text" ? (
-              <textarea
-                value={importText}
-                onChange={e => { setImportText(e.target.value); setImportError(null); }}
-                placeholder={"Lundi : Squat 5x5 @100kg, Leg press 3x10\nMercredi : Développé couché 5x5 @70kg\nVendredi : Soulevé de terre 3x5 @120kg\n..."}
-                rows={9}
-                style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: 16, border: "1.5px solid rgba(0,0,0,.12)", fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical", outline: "none" }}
-              />
-            ) : (
-              <div
                 onClick={() => importFileInputRef.current?.click()}
                 style={{
-                  border: importPhotoFile ? "1.5px solid rgba(47,158,68,.4)" : "1.5px dashed rgba(0,0,0,.18)",
-                  background: importPhotoFile ? "#f4fbf5" : "#fff",
-                  borderRadius: 16, minHeight: 200, display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center", gap: 8, textAlign: "center",
-                  padding: 20, cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999,
+                  border: importPhotoFile ? "1.5px solid #2f9e44" : "1.5px solid rgba(212,64,0,.4)",
+                  background: "#fff", color: importPhotoFile ? "#2f9e44" : "#d44000",
+                  fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
                 }}
               >
-                <input
-                  ref={importFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) { setImportPhotoFile(f); setImportError(null); } }}
-                />
-                <div style={{ fontSize: 28 }}>📷</div>
-                <strong style={{ fontSize: 13.5, fontWeight: 800 }}>{importPhotoFile ? importPhotoFile.name : "Ajouter une photo"}</strong>
-                <span style={{ fontSize: 12, color: "#62686e" }}>{importPhotoFile ? "Clique pour la remplacer." : "Une feuille manuscrite, une capture d'écran, un PDF exporté..."}</span>
-              </div>
-            )}
+                📷 {importPhotoFile ? importPhotoFile.name : "Importer un fichier"}
+              </button>
+              {importPhotoFile && (
+                <button
+                  onClick={() => setImportPhotoFile(null)}
+                  style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 15, cursor: "pointer", padding: 0 }}
+                >
+                  ✕
+                </button>
+              )}
+              <input
+                ref={importFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    setImportPhotoFile(f);
+                    setImportError(null);
+                    if (importText.trim()) setImportText("");
+                  }
+                }}
+              />
+            </div>
 
             {importError && <p style={{ fontSize: 11.5, color: "#c81e1e", marginTop: 10 }}>{importError}</p>}
           </div>

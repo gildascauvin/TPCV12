@@ -126,16 +126,21 @@ interface Props {
      — `sport` est ce que consomme /api/programs/generate, pas forcément affichable tel quel). Repli
      sur `sport` si absent. */
   sportLabel?: string;
+  /* Programme importé (photo/texte, sport_2a) — quand fourni, remplace entièrement l'appel à
+     /api/programs/generate ci-dessous : le contenu vient déjà de l'utilisateur, rien à générer.
+     sport/level/focus/weaknesses restent transmis mais ignorés par cet écran dans ce cas (jamais
+     vidés côté appelant, pour ne pas perturber un retour arrière vers sport_2a). */
+  importedTemplate?: ProgramTemplate | null;
   frise?: React.ReactNode;
   onNext: () => void;
   onBack?: () => void;
 }
 
-export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, customSessionLabels, programFlow, role, weaknessLabels, sportLabel, frise, onNext, onBack }: Props) {
+export default function WeekPreviewStep({ sport, level, trainingDays, focus, weaknesses, duration, customExercises, customWeaknessMeta, customSessionLabels, programFlow, role, weaknessLabels, sportLabel, importedTemplate, frise, onNext, onBack }: Props) {
   const { isMd, isLg } = useBreakpoint();
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
-  const [generatedTemplate, setGeneratedTemplate] = useState<ProgramTemplate | null>(null);
+  const [generatedTemplate, setGeneratedTemplate] = useState<ProgramTemplate | null>(importedTemplate ?? null);
   const [formSlider, setFormSlider] = useState(50);
   const formDelta = deltaFromSlider(formSlider);
   const { emoji: sliderEmoji, text: sliderText } = sliderStateLabel(formSlider);
@@ -152,6 +157,11 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
   }, [programFlow]);
 
   useEffect(() => {
+    // Programme importé : rien à générer, generatedTemplate est déjà seedé depuis importedTemplate
+    // à l'initialisation du state ci-dessus. Garde explicite plutôt que de compter sur le fait que
+    // trainingDays est vide sur ce chemin (sport_2a→week_preview saute days_2a) — coïncidence
+    // fragile à ne pas laisser porter l'intention.
+    if (importedTemplate) return;
     if (!trainingDays.length) return;
     const dayStrings = trainingDays.map(d => DOW_NAMES[d]).filter(Boolean);
     if (!dayStrings.length) return;
@@ -215,7 +225,9 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
   // de Gildas, 2026-08-17). weaknessLabels vide (facultatif) → phrase sans cette partie.
   const sportForSentence = sportLabel || sport;
   const weaknessPart = weaknessLabels?.length ? weaknessLabels.join(" et ") : null;
-  const headerSub = programFlow
+  const headerSub = importedTemplate
+    ? "Reconstruit à partir de ce que tu nous as envoyé. Ta vraie analyse s'appuiera sur tes données réelles."
+    : programFlow
     ? (displayName ? "Personnalisable à tout moment selon l'avancée de tes sportifs." : "Chargement du programme…")
     : `${weaknessPart ? `Construit à partir de ${sportForSentence}, ${weaknessPart} et tes jours d'entraînement.` : `Construit à partir de ${sportForSentence} et tes jours d'entraînement.`} Ta vraie analyse s'appuiera sur tes données réelles.`;
   const nextLabel = "Personnaliser ce programme →";

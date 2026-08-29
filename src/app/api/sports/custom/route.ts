@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
 import { getSportCategory, type WeaknessMeta } from "@/app/api/programs/generate/route";
 import type { SessionType } from "@/types";
 
@@ -62,11 +61,15 @@ function isValidWeaknesses(v: unknown): v is CustomWeakness[] {
 // menu de faiblesses) est ensuite injecté dans /api/programs/generate via customExercises/
 // customWeaknessMeta — le moteur de périodisation (blocs, plafonds RPE, Phase A2/B) n'est jamais
 // touché, Claude ne fournit que le vocabulaire, jamais la structure.
+// Route publique (2026-08-29) — plus de check d'authentification. Bug réel trouvé en construisant
+// l'import de programme sur sport_2a : le check auth.getUser() bloquait déjà silencieusement cette
+// route pour TOUT visiteur en cours d'inscription anonyme (la grande majorité du trafic — account
+// n'arrive que bien plus tard dans le path, après week_preview/role/decision, voir OnboardingFlow.tsx).
+// analyzeSport() capturait l'échec 401 dans son catch et retombait sur le contenu générique "Autre",
+// sans jamais réellement appeler Claude — invisible car le repli est gracieux, jamais un écran cassé.
+// Coût jugé négligeable (~0,004-0,006$/appel, déjà documenté) — même posture que les autres routes
+// publiques de l'app (/api/sandbox/*, claim de /p/[id]), aucune n'a de rate-limiting dédié non plus.
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-
   const body = await req.json().catch(() => null);
   const description = typeof body?.description === "string" ? body.description.trim() : "";
   if (!description) return NextResponse.json({ error: "description requise" }, { status: 400 });

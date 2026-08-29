@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
 import type { SessionType, SessionTemplate, WeekTemplate, ProgramTemplate } from "@/types";
 
 const client = new Anthropic();
@@ -57,11 +56,12 @@ Règles strictes :
 - "target_difficulty" est ton estimation de la difficulté perçue de la séance (volume × intensité), pas une donnée du document sauf si elle y figure explicitement (RPE, %1RM élevé...).
 - "type" reflète la nature réelle de la séance (ex. une séance de repos actif/mobilité → "recuperation", un test de charge maximale → "test", le reste selon dominante technique/volume/intensité).`;
 
+// Route publique (2026-08-29) — nécessaire pour l'appeler depuis sport_2a en onboarding, avant la
+// création du compte (account arrive bien plus tard dans le path, après week_preview/role/decision).
+// Même correction que /api/sports/custom le même jour — un check auth.getUser() ici aurait été
+// silencieusement cassé pour tout visiteur anonyme en cours d'inscription, exactement le bug déjà
+// trouvé sur cette route sœur.
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-
   const body = await req.json().catch(() => null);
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   const imageBase64 = typeof body?.imageBase64 === "string" ? body.imageBase64.trim() : "";
