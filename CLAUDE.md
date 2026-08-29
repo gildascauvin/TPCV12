@@ -2323,3 +2323,30 @@ Demande explicite de Gildas : pouvoir revenir au picker depuis n'importe lequel 
 **Non testé, nécessite la prod** (même limite que `/api/sports/custom` — clé Anthropic vide en local, Sensitive côté Vercel) : le vrai appel Haiku de `/api/programs/import`, sur texte et sur photo.
 
 Déployé en prod le 2026-08-29, commit `6b4e472`, push direct sur `main`.
+
+## 4 retours après le picker de création — bannière, reps/sets, exercices combinés, collage multi-lignes (2026-08-29, suite)
+
+Retours de Gildas en testant le chantier précédent, traités ensemble.
+
+### Bannière "Aucun programme actif" retirée de la librairie
+`ProgramLibraryPage.tsx` affichait `<ProgramBanner>` en haut de la liste dès que `activeProgram !== undefined` — redondant avec le même bandeau déjà visible sur `/week` avant même d'ouvrir la librairie. Vérifié avant de retirer : `activeProgram`/`activeProgramWeek` ne sont jamais passés par `CoachPlanningClient.tsx` (seul `WeekClient.tsx`, sportif, les fournit) — le bloc ne s'affichait donc déjà que côté sportif, jamais côté coach. Bloc + import `ProgramBanner` (devenu inutile dans ce fichier) retirés.
+
+### `exerciseAutocomplete.ts` — "N reps M sets" reconnu comme volume
+Nouvelle alternative dans `TOKEN_RE`/`LEADING_VOLUME_RE` : `\d+\s*(?:reps?|répétitions?)\s+\d+\s*(?:sets?|séries?)` et l'inverse (ordre libre, FR/EN) — équivalent en toutes lettres du NxM condensé déjà reconnu. Volontairement limité à la forme à 2 nombres explicitement étiquetés ; un "N reps" seul resterait aussi ambigu que le cas "10 pompes" déjà écarté le 2026-08-25 ("laissé tel quel").
+
+### Exercices combinés par "+" avec intensité propre à chacun — 2e cas du 2026-08-25, traité
+Cas explicitement laissé de côté le 2026-08-25 ("cas 2, expliqué mais non traité") : `"Front squat 90% + Back squat 3x5 127,5kg"` — contrairement aux complexes déjà gérés (une seule intensité finale partagée par tous les noms combinés, ex. `"Power clean + Split jerk 90kg"`), ici **chaque exercice combiné porte sa propre intensité avant son "+"**. `findNameSpans` cherchait un seul candidat sur la ligne entière puis le splittait sur "+" — s'arrêtait donc au premier token rencontré ("90%") et perdait "Back squat" entièrement.
+
+**Fix** : nouvelle fonction `splitTopLevelPlus(line)` — découpe la ligne sur les "+" de premier niveau uniquement (jamais ceux à l'intérieur d'une parenthèse, ex. `"3X(1+1+1)"` où les "+" décrivent la formule d'un seul mouvement, pas une séparation entre exercices). `findNameSpans` appelle désormais `findNameSpanRaw` sur **chaque segment indépendamment** plutôt qu'une seule fois sur la ligne entière repartitionnée après coup. `resolveExerciseName` (clé de la bibliothèque vidéo, qui garde volontairement le texte combiné entier comme UNE seule clé pour un circuit/complex — décision du 2026-08-18) n'est pas touchée, seul l'affichage en pastilles (`findNameSpans`/`Tokenized`) change.
+
+**Vérifié en Node** (`npx tsx`, script ad-hoc appelant `findNameSpans`/`TOKEN_RE` directement) sur le nouveau cas et sur tout le jeu de tests déjà accumulé les 2026-08-24/25 (complexe haltéro, label de superset "A – 2X8...", "Power clean + Split jerk 90kg", "Hang snatch pull" seul, "400m", NxM simple) — aucune régression, tous les cas déjà corrigés restent corrects.
+
+### Collage multi-lignes dans le composeur "+ Ajouter une séance"
+Coller un bloc de plusieurs exercices (ex. une séance copiée depuis un autre programme) enregistrait déjà correctement — `notes` reste `\n`-séparé, et le texte collé garde ses retours à la ligne bruts dans le `draft` du composeur, donc `commitLines()`/`onChange` produisait déjà la bonne chaîne finale une fois rejointe. Mais dans l'éditeur lui-même, ça restait affiché comme **une seule carte** contenant tout le bloc, jusqu'à recharger la séance.
+
+**Fix** : `TokenInput` gagne un prop optionnel `onPasteLines?: (lines: string[]) => void` — un nouveau handler `onPaste` sur le `<textarea>` détecte un collage à plusieurs lignes non-vides (`clipboardData.getData("text").split("\n")...`), appelle `e.preventDefault()` et le callback plutôt que de laisser le texte s'insérer tel quel dans le champ. Câblé uniquement sur l'instance composeur (`ExerciseBlockEditor.tsx`, "+ Ajouter une séance") — `commitLines([...lines, ...pastedLines.map(text => ({id, text}))])` crée directement une carte par ligne collée. **Non câblé sur l'édition d'une ligne existante** (2e usage de `TokenInput`, dans `ExerciseCard`) — prop optionnel, `undefined` = comportement de collage normal inchangé, portée volontairement limitée à ce qui a été demandé.
+
+### Vérifié
+`tsc --noEmit` propre après chaque fix. `findNameSpans`/`TOKEN_RE` vérifiés en Node avant tout commit (voir plus haut). **Pas de clic réel par Claude sur ce round** — Gildas a explicitement demandé de tester lui-même désormais plutôt qu'une vérification systématique en navigateur sur son compte réel.
+
+Déployé en prod le 2026-08-29, commit `71b54f9`, push direct sur `main`.
