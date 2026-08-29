@@ -7,7 +7,6 @@ import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
 import ProgramCreatePicker from "./ProgramCreatePicker";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
-import ProgramBanner from "./ProgramBanner";
 import type { ProgramTemplate } from "@/types";
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -272,11 +271,6 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           + Nouveau
         </button>
       </div>
-
-      {/* Programme actif (bandeau sportif) */}
-      {activeProgram !== undefined && (
-        <ProgramBanner program={activeProgram} currentWeek={activeProgramWeek ?? -1} />
-      )}
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>

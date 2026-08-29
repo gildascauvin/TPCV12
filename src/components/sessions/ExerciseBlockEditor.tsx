@@ -288,11 +288,18 @@ function ActionMenu({ rows, onClose, anchorRect }: { rows: MenuRow[]; onClose: (
   );
 }
 
-function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus, isPanelOwner, requestPanel, releasePanel }: {
+function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocus, isPanelOwner, requestPanel, releasePanel, onPasteLines }: {
   value: string; onChange: (v: string) => void; onCommit: () => void; onCancel?: () => void; placeholder?: string; autoFocus?: boolean;
   /* Même mécanisme de panneau exclusif que ExerciseCard (cf. CardProps) — un seul panneau ouvert
      à la fois, tous exercices confondus (lignes existantes + composeur "+ Ajouter une séance"). */
   isPanelOwner: boolean; requestPanel: () => void; releasePanel: () => void;
+  /* Collage multi-lignes (ex. une séance entière copiée depuis un autre programme) — n'importe
+     quel appelant peut fournir ce callback pour transformer un collage à plusieurs lignes en
+     plusieurs entrées distinctes plutôt qu'un seul champ contenant des "\n" bruts (ce dernier
+     produisait déjà les bonnes lignes une fois enregistré — `notes` est déjà `\n`-séparé — mais
+     restait affiché comme un seul bloc dans l'éditeur tant qu'on ne rechargeait pas la séance).
+     `undefined` (repli par défaut, ex. édition d'une ligne existante) = collage normal inchangé. */
+  onPasteLines?: (lines: string[]) => void;
 }) {
   const { isMd } = useBreakpoint();
   const [ac, setAc] = useState<AcState | null>(null);
@@ -400,11 +407,22 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     blurTimeout.current = setTimeout(() => { closeAc(); onCommit(); }, 150);
   }
 
+  // Collage multi-lignes → plusieurs entrées distinctes tout de suite (demande explicite : "dès
+  // que je colle ça affiche plusieurs lignes"), pas seulement au moment d'enregistrer. Un collage
+  // d'une seule ligne garde le comportement normal (inséré dans le champ, pas de court-circuit).
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (!onPasteLines) return;
+    const pastedLines = e.clipboardData.getData("text").split("\n").map(l => l.trim()).filter(Boolean);
+    if (pastedLines.length <= 1) return;
+    e.preventDefault();
+    onPasteLines(pastedLines);
+  }
+
   return (
     <>
       <textarea
         ref={ref} value={value} autoFocus={autoFocus} placeholder={placeholder} rows={1}
-        onChange={e => handleChange(e.target.value)} onClick={handleClick} onKeyDown={handleKeyDown} onBlur={handleBlur}
+        onChange={e => handleChange(e.target.value)} onClick={handleClick} onKeyDown={handleKeyDown} onBlur={handleBlur} onPaste={handlePaste}
         style={{
           display: "block", width: "100%", fontSize: 16, fontFamily: "inherit", border: "none", outline: "none",
           background: "transparent", color: "#171b1f", padding: 0, margin: 0, resize: "none", overflow: "hidden",
@@ -1302,6 +1320,10 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
               isPanelOwner={openPanelId === "composer"}
               requestPanel={() => setOpenPanelId("composer")}
               releasePanel={() => releasePanelFor("composer")}
+              onPasteLines={pastedLines => {
+                commitLines([...lines, ...pastedLines.map(text => ({ id: crypto.randomUUID(), text }))]);
+                setDraft("");
+              }}
             />
           </div>
         </div>

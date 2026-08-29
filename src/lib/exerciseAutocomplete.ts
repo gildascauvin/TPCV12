@@ -303,8 +303,13 @@ const INTENSITY_TOKEN_RE = /@\s*\d+(?:[.,]\d+)?\s*(kg)?|RPE\s*\d+(?:\.\d+)?|\d+\
    - 2e alternative, décimale sur le 2e nombre ("2x92.5", "2X92,5") : trouvé par Gildas — sans le
      groupe décimal optionnel, "2X92,5" ne matchait que "2X92", laissant ",5" en texte brut, qui se
      faisait ensuite happer comme un faux nom d'exercice par extractNameCandidate (voir
-     LEADING_VOLUME_RE ci-dessous, qui partage cette même alternative). */
-export const TOKEN_RE = /(\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|(?:RPE|RIR)\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/gi;
+     LEADING_VOLUME_RE ci-dessous, qui partage cette même alternative).
+   - Nouvelle alternative "N reps M sets"/"N sets M reps" (mots entiers, FR/EN, ordre libre) —
+     équivalent en toutes lettres du NxM condensé, demandé par Gildas ("6 reps 6 sets"). Volontairement
+     limité à la forme à 2 nombres explicitement étiquetés — un "N reps" seul, sans le nombre de
+     séries qui l'accompagne, resterait aussi ambigu que le cas "10 pompes" déjà écarté (2026-08-25,
+     "laissé tel quel"). */
+export const TOKEN_RE = /(\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|\d+\s*(?:reps?|répétitions?)\s+\d+\s*(?:sets?|séries?)|\d+\s*(?:sets?|séries?)\s+\d+\s*(?:reps?|répétitions?)|@\s*\d+(?:[.,]\d+)?(?:[\s,/]+\d+(?:[.,]\d+)?)*\s*%?\s*(?:kg)?\b|(?:RPE|RIR)\s?\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s?(?:km|kg|min|m|s|%)(?![a-zA-Z]))/gi;
 
 function formatRelativeDate(dateStr: string): string {
   const diffMs = Date.now() - new Date(dateStr + "T12:00:00").getTime();
@@ -328,7 +333,7 @@ const LEADING_QUANTITY_RE = /^(\d+(?:[.,]\d+)?\s*(?:km|min|h\d*|sec(?:ondes?)?|s
    resolveExerciseName/findNameSpanRaw ci-dessous), qui ne garde que la clé HISTORY la plus longue
    trouvée n'importe où dans la ligne. Consomme aussi un éventuel séparateur tiret/deux-points entre
    le volume et le nom, pour ne pas le laisser traîner en tête du candidat. */
-const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?)\s*[-–:·]?\s*/i;
+const LEADING_VOLUME_RE = /^\s*(?:\d+\s?[x×X]\s?\(\s*\d+(?:\s*[+-]\s*\d+)*\s*\)|\d+\s?[x×X]\s?\d+(?:[.,]\d+)?(?:km|kg|min|m|s|%)?(?![a-zA-Z])(?:\/\S+)?|\d+\s*(?:reps?|répétitions?)\s+\d+\s*(?:sets?|séries?)|\d+\s*(?:sets?|séries?)\s+\d+\s*(?:reps?|répétitions?))\s*[-–:·]?\s*/i;
 
 /* Label de superset en tête de ligne ("A – ", "B – ", "A1 – "...) — même convention déjà utilisée
    ailleurs dans ce fichier pour les suggestions de contrainte (cote()/complete Cote : "A1"/"A2"/
@@ -407,32 +412,55 @@ export function resolveExerciseName(line: string): string | null {
   return null;
 }
 
+/* Découpe une ligne sur les "+" de premier niveau uniquement — jamais ceux à l'intérieur d'une
+   parenthèse (ex. "3X(1+1+1)", un complexe haltéro : ces "+" décrivent la formule d'UN seul
+   mouvement, pas une séparation entre exercices combinés). Nécessaire pour findNameSpans
+   ci-dessous : un simple line.split("+") couperait "3X(1+1+1) Hang power clean + Push press"
+   en plein milieu de la parenthèse. */
+function splitTopLevelPlus(line: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    else if (ch === "+" && depth === 0) {
+      parts.push(line.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(line.slice(start));
+  return parts;
+}
+
 /** Bornes exactes (dans la casse d'origine) du/des nom(s) d'exercice au sein d'une ligne — même
     règle universelle que resolveExerciseName ci-dessus (phrase tapée en priorité, banque en repli
     seulement si aucune portion non-chiffrée n'est trouvée en tête de ligne) : le nom cliqué en
     lecture (Tokenized) et les suggestions générées au clic (generateSuggestionsClickMode)
     portent donc toujours sur la phrase entière tapée, jamais un sous-mot connu qu'elle contient.
-    Un "+" dans cette portion sépare des exercices combinés sur une même ligne (ex. "Power clean +
-    Split jerk") — chacun devient son propre token nom, le "+" restant du texte simple entre les
-    deux pastilles plutôt que de faire partie de l'une d'elles. Retourne un tableau vide si aucun
-    nom n'est identifiable (ligne réduite à un volume/intensité sans aucun mot devant, ex. juste
-    "4x5 @150kg"). */
+    Un "+" dans la ligne sépare des exercices combinés (ex. "Power clean + Split jerk") — chacun
+    devient son propre token nom, le "+" restant du texte simple entre les deux pastilles. Chaque
+    segment "+" est traité INDÉPENDAMMENT (findNameSpanRaw appelé sur chaque part, pas une seule
+    fois sur la ligne entière) : nécessaire quand chaque exercice combiné porte sa PROPRE intensité
+    avant le "+" plutôt qu'une seule intensité finale partagée (ex. "Front squat 90% + Back squat
+    3x5 127,5kg" — sans ce découpage, l'ancienne extraction sur la ligne entière s'arrêtait au
+    premier token rencontré ("90%") et perdait "Back squat" entièrement, jamais tokénisé). Retourne
+    un tableau vide si aucun nom n'est identifiable dans aucun segment (ex. ligne réduite à un
+    volume/intensité sans aucun mot devant, "4x5 @150kg"). */
 export function findNameSpans(line: string): { start: number; end: number }[] {
-  const outer = findNameSpanRaw(line);
-  if (!outer) return [];
-  const segment = line.slice(outer.start, outer.end);
-  if (!segment.includes("+")) return [outer];
+  const segments = splitTopLevelPlus(line);
+  if (segments.length === 1) {
+    const only = findNameSpanRaw(line);
+    return only ? [only] : [];
+  }
   const spans: { start: number; end: number }[] = [];
   let cursor = 0;
-  segment.split("+").forEach(part => {
-    const rawStart = cursor;
+  for (const part of segments) {
+    const span = findNameSpanRaw(part);
+    if (span) spans.push({ start: cursor + span.start, end: cursor + span.end });
     cursor += part.length + 1; // +1 pour le "+" consommé entre les parties
-    const trimmed = part.trim();
-    if (!trimmed) return;
-    const leadingWs = part.length - part.trimStart().length;
-    const absStart = outer.start + rawStart + leadingWs;
-    spans.push({ start: absStart, end: absStart + trimmed.length });
-  });
+  }
   return spans;
 }
 
