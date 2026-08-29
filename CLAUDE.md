@@ -2238,3 +2238,40 @@ Repéré en investiguant un rapport utilisateur (Guillaume Rousset, inscrit le 2
 `tsc --noEmit` propre sur les deux fichiers modifiés. Pas de `npm run build` (dev server actif en parallèle, risque de corruption `.next` déjà documenté ailleurs dans ce fichier). **Non testé au clic réel** — aucune vraie inscription/wellness_q par Claude ; à confirmer par Gildas si un cas similaire se represente (les logs `console.error` faciliteront le diagnostic).
 
 Déployé en prod le 2026-08-29, commit `4ec542f`, push direct sur `main`.
+
+## Palette de sévérité 3 tons pour l'alerte Alléger/Surcharger (2026-08-29)
+
+Point de départ : question ouverte de Gildas sur la cohérence visuelle du bandeau "Alléger/Surcharger" entre les 2 contextes réels de l'app — Planning (`/week`, `/coach/planning`, cartes blanches) et Coach Control (`/coach`, cartes déjà sombres), avec `/today` (carte "Score & conseils", sombre) et l'aperçu programme onboarding (`week_preview_2a/2b`, cartes blanches) ajoutés en cours de route. Longue itération en local (jamais commit/push jusqu'à validation explicite) — plusieurs directions testées et écartées avant de converger sur celle décrite ci-dessous : d'abord une palette pastel uniformisée, puis une palette sombre teintée, avant de trancher pour une approche **contexte-adaptative** (pastel sur fond blanc, sombre teinté sur fond déjà sombre) plutôt qu'une seule palette universelle.
+
+### `suggestionSeverityColor()` — 3e teinte, source unique (`src/lib/autoregulation.ts`)
+Le mécanisme d'autorégulation (`computeAutoregSuggestion()`, livré le 2026-08-13) ne distinguait que 2 icônes (⚠️/🚀) en pratique côté couleur — le cas 🚨 (alléger sévère, wellness<40) n'avait jamais de teinte propre. Nouvelle fonction, seule source de cette palette pour tout le repo : 🚨→`#dc2626` (rouge, inédit dans l'app avant ce chantier — `loadRule.ts` réutilisait l'orange existant même pour son tag "🔴 Critique"), ⚠️→`#f28a00`, 🚀→`#2f9e44`.
+
+### `AlertBox.tsx` — 2 variantes réutilisées partout, halo optionnel
+- **`variant="light"`** (Planning + aperçu onboarding, cartes blanches) : palette pastel (`LIGHT_PALETTE`, clé = couleur de sévérité) + pulsation de bordure nette + petite pastille pulsante — jamais de halo diffus flou, illisible sur blanc.
+- **`variant="darkColor"`** (`/today`, Coach Control, cartes déjà sombres) : fond dégradé teinté par sévérité (`DARK_COLOR_PALETTE`) + halo diffus (fonctionne bien sur fond sombre).
+- **Nouveau prop `pulse?: boolean`** (défaut `true`) : désactive l'animation/pastille propres à l'encart pour un contexte où le pulse vit déjà sur le **contour de la carte hôte** — "un seul signal de mouvement par carte". Utilisé par `/today` (wellness card) et Coach Control, dont le halo a été déplacé sur le contour de la carte entière (voir plus bas) plutôt que dupliqué sur l'encart interne.
+- **Texte en 2 lignes** (`AlertText`, nouveau) : titre court en gras ("⚠️ Alléger recommandé") sur sa propre ligne, détail (`autoregAdvice()`) en dessous — `alert.text` encode les 2 lignes séparées par `"\n"`, un texte sans `"\n"` (repli loadRule, pas de suggestion) reste affiché tel quel. Taille de police **par variante**, jamais une seule taille pour les deux : `light` reprend exactement la convention `rule.title`/`rule.text` (12/900 puis 11/500, déjà la norme des boîtes de cette carte) ; `darkColor`/`dark` reste à 13px sur les 2 lignes — la taille déjà utilisée en prod pour ce texte avant le passage en 2 lignes (retour explicite de Gildas après un premier essai à 11/12, jugé trop petit sur fond sombre).
+- Nouvel export `autoregHeadline(dir)` (`autoregulation.ts`) fournit le titre court, distinct d'`autoregTitle()` (wording existant, utilisé ailleurs, ex. `AdjustSessionModal`).
+
+### Halo déplacé sur le contour de la carte entière — `/today` et `CoachAthleteCard.tsx`
+Sur `/today` ("Score & conseils") et Coach Control, le halo pulsant "attention requise" vit désormais sur le **contour de la carte entière** (couleur dérivée de la sévérité réelle) plutôt que sur l'encart de suggestion interne, qui reste statique — les deux cartes utilisent maintenant strictement les mêmes paramètres (bordure 3px, mêmes paliers d'alpha `66`/`8c` sur la couleur de sévérité, même pastille pulsante 9px en haut à droite) pour un rendu identique entre les deux surfaces.
+
+`CoachAthleteCard.tsx` réutilise directement `AlertBox` (`variant="darkColor" pulse={false}`) pour son encart de suggestion au lieu d'une copie locale de sa palette/bordure — élimine tout risque de divergence future entre l'encart de `/today` et celui de Coach Control (une bordure `${severity}66` calculée deux fois séparément avait fini par diverger légèrement d'une palette `DARK_COLOR_PALETTE` à alpha fixe `.5`).
+
+### CTA principal coloré par sévérité (`AutoregButtons.tsx`)
+Le bouton "⬇ Alléger →" était toujours orange (`#f28a00`), y compris dans le cas critique 🚨 (rouge) — incohérent avec le bandeau et le halo déjà rouges dans ce cas. Nouveau prop optionnel `severityColor?: string` : quand fourni par l'appelant (qui connaît la suggestion complète), remplace la couleur fixe par la vraie teinte de sévérité ; absent = repli historique (orange fixe pour "low", vert fixe pour "high"), pour les appelants pas concernés (`AdjustSessionModal`, `FrisePreviews.tsx`).
+
+### `WeekPreviewStep.tsx` (aperçu programme onboarding) — bug de palette figée corrigé
+Utilisait encore un ancien mapping à 2 teintes codées en dur (`isLow ? "#d44000" : "#2f9e44"`, orange/vert), jamais mis à jour vers `suggestionSeverityColor()` — le cas 🚨 critique n'y était donc jamais visible, contrairement à `/week`/`/coach/planning` déjà sur la vraie fonction. Corrigé, vérifié en direct (slider de forme poussé au minimum) que le rouge critique s'affiche désormais bien sur cet écran aussi.
+
+### Câblage — 4 surfaces réelles
+`severityColor`/`suggestionSeverityColor()` calculés une fois par l'appelant et redescendus à la fois dans `alert.glow`/`alert.border` (AlertBox) et `severityColor` (AutoregButtons), jamais recalculés en double :
+- **`/today`** (`TodayClient.tsx`) : `AlertBox variant="darkColor" pulse={false}`, halo sur le contour de la carte "Score & conseils".
+- **`/week`** (`WeekClient.tsx`) / **`/coach/planning`** (`CoachPlanningClient.tsx`) : `AlertBox variant="light"` (défaut) sur la carte "Aujourd'hui" du carrousel, `AutoregButtons variant="light"` (texte/boutons adaptés au fond clair — un bug de contraste trouvé en testant : le bouton "→ Maintenir" restait blanc-sur-blanc, `variant="light"` n'avait jamais été repassé après une itération précédente).
+- **Coach Control** (`CoachAthleteCard.tsx`) : `AlertBox variant="darkColor" pulse={false}` + halo sur le contour de la carte entière.
+- **Aperçu onboarding** (`WeekPreviewStep.tsx`) : `AlertBox variant="light"` (défaut), pas de CTA cliquable (aperçu passif, action réelle réservée à `decision_2a/2b`).
+
+### Vérifié
+`tsc --noEmit` + `npm run build` propres après chaque round. Vérifié en clic réel sur la sandbox (`/sandbox/athlete`, `/sandbox/coach`, `/sandbox/athlete/week`, `/register?dbgstep=4` pour l'aperçu onboarding — aucune manipulation d'un vrai compte) : les 3 teintes (rouge/orange/vert) confirmées sur les 4 surfaces, halo identique entre `/today` et Coach Control, CTA rouge confirmé sur le cas critique (Léa, wellness 35, Coach Control), bouton "Maintenir" lisible sur fond clair. Pas de clic réel sur un vrai compte (règle permanente).
+
+Déployé en prod le 2026-08-29, commit `583ce75`, push direct sur `main`.
