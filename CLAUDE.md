@@ -2396,4 +2396,4 @@ En vérifiant que l'import fonctionnerait aussi pour le trafic programme claimé
 ### Vérifié
 `tsc --noEmit` propre (tsconfig temporaire excluant `.next`, `next dev` de Gildas actif en continu). **Pas de clic réel par Claude** (préférence de Gildas, serveur local laissé à sa disposition) — à tester par lui, notamment le cas complet "programme claimé → import → compte créé → vrai programme importé assigné" jamais vérifié en conditions réelles jusqu'ici (ni avant ce fix, ni après).
 
-Déployé en prod le 2026-08-29, commit `<hash>`, push direct sur `main`.
+Déployé en prod le 2026-08-29, commit `1c9b836`, push direct sur `main`.
