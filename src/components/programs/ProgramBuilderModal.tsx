@@ -7,6 +7,8 @@ import AddSessionModal from "@/components/sessions/AddSessionModal";
 import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions/ReconduireModal";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
+import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -138,6 +140,12 @@ function DraggableProgramExercise({ day, sIdx, exIdx, text }: { day: string; sId
    position (semaine + jour de la semaine "Lun".."Dim"), jamais de date réelle — même contrainte déjà
    contournée par Reconduire dans ce fichier (`daySlots` positionnel, `date: ""` factice). Modal
    locale dédiée, pas exportée : sélection semaine + jour au lieu d'un date picker. */
+type DuplicateChargeMode = "deload" | "maintien" | "surcharge";
+const DUPLICATE_CHIP_VALUES = [2.5, 5, 10, 15, 20];
+function fmtPct(n: number): string {
+  return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
+}
+
 function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultDay, onClose, onConfirm }: {
   /* Toutes les séances du jour source — un sélecteur "Séance" n'apparaît que si plusieurs (le
      déclencheur est par jour, pas par carte, voir la ligne "+ Ajouter une séance"). */
@@ -146,86 +154,180 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
   defaultWeekIdx: number;
   defaultDay: string;
   onClose: () => void;
-  onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string) => void;
+  /* pct : même convention que ReconduireModal/DuplicateModal — 0 en Maintien, négatif en Décharge,
+     positif en Surcharge. */
+  onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string, pct: number) => void;
 }) {
+  const { isMd } = useBreakpoint();
   const [sourceIdx, setSourceIdx] = useState(0);
   const [targetWeek, setTargetWeek] = useState(defaultWeekIdx);
   const [targetDay, setTargetDay] = useState(defaultDay);
+  const [mode, setMode] = useState<DuplicateChargeMode>("maintien");
+  const [customPct, setCustomPct] = useState(10);
   const session = sessions[sourceIdx];
   if (!session) return null;
+
+  const currentPct = mode === "maintien" ? 0 : mode === "deload" ? -customPct : customPct;
+  const modeCards: { key: DuplicateChargeMode; icon: string; label: string; sub: string }[] = [
+    { key: "deload", icon: "📉", label: "Décharge", sub: `−${fmtPct(customPct)}%` },
+    { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
+    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtPct(customPct)}%` },
+  ];
+  const lines = session.notes ? session.notes.split("\n").filter(Boolean) : [];
+  const newDiff = adjustDifficulty(session.target_difficulty ?? 6, currentPct);
+  const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
+  const previewSession: SessionTemplate = { ...session, target_difficulty: newDiff };
 
   return (
     <div
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 2147483200, padding: 18,
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483200, overflow: "hidden",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{
         background: "#fff", color: "#171b1f",
-        border: "1px solid rgba(0,0,0,.10)",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 30, padding: 28,
-        width: "100%", maxWidth: 380,
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>
-          Dupliquer
-        </div>
-        <div style={{ fontSize: 14, color: "#62686e", marginBottom: 20, lineHeight: 1.4 }}>
-          Une copie de la séance sera ajoutée à l&apos;emplacement choisi.
+        <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>Dupliquer</div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
-        {sessions.length > 1 ? (
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Séance</div>
-            <select
-              value={sourceIdx} onChange={e => setSourceIdx(Number(e.target.value))}
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
-            >
-              {sessions.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
-            </select>
+        <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 20px" }}>
+          <div style={{ fontSize: 13, color: "#62686e", marginBottom: 18, lineHeight: 1.4 }}>
+            Une copie de la séance sera ajoutée à l&apos;emplacement choisi.
           </div>
-        ) : (
-          <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "10px 13px", marginBottom: 18, fontSize: 14, fontWeight: 700, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-            {session.name}
-          </div>
-        )}
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Semaine</div>
-            <select
-              value={targetWeek} onChange={e => setTargetWeek(Number(e.target.value))}
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
-            >
-              {Array.from({ length: weeksCount }, (_, i) => <option key={i} value={i}>S{i + 1}</option>)}
-              <option value={weeksCount}>+ Nouvelle semaine</option>
-            </select>
+          {sessions.length > 1 ? (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Séance</div>
+              <select
+                value={sourceIdx} onChange={e => setSourceIdx(Number(e.target.value))}
+                style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+              >
+                {sessions.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
+              </select>
+            </div>
+          ) : (
+            <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "10px 13px", marginBottom: 18, fontSize: 14, fontWeight: 700, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+              {session.name}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Semaine</div>
+              <select
+                value={targetWeek} onChange={e => setTargetWeek(Number(e.target.value))}
+                style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+              >
+                {Array.from({ length: weeksCount }, (_, i) => <option key={i} value={i}>S{i + 1}</option>)}
+                <option value={weeksCount}>+ Nouvelle semaine</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Jour</div>
+              <select
+                value={targetDay} onChange={e => setTargetDay(e.target.value)}
+                style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
+              >
+                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Jour</div>
-            <select
-              value={targetDay} onChange={e => setTargetDay(e.target.value)}
-              style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
-            >
-              {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+
+          {/* Charge de la copie — même mécanique que ReconduireModal/DuplicateModal (Planning) */}
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+            Charge de la copie
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: mode !== "maintien" ? 14 : 20 }}>
+            {modeCards.map(m => (
+              <div
+                key={m.key}
+                onClick={() => setMode(m.key)}
+                style={{
+                  border: `2px solid ${mode === m.key ? "#d44000" : "#eee"}`,
+                  background: mode === m.key ? "rgba(212,64,0,.05)" : "#fff",
+                  borderRadius: 14, padding: "12px 8px", textAlign: "center", cursor: "pointer",
+                }}
+              >
+                <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: mode === m.key ? "#d44000" : "#171b1f" }}>{m.label}</div>
+                <div style={{ fontSize: 10.5, color: "#8a8f94", marginTop: 2 }}>{m.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {mode !== "maintien" && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              {DUPLICATE_CHIP_VALUES.map(v => {
+                const active = v === customPct;
+                const sign = mode === "deload" ? "−" : "+";
+                return (
+                  <button
+                    key={v}
+                    onClick={() => setCustomPct(v)}
+                    style={{
+                      padding: "9px 16px", borderRadius: 999, fontSize: 14, fontWeight: 800, cursor: "pointer",
+                      border: `1.5px solid ${active ? "#d44000" : "rgba(0,0,0,.12)"}`,
+                      background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "#fff",
+                      color: active ? "#fff" : "#62686e",
+                      boxShadow: active ? "0 4px 12px rgba(212,64,0,.22)" : "none",
+                    }}
+                  >
+                    {sign}{fmtPct(v)}%
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Aperçu — même carte que le builder (SessionTemplateCard), diff avant/après si la
+              charge a été ajustée. */}
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+            Aperçu de la copie
+          </div>
+          <SessionTemplateCard
+            session={previewSession}
+            renderExerciseLine={(_ex, i) => {
+              const { line, after } = rendered[i];
+              const changed = after !== line;
+              return changed ? (
+                <div style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                  <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
+                </div>
+              ) : (
+                <div style={{
+                  padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
+                  borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                }}>
+                  {line}
+                </div>
+              );
+            }}
+          />
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={onClose}
-            style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
+        <div style={{
+          flexShrink: 0, display: "flex", gap: 10, alignItems: "center",
+          padding: "16px 24px 20px", borderTop: "1px solid #f0f0f0", background: "#fff",
+        }}>
+          <button onClick={onClose} style={{ background: "#f5f5f5", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, cursor: "pointer", color: "#666" }}>
             Annuler
           </button>
           <button
-            onClick={() => onConfirm(sourceIdx, targetWeek, targetDay)}
-            style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+            onClick={() => onConfirm(sourceIdx, targetWeek, targetDay, currentPct)}
+            style={{ flex: 1, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
           >
             ⎘ Dupliquer
           </button>
@@ -368,16 +470,18 @@ export default function ProgramBuilderModal({ programName: initialName, template
     setShowReconduire(false);
   }
 
-  function duplicateSession(source: { weekIdx: number; day: string }, sourceIdx: number, targetWeekIdx: number, targetDay: string) {
+  function duplicateSession(source: { weekIdx: number; day: string }, sourceIdx: number, targetWeekIdx: number, targetDay: string, pct: number = 0) {
     const sourceSession = ((template.weeks[source.weekIdx]?.[source.day] ?? []) as SessionTemplate[])[sourceIdx];
     if (!sourceSession) return;
+    const notes = sourceSession.notes ? sourceSession.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : sourceSession.notes;
+    const target_difficulty = adjustDifficulty(sourceSession.target_difficulty ?? 6, pct);
     setTemplate(prev => {
       const weeks = targetWeekIdx >= prev.weeks.length
         ? [...prev.weeks, DAYS.reduce((w, d) => ({ ...w, [d]: [] }), {} as WeekTemplate)]
         : prev.weeks;
       return {
         weeks: weeks.map((w, wi) => wi !== targetWeekIdx ? w : {
-          ...w, [targetDay]: [...((w[targetDay] ?? []) as SessionTemplate[]), { ...sourceSession }],
+          ...w, [targetDay]: [...((w[targetDay] ?? []) as SessionTemplate[]), { ...sourceSession, notes, target_difficulty }],
         }),
       };
     });
@@ -615,7 +719,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             defaultWeekIdx={duplicateDay.weekIdx}
             defaultDay={duplicateDay.day}
             onClose={() => setDuplicateDay(null)}
-            onConfirm={(sourceIdx, targetWeekIdx, targetDay) => duplicateSession(duplicateDay, sourceIdx, targetWeekIdx, targetDay)}
+            onConfirm={(sourceIdx, targetWeekIdx, targetDay, pct) => duplicateSession(duplicateDay, sourceIdx, targetWeekIdx, targetDay, pct)}
           />
         );
       })()}

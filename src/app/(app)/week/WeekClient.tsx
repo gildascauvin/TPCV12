@@ -313,14 +313,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const duplicateSession = useCallback(async (newDate: string) => {
+  const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
     if (!duplicating) return;
+    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
+    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
     const { data: saved } = await supabase.from("sessions").insert({
       user_id: userId,
       name: duplicating.name,
-      notes: duplicating.notes,
+      notes,
       date: newDate,
-      target_difficulty: duplicating.target_difficulty,
+      target_difficulty,
       done: false,
     }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
@@ -733,7 +735,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         />
       )}
       {duplicating && (
-        <DuplicateModal session={duplicating} onDuplicate={date => requireSubscription(() => duplicateSession(date))} onClose={() => setDuplicating(null)} />
+        <DuplicateModal session={duplicating} onDuplicate={(date, _targetAthleteIds, pct) => requireSubscription(() => duplicateSession(date, pct))} onClose={() => setDuplicating(null)} />
       )}
       {showWellness && (
         <WellnessModal date={todayStr} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />

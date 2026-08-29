@@ -336,10 +336,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (!result.ok) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
   }, [athlete, sessions]);
 
-  const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[]) => {
+  const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[], pct: number = 0) => {
     if (!duplicating || !athlete) return;
     const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
-    const data = { name: duplicating.name, notes: duplicating.notes ?? "", target_difficulty: duplicating.target_difficulty ?? 6, date: newDate };
+    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (duplicating.notes ?? "");
+    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
+    const data = { name: duplicating.name, notes, target_difficulty, date: newDate };
     const results = await Promise.all(recipientIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
     const created: CoachViewSession[] = results
       .filter(r => r.ok && r.session)
@@ -840,7 +842,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       {duplicating && athlete && (
-        <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds) => requireSubscription(() => duplicateSessionToDate(date, targetAthleteIds))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
+        <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds, pct) => requireSubscription(() => duplicateSessionToDate(date, targetAthleteIds, pct))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
       )}
       {showReconduire && athlete && (
         <ReconduireModal
