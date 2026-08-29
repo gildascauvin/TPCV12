@@ -2375,3 +2375,25 @@ Tabs retirées, même modèle textarea + badge fichier — pas de label supplém
 `tsc --noEmit` propre après chaque round. **Pas de clic réel par Claude sur ce chantier** — Gildas teste lui-même (préférence explicite, voir plus haut dans ce fichier section précédente). Le vrai appel Haiku de `/api/programs/import` depuis sport_2a reste à valider en prod (clé Anthropic vide en local, même limite que d'habitude) — mais désormais l'appel devrait au moins atteindre Claude (avant ce fix, il n'atteignait jamais l'endpoint, bloqué par l'auth).
 
 Déployé en prod le 2026-08-29, commit `951c230`, push direct sur `main`.
+
+## sport_2a en sélection+CTA, programme claimé peut importer (2026-08-29, suite)
+
+Suite d'une discussion stratégique sur le trafic "programme claimé" (canal d'acquisition prioritaire) — parallèle avec l'onboarding Trello ("même venu d'un template, on montre l'onboarding classique sans distinction") débattu avec Gildas avant de trancher : pas de carte de confirmation dédiée (over-engineering pour ce cas), mais réutiliser exactement le mécanisme sélection+CTA déjà construit pour les faiblesses (`level_2a`), avec une préselection.
+
+### `sport_2a` — exception au "clic = avance direct"
+Seule étape de l'onboarding où cliquer une chip ne fait plus avancer automatiquement (`nextAfterChoice` retiré du clic) — les chips redeviennent simplement sélectionnables, il faut cliquer le CTA en bas ("Suivant →") pour continuer, même mécanique que `level_2a`. Footer unifié (plus de branchement `isRegisterMode` qui masquait le CTA une fois un sport choisi) : toujours visible, `nextDisabled` exige un sport choisi OU "Autre" rempli (sauf si import en cours, qui a son propre CTA "Analyser mon programme →").
+
+### `PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH` — `sport_2a` réintégré
+Motivation de Gildas : le trafic "programme claimé" est un profil qui cherche activement des programmes en ligne — candidat naturel à vouloir importer son propre contenu plutôt que celui claimé, sans jamais voir cette option auparavant (le chemin sautait `sport_2a` entièrement, sport déduit silencieusement). `sport_2a` réintégré en première position (avant `level_2a`) dans les 2 paths. Le sport reste pré-rempli depuis le claim (`setSport(data.sport)`, effet déjà existant, inchangé) — la sélection+CTA permet 3 issues : garder tel quel (clic direct sur "Suivant →"), changer de sport (autre chip), ou importer son propre programme (remplace le claim — `advanceToWeekPreviewViaImport()`, déjà construit pour le chemin classique, saute alors `level_2a`/`days_2a`).
+
+**Bug trouvé en vérifiant, pas en supposant** : `programs.sport` (bibliothèque) porte des libellés bien plus fins que les 8 id des chips onboarding (ex. "Musculation/Hypertrophie" sans espaces, "Course à pied/Endurance", des titres de spécialisation) — une égalité stricte `sport === s.id` n'aurait matché quasiment aucun programme claimé réel, laissant la préselection visuellement invisible (aucune chip ne se serait affichée sélectionnée, sans erreur). Nouvelle fonction `guessSportChip()` (mots-clés, purement pour l'affichage) rattache le sport déduit à la chip la plus proche — `sport` garde sa valeur précise pour la génération réelle, seul le rendu de la chip s'appuie sur ce repli.
+
+### Bug plus profond trouvé en traçant le chemin de bout en bout : l'import n'était jamais réellement sauvegardé
+En vérifiant que l'import fonctionnerait aussi pour le trafic programme claimé, découverte que ce n'était déjà pas le cas pour le chemin classique non plus (chantier du 2026-08-29 précédent, jamais testé en clic réel bout-en-bout) : `importedTemplate` n'alimentait que l'aperçu (`WeekPreviewStep`) — à la création réelle du compte, `finishAthleteActivation()`/`completeProfile()` appelaient toujours `generateAndAssignProgram()` avec `sport=""` (vidé par l'import), donc régénéraient un programme générique "Autre" au lieu de persister ce qui avait été réellement importé et prévisualisé.
+
+**Fix, `generateAndAssignProgram()`** : nouveau param optionnel `template?: ProgramTemplate` — s'il est fourni, saute entièrement `/api/programs/generate` et persiste ce template tel quel (`weeks_count` = sa vraie longueur, 1 semaine pour un import — extension sur plusieurs semaines via Reconduire, pas une génération). Câblé aux 2 rôles : côté sportif, `finishAthleteActivation()` vérifie `importedTemplate` en priorité absolue (avant `hasClaimedProgram`) ; côté coach, `completeProfile()` passe `template: importedTemplate` directement dans son appel synchrone. Dans les deux cas, un claim abandonné au profit d'un import nettoie quand même `claim_program_id` du localStorage.
+
+### Vérifié
+`tsc --noEmit` propre (tsconfig temporaire excluant `.next`, `next dev` de Gildas actif en continu). **Pas de clic réel par Claude** (préférence de Gildas, serveur local laissé à sa disposition) — à tester par lui, notamment le cas complet "programme claimé → import → compte créé → vrai programme importé assigné" jamais vérifié en conditions réelles jusqu'ici (ni avant ce fix, ni après).
+
+Déployé en prod le 2026-08-29, commit `<hash>`, push direct sur `main`.

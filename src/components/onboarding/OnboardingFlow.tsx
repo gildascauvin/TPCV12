@@ -217,18 +217,25 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
   );
 }
 
-/* Programme claimé : sport déjà déduit du programme (pas de "sport_2a" ici) — "level_2a" ne sert
-   plus que d'écran faiblesses seul (voir son rendu, réécrit le 2026-08-17 pour ne plus brancher
-   sur le rôle). Convergé avec la version courte : plus de distinction control/test, une seule
-   forme par rôle. */
+/* Programme claimé : "sport_2a" réintégré le 2026-08-29 — le sport reste pré-rempli depuis le
+   claim (setSport(data.sport) dans l'effet de claim plus bas), la chip correspondante s'affiche
+   donc déjà sélectionnée. L'user peut confirmer telle quelle (clic direct sur "Suivant →", même
+   sport que le programme claimé), changer de sport (choisit une autre chip), ou importer son
+   propre programme (remplace le programme claimé — même mécanisme que le chemin classique,
+   advanceToWeekPreviewViaImport() saute alors level_2a/days_2a). Raison : le trafic "programme
+   claimé" est un profil qui cherche activement des programmes en ligne, donc un candidat naturel
+   à l'import de son propre contenu — sans ça, ce chemin ne voyait jamais l'option. "level_2a" ne
+   sert plus que d'écran faiblesses seul (voir son rendu, réécrit le 2026-08-17 pour ne plus
+   brancher sur le rôle). Convergé avec la version courte : plus de distinction control/test, une
+   seule forme par rôle. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
-  "level_2a", "days_2a",
+  "sport_2a", "level_2a", "days_2a",
   "week_preview_2a", "role", "decision_2a", "account", "celebration", "wellness_q",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
-  "level_2a", "days_2a",
+  "sport_2a", "level_2a", "days_2a",
   "week_preview_2b", "role", "decision_2b", "account", "celebration",
 ];
 
@@ -272,34 +279,49 @@ const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 // Ne bloque jamais la suite du signup (parcours critique) — échec = false, logué, jamais throw.
 async function generateAndAssignProgram(
   uid: string,
-  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>; customSessionLabels?: Record<string, string>; startDate?: string }
+  opts: { sport: string; level: Level; days: number[]; target: { athlete_id: string } | { user_id: string }; wellnessAdjustment?: number; focus?: ProgramFocus; weaknesses?: string[]; duration?: 4 | 6 | 8 | 12 | 16; customExercises?: Record<string, string[]>; customWeaknessMeta?: Record<string, { extraLine: string; typeHints: string[] }>; customSessionLabels?: Record<string, string>; startDate?: string; template?: ProgramTemplate }
 ): Promise<boolean> {
   try {
     const dayStrings = opts.days.map(d => DOW_NAMES[d]).filter(Boolean);
     if (!dayStrings.length) return false;
     const focus = opts.focus ?? "mixte";
-    // Durée dynamique (2026-08-05) : le chemin "programme claimé" personnalisé passe la vraie
-    // durée du programme claimé (claimedProgramWeeks) plutôt que de la tronquer silencieusement à
-    // 4 semaines — le chemin classique reste sur 4 (opts.duration jamais fourni dans ce cas).
-    const duration = opts.duration ?? 4;
 
-    const genRes = await fetch("/api/programs/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [],
-        ...(opts.customExercises ? { customExercises: opts.customExercises, customWeaknessMeta: opts.customWeaknessMeta, customSessionLabels: opts.customSessionLabels } : {}),
-      }),
-    });
-    if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
-    const { template } = await genRes.json() as { template: ProgramTemplate };
+    let template: ProgramTemplate;
+    let duration: number;
+    let programName: string;
+    if (opts.template) {
+      /* Programme importé (photo/texte, sport_2a — 2026-08-29) : une seule semaine reconstruite
+         fidèlement, jamais générée — on saute /api/programs/generate entièrement et on persiste ce
+         template tel quel. weeks_count reflète sa vraie longueur (1), pas opts.duration (qui ne
+         s'applique qu'à un programme généré). Extension sur plusieurs semaines : Reconduire, déjà
+         construit, pas une génération ici. */
+      template = opts.template;
+      duration = template.weeks.length || 1;
+      programName = `Programme importé — ${opts.sport || "sport à préciser"}`;
+    } else {
+      // Durée dynamique (2026-08-05) : le chemin "programme claimé" personnalisé passe la vraie
+      // durée du programme claimé (claimedProgramWeeks) plutôt que de la tronquer silencieusement à
+      // 4 semaines — le chemin classique reste sur 4 (opts.duration jamais fourni dans ce cas).
+      duration = opts.duration ?? 4;
+      const genRes = await fetch("/api/programs/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sport: opts.sport, level: LEVEL_TO_DB[opts.level], days: dayStrings, duration, focus, weaknesses: opts.weaknesses ?? [],
+          ...(opts.customExercises ? { customExercises: opts.customExercises, customWeaknessMeta: opts.customWeaknessMeta, customSessionLabels: opts.customSessionLabels } : {}),
+        }),
+      });
+      if (!genRes.ok) throw new Error(`generate ${genRes.status}`);
+      ({ template } = await genRes.json() as { template: ProgramTemplate });
+      programName = `Programme ${opts.sport} — ${duration} semaines`;
+    }
 
     const progRes = await fetch("/api/programs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: `Programme ${opts.sport} — ${duration} semaines`,
-        sport: opts.sport,
+        name: programName,
+        sport: opts.sport || "Importé",
         level: LEVEL_TO_DB[opts.level],
         focus,
         weeks_count: duration,
@@ -373,6 +395,28 @@ const SPORT_CATEGORIES = [
   { id: "Endurance",                  icon: "🏊", sub: "Course, cyclisme, natation…" },
   { id: "Arts martiaux & combat",     icon: "🥋", sub: "Judo, MMA, boxe…" },
 ];
+
+/* Devine à quelle chip de SPORT_CATEGORIES rattacher visuellement le sport déduit d'un programme
+   claimé (2026-08-29) — programs.sport porte des libellés de bibliothèque bien plus fins que les 8
+   catégories de cet écran (ex. "Musculation/Hypertrophie" sans espaces, "Course à pied/Endurance",
+   des titres de spécialisation type "Powerlifting — Spécialisation Squat"...) : une égalité stricte
+   sur `sport === s.id` ne matcherait quasiment jamais, et aucune chip n'apparaîtrait présélectionnée
+   — silencieusement, sans erreur. Mots-clés plutôt qu'égalité, purement pour l'affichage : `sport`
+   garde sa valeur précise déduite pour la génération réelle (/api/programs/generate re-catégorise
+   déjà finement via getSportCategory() côté serveur), seul le rendu de la chip s'appuie sur ce
+   repli. */
+function guessSportChip(raw: string): string | null {
+  const s = raw.toLowerCase();
+  if (/hypertroph|musculation/.test(s)) return "Musculation / Hypertrophie";
+  if (/power(lifting)?|squat|bench|deadlift/.test(s)) return "Powerlifting";
+  if (/halt[ée]rophil|arrach|[ée]paul|snatch|clean.?jerk/.test(s)) return "Haltérophilie";
+  if (/crossfit|hyrox|fitness/.test(s)) return "Fitness / CrossFit";
+  if (/sprint|athl[ée]tisme|\bsaut|vitesse/.test(s)) return "Athlétisme & vitesse";
+  if (/collectif|rugby|foot|hand|basket|volley/.test(s)) return "Sports collectifs";
+  if (/endurance|course|cyclisme|natation|trail|triathlon|aviron|v[ée]lo|marathon|semi/.test(s)) return "Endurance";
+  if (/combat|martiaux|boxe|judo|\bmma\b/.test(s)) return "Arts martiaux & combat";
+  return null;
+}
 
 const SPORT_QUALITIES: Record<string, string> = {
   "Haltérophilie":              "Explosivité, technique de mouvement, mobilité",
@@ -1610,11 +1654,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
          la fin de wellness_q (finishAthleteActivation), même point d'appel et même date que le
          programme claimé (claimAndAssignProgram) — plus de différence entre les deux au-delà du
          sport déjà déduit ou non. */
-      if (!hasClaimedProgram) {
+      /* Importé (2026-08-29, suite) : prioritaire sur hasClaimedProgram — un programme importé
+         remplace le programme claimé, pas l'inverse. Sans le `|| importedTemplate`, un claimed qui
+         importe son propre programme n'aurait jamais ses opts mémorisées ici, et
+         finishAthleteActivation() retomberait sur claimAndAssignProgram() (le claim, abandonné). */
+      if (!hasClaimedProgram || importedTemplate) {
         pendingAthleteProgramOptsRef.current = {
           sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
+          ...(importedTemplate ? { template: importedTemplate } : {}),
+          ...(!sport && !importedTemplate && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
         };
       }
       const [sessionsRes, baselineRes, historyRes] = await Promise.all([
@@ -1661,7 +1710,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         const ok = await generateAndAssignProgram(uid, {
           sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
           duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
+          // Importé (2026-08-29, suite) : remplace la génération/le claim, même principe que côté sportif.
+          ...(importedTemplate ? { template: importedTemplate } : {}),
+          ...(!sport && !importedTemplate && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
         });
         if (ok) localStorage.setItem("program_start_date", getNextMonday());
       }
@@ -1706,11 +1757,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         if (wellnessError) console.error("[finishAthleteActivation] wellness_daily upsert failed after retry — le score du jour reste le placeholder d'activation:", wellnessError);
       }
       const wellnessAdjustment = score < 45 ? -1 : 0;
-      /* Programme claimé : claimAndAssignProgram (no-op si pas de claim_program_id). Programme
-         non-claimé : opts mémorisées par completeProfile() (voir sa doc) — même wellnessAdjustment
-         et même chosenStartDate que le chemin claimé, un seul point d'écriture pour les deux, plus
-         de différence entre les deux chemins au-delà du sport déjà déduit ou non (2026-08-27). */
-      if (hasClaimedProgram) {
+      /* Importé (2026-08-29, suite) : prioritaire — un programme importé sur sport_2a (classique ou
+         programme claimé) remplace ce qui aurait normalement été généré/claimé. Programme claimé
+         sans import : claimAndAssignProgram (no-op si pas de claim_program_id). Programme non-claimé
+         ni importé : opts mémorisées par completeProfile() (voir sa doc) — même wellnessAdjustment
+         et même chosenStartDate pour les 3 cas, un seul point d'écriture (2026-08-27). */
+      if (importedTemplate && pendingAthleteProgramOptsRef.current) {
+        await generateAndAssignProgram(uid, { ...pendingAthleteProgramOptsRef.current, startDate: chosenStartDate, wellnessAdjustment });
+        pendingAthleteProgramOptsRef.current = null;
+        if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
+      } else if (hasClaimedProgram) {
         await claimAndAssignProgram(uid, wellnessAdjustment);
       } else if (pendingAthleteProgramOptsRef.current) {
         await generateAndAssignProgram(uid, { ...pendingAthleteProgramOptsRef.current, startDate: chosenStartDate, wellnessAdjustment });
@@ -2328,17 +2384,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           );
         })()}
 
-        {/* ── SPORT + FAIBLESSES (fusionnés, 2026-08-17) — "on construit ta séance sous tes yeux" :
-             plus d'avancement auto au tap d'un sport (nextAfterChoice retiré), on reste sur l'écran
-             pour permettre de cocher jusqu'à 2 faiblesses avant de continuer. Les faiblesses
-             n'apparaissent que pour un sport reconnu via une carte (WEAKNESSES_BY_SPORT) — pour un
-             sport tapé en texte libre, l'analyse Claude ne résout qu'au clic sur "Continuer"
-             (handleSportNext), donc pas de liste de faiblesses affichable avant ce clic ; limite
-             assumée plutôt que de resynchroniser analyzeSport() sur la frappe. */}
-        {/* ── SPORT — de nouveau séparé des faiblesses (2026-08-17, 2e itération) : le retour de
-             Gildas sur la fusion précédente ("on voit pas les faiblesses en mobile en bas") a
-             montré que l'écran combiné dépassait l'écran sur mobile. Redevient sport seul, avec
-             l'auto-advance au tap d'une carte (comme avant la fusion).
+        {/* ── SPORT — séparé des faiblesses depuis le 2026-08-17 (2e itération, l'écran combiné
+             dépassait l'écran sur mobile). Chips sélectionnables + CTA explicite (pas d'avance auto
+             au clic) depuis le 2026-08-29 — exception au pattern "clic = avance direct" des autres
+             écrans à choix unique de l'onboarding, pour que le sport déduit d'un programme claimé
+             puisse être présélectionné (voir PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH plus haut) sans
+             carte de confirmation dédiée : même chip, juste déjà sélectionnée à l'arrivée.
              Wording générique coach/sportif depuis le 2026-08-19 (plus de ternaire par rôle sur ce
              step, ni sur level_2a/days_2a/WeekPreviewStep juste après) — "role" n'est plus connu à
              ce stade, choisi après week_preview désormais (voir doc des paths en tête de fichier).
@@ -2354,7 +2405,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
-                <Chip key={s.id} icon={s.icon} label={s.id} title={s.sub} selected={sport === s.id}
+                <Chip key={s.id} icon={s.icon} label={s.id} title={s.sub} selected={sport === s.id || (!!sport && guessSportChip(sport) === s.id)}
                   onClick={() => {
                     const isSame = sport === s.id;
                     setSport(isSame ? "" : s.id);
@@ -2365,7 +2416,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                     setImportText("");
                     setImportPhotoFile(null);
                     setImportError(null);
-                    if (!isSame && isRegisterMode) nextAfterChoice(() => {});
                   }} />
               ))}
               {/* "Autre" redevient un chip (2026-08-29) — voir commentaire sur autreChipSelected
@@ -2477,17 +2527,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               {importError && <p style={{ fontSize: 11, color: "#c0392b", marginTop: 8 }}>{importError}</p>}
             </div>
 
-            {isRegisterMode
-              ? !sport && (
-                  canSubmitImport
-                    ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
-                    : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || !autreChipSelected || !sportPrecision.trim()} />
-                )
-              : (
-                  canSubmitImport
-                    ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
-                    : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport} />
-                )
+            {/* Exception au "clic = avance direct" des autres steps à choix unique (2026-08-29) :
+                les chips sont sélectionnables, il faut cliquer le CTA pour avancer — même mécanique
+                que level_2a (faiblesses). Décidé pour permettre la présélection du sport déduit d'un
+                programme claimé (l'user garde la main pour la confirmer ou la changer) sans avoir à
+                construire un composant de confirmation séparé. */}
+            {canSubmitImport
+              ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
+              : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || (!sport && !(autreChipSelected && sportPrecision.trim()))} />
             }
           </div>
         )}
