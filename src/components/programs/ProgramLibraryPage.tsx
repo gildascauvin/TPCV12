@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Program, CoachAthlete, ProgramAssignment } from "@/types";
 import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
+import ProgramCreatePicker from "./ProgramCreatePicker";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import ProgramBanner from "./ProgramBanner";
@@ -72,9 +73,14 @@ interface Props {
 
 type UIStep =
   | { type: "list" }
-  | { type: "criteria" }
+  | { type: "new" }
+  | { type: "criteria"; mode: "criteria" | "import" }
   | { type: "builder"; template: ProgramTemplate; meta: ProgramMeta; programId?: string; programName?: string; assignmentCount?: number }
   | { type: "assign"; programId: string; programName: string };
+
+const BLANK_PROGRAM_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const NEUTRAL_LEVEL = "intermediaire" as const;
+const LIBRARY_URL = "https://www.theperfclub.com/bibliotheque-de-programmes-dentrainement-sportif/";
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
@@ -86,6 +92,14 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<UIStep>({ type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
+
+  function createBlankProgram() {
+    const week: Record<string, never[]> = {};
+    BLANK_PROGRAM_DAYS.forEach(d => { week[d] = []; });
+    const template: ProgramTemplate = { weeks: [week] };
+    const meta: ProgramMeta = { sport: "Programme vierge", level: NEUTRAL_LEVEL, focus: "mixte", days: [], duration: 4 };
+    setStep({ type: "builder", template, meta, programName: "Programme vierge" });
+  }
 
   async function fetchPrograms() {
     const res = await fetch(sandboxMode ? "/api/sandbox/library" : "/api/programs");
@@ -163,13 +177,29 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     if (res.ok) fetchPrograms();
   }
 
-  /* ─── Criteria ─── */
+  /* ─── Picker "+ Nouveau" (écran racine du flux de création, 4 cartes à plat) ─── */
+  if (step.type === "new") {
+    return (
+      <ProgramCreatePicker
+        onClose={() => setStep({ type: "list" })}
+        onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
+        onImport={() => setStep({ type: "criteria", mode: "import" })}
+        onTemplate={() => window.open(LIBRARY_URL, "_blank", "noopener,noreferrer")}
+        onBlank={() => createBlankProgram()}
+      />
+    );
+  }
+
+  /* ─── Criteria / Import (même drawer, mode fixé par le picker "+ Nouveau") ─── */
   if (step.type === "criteria") {
+    const mode = step.mode;
     return (
       <ProgramCriteriaModal
+        mode={mode}
         onClose={() => setStep({ type: "list" })}
+        onBack={() => setStep({ type: "new" })}
         onGenerate={(template, meta) => {
-          const defaultName = meta.sport ? `Programme ${meta.sport}` : "Mon programme";
+          const defaultName = mode === "import" ? "Programme importé" : (meta.sport ? `Programme ${meta.sport}` : "Mon programme");
           setStep({ type: "builder", template, meta, programName: defaultName });
         }}
       />
@@ -186,7 +216,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         assignmentCount={step.assignmentCount ?? 0}
         requireSubscription={requireSubscription}
         isActive={isActive}
-        onBack={() => setStep(isEdit ? { type: "list" } : { type: "criteria" })}
+        onBack={() => setStep(isEdit ? { type: "list" } : { type: "new" })}
         onSaveToLibrary={async (name, template) => {
           if (isEdit) await updateProgram(step.programId!, name, template);
           else await saveProgram(name, template, step.meta);
@@ -232,8 +262,11 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
             2026-08-19) — seuls "Enregistrer en librairie"/"Assigner" dans ProgramBuilderModal
             sont gatés (gate() y est déjà câblé). Ouvrir le générateur ne doit jamais bloquer,
             sinon un free ne voit jamais la valeur du générateur. */}
+        {/* Ouvre le picker "+ Nouveau" (ProgramCreatePicker.tsx, drawer à 4 cartes à plat) —
+            remplace un ancien menu ancré (dropdown), moins confortable au pouce sur mobile pour
+            un même nombre de clics (1 pour ouvrir, 1 pour choisir) — retour explicite de Gildas. */}
         <button
-          onClick={() => setStep({ type: "criteria" })}
+          onClick={() => setStep({ type: "new" })}
           style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
         >
           + Nouveau
@@ -247,28 +280,6 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
-
-        {/* Encart bibliothèque externe */}
-        <a
-          href="https://www.theperfclub.com/bibliotheque-de-programmes-dentrainement-sportif/"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "13px 16px", marginBottom: 16,
-            background: "#fff3ef", borderRadius: 16,
-            border: "1px solid rgba(212,64,0,.22)", textDecoration: "none",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 22 }}>📚</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.2 }}>36 programmes à explorer</div>
-              <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2 }}>Trail, vélo, fitness, sports co… →</div>
-            </div>
-          </div>
-          <span style={{ fontSize: 18, color: "#d44000" }}>›</span>
-        </a>
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>

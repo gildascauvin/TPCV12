@@ -1,8 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+
+const IMPORT_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
+function fileToBase64(file: File): Promise<{ data: string; mediaType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const match = result.match(/^data:([^;]+);base64,(.*)$/);
+      if (!match) { reject(new Error("Fichier illisible")); return; }
+      resolve({ mediaType: match[1], data: match[2] });
+    };
+    reader.onerror = () => reject(new Error("Fichier illisible"));
+    reader.readAsDataURL(file);
+  });
+}
 
 // Wording/icônes repris du POC (theperfclub_poc_onboarding_program_fields_v1.html, SPORT_META) —
 // "Musculation / Force" du POC reste ici volontairement splitté en 2 cartes (Powerlifting +
@@ -129,12 +145,22 @@ type CustomSportState =
   | { status: "failed" };
 
 interface Props {
+  /* Fixé par le picker "+ Nouveau" (ProgramCreatePicker.tsx via ProgramLibraryPage.tsx) — plus une
+     bascule interne : chaque méthode de création (Générer/Importer/Modèle/Vierge) est une carte à
+     plat de ce picker, pas une alternative à découvrir à l'intérieur d'un même écran (benchmark
+     Drive/Notion, plusieurs tours de conversation avec Gildas — remplace d'abord une carte
+     collapsante, puis un menu ancré, avant de converger sur le drawer à cartes). */
+  mode: "criteria" | "import";
   onClose: () => void;
+  /* Retour au picker (1 niveau), distinct de onClose (ferme tout, retour à la liste) — demandé
+     explicitement par Gildas pour pouvoir changer de méthode sans repartir de zéro. */
+  onBack: () => void;
   onGenerate: (template: ProgramTemplate, meta: ProgramMeta) => void;
 }
 
-export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
+export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate }: Props) {
   const { isMd } = useBreakpoint();
+  const importMode = mode === "import";
   const [sport, setSport] = useState("");
   const [focus, setFocus] = useState<ProgramFocus | "">("");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
@@ -144,6 +170,49 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
   const [sportDescription, setSportDescription] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [customSport, setCustomSport] = useState<CustomSportState | null>(null);
+
+  // Import d'un programme existant (photo/texte) — voir `mode` ci-dessus pour le choix d'UX.
+  const [importTab, setImportTab] = useState<"text" | "photo">("text");
+  const [importText, setImportText] = useState("");
+  const [importPhotoFile, setImportPhotoFile] = useState<File | null>(null);
+  const [importAnalyzing, setImportAnalyzing] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const canSubmitImport = importTab === "text" ? importText.trim().length > 0 : !!importPhotoFile;
+
+  async function handleImportAnalyze() {
+    if (!canSubmitImport || importAnalyzing) return;
+    setImportAnalyzing(true);
+    setImportError(null);
+    try {
+      const body: { text?: string; imageBase64?: string; imageMediaType?: string } = {};
+      if (importTab === "text") {
+        body.text = importText.trim();
+      } else if (importPhotoFile) {
+        const { data, mediaType } = await fileToBase64(importPhotoFile);
+        body.imageBase64 = data;
+        body.imageMediaType = mediaType;
+      }
+      const res = await fetch("/api/programs/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok || !data?.template) {
+        setImportError(data?.error ?? "On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
+        return;
+      }
+      const template = data.template as ProgramTemplate;
+      const days = IMPORT_DAYS.filter(d => (template.weeks[0]?.[d] ?? []).length > 0);
+      const meta: ProgramMeta = { sport: "Programme importé", level: NEUTRAL_LEVEL, focus: "mixte", days, duration: 4 };
+      onGenerate(template, meta);
+    } catch {
+      setImportError("On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
+    } finally {
+      setImportAnalyzing(false);
+    }
+  }
 
   function selectSport(s: string) {
     const next = s === sport ? "" : s;
@@ -250,15 +319,72 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Créer un programme</div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Remplis les critères — généré en un clic</div>
+        {/* Header — dépend du mode fixé par le picker "+ Nouveau", plus de bascule interne. "←"
+            (retour au picker) même style que le "←" déjà utilisé par ProgramBuilderModal.tsx,
+            distinct du "✕" (ferme tout, retour à la liste). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "space-between", marginBottom: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>{importMode ? "Importer un programme" : "Créer un programme"}</div>
+              <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>{importMode ? "Colle ton texte ou prends une photo — une semaine suffit, tu pourras la reconduire ensuite." : "Remplis les critères — généré en un clic"}</div>
+            </div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>
         </div>
 
+        {importMode && (
+          <div>
+            <div style={{ display: "flex", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12, padding: 3, gap: 2, marginBottom: 16 }}>
+              <button
+                onClick={() => setImportTab("text")}
+                style={{ flex: 1, border: "none", background: importTab === "text" ? "#171b1f" : "transparent", color: importTab === "text" ? "#fff" : "#62686e", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "9px 6px", borderRadius: 9, cursor: "pointer" }}
+              >
+                📋 Coller le texte
+              </button>
+              <button
+                onClick={() => setImportTab("photo")}
+                style={{ flex: 1, border: "none", background: importTab === "photo" ? "#171b1f" : "transparent", color: importTab === "photo" ? "#fff" : "#62686e", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, padding: "9px 6px", borderRadius: 9, cursor: "pointer" }}
+              >
+                📷 Photo
+              </button>
+            </div>
+
+            {importTab === "text" ? (
+              <textarea
+                value={importText}
+                onChange={e => { setImportText(e.target.value); setImportError(null); }}
+                placeholder={"Lundi : Squat 5x5 @100kg, Leg press 3x10\nMercredi : Développé couché 5x5 @70kg\nVendredi : Soulevé de terre 3x5 @120kg\n..."}
+                rows={9}
+                style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: 16, border: "1.5px solid rgba(0,0,0,.12)", fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical", outline: "none" }}
+              />
+            ) : (
+              <div
+                onClick={() => importFileInputRef.current?.click()}
+                style={{
+                  border: importPhotoFile ? "1.5px solid rgba(47,158,68,.4)" : "1.5px dashed rgba(0,0,0,.18)",
+                  background: importPhotoFile ? "#f4fbf5" : "#fff",
+                  borderRadius: 16, minHeight: 200, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 8, textAlign: "center",
+                  padding: 20, cursor: "pointer",
+                }}
+              >
+                <input
+                  ref={importFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { setImportPhotoFile(f); setImportError(null); } }}
+                />
+                <div style={{ fontSize: 28 }}>📷</div>
+                <strong style={{ fontSize: 13.5, fontWeight: 800 }}>{importPhotoFile ? importPhotoFile.name : "Ajouter une photo"}</strong>
+                <span style={{ fontSize: 12, color: "#62686e" }}>{importPhotoFile ? "Clique pour la remplacer." : "Une feuille manuscrite, une capture d'écran, un PDF exporté..."}</span>
+              </div>
+            )}
+
+            {importError && <p style={{ fontSize: 11.5, color: "#c81e1e", marginTop: 10 }}>{importError}</p>}
+          </div>
+        )}
+
+        {!importMode && (
+        <>
           {/* Sport — chips compactes comme le POC (icône inline, pas de carte haute) */}
           <Section label="🏋️ Sport">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -368,6 +494,8 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
               ))}
             </div>
           </Section>
+        </>
+        )}
         </div>
 
         {/* Actions — flex item non-scrollable, jamais recouvert par le contenu */}
@@ -378,18 +506,18 @@ export default function ProgramCriteriaModal({ onClose, onGenerate }: Props) {
           borderTop: "1px solid rgba(0,0,0,.08)",
         }}>
           <button
-            onClick={handleGenerate}
-            disabled={!canSubmit || loading}
+            onClick={importMode ? handleImportAnalyze : handleGenerate}
+            disabled={importMode ? (!canSubmitImport || importAnalyzing) : (!canSubmit || loading)}
             style={{
               width: "100%", padding: "15px", borderRadius: 14, border: "none",
-              cursor: canSubmit && !loading ? "pointer" : "not-allowed",
-              background: canSubmit && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
-              color: canSubmit && !loading ? "#fff" : "#aaa",
+              cursor: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "pointer" : "not-allowed",
+              background: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
+              color: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "#fff" : "#aaa",
               fontWeight: 900, fontSize: 15, letterSpacing: ".01em",
-              boxShadow: canSubmit && !loading ? "0 6px 20px rgba(212,64,0,.28)" : "none",
+              boxShadow: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "0 6px 20px rgba(212,64,0,.28)" : "none",
             }}
           >
-            {loading ? "Génération…" : "Générer le programme →"}
+            {importMode ? (importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →") : (loading ? "Génération…" : "Générer le programme →")}
           </button>
         </div>
       </div>
