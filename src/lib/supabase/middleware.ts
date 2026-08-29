@@ -42,8 +42,31 @@ export async function updateSession(request: NextRequest) {
   );
 
   const {
-    data: { user },
+    data: { user: fetchedUser },
+    error: userError,
   } = await supabase.auth.getUser();
+
+  let user = fetchedUser;
+
+  /* Un refresh token invalide/déjà consommé (rotation Supabase, cookie périmé resté
+     coincé sur un appareil) faisait échouer getUser() en silence — user retombait à
+     null sans jamais nettoyer le cookie, donc le même échec se reproduisait à chaque
+     requête suivante (confirmé en prod : 24 occurrences sur seulement 5 users en 8
+     jours, pas un pic ponctuel). Ça laissait aussi le client (supabase-js navigateur)
+     retenter indéfiniment un refresh avec le même token mort, plausible cause des
+     "TypeError: Load failed" côté client. Fix : nettoyer le cookie dès qu'on détecte
+     ce cas précis, pour casser la boucle et repartir sur un état anonyme propre.
+     scope:"local" délibéré (pas le défaut "global") — ce message exact est aussi le
+     symptôme classique d'une race de rotation de refresh token (deux requêtes
+     concurrentes, ex. 2 onglets/prefetch/service worker, utilisent le même token :
+     la 1re le fait tourner, la 2e se prend cette erreur alors que la session reste
+     valide). "local" nettoie uniquement le cookie de CETTE réponse sans révoquer la
+     session côté serveur Supabase — si c'était en fait une race bénigne, on n'éjecte
+     pas une session par ailleurs valide. */
+  if (userError?.message?.toLowerCase().includes("refresh token")) {
+    await supabase.auth.signOut({ scope: "local" });
+    user = null;
+  }
 
   const { pathname } = request.nextUrl;
 
