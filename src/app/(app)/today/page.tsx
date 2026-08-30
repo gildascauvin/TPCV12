@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
+import { WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
+import { daysAgoStr } from "@/lib/trainingLoad";
 import TodayClient from "./TodayClient";
 import { format } from "date-fns";
 import { redirect } from "next/navigation";
@@ -15,12 +17,16 @@ export default async function TodayPage() {
   if (profileCheck?.mode === "coach") redirect("/coach");
 
   const today = format(new Date(), "yyyy-MM-dd");
+  // Fenêtre glissante pour la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — jours
+  // strictement antérieurs à aujourd'hui, filtrés côté client (TodayClient) avant le calcul.
+  const sinceBaseline = daysAgoStr(WELLNESS_BASELINE_WINDOW_DAYS);
 
-  const [{ data: profile }, { data: wellness }, { data: sessions }, { data: activeAssignments }] = await Promise.all([
+  const [{ data: profile }, { data: wellness }, { data: sessions }, { data: activeAssignments }, { data: wellnessHistory }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).eq("date", today).maybeSingle(),
     supabase.from("sessions").select("*").eq("user_id", user!.id).order("date").order("created_at"),
     supabase.from("program_assignments").select("start_date, programs(name, weeks_count)").eq("user_id", user!.id).eq("status", "active"),
+    supabase.from("wellness_daily").select("*").eq("user_id", user!.id).gte("date", sinceBaseline).lt("date", today),
   ]);
 
   const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
@@ -50,6 +56,7 @@ export default async function TodayPage() {
       hasCoach={hasCoach}
       hasActiveCoach={hasActiveCoach}
       activeProgram={activeProgram}
+      initialWellnessHistory={wellnessHistory ?? []}
     />
   );
 }

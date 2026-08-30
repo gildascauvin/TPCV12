@@ -1,6 +1,7 @@
 import type { Session, WellnessDaily } from "@/types";
 import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
+import { Z_SWC, wellnessSignal, describeDominantDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 export { fitnessFatigueTrend } from "@/lib/trainingLoad";
 export type { TrendDirection } from "@/lib/trainingLoad";
@@ -70,7 +71,15 @@ export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recove
  */
 export type Perspective = "athlete" | "coach";
 
-export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "form", value: number, perspective: Perspective = "athlete"): { label: string; color: string; text: string } {
+/**
+ * `baseline` (optionnel, uniquement consulté pour `dim==="recovery"`, ignoré — donc zéro
+ * changement de comportement — pour les 4 autres dimensions) : dès que l'historique du sportif est
+ * suffisant, bascule "recovery" sur les 3 zones relatives ("Frais/Équilibré/Fatigué") au lieu
+ * des seuils absolus 70/50 — voir src/lib/wellnessBaseline.ts. `value` reste le repli exact tant
+ * que ce n'est pas le cas (comportement 100% inchangé pour tout appelant qui ne fournit pas encore
+ * ce paramètre).
+ */
+export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "form", value: number, perspective: Perspective = "athlete", baseline?: WellnessBaselineResult | null): { label: string; color: string; text: string } {
   const coach = perspective === "coach";
   if (dim === "form") {
     // 3 bandes (pas 5) — la version à 5 paliers testée d'abord ajoutait plus de bruit que de
@@ -96,8 +105,14 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
     return { label: "RISQUE BLESSURE", color: "#d10000", text: "Risque de blessure accru au-delà de 10000 UA/semaine (Foster, 1998)." };
   }
   // Couleur = wellnessColor(value) (dégradé séquentiel bleu, même source que le ring/chart) au lieu
-  // de rouge/orange/vert — seuils/labels de zone inchangés, seule la couleur suit désormais le même
-  // dégradé que partout ailleurs pour le wellness.
+  // de rouge/orange/vert — la fonction elle-même n'est jamais modifiée, seul le nombre qu'elle reçoit
+  // change (relatif dès que la baseline est fournie, absolu sinon).
+  if (baseline?.hasEnoughHistory && baseline.composite.z !== null) {
+    const z = baseline.composite.z;
+    if (z >= Z_SWC) return { label: "FRAIS", color: wellnessColor(value), text: coach ? "Récupération au-dessus de sa norme habituelle." : "Ta récupération est au-dessus de ta norme habituelle." };
+    if (z >= -Z_SWC) return { label: "ÉQUILIBRÉ", color: wellnessColor(value), text: coach ? "Récupération dans sa norme habituelle." : "Ta récupération est dans ta norme habituelle." };
+    return { label: "FATIGUÉ", color: wellnessColor(value), text: coach ? "Récupération sous sa norme habituelle — éviter d'enchaîner les séances dures." : "Ta récupération est sous ta norme habituelle — évite d'enchaîner les séances dures." };
+  }
   if (value >= 70) return { label: "BONNE RÉCUP",  color: wellnessColor(value), text: "Bonne capacité de récupération." };
   if (value >= 50) return { label: "RÉCUP STABLE", color: wellnessColor(value), text: coach ? "Récupération moyenne — sommeil à surveiller." : "Récupération moyenne — surveille le sommeil." };
   return             { label: "RÉCUP FRAGILE", color: wellnessColor(value), text: coach ? "Récupération fragile — éviter d'enchaîner les séances dures." : "Récupération fragile — évite d'enchaîner les séances dures." };
@@ -170,9 +185,17 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
  * (charge chronique − aiguë, signal objectif dérivé de l'entraînement). Les deux peuvent diverger
  * (ex. bon wellness mais charge récente élevée = fatigue possible avec un décalage) — c'est
  * justement ce décalage qui est le plus intéressant à signaler.
- */
-export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number | null, perspective: Perspective = "athlete"): string {
-  if (formValue === null) return recoveryInfo.text;
+ *
+ * `baseline` (optionnel) : quand fourni et son historique suffisant, la dimension qui domine le Z
+ * du jour (positive ou négative — describeDominantDimension(), wellnessBaseline.ts) est ajoutée en
+ * fin de phrase ("Sommeil au-dessus de ta norme.") — répond au "pour savoir quelle dimension
+ * impacte" plutôt que de laisser l'insight composite sans détail. Absent/insuffisant = comportement
+ * 100% inchangé (phrase seule, comme avant ce paramètre). */
+export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number | null, perspective: Perspective = "athlete", baseline?: WellnessBaselineResult | null): string {
+  const dominant = baseline ? describeDominantDimension(baseline, perspective) : null;
+  const suffix = dominant ? ` ${dominant.charAt(0).toUpperCase() + dominant.slice(1)}.` : "";
+
+  if (formValue === null) return recoveryInfo.text + suffix;
   const coach = perspective === "coach";
   // Bornes alignées sur la bande "Équilibré" de sigDimInfo (±8%, voir plus haut) — pas de nouveau
   // seuil inventé séparément.
@@ -180,22 +203,23 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
   const formBad = formValue <= -8;
   // Sur le label, pas la couleur : depuis le passage du badge Récupération au dégradé séquentiel
   // bleu (wellnessColor), la couleur n'est plus un rouge/vert fixe comparable par égalité — le
-  // label ("BONNE RÉCUP"/"RÉCUP FRAGILE") reste, lui, une chaîne stable.
-  const wellGood = recoveryInfo.label === "BONNE RÉCUP";
-  const wellBad = recoveryInfo.label === "RÉCUP FRAGILE";
-  if (wellGood && formGood) return coach
+  // label reste, lui, une chaîne stable. 2 jeux de libellés possibles selon que sigDimInfo("recovery",...)
+  // a basculé sur la baseline relative ou non (voir sigDimInfo plus haut) — les deux sont testés ici.
+  const wellGood = recoveryInfo.label === "BONNE RÉCUP" || recoveryInfo.label === "FRAIS";
+  const wellBad = recoveryInfo.label === "RÉCUP FRAGILE" || recoveryInfo.label === "FATIGUÉ";
+  if (wellGood && formGood) return (coach
     ? "Récupération et forme (charge chronique vs récente) sont alignées positivement : prêt à bien performer."
-    : "Récupération et forme (charge chronique vs récente) sont alignées positivement : tu es prêt à bien performer.";
-  if (wellBad && formBad) return coach
+    : "Récupération et forme (charge chronique vs récente) sont alignées positivement : tu es prêt à bien performer.") + suffix;
+  if (wellBad && formBad) return (coach
     ? "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, récupération à prioriser."
-    : "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.";
-  if (wellGood && formBad) return coach
+    : "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.") + suffix;
+  if (wellGood && formBad) return (coach
     ? "Récupération bonne, mais charge récente au-dessus de l'habituelle : une fatigue avec décalage est possible dans les prochains jours."
-    : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : une fatigue avec décalage est possible dans les prochains jours.";
-  if (wellBad && formGood) return coach
+    : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : une fatigue avec décalage est possible dans les prochains jours.") + suffix;
+  if (wellBad && formGood) return (coach
     ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement — sommeil/stress à explorer."
-    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement — regarde sommeil/stress.";
-  return recoveryInfo.text;
+    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement — regarde sommeil/stress.") + suffix;
+  return recoveryInfo.text + suffix;
 }
 
 export type DayPoint = {
@@ -226,7 +250,10 @@ export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDail
     const form = fp.value;
     const formRaw = fp.fitness !== null && fp.fatigue !== null ? Math.round(fp.fitness - fp.fatigue) : null;
     const w = wellness.find(wd => wd.date === p.date);
-    const recovery = (w?.score ?? w?.base_score) ?? null;
+    // base_score en priorité (jamais score, qui inclut le bonus/malus comportements) — voir
+    // wellnessSignal() dans wellnessBaseline.ts pour le pourquoi ; nécessaire pour que ce chiffre
+    // reste comparable à la baseline personnelle calculée ailleurs sur la même donnée.
+    const recovery = w ? wellnessSignal(w) : null;
     return { date: p.date, load: p.load, monotony: monotonyVal, strain: strainVal, acwr: acwrPoints[idx].value, recovery, form, formRaw };
   });
 }

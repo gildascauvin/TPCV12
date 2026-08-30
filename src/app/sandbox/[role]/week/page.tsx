@@ -18,6 +18,7 @@ export default function SandboxWeekPage({ params }: { params: { role: string } }
       hasCoach={false}
       hasActiveCoach={false}
       sandboxMode
+      wellnessBaselineHistory={wellness}
     />
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { WellnessRing } from "@/components/coach/CoachAthleteCard";
 import { zoneLabel } from "@/lib/wellness";
+import { relativeZoneLabel, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { type AutoregDir, AUTOREG_CHIPS, formatAutoregPct, autoregTitle } from "@/lib/autoregulation";
@@ -25,6 +26,12 @@ interface Props {
   dir: AutoregDir;
   reco: number;
   wellnessScore: number | null;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — bascule le libellé de zone sur
+     "Fatigué/Équilibré/Frais" (relativeZoneLabel) dès que l'historique est suffisant, repli exact
+     sur l'ancien zoneLabel() absolu sinon (comportement inchangé pour tout appelant qui ne fournit
+     pas encore ce paramètre). `wellnessScore` reste toujours affiché tel quel sur le ring — voir
+     CoachAthleteCard.tsx pour le même repli. */
+  baseline?: WellnessBaselineResult | null;
   behaviors?: string[];
   advice: string;
   onClose: () => void;
@@ -35,7 +42,7 @@ interface Props {
   onSkip?: () => void;
 }
 
-export default function AdjustSessionModal({ session, dir, reco, wellnessScore, behaviors = [], advice, onClose, onConfirm, chainCurrent, chainTotal, onSkip }: Props) {
+export default function AdjustSessionModal({ session, dir, reco, wellnessScore, baseline, behaviors = [], advice, onClose, onConfirm, chainCurrent, chainTotal, onSkip }: Props) {
   const [pct, setPct] = useState(reco);
   const [saving, setSaving] = useState(false);
   const chips = AUTOREG_CHIPS[dir];
@@ -94,8 +101,8 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
           {/* Contexte wellness */}
           <div style={{ background: "#faf9f7", border: "1px solid rgba(0,0,0,.06)", borderRadius: 16, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: behaviors.length ? 8 : 0 }}>
-              <WellnessRing score={wellnessScore} size={48} />
-              <div style={{ fontSize: 13, fontWeight: 900, color: "#171b1f" }}>{zoneLabel(wellnessScore)}</div>
+              <WellnessRing score={baseline?.hasEnoughHistory ? baseline.relativeScore : wellnessScore} size={48} />
+              <div style={{ fontSize: 13, fontWeight: 900, color: "#171b1f" }}>{baseline?.hasEnoughHistory ? relativeZoneLabel(baseline) : zoneLabel(wellnessScore)}</div>
             </div>
             {behaviors.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>

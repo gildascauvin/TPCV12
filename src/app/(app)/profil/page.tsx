@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
+import { wellnessSignal } from "@/lib/wellnessBaseline";
 import ProfilClient from "./ProfilClient";
 import type { Session, WellnessDaily } from "@/types";
 
@@ -30,8 +31,9 @@ export default async function ProfilPage() {
   const avgRpe = doneSessions.length
     ? Math.round(doneSessions.reduce((a, s) => a + (s.rpe || 0), 0) / doneSessions.length * 10) / 10
     : null;
+  // base_score en priorité (jamais score, qui inclut le bonus/malus comportements).
   const avgWellness = wellness.length
-    ? Math.round(wellness.reduce((a, w) => a + (w.score ?? w.base_score ?? 0), 0) / wellness.length)
+    ? Math.round(wellness.reduce((a, w) => a + (wellnessSignal(w) ?? 0), 0) / wellness.length)
     : null;
   const allBehaviors = Array.from(new Set(wellness.flatMap(w => w.behaviors || [])));
   const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;

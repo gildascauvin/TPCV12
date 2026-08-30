@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("wellness_daily")
-    .select("user_id, score, behaviors")
+    .select("user_id, score, base_score, behaviors")
     .in("user_id", userIds)
     .eq("date", date);
 

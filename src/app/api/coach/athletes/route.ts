@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
   const athletes = (rawAthletes || []) as CoachAthlete[];
   const admin = createAdminClient();
-  const { signatures, trends, trendInsights } = await getAthletesSignatures(admin, athletes, date);
+  const { signatures, trends, trendInsights, baselines, baselineSeries } = await getAthletesSignatures(admin, athletes, date);
 
-  return Response.json({ signatures, trends, trendInsights });
+  return Response.json({ signatures, trends, trendInsights, baselines, baselineSeries });
 }

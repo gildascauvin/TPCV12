@@ -39,14 +39,19 @@ export function demoToView(s: CoachSession): CoachViewSession {
   };
 }
 
+/* `base_score` en priorité (jamais `score`, qui inclut le bonus/malus comportements) — voir
+   wellnessSignal() dans wellnessBaseline.ts pour le pourquoi. `base_score` optionnel dans le type
+   pour rester compatible avec les appelants qui ne le sélectionnent pas encore en base (repli sur
+   `score` dans ce cas, comportement inchangé). */
 export function buildWellnessMap(
-  rows: { user_id: string; date: string; score: number | null }[]
+  rows: { user_id: string; date: string; score: number | null; base_score?: number | null }[]
 ): Record<string, Record<string, number>> {
   const map: Record<string, Record<string, number>> = {};
   for (const r of rows) {
-    if (r.score == null) continue;
+    const v = r.base_score ?? r.score;
+    if (v == null) continue;
     if (!map[r.user_id]) map[r.user_id] = {};
-    map[r.user_id][r.date] = r.score;
+    map[r.user_id][r.date] = v;
   }
   return map;
 }

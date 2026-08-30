@@ -1,4 +1,5 @@
 import type { WellnessDaily, Session } from "@/types";
+import { describeDrivingDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 export const POSITIVE_BEHAVIOR_KEYS = new Set([
   "stretching", "cold_shower", "reading", "meditation", "hydration", "walk",
@@ -186,9 +187,16 @@ const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
   travel:        { label: "Voyage hier",          tip: "hydrate-toi bien, les trajets fatiguent plus qu'il n'y paraît" },
 };
 
+/* `baseline` (optionnel) : dès que l'historique du sportif est suffisant, la dimension "faible"
+   citée devient celle qui dévie le plus de SA norme perso (drivingDimension/describeDrivingDimension,
+   src/lib/wellnessBaseline.ts) plutôt que le seuil absolu (sleep<5/stress>6/recovery<5/motivation<5)
+   — même repli exact sinon (comportement inchangé). Les comportements négatifs (alcool, écrans
+   tard...) restent prioritaires et absolus dans les deux cas — pas de notion de "norme perso" pour
+   un comportement ponctuel. */
 export function getRecoveryAdvice(
   wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "behaviors"> | null,
-  loadCls: "hard" | "moderate" | "easy" | "rest"
+  loadCls: "hard" | "moderate" | "easy" | "rest",
+  baseline?: WellnessBaselineResult | null
 ): string {
   if (!wellness) return "Remplis ta récupération pour voir ton état de forme.";
   const { sleep, stress, recovery, motivation, behaviors } = wellness;
@@ -205,14 +213,19 @@ export function getRecoveryAdvice(
       : `${negBehavior.label} — ${negBehavior.tip}.`;
   }
 
-  const signals = [
-    { value: sleep, low: sleep < 5, label: "Sommeil court" },
-    { value: 10 - stress, low: stress > 6, label: "Stress élevé" },
-    { value: recovery, low: recovery < 5, label: "Récupération musculaire insuffisante" },
-    { value: motivation, low: motivation < 5, label: "Motivation en berne" },
-  ];
-  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
-  if (weakest) return `${weakest.label}, avec une ${charge} — hydratation et sommeil avant tout ce soir.`;
+  if (baseline?.hasEnoughHistory) {
+    const driving = describeDrivingDimension(baseline, "athlete");
+    if (driving) return `${driving}, avec une ${charge} — hydratation et sommeil avant tout ce soir.`;
+  } else {
+    const signals = [
+      { value: sleep, low: sleep < 5, label: "Sommeil court" },
+      { value: 10 - stress, low: stress > 6, label: "Stress élevé" },
+      { value: recovery, low: recovery < 5, label: "Récupération musculaire insuffisante" },
+      { value: motivation, low: motivation < 5, label: "Motivation en berne" },
+    ];
+    const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
+    if (weakest) return `${weakest.label}, avec une ${charge} — hydratation et sommeil avant tout ce soir.`;
+  }
 
   if (isDemanding) return `Bons signaux, mais ${charge} — hydratation, protéines et sommeil pour bien récupérer.`;
   return `Bons signaux, ${charge} — routine simple : hydratation et sommeil réguliers.`;

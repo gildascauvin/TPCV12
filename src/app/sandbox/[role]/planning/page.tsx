@@ -5,7 +5,7 @@ import { demoToView } from "@/lib/coachSessions";
 
 export default function SandboxPlanningPage({ params }: { params: { role: string } }) {
   if (params.role !== "coach") notFound();
-  const { coachName, athletes, sessionsByDate } = buildCoachFixture();
+  const { coachName, athletes, sessionsByDate, wellnessHistoryByAthlete } = buildCoachFixture();
   const initialSessions = Object.values(sessionsByDate).flat().map(demoToView);
 
   return (
@@ -17,6 +17,7 @@ export default function SandboxPlanningPage({ params }: { params: { role: string
       initialWellnessMap={{}}
       subscriptionStatus="free"
       sandboxMode
+      wellnessBaselineHistory={wellnessHistoryByAthlete}
     />
   );
 }

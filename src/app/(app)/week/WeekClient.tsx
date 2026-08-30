@@ -23,6 +23,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -42,9 +43,14 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>; }
+interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
+  /* Historique wellness (~21j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
+     la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — carte "Aujourd'hui" uniquement.
+     Absent par défaut (sandbox, données synthétiques) = repli cold-start automatique. */
+  wellnessBaselineHistory?: WellnessDaily[];
+}
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {} }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [] }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -64,6 +70,13 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
+  // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
+  // sur "aujourd'hui" (même bug/fix que TodayClient.tsx : sans ça, naviguer vers une semaine passée
+  // réduit progressivement l'historique disponible jusqu'à retomber à tort sur l'ancien libellé
+  // absolu malgré des mois de données réelles). Refetchée dans loadWeek(), remplacée entièrement à
+  // chaque semaine (pas de merge/dédup — contrairement à wellnessList, qui reste borné à la semaine
+  // affichée pour le rendu des cartes).
+  const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<WellnessDaily[]>(initialWellnessBaselineHistory);
   const [monthSessions, setMonthSessions] = useState<Session[]>([]);
   const [monthWellness, setMonthWellness] = useState<WellnessDaily[]>([]);
   const [addingDate, setAddingDate] = useState<string | null>(null);
@@ -177,12 +190,15 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     if (sandboxMode) return;
     const mon = format(startOfWeek(base, { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(base, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    const [{ data: s }, { data: w }] = await Promise.all([
+    const sinceBaseline = format(subDays(startOfWeek(base, { weekStartsOn: 1 }), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    const [{ data: s }, { data: w }, { data: bh }] = await Promise.all([
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", mon).lte("date", sun).order("created_at"),
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", mon).lte("date", sun),
+      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", sun),
     ]);
     if (s) setSessions(prev => { const out = prev.filter(x => x.date < mon || x.date > sun); return [...out, ...s]; });
     if (w) setWellnessList(prev => { const out = prev.filter(x => x.date < mon || x.date > sun); return [...out, ...w]; });
+    if (bh) setWellnessBaselineHistory(bh);
   }
 
   async function loadMonth(anchor: string) {
@@ -195,12 +211,15 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
     const start = format(gridStart, "yyyy-MM-dd");
     const end = format(gridEnd, "yyyy-MM-dd");
-    const [{ data: s }, { data: w }] = await Promise.all([
+    const sinceBaseline = format(subDays(gridStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    const [{ data: s }, { data: w }, { data: bh }] = await Promise.all([
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
+      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", end),
     ]);
     setMonthSessions(s ?? []);
     setMonthWellness(w ?? []);
+    if (bh) setWellnessBaselineHistory(bh);
   }
 
   // Label "Séances libres" valable uniquement pour la semaine dont `mondayStr` est le lundi.
@@ -369,10 +388,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     }
   }
 
+  // Même calcul que le ring de chaque DayColumn ci-dessous (score relatif dès que l'historique est
+  // suffisant) — un seul et même chiffre entre le header, le ring du jour et /today pour une même
+  // date, jamais 3 valeurs différentes pour le même sportif.
   const wellnessMapForHeader: Record<string, number | null> = {};
   dates.forEach(d => {
     const iso = format(d, "yyyy-MM-dd");
-    wellnessMapForHeader[iso] = wellnessList.find(w => w.date === iso)?.score ?? null;
+    const row = wellnessList.find(w => w.date === iso) ?? null;
+    if (!row || row.bedtime == null) { wellnessMapForHeader[iso] = null; return; }
+    const b = computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < iso), row);
+    wellnessMapForHeader[iso] = b?.hasEnoughHistory ? b.relativeScore : wellnessSignal(row);
   });
 
   // Programme + semaine correspondant à la semaine actuellement affichée (navigation) —
@@ -482,10 +507,13 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
               const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
               const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
+              const baseline = wellnessFilledToday
+                ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < todayStr), wellnessToday)
+                : null;
               const autoregTarget = [...todaySessions].filter(s => !s.done)
                 .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
               const suggestion = wellnessFilledToday && autoregTarget
-                ? computeAutoregSuggestion(wellnessToday?.score ?? null, autoregTarget.target_difficulty)
+                ? computeAutoregSuggestion(wellnessToday ? wellnessSignal(wellnessToday) : null, autoregTarget.target_difficulty, baseline)
                 : null;
               if (suggestion && autoregTarget) {
                 const severityColor = suggestionSeverityColor(suggestion);
@@ -515,16 +543,28 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   />
                 );
               } else {
-                alert = athleteAlertFor(wellnessToday?.score ?? null, maxDiff, wellnessFilledToday) ?? undefined;
+                alert = athleteAlertFor(wellnessToday ? wellnessSignal(wellnessToday) : null, maxDiff, wellnessFilledToday, baseline) ?? undefined;
               }
             }
+            // Score + zone relatifs ("Équilibré"...) sur CHAQUE jour de la semaine affichée, pas
+            // seulement "Aujourd'hui" — réutilise le même historique déjà rechargé par semaine
+            // (wellnessBaselineHistory, voir loadWeek/loadMonth) ; un jour sans historique suffisant
+            // retombe silencieusement sur le score/libellé absolus (DayColumn, comportement inchangé).
+            // Le ring affiché ici doit rester identique au ring de /today et de CalendarHeader pour
+            // le même jour — un seul calcul (computeWellnessBaselineAt), jamais 3 chiffres différents.
+            const dayRow = wellnessList.find(w => w.date === dstr) ?? null;
+            const dayBaseline = dayRow?.bedtime != null
+              ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < dstr), dayRow)
+              : null;
+            const dayZoneLabel = dayBaseline?.hasEnoughHistory ? relativeZoneLabel(dayBaseline, "athlete") : undefined;
+            const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : (dayRow ? wellnessSignal(dayRow) : null);
             return (
               <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
               <DroppableDay dstr={dstr}>
               <DayColumn
                 date={date}
                 sessions={sessions.filter(s => s.date === dstr)}
-                wellness={wellnessList.find(w => w.date === dstr) ?? null}
+                wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
@@ -594,7 +634,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   const inMonth = date.getMonth() === anchor.getMonth();
                   const daySessions = monthSessions.filter(s => s.date === dstr);
                   const wellness = monthWellness.find(w => w.date === dstr) ?? null;
-                  const score = wellness?.score ?? null;
+                  const score = wellness ? wellnessSignal(wellness) : null;
 
                   return (
                     <div
@@ -728,7 +768,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           session={adjustCtx.session as AdjustSessionTarget}
           dir={adjustCtx.dir}
           reco={adjustCtx.reco}
-          wellnessScore={wellnessList.find(w => w.date === todayStr)?.score ?? null}
+          wellnessScore={(() => { const w = wellnessList.find(w => w.date === todayStr); return w ? wellnessSignal(w) : null; })()}
+          // Même calcul que l'alerte "jour prioritaire" ci-dessus (todayStr) — jamais l'ancien
+          // zoneLabel() absolu affiché à part dans cette modale.
+          baseline={(() => {
+            const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
+            const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
+            return wellnessFilledToday
+              ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < todayStr), wellnessToday)
+              : null;
+          })()}
           behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
           advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6)}
           onClose={() => setAdjustCtx(null)}

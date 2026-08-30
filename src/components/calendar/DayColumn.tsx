@@ -9,8 +9,11 @@ import type { DayAlert } from "@/lib/alerts";
 import type { ExerciseAttachments } from "@/types";
 /* Seul le score est lu ici — un objet minimal suffit, permet à /coach/planning (qui n'a qu'un
    score déjà résolu par jour, pas une ligne wellness_daily complète) de passer directement sans
-   fabriquer un faux WellnessDaily. */
-export interface WellnessScoreLike { score: number | null }
+   fabriquer un faux WellnessDaily. `zoneLabel` (optionnel) : libellé de zone déjà résolu par
+   l'appelant (relatif — "Équilibré" — dès que sa baseline perso a assez d'historique pour ce
+   jour, src/lib/wellnessBaseline.ts) ; absent = repli sur le libellé absolu calculé ici même
+   (formLabel), comportement inchangé. */
+export interface WellnessScoreLike { score: number | null; zoneLabel?: string }
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -212,7 +215,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
 
       {/* Zone label */}
       <div style={{ fontSize: 10, fontWeight: 800, color: score !== null ? scoreColor(score) : "#8a8f94", marginBottom: 8, letterSpacing: "0.01em" }}>
-        {formLabel(score)}
+        {wellness?.zoneLabel ?? formLabel(score)}
       </div>
 
       {/* Load rule card — remplacé par l'alerte wellness/décision quand un cas notable est détecté

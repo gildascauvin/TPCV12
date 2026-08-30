@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { wellnessColor, WELLNESS_RAMP } from "@/lib/wellness";
+import type { DimensionBadge } from "@/lib/wellnessBaseline";
 
 const MONTH_FR = ["jan","fév","mar","avr","mai","juin","juil","aoû","sep","oct","nov","déc"];
 const DAY_FR   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -18,14 +19,16 @@ function weekMonthLabel(dateStr: string, weekNum: number) {
   return `S${weekNum} ${month.charAt(0).toUpperCase()}${month.slice(1)}.`;
 }
 
-function wellnessZone(v: number): string {
+function zoneLabelFallback(v: number): string {
+  // Repli absolu (jour sans historique suffisant, cf. `points`/`pointsRaw` plus bas) — mêmes seuils
+  // que zoneLabel() (wellness.ts) tant qu'aucune baseline n'a pu être calculée pour ce jour.
   if (v >= 82) return "Zone optimale";
   if (v >= 65) return "Zone stable";
   if (v >= 45) return "Zone prudente";
   return "Zone récupération";
 }
 
-function formatTooltipValue(metricType: "load" | "monotony" | "recovery", v: number | null): string {
+function formatTooltipValue(metricType: "load" | "monotony" | "recovery", v: number | null, raw?: number | null): string {
   if (metricType === "load") {
     if (v === null || v === 0) return "🛌 Repos";
     return `⚡ Charge : ${v}`;
@@ -34,15 +37,27 @@ function formatTooltipValue(metricType: "load" | "monotony" | "recovery", v: num
     if (v === null) return "— Pas assez d'historique";
     return `🔁 Monotonie : ${v}`;
   }
-  // recovery
+  // recovery — `v` = position relative (50+Z×15) si `raw` est fourni (donc une baseline existe pour
+  // ce jour), sinon `v` EST déjà le score absolu (repli, voir zoneLabelFallback ci-dessus).
   if (v === null) return "— Non renseigné";
-  return `🌿 ${v}/100 · ${wellnessZone(v)}`;
+  if (raw !== undefined && raw !== null) {
+    const z = zone2For(WELLNESS_ZONES, v);
+    return `🌿 ${raw}/100 · ${z.label.charAt(0) + z.label.slice(1).toLowerCase()}`;
+  }
+  return `🌿 ${v}/100 · ${zoneLabelFallback(v)}`;
 }
 
 function formatFormValue(pct: number | null, zoneLabel?: string | null): string | null {
   if (pct === null) return null;
   const sign = pct > 0 ? "+" : "";
   return `📊 Forme : ${sign}${pct}%${zoneLabel ? ` · ${zoneLabel}` : ""}`;
+}
+
+const ARROW_SYMBOL: Record<DimensionBadge["arrow"], string> = { up: "↑", down: "↓", stable: "→" };
+function formatDimensionBadge(b: DimensionBadge): string {
+  const sign = b.z >= 0 ? "+" : "−";
+  const abs = Math.abs(b.z).toFixed(2).replace(".", ",");
+  return `${b.label.toUpperCase()} ${sign}${abs} ${ARROW_SYMBOL[b.arrow]}`;
 }
 
 /* Bandes de zone Form (Fitness − Fatigue, en % de la charge chronique) — mêmes bornes que
@@ -61,6 +76,16 @@ export const FORM_ZONES: Zone2[] = [
   { min: 42, max: 58,  label: "ÉQUILIBRÉ",  color: "#8a8f94" },
   { min: 58, max: 101, label: "FRAIS",      color: "#2f9e44" },
 ];
+
+/* Zones relatives de la courbe principale (Wellness) — mêmes bornes que relativeZoneLabel()
+   (wellnessBaseline.ts, Z_SWC=0.2 × conversion percentile Φ(z)×100 : Φ(0.2)×100≈58, Φ(-0.2)×100≈42)
+   — coïncide presque exactement avec les bornes déjà existantes de FORM_ZONES ci-dessus (42/58,
+   ±8%). Wellness et Forme partagent donc littéralement la même échelle/légende sur ce chart (voir
+   zones1 côté gauche plus bas, qui remplace la légende dégradée quand fourni, et la suppression du
+   2e jeu de libellés côté droit pour zones2 dans ce cas — une seule légende, pas deux jeux du même
+   vocabulaire). Alias direct sur FORM_ZONES plutôt qu'un 2e tableau à valeurs dupliquées. */
+export const WELLNESS_ZONES: Zone2[] = FORM_ZONES;
+
 function zone2For(zones: Zone2[], v: number): Zone2 {
   return zones.find(z => v < z.max) ?? zones[zones.length - 1];
 }
@@ -120,11 +145,25 @@ interface Props {
      ZoneSparkline.tsx pour le pourquoi. `false` par défaut : zéro impact sur les appelants
      existants (vue Sem. inchangée). */
   weekLabels?: boolean;
+  /* Valeur brute (ex. score wellness absolu) affichée en tooltip à côté de la valeur tracée dans
+     `points` — même principe que `points2Raw` pour la série secondaire. Sert au chart Récupération
+     quand `points` porte le score RELATIF (position 50+Z×15) plutôt que le score brut. */
+  pointsRaw?: (number | null)[];
+  /* Bandes de zone pour la série PRINCIPALE (ex. WELLNESS_ZONES) — rendues comme sur ZoneSparkline.tsx
+     (bande translucide plein-largeur pour la zone médiane + liseré bord gauche + libellés flottants),
+     contrairement à `zones2` (liseré discret bord droit uniquement) : la série principale domine déjà
+     visuellement l'espace, ses propres zones méritent le même traitement que sur le chart Charge. */
+  zones1?: Zone2[];
+  /* Badges de dimension (ex. "SOMMEIL −1,82 ↓") au survol — un élément par jour, même alignement que
+     `points`/`dates` (voir dimensionBadgesSeries() dans wellnessBaseline.ts, précalculé par
+     l'appelant — ce composant reste présentationnel, jamais de calcul de Z ici). */
+  dimensionBadgesAt?: (DimensionBadge[] | null)[];
 }
 
 export default function SparkLineClient({
   points, dates, color, maxVal, height = 52, animDelay = 0, metricType, uid, chartType = "line",
   points2, points2Raw, color2, thresholdValue, thresholdLabel, zones2, sequentialFill, weekLabels,
+  pointsRaw, zones1, dimensionBadgesAt,
 }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [hover, setHover] = useState<{ idx: number; xPx: number } | null>(null);
@@ -186,6 +225,7 @@ export default function SparkLineClient({
 
   const hIdx = hover?.idx ?? null;
   const hVal  = hIdx !== null ? points[hIdx] : null;
+  const hValRaw = hIdx !== null && pointsRaw ? pointsRaw[hIdx] : undefined;
   const hVal2 = hIdx !== null && points2 ? points2[hIdx] : null;
   const hVal2Raw = hIdx !== null && points2Raw ? points2Raw[hIdx] : null;
   const hDate = hIdx !== null ? dates[hIdx] : null;
@@ -222,11 +262,20 @@ export default function SparkLineClient({
             {formatDateFr(hDate)}
           </div>
           <div style={{ fontSize: 13, fontWeight: 800, color: sequentialFill && hVal !== null ? wellnessColor(hVal) : color }}>
-            {formatTooltipValue(metricType, hVal)}
+            {formatTooltipValue(metricType, hVal, hValRaw)}
           </div>
           {points2 && formatFormValue(hVal2Raw, hVal2 !== null && zones2 ? zone2For(zones2, hVal2).label : null) && (
             <div style={{ fontSize: 12, fontWeight: 700, color: color2 ?? "#8a8f94", marginTop: 2 }}>
               {formatFormValue(hVal2Raw, hVal2 !== null && zones2 ? zone2For(zones2, hVal2).label : null)}
+            </div>
+          )}
+          {hIdx !== null && dimensionBadgesAt?.[hIdx] && dimensionBadgesAt[hIdx]!.length > 0 && (
+            <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.13)", display: "flex", flexDirection: "column", gap: 2 }}>
+              {dimensionBadgesAt[hIdx]!.map(b => (
+                <div key={b.key} style={{ fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: "0.02em" }}>
+                  {formatDimensionBadge(b)}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -257,13 +306,30 @@ export default function SparkLineClient({
           </clipPath>
         </defs>
 
-        {/* Bandes de zone (Form) — liseré fin bord droit uniquement, voir FORM_ZONES plus haut pour
-            le pourquoi (pas de bande pleine comme ZoneSparkline, pour ne pas rivaliser avec l'aire
-            wellness qui occupe déjà tout le 0-100). */}
-        {zones2 && zones2.map(z => {
+        {/* Bandes de zone (Form) — liseré fin bord droit, voir FORM_ZONES plus haut pour le pourquoi
+            (pas de bande pleine comme ZoneSparkline, pour ne pas rivaliser avec l'aire wellness qui
+            occupe déjà tout le 0-100). Masqué quand zones1 est fourni : Wellness et Forme partagent
+            désormais la même échelle (voir WELLNESS_ZONES), une seule légende suffit — zones1 (bord
+            gauche) la porte déjà, ce liseré droit serait une simple redite du même vocabulaire. */}
+        {zones2 && !zones1 && zones2.map(z => {
           const yTop = toY(Math.min(z.max, maxVal));
           const yBot = toY(z.min);
           return <rect key={z.label} x={W - 3} y={yTop} width={3} height={Math.max(0, yBot - yTop)} fill={z.color} />;
+        })}
+
+        {/* Bandes de zone pour la série PRINCIPALE (ex. WELLNESS_ZONES) — fond translucide plein-
+            largeur pour la zone MÉDIANE ("dans ta norme") uniquement, même traitement que la zone
+            "OPTIMAL" du chart Charge (ZoneSparkline.tsx, idx===1) ; + liseré bord GAUCHE sur les 3
+            zones (miroir de zones2 côté droit). */}
+        {zones1 && zones1.map((z, zi) => {
+          const yTop = toY(Math.min(z.max, maxVal));
+          const yBot = toY(z.min);
+          return (
+            <g key={`z1-${z.label}`}>
+              {zi === 1 && <rect x={0} y={yTop} width={W} height={Math.max(0, yBot - yTop)} fill="rgba(255,255,255,.05)" />}
+              <rect x={0} y={yTop} width={3} height={Math.max(0, yBot - yTop)} fill={z.color} />
+            </g>
+          );
         })}
 
         {/* Baseline */}
@@ -375,8 +441,10 @@ export default function SparkLineClient({
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
         {/* Légende wellness — barre dégradée continue en bord gauche (miroir du liseré Form à
             droite), + 2 libellés d'ancrage seulement (pas de bandes discrètes : le wellness est une
-            magnitude continue, pas 3 états — voir WELLNESS_RAMP plus haut). */}
-        {sequentialFill && (
+            magnitude continue, pas 3 états — voir WELLNESS_RAMP plus haut). Remplacée par les 3
+            libellés de zones1 (ci-dessous) quand ils sont fournis — les deux ne coexistent pas, même
+            bord gauche. */}
+        {sequentialFill && !zones1 && (
           <>
             <div style={{
               position: "absolute", left: 0, top: `${(PAD_TOP / H) * 100}%`, bottom: `${(PAD_BOT / H) * 100}%`,
@@ -390,6 +458,22 @@ export default function SparkLineClient({
             </div>
           </>
         )}
+        {/* Libellés de zones1 (ex. WELLNESS_ZONES) — bord gauche, miroir des libellés zones2 côté
+            droit. Remplace la légende dégradée générique ci-dessus quand fourni. */}
+        {zones1 && zones1.map(z => {
+          const yTopPct = (toY(Math.min(z.max, maxVal)) / H) * 100;
+          const yBotPct = (toY(z.min) / H) * 100;
+          return (
+            <div key={`z1-${z.label}`} style={{
+              position: "absolute", left: 6, top: `${(yTopPct + yBotPct) / 2}%`,
+              transform: "translateY(-50%)",
+              fontSize: 7.5, fontWeight: 900, letterSpacing: "0.04em", color: z.color,
+              whiteSpace: "nowrap" as const,
+            }}>
+              {z.label}
+            </div>
+          );
+        })}
         {zones2 && known2.map(({ i, x, y, v }) => {
           const z = zone2For(zones2, v);
           const size = hIdx === i ? 14 : 11;
@@ -403,7 +487,9 @@ export default function SparkLineClient({
             }} />
           );
         })}
-        {zones2 && zones2.map(z => {
+        {/* Libellés de zones2 côté droit — masqués quand zones1 est fourni, même raison que le
+            liseré plus haut (une seule légende, celle de zones1 à gauche). */}
+        {zones2 && !zones1 && zones2.map(z => {
           const yTopPct = (toY(Math.min(z.max, maxVal)) / H) * 100;
           const yBotPct = (toY(z.min) / H) * 100;
           return (

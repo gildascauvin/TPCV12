@@ -56,7 +56,7 @@ export default async function CoachAthletesPage() {
   const athletes = (rawAthletes || []) as CoachAthlete[];
 
   const today = new Date().toISOString().split("T")[0];
-  const [{ signatures, trends, trendInsights }, lastTests] = await Promise.all([
+  const [{ signatures, trends, trendInsights, baselines, baselineSeries }, lastTests] = await Promise.all([
     getAthletesSignatures(admin, athletes, today),
     getAthletesLastTests(admin, user.id, athletes),
   ]);
@@ -69,6 +69,8 @@ export default async function CoachAthletesPage() {
       initialSignatures={signatures}
       initialTrends={trends}
       initialTrendInsights={trendInsights}
+      initialBaselines={baselines}
+      initialBaselineSeries={baselineSeries}
       initialLastTests={lastTests}
       subscriptionStatus={profile.subscription_status ?? "free"}
       inviteCode={profile.invite_code as string | null ?? null}

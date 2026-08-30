@@ -8,7 +8,7 @@ import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, computeFatigueImpact, computeDisplayScore, wellnessColor } from "@/lib/wellness";
+import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, wellnessColor } from "@/lib/wellness";
 import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -24,6 +24,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } f
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ShareButton from "@/components/sessions/ShareButton";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, Z_MODERATE, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
@@ -46,6 +47,14 @@ function greeting() {
 function scoreColor(score: number | null) {
   if (score === null) return "rgba(255,255,255,0.18)";
   return wellnessColor(score);
+}
+
+/* Zone relative si `baseline` a assez d'historique, repli exact sur l'ancien zoneLabel() absolu
+   sinon (comportement inchangé) — voir CoachAthleteCard.tsx pour le même pattern côté coach. */
+function relativeOrAbsoluteZoneLabel(score: number | null, baseline: WellnessBaselineResult | null): string {
+  if (score === null) return "Non renseigné";
+  if (baseline?.hasEnoughHistory) return relativeZoneLabel(baseline, "athlete");
+  return formLabel(score);
 }
 
 function buildDotMap(sessions: Session[], anchor: string) {
@@ -284,9 +293,17 @@ interface Props {
      ailleurs). */
   sandboxMode?: boolean;
   sandboxWellnessByDate?: Record<string, WellnessDaily>;
+  /* Historique wellness (~21j glissants avant `initialDate`) pour la baseline personnelle (Z-score,
+     src/lib/wellnessBaseline.ts) — fetché une fois côté serveur (today/page.tsx). Filtré ici sur
+     `date < selectedDate` avant d'être passé à computeWellnessBaselineAt() ; en cas de navigation
+     vers un autre jour que celui du chargement de page, la fenêtre n'est pas re-fetchée pour ce
+     nouveau jour (limite acceptée — computeWellnessBaselineAt() se dégrade proprement, moins de
+     jours disponibles = hasEnoughHistory peut retomber à false plutôt qu'un chiffre faux). Absent
+     en sandbox (données synthétiques, pas d'historique réel) — repli cold-start automatique. */
+  initialWellnessHistory?: WellnessDaily[];
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [] }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -299,8 +316,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
   const [weekWellnessMap, setWeekWellnessMap] = useState<Record<string, number | null>>({
-    [initialDate]: initialWellness?.score ?? null,
+    [initialDate]: initialWellness ? wellnessSignal(initialWellness) : null,
   });
+  // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
+  // sur "aujourd'hui" : sans ça, naviguer vers une semaine passée réduit progressivement l'historique
+  // disponible (la fenêtre initiale ne couvrait que les 21j avant AUJOURD'HUI) jusqu'à retomber sous
+  // le seuil minimal et afficher à tort l'ancien libellé absolu malgré des mois de données réelles
+  // (bug réel signalé par Gildas). Refetchée à chaque changement de semaine (même effet que
+  // weekWellnessMap ci-dessous), fenêtre = 21j avant le LUNDI de la semaine affichée → toujours
+  // assez de recul pour n'importe quel jour de cette semaine.
+  const [baselineHistory, setBaselineHistory] = useState<WellnessDaily[]>(initialWellnessHistory);
 
   const prevWeekRef = useRef("");
 
@@ -324,13 +349,20 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     prevWeekRef.current = weekStart;
     const dates = Array.from({ length: 7 }, (_, i) => format(addDays(new Date(weekStart + "T12:00:00"), i), "yyyy-MM-dd"));
     const sun = dates[6];
+    const sinceBaseline = format(subDays(new Date(weekStart + "T12:00:00"), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
     Promise.all([
-      supabase.from("wellness_daily").select("date, score").eq("user_id", userId).in("date", dates),
+      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", sun),
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", weekStart).lte("date", sun).order("created_at"),
     ]).then(([{ data: wellData }, { data: sessData }]) => {
+      const rows = (wellData ?? []) as WellnessDaily[];
+      setBaselineHistory(rows);
       const map: Record<string, number | null> = {};
-      dates.forEach(d => { map[d] = null; });
-      (wellData ?? []).forEach((w: { date: string; score: number | null }) => { map[w.date] = w.score; });
+      dates.forEach(d => {
+        const row = rows.find(w => w.date === d) ?? null;
+        if (!row || row.bedtime == null) { map[d] = null; return; }
+        const b = computeWellnessBaselineAt(rows.filter(w => w.date < d), row);
+        map[d] = b?.hasEnoughHistory ? b.relativeScore : wellnessSignal(row);
+      });
       setWeekWellnessMap(prev => ({ ...prev, ...map }));
       if (sessData) setAllSessions(prev => [...prev.filter(s => s.date < weekStart || s.date > sun), ...(sessData as Session[])]);
     });
@@ -385,7 +417,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           const w = payload.new as WellnessDaily;
           if (w.date === selectedDateRef.current) {
             setWellness(w);
-            setWeekWellnessMap(prev => ({ ...prev, [w.date]: w.score }));
+            setWeekWellnessMap(prev => ({ ...prev, [w.date]: wellnessSignal(w) }));
           }
         }
       })
@@ -401,12 +433,33 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const weekStart = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
   const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
   const weekSessions = allSessions.filter(s => s.date >= weekStart && s.date <= weekEnd);
-  const score = wellness?.score ?? null;
+  // `base_score` en priorité (jamais `score`, qui inclut le bonus/malus comportements) — voir
+  // wellnessSignal() dans wellnessBaseline.ts pour le pourquoi. Nécessaire pour que ce "score du
+  // jour" reste comparable à l'historique déjà bâti sur base_score dans wellnessBaseline plus bas.
+  const score = wellness ? wellnessSignal(wellness) : null;
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
-  const doneToday = todaySessions.filter(s => s.done && s.rpe && s.duration);
-  const impacts = doneToday.map(s => computeFatigueImpact(s.rpe!, s.duration!));
-  const displayScore = wellnessFilledToday && score !== null ? computeDisplayScore(score, impacts) : null;
+  /* Plus d'impact fatigue post-séance ici (retiré partout, pas seulement sur ce chart) : le garder
+     sur une seule surface créait exactement le type de confusion inter-surfaces ("le score n'est pas
+     le même sur /today qu'ailleurs pour le même jour") que toute cette refonte relative vise à
+     éliminer — la charge du jour est déjà couverte par l'encart "⚡ Entraînement" (loadRule), qui n'a
+     jamais eu besoin de ce mécanisme. `displayScore` = le score du matin, pur, identique partout. */
+  const displayScore = wellnessFilledToday ? score : null;
   const displayWellness = wellnessFilledToday ? wellness : null;
+  /* Baseline personnelle (Z-score) — comparée à `displayScore` (score brut du matin), la fenêtre de
+     référence (mean/stdDev) restant bâtie sur les scores bruts stockés des jours précédents
+     (`baselineHistory`, ancré sur la semaine affichée — voir l'effet de rechargement plus haut). */
+  const wellnessBaseline: WellnessBaselineResult | null = wellnessFilledToday
+    ? computeWellnessBaselineAt(
+        baselineHistory.filter(w => w.date < selectedDate),
+        wellness,
+      )
+    : null;
+  /* Chiffre affiché (ring, headline "Score & conseils") — relatif dès que l'historique est
+     suffisant, repli exact sur `displayScore` (absolu) sinon. `displayScore` lui-même reste inchangé
+     et continue d'alimenter computeAutoregSuggestion()/row() ci-dessous : ces fonctions ont besoin du
+     score ABSOLU pour leur garde-fou interne, même quand une baseline pilote déjà le déclenchement
+     via le Z (voir wellnessBaseline?.guardRailTriggered). */
+  const relativeDisplayScore = wellnessBaseline?.hasEnoughHistory ? wellnessBaseline.relativeScore : displayScore;
   /* Hissé ici (au lieu de recalculé dans l'IIFE plus bas) pour être accessible à la fois par la
      carte "Score & conseils" (halo pulsant sur le CONTOUR de la carte, même mécanisme que Coach
      Control/CoachAthleteCard.tsx — un seul signal de mouvement, pas un 2e sur l'encart interne) et
@@ -414,7 +467,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const autoregTargetTop = [...todaySessions].filter(s => !s.done)
     .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   const wellnessCardSuggestion = wellnessFilledToday && autoregTargetTop
-    ? computeAutoregSuggestion(displayScore, autoregTargetTop.target_difficulty)
+    ? computeAutoregSuggestion(displayScore, autoregTargetTop.target_difficulty, wellnessBaseline)
     : null;
   const wellnessCardBadgeColor = wellnessCardSuggestion ? suggestionSeverityColor(wellnessCardSuggestion) : "#d44000";
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
@@ -428,7 +481,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const rule = loadRule(todaySessions, loadCtx);
   const advice = {
     training: `${rule.title}. ${rule.text}`,
-    recovery: getRecoveryAdvice(displayWellness, rule.cls),
+    recovery: getRecoveryAdvice(displayWellness, rule.cls, wellnessBaseline),
   };
   const dotMap = buildDotMap(allSessions, selectedDate);
 
@@ -467,7 +520,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .select().single();
     if (saved) {
       setWellness(saved as WellnessDaily);
-      setWeekWellnessMap(prev => ({ ...prev, [selectedDate]: (saved as WellnessDaily).score }));
+      setWeekWellnessMap(prev => ({ ...prev, [selectedDate]: wellnessSignal(saved as WellnessDaily) }));
     }
     setShowWellness(false);
     if (pendingCompleteSession) {
@@ -653,8 +706,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 resourceType="wellness"
                 variant="dark"
                 buildSnapshot={() => ({
-                  score: displayScore,
-                  zoneLabel: formLabel(displayScore),
+                  score: relativeDisplayScore,
+                  zoneLabel: relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline),
                   behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
                     ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
                     : { emoji: "", label: b, positive: true }),
@@ -662,7 +715,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   recoveryAdvice: advice.recovery,
                   authorName: profile.name ?? "Toi",
                 })}
-                title={`${profile.name ?? "Mon"} — ${formLabel(displayScore)}`}
+                title={`${profile.name ?? "Mon"} — ${relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline)}`}
                 text={advice.recovery}
               />
             </div>
@@ -686,13 +739,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 onClick={() => setShowWellness(true)}
                 style={{ display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18, cursor: "pointer" }}
               >
-                <WellnessRingPOC score={displayScore} size={ringSize} />
+                <WellnessRingPOC score={relativeDisplayScore} size={ringSize} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
                     Score &amp; conseils
                   </div>
                   <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
-                    {wellnessFilledToday ? formLabel(displayScore) : "Non renseigné"}
+                    {wellnessFilledToday ? relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline) : "Non renseigné"}
                   </div>
                   {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
@@ -712,7 +765,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             const autoregTarget = [...todaySessions].filter(s => !s.done)
               .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
             const suggestion = wellnessFilledToday && autoregTarget
-              ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty)
+              ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty, wellnessBaseline)
               : null;
 
             const scrollToSessions = (e: React.MouseEvent) => {
@@ -791,23 +844,32 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               "Complète ta récupération pour des conseils personnalisés",
               "Comment tu vas ? →", openWellness
             );
-            if (displayScore !== null && displayScore < 55 && maxDiff >= 8) return row(
+            /* `useZ`/`lowZ`/`highZ` : dès que l'historique est suffisant, ces 4 cas basculent sur le
+               Z-score personnel (src/lib/wellnessBaseline.ts) au lieu du seuil absolu 55/80 — le
+               garde-fou absolu (wellnessBaseline.guardRailTriggered) force toujours le cas bas même
+               si le Z lit "dans sa norme". Repli exact sur `displayScore` sinon (comportement
+               inchangé pour tout compte sans historique suffisant). */
+            const useZ = wellnessBaseline?.hasEnoughHistory && wellnessBaseline.composite.z !== null;
+            const z = useZ ? wellnessBaseline!.composite.z! : null;
+            const lowZ = useZ ? (z! < -Z_MODERATE || wellnessBaseline!.guardRailTriggered) : (displayScore !== null && displayScore < 55);
+            const highZ = useZ ? z! >= Z_MODERATE : (displayScore !== null && displayScore >= 80);
+            if (lowZ && maxDiff >= 8) return row(
               "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
-              `🔥 Récupération basse · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
+              `🔥 ${useZ ? "Fatigué" : "Récupération basse"} · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
               "Baisse la charge →", scrollToSessions
             );
-            if (displayScore !== null && displayScore < 55 && maxDiff >= 5) return row(
+            if (lowZ && maxDiff >= 5) return row(
               "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
-              `⚠️ Récupération basse · Séance à ${maxDiff}/10 — surveille ton effort`,
+              `⚠️ ${useZ ? "Fatigué" : "Récupération basse"} · Séance à ${maxDiff}/10 — surveille ton effort`,
               "Voir la séance →", scrollToSessions
             );
-            if (displayScore !== null && displayScore < 55) return row(
+            if (lowZ) return row(
               "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
-              "💛 Récupération basse — journée allégée recommandée"
+              `💛 ${useZ ? "Fatigué" : "Récupération basse"} — journée allégée recommandée`
             );
-            if (displayScore !== null && displayScore >= 80 && maxDiff >= 8) return row(
+            if (highZ && maxDiff >= 8) return row(
               "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",
-              `✅ Score ${displayScore} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
+              `✅ ${useZ ? "Frais" : `Score ${displayScore}`} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
               "C'est parti →", scrollToSessions
             );
             return null;

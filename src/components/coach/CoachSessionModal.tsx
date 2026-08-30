@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import type { CoachSession, CoachAthlete, ExerciseAttachments } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
+import { Z_MODERATE, Z_SWC, relativeZoneLabel, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
@@ -17,6 +18,10 @@ export interface ReviewContext {
   queueCurrent: number;
   queueTotal: number;
   trend?: TrendCode | null; // charge/récupération 7j vs 7j précédents — voir trainingLoad.ts
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du sportif — déjà disponible côté
+     page appelante (/coach, /coach/planning, batch déjà fetché). `undefined`/absent = repli exact
+     sur `wellness` en absolu, comportement 100% inchangé. */
+  baseline?: WellnessBaselineResult | null;
 }
 
 interface Props {
@@ -37,7 +42,11 @@ interface Props {
   onMarkViewed?: () => void;
 }
 
-function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: TrendCode | null): string[] {
+/* `baseline` (optionnel) : dès que l'historique du sportif est suffisant, bascule sur le Z-score
+   personnel (src/lib/wellnessBaseline.ts) au lieu des seuils absolus 55/65/72 — `wellness` reste le
+   repli exact tant que ce n'est pas le cas. Le garde-fou absolu (baseline.guardRailTriggered)
+   force toujours le point "critique" même si le Z lit "dans sa norme". */
+function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: TrendCode | null, baseline?: WellnessBaselineResult | null): string[] {
   const points: string[] = [];
   if (trend === "accumulation") points.push("Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.");
   if (trend === "fatigue_persistante") points.push("Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.");
@@ -45,21 +54,28 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
     if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — récupération non renseignée aujourd'hui, vérifier avec lui.`);
     return points;
   }
-  if (wellness < 55) {
-    points.push(`Récupération critique (${wellness}/100) — insuffisante.`);
-  } else if (wellness < 65) {
-    points.push(`Récupération faible (${wellness}/100) — surveiller la charge du jour.`);
-  } else if (wellness < 72) {
-    points.push(`Récupération en dessous de la zone optimale (${wellness}/100).`);
+
+  const useZ = baseline?.hasEnoughHistory && baseline.composite.z !== null;
+  const z = useZ ? baseline!.composite.z! : null;
+  const critical = useZ ? (z! < -Z_MODERATE || baseline!.guardRailTriggered) : wellness < 55;
+  const weak = useZ ? z! < -Z_SWC : wellness < 65;
+  const belowOptimal = useZ ? z! < -Z_SWC / 2 : wellness < 72; // même intention que l'ancien seuil 72 : juste en dessous d'"Équilibré"
+
+  if (critical) {
+    points.push(useZ ? `Très fatigué (${wellness}/100) — récupération insuffisante.` : `Récupération critique (${wellness}/100) — insuffisante.`);
+  } else if (weak) {
+    points.push(useZ ? `Fatigué (${wellness}/100) — surveiller la charge du jour.` : `Récupération faible (${wellness}/100) — surveiller la charge du jour.`);
+  } else if (belowOptimal) {
+    points.push(`Un peu fatigué (${wellness}/100).`);
   }
   if (maxDiff >= 9) {
     points.push(`Séance maximale prévue (${maxDiff}/10) — confirmer que la forme le permet.`);
   } else if (maxDiff >= 8) {
     points.push(`Séance dure prévue (${maxDiff}/10) — vérifier l'état de récupération.`);
-  } else if (maxDiff >= 6 && wellness < 72) {
+  } else if (maxDiff >= 6 && belowOptimal) {
     points.push(`Charge importante (${maxDiff}/10) malgré une récupération limitée.`);
   }
-  if (wellness < 65 && maxDiff >= 7) {
+  if (weak && maxDiff >= 7) {
     points.push("Risque élevé : récupération basse + séance difficile.");
   }
   return points;
@@ -216,15 +232,19 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         {/* Wellness + attention block (combined) */}
         {reviewContext && (() => {
           const w = reviewContext.wellness;
+          const baseline = reviewContext.baseline;
+          // `dispW` : chiffre affiché (ring, headline) — relatif dès que la baseline est fournie et
+          // son historique suffisant, repli exact sur `w` (absolu) sinon.
+          const dispW = baseline?.hasEnoughHistory ? baseline.relativeScore : w;
           // Dégradé séquentiel bleu (wellnessColor) — ring, texte ET fond/bordure de la carte
           // dérivés de la même couleur (suffixe hex+alpha) pour rester cohérents entre eux, plutôt
           // que de ne recolorer que le ring et laisser le fond de carte en rouge/orange/vert.
-          const wColor = w === null ? "rgba(0,0,0,0.22)" : wellnessColor(w);
-          const wBg = w === null ? "rgba(0,0,0,0.03)" : `${wColor}12`;
-          const wBorder = w === null ? "rgba(0,0,0,0.10)" : `${wColor}44`;
-          const wLabel = w === null ? "Non renseigné" : w >= 82 ? "Zone optimale" : w >= 65 ? "Zone stable" : w >= 45 ? "Zone prudente" : "Zone récupération";
+          const wColor = dispW === null ? "rgba(0,0,0,0.22)" : wellnessColor(dispW);
+          const wBg = dispW === null ? "rgba(0,0,0,0.03)" : `${wColor}12`;
+          const wBorder = dispW === null ? "rgba(0,0,0,0.10)" : `${wColor}44`;
+          const wLabel = w === null ? "Non renseigné" : (baseline?.hasEnoughHistory ? relativeZoneLabel(baseline, "coach") : (w >= 82 ? "Zone optimale" : w >= 65 ? "Zone stable" : w >= 45 ? "Zone prudente" : "Zone récupération"));
           const dColor = reviewContext.maxDiff >= 8 ? "#d44000" : reviewContext.maxDiff >= 5 ? "#b96500" : "#2f9e44";
-          const points = buildAttentionPoints(w, reviewContext.maxDiff, reviewContext.trend);
+          const points = buildAttentionPoints(w, reviewContext.maxDiff, reviewContext.trend, baseline);
           return (
             <div style={{ background: wBg, border: `1px solid ${wBorder}`, borderRadius: 16, padding: "13px 16px", marginBottom: 18 }}>
               {/* Gauge row */}
@@ -234,10 +254,10 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                     <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
                     <circle cx="32" cy="32" r="27" fill="none" stroke={wColor} strokeWidth="5" strokeLinecap="round"
                       strokeDasharray={String(+(2 * Math.PI * 27).toFixed(1))}
-                      strokeDashoffset={String(+(2 * Math.PI * 27 * (1 - (w ?? 0) / 100)).toFixed(1))} />
+                      strokeDashoffset={String(+(2 * Math.PI * 27 * (1 - (dispW ?? 0) / 100)).toFixed(1))} />
                   </svg>
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{w !== null ? w : "—"}</span>
+                    <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{dispW !== null ? dispW : "—"}</span>
                     <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>récup.</span>
                   </div>
                 </div>

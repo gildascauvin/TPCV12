@@ -29,7 +29,7 @@ import ReconduireModal from "@/components/sessions/ReconduireModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
@@ -39,18 +39,25 @@ import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessi
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
 
 function dayWellness(
   athlete: CoachAthlete,
   dateStr: string,
-  wellnessMap: Record<string, Record<string, number>>
+  wellnessMap: Record<string, Record<string, number>>,
+  demoHistory?: Record<string, WellnessDaily[]>
 ): number | null {
   if (athlete.user_id) {
     // Vrai sportif : uniquement la ligne wellness_daily réelle de ce jour, jamais de repli
     // sur athlete.wellness_score (denormalisé, peut dater de plusieurs jours).
     return wellnessMap[athlete.user_id]?.[dateStr] ?? null;
   }
-  return athlete.wellness_score; // démo : score fixe, pas de notion de jour
+  // Démo : historique synthétique déterministe (coachWellnessScoreFor, src/lib/sandboxFixtures.ts —
+  // même fonction que /coach et /coach/athletes) si disponible pour ce jour précis ; repli sur le
+  // score statique du profil pour les jours hors de la fenêtre construite (ex. futur, jamais
+  // synthétisé — même convention que les vrais sportifs, pas de wellness futur).
+  const row = demoHistory?.[athlete.id]?.find(w => w.date === dateStr);
+  return row ? (row.base_score ?? row.score ?? athlete.wellness_score) : athlete.wellness_score;
 }
 
 
@@ -67,9 +74,15 @@ interface Props {
   initialDate?: string;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
+  /* Historique wellness pour la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — clé =
+     user_id pour un vrai sportif (~21j glissants avant aujourd'hui), clé = athlete.id pour un
+     sportif démo (historique synthétique déterministe, coachWellnessScoreFor — même fonction que
+     /coach et /coach/athletes, pas de calcul séparé). Absent/pas d'entrée pour ce jour = repli
+     cold-start automatique, comme partout ailleurs. */
+  wellnessBaselineHistory?: Record<string, WellnessDaily[]>;
 }
 
-export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false }: Props) {
+export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false, wellnessBaselineHistory: initialWellnessBaselineHistory = {} }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,6 +104,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<CoachViewSession[]>(initialSessions);
   const [wellnessMap, setWellnessMap] = useState(initialWellnessMap);
+  // Historique glissant par sportif pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE/
+  // LE MOIS AFFICHÉS, pas sur "aujourd'hui" (même bug/fix que WeekClient.tsx/TodayClient.tsx : sans
+  // ça, naviguer vers une période passée réduit progressivement l'historique disponible jusqu'à
+  // retomber à tort sur l'ancien libellé absolu malgré des mois de données réelles). Refetché dans
+  // handleDateChange()/loadMonth(), remplacé entièrement à chaque navigation.
+  const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
   const [monthSessions, setMonthSessions] = useState<CoachViewSession[]>([]);
   const [monthWellnessMap, setMonthWellnessMap] = useState<Record<string, Record<string, number>>>({});
   const [addingDate, setAddingDate] = useState<string | null>(null);
@@ -226,11 +245,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     }
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
+    const sinceBaseline = format(subDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
 
     const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
     const allAthleteIds = athletes.map(a => a.id);
 
-    const [realRes, coachRes, wellnessRes] = await Promise.all([
+    const [realRes, coachRes, wellnessRes, baselineRes] = await Promise.all([
       realUserIds.length
         ? supabase.from("sessions").select("*").in("user_id", realUserIds).gte("date", mon).lte("date", sun)
         : Promise.resolve({ data: [] }),
@@ -238,8 +258,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         ? supabase.from("coach_sessions").select("*").eq("coach_id", userId).in("athlete_id", allAthleteIds).gte("date", mon).lte("date", sun)
         : Promise.resolve({ data: [] }),
       realUserIds.length
-        ? supabase.from("wellness_daily").select("user_id, date, score").in("user_id", realUserIds).gte("date", mon).lte("date", sun)
+        ? supabase.from("wellness_daily").select("user_id, date, score, base_score").in("user_id", realUserIds).gte("date", mon).lte("date", sun)
         : Promise.resolve({ data: [] }),
+      realUserIds.length
+        ? supabase.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceBaseline).lte("date", sun)
+        : Promise.resolve({ data: [] as WellnessDaily[] }),
     ]);
 
     const newSessions: CoachViewSession[] = [
@@ -253,7 +276,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     });
 
     const newWellness = buildWellnessMap(
-      (wellnessRes.data || []) as { user_id: string; date: string; score: number | null }[]
+      (wellnessRes.data || []) as { user_id: string; date: string; score: number | null; base_score: number | null }[]
     );
     setWellnessMap(prev => {
       const merged = { ...prev };
@@ -262,6 +285,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       }
       return merged;
     });
+
+    const newBaselineHistory: Record<string, WellnessDaily[]> = {};
+    for (const row of (baselineRes.data || []) as WellnessDaily[]) {
+      (newBaselineHistory[row.user_id] ??= []).push(row);
+    }
+    setWellnessBaselineHistory(newBaselineHistory);
   }
 
   const dotMap = (() => {
@@ -385,10 +414,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const end = format(gridEnd, "yyyy-MM-dd");
 
     if (athleteObj.user_id) {
-      const [realRes, demoRes, wellRes] = await Promise.all([
+      const sinceBaseline = format(subDays(gridStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+      const [realRes, demoRes, wellRes, baselineRes] = await Promise.all([
         supabase.from("sessions").select("*").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
         supabase.from("coach_sessions").select("*").eq("coach_id", userId).eq("athlete_id", athleteObj.id).gte("date", start).lte("date", end),
-        supabase.from("wellness_daily").select("date, score").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
+        supabase.from("wellness_daily").select("date, score, base_score").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
+        supabase.from("wellness_daily").select("*").eq("user_id", athleteObj.user_id).gte("date", sinceBaseline).lte("date", end),
       ]);
       const unified: CoachViewSession[] = [
         ...(realRes.data || []).map(s => realToView(s as Session, athletes)),
@@ -396,13 +427,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       ];
       setMonthSessions(unified);
       const wm: Record<string, Record<string, number>> = {};
-      (wellRes.data || []).forEach((w: { date: string; score: number | null }) => {
-        if (w.score != null) {
+      (wellRes.data || []).forEach((w: { date: string; score: number | null; base_score: number | null }) => {
+        const v = wellnessSignal(w);
+        if (v != null) {
           if (!wm[athleteObj.user_id!]) wm[athleteObj.user_id!] = {};
-          wm[athleteObj.user_id!][w.date] = w.score;
+          wm[athleteObj.user_id!][w.date] = v;
         }
       });
       setMonthWellnessMap(wm);
+      setWellnessBaselineHistory(prev => ({ ...prev, [athleteObj.user_id!]: (baselineRes.data || []) as WellnessDaily[] }));
     } else {
       const { data } = await supabase.from("coach_sessions").select("*").eq("coach_id", userId).eq("athlete_id", athleteObj.id).gte("date", start).lte("date", end);
       setMonthSessions((data || []).map(s => demoToView(s as CoachSession)));
@@ -453,13 +486,35 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (mode === "month" && athlete) loadMonth(selectedDate, athlete);
   }
 
+  // Même calcul que le ring de chaque DayColumn ci-dessous — un seul chiffre par (sportif, jour),
+  // jamais un écart entre le header et la carte du jour. Clé user_id pour un vrai sportif, athlete.id
+  // pour un sportif démo (voir dayWellness()/wellnessBaselineHistory plus haut).
   const coachWellnessHeader: Record<string, number | null> = {};
   if (athlete) {
+    const athleteHistoryForHeader = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
     weekDates.forEach(d => {
       const iso = format(d, "yyyy-MM-dd");
-      coachWellnessHeader[iso] = dayWellness(athlete, iso, wellnessMap);
+      const raw = dayWellness(athlete, iso, wellnessMap, wellnessBaselineHistory);
+      const filledThisDay = athlete.user_id ? wellnessMap[athlete.user_id]?.[iso] !== undefined : true;
+      if (raw === null || !filledThisDay) { coachWellnessHeader[iso] = raw; return; }
+      const b = computeWellnessBaselineAt(
+        athleteHistoryForHeader.filter(w => w.date < iso),
+        { score: raw, base_score: raw, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
+      );
+      coachWellnessHeader[iso] = b?.hasEnoughHistory ? b.relativeScore : raw;
     });
   }
+  // Baseline du jour "aujourd'hui" pour AdjustSessionModal (déclenché depuis les chips Alléger/
+  // Surcharger de la carte "Aujourd'hui") — même calcul que coachWellnessHeader/dayBaseline
+  // ci-dessus, jamais l'ancien zoneLabel() absolu affiché à part dans cette modale.
+  const todayWellness = athlete ? dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory) : null;
+  const todayFilledForBaseline = athlete?.user_id ? wellnessMap[athlete.user_id]?.[todayStr] !== undefined : true;
+  const todayBaseline = athlete && todayFilledForBaseline && todayWellness !== null
+    ? computeWellnessBaselineAt(
+        (wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? []).filter(w => w.date < todayStr),
+        { score: todayWellness, base_score: todayWellness, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
+      )
+    : null;
 
   if (!athlete) {
     return (
@@ -629,7 +684,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   const isToday = dstr === todayStr;
                   const inMonth = date.getMonth() === anchor.getMonth();
                   const daySessions = monthSessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-                  const wellScore = dayWellness(athlete, dstr, monthWellnessMap);
+                  const wellScore = dayWellness(athlete, dstr, monthWellnessMap, wellnessBaselineHistory);
 
                   return (
                     <div
@@ -742,7 +797,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             const dstr = format(date, "yyyy-MM-dd");
             const isToday = dstr === todayStr;
             const daySessions = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-            const wellness = dayWellness(athlete, dstr, wellnessMap);
+            const wellness = dayWellness(athlete, dstr, wellnessMap, wellnessBaselineHistory);
             const prevStr = idx > 0 ? format(weekDates[idx - 1], "yyyy-MM-dd") : null;
             const nextStr = idx < weekDates.length - 1 ? format(weekDates[idx + 1], "yyyy-MM-dd") : null;
             const prevSess = prevStr ? sessions.filter(s => s.athlete_id === athlete.id && s.date === prevStr) : [];
@@ -759,13 +814,34 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
             // aucune alerte).
             const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
+            // Baseline personnelle — calculée pour CHAQUE jour affiché (pas seulement "Aujourd'hui",
+            // pour que la zone relative "Équilibré" s'affiche sur toute la semaine, pas juste la
+            // carte du jour). Fonctionne aussi pour un sportif démo désormais (historique synthétique
+            // déterministe indexé par athlete.id, même calcul que /coach et /coach/athletes — voir
+            // dayWellness()/wellnessBaselineHistory plus haut) : plus de repli absolu systématique
+            // pour les démo. `todayRow` synthétisé depuis `wellness` (composite déjà résolu via
+            // dayWellness()) — seul `composite`/`guardRailTriggered` sont exploités, jamais
+            // `.dimensions` (pas de vraies valeurs par dimension disponibles sur cette surface,
+            // wellnessMap ne porte que le score composite).
+            const athleteHistory = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
+            const dayBaseline = wellnessFilledToday && wellness !== null
+              ? computeWellnessBaselineAt(
+                  athleteHistory.filter(w => w.date < dstr),
+                  { score: wellness, base_score: wellness, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
+                )
+              : null;
+            const dayZoneLabel = dayBaseline?.hasEnoughHistory ? relativeZoneLabel(dayBaseline, "coach") : undefined;
+            // Même chiffre que le header (coachWellnessHeader) et que /today du sportif — un seul
+            // calcul, jamais 3 valeurs différentes pour le même jour.
+            const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : wellness;
             let alert;
             let alertActions;
             if (isToday) {
+              const baseline = dayBaseline;
               const autoregTarget = [...daySessions].filter(s => !s.done)
                 .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
               const suggestion = wellnessFilledToday && autoregTarget
-                ? computeAutoregSuggestion(wellness, autoregTarget.target_difficulty)
+                ? computeAutoregSuggestion(wellness, autoregTarget.target_difficulty, baseline)
                 : null;
               if (suggestion && autoregTarget) {
                 const severityColor = suggestionSeverityColor(suggestion);
@@ -797,7 +873,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               } else {
                 alert = coachAlertFor(
                   { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
-                  maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr))
+                  maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr)),
+                  baseline
                 ) ?? undefined;
               }
             }
@@ -808,7 +885,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               <DayColumn
                 date={date}
                 sessions={daySessions}
-                wellness={wellness !== null ? { score: wellness } : null}
+                wellness={wellness !== null ? { score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
@@ -900,7 +977,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           session={adjustCtx.session as AdjustSessionTarget}
           dir={adjustCtx.dir}
           reco={adjustCtx.reco}
-          wellnessScore={dayWellness(athlete, todayStr, wellnessMap)}
+          wellnessScore={dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory)}
+          baseline={todayBaseline}
           behaviors={athlete.behaviors ?? []}
           advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0])}
           onClose={() => setAdjustCtx(null)}

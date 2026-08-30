@@ -3,28 +3,71 @@
 // déjà construits pour "Reconduire") pour l'application réelle du % — cette couche ne fait que
 // détecter le signal et proposer la décision, jamais de modification automatique.
 
+import {
+  Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE,
+  type WellnessBaselineResult,
+} from "@/lib/wellnessBaseline";
+
 export type AutoregDir = "low" | "high";
 
 export interface AutoregSuggestion {
   dir: AutoregDir;
-  reco: number; // % signé pré-sélectionné, ex. -15 ou 10
-  icon: string; // ⚠️/🚨 (alléger, gradué sur le seul palier existant : wellness<40 → 🚨) ou 🚀 (surcharger)
+  reco: number; // % signé, gradué en continu (voir plus bas), snappé au chip le plus proche
+  icon: string; // ⚠️/🚨 (alléger, gradué sur le garde-fou/seuil critique) ou 🚀 (surcharger)
 }
 
-/* ALERTE BASSE : wellness < 60 ET difficulté prévue ≥ 7 → alléger (reco -15%, ou -20% si wellness < 40)
-   ALERTE HAUTE : wellness ≥ 80 ET difficulté prévue ≤ 4 → surcharger (reco +10%)
-   Sinon : pas de suggestion — affichage normal, pas de CTA décisionnel. */
-export function computeAutoregSuggestion(wellness: number | null, plannedDifficulty: number | null): AutoregSuggestion | null {
+// Les 5 paliers réellement proposables (AUTOREG_CHIPS plus bas) — le % continu calculé par
+// computeAutoregSuggestion() est toujours arrondi à l'un de ceux-ci, jamais un chiffre "en dehors
+// de la grille" que l'utilisateur ne pourrait pas retrouver en cliquant les chips lui-même.
+const AUTOREG_STEPS = [2.5, 5, 10, 15, 20];
+function nearestStep(magnitude: number): number {
+  const capped = Math.min(20, magnitude);
+  return AUTOREG_STEPS.reduce((best, s) => Math.abs(capped - s) < Math.abs(capped - best) ? s : best, AUTOREG_STEPS[0]);
+}
+
+/* Écart continu score/difficulté (2026-08-31, retour explicite de Gildas — remplace la grille à
+   seuils fixes de la veille : diff=7 vs diff=8 pouvait faire toute la différence entre "rien" et
+   "Alléger" pour un score quasi identique, un pur effet de falaise. Exemple qui a motivé le
+   changement : score=5/100 + séance à 7/10 ne déclenchait rien malgré un état clairement critique).
+
+   Difficulté (1-10) et score (0-100, relatif si la baseline est disponible, sinon absolu) ramenés
+   sur la MÊME échelle (diffPos = difficulté×10) — l'écart entre les deux pilote à la fois le
+   déclenchement et l'ampleur de la reco :
+     mismatch = diffPos − score
+     mismatch > 0 → séance plus dure que ce que l'état du jour permet → Alléger
+     mismatch < 0 → séance plus facile que ce que l'état du jour permet → Surcharger
+     |mismatch| < 35 → pas de reco chiffrée (peut rester une alerte informative sans chips, voir
+       decisionText()/coachAlertFor()/athleteAlertFor() — logique Z_SWC séparée, inchangée)
+     |mismatch| ≥ 35 → reco actionnable, % = clamp(20, |mismatch|/5) arrondi au chip le plus proche
+   `baseline` (optionnel) : dès que l'historique du sportif est suffisant, le score utilisé dans le
+   calcul devient le score RELATIF personnel (baseline.relativeScore) plutôt que `wellness` en
+   absolu — repli exact sur `wellness` tant que l'historique est insuffisant, comportement 100%
+   inchangé pour tout appelant qui ne fournit pas encore ce paramètre.
+
+   Le garde-fou absolu (score composite brut < 40) et le seuil critique (Z_SEVERE) n'inventent
+   jamais un déclenchement à eux seuls — ils ESCALADENT la sévérité d'un Alléger déjà déclenché par
+   le mismatch (🚨/-20% au lieu de ce que le calcul continu aurait donné), jamais côté Surcharger
+   (pas de notion de "critique" pour une séance trop facile). */
+export function computeAutoregSuggestion(
+  wellness: number | null,
+  plannedDifficulty: number | null,
+  baseline?: WellnessBaselineResult | null,
+): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
-  if (wellness < 60 && plannedDifficulty >= 7) {
-    // Gradation sur le seul palier réel de l'heuristique (le % pré-rempli) : -15% = alerte modérée
-    // (⚠️), -20% = cas critique (🚨) — pas de 3e palier inventé, contrairement à l'itération précédente.
-    return { dir: "low", reco: wellness < 40 ? -20 : -15, icon: wellness < 40 ? "🚨" : "⚠️" };
+
+  const useZ = baseline?.hasEnoughHistory && baseline.composite.z !== null;
+  const scoreForMismatch = useZ ? baseline!.relativeScore : wellness;
+  const mismatch = plannedDifficulty * 10 - scoreForMismatch;
+  const absMismatch = Math.abs(mismatch);
+  if (absMismatch < 35) return null;
+
+  if (mismatch > 0) {
+    const guardRail = (baseline?.guardRailTriggered ?? false) || wellness < WELLNESS_ABSOLUTE_GUARD_SCORE;
+    const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
+    const critical = guardRail || severe;
+    return { dir: "low", reco: critical ? -20 : -nearestStep(absMismatch / 5), icon: critical ? "🚨" : "⚠️" };
   }
-  if (wellness >= 80 && plannedDifficulty <= 4) {
-    return { dir: "high", reco: 10, icon: "🚀" };
-  }
-  return null;
+  return { dir: "high", reco: nearestStep(absMismatch / 5), icon: "🚀" };
 }
 
 /* Couleur de sévérité par palier réel de l'heuristique (🚨 critique / ⚠️ modéré / 🚀 surcharge),

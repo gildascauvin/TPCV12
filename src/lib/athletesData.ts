@@ -3,6 +3,7 @@ import type { CoachAthlete, Session, WellnessDaily, CoachSession } from "@/types
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
 import { daysAgoStr, computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
 import { coachWellnessScoreFor } from "@/lib/sandboxFixtures";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Signatures de fatigue + tendances par sportif pour /coach/athletes, paramétré par une date de
    référence — réutilisé par la page (SSR, date = aujourd'hui) et par
@@ -25,6 +26,10 @@ export async function getAthletesSignatures(
   signatures: Record<string, AthleteSignature>;
   trends: Record<string, TrendCode | null>;
   trendInsights: Record<string, AthleteTrendInsight>;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du jour de référence + série 42j
+     (même alignement que `series` dans AthleteSignature), par sportif. */
+  baselines: Record<string, WellnessBaselineResult | null>;
+  baselineSeries: Record<string, (WellnessBaselineResult | null)[]>;
 }> {
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const demoAthleteIds = athletes.filter(a => !a.user_id).map(a => a.id);
@@ -49,6 +54,8 @@ export async function getAthletesSignatures(
   const signatures: Record<string, AthleteSignature> = {};
   const trends: Record<string, TrendCode | null> = {};
   const trendInsights: Record<string, AthleteTrendInsight> = {};
+  const baselines: Record<string, WellnessBaselineResult | null> = {};
+  const baselineSeries: Record<string, (WellnessBaselineResult | null)[]> = {};
   for (const a of athletes) {
     if (!a.user_id) {
       /* Sportif démo : coach_sessions déjà réels (buildCoachDemoSessions), mais wellness_daily
@@ -81,6 +88,11 @@ export async function getAthletesSignatures(
       const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
       const sig = computeSignature(mySessions, a.wellness_score, 28, anchor);
       signatures[a.id] = { kind: "ok", series, sig };
+      const demoTodayRow = myWellness.find(w => w.date === referenceDate) ?? null;
+      baselines[a.id] = demoTodayRow
+        ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), demoTodayRow)
+        : null;
+      baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
       continue;
     }
     const myWellness = allWellness.filter(w => w.user_id === a.user_id);
@@ -92,13 +104,18 @@ export async function getAthletesSignatures(
     trendInsights[a.id] = coachText
       ? { text: coachText, emoji: trendSeverity(code!) === "alert" ? "🔴" : trendSeverity(code!) === "watch" ? "🟡" : "🟢", action: trendActionWord(code!) }
       : null;
-    if (myWellness.length === 0) { signatures[a.id] = { kind: "no_data" }; continue; }
+    if (myWellness.length === 0) { signatures[a.id] = { kind: "no_data" }; baselines[a.id] = null; baselineSeries[a.id] = []; continue; }
     const refWellness = myWellness.find(w => w.date === referenceDate);
-    const wellnessScore = refWellness?.score ?? refWellness?.base_score ?? 75;
+    // base_score en priorité (jamais score, qui inclut le bonus/malus comportements).
+    const wellnessScore = refWellness ? (wellnessSignal(refWellness) ?? 75) : 75;
     const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
     const sig = computeSignature(mySessions, wellnessScore, 28, anchor);
     signatures[a.id] = { kind: "ok", series, sig };
+    baselines[a.id] = refWellness
+      ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), refWellness)
+      : null;
+    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
   }
 
-  return { signatures, trends, trendInsights };
+  return { signatures, trends, trendInsights, baselines, baselineSeries };
 }

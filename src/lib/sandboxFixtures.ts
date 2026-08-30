@@ -3,6 +3,7 @@ import type { Profile, Session, WellnessDaily, CoachAthlete, CoachSession } from
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
 
 /* Données fictives pour la sandbox non authentifiée (2026-08-19) — brief : "les programmes doivent
@@ -218,6 +219,38 @@ export function coachWellnessScoreFor(offset: number, todayScore: number): numbe
   return Math.min(92, Math.max(30, wave));
 }
 
+/* Construit un historique wellness synthétique convergeant vers `todayScore` — même fonction
+   d'oscillation (coachWellnessScoreFor) que TOUTES les surfaces démo/fictives de l'app (sandbox,
+   sportifs démo réels d'un coach via /coach/athletes, désormais /coach et /coach/planning aussi,
+   onboarding). Factorisée ici pour être la SEULE source de "quel historique construire pour un
+   score démo donné" — élimine le risque qu'une surface calcule sa propre variante et diverge des
+   autres pour le même score affiché. */
+export function buildSyntheticWellnessHistory(todayScore: number, ownerId: string, days = 42, anchor: Date = new Date()): WellnessDaily[] {
+  const history: WellnessDaily[] = [];
+  for (let offset = -days; offset <= 0; offset++) {
+    const score = coachWellnessScoreFor(offset, todayScore);
+    history.push({
+      id: `synthetic-${ownerId}-${offset}`, user_id: ownerId, date: dstr(anchor, offset),
+      sleep: score < 50 ? 3 : score < 70 ? 5 : 7, stress: score < 50 ? 7 : 4, recovery: score < 50 ? 3 : 6, motivation: score < 50 ? 4 : 7,
+      base_score: score, score, behaviors: [], bedtime: "23:00", created_at: new Date().toISOString(),
+    });
+  }
+  return history;
+}
+
+/* Baseline (Z-score, src/lib/wellnessBaseline.ts) pour un score démo "aujourd'hui" donné — construit
+   l'historique synthétique ci-dessus puis appelle computeWellnessBaselineAt(), EXACTEMENT le même
+   calcul que pour un vrai sportif (aucune formule séparée). Toute surface démo/fictive qui affiche
+   un score/une zone doit passer par cette fonction plutôt que d'afficher `todayScore` en absolu — un
+   seul calcul, jamais un texte "Fatigué/Équilibré/Frais" ou un chiffre inventé indépendamment. */
+export function syntheticBaselineFor(todayScore: number, ownerId = "demo", anchor: Date = new Date()) {
+  const history = buildSyntheticWellnessHistory(todayScore, ownerId, 42, anchor);
+  const todayStr = dstr(anchor, 0);
+  const todayRow = history.find(w => w.date === todayStr);
+  if (!todayRow) return null;
+  return computeWellnessBaselineAt(history.filter(w => w.date < todayStr), todayRow);
+}
+
 export function buildCoachFixture(now: Date = new Date()): CoachFixture {
   sandboxIdCounter = 0;
   const coachId = "sandbox-coach";
@@ -286,15 +319,22 @@ export function buildCoachFixture(now: Date = new Date()): CoachFixture {
 /* Construit signatures/tendances "ok" pour les 5 sportifs démo à partir de l'historique fictif
    ci-dessus — même calcul que getAthletesSignatures() (athletesData.ts) pour un vrai sportif, mais
    sans passer par Supabase (fonctions pures de fatigueSignature.ts/trainingLoad.ts réutilisées
-   telles quelles, aucune logique dupliquée). */
+   telles quelles, aucune logique dupliquée). `baselines`/`baselineSeries` (Z-score,
+   src/lib/wellnessBaseline.ts) calculés sur le même historique fictif — sans eux, /coach/athletes
+   retombait sur l'ancien libellé absolu (BONNE RÉCUP/RÉCUP FRAGILE) pour les 5 sportifs sandbox,
+   divergeant du Fatigué/Équilibré/Frais affiché partout ailleurs pour le même genre de donnée. */
 export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Date()): {
   signatures: Record<string, AthleteSignature>;
   trends: Record<string, TrendCode | null>;
   trendInsights: Record<string, AthleteTrendInsight>;
+  baselines: Record<string, WellnessBaselineResult | null>;
+  baselineSeries: Record<string, (WellnessBaselineResult | null)[]>;
 } {
   const signatures: Record<string, AthleteSignature> = {};
   const trends: Record<string, TrendCode | null> = {};
   const trendInsights: Record<string, AthleteTrendInsight> = {};
+  const baselines: Record<string, WellnessBaselineResult | null> = {};
+  const baselineSeries: Record<string, (WellnessBaselineResult | null)[]> = {};
 
   for (const a of fixture.athletes) {
     const mySessions = fixture.sessionsHistoryByAthlete[a.id] ?? [];
@@ -310,9 +350,13 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
     const series = buildDailyTimeSeries(mySessions, myWellness, 42, now);
     const sig = computeSignature(mySessions, wellnessScore, 28, now);
     signatures[a.id] = { kind: "ok", series, sig };
+    baselines[a.id] = refWellness
+      ? computeWellnessBaselineAt(myWellness.filter(w => w.date < fixture.todayStr), refWellness)
+      : null;
+    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, now);
   }
 
-  return { signatures, trends, trendInsights };
+  return { signatures, trends, trendInsights, baselines, baselineSeries };
 }
 
 /* Vérification de cohérence — les 3 issues (Alléger/Maintenir/Surcharger) doivent bien apparaître

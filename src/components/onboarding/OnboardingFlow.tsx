@@ -2158,27 +2158,27 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
      demoHardest/demoLightest/demoMiddle). Bug réel trouvé
      par Gildas en testant ("j'ai pas toujours un sportif à alléger et un sportif à surcharger") :
      restreindre la recherche à la semaine 1 (pour cette continuité) peut la priver d'un vrai jour
-     difficile (diff≥7) ou léger (diff≤4) — computeAutoregSuggestion exige ces seuils réels, aucun
+     difficile (diff≥8) ou léger (diff≤4) — computeAutoregSuggestion exige ces seuils réels, aucun
      wellness forcé ne peut compenser une difficulté qui ne les franchit pas. Repli en 2 temps :
      cherche d'abord dans la semaine 1 (préserve la continuité la plupart du temps), élargit à tout
      le programme SEULEMENT si la semaine 1 n'atteint pas le seuil requis — jamais l'inverse. */
-  /* Exclut les séances de type "test" (2026-08-17, 6e itération, retour explicite de Gildas) — un
-     test de fin de bloc ("Bilan de cycle" : "Squat — tentative de maximum", "Bilan technique
-     (vidéo)"...) a beau avoir une difficulté élevée, son texte n'a aucun token numérique
-     (sets×reps@%) à modifier visiblement — parseAndApply() ne trouve rien à changer, l'ajustement
-     Alléger/Surcharger ne se voit pas. On préfère toujours une vraie séance "intensite"/"volume"
-     avec de vrais chiffres, même si elle est objectivement un peu moins dure/légère qu'un test. */
+  /* Les séances "test" comptent désormais comme les autres (2026-08-30, retour explicite de Gildas
+     — "sans exception" : un test de fin de bloc reste une vraie séance avec une vraie difficulté,
+     la reco Alléger/Surcharger doit s'y déclencher comme ailleurs, même si le texte lui-même n'a pas
+     de token numérique à faire varier visiblement — voir WeekPreviewStep.tsx). Avant ce chantier,
+     l'exclusion faisait qu'un "Bilan de cycle" pouvait devenir le SEUL jour dur de la semaine sans
+     jamais déclencher la démo Alléger. */
   function flattenWeeks(t: ProgramTemplate | null, onlyFirst: boolean) {
     const out: SessionTemplate[] = [];
     const weeks = onlyFirst ? (t?.weeks?.[0] ? [t.weeks[0]] : []) : (t?.weeks ?? []);
-    weeks.forEach(week => Object.values(week).forEach(sessions => (sessions as SessionTemplate[]).forEach(s => { if (s.type !== "test") out.push(s); })));
+    weeks.forEach(week => Object.values(week).forEach(sessions => (sessions as SessionTemplate[]).forEach(s => out.push(s))));
     return out;
   }
   const week1Pool = flattenWeeks(previewTemplate, true);
   const allPool = flattenWeeks(previewTemplate, false);
   function pickHardest(): SessionTemplate | null {
     const inWeek1 = [...week1Pool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-    if (inWeek1 && (inWeek1.target_difficulty ?? 0) >= 7) return inWeek1;
+    if (inWeek1 && (inWeek1.target_difficulty ?? 0) >= 8) return inWeek1;
     return [...allPool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? inWeek1;
   }
   function pickLightest(): SessionTemplate | null {

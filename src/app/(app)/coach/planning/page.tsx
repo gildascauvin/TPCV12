@@ -5,7 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachPlanningClient from "./CoachPlanningClient";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession } from "@/types";
+import { WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
+import { buildSyntheticWellnessHistory } from "@/lib/sandboxFixtures";
+import { startOfWeek, addDays, subDays, format } from "date-fns";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
 
 export default async function CoachPlanningPage({ searchParams }: { searchParams: { date?: string } }) {
   const supabase = await createClient();
@@ -45,7 +48,16 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
     }
   }
 
-  const [realSessionsRes, coachSessionsRes, wellnessRes] = await Promise.all([
+  // Ancré sur la semaine DEMANDÉE (searchParams.date si présent, sinon aujourd'hui) — pas
+  // "aujourd'hui" en dur : un lien direct vers une semaine passée doit avoir assez de recul pour
+  // CETTE semaine dès le premier rendu SSR, même logique que handleDateChange()/loadMonth() côté
+  // client (CoachPlanningClient.tsx) qui refetchent à chaque navigation.
+  const requestedBase = searchParams.date ? new Date(searchParams.date + "T12:00:00") : new Date();
+  const requestedWeekStart = startOfWeek(requestedBase, { weekStartsOn: 1 });
+  const requestedWeekEnd = format(addDays(requestedWeekStart, 6), "yyyy-MM-dd");
+  const sinceBaseline = format(subDays(requestedWeekStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+
+  const [realSessionsRes, coachSessionsRes, wellnessRes, wellnessBaselineRes] = await Promise.all([
     realUserIds.length
       ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
       : Promise.resolve({ data: [] as Session[] }),
@@ -53,8 +65,14 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
       ? admin.from("coach_sessions").select("*").eq("coach_id", user.id).in("athlete_id", allAthleteIds).gte("date", sinceStr).lte("date", untilStr)
       : Promise.resolve({ data: [] as CoachSession[] }),
     realUserIds.length
-      ? admin.from("wellness_daily").select("user_id, date, score").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
-      : Promise.resolve({ data: [] as { user_id: string; date: string; score: number | null }[] }),
+      ? admin.from("wellness_daily").select("user_id, date, score, base_score").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
+      : Promise.resolve({ data: [] as { user_id: string; date: string; score: number | null; base_score: number | null }[] }),
+    // Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — fenêtre glissante ~21j avant
+    // aujourd'hui, indépendante de sinceStr/untilStr (calendrier navigable), batchée sur tous les
+    // sportifs réels d'un coup.
+    realUserIds.length
+      ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceBaseline).lte("date", requestedWeekEnd)
+      : Promise.resolve({ data: [] as WellnessDaily[] }),
   ]);
 
   const initialSessions: CoachViewSession[] = [
@@ -63,8 +81,20 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   ];
 
   const wellnessMap = buildWellnessMap(
-    (wellnessRes.data || []) as { user_id: string; date: string; score: number | null }[]
+    (wellnessRes.data || []) as { user_id: string; date: string; score: number | null; base_score: number | null }[]
   );
+
+  const wellnessBaselineHistory: Record<string, WellnessDaily[]> = {};
+  for (const row of (wellnessBaselineRes.data || []) as WellnessDaily[]) {
+    (wellnessBaselineHistory[row.user_id] ??= []).push(row);
+  }
+  // Sportifs démo (user_id null) : historique synthétique déterministe (coachWellnessScoreFor, même
+  // fonction que /coach et /coach/athletes), clé = athlete.id — voir dayWellness()/
+  // wellnessBaselineHistory dans CoachPlanningClient.tsx.
+  for (const a of athletes) {
+    if (a.user_id) continue;
+    wellnessBaselineHistory[a.id] = buildSyntheticWellnessHistory(a.wellness_score, a.id, 42, requestedBase);
+  }
 
   return (
     <CoachPlanningClient
@@ -75,6 +105,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
       initialWellnessMap={wellnessMap}
       subscriptionStatus={profile.subscription_status ?? "free"}
       initialDate={searchParams.date}
+      wellnessBaselineHistory={wellnessBaselineHistory}
     />
   );
 }

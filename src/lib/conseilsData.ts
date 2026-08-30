@@ -3,6 +3,7 @@ import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -76,6 +77,12 @@ export type ConseilsData = {
   zoneMonotony: (number | null)[];
   zoneStrain: (number | null)[];
   recoveryAlert: boolean;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du jour de référence — pilote
+     recoveryInfo/recoveryInsight dès que l'historique est suffisant (voir plus bas). */
+  wellnessBaseline: WellnessBaselineResult | null;
+  /* Série jour par jour (42j, même alignement que `timeSeries`) — pour le chart Récupération, tracé
+     en relatif plutôt qu'en absolu dès que l'historique de chaque jour est suffisant. */
+  wellnessBaselineSeries: (WellnessBaselineResult | null)[];
   done7Count: number;
   avgRpe: number | null;
   freqTarget: number;
@@ -133,7 +140,9 @@ export function computeConseilsData(
   const tomorrowStr = daysAgoStr(-1, anchor);
 
   const refWellness = allWellness.find(w => w.date === referenceDate);
-  const wellnessScore = refWellness?.score ?? refWellness?.base_score ?? null;
+  // base_score en priorité (jamais score, qui inclut le bonus/malus comportements) — voir
+  // wellnessSignal() dans wellnessBaseline.ts.
+  const wellnessScore = refWellness ? wellnessSignal(refWellness) : null;
 
   // 7 derniers jours glissants jusqu'à la date de référence (pas la semaine calendaire — voir
   // computeWeekOverWeekTrend dans trainingLoad.ts pour la même convention)
@@ -191,7 +200,14 @@ export function computeConseilsData(
     ? sigDimInfo("monotony", sig.monotony)
     : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "Termine des séances sur au moins 7 jours pour calculer ta monotonie." };
   const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain) : null;
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery);
+  // Baseline personnelle du jour de référence — history = jours strictement antérieurs, dans la
+  // fenêtre déjà fetchée (allWellness, 42j). refWellness peut être absent (jour non renseigné) :
+  // computeWellnessBaselineAt() renvoie alors null, repli automatique sur sig.recovery en absolu.
+  const wellnessBaseline = refWellness
+    ? computeWellnessBaselineAt(allWellness.filter(w => w.date < referenceDate), refWellness)
+    : null;
+  const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, 42, anchor);
+  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "athlete", wellnessBaseline);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm) : null;
   const ffTrend = fitnessFatigueTrend(timeSeries);
@@ -199,7 +215,7 @@ export function computeConseilsData(
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue) : null;
 
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo);
-  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm);
+  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "athlete", wellnessBaseline);
 
   const last7 = timeSeries.slice(-7);
   const zoneAcwr = last7.map(p => p.acwr);
@@ -220,7 +236,7 @@ export function computeConseilsData(
     referenceDate,
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
     sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
-    recoveryAlert, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
+    recoveryAlert, wellnessBaseline, wellnessBaselineSeries, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
     trendCode, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };
 }

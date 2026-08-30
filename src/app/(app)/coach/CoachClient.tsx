@@ -23,6 +23,7 @@ import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessi
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode } from "@/lib/trainingLoad";
+import { wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments } from "@/types";
 
 interface Props {
@@ -34,6 +35,10 @@ interface Props {
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
   trends: Record<string, TrendCode | null>;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) par sportif — clé = athlete.id
+     (comme `trends`), calculée côté page (même fetch batché que `trends`). `undefined`/absent pour
+     un sportif démo ou sans check-in du jour = repli absolu automatique partout où c'est consommé. */
+  baselines?: Record<string, WellnessBaselineResult | null>;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
   sandboxSessionsByDate?: Record<string, CoachViewSession[]>;
@@ -73,7 +78,7 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
 }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, sandboxMode = false, sandboxSessionsByDate }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, baselines = {}, sandboxMode = false, sandboxSessionsByDate }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -141,9 +146,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${a.user_id}` },
           (payload) => {
             const row = payload.new as any;
-            if (row?.score != null && row?.date === today) {
+            const rowValue = row ? wellnessSignal(row) : null;
+            if (rowValue != null && row?.date === today) {
               setAthletes(prev => prev.map(x =>
-                x.user_id === a.user_id ? { ...x, wellness_score: row.score, behaviors: row.behaviors ?? [], wellnessFilledToday: true } : x
+                x.user_id === a.user_id ? { ...x, wellness_score: rowValue, behaviors: row.behaviors ?? [], wellnessFilledToday: true } : x
               ));
             }
           })
@@ -183,8 +189,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     setSessions(unified);
 
     const wellnessByUser = new Map<string, { score: number; behaviors: string[] }>();
-    (wellnessRes.wellness || []).forEach((w: { user_id: string; score: number | null; behaviors: string[] | null }) => {
-      wellnessByUser.set(w.user_id, { score: w.score ?? 70, behaviors: w.behaviors ?? [] });
+    (wellnessRes.wellness || []).forEach((w: { user_id: string; score: number | null; base_score: number | null; behaviors: string[] | null }) => {
+      wellnessByUser.set(w.user_id, { score: wellnessSignal(w) ?? 70, behaviors: w.behaviors ?? [] });
     });
     setAthletes(prev => prev.map(a => {
       if (!a.user_id) return a; // démo : pas de notion de jour, wellnessFilledToday déjà true
@@ -229,14 +235,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const priority = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id]);
+    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id]);
   });
   const stable = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id]);
+    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id]);
   });
   const sortedPriority = [...priority].sort((a, b) =>
-    riskScore(b, maxDiffToday(b.id, sessions), trends[b.id]) - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id])
+    riskScore(b, maxDiffToday(b.id, sessions), trends[b.id], baselines[b.id]) - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id])
   );
 
   const filledAthletes = athletes.filter(a => a.wellnessFilledToday !== false);
@@ -285,7 +291,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   function openDecision(athlete: CoachAthlete) {
     const topSession = getTopSession(athlete.id);
     const wellness = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
-    const suggestion = topSession && !topSession.done ? computeAutoregSuggestion(wellness, topSession.target_difficulty) : null;
+    const suggestion = topSession && !topSession.done ? computeAutoregSuggestion(wellness, topSession.target_difficulty, baselines[athlete.id]) : null;
     if (suggestion && topSession) {
       setAdjustChainCtx({ athlete, session: topSession, dir: suggestion.dir, reco: suggestion.reco });
       setReviewAthlete(null);
@@ -578,6 +584,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={reviewedIds.has(a.id)}
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
+                    baseline={baselines[a.id]}
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
                     onDecide={() => handleDecide(a)}
@@ -605,6 +612,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
+                    baseline={baselines[a.id]}
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
                     onDecide={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}
@@ -660,6 +668,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             queueCurrent: reviewedPriorityCount,
             queueTotal: sortedPriority.length,
             trend: trends[reviewAthlete.id],
+            // Oublié lors du branchement initial de `baselines` sur cette page (2026-08-30) — le
+            // drawer retombait sur l'ancien libellé absolu ("Zone stable"...) alors que le reste de
+            // la carte affiche déjà "Fatigué/Équilibré/Frais" pour le même sportif/jour.
+            baseline: baselines[reviewAthlete.id],
           }}
           onSave={(data, athleteIds) => requireSubscription(() => handleSaveReview(data, athleteIds))}
           onClose={handleCloseReview}
@@ -676,6 +688,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           dir={adjustChainCtx.dir}
           reco={adjustChainCtx.reco}
           wellnessScore={adjustChainCtx.athlete.wellnessFilledToday === false ? null : adjustChainCtx.athlete.wellness_score}
+          baseline={baselines[adjustChainCtx.athlete.id]}
           behaviors={adjustChainCtx.athlete.behaviors ?? []}
           advice={autoregAdvice(adjustChainCtx.dir, adjustChainCtx.session.target_difficulty ?? 6, adjustChainCtx.athlete.name.split(" ")[0])}
           chainCurrent={reviewedPriorityCount - 1}

@@ -10,7 +10,8 @@ import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
 import TestsPanel from "@/components/tests/TestsPanel";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
-import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
+import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
+import { dimensionBadgesSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
@@ -57,7 +58,7 @@ function todayRecovery(athlete: CoachAthlete, signature: AthleteSignature): numb
 // mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
 // "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
 // fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
-function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, trendInsight }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode; trendInsight: AthleteTrendInsight }) {
+function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, trendInsight, baselineSeries }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode; trendInsight: AthleteTrendInsight; baselineSeries?: (WellnessBaselineResult | null)[] }) {
   if (signature.kind === "manual") {
     return (
       <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
@@ -85,6 +86,12 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
   const zoneDates = last7.map(p => p.date);
   const zoneMonotony = last7.map(p => p.monotony);
   const zoneStrain = last7.map(p => p.strain);
+  const last7Baseline = baselineSeries ? (rangeMode === "month" ? baselineSeries.slice(-28) : baselineSeries.slice(-7)) : [];
+  const todayBaseline = baselineSeries?.[baselineSeries.length - 1] ?? null;
+  // Badges de dimension au survol — même principe que ConseilsClient.tsx (calculés sur toute la
+  // série pour garder du recul de tendance, puis découpés avec le même slicing que last7Baseline).
+  const dimensionBadgesFull = baselineSeries ? dimensionBadgesSeries(baselineSeries) : [];
+  const last7DimensionBadges = rangeMode === "month" ? dimensionBadgesFull.slice(-28) : dimensionBadgesFull.slice(-7);
 
   const todayAcwr = series[series.length - 1]?.acwr ?? null;
   const loadInfo = todayAcwr !== null
@@ -94,14 +101,14 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
     ? sigDimInfo("monotony", sig.monotony, "coach")
     : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "" };
   const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, "coach") : null;
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "coach");
+  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "coach", todayBaseline);
   const todayForm = series[series.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, "coach") : null;
   const ffTrend = fitnessFatigueTrend(series);
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, "coach") : null;
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, "coach") : null;
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, "coach");
-  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach");
+  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach", todayBaseline);
 
   return (
     <div style={{
@@ -153,9 +160,12 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
         </div>
         <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
         <SparkLineClient
-          points={last7.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
+          points={last7Baseline.map(b => b?.hasEnoughHistory ? b.relativeScore : null)}
+          pointsRaw={last7.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
           maxVal={100} height={168} animDelay={0}
           metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line" sequentialFill
+          zones1={WELLNESS_ZONES}
+          dimensionBadgesAt={last7DimensionBadges}
           points2={last7.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
           points2Raw={last7.map(p => p.form)} zones2={FORM_ZONES}
           weekLabels={rangeMode === "month"}
@@ -218,8 +228,8 @@ function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
 /* Panneau déplié — tabs "Charge & Récupération / Tests de performance" propres à CET athlète (état
    local, se réinitialise naturellement à chaque ouverture puisque démonté à la fermeture — un seul
    panneau ouvert à la fois, voir expandedId dans AthletesClient). */
-function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsight }: {
-  userId: string; athlete: CoachAthlete; signature: AthleteSignature; rangeMode: RangeMode; trendInsight: AthleteTrendInsight;
+function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsight, baselineSeries }: {
+  userId: string; athlete: CoachAthlete; signature: AthleteSignature; rangeMode: RangeMode; trendInsight: AthleteTrendInsight; baselineSeries?: (WellnessBaselineResult | null)[];
 }) {
   const [section, setSection] = useState<TestsSection>("load");
   return (
@@ -231,7 +241,7 @@ function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsi
           emptyHint={`Aucun test enregistré pour ${athlete.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
         />
       ) : (
-        <AthleteSignatureBlock signature={signature} athleteId={athlete.id} athleteName={athlete.name} rangeMode={rangeMode} trendInsight={trendInsight} />
+        <AthleteSignatureBlock signature={signature} athleteId={athlete.id} athleteName={athlete.name} rangeMode={rangeMode} trendInsight={trendInsight} baselineSeries={baselineSeries} />
       )}
     </div>
   );
@@ -244,6 +254,10 @@ interface Props {
   initialSignatures: Record<string, AthleteSignature>;
   initialTrends: Record<string, TrendCode | null>;
   initialTrendInsights: Record<string, AthleteTrendInsight>;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) par sportif — série 42j alignée sur
+     `initialSignatures[id].series`. Absent (sandbox) = repli absolu automatique. */
+  initialBaselines?: Record<string, WellnessBaselineResult | null>;
+  initialBaselineSeries?: Record<string, (WellnessBaselineResult | null)[]>;
   initialLastTests: LastTestByAthlete;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
@@ -251,7 +265,7 @@ interface Props {
   sandboxMode?: boolean;
 }
 
-export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialLastTests, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialBaselineSeries = {}, initialLastTests, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
   const { isMd } = useBreakpoint();
   const [athletes, setAthletes] = useState(initialAthletes);
@@ -261,6 +275,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [signatures, setSignatures] = useState(initialSignatures);
   const [trends, setTrends] = useState(initialTrends);
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
+  const [baselineSeriesByAthlete, setBaselineSeriesByAthlete] = useState(initialBaselineSeries);
   const [lastTests] = useState(initialLastTests);
   // Une seule carte ouverte à la fois (évite le chaos — principe repris d'un POC UX fourni par
   // Gildas) : remplace l'ancien Set multi-expand. Les tabs Charge/Tests vivent maintenant PAR carte
@@ -281,10 +296,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     if (sandboxMode) return;
     const res = await fetch(`/api/coach/athletes?date=${date}`);
     if (res.ok) {
-      const { signatures: s, trends: t, trendInsights: ti } = await res.json();
+      const { signatures: s, trends: t, trendInsights: ti, baselineSeries: bs } = await res.json();
       setSignatures(s);
       setTrends(t);
       setTrendInsights(ti);
+      setBaselineSeriesByAthlete(bs ?? {});
     }
   }
 
@@ -453,7 +469,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                       {isExpanded && (
                         <ExpandedAthletePanel
                           userId={userId} athlete={a} signature={signatures[a.id] ?? { kind: "manual" }}
-                          rangeMode={rangeMode} trendInsight={insight}
+                          rangeMode={rangeMode} trendInsight={insight} baselineSeries={baselineSeriesByAthlete[a.id]}
                         />
                       )}
                     </>

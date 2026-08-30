@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import SparkLineClient, { FORM_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
+import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
+import { dimensionBadgesSeries } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
@@ -159,15 +160,23 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
 
   const {
     sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
-    recoveryAlert, done7Count, avgRpe, freqTarget, sessionStatus,
+    recoveryAlert, wellnessBaselineSeries, done7Count, avgRpe, freqTarget, sessionStatus,
     loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
     recentBehaviors, allRecentBehaviorKeys,
   } = data;
 
   const dotMap: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
+  // Score relatif (baseline Z-score) sur le ring du header quand l'historique de ce jour est
+  // suffisant — repli sur le score absolu sinon. Même chiffre que /today et /week pour le même jour
+  // (un seul calcul, jamais l'absolu affiché ici pendant que les autres surfaces montrent le relatif
+  // — bug réel trouvé par Gildas, tous les jours du header /conseils étaient encore en absolu).
+  // wellnessBaselineSeries et timeSeries sont alignés index à index (même longueur/fenêtre, voir
+  // conseilsData.ts).
   const wellnessMap: Record<string, number | null> = {};
-  for (const p of timeSeries) {
-    wellnessMap[p.date] = p.recovery;
+  for (let i = 0; i < timeSeries.length; i++) {
+    const p = timeSeries[i];
+    const b = wellnessBaselineSeries[i];
+    wellnessMap[p.date] = b?.hasEnoughHistory ? b.relativeScore : p.recovery;
     if (p.load > 600) dotMap[p.date] = "done-high";
     else if (p.load > 300) dotMap[p.date] = "done-med";
     else if (p.load > 0) dotMap[p.date] = "done-light";
@@ -184,6 +193,18 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
   const zoneDates = last7Series.map(p => p.date);
   const zoneMonotony = last7Series.map(p => p.monotony);
   const zoneStrain = last7Series.map(p => p.strain);
+  // Baseline personnelle (Z-score) alignée sur la même fenêtre que last7Series (même slicing,
+  // wellnessBaselineSeries porte 42j calculés côté serveur comme timeSeries). Un jour sans
+  // historique suffisant devient un trou dans la courbe (null) plutôt qu'une valeur absolue
+  // classée à tort dans les zones relatives — voir SparkLineClient.tsx.
+  const last7Baseline = rangeMode === "month" ? wellnessBaselineSeries.slice(-28) : wellnessBaselineSeries.slice(-7);
+  const recoveryRelativePoints = last7Baseline.map(b => b?.hasEnoughHistory ? b.relativeScore : null);
+  const recoveryRawPoints = last7Series.map(p => p.recovery);
+  // Badges de dimension au survol (ex. "SOMMEIL −1,82 ↓") — calculés sur toute la série 42j (pour
+  // que la tendance 7j des badges ait du recul même en tout début de fenêtre affichée), puis
+  // découpés avec le même slicing que last7Baseline pour rester aligné index à index avec le chart.
+  const dimensionBadgesFull = dimensionBadgesSeries(wellnessBaselineSeries);
+  const last7DimensionBadges = rangeMode === "month" ? dimensionBadgesFull.slice(-28) : dimensionBadgesFull.slice(-7);
 
   return (
     <>
@@ -315,9 +336,11 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
                   </div>
                   <div style={{ borderRadius: 10, overflow: "visible", marginBottom: 6 }}>
                     <SparkLineClient
-                      points={last7Series.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
+                      points={recoveryRelativePoints} pointsRaw={recoveryRawPoints} dates={zoneDates} color={recoveryInfo.color}
                       maxVal={100} height={168} animDelay={300}
                       metricType="recovery" uid="recovery" chartType="line" sequentialFill
+                      zones1={WELLNESS_ZONES}
+                      dimensionBadgesAt={last7DimensionBadges}
                       points2={last7Series.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
                       points2Raw={last7Series.map(p => p.form)} zones2={FORM_ZONES}
                       weekLabels={rangeMode === "month"}

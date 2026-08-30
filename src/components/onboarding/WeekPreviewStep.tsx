@@ -9,7 +9,8 @@ import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { computeAutoregSuggestion, qualitativeDifficulty, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import { zoneLabel } from "@/lib/wellness";
+import { relativeZoneLabel } from "@/lib/wellnessBaseline";
+import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate, WeekTemplate } from "@/types";
 
@@ -24,8 +25,12 @@ import type { ProgramTemplate, ProgramFocus, SessionTemplate, WeekTemplate } fro
    Simulation de forme : un slider continu (0-100) interpole entre 3 semaines-types ancrées
    (Pas en forme / OK / En forme, deltas -28/0/+22 appliqués à une base variée par jour, jamais un
    score plat identique sur les 7 jours) — validé sur plusieurs itérations de POC avant portage ici
-   (voir historique de conversation). La reco par jour utilise la VRAIE fonction
-   `computeAutoregSuggestion` (déjà utilisée par DecisionStep/AutoregButtons en prod), jamais une
+   (voir historique de conversation). Chaque jour passe par la MÊME baseline Z-score que le reste de
+   l'app (syntheticBaselineFor(), src/lib/sandboxFixtures.ts — historique synthétique déterministe,
+   aucune formule séparée) : le ring, "Fatigué/Équilibré/Frais" (relativeZoneLabel) et la reco
+   viennent tous de ce même calcul, jamais un score absolu affiché à part. La reco par jour utilise
+   la VRAIE fonction `computeAutoregSuggestion` (déjà utilisée par DecisionStep/AutoregButtons en
+   prod), jamais une
    heuristique de chaînage (l'ancienne boîte `loadRule` est retirée de cet écran — elle démontrait
    l'enchaînement des séances, indépendant de la forme, ce qui n'est plus le sujet ici ; deux boîtes
    de reco par carte × 7 colonnes aurait surchargé visuellement cet écran). Quand une suggestion se
@@ -75,18 +80,20 @@ function adjustDiff(base: number, level: Level): number {
 /* Choisit la semaine réellement affichée dans l'aperçu — pas toujours la semaine 1. Vérifié en
    direct sur /api/programs/generate (pas supposé) : la semaine 1 (bloc MEV de la périodisation)
    plafonne à 6/10 sur plusieurs sports/nombres de jours testés (Powerlifting, Sprint, CrossFit,
-   Endurance), jamais 7+ — la reco "Alléger" (computeAutoregSuggestion exige diff≥7) ne se
+   Endurance), jamais 8+ — la reco "Alléger" (computeAutoregSuggestion exige diff≥8, "dure") ne se
    déclencherait donc quasiment jamais si on restait figé sur la semaine 1, quel que soit l'état de
    forme simulé. Cherche la première semaine (ordre chronologique, jamais un index codé en dur —
    la position de la semaine la plus dure dépend du sport/de la durée) qui contient un vrai jour
-   difficile (diff≥7, hors séances "test" — mêmes exclusions que pickHardest() dans OnboardingFlow,
-   un texte de test n'a pas de token numérique à faire varier visiblement dans l'aperçu avant/après).
-   Repli sur la semaine 1 si aucune semaine n'atteint ce seuil (ex. programmes de rééducation,
-   plafonnés à 5/10 par design — l'absence de séance dure y est le comportement correct, pas un bug). */
+   difficile (diff≥8). Les séances "test" (bilan de cycle) COMPTENT désormais comme les autres
+   (2026-08-30, retour explicite de Gildas — la reco doit se déclencher "sans exception", même si le
+   texte du test lui-même n'a pas de token numérique à faire varier visiblement : la jauge de
+   difficulté et l'encart de suggestion restent pertinents). Repli sur la semaine 1 si aucune
+   semaine n'atteint ce seuil (ex. programmes de rééducation, plafonnés à 5/10 par design —
+   l'absence de séance dure y est le comportement correct, pas un bug). */
 function pickPreviewWeek(template: ProgramTemplate | null): WeekTemplate | null {
   if (!template?.weeks?.length) return null;
   for (const week of template.weeks) {
-    const hasHardDay = Object.values(week).some(sessions => sessions.some(s => s.type !== "test" && (s.target_difficulty ?? 0) >= 7));
+    const hasHardDay = Object.values(week).some(sessions => sessions.some(s => (s.target_difficulty ?? 0) >= 8));
     if (hasHardDay) return week;
   }
   return template.weeks[0];
@@ -282,13 +289,19 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
         }}>
           {DAYS.map((day, dayIdx) => {
             const daySessions = sessionsByDay[day] ?? [];
-            // Exclut les séances "test" du déclenchement de la reco forme (mêmes exclusions que
-            // pickHardest()/pickLightest() dans OnboardingFlow) — un texte de test n'a pas de token
-            // numérique à faire varier visiblement dans l'aperçu avant/après.
-            const nonTestSessions = daySessions.filter(s => s.type !== "test");
-            const dayMaxDiff = nonTestSessions.length ? Math.max(...nonTestSessions.map(s => s.target_difficulty ?? 6)) : null;
+            // Les séances "test" participent à la reco comme les autres (2026-08-30, retour
+            // explicite de Gildas, "sans exception") — seule la jauge de difficulté/l'encart de
+            // suggestion changent visiblement pour ces séances, le texte lui-même n'ayant pas de
+            // token numérique à faire varier (parseAndApply() ne trouve rien à remplacer dedans).
+            const dayMaxDiff = daySessions.length ? Math.max(...daySessions.map(s => s.target_difficulty ?? 6)) : null;
             const score = Math.round(Math.max(5, Math.min(98, SIM_BASE[dayIdx] + formDelta)));
-            const suggestion = computeAutoregSuggestion(score, dayMaxDiff);
+            // Baseline (Z-score, src/lib/wellnessBaseline.ts) sur historique synthétique — même
+            // calcul que partout ailleurs dans l'app (sandbox, /coach, /coach/planning), pas un
+            // seuil absolu séparé propre à cet aperçu. `ownerId` unique par jour : chaque appel est
+            // une recomputation pure indépendante, pas une lecture d'un cache partagé.
+            const baseline = syntheticBaselineFor(score, `preview-${day}`);
+            const displayScore = baseline?.hasEnoughHistory ? baseline.relativeScore : score;
+            const suggestion = computeAutoregSuggestion(score, dayMaxDiff, baseline);
             const pct = suggestion?.reco ?? 0;
             const needsAction = !!suggestion;
 
@@ -337,9 +350,9 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
               }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 9 }}>
                   <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>{day}</div>
-                  <PlanningRing score={score} size={58} />
+                  <PlanningRing score={displayScore} size={58} />
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "#687075", marginBottom: 7 }}>{zoneLabel(score)}</div>
+                <div style={{ fontSize: 11, fontWeight: 800, color: "#687075", marginBottom: 7 }}>{relativeZoneLabel(baseline)}</div>
 
                 {recoBox}
 

@@ -6,6 +6,7 @@ import Actions from "@/components/onboarding/Actions";
 import { CoachCard } from "@/components/coach/CoachAthleteCard";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { SessionTemplate, CoachAthlete, CoachViewSession } from "@/types";
 
@@ -129,7 +130,11 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
       wellness_score: FORCED_WELLNESS, behaviors: FORCED_BEHAVIORS,
       wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString(),
     };
-    const suggestion = session ? computeAutoregSuggestion(FORCED_WELLNESS, session.target_difficulty ?? 6) : null;
+    // Baseline (Z-score, src/lib/wellnessBaseline.ts) sur historique synthétique — même calcul que
+    // /coach, /coach/planning et la sandbox (syntheticBaselineFor, src/lib/sandboxFixtures.ts),
+    // jamais un seuil absolu propre à cet aperçu.
+    const baseline = syntheticBaselineFor(FORCED_WELLNESS, "preview-you");
+    const suggestion = session ? computeAutoregSuggestion(FORCED_WELLNESS, session.target_difficulty ?? 6, baseline) : null;
     return (
       <div style={{ position: "relative" }}>
         {heroBlock}
@@ -137,6 +142,7 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
           {session && (
             <CoachCard
               athlete={athlete} sessions={[session]} isPriority={!!suggestion} isReviewed={decidedIds.has("preview-you")} selfView
+              baseline={baseline}
               onDecide={() => {}}
               onApplyAdjust={async (s, pct) => {
                 const notes = s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes;
@@ -159,6 +165,14 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
   const pierreSession = buildSession("preview-pierre", "preview-pierre", lightest);
   const allSessions = [thomasSession, emmaSession, pierreSession].filter((s): s is CoachViewSession => !!s);
 
+  // Baseline (Z-score) par sportif démo — même calcul que /coach et /coach/planning
+  // (syntheticBaselineFor, src/lib/sandboxFixtures.ts), jamais un seuil absolu propre à cet aperçu.
+  const baselinesById: Record<string, ReturnType<typeof syntheticBaselineFor>> = {
+    "preview-thomas": syntheticBaselineFor(FORCED_WELLNESS, "preview-thomas"),
+    "preview-emma": syntheticBaselineFor(70, "preview-emma"),
+    "preview-pierre": syntheticBaselineFor(88, "preview-pierre"),
+  };
+
   const athletes: { athlete: CoachAthlete; session: CoachViewSession | null }[] = [
     { athlete: { id: "preview-thomas", coach_id: "preview", name: "Thomas M.", sport, wellness_score: FORCED_WELLNESS, behaviors: FORCED_BEHAVIORS, wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, session: thomasSession },
     { athlete: { id: "preview-emma", coach_id: "preview", name: "Emma L.", sport, wellness_score: 70, behaviors: ["walk"], wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString() }, session: emmaSession },
@@ -168,7 +182,7 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
   function isPriorityFor(id: string, session: CoachViewSession | null): boolean {
     if (!session) return false;
     const wellness = id === "preview-thomas" ? FORCED_WELLNESS : id === "preview-emma" ? 70 : 88;
-    return !!computeAutoregSuggestion(wellness, session.target_difficulty ?? 6);
+    return !!computeAutoregSuggestion(wellness, session.target_difficulty ?? 6, baselinesById[id]);
   }
 
   function renderCard(a: CoachAthlete, session: CoachViewSession | null) {
@@ -177,6 +191,7 @@ export default function DecisionStep({ demoHardest, demoLightest, demoMiddle, sp
       <CoachCard
         key={a.id}
         athlete={a} sessions={allSessions} isPriority={isPriorityFor(a.id, session)} isReviewed={decidedIds.has(a.id)}
+        baseline={baselinesById[a.id]}
         onDecide={() => {}}
         onApplyAdjust={async (s, pct) => {
           const notes = s.notes ? s.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : s.notes;

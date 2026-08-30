@@ -10,6 +10,10 @@ import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor, type AutoregOriginal } from "@/lib/autoregulation";
+import {
+  Z_SWC, Z_MODERATE, relativeZoneLabel,
+  type WellnessBaselineResult, type Perspective as BaselinePerspective,
+} from "@/lib/wellnessBaseline";
 import type { TrendCode } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession } from "@/types";
 
@@ -53,19 +57,40 @@ export function maxDiffToday(athleteId: string, sessions: CoachViewSession[]) {
    (alerts.ts, aperçu onboarding WeekPreviewStep) : comportement strictement inchangé pour eux. */
 const TREND_ALERT: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
 
-export function attention(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null) {
+/* `baseline` (optionnel, partout) : dès que l'historique du sportif est suffisant, ces 3 fonctions
+   comparent au Z-score personnel (src/lib/wellnessBaseline.ts) plutôt qu'au score absolu — absent/
+   `hasEnoughHistory=false` = repli exact sur `a.wellness_score` en absolu, comportement 100%
+   inchangé pour tout appelant qui ne fournit pas encore ce paramètre (ex. aperçu onboarding). Le
+   garde-fou absolu (`baseline.guardRailTriggered`, score composite brut < 40) escalade toujours au
+   palier le plus sévère même si le Z lit "dans sa norme" — jamais masqué par une norme perso basse. */
+function isLowZ(baseline?: WellnessBaselineResult | null): boolean {
+  if (!baseline?.hasEnoughHistory || baseline.composite.z === null) return false;
+  return baseline.composite.z < -Z_MODERATE || baseline.guardRailTriggered;
+}
+function isMildLowZ(baseline?: WellnessBaselineResult | null): boolean {
+  if (!baseline?.hasEnoughHistory || baseline.composite.z === null) return false;
+  return baseline.composite.z < -Z_SWC || baseline.guardRailTriggered;
+}
+
+export function attention(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, baseline?: WellnessBaselineResult | null) {
   if (trend && TREND_ALERT.has(trend)) return true; // charge en accumulation ou fatigue persistante : alerte même si le snapshot du jour semble OK
   if (a.wellnessFilledToday === false) return maxDiff >= 8; // pas de wellness du jour : seule une séance dure prévue justifie une alerte
+  if (baseline?.hasEnoughHistory) return isLowZ(baseline) || (isMildLowZ(baseline) && maxDiff >= 5) || maxDiff >= 8;
   return a.wellness_score < 55 ||
     (a.wellness_score < 65 && maxDiff >= 5) ||
     maxDiff >= 8;
 }
 
-export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null): number {
+export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, baseline?: WellnessBaselineResult | null): number {
   let score = 0;
   if (a.wellnessFilledToday !== false) {
-    if (a.wellness_score < 55) score += 4;
-    else if (a.wellness_score < 65) score += 2;
+    if (baseline?.hasEnoughHistory) {
+      if (isLowZ(baseline)) score += 4;
+      else if (isMildLowZ(baseline)) score += 2;
+    } else {
+      if (a.wellness_score < 55) score += 4;
+      else if (a.wellness_score < 65) score += 2;
+    }
   }
   if (maxDiff >= 8) score += 3;
   else if (maxDiff >= 6) score += 1;
@@ -78,7 +103,7 @@ export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | 
    personne ("vérifier avec lui", "qu'il n'enchaîne pas dur"), correct quand c'est un coach qui
    regarde un vrai sportif, faux quand la carte représente l'utilisateur lui-même. `undefined`/
    `false` par défaut : comportement 100% inchangé pour /coach et /coach/planning. */
-export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, selfView?: boolean) {
+export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, selfView?: boolean, baseline?: WellnessBaselineResult | null) {
   if (trend === "accumulation") return "Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.";
   if (trend === "fatigue_persistante") return "Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.";
   if (a.wellnessFilledToday === false) {
@@ -87,16 +112,32 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
       : "Récupération non renseignée aujourd'hui + séance dure prévue : vérifier avec lui avant.";
     return "Récupération non renseignée aujourd'hui.";
   }
-  if (a.wellness_score < 55 && maxDiff >= 7) return "Récupération basse + séance difficile : alléger maintenant.";
+  const useZ = baseline?.hasEnoughHistory ?? false;
+  const mildLowZ = useZ ? isMildLowZ(baseline) : a.wellness_score < 65;
+  const mildLabel = useZ ? "Un peu fatigué" : "Récupération légèrement basse";
+  // Le cas "Fatigué + séance dure" est désormais entièrement couvert par computeAutoregSuggestion()
+  // (chips Alléger, seuils Z_SWC/diff≥8 — voir autoregulation.ts) : decisionText() n'est appelé
+  // qu'en repli quand computeAutoregSuggestion() a déjà renvoyé null (tous les appelants), donc plus
+  // jamais atteint pour ce cas précis — branche retirée plutôt que laissée en texte incohérent
+  // ("alléger maintenant" sans bouton pour le faire).
   if (maxDiff >= 8) return selfView
     ? "Séance dure prévue : assure-toi de ne pas enchaîner trop dur."
     : "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
-  if (a.wellness_score < 65 && maxDiff <= 4) return "Récupération légèrement basse, séance légère : rien à changer, surveiller demain.";
-  if (a.wellness_score < 65) return "Récupération à surveiller : réduire le volume ou vérifier la difficulté réelle.";
+  if (mildLowZ && maxDiff <= 4) return `${mildLabel}, séance légère : rien à changer, surveiller demain.`;
+  if (mildLowZ) return "Récupération à surveiller : réduire le volume ou vérifier la difficulté réelle.";
   return "Plan cohérent : suivre la difficulté réelle.";
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView, isActive }: {
+/* Zone relative si `baseline` est fourni et son historique suffisant, sinon repli exact sur
+   l'ancien zoneLabel() absolu (comportement inchangé pour tout appelant qui ne câble pas encore
+   `baseline`, ex. aperçu onboarding). */
+function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | null | undefined, perspective: BaselinePerspective): string {
+  if (score === null) return "Non renseigné";
+  if (baseline?.hasEnoughHistory) return relativeZoneLabel(baseline, perspective);
+  return zoneLabel(score);
+}
+
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView, isActive, baseline }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -127,24 +168,42 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      paywall/signup). `undefined`/absent = toujours considéré actif (usages onboarding/aperçus,
      jamais réellement gatés — voir AutoregButtons.tsx). */
   isActive?: boolean;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du sportif — calculée par le parent
+     (historique multi-jours réel pour un vrai sportif, historique synthétique déterministe via
+     syntheticBaselineFor()/src/lib/sandboxFixtures.ts pour un sportif démo/aperçu onboarding — même
+     calcul dans les deux cas, jamais deux formules séparées). `undefined`/absent = repli automatique
+     sur les seuils absolus actuels, comportement 100% inchangé. */
+  baseline?: WellnessBaselineResult | null;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
   const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   const extraSessions = todaySessions.length - (topSession ? 1 : 0);
-  const decision = decisionText(athlete, maxDiff, trend, selfView);
+  const perspective: BaselinePerspective = selfView ? "athlete" : "coach";
+  const decision = decisionText(athlete, maxDiff, trend, selfView, baseline);
   const showBadge = isPriority && !isReviewed;
   const showReviewed = isPriority && isReviewed;
   const behaviors = athlete.behaviors ?? [];
   const firstName = athlete.name.split(" ")[0];
-  const displayScore = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
+  /* Score ABSOLU brut — celui qu'`athlete.wellness_score` porte déjà, jamais transformé. Sert de
+     garde-fou (`computeAutoregSuggestion`, WELLNESS_ABSOLUTE_GUARD_SCORE) et de repli tant que la
+     baseline n'a pas assez d'historique — toujours ce nombre-là, jamais le score relatif. */
+  const absoluteScore = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
+  /* `displayScore` = le chiffre affiché sur cette carte (ring, headline) — score relatif dès que la
+     baseline est fournie et son historique suffisant, repli exact sur le score absolu sinon (même
+     nom déjà établi dans ce fichier avant ce chantier, conserve son sens local : "le score affiché
+     par CETTE carte", distinct du `displayScore` de TodayClient.tsx — post-impact fatigue même jour,
+     concept différent, jamais confondu). */
+  const displayScore = baseline?.hasEnoughHistory ? baseline.relativeScore : absoluteScore;
 
   /* Suggestion décharge/surcharge — seulement sur une séance encore prévue (une séance déjà
      terminée n'a plus de sens à ajuster). Indépendant de isPriority : une "surcharge" (forme au
      top + séance légère) n'a rien d'une alerte, ce sportif reste classé "Plan cohérent" — voir
-     autoregulation.ts. */
+     autoregulation.ts. `absoluteScore` (jamais `displayScore`) : computeAutoregSuggestion() a besoin
+     du score ABSOLU pour son garde-fou interne, même quand une baseline pilote déjà le déclenchement
+     via le Z. */
   const suggestion = topSession && !topSession.done
-    ? computeAutoregSuggestion(displayScore, topSession.target_difficulty)
+    ? computeAutoregSuggestion(absoluteScore, topSession.target_difficulty, baseline)
     : null;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
 
@@ -196,7 +255,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           buildSnapshot={() => ({
             athleteName: athlete.name,
             score: displayScore,
-            zoneLabel: zoneLabel(displayScore),
+            zoneLabel: zoneLabelFor(displayScore, baseline, perspective),
             decision,
             isPriority,
             behaviors: behaviors.map(b => BEHAVIOR_META[b]
@@ -209,7 +268,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             } : undefined,
             authorName: coachName ?? "Coach",
           })}
-          title={`${firstName} — ${zoneLabel(displayScore)}`}
+          title={`${firstName} — ${zoneLabelFor(displayScore, baseline, perspective)}`}
           text={decision}
         />
       </div>
@@ -219,7 +278,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         <WellnessRing score={displayScore} size={72} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
-            {zoneLabel(displayScore)}
+            {zoneLabelFor(displayScore, baseline, perspective)}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.03em" }}>{firstName}</div>
