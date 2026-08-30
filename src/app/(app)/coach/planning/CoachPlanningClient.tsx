@@ -37,7 +37,7 @@ import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
-import { pickRelevantAssignment } from "@/lib/programAssignment";
+import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 
 function dayWellness(
@@ -109,6 +109,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // Tous les assignments actifs de l'athlète (il peut en enchaîner plusieurs dans le futur) —
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation).
   const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
+  // Label "Séances libres" par semaine (clé = lundi) : édité par le coach ici, ou par le sportif
+  // sur /week — valeur de base sur athlete.free_training_label (mergée server-side, page.tsx),
+  // override local par athleteId le temps que la donnée serveur se resynchronise.
+  const [freeLabelOverrides, setFreeLabelOverrides] = useState<Record<string, Record<string, string>>>({});
 
   useEffect(() => {
     const id = searchParams.get("athlete");
@@ -126,6 +130,22 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   }, [userId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
+
+  function freeLabelsFor(a: CoachAthlete): Record<string, string> {
+    return freeLabelOverrides[a.id] ?? (a.free_training_label as Record<string, string> | undefined) ?? {};
+  }
+
+  async function setFreeLabelForWeek(a: CoachAthlete, mondayStr: string, label: string) {
+    const value = label.trim();
+    const next = { ...freeLabelsFor(a) };
+    if (value) next[mondayStr] = value; else delete next[mondayStr];
+    setFreeLabelOverrides(prev => ({ ...prev, [a.id]: next }));
+    if (sandboxMode) return;
+    await fetch("/api/coach/free-label", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteId: a.id, monday: mondayStr, label: value }),
+    });
+  }
 
   // Fetch active program for selected athlete
   useEffect(() => {
@@ -495,31 +515,23 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
           on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
           (qui reste "le programme pertinent aujourd'hui"). */}
-      {(() => {
-        let viewedProgram: Program | null = null;
-        let viewedWeek = -1;
-        // `weekStart` (startOfWeek) tombe à minuit heure locale — reformaté à midi pour
-        // rester comparable aux dates de démarrage des programmes, toujours construites
-        // en "T12:00:00" (convention anti-DST déjà utilisée partout ailleurs dans ce fichier).
-        const weekStartNoon = new Date(format(weekStart, "yyyy-MM-dd") + "T12:00:00").getTime();
-        for (const a of activeAssignments) {
-          const prog = (Array.isArray(a.programs) ? a.programs[0] : a.programs) as Program | undefined;
-          if (!prog) continue;
-          const start = new Date(a.start_date + "T12:00:00").getTime();
-          const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
-          if (weekStartNoon >= start && weekStartNoon < end) {
-            viewedProgram = prog;
-            viewedWeek = Math.round((weekStartNoon - start) / (7 * 24 * 60 * 60 * 1000));
-            break;
-          }
-        }
+      {athlete && (() => {
+        // `weekStart` (startOfWeek) tombe à minuit heure locale — findProgramForWeek reparse
+        // en "T12:00:00" en interne, cohérent avec les dates de démarrage des programmes
+        // (convention anti-DST déjà utilisée partout ailleurs dans ce fichier).
+        const mondayStr = format(weekStart, "yyyy-MM-dd");
+        const match = findProgramForWeek(activeAssignments, mondayStr);
+        const viewedProgram = match?.program ?? null;
+        const viewedWeek = match?.week ?? -1;
         return (
           <ProgramBanner
             program={viewedProgram}
             currentWeek={viewedWeek}
             onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
             onOpenLibrary={() => setShowLibrary(true)}
-            onReconduire={athlete ? () => setShowReconduire(true) : undefined}
+            onReconduire={() => setShowReconduire(true)}
+            freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
+            onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
           />
         );
       })()}
@@ -597,8 +609,21 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 </div>
               ))}
             </div>
-            {weeks.map(weekMonday => (
-              <div key={weekMonday.toISOString()} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: isMd ? 4 : 2 }}>
+            {weeks.map(weekMonday => {
+              const mondayStr = format(weekMonday, "yyyy-MM-dd");
+              const weekMatch = findProgramForWeek(activeAssignments, mondayStr);
+              return (
+              <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
+                {weekMatch ? (
+                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} />
+                ) : (
+                  <ProgramBanner
+                    compact
+                    freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
+                    onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
+                  />
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginTop: 4 }}>
                 {Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)).map(date => {
                   const dstr = format(date, "yyyy-MM-dd");
                   const isToday = dstr === todayStr;
@@ -693,8 +718,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     </div>
                   );
                 })}
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         );
       })()}

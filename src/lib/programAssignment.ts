@@ -28,3 +28,26 @@ export function pickRelevantAssignment<T extends AssignmentLike>(assignments: T[
   if (upcoming.length) return upcoming.sort((x, y) => x.start - y.start)[0].a;
   return null;
 }
+
+/**
+ * Parmi les assignments actifs, celui qui couvre une semaine donnée (son lundi,
+ * "yyyy-MM-dd" à midi — même convention anti-DST que le reste de l'app). Un sportif
+ * pouvant enchaîner plusieurs programmes, le programme "pertinent aujourd'hui"
+ * (pickRelevantAssignment) n'est pas forcément celui qui couvre la semaine consultée.
+ */
+export function findProgramForWeek<P extends { weeks_count: number }>(
+  assignments: { start_date: string; programs: P | P[] | null }[],
+  mondayStr: string
+): { program: P; week: number } | null {
+  const weekStart = new Date(mondayStr + "T12:00:00").getTime();
+  for (const a of assignments) {
+    const prog = Array.isArray(a.programs) ? a.programs[0] : a.programs;
+    if (!prog) continue;
+    const start = new Date(a.start_date + "T12:00:00").getTime();
+    const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
+    if (weekStart >= start && weekStart < end) {
+      return { program: prog, week: Math.round((weekStart - start) / (7 * 24 * 60 * 60 * 1000)) };
+    }
+  }
+  return null;
+}

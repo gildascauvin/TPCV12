@@ -21,6 +21,8 @@ export interface Profile {
   onboarding_done: boolean;
   invite_code: string | null;
   training_days: number[] | null;
+  /** Label "Séances libres" par semaine — clé = lundi "yyyy-MM-dd", pas un label global. */
+  free_training_label: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -67,6 +69,7 @@ export interface CoachAthlete {
   wellnessFilledToday?: boolean; // true si une ligne wellness_daily existe pour le jour consulté (toujours true pour les démo, sans notion de jour)
   user_id: string | null; // null = démo ou invite pending, string = vrai sportif lié
   invite_email: string | null; // non-null = invitation pending (sportif pas encore inscrit)
+  free_training_label?: Record<string, string>; // label "Séances libres" par semaine (clé = lundi) — pour un vrai sportif, la valeur réelle vient de profiles.free_training_label (fusionnée côté page.tsx), cette colonne ne sert que pour les démo
   created_at: string;
 }
 

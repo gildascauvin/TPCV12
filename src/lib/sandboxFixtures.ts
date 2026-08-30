@@ -96,7 +96,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
   const profile: Profile = {
     id: sid("profile"), user_id: userId, name: "Toi (démo)", sport: "CrossFit", objective: "performance",
     freq_target: 4, mode: "athlete", subscription_status: "free", stripe_customer_id: null,
-    onboarding_done: true, invite_code: null, training_days: [1, 3, 5, 6],
+    onboarding_done: true, invite_code: null, training_days: [1, 3, 5, 6], free_training_label: {},
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };
 

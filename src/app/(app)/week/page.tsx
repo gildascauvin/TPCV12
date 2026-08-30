@@ -18,7 +18,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       .gte("date", start).lte("date", end).order("created_at"),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id)
       .gte("date", start).lte("date", end),
-    supabase.from("profiles").select("subscription_status, invited_by_coach_id, name").eq("user_id", user!.id).single(),
+    supabase.from("profiles").select("subscription_status, invited_by_coach_id, name, free_training_label").eq("user_id", user!.id).single(),
   ]);
 
   const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
@@ -35,6 +35,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       hasCoach={hasCoach}
       hasActiveCoach={hasActiveCoach}
       initialDate={searchParams.date}
+      initialFreeLabels={(profile as { free_training_label?: Record<string, string> | null } | null)?.free_training_label ?? {}}
     />
   );
 }

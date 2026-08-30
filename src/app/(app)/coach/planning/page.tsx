@@ -35,6 +35,16 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const allAthleteIds = athletes.map(a => a.id);
 
+  // Pour un vrai sportif, le label "Séances libres" est le sien (profiles.free_training_label,
+  // qu'il édite lui-même sur /week) — pas la colonne coach_athletes, qui ne sert qu'aux démo.
+  if (realUserIds.length) {
+    const { data: labelRows } = await admin.from("profiles").select("user_id, free_training_label").in("user_id", realUserIds);
+    const byUserId = new Map((labelRows || []).map(r => [r.user_id, r.free_training_label]));
+    for (const a of athletes) {
+      if (a.user_id && byUserId.has(a.user_id)) a.free_training_label = byUserId.get(a.user_id) ?? {};
+    }
+  }
+
   const [realSessionsRes, coachSessionsRes, wellnessRes] = await Promise.all([
     realUserIds.length
       ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)

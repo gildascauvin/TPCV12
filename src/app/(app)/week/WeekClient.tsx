@@ -23,7 +23,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
-import { pickRelevantAssignment } from "@/lib/programAssignment";
+import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -42,9 +42,9 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; }
+interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>; }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {} }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -84,6 +84,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation),
   // distinct de `activeProgram` ci-dessus qui reste "le programme pertinent aujourd'hui".
   const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
+  // Label "Séances libres" — par semaine (clé = lundi "yyyy-MM-dd"), pas global.
+  const [freeLabels, setFreeLabels] = useState<Record<string, string>>(initialFreeLabels);
 
   async function fetchActiveProgram() {
     const { data } = await supabase
@@ -199,6 +201,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     ]);
     setMonthSessions(s ?? []);
     setMonthWellness(w ?? []);
+  }
+
+  // Label "Séances libres" valable uniquement pour la semaine dont `mondayStr` est le lundi.
+  async function setFreeLabelForWeek(mondayStr: string, label: string) {
+    const value = label.trim();
+    const next = { ...freeLabels };
+    if (value) next[mondayStr] = value; else delete next[mondayStr];
+    setFreeLabels(next);
+    if (sandboxMode) return;
+    await supabase.from("profiles").update({ free_training_label: next }).eq("user_id", userId);
   }
 
   function handleDateChange(date: string) {
@@ -366,19 +378,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // Programme + semaine correspondant à la semaine actuellement affichée (navigation) —
   // un sportif pouvant enchaîner plusieurs programmes actifs, celui pertinent pour la
   // semaine affichée n'est pas forcément `activeProgram` (qui reste "pertinent aujourd'hui").
-  const { program: viewedProgram, week: viewedProgramWeek } = (() => {
-    const viewedMonday = new Date(format(dates[0], "yyyy-MM-dd") + "T12:00:00").getTime();
-    for (const a of activeAssignments) {
-      const prog = (Array.isArray(a.programs) ? a.programs[0] : a.programs) as Program | undefined;
-      if (!prog) continue;
-      const start = new Date(a.start_date + "T12:00:00").getTime();
-      const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
-      if (viewedMonday >= start && viewedMonday < end) {
-        return { program: prog, week: Math.round((viewedMonday - start) / (7 * 24 * 60 * 60 * 1000)) };
-      }
-    }
-    return { program: null as Program | null, week: -1 };
-  })();
+  const viewedMatch = findProgramForWeek(activeAssignments, format(dates[0], "yyyy-MM-dd"));
+  const viewedProgram = viewedMatch?.program ?? null;
+  const viewedProgramWeek = viewedMatch?.week ?? -1;
   const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
 
   return (
@@ -406,6 +408,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
         onOpenLibrary={() => setShowLibrary(true)}
         onReconduire={() => setShowReconduire(true)}
+        freeLabel={freeLabels[format(dates[0], "yyyy-MM-dd")] ?? null}
+        onEditFreeLabel={label => setFreeLabelForWeek(format(dates[0], "yyyy-MM-dd"), label)}
       />
 
       {activeProgram && activeProgramWeek === -1 && activeProgramStartDate
@@ -567,9 +571,23 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 </div>
               ))}
             </div>
-            {/* Grille semaines */}
-            {weeks.map(weekMonday => (
-              <div key={weekMonday.toISOString()} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: isMd ? 4 : 2 }}>
+            {/* Grille semaines — une mini-bannière programme/label par semaine, façon événement
+                multi-jours au-dessus de la ligne (comme un bandeau Google Calendar). */}
+            {weeks.map(weekMonday => {
+              const mondayStr = format(weekMonday, "yyyy-MM-dd");
+              const weekMatch = findProgramForWeek(activeAssignments, mondayStr);
+              return (
+              <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
+                {weekMatch ? (
+                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} />
+                ) : (
+                  <ProgramBanner
+                    compact
+                    freeLabel={freeLabels[mondayStr] ?? null}
+                    onEditFreeLabel={label => setFreeLabelForWeek(mondayStr, label)}
+                  />
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginTop: 4 }}>
                 {Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i)).map(date => {
                   const dstr = format(date, "yyyy-MM-dd");
                   const isToday = dstr === todayStr;
@@ -667,8 +685,10 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     </div>
                   );
                 })}
+                </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         );
       })()}

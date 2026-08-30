@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Program } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
@@ -7,6 +8,7 @@ const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<string, string> = {
   debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite",
 };
+const DEFAULT_FREE_LABEL = "Séances libres";
 
 function avgWeekRpe(week: Record<string, { target_difficulty: number }[]>): number {
   const sessions = DAYS.flatMap(d => week[d] ?? []);
@@ -38,24 +40,100 @@ interface Props {
   onStop?: () => void;
   onOpenLibrary?: () => void;
   onReconduire?: () => void;
+  /** Label personnalisé affiché à la place de "Aucun programme actif" — null/vide = repli sur DEFAULT_FREE_LABEL. */
+  freeLabel?: string | null;
+  /** Absent = label non éditable ici (lecture seule). */
+  onEditFreeLabel?: (label: string) => void;
+  /** Variante compacte une ligne — utilisée par-dessus chaque semaine en vue Mois. */
+  compact?: boolean;
 }
 
-export default function ProgramBanner({ program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire }: Props) {
+export default function ProgramBanner({
+  program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire,
+  freeLabel, onEditFreeLabel, compact = false,
+}: Props) {
   const { isMd } = useBreakpoint();
+  const [editingLabel, setEditingLabel] = useState(false);
+  const [draftLabel, setDraftLabel] = useState("");
   const curWi = currentWeek ?? -1;
   const isActiveWeek = !!program && curWi >= 0 && curWi < program.weeks_count;
 
+  function startEditing() {
+    if (!onEditFreeLabel) return;
+    setDraftLabel(freeLabel ?? "");
+    setEditingLabel(true);
+  }
+  function commitLabel() {
+    setEditingLabel(false);
+    onEditFreeLabel?.(draftLabel.trim());
+  }
+
   if (!isActiveWeek) {
+    const displayLabel = freeLabel && freeLabel.trim() ? freeLabel : DEFAULT_FREE_LABEL;
+
+    if (compact) {
+      return (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 10,
+          padding: "5px 8px",
+        }}>
+          {editingLabel ? (
+            <input
+              autoFocus value={draftLabel}
+              onChange={e => setDraftLabel(e.target.value)}
+              onBlur={commitLabel}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingLabel(false); }}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: 10, fontWeight: 800, background: "transparent", color: "#171b1f" }}
+            />
+          ) : (
+            <span
+              onClick={startEditing}
+              style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 800, color: "#171b1f", cursor: onEditFreeLabel ? "text" : "default" }}
+            >
+              {onEditFreeLabel && <span style={{ opacity: 0.45, marginRight: 3 }}>✏️</span>}
+              {displayLabel}
+            </span>
+          )}
+          {onReconduire && (
+            <button
+              onClick={onReconduire} title="Reconduire la semaine"
+              style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(0,0,0,.12)", background: "#fff", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+            >
+              ↻
+            </button>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div style={{
         background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px",
         display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "flex-start",
-        justifyContent: "space-between", gap: isMd ? 0 : 10,
+        justifyContent: "space-between", gap: isMd ? 12 : 10,
       }}>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2 }}>Aucun programme actif</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          {editingLabel ? (
+            <input
+              autoFocus value={draftLabel}
+              onChange={e => setDraftLabel(e.target.value)}
+              onBlur={commitLabel}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingLabel(false); }}
+              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", border: "1px solid rgba(0,0,0,.15)", borderRadius: 8, padding: "3px 8px", outline: "none", width: "100%", maxWidth: 260, marginBottom: 2 }}
+            />
+          ) : (
+            <div
+              onClick={startEditing}
+              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2, display: "inline-flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default" }}
+            >
+              {displayLabel}
+              {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45 }}>✏️</span>}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: "#8a8f94" }}>Les séances libres restent disponibles</div>
         </div>
+
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, width: isMd ? "auto" : "100%" }}>
           {onReconduire && (
             <button onClick={onReconduire} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
@@ -76,6 +154,22 @@ export default function ProgramBanner({ program, currentWeek, onEdit, onStop, on
   const maxBar = Math.max(...bars, 1);
   const levelLabel = program!.level ? LEVEL_LABELS[program!.level] : null;
   const focusLabel = `S${curWi + 1}/${program!.weeks_count}`;
+
+  if (compact) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        background: "#fff", border: "1px solid rgba(212,64,0,.18)", borderRadius: 10,
+        padding: "5px 8px",
+      }}>
+        <span style={{ flexShrink: 0, fontSize: 12 }}>{sportEmoji(program!.sport)}</span>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 800, color: "#171b1f" }}>
+          {program!.name}
+        </span>
+        <span style={{ flexShrink: 0, fontSize: 10, color: "#8a8f94", fontWeight: 700 }}>{focusLabel}</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
