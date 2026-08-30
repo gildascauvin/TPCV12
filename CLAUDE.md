@@ -2397,3 +2397,29 @@ En vérifiant que l'import fonctionnerait aussi pour le trafic programme claimé
 `tsc --noEmit` propre (tsconfig temporaire excluant `.next`, `next dev` de Gildas actif en continu). **Pas de clic réel par Claude** (préférence de Gildas, serveur local laissé à sa disposition) — à tester par lui, notamment le cas complet "programme claimé → import → compte créé → vrai programme importé assigné" jamais vérifié en conditions réelles jusqu'ici (ni avant ce fix, ni après).
 
 Déployé en prod le 2026-08-29, commit `1c9b836`, push direct sur `main`.
+
+## Bannière "Séances libres" éditable par semaine + blocs façon Google Calendar en vue Mois (2026-08-30)
+
+Brainstorm avant exécution (Gildas a explicitement challengé une 1ère proposition trop lourde — voir historique de conversation) : au lieu d'un vrai concept de "bloc/mesocycle" (Accumulation/Intensification, table dédiée, programme virtuel), la demande réelle s'est réduite à quelque chose de beaucoup plus simple — pour un sportif qui ne suit pas de programme mais reconduit ses semaines, pouvoir renommer la bannière `ProgramBanner.tsx` ("Aucun programme actif" → texte libre), sportif et coach pouvant tous les deux l'éditer, et une notion de "bloc" en vue Mois façon événement multi-jours Google Calendar au-dessus de chaque ligne de semaine.
+
+### Label par semaine, pas global
+`profiles.free_training_label` / `coach_athletes.free_training_label` passent en JSONB (`{"2026-08-24": "Bloc perso"}`, clé = lundi de la semaine) — demande explicite de Gildas après un 1er essai à label global unique : un texte écrit sur une semaine ne doit jamais réapparaître sur une autre semaine "sans programme". Migration additive (`017_free_training_label.sql`), écrite puis réécrite une fois directement en JSONB dès qu'il est apparu que le 1er design (texte global) ne survivrait pas au retour suivant — la feature n'ayant jamais été déployée entre les deux, une seule migration finale plutôt que deux.
+
+### `ProgramBanner.tsx` — 2 nouveaux props, 1 nouvelle variante
+- `freeLabel`/`onEditFreeLabel` : édition inline (crayon ✏️, clic → input, Entrée/blur valide) sur l'état "sans programme" — chaque appelant résout lui-même le label de la semaine concernée (le composant ne connaît que la valeur déjà résolue pour l'instance en cours, jamais la map complète).
+- `compact` : variante une-ligne, réutilisée par-dessus chaque semaine en vue Mois (programme réel = icône+nom+`S{n}/{total}` ; sans programme = label+crayon+bouton ↻ Reconduire).
+- **Barres de charge rétrospectives testées puis retirées** : une 1ère version calculait 4 barres de charge glissantes (moyenne `target_difficulty` des vraies séances des 4 dernières semaines calendaires) pour l'état "sans programme", exactement comme les barres S1..SN d'un vrai programme — retiré après retour visuel de Gildas ("ça rend pas bien"), `src/lib/freeCycleBars.ts` supprimé entièrement plutôt que laissé mort.
+
+### `findProgramForWeek()` — factorisation
+Nouvelle fonction dans `programAssignment.ts` (à côté de `pickRelevantAssignment`, déjà existante) : "quel programme couvre telle semaine" était dupliqué en IIFE dans `WeekClient.tsx` et `CoachPlanningClient.tsx`, et il fallait un 3e appel par ligne de semaine en vue Mois — une seule fonction pure, réutilisée aux 3 endroits.
+
+### Vue Mois — bandeau plein + bandeaux compacts par semaine
+1er essai : masquer la bannière pleine largeur en vue Mois, ne garder que les bandeaux compacts par ligne — retiré à la demande de Gildas ("remets la bannière pleine en vue Mois en fait"), les deux coexistent désormais : bannière pleine au-dessus du calendrier (comme en vue Semaine, reflète la semaine actuellement sélectionnée) + un bandeau compact par ligne de semaine juste au-dessus de sa grille de 7 jours (programme réel ou label libre, cliquable pour éditer).
+
+### Écriture côté coach — nouvelle route `/api/coach/free-label`
+Même garde d'accès que `/api/coach/session`/`/api/coach/wellness` (vérifie `coach_athletes.coach_id = auth.uid()` via le client normal, écrit via le client admin) — écrit sur `profiles` pour un vrai sportif lié, sur `coach_athletes` pour un sportif démo. Lecture-fusion-écriture sur la map JSONB (lit la valeur courante avant d'y injecter/retirer la clé de la semaine éditée), pas un simple overwrite.
+
+### Vérifié
+`tsc --noEmit` propre à chaque round (seule erreur résiduelle : le faux positif `.next/types`/`getSportCategory` déjà documenté ailleurs dans ce fichier, `next dev` de Gildas actif en parallèle). **Pas de clic réel par Claude** — implémenté et itéré uniquement sur retours texte de Gildas (barres retirées, bannière pleine masquée puis remise, label par semaine), jamais vérifié en navigateur.
+
+Déployé en prod le 2026-08-30, commit `f115216`, push direct sur `main`.
