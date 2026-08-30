@@ -23,7 +23,7 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import PaywallModal from "@/components/paywall/PaywallModal";
@@ -87,7 +87,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [showWellness, setShowWellness] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
-  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number } | null>(null);
+  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
@@ -520,7 +520,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 alert = {
                   border: `${severityColor}66`,
                   glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff, undefined, baseline)}`,
                 };
                 alertActions = (
                   <AutoregButtons
@@ -533,7 +533,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     variant="light"
                     severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco, baseline })}
                     onUndo={async (original) => {
                       if (!original) return;
                       const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
@@ -779,7 +779,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               : null;
           })()}
           behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
-          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6)}
+          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, undefined, adjustCtx.baseline)}
           onClose={() => setAdjustCtx(null)}
           onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;

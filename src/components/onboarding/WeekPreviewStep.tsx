@@ -316,7 +316,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
                 <AlertBox alert={{
                   border: `${severityColor}66`,
                   glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, dayMaxDiff ?? 6)}`,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, dayMaxDiff ?? 6, undefined, baseline)}`,
                 }} />
               );
             } else {

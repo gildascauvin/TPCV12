@@ -690,7 +690,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           wellnessScore={adjustChainCtx.athlete.wellnessFilledToday === false ? null : adjustChainCtx.athlete.wellness_score}
           baseline={baselines[adjustChainCtx.athlete.id]}
           behaviors={adjustChainCtx.athlete.behaviors ?? []}
-          advice={autoregAdvice(adjustChainCtx.dir, adjustChainCtx.session.target_difficulty ?? 6, adjustChainCtx.athlete.name.split(" ")[0])}
+          advice={autoregAdvice(adjustChainCtx.dir, adjustChainCtx.session.target_difficulty ?? 6, adjustChainCtx.athlete.name.split(" ")[0], baselines[adjustChainCtx.athlete.id])}
           chainCurrent={reviewedPriorityCount - 1}
           chainTotal={sortedPriority.length}
           onSkip={handleAdjustChainSkip}

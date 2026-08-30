@@ -11,7 +11,7 @@ import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
 import TestsPanel from "@/components/tests/TestsPanel";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
@@ -92,6 +92,7 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
   // série pour garder du recul de tendance, puis découpés avec le même slicing que last7Baseline).
   const dimensionBadgesFull = baselineSeries ? dimensionBadgesSeries(baselineSeries) : [];
   const last7DimensionBadges = rangeMode === "month" ? dimensionBadgesFull.slice(-28) : dimensionBadgesFull.slice(-7);
+  const todayDimensionBadges = dimensionBadgesFull[dimensionBadgesFull.length - 1];
 
   const todayAcwr = series[series.length - 1]?.acwr ?? null;
   const loadInfo = todayAcwr !== null
@@ -154,7 +155,9 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>🌿 Récupération</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-            <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} size="sm" />
+            {todayDimensionBadges?.map(b => (
+              <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} size="sm" />
+            ))}
             {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
           </div>
         </div>

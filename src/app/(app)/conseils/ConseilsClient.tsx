@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries } from "@/lib/wellnessBaseline";
+import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
@@ -205,6 +205,8 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
   // découpés avec le même slicing que last7Baseline pour rester aligné index à index avec le chart.
   const dimensionBadgesFull = dimensionBadgesSeries(wellnessBaselineSeries);
   const last7DimensionBadges = rangeMode === "month" ? dimensionBadgesFull.slice(-28) : dimensionBadgesFull.slice(-7);
+  // Toujours le dernier point de la série complète (= aujourd'hui), indépendant du toggle Sem./Mois.
+  const todayDimensionBadges = dimensionBadgesFull[dimensionBadgesFull.length - 1];
 
   return (
     <>
@@ -327,7 +329,14 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
                       🌿 Récupération
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-                      <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} />
+                      {/* 4 badges de dimension (Sommeil/Stress/Récup./Motivation) à la place du
+                          badge composite "Fatigué/Équilibré/Frais" — flèche de tendance 7j
+                          uniquement, jamais l'indice Z brut (2026-08-31, retour explicite de
+                          Gildas). Repli sur rien si l'historique du jour est insuffisant (comme
+                          au survol du chart, même donnée). */}
+                      {todayDimensionBadges?.map(b => (
+                        <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} />
+                      ))}
                       {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
                     </div>
                   </div>
@@ -346,7 +355,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
                       weekLabels={rangeMode === "month"}
                     />
                   </div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Dégradé bleu = récupération (clair = en forme) · Pointillé coloré = Forme</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Trait dégradé = récupération (clair = en forme) · Pointillé coloré = Forme · Bande = écart entre les deux</div>
                 </div>
               </div>
 

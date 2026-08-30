@@ -39,7 +39,7 @@ import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessi
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 function dayWellness(
   athlete: CoachAthlete,
@@ -117,7 +117,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
-  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number } | null>(null);
+  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
@@ -848,7 +848,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 alert = {
                   border: `${severityColor}66`,
                   glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0])}`,
+                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0], baseline)}`,
                 };
                 alertActions = (
                   <AutoregButtons
@@ -861,7 +861,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     variant="light"
                     severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco })}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco, baseline })}
                     onUndo={async (original) => {
                       if (!original) return;
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: original });
@@ -980,7 +980,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           wellnessScore={dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory)}
           baseline={todayBaseline}
           behaviors={athlete.behaviors ?? []}
-          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0])}
+          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0], adjustCtx.baseline)}
           onClose={() => setAdjustCtx(null)}
           onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;

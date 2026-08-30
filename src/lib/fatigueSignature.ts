@@ -153,29 +153,50 @@ function severityOf(color: string): Severity {
  * de statut "alerte" pour ces deux-là (trendDimInfo ne renvoie que vert/gris/orange), seulement
  * "à surveiller" (fitness en baisse, fatigue en hausse) ou rien (stable/positif).
  */
+/* Action concrète par métrique (2026-08-31) — remplace les fins de phrase vagues ("à prendre au
+   sérieux", "reste attentif") par une vraie instruction, propre à CE qui a déclenché l'alerte plutôt
+   qu'un conseil générique. `fitness`/`fatigue` absents ici : jamais "alert" (voir commentaire de
+   chargeCrossInsight), seulement "watch" — pas d'action dédiée nécessaire, le fallback watch suffit. */
+const CHARGE_METRIC_ACTION: Record<"load" | "monotony" | "strain", { coach: string; athlete: string }> = {
+  load: {
+    coach: "réduis le volume ou l'intensité de ses prochaines séances.",
+    athlete: "réduis le volume ou l'intensité de tes prochaines séances.",
+  },
+  monotony: {
+    coach: "varie l'intensité d'un jour à l'autre plutôt que d'enchaîner des séances similaires.",
+    athlete: "varie l'intensité d'un jour à l'autre plutôt que d'enchaîner des séances similaires.",
+  },
+  strain: {
+    coach: "insère un jour de récupération avant sa prochaine séance dure.",
+    athlete: "insère un jour de récupération avant ta prochaine séance dure.",
+  },
+};
+
 export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
-  const items = [
-    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", sev: severityOf(loadInfo.color) },
-    { name: coach ? "sa monotonie" : "ta monotonie", sev: severityOf(monotonyInfo.color) },
-    { name: coach ? "son strain" : "ton strain", sev: severityOf(strainInfo.color) },
+  const items: { name: string; key: "load" | "monotony" | "strain" | "fitness" | "fatigue"; sev: Severity }[] = [
+    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", key: "load", sev: severityOf(loadInfo.color) },
+    { name: coach ? "sa monotonie" : "ta monotonie", key: "monotony", sev: severityOf(monotonyInfo.color) },
+    { name: coach ? "son strain" : "ton strain", key: "strain", sev: severityOf(strainInfo.color) },
   ];
-  if (fitnessTrendInfo) items.push({ name: coach ? "sa fitness" : "ta fitness", sev: severityOf(fitnessTrendInfo.color) });
-  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", sev: severityOf(fatigueTrendInfo.color) });
-  const alerts = items.filter(i => i.sev === "alert").map(i => i.name);
-  const watches = items.filter(i => i.sev === "watch").map(i => i.name);
+  if (fitnessTrendInfo) items.push({ name: coach ? "sa fitness" : "ta fitness", key: "fitness", sev: severityOf(fitnessTrendInfo.color) });
+  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", key: "fatigue", sev: severityOf(fatigueTrendInfo.color) });
+  const alerts = items.filter(i => i.sev === "alert");
+  const watches = items.filter(i => i.sev === "watch");
   if (alerts.length >= 2) return coach
-    ? `Plusieurs signaux de charge convergent vers un risque accru (${alerts.join(", ")}) : allègement conseillé dans les prochains jours.`
-    : `Plusieurs signaux de charge convergent vers un risque accru (${alerts.join(", ")}) : allège significativement dans les prochains jours.`;
-  if (alerts.length === 1) return coach
-    ? `${alerts[0]} est en zone de risque : à prendre au sérieux, même si le reste va bien.`
-    : `${alerts[0]} est en zone de risque : prends-le au sérieux, même si le reste va bien.`;
+    ? `Plusieurs signaux de charge convergent vers un risque accru (${alerts.map(a => a.name).join(", ")}) : allègement conseillé dans les prochains jours.`
+    : `Plusieurs signaux de charge convergent vers un risque accru (${alerts.map(a => a.name).join(", ")}) : allège significativement dans les prochains jours.`;
+  if (alerts.length === 1) {
+    const key = alerts[0].key as "load" | "monotony" | "strain"; // fitness/fatigue jamais "alert"
+    const action = CHARGE_METRIC_ACTION[key][coach ? "coach" : "athlete"];
+    return `${alerts[0].name} est en zone de risque : ${action}`;
+  }
   if (watches.length >= 2) return coach
-    ? `${watches.join(" et ")} sont à surveiller ensemble ces prochains jours.`
-    : `${watches.join(" et ")} sont à surveiller ensemble : reste attentif ces prochains jours.`;
+    ? `${watches.map(w => w.name).join(" et ")} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`
+    : `${watches.map(w => w.name).join(" et ")} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`;
   if (watches.length === 1) return coach
-    ? `${watches[0]} est à surveiller, le reste de sa charge est sain.`
-    : `${watches[0]} est à surveiller, le reste de ta charge est sain.`;
+    ? `${watches[0].name} est à surveiller : le reste de ses indicateurs est bon.`
+    : `${watches[0].name} est à surveiller : le reste de tes indicateurs est bon.`;
   const extra = (fitnessTrendInfo || fatigueTrendInfo) ? ", fitness et fatigue" : "";
   return `Charge, monotonie, strain${extra} sont tous dans des zones saines : rien à ajuster.`;
 }
@@ -214,11 +235,11 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
     ? "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, récupération à prioriser."
     : "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.") + suffix;
   if (wellGood && formBad) return (coach
-    ? "Récupération bonne, mais charge récente au-dessus de l'habituelle : une fatigue avec décalage est possible dans les prochains jours."
-    : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : une fatigue avec décalage est possible dans les prochains jours.") + suffix;
+    ? "Récupération bonne, mais charge récente au-dessus de l'habituelle : surveille les prochains jours, une fatigue avec décalage peut encore apparaître."
+    : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : reste vigilant les prochains jours, une fatigue avec décalage peut encore apparaître.") + suffix;
   if (wellBad && formGood) return (coach
-    ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement — sommeil/stress à explorer."
-    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement — regarde sommeil/stress.") + suffix;
+    ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie son sommeil et son stress des derniers jours."
+    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie ton sommeil et ton stress des derniers jours.") + suffix;
   return recoveryInfo.text + suffix;
 }
 

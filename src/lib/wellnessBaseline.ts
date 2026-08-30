@@ -288,7 +288,45 @@ export function describeDominantDimension(b: WellnessBaselineResult, perspective
   return `${DIMENSION_LABELS[dim]} ${intensity} de ${poss} norme`;
 }
 
+/* Libellé court (minuscule, ex. "sommeil") d'une dimension à citer entre parenthèses dans une reco
+   D'AUTORÉGULATION (Alléger/Surcharger, autoregAdvice() dans autoregulation.ts) — plus stricte que
+   describeDrivingDimension()/describeDominantDimension() ci-dessus (seuil Z_MODERATE, pas Z_SWC) :
+   une reco actionnable ne doit citer une dimension que si elle domine clairement, jamais sur un
+   simple "un peu en dessous", pour ne pas laisser croire à une précision que le calcul (basé sur le
+   score COMPOSITE, pas une dimension) n'a pas réellement. "low" cherche la dimension la plus
+   négative (celle qui tire vers le bas), "high" cherche la plus positive (celle qui explique la
+   marge) — jamais l'inverse d'un côté à l'autre. Retourne null si l'historique est insuffisant ou si
+   aucune dimension ne domine assez nettement (état bas/haut diffus, réparti sur les 4 à la fois). */
+export function autoregDimensionLabel(dir: "low" | "high", b: WellnessBaselineResult | null | undefined): string | null {
+  if (!b?.hasEnoughHistory) return null;
+  let bestDim: DimensionKey | null = null;
+  let bestZ = dir === "low" ? Infinity : -Infinity;
+  for (const k of DIMENSION_KEYS) {
+    const raw = b.dimensions[k].z;
+    if (raw === null) continue;
+    const dz = directionalZ(k, raw);
+    if (dir === "low" ? dz < bestZ : dz > bestZ) { bestZ = dz; bestDim = k; }
+  }
+  if (!bestDim) return null;
+  if (dir === "low" ? bestZ >= -Z_MODERATE : bestZ <= Z_MODERATE) return null;
+  return DIMENSION_LABELS[bestDim].toLowerCase();
+}
+
 export type DimensionBadge = { key: DimensionKey; label: string; z: number; arrow: "up" | "down" | "stable" };
+
+/* Symbole + couleur d'un badge de dimension pour un affichage PERMANENT (ex. ligne de badges
+   Sommeil/Stress/Récup./Motivation sur le chart Récupération, 2026-08-31, retour explicite de
+   Gildas — remplace le badge composite "Fatigué/Équilibré/Frais" par ces 4-là) — même convention
+   que trendDimInfo() (fatigueSignature.ts, badges Fitness/Fatigue de la carte Charge) : la couleur
+   reflète la DIRECTION du delta 7j, jamais l'indice Z brut (volontairement omis, seule la flèche
+   compte ici). Toutes les dimensions étant déjà orientées "plus haut = mieux" (stress pré-inversé,
+   voir dimensionRaw() plus haut), ↑ est toujours favorable (vert), ↓ toujours défavorable (orange),
+   sans logique asymétrique entre dimensions (contrairement à Fitness/Fatigue, conceptuellement
+   opposées). */
+export const DIMENSION_ARROW: Record<DimensionBadge["arrow"], string> = { up: "↑", down: "↓", stable: "→" };
+export function dimensionBadgeColor(arrow: DimensionBadge["arrow"]): string {
+  return arrow === "up" ? "#2f9e44" : arrow === "down" ? "#f28a00" : "#8a8f94";
+}
 
 /* Badges de dimension pour un point donné d'une série (ex. survol du chart Récupération) — un badge
    par dimension avec historique suffisant, Z + tendance (comparée au même point ~`trendLookback`

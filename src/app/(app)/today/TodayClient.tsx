@@ -802,7 +802,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   alert={{
                     border: `${severityColor}66`,
                     glow: severityColor,
-                    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff)}`,
+                    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff, undefined, wellnessBaseline)}`,
                   }}
                   actions={
                 <AutoregButtons

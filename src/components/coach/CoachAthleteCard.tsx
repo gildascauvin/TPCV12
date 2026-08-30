@@ -328,7 +328,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             alert={{
               border: `${badgeColor}66`,
               glow: badgeColor,
-              text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, selfView ? undefined : firstName)}`,
+              text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, topSession.target_difficulty ?? maxDiff, selfView ? undefined : firstName, baseline)}`,
             }}
             actions={
               <AutoregButtons

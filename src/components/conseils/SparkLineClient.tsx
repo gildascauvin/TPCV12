@@ -216,6 +216,24 @@ export default function SparkLineClient({
     if (cur2.length) segments2.push(cur2);
   }
 
+  /* Ombrage ENTRE les deux courbes (points vs points2) plutôt que sous la courbe wellness seule
+     (2026-08-31, retour explicite de Gildas — "ça met en avant les divergences ou convergences de
+     forme issues de la charge ou du subjectif") : la largeur de la bande EST le signal — fine =
+     wellness et Forme alignés, large = ils divergent. Segmenté partout où l'UNE des deux séries est
+     manquante (pas seulement wellness), jamais une zone remplie sur une portion où l'une des deux
+     valeurs est inconnue. */
+  type BetweenSeg = { x: number; yTop: number; yBottom: number }[];
+  const betweenSegments: BetweenSeg[] = [];
+  if (points2) {
+    let curB: BetweenSeg = [];
+    points.forEach((v, i) => {
+      const v2 = points2![i];
+      if (v === null || v2 === null || v2 === undefined) { if (curB.length) { betweenSegments.push(curB); curB = []; } }
+      else curB.push({ x: toX(i), yTop: toY(v), yBottom: toY(v2) });
+    });
+    if (curB.length) betweenSegments.push(curB);
+  }
+
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const xRatio = (e.clientX - rect.left) / rect.width;
@@ -375,6 +393,16 @@ export default function SparkLineClient({
           ) : (
             // Line + area chart
             <>
+              {/* Bande "entre les deux courbes" — remplace l'aire sous wellness seule quand une
+                  série secondaire (Forme) existe ; rendue AVANT les traits pour qu'ils passent
+                  par-dessus. Couleur neutre orange très diluée : ce n'est pas un signal de
+                  sévérité, juste un repère visuel de largeur = écart. */}
+              {points2 && betweenSegments.map((seg, si) => {
+                if (seg.length < 2) return null;
+                const forward = seg.map(p => `${p.x.toFixed(1)},${p.yTop.toFixed(1)}`).join(" L ");
+                const backward = [...seg].reverse().map(p => `${p.x.toFixed(1)},${p.yBottom.toFixed(1)}`).join(" L ");
+                return <path key={`between-${si}`} d={`M ${forward} L ${backward} Z`} fill="rgba(242,138,0,0.12)" stroke="none" />;
+              })}
               {segments.map((seg, si) => {
                 if (!seg.length) return null;
                 const ptStr = seg.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -387,7 +415,10 @@ export default function SparkLineClient({
                 const strokeFill = sequentialFill ? `url(#wellness-grad-${uid})` : color;
                 return (
                   <g key={si}>
-                    <path d={fillD} fill={strokeFill} fillOpacity={sequentialFill ? 0.28 : 0.12} />
+                    {/* Aire sous la courbe seule : uniquement en repli quand pas de série
+                        secondaire (points2 absent) — sinon la bande "entre les deux courbes"
+                        ci-dessus porte déjà le remplissage. */}
+                    {!points2 && <path d={fillD} fill={strokeFill} fillOpacity={sequentialFill ? 0.28 : 0.12} />}
                     {seg.length > 1
                       ? <polyline points={ptStr} fill="none" stroke={strokeFill} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
                       : <circle cx={seg[0].x} cy={seg[0].y} r={3} fill={strokeFill} />}

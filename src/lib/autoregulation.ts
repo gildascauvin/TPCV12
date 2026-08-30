@@ -4,7 +4,7 @@
 // détecter le signal et proposer la décision, jamais de modification automatique.
 
 import {
-  Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE,
+  Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE, autoregDimensionLabel,
   type WellnessBaselineResult,
 } from "@/lib/wellnessBaseline";
 
@@ -102,17 +102,29 @@ export function formatAutoregPct(v: number): string {
 }
 
 /* subject omis = à la 2e personne (Aujourd'hui, sportif sur sa propre séance) ; fourni = à la 3e
-   personne (Coach Control / Planning coach, prénom du sportif). */
-export function autoregAdvice(dir: AutoregDir, plannedDifficulty: number, subject?: string): string {
+   personne (Coach Control / Planning coach, prénom du sportif).
+   `baseline` (optionnel, 2026-08-31) : cite la dimension dominante entre parenthèses ("Récupération
+   basse (sommeil)") UNIQUEMENT quand une dimension domine clairement (autoregDimensionLabel(),
+   seuil Z_MODERATE — plus strict que les seuils purement descriptifs) — le calcul qui déclenche
+   cette reco (computeAutoregSuggestion) regarde le score COMPOSITE, pas une dimension précise ;
+   citer une dimension à chaque fois donnerait une fausse impression de précision sur un état bas/
+   haut en réalité diffus, réparti sur les 4 dimensions à la fois. Repli sur le texte générique
+   (comportement inchangé) si `baseline` est omis ou si aucune dimension ne ressort. */
+export function autoregAdvice(
+  dir: AutoregDir, plannedDifficulty: number, subject?: string,
+  baseline?: WellnessBaselineResult | null,
+): string {
   const qualif = qualitativeDifficulty(plannedDifficulty);
+  const dimLabel = autoregDimensionLabel(dir === "low" ? "low" : "high", baseline);
+  const dimSuffix = dimLabel ? ` (${dimLabel})` : "";
   if (dir === "low") {
     return subject
-      ? `Récupération basse — la séance ${qualif} prévue est trop élevée pour l'état de forme de ${subject}.`
-      : `Récupération basse — la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
+      ? `Récupération basse${dimSuffix} : la séance ${qualif} prévue est trop élevée pour l'état de forme de ${subject}.`
+      : `Récupération basse${dimSuffix} : la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
   }
   return subject
-    ? `Forme optimale — la séance ${qualif} prévue laisse de la marge pour ${subject}.`
-    : `Forme optimale — la séance ${qualif} prévue laisse de la marge. Tu peux pousser plus.`;
+    ? `Forme optimale${dimSuffix} : la séance ${qualif} prévue laisse de la marge pour ${subject}.`
+    : `Forme optimale${dimSuffix} : la séance ${qualif} prévue laisse de la marge. Tu peux pousser plus.`;
 }
 
 export function autoregTitle(dir: AutoregDir): string {
