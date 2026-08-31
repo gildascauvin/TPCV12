@@ -16,9 +16,8 @@ import WellnessCheckStep from "@/components/onboarding/WellnessCheckStep";
 import AutoRegScoreStep, { computeAthleteAutoregProfile } from "@/components/onboarding/AutoRegScoreStep";
 import AutoRegScoreStepCoach, { computeCoachAutoregProfile } from "@/components/onboarding/AutoRegScoreStepCoach";
 import CelebrationScreen from "@/components/onboarding/CelebrationScreen";
-import { CheckoutForm, PRICING, PAYWALL_AVATARS, PAYWALL_CTA_LABEL, getStripePromise, type Billing } from "@/components/paywall/PaywallModal";
-import { PricingPrimingContent, PRICING_PRIMING_GUARANTEE_CAPTION } from "@/components/paywall/PricingPriming";
-import { Elements } from "@stripe/react-stripe-js";
+import PaywallModal, { PAYWALL_AVATARS, type Billing } from "@/components/paywall/PaywallModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -60,7 +59,9 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    (pain points → score → concept) par une construction directe : sport+faiblesses (un seul écran,
    fusionnés) → jours → programme réel (aperçu éphémère, aucun compte requis) → rôle → décision
    d'autorégulation vécue (week_preview_2a/2b, déjà l'aha réel depuis le 2026-08-14) → compte →
-   formule. Rôle et Signup repositionnés le 2026-08-18/19 (voir discussion funnel du 2026-08-16→19) :
+   célébration → formule (paywall obligatoire-mais-skippable, réintroduit le 2026-08-31 après
+   celebration — voir doc juste avant les 4 tableaux de path plus bas). Rôle et Signup repositionnés
+   le 2026-08-18/19 (voir discussion funnel du 2026-08-16→19) :
    le rôle attend d'avoir montré un programme concret ("Pour moi / Pour mes sportifs" plutôt qu'une
    catégorisation à froid), le signup attend le vrai AHA (decision_2a/2b) — seul moment où il y a
    quelque chose de réel à vouloir sauvegarder. Ancienne distinction control/test "position du
@@ -80,6 +81,19 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    (simulation de forme + reco déjà intégrées à l'aperçu du programme, voir WeekPreviewStep.tsx).
    StepId/JSX/state gardés intacts (dead code assumé, même principe que les autres steps dépréciés
    documentés en tête de ce bloc). */
+/* paywall_priming/paywall_form réintroduits dans les 4 paths actifs (2026-08-31), APRÈS celebration
+   — pas avant comme avant le retrait du 2026-08-19. Différence structurelle avec l'ancien modèle
+   CB-obligatoire : ce paywall est vu par 100% de ceux qui terminent l'onboarding (obligatoire dans
+   le sens "sur le chemin", jamais sauté silencieusement) mais **skippable** — voir skipPaywall(),
+   câblé sur le "×" de PrimingJourneyModal/PaywallModal (les 2 écrans sont désormais rendus en
+   important directement ces composants du gating in-app, "exactement le même habillage", demande
+   explicite de Gildas — plus une copie parallèle "Plus tard →" spécifique à l'onboarding, tentée
+   puis retirée le jour même). onboarding_done reste posé à l'activation
+   (createAccount/finishAthleteActivation/finishCoachActivation), jamais gaté par ce paywall — payer
+   ou fermer n'a aucun effet sur l'accès (modèle produit-gated du 2026-08-19/20 inchangé, seul un
+   save ultérieur reste gaté). Position choisie précisément pour que fermer laisse toujours une
+   suite naturelle : wellness_q côté sportif (déjà le dernier step), /coach côté coach (déjà la
+   sortie normale) — jamais un cul-de-sac. */
 const ATHLETE_PATH: StepId[] = [
   "value_intro",
   "sport_2a",
@@ -90,6 +104,8 @@ const ATHLETE_PATH: StepId[] = [
   "decision_2a",
   "account",
   "celebration",
+  "paywall_priming",
+  "paywall_form",
   "wellness_q",
 ];
 const COACH_PATH: StepId[] = [
@@ -102,6 +118,8 @@ const COACH_PATH: StepId[] = [
   "decision_2b",
   "account",
   "celebration",
+  "paywall_priming",
+  "paywall_form",
 ];
 
 const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
@@ -231,12 +249,14 @@ function ReconductionTeaserScreen({ role }: { role: Role | null }) {
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "sport_2a", "level_2a", "days_2a",
-  "week_preview_2a", "role", "decision_2a", "account", "celebration", "wellness_q",
+  "week_preview_2a", "role", "decision_2a", "account", "celebration",
+  "paywall_priming", "paywall_form", "wellness_q",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
   "sport_2a", "level_2a", "days_2a",
   "week_preview_2b", "role", "decision_2b", "account", "celebration",
+  "paywall_priming", "paywall_form",
 ];
 
 /* Anciennes variantes "courtes" de l'A/B test short-onboarding-signup — désormais identiques aux
@@ -1137,9 +1157,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
     return 0;
   });
-  /* Posé une seule fois, au succès de trial_started dans paywall_form — insère l'activation
-     (wellness_q/wellness_reveal ou invite_team) après celebration, voir getPath(). */
-  const [paidExtras, setPaidExtras] = useState<StepId[] | null>(null);
   const [role, setRole]       = useState<Role>(pendingData?.role || initialRole || "athlete");
   /* roleChosen ne dérive plus de initialRole (2026-08-06) : le rôle pré-rempli par un ?role= dans
      l'URL (iframes programme, landing pages) mesurait nettement moins bien que le demander sur un
@@ -1463,6 +1480,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
   const canGoBack = stepIdx > 0 && !["celebration", "wellness_q", "wellness_reveal", "invite_team"].includes(currentStep);
 
+  /* onDismiss du "×" de PrimingJourneyModal sur paywall_priming (2026-08-31, voir doc du path plus
+     haut — même composant/même "×" que le gating in-app, demande explicite de Gildas). Saute
+     paywall_priming ET paywall_form d'un coup, jamais juste le step courant — quelqu'un qui ferme
+     l'offre ne doit jamais atterrir malgré lui sur le formulaire Stripe qu'il vient de refuser.
+     paywall_form a son propre "×"/"← Retour" (onClose de PaywallModal) mais câblé sur goBack, pas
+     celui-ci — comportement identique à l'in-app (onClose y renvoie vers priming, jamais un skip
+     complet). Même filet que next() pour la redirection de fin de path (coach, qui n'a rien après
+     paywall_form). */
+  function skipPaywall() {
+    posthog.capture("onboarding_paywall_skipped", { role, ab_variant: assignedVariant ?? "control" });
+    const formIdx = path.indexOf("paywall_form");
+    const targetIdx = formIdx === -1 ? stepIdx + 1 : formIdx + 1;
+    if (targetIdx >= path.length) {
+      window.location.href = role === "coach" ? "/coach" : "/today";
+    } else {
+      setStepIdx(targetIdx);
+    }
+  }
+
   /* Retour depuis week_preview atteint via import (advanceToWeekPreviewViaImport a sauté
      level_2a/days_2a) — goBack() décrémenterait stepIdx d'une seule position, ramenant sur
      days_2a, un step jamais réellement vu sur ce chemin. Cherche sport_2a en arrière dans le path
@@ -1772,12 +1808,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         await generateAndAssignProgram(uid, { ...pendingAthleteProgramOptsRef.current, startDate: chosenStartDate, wellnessAdjustment });
         pendingAthleteProgramOptsRef.current = null;
       }
-      /* Retrait du paywall obligatoire de l'onboarding (2026-08-19, chantier gating save) :
-         onboarding_done ne dépend plus d'un paiement (handlePaymentSuccess(), plus jamais atteint
-         depuis que paywall_priming/paywall_form sont sortis des paths actifs) — le vrai jalon de
-         fin d'onboarding redevient l'activation elle-même, comme avant l'introduction du paywall
-         obligatoire. Ce premier wellness reste la seule sauvegarde gratuite du compte (voir
-         requireSubscription() sur /today, /week — tout wellness suivant est gaté). */
+      /* onboarding_done posé ici, pas au paiement (2026-08-19, chantier gating save) — inchangé par
+         la réintroduction du paywall obligatoire-mais-skippable du 2026-08-31 : ce paywall (juste
+         après celebration désormais) n'a plus voix au chapitre sur l'accès, payer ou cliquer
+         "Plus tard" ne change rien à onboarding_done. Ce premier wellness reste la seule sauvegarde
+         gratuite du compte (voir requireSubscription() sur /today, /week — tout wellness suivant
+         est gaté). */
       await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
     }
     next();
@@ -1957,44 +1993,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     if (sent.length) setInviteResult(sent.some(r => r.linked) ? "linked" : "pending");
   }
 
-  /* Paywall scindé en 2 écrans plein-page, dans le path comme tout le reste — plus un modal
-     déclenché manuellement (voir Pivot A/B, "Réordonnancement Paywall → Célébration → Activation"). */
+  /* Paywall scindé en 2 écrans plein-page (2026-08-31 : rendus directement via PrimingJourneyModal/
+     PaywallModal, les mêmes composants que le gating in-app — voir doc du path plus haut). Tracking
+     paywall_priming_viewed/paywall_form_viewed et setup-intent Stripe sont désormais internes à ces
+     2 composants, plus besoin de les dupliquer ici — seul `billing` reste levé dans ce fichier
+     (partagé entre les deux écrans, même pattern que usePaywall.ts). */
   const [billing, setBilling] = useState<Billing>("annual");
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [loadingIntent, setLoadingIntent] = useState(true);
-  const [setupError, setSetupError] = useState<string | null>(null);
-  const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (currentStep !== "paywall_priming") return;
-    /* Remplace l'ancien handleStartTrial() : la vue "priming" est désormais une entrée de path
-       normale (voir onboarding_step_viewed émis par ailleurs), on garde cet event nommé pour la
-       continuité analytique. celebration_cta_clicked n'a plus de sens (celebration ne mène plus
-       au paywall) — abandonné, pas renommé pour ne pas laisser un event trompeur. */
-    posthog.capture("paywall_priming_viewed", { plan: role, objective: goal, ab_variant: assignedVariant ?? "control" });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep]);
-
-  useEffect(() => {
-    if (currentStep !== "paywall_form" || clientSecret || setupError) return;
-    fetch("/api/stripe/setup-intent", { method: "POST" })
-      .then(r => r.json())
-      .then((json) => {
-        if (json.error) { setSetupError(`Erreur: ${json.error}`); setLoadingIntent(false); return; }
-        setClientSecret(json.clientSecret);
-        setLoadingIntent(false);
-      })
-      .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep]);
-
-  /* Paiement confirmé (trial_started, capturé dans CheckoutForm) : c'est ici, et seulement ici,
-     que onboarding_done passe à true — payer est le vrai jalon qui débloque l'app, l'activation
-     (wellness_q/invite_team) qui suit n'est pas bloquante si abandonnée après coup. */
+  /* Paiement confirmé (trial_started, capturé dans CheckoutForm) — onboarding_done est déjà true
+     depuis l'activation (voir createAccount()/finishAthleteActivation()/finishCoachActivation()),
+     payer ne le repose ici que par défense en profondeur (idempotent), ce n'est plus le jalon qui
+     débloque quoi que ce soit (paywall obligatoire-mais-skippable depuis le 2026-08-31, voir doc du
+     path). wellness_q/coach reste la suite normale du path, next() suffit. */
   async function handlePaymentSuccess() {
     const uid = userId || newUserId;
     if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
-    setPaidExtras(role === "coach" ? ["invite_team"] : ["wellness_q", "wellness_reveal"]);
     next();
   }
 
@@ -3465,103 +3478,43 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── PAYWALL PRIMING (pricing + réassurance) ── */}
+        {/* ── PAYWALL PRIMING — même composant que le gating in-app (2026-08-31) ── */}
         {currentStep === "paywall_priming" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
-          // Retiré (2026-08-17) : l'ancien headline "Ta charge d'entraînement irrégulière limite ta
-          // progression en endurance."/coach équivalent était statique par rôle, jamais personnalisé
-          // — un powerlifter voyait littéralement un texte sur l'endurance (retour de Gildas). Il
-          // provenait des pain points (frustration/overload/planning/fatigue), retirés du flow avec
-          // le reste du diagnostic self-report (voir refonte "zéro problem awareness" en tête de
-          // fichier) — plus aucune donnée pour le personnaliser légitimement. Remplacé par le même
-          // headline honnête déjà utilisé par PrimingJourneyModal.tsx (gating in-app, PricingPriming.tsx)
-          // — cohérent entre les deux surfaces plutôt que deux textes différents pour le même écran.
           const headline = isClaimed
             ? `Ton programme ${claimedProgramName} t'attend.`
-            : (role === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
+            : undefined; // repli sur le headline générique par rôle de PrimingJourneyModal, identique à l'in-app
           const displaySport = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : (sport || undefined);
           const durationWeeks = claimedProgramWeeks ?? 4;
           const realSessionCount = trainingDays.length > 0 ? trainingDays.length * durationWeeks : undefined;
           return (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", textTransform: "uppercase", color: "#d44000", marginBottom: 10 }}>
-                🎯 Ta formule
-              </div>
-              <PricingPrimingContent
-                role={role === "coach" ? "coach" : "athlete"}
-                billing={billing}
-                setBilling={setBilling}
-                headline={headline}
-                sport={displaySport}
-                sessionCount={role === "coach" ? undefined : realSessionCount}
-                weaknessLabels={role === "coach" ? undefined : weaknessLabels}
-                name={name}
-              />
-              <Actions onBack={canGoBack ? goBack : undefined} onNext={next} nextLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} caption={PRICING_PRIMING_GUARANTEE_CAPTION} />
-            </div>
+            <PrimingJourneyModal
+              mode={role === "coach" ? "coach" : "athlete"}
+              billing={billing}
+              setBilling={setBilling}
+              allowDismiss
+              onContinue={next}
+              onDismiss={skipPaywall}
+              headline={headline}
+              sport={displaySport}
+              sessionCount={role === "coach" ? undefined : realSessionCount}
+              weaknessLabels={role === "coach" ? undefined : weaknessLabels}
+              name={name}
+            />
           );
         })()}
 
-        {/* ── PAYWALL FORM (carte Stripe, plein écran) ── */}
-        {currentStep === "paywall_form" && (() => {
-          const p = PRICING[role === "coach" ? "coach" : "athlete"];
-          const isMonthly = billing === "monthly";
-          const renewalDate = new Date();
-          if (isMonthly) renewalDate.setMonth(renewalDate.getMonth() + 1);
-          else renewalDate.setFullYear(renewalDate.getFullYear() + 1);
-          const renewalDateStr = renewalDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: isMonthly ? undefined : "numeric" });
-          return (
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-                🔒 Garanti 14j
-              </div>
-              <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>Passe au niveau supérieur.</div>
-
-              {/* Reçu (2026-07-30, mis à jour 2026-08-07 : plus d'essai, montant réel dû
-                  aujourd'hui) — un seul bloc façon reçu (Dû aujourd'hui / garantie / renouvellement),
-                  même structure que le POC A3 validé, chiffres réels au lieu de "0€"/"essai". */}
-              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "16px 17px", marginBottom: 20 }}>
-                <div
-                  onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(0,0,0,.07)", paddingBottom: 12, marginBottom: 12, cursor: "pointer" }}>
-                  <span style={{ fontSize: 13, color: "#8a8f94", fontWeight: 700 }}>{isMonthly ? "Facturé mensuellement" : "Facturé annuellement"}</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontWeight: 900, fontSize: 15 }}>
-                  <span>Dû aujourd&apos;hui</span>
-                  <span style={{ fontSize: 22, fontWeight: 1000, color: "#d44000" }}>{isMonthly ? `${p.monthly}€` : `${p.annual}€`}</span>
-                </div>
-                <div style={{ fontSize: 13, color: "#8a8f94", padding: "4px 0 6px", lineHeight: 1.5 }}>
-                  🛡️ Remboursable sous 14 jours, sans justification.
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: 13, color: "#8a8f94", paddingTop: 2 }}>
-                  <span>Renouvellement le {renewalDateStr}</span>
-                  <span>{isMonthly ? `${p.monthly}€/mois` : `${p.annual}€/an (${p.annualMonthly}€/mois)`}</span>
-                </div>
-              </div>
-
-              {loadingIntent && <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement du formulaire...</div>}
-              {setupError && <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{setupError}</div>}
-              {clientSecret && (
-                <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } } }}>
-                  <CheckoutForm mode={role} billing={billing} footerPortalNode={footerPortalNode} onSuccess={handlePaymentSuccess} abVariant={assignedVariant ?? "control"} ctaLabel={PAYWALL_CTA_LABEL[role === "coach" ? "coach" : "athlete"]} showBillingLegal={false} />
-                </Elements>
-              )}
-              {/* Le footer sticky de CheckoutForm (récap + bouton + mention sécurité) est plus haut
-                  que le footer 1-bouton standard des autres steps — le padding-bottom global de
-                  OnboardingBackground (120px) ne suffit pas à empêcher le footer fixed de recouvrir
-                  le texte légal Stripe juste au-dessus. Espace réservé en plus, propre à ce step. */}
-              <div style={{ height: 80 }} />
-              {/* Portail : le bouton submit Stripe doit rester lié au <form> (CheckoutForm) tout en
-                  étant ancré au bas du viewport comme le footer de tous les autres steps — même
-                  largeur de contenu que Actions.tsx "light" (maxWidth 560, centré), pas pleine
-                  largeur de la page. */}
-              <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, background: "#fff" }}>
-                <div ref={setFooterPortalNode} style={{ maxWidth: colMaxWidth, margin: "0 auto" }} />
-              </div>
-            </div>
-          );
-        })()}
+        {/* ── PAYWALL FORM — même composant que le gating in-app (2026-08-31) ── */}
+        {currentStep === "paywall_form" && (
+          <PaywallModal
+            mode={role === "coach" ? "coach" : "athlete"}
+            allowDismiss
+            onClose={goBack}
+            onSuccess={handlePaymentSuccess}
+            initialBilling={billing}
+            abVariant={assignedVariant ?? "control"}
+          />
+        )}
 
         {/* ── CÉLÉBRATION + UPGRADE PITCH ── */}
         {currentStep === "celebration" && (() => {

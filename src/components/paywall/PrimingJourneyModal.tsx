@@ -12,6 +12,19 @@ interface Props {
   allowDismiss: boolean;
   onContinue: () => void;
   onDismiss: () => void;
+  /** Personnalisation optionnelle (2026-08-31) — l'onboarding rend désormais ce composant tel
+      quel pour paywall_priming (plus une copie parallèle) afin de garder "le même habillage" que
+      le gating in-app, y compris le "×"/onDismiss. Ces 5 props restent absentes de tous les
+      appelants in-app existants (repli sur le headline générique + PricingPrimingContent sans
+      personnalisation, comportement inchangé pour eux) — seul l'onboarding les fournit, pour ne
+      pas perdre le titre "Ton programme {nom} t'attend"/sport/faiblesses/prénom qu'il avait avant
+      ce changement. Voir PricingPrimingProps (PricingPriming.tsx) pour le détail de chaque champ. */
+  headline?: string;
+  sub?: string | null;
+  sport?: string;
+  sessionCount?: number;
+  weaknessLabels?: string[];
+  name?: string;
 }
 
 /* Shell modal (dismissible) autour du contenu partagé PricingPrimingContent — voir
@@ -19,12 +32,12 @@ interface Props {
    Décision explicite de Gildas (2026-08-07) : ce composant et l'étape paywall_priming de
    l'onboarding (OnboardingFlow.tsx) doivent rester "exactement le même composant" — toute
    modification de contenu se fait uniquement dans PricingPriming.tsx. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name }: Props) {
   useEffect(() => {
     posthog.capture("paywall_priming_viewed", { plan: mode });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const headline = mode === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.";
+  const headline = headlineProp ?? (mode === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
 
   const ctaBtn: React.CSSProperties = {
     width: "100%", height: 50, borderRadius: 14, border: "none",
@@ -41,7 +54,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
       <div style={{ minHeight: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ width: "100%", maxWidth: 640, padding: "36px 20px 140px" }}>
-          <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} />
+          <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} />
         </div>
       </div>
 
