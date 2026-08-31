@@ -2565,3 +2565,48 @@ Une décision déjà "traitée" (`overrides`/`decidedIds`, via `AutoregButtons`)
 `tsc --noEmit` propre à chaque étape. Calibration vérifiée par script Node reproduisant les formules réelles du repo (pas en relisant le code seul, ni en devinant une valeur) — voir `/private/tmp/.../scratchpad/calib.mjs`, jetable, pas committé. Pas de clic réel par Claude — testé en local par Gildas lui-même (`next dev` déjà lancé, laissé à sa disposition).
 
 Déployé en prod le 2026-08-31, commit `6ab13f2`, push direct sur `main`.
+
+## Bottom nav — bouton "+" central, onglets Analyses/Programmes, header réorganisé (2026-09-01)
+
+Point de départ : demande de refonte de la nav bas coach+sportif façon capture fournie (rond "+" central pour créer rapidement). Discuté avant d'exécuter (`AskUserQuestion`) : le "+" ne propose que Séance/Programme, jamais "Ajouter un sportif" (action rare/administrative, déjà chez elle sur l'onglet Sportifs via `InviteModal`) ; les options s'ouvrent dans un bottom sheet compact, pas un drawer plein (`ProgramCreatePicker`-like) — un simple routage à 2 choix ne mérite pas ce poids. Chantier étendu en cours de route sur plusieurs tours de retours visuels de Gildas (nav mobile qui ne tenait pas, "+" décentré, espacement inégal).
+
+### "+" central — `QuickAddSheet.tsx`
+Nouveau composant : petit bottom sheet (backdrop + carte, `sheetInUp`) avec 2 lignes ("📝 Ajouter une séance" / "📚 Nouveau programme"), chacune un `Link` vers `/week?quickadd=session|program` (sportif) ou `/coach/planning?quickadd=session|program` (coach). `WeekClient.tsx`/`CoachPlanningClient.tsx` lisent `quickadd` au montage (`setAddingDate`/ouvre `ProgramLibraryPage` sur le picker de création via un nouveau prop `initialStep="new"`), puis nettoient l'URL (`router.replace`).
+
+**Bug réel trouvé et corrigé le jour même** : l'effet qui lit `quickadd` avait des deps `[]` — cliquer le "+" depuis une page déjà montée (ex. déjà sur `/week`) ne remonte pas le composant, donc l'effet ne se redéclenchait jamais et le clic ne faisait rien (perçu comme un lag par Gildas). Fix : deps `[searchParams]`.
+
+### Onglets actifs — soulignés, plus de pill remplie
+`BottomNav.tsx` : l'ancien fond orange plein sur l'onglet actif est remplacé par icône+texte en orange (`#f04a08`) + un petit trait souligné sous le texte (transparent si inactif, réservé en permanence pour ne jamais décaler le layout).
+
+### Renommages + icônes
+- Sportif : Conseils→**Analyses** (icône courbe montante, remplace un 1er essai en barres) ; Profil→**Programmes** (reprend l'icône livre de l'ancien Conseils).
+- Coach : Dashboard→**Accueil** ; Profil→**Programmes** (même icône livre).
+- `Programmes`→**"Prog."** sur mobile uniquement (`shortLabel`, `!isMd`) pour ne jamais tronquer — desktop garde "Programmes" en entier.
+
+### Programmes — vraie page, pas juste une modale
+`ProgramLibraryPage.tsx` était déjà un overlay plein écran auto-suffisant (fetch ses propres données, son propre header/back button), utilisé jusque-là uniquement en modale depuis `WeekClient`/`CoachPlanningClient`. Nouveau wrapper `ProgramLibraryStandalone.tsx` (même câblage paywall — `usePaywall`/`useSandboxGate` + `PrimingJourneyModal`/`PaywallModal`/`SandboxGateModal` — que ces deux fichiers, pour ne jamais bypasser le gating "Enregistrer en librairie"/"Assigner") le rend accessible comme vraie route : `/programmes`, `/coach/programmes`, `/sandbox/[role]/programmes`.
+
+### Header (`CalendarHeader.tsx`) — icône profil, année masquée, réordonné 3 fois
+- **Icône profil** en haut à droite (remplace l'onglet Profil retiré de la nav) — nouveau prop `profileHref`, câblé sur les 6 pages qui utilisent ce header (`/today`, `/week`, `/conseils`, `/coach`, `/coach/athletes`, `/coach/planning` ×2), avec le bon lien sandbox le cas échéant (`/sandbox/athlete/profil` ou `/sandbox/coach/profil`).
+- **Année retirée** du libellé de mois (`"MMMM yyyy"` → `"MMMM"`, affiche juste "Août").
+- **3 itérations d'ordre**, chacune en réponse à un retour direct :
+  1. `[Aujourd'hui] ‹Mois› [toggle+profil]` (3 colonnes d'origine).
+  2. Flèches supprimées (mobile ne tenait pas) — swipe étendu à **tout le header** (pas juste le day strip, qui n'existe qu'en vue semaine) pour que la vue Mois garde un moyen de naviguer ; "Auj." abrégé sur mobile.
+  3. Flèches remises ("ça passe maintenant"), Aujourd'hui déplacé à gauche à côté du mois (`‹ › Mois Aujourd'hui` à gauche, toggle+profil à droite) — ordre final.
+
+### Toggle Semaine/Mois → bouton unique dynamique, partagé
+Nouveau `ViewToggleButton.tsx` : un seul bouton affichant le mode **vers lequel** basculer (icône grille "Mois" en vue semaine / icône colonnes "Sem." en vue mois), remplace le toggle à 2 boutons — demandé explicitement pour Planning **et** pour Analyses/Sportifs. `RangeToggle.tsx` (toggle 7j/4 semaines de `/conseils` et `/coach/athletes`) devient un thin wrapper autour du même composant — un seul point de vérité visuel pour les 3 pages.
+
+### `ProgramBanner.tsx` — CTA "📚 Programmes" retiré
+Redondant avec le nouvel onglet nav. Prop `onOpenLibrary` devenu mort, retiré de l'interface et des 2 call sites (`WeekClient.tsx`, `CoachPlanningClient.tsx`) plutôt que laissé en dead code.
+
+### Bottom nav — 3 itérations de spacing
+1. Grille `repeat(5,1fr)`, colonne "+" partageant 1fr comme les autres, largeur `min(640px,100vw-28px)` — trop d'espace vide entre icônes sur desktop (colonnes ~122px pour du contenu ~50px), et seulement 14px de marge écran sur mobile.
+2. Passage en **flex content-sized** (chaque tab prend sa largeur naturelle) — corrige les 2 points ci-dessus mais casse la symétrie : "Aujourd'hui" (long) à gauche vs "Analyses"/"Programmes" (courts) à droite déséquilibre les 2 moitiés, donc le "+" (centré sur la boîte de la nav, pas sur le contenu) n'est plus visuellement centré, et l'espacement entre icônes devient inégal.
+3. **Retour à une grille, mais élargie et responsive** : `gridTemplateColumns: repeat(5,1fr)` (colonne "+" repassée en `1fr` comme les 4 vrais tabs, pas fixée à 58px — donne au cercle plus d'air à gauche/droite, demandé explicitement), largeur `isMd ? min(640px,100vw-28px) : min(440px,100vw-24px)` (desktop = largeur historique de prod redemandée explicitement ; mobile élargi pour loger "Aujourd'hui" sans tronquer). **Piège CSS Grid rencontré** : une piste `1fr` refuse par défaut de descendre sous le min-content de son contenu (`min-width:auto` implicite) — sans `minWidth:0` explicite sur chaque tab, "Aujourd'hui" aurait fait grossir sa seule colonne au-delà des 3 autres et recassé la symétrie/le centrage que cette grille égale est censée garantir. Ellipsis/troncature retirés du texte (plus jamais coupé) — filet de sécurité si un libellé déborde malgré tout : léger débordement visuel plutôt qu'un mot tronqué.
+- Bouton "+" agrandi au passage (48→58px, icône 24→28px) sur retour explicite de Gildas.
+
+### Vérifié
+`tsc --noEmit` propre (`tsconfig.temp.json`, `.next` exclu) après chaque round — nombreux, chantier construit sur plusieurs tours de retours visuels successifs de Gildas plutôt qu'en un seul passage. Pas de `npm run build` (dev server de Gildas actif en continu, risque de corruption `.next` déjà documenté ailleurs dans ce fichier). **Pas de clic réel par Claude** sur ce chantier — Gildas a testé chaque itération lui-même en local et remonté les corrections (nav mobile trop étroite, "+" décentré, espacement inégal) qui ont directement piloté les 3 rounds de spacing ci-dessus.
+
+Déployé en prod le 2026-09-01, commit `47a31aa`, push direct sur `main`.
