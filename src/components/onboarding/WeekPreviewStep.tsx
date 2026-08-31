@@ -3,59 +3,25 @@
 import { useState, useEffect } from "react";
 import Actions from "@/components/onboarding/Actions";
 import { SessionTemplateCard } from "@/components/programs/ProgramBuilderModal";
-import PlanningRing from "@/components/calendar/PlanningRing";
-import AlertBox from "@/components/calendar/AlertBox";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { computeAutoregSuggestion, qualitativeDifficulty, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import { relativeZoneLabel } from "@/lib/wellnessBaseline";
-import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
-import type { ProgramTemplate, ProgramFocus, SessionTemplate, WeekTemplate } from "@/types";
+import type { ProgramTemplate, ProgramFocus, SessionTemplate } from "@/types";
 
-/* Écran "programme prêt" — aperçu du programme réellement généré, désormais fusionné avec le
-   concept d'autorégulation (2026-08-28, remplace l'ancien step séparé `wellness_check_2a/2b` —
-   voir OnboardingFlow.tsx, StepId toujours présent mais plus référencé par aucun path actif, même
-   convention que les autres steps dépréciés de ce fichier). Réutilise les composants réels au
-   maximum : `SessionTemplateCard` (import direct depuis ProgramBuilderModal.tsx), `PlanningRing`
-   (même ring que /week et /coach/planning), même "+ Ajouter une séance"/icône dupliquer (inertes
-   ici, aucune édition possible sur un aperçu onboarding — mais visuellement fidèles).
-
-   Simulation de forme : un slider continu (0-100) interpole entre 3 semaines-types ancrées
-   (Pas en forme / OK / En forme, deltas -28/0/+22 appliqués à une base variée par jour, jamais un
-   score plat identique sur les 7 jours) — validé sur plusieurs itérations de POC avant portage ici
-   (voir historique de conversation). Chaque jour passe par la MÊME baseline Z-score que le reste de
-   l'app (syntheticBaselineFor(), src/lib/sandboxFixtures.ts — historique synthétique déterministe,
-   aucune formule séparée) : le ring, "Fatigué/Équilibré/Frais" (relativeZoneLabel) et la reco
-   viennent tous de ce même calcul, jamais un score absolu affiché à part. La reco par jour utilise
-   la VRAIE fonction `computeAutoregSuggestion` (déjà utilisée par DecisionStep/AutoregButtons en
-   prod), jamais une
-   heuristique de chaînage (l'ancienne boîte `loadRule` est retirée de cet écran — elle démontrait
-   l'enchaînement des séances, indépendant de la forme, ce qui n'est plus le sujet ici ; deux boîtes
-   de reco par carte × 7 colonnes aurait surchargé visuellement cet écran). Quand une suggestion se
-   déclenche, les lignes d'exercice affichent l'ancienne valeur barrée au-dessus de la nouvelle en
-   gras orange via `renderExerciseLine` (même convention déjà utilisée par ReconduireModal/
-   AutoregButtons ailleurs dans l'app) — c'est un APERÇU passif de l'effet, jamais une action : zéro
-   bouton cliquable ici, l'ajustement réel reste sur `decision_2a/2b`, l'étape suivante. */
+/* Écran "programme prêt" — pure aperçu du programme réellement généré (redevenu 100% passif le
+   2026-08-31 : la jauge de forme interactive introduite le 2026-08-28 déménage sur `decision_2a/2b`
+   — retour explicite de Gildas, personne ne jouait avec le curseur pendant qu'on vend encore le
+   produit, `decision` est le seul écran cadré comme "le premier vrai geste". Revient donc au
+   principe d'origine de cet écran (2026-08-17, 2e itération) : "Jamais de ring, de numéro de jour
+   ou de 'Non renseigné' : ce n'est pas un planning calendaire, c'est un programme" — plus de
+   PlanningRing/relativeZoneLabel/syntheticBaselineFor/computeAutoregSuggestion ici, l'unique boîte
+   de reco redevient `loadRule` (enchaînement des séances, indépendant de la forme) sur les 7
+   colonnes, sans condition. Réutilise les composants réels au maximum : `SessionTemplateCard`
+   (import direct depuis ProgramBuilderModal.tsx), même "+ Ajouter une séance"/icône dupliquer
+   (inertes ici, aucune édition possible sur un aperçu onboarding — mais visuellement fidèles). */
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const DOW_MAP: Record<string, number> = { Lun: 0, Mar: 1, Mer: 2, Jeu: 3, Ven: 4, Sam: 5, Dim: 6 };
-
-/* Base de forme simulée, variée par jour (déterministe — jamais Math.random, pour rester stable
-   entre re-renders/hydratation) + 3 ancres de delta (mêmes valeurs que le POC validé). Le slider
-   interpole entre ces 3 ancres plutôt que de calculer un delta libre. */
-const SIM_BASE = [62, 70, 75, 58, 66, 60, 72]; // Lun..Dim
-const ANCHOR_DELTA = { low: -28, ok: 0, high: 22 };
-function deltaFromSlider(v: number): number {
-  if (v <= 50) return ANCHOR_DELTA.low + (ANCHOR_DELTA.ok - ANCHOR_DELTA.low) * (v / 50);
-  return ANCHOR_DELTA.ok + (ANCHOR_DELTA.high - ANCHOR_DELTA.ok) * ((v - 50) / 50);
-}
-function sliderStateLabel(v: number): { emoji: string; text: string } {
-  if (v < 34) return { emoji: "😴", text: "Pas en forme" };
-  if (v > 66) return { emoji: "⚡", text: "En forme" };
-  return { emoji: "😐", text: "Forme OK" };
-}
 
 function getSportEmoji(sport: string): string {
   const s = sport.toLowerCase();
@@ -75,28 +41,6 @@ function adjustDiff(base: number, level: Level): number {
   if (level === "beginner") return Math.max(1, base - 4);
   if (level === "elite") return Math.min(10, base + 1);
   return base;
-}
-
-/* Choisit la semaine réellement affichée dans l'aperçu — pas toujours la semaine 1. Vérifié en
-   direct sur /api/programs/generate (pas supposé) : la semaine 1 (bloc MEV de la périodisation)
-   plafonne à 6/10 sur plusieurs sports/nombres de jours testés (Powerlifting, Sprint, CrossFit,
-   Endurance), jamais 8+ — la reco "Alléger" (computeAutoregSuggestion exige diff≥8, "dure") ne se
-   déclencherait donc quasiment jamais si on restait figé sur la semaine 1, quel que soit l'état de
-   forme simulé. Cherche la première semaine (ordre chronologique, jamais un index codé en dur —
-   la position de la semaine la plus dure dépend du sport/de la durée) qui contient un vrai jour
-   difficile (diff≥8). Les séances "test" (bilan de cycle) COMPTENT désormais comme les autres
-   (2026-08-30, retour explicite de Gildas — la reco doit se déclencher "sans exception", même si le
-   texte du test lui-même n'a pas de token numérique à faire varier visiblement : la jauge de
-   difficulté et l'encart de suggestion restent pertinents). Repli sur la semaine 1 si aucune
-   semaine n'atteint ce seuil (ex. programmes de rééducation, plafonnés à 5/10 par design —
-   l'absence de séance dure y est le comportement correct, pas un bug). */
-function pickPreviewWeek(template: ProgramTemplate | null): WeekTemplate | null {
-  if (!template?.weeks?.length) return null;
-  for (const week of template.weeks) {
-    const hasHardDay = Object.values(week).some(sessions => sessions.some(s => (s.target_difficulty ?? 0) >= 8));
-    if (hasHardDay) return week;
-  }
-  return template.weeks[0];
 }
 
 type Level = "beginner" | "intermediate" | "elite";
@@ -148,9 +92,6 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
   const heroMaxWidth = isLg ? 720 : isMd ? 640 : 560;
   const [fetchedProgram, setFetchedProgram] = useState<FetchedProgram | null>(null);
   const [generatedTemplate, setGeneratedTemplate] = useState<ProgramTemplate | null>(importedTemplate ?? null);
-  const [formSlider, setFormSlider] = useState(50);
-  const formDelta = deltaFromSlider(formSlider);
-  const { emoji: sliderEmoji, text: sliderText } = sliderStateLabel(formSlider);
 
   useEffect(() => {
     if (!programFlow) return;
@@ -190,7 +131,7 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sport, level, JSON.stringify(trainingDays), focus, JSON.stringify(weaknesses), duration, JSON.stringify(customExercises)]);
 
-  const week1 = pickPreviewWeek(generatedTemplate);
+  const week1 = generatedTemplate?.weeks?.[0] ?? null;
   const displayName = fetchedProgram?.name;
   const sportEmoji  = getSportEmoji(sport);
 
@@ -222,9 +163,8 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
      dessus) — "programme" reste le mot utilisé partout ailleurs dans l'app (routes, nav,
      ProgramBuilderModal...), jamais renommé "système" (discuté et écarté avec Gildas : un vrai
      changement de terminologie produit ne se glisse pas dans un seul écran). headerSub reste un
-     seul bloc de 2 phrases courtes (sport/faiblesses/jours + rappel données réelles) plutôt que
-     dispersé entre le sous-titre et une légende séparée sous le slider — retour explicite de
-     Gildas ("trop de texte partout"). */
+     seul bloc de 2 phrases courtes (sport/faiblesses/jours + rappel données réelles) — retour
+     explicite de Gildas ("trop de texte partout"). */
   const headerTitle = programFlow
     ? (displayName ?? "Chargement…")
     : "Ton programme adaptatif est prêt.";
@@ -250,28 +190,8 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
         <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 4, color: "#fff" }}>
           {sportEmoji} {headerTitle}
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45, marginBottom: 18 }}>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.45 }}>
           {headerSub}
-        </div>
-
-        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", marginBottom: 10 }}>
-          Ta forme aujourd&apos;hui
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 24 }}>{sliderEmoji}</span>
-          <span style={{ fontSize: 15, fontWeight: 900, color: "#fff" }}>{sliderText}</span>
-        </div>
-        <input
-          type="range" min={0} max={100} value={formSlider}
-          onChange={e => setFormSlider(Number(e.target.value))}
-          style={{
-            WebkitAppearance: "none", width: "100%", height: 6, borderRadius: 3,
-            background: "linear-gradient(90deg, #2a78d6 0%, rgba(255,255,255,.18) 50%, #d44000 100%)",
-            outline: "none", cursor: "pointer",
-          }}
-        />
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 10.5, fontWeight: 800, color: "rgba(255,255,255,.55)" }}>
-          <span>😴 Pas en forme</span><span>⚡ En forme</span>
         </div>
       </div>
     </div>
@@ -289,70 +209,34 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
         }}>
           {DAYS.map((day, dayIdx) => {
             const daySessions = sessionsByDay[day] ?? [];
-            // Les séances "test" participent à la reco comme les autres (2026-08-30, retour
-            // explicite de Gildas, "sans exception") — seule la jauge de difficulté/l'encart de
-            // suggestion changent visiblement pour ces séances, le texte lui-même n'ayant pas de
-            // token numérique à faire varier (parseAndApply() ne trouve rien à remplacer dedans).
-            const dayMaxDiff = daySessions.length ? Math.max(...daySessions.map(s => s.target_difficulty ?? 6)) : null;
-            const score = Math.round(Math.max(5, Math.min(98, SIM_BASE[dayIdx] + formDelta)));
-            // Baseline (Z-score, src/lib/wellnessBaseline.ts) sur historique synthétique — même
-            // calcul que partout ailleurs dans l'app (sandbox, /coach, /coach/planning), pas un
-            // seuil absolu séparé propre à cet aperçu. `ownerId` unique par jour : chaque appel est
-            // une recomputation pure indépendante, pas une lecture d'un cache partagé.
-            const baseline = syntheticBaselineFor(score, `preview-${day}`);
-            const displayScore = baseline?.hasEnoughHistory ? baseline.relativeScore : score;
-            const suggestion = computeAutoregSuggestion(score, dayMaxDiff, baseline);
-            const pct = suggestion?.reco ?? 0;
-            const needsAction = !!suggestion;
 
-            let recoBox: React.ReactNode;
-            if (suggestion) {
-              // Réutilise le vrai AlertBox (variant "light" par défaut, palette pastel + halo/
-              // pastille pulsants) — même composant que /week et /coach/planning pour ce type
-              // d'alerte, glow/border dérivés de la vraie sévérité (suggestionSeverityColor —
-              // 🚨 rouge / ⚠️ orange / 🚀 vert).
-              const severityColor = suggestionSeverityColor(suggestion);
-              recoBox = (
-                <AlertBox alert={{
-                  border: `${severityColor}66`,
-                  glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, dayMaxDiff ?? 6, undefined, baseline)}`,
-                }} />
-              );
-            } else {
-              // Pas de suggestion forme (Alléger/Surcharger) sur ce jour → repli sur la vraie
-              // boîte de reco chaînage (loadRule, même moteur que /week — enchaînement des séances,
-              // indépendant de la forme) plutôt qu'un texte générique inventé.
-              const prevSess = sessionsByDay[DAYS[dayIdx - 1]] ?? [];
-              const nextSess = sessionsByDay[DAYS[dayIdx + 1]] ?? [];
-              const ctx = {
-                prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
-                nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
-              };
-              const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
-              const tagColor = ruleTagColors[rule.cls];
-              recoBox = (
-                <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                    <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
-                  </div>
-                  <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
+            // Boîte de reco chaînage (loadRule, même moteur que /week — enchaînement des séances
+            // dur/modéré/léger d'un jour à l'autre), sans condition : plus de simulation de forme
+            // sur cet écran, la jauge interactive vit désormais sur decision_2a/2b.
+            const prevSess = sessionsByDay[DAYS[dayIdx - 1]] ?? [];
+            const nextSess = sessionsByDay[DAYS[dayIdx + 1]] ?? [];
+            const ctx = {
+              prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.target_difficulty ?? 6)) : 0,
+              nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.target_difficulty ?? 6)) : 0,
+            };
+            const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
+            const tagColor = ruleTagColors[rule.cls];
+            const recoBox = (
+              <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+                  <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
+                  <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
                 </div>
-              );
-            }
+                <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
+              </div>
+            );
 
             return (
               <div key={day} style={{
                 scrollSnapAlign: "start", background: "#fff", borderRadius: 26, padding: 16,
-                border: needsAction ? "1.5px solid rgba(212,64,0,.5)" : "1px solid rgba(0,0,0,.08)",
-                boxShadow: needsAction ? "0 0 0 3px rgba(212,64,0,.1), 0 6px 18px rgba(0,0,0,.05)" : "0 6px 18px rgba(0,0,0,.05)",
+                border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 6px 18px rgba(0,0,0,.05)",
               }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 9 }}>
-                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>{day}</div>
-                  <PlanningRing score={displayScore} size={58} />
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "#687075", marginBottom: 7 }}>{relativeZoneLabel(baseline)}</div>
+                <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 9 }}>{day}</div>
 
                 {recoBox}
 
@@ -366,25 +250,9 @@ export default function WeekPreviewStep({ sport, level, trainingDays, focus, wea
                       Repos / libre
                     </div>
                   )}
-                  {daySessions.map((s, sIdx) => {
-                    const displaySession = suggestion ? { ...s, target_difficulty: adjustDifficulty(s.target_difficulty ?? 6, pct) } : s;
-                    return (
-                      <SessionTemplateCard
-                        key={sIdx}
-                        session={displaySession}
-                        renderExerciseLine={suggestion ? (line, i) => {
-                          const after = parseAndApply(line, pct);
-                          const changed = after !== line;
-                          return (
-                            <div style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                              {changed && <div style={{ color: "#b3b8bc", textDecoration: "line-through", fontSize: 9.5, lineHeight: 1.3, fontWeight: 600 }}>{line}</div>}
-                              <div style={changed ? { color: "#d44000", fontWeight: 800 } : { color: "#2c3236", fontWeight: 600 }}>{after}</div>
-                            </div>
-                          );
-                        } : undefined}
-                      />
-                    );
-                  })}
+                  {daySessions.map((s, sIdx) => (
+                    <SessionTemplateCard key={sIdx} session={s} />
+                  ))}
                   <div style={{ display: "flex", gap: 5 }}>
                     <div style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, fontWeight: 700 }}>
                       + Ajouter une séance
