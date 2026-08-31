@@ -220,6 +220,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       <CalendarHeader
         selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap}
         extraControls={section === "load" ? <RangeToggle mode={rangeMode} onChange={setRangeMode} /> : undefined}
+        profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"}
       />
 
       <div className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>

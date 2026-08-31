@@ -334,6 +334,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       <CalendarHeader
         selectedDate={selectedDate} onDateChange={handleDateChange}
         extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
+        profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"}
       />
 
       <div className="page-shell">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -53,6 +53,7 @@ interface Props { userId: string; userName?: string | null; initialSessions: Ses
 export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [] }: Props) {
   const supabase = createClient();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
@@ -86,6 +87,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryInitialStep, setLibraryInitialStep] = useState<"new" | undefined>(undefined);
   const [showReconduire, setShowReconduire] = useState(false);
   const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
@@ -99,6 +101,22 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
   // Label "Séances libres" — par semaine (clé = lundi "yyyy-MM-dd"), pas global.
   const [freeLabels, setFreeLabels] = useState<Record<string, string>>(initialFreeLabels);
+
+  /* "+" central de la nav (2026-08-31) : ?quickadd=session|program ouvre directement le bon
+     flow, puis nettoie l'URL — sinon revenir en arrière rouvrirait la modale. Déps sur
+     `searchParams` (pas `[]`) : cliquer le "+" depuis /week lui-même (déjà monté) ne remonte
+     pas le composant, un effet à `[]` ne se redéclencherait donc jamais et le clic resterait
+     silencieusement sans effet (perçu comme un lag, cf. retour utilisateur). */
+  useEffect(() => {
+    const quickAdd = searchParams.get("quickadd");
+    if (!quickAdd) return;
+    if (quickAdd === "session") setAddingDate(todayStr);
+    else if (quickAdd === "program") { setLibraryInitialStep("new"); setShowLibrary(true); }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("quickadd");
+    router.replace(params.toString() ? `/week?${params.toString()}` : "/week");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   async function fetchActiveProgram() {
     const { data } = await supabase
@@ -425,13 +443,13 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onSwipe={navigatePeriod}
+        profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"}
       />
 
       <ProgramBanner
         program={viewedProgram}
         currentWeek={viewedProgramWeek}
         onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
-        onOpenLibrary={() => setShowLibrary(true)}
         onReconduire={() => setShowReconduire(true)}
         freeLabel={freeLabels[format(dates[0], "yyyy-MM-dd")] ?? null}
         onEditFreeLabel={label => setFreeLabelForWeek(format(dates[0], "yyyy-MM-dd"), label)}
@@ -818,7 +836,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           requireSubscription={requireSubscription}
           isActive={isActive}
           sandboxMode={sandboxMode}
-          onClose={async () => { setShowLibrary(false); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}
+          initialStep={libraryInitialStep}
+          onClose={async () => { setShowLibrary(false); setLibraryInitialStep(undefined); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}
         />
       )}
       {paywallStep === "priming" && (

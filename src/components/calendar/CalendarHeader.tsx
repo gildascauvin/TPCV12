@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { format, addDays, startOfWeek, subDays, addMonths, subMonths } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { wellnessColor } from "@/lib/wellness";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+import ViewToggleButton from "./ViewToggleButton";
 
 export type ViewMode = "week" | "month";
 
@@ -22,6 +25,10 @@ interface CalendarHeaderProps {
      de la navigation par jour de ce header — voir RangeToggle.tsx). Ignoré si onViewModeChange est
      fourni (jamais les deux en même temps). */
   extraControls?: React.ReactNode;
+  /* Icône profil en haut à droite du header (2026-08-31) — remplace l'onglet "Profil" retiré de
+     la bottom nav (remplacé par "Programmes"). Un seul endroit à câbler pour toutes les pages qui
+     utilisent ce header plutôt qu'un bouton par page. Absent = pas d'icône (repli permissif). */
+  profileHref?: string;
 }
 
 const CIRC = 81.68; // 2π × r=13
@@ -48,7 +55,9 @@ export default function CalendarHeader({
   onViewModeChange,
   onSwipe,
   extraControls,
+  profileHref,
 }: CalendarHeaderProps) {
+  const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
   const [currentDate, setCurrentDate] = useState(new Date(selectedDate + "T12:00:00"));
   const touchStartX = useRef(0);
@@ -92,85 +101,82 @@ export default function CalendarHeader({
     ? days.some(d => format(d, "yyyy-MM-dd") === today)
     : format(currentDate, "yyyy-MM") === format(new Date(), "yyyy-MM");
 
-  function handleStripTouchStart(e: React.TouchEvent) {
+  function handleHeaderTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
   }
-  function handleStripTouchEnd(e: React.TouchEvent) {
+  function handleHeaderTouchEnd(e: React.TouchEvent) {
     const dx = e.changedTouches[0].clientX - touchStartX.current;
     if (dx < -55) onSwipe?.("next");
     else if (dx > 55) onSwipe?.("prev");
   }
 
   return (
-    <header style={{
-      background: "radial-gradient(circle at 18% 8%, rgba(255,255,255,.08), transparent 24%), linear-gradient(180deg,#050505 0%,#171717 58%,#101010 100%)",
-      boxShadow: "0 16px 38px rgba(0,0,0,.18)",
-      color: "#fff",
-      paddingTop: 8,
-    }}>
-      {/* Top row */}
-      <div className="flex items-center px-4 pb-3 pt-[14px] gap-2">
-
-        {/* Gauche : Aujourd'hui — visible dès qu'il y a un onDateChange */}
-        <div style={{ minWidth: 80 }}>
+    <header
+      onTouchStart={handleHeaderTouchStart}
+      onTouchEnd={handleHeaderTouchEnd}
+      style={{
+        background: "radial-gradient(circle at 18% 8%, rgba(255,255,255,.08), transparent 24%), linear-gradient(180deg,#050505 0%,#171717 58%,#101010 100%)",
+        boxShadow: "0 16px 38px rgba(0,0,0,.18)",
+        color: "#fff",
+        paddingTop: 8,
+      }}>
+      {/* Top row (2026-09-01) : flèches remises (ça tient maintenant que le reste a été
+          compacté), Aujourd'hui déplacé à gauche à côté du mois affiché — le swipe (attaché à
+          tout le header, pas juste le day strip) reste un moyen de naviguer en plus des flèches. */}
+      <div className="flex items-center justify-between px-4 pb-3 pt-[14px] gap-2">
+        <div className="flex gap-2 items-center">
+          <button onClick={prevPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>‹</button>
+          <button onClick={nextPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>›</button>
+          <span className="text-[16px] font-black uppercase tracking-[0.02em] text-white px-1">
+            {format(currentDate, "MMMM", { locale: fr })}
+          </span>
           {showTodayBtn && (
             <button
               onClick={isOnCurrentPeriod ? undefined : goToday}
               style={{
-                height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 8,
+                height: 32, paddingLeft: 12, paddingRight: 12, borderRadius: 10,
                 background: isOnCurrentPeriod ? "rgba(255,255,255,.08)" : "rgba(212,64,0,.22)",
-                border: `1px solid ${isOnCurrentPeriod ? "rgba(255,255,255,.12)" : "rgba(212,64,0,.4)"}`,
-                color: isOnCurrentPeriod ? "rgba(255,255,255,.35)" : "#ff8a55",
+                border: `1px solid ${isOnCurrentPeriod ? "rgba(255,255,255,.14)" : "rgba(212,64,0,.4)"}`,
+                color: isOnCurrentPeriod ? "rgba(255,255,255,.7)" : "#ff8a55",
                 fontSize: 11, fontWeight: 800,
                 cursor: isOnCurrentPeriod ? "default" : "pointer",
                 whiteSpace: "nowrap",
                 transition: "all .2s",
               }}
             >
-              Aujourd&apos;hui
+              {isMd ? "Aujourd'hui" : "Auj."}
             </button>
           )}
         </div>
 
-        {/* Centre : flèches + label mois */}
-        <div className="flex gap-1 items-center flex-1 justify-center">
-          <button onClick={prevPeriod} className="w-[34px] h-[34px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>‹</button>
-          <span className="text-[14px] font-black uppercase tracking-[0.02em] text-white px-2">
-            {format(currentDate, "MMMM yyyy", { locale: fr })}
-          </span>
-          <button onClick={nextPeriod} className="w-[34px] h-[34px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>›</button>
-        </div>
-
-        {/* Droite : toggle Semaine/Mois */}
-        <div style={{ minWidth: 80, display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
           {showControls ? (
-            <div style={{ display: "flex", background: "rgba(255,255,255,.10)", borderRadius: 10, padding: 3, gap: 2 }}>
-              {(["week", "month"] as ViewMode[]).map(m => (
-                <button
-                  key={m}
-                  onClick={() => onViewModeChange?.(m)}
-                  style={{
-                    height: 28, paddingLeft: 10, paddingRight: 10, borderRadius: 8, border: "none",
-                    background: viewMode === m ? "#fff" : "transparent",
-                    color: viewMode === m ? "#111" : "rgba(255,255,255,.6)",
-                    fontSize: 11, fontWeight: 800, cursor: "pointer", transition: "all .15s",
-                  }}
-                >
-                  {m === "week" ? "Sem." : "Mois"}
-                </button>
-              ))}
-            </div>
+            <ViewToggleButton mode={viewMode} onChange={m => onViewModeChange?.(m)} />
           ) : extraControls}
+          {profileHref && (
+            <Link
+              href={profileHref}
+              aria-label="Profil"
+              style={{
+                width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.12)",
+                color: "rgba(255,255,255,.85)",
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"
+                fill="none" stroke="currentColor" strokeWidth="2.15"
+                strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 12.2a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6Zm-7.4 8.3a7.4 7.4 0 0 1 14.8 0"/>
+              </svg>
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Day strip avec wellness rings — semaine uniquement */}
       {viewMode === "week" && (
-        <div
-          className="flex justify-between px-[18px] pb-4"
-          onTouchStart={handleStripTouchStart}
-          onTouchEnd={handleStripTouchEnd}
-        >
+        <div className="flex justify-between px-[18px] pb-4">
           {days.map((d) => {
             const iso = format(d, "yyyy-MM-dd");
             const isToday    = iso === today;

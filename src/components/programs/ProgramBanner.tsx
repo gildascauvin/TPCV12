@@ -38,7 +38,6 @@ interface Props {
   currentWeek?: number;
   onEdit?: () => void;
   onStop?: () => void;
-  onOpenLibrary?: () => void;
   onReconduire?: () => void;
   /** Label personnalisé affiché à la place de "Aucun programme actif" — null/vide = repli sur DEFAULT_FREE_LABEL. */
   freeLabel?: string | null;
@@ -49,7 +48,7 @@ interface Props {
 }
 
 export default function ProgramBanner({
-  program, currentWeek, onEdit, onStop, onOpenLibrary, onReconduire,
+  program, currentWeek, onEdit, onStop, onReconduire,
   freeLabel, onEditFreeLabel, compact = false,
 }: Props) {
   const { isMd } = useBreakpoint();
@@ -138,11 +137,6 @@ export default function ProgramBanner({
           {onReconduire && (
             <button onClick={onReconduire} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
               Reconduire la semaine →
-            </button>
-          )}
-          {onOpenLibrary && (
-            <button data-tour="programmes-btn" onClick={onOpenLibrary} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "none", cursor: "pointer", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 11, boxShadow: "0 4px 12px rgba(212,64,0,.20)", whiteSpace: "nowrap" }}>
-              📚 Programmes<span className="tour-lock">🔒</span>
             </button>
           )}
         </div>

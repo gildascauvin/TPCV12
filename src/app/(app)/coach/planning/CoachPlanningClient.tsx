@@ -121,6 +121,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryInitialStep, setLibraryInitialStep] = useState<"new" | undefined>(undefined);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -147,6 +148,22 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
     if (fromOnboarding && !alreadySeen) setShowWelcome(true);
   }, [userId, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* "+" central de la nav (2026-08-31) : ?quickadd=session|program ouvre directement le bon
+     flow, puis nettoie l'URL — sinon revenir en arrière rouvrirait la modale. Déps sur
+     `searchParams` (pas `[]`) : cliquer le "+" depuis /coach/planning lui-même (déjà monté) ne
+     remonte pas le composant, un effet à `[]` ne se redéclencherait donc jamais et le clic
+     resterait silencieusement sans effet (perçu comme un lag, cf. retour utilisateur). */
+  useEffect(() => {
+    const quickAdd = searchParams.get("quickadd");
+    if (!quickAdd) return;
+    if (quickAdd === "session") setAddingDate(todayStr);
+    else if (quickAdd === "program") { setLibraryInitialStep("new"); setShowLibrary(true); }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("quickadd");
+    router.replace(params.toString() ? `/coach/planning?${params.toString()}` : "/coach/planning");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
 
@@ -519,7 +536,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   if (!athlete) {
     return (
       <>
-        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
+        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
@@ -542,7 +559,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
 
       {/* Athlete tabs bar */}
       <div style={{
@@ -583,7 +600,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             program={viewedProgram}
             currentWeek={viewedWeek}
             onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
-            onOpenLibrary={() => setShowLibrary(true)}
             onReconduire={() => setShowReconduire(true)}
             freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
             onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
@@ -1008,7 +1024,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           requireSubscription={requireSubscription}
           isActive={isActive}
           sandboxMode={sandboxMode}
-          onClose={() => setShowLibrary(false)}
+          initialStep={libraryInitialStep}
+          onClose={() => { setShowLibrary(false); setLibraryInitialStep(undefined); }}
         />
       )}
       {paywallStep === "priming" && (

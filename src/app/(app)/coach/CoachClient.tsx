@@ -378,7 +378,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
 
       <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
 

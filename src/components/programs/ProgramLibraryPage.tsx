@@ -68,6 +68,9 @@ interface Props {
      grande famille de curriculum) au lieu de /api/programs (bibliothèque du compte courant).
      Aucun autre changement : même liste, même builder, mêmes gates (Enregistrer/Assigner). */
   sandboxMode?: boolean;
+  /* Routage rapide depuis le "+" central de la nav (2026-08-31) : "new" saute directement
+     l'écran liste pour ouvrir le picker de création (ProgramCreatePicker). */
+  initialStep?: "new";
 }
 
 type UIStep =
@@ -83,13 +86,13 @@ const LIBRARY_URL = "https://www.theperfclub.com/bibliotheque-de-programmes-dent
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<UIStep>({ type: "list" });
+  const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : { type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
 
   function createBlankProgram() {
