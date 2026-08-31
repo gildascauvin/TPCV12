@@ -91,7 +91,7 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
   if (dim === "load") {
     if (value < 0.8) return { label: "SOUS-CHARGE", color: "#8a8f94", text: coach ? "En dessous de sa zone d'entraînement optimale (ACWR < 0,8)." : "En dessous de ta zone d'entraînement optimale (ACWR < 0,8)." };
     if (value <= 1.3) return { label: "ZONE OPTIMALE", color: "#2f9e44", text: "Dans la fourchette de charge recommandée (ACWR 0,8–1,3)." };
-    if (value <= 1.5) return { label: "RISQUE MODÉRÉ", color: "#f28a00", text: coach ? "Charge récente nettement au-dessus de sa charge chronique — récupération à surveiller." : "Charge récente nettement au-dessus de ta charge chronique — surveille la récupération." };
+    if (value <= 1.5) return { label: "RISQUE MODÉRÉ", color: "#f28a00", text: coach ? "Charge récente nettement au-dessus de sa charge chronique : récupération à surveiller." : "Charge récente nettement au-dessus de ta charge chronique : surveille la récupération." };
     return { label: "RISQUE ÉLEVÉ", color: "#d10000", text: coach ? "Charge récente très au-dessus de sa charge chronique (ACWR > 1,5)." : "Charge récente très au-dessus de ta charge chronique (ACWR > 1,5)." };
   }
   if (dim === "monotony") {
@@ -172,15 +172,25 @@ const CHARGE_METRIC_ACTION: Record<"load" | "monotony" | "strain", { coach: stri
   },
 };
 
+/* Première lettre en majuscule — nécessaire partout où `name` (toujours au format minuscule "ta/sa
+   ...", pensé pour s'insérer au milieu d'une phrase, ex. la liste entre parenthèses de la branche
+   alerts≥2) démarre en réalité la phrase (branches à un seul élément ci-dessous). */
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
-  const items: { name: string; key: "load" | "monotony" | "strain" | "fitness" | "fatigue"; sev: Severity }[] = [
-    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", key: "load", sev: severityOf(loadInfo.color) },
-    { name: coach ? "sa monotonie" : "ta monotonie", key: "monotony", sev: severityOf(monotonyInfo.color) },
-    { name: coach ? "son strain" : "ton strain", key: "strain", sev: severityOf(strainInfo.color) },
+  const items: { name: string; text: string; key: "load" | "monotony" | "strain" | "fitness" | "fatigue"; sev: Severity }[] = [
+    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", text: loadInfo.text, key: "load", sev: severityOf(loadInfo.color) },
+    { name: coach ? "sa monotonie" : "ta monotonie", text: monotonyInfo.text, key: "monotony", sev: severityOf(monotonyInfo.color) },
+    { name: coach ? "son strain" : "ton strain", text: strainInfo.text, key: "strain", sev: severityOf(strainInfo.color) },
   ];
-  if (fitnessTrendInfo) items.push({ name: coach ? "sa fitness" : "ta fitness", key: "fitness", sev: severityOf(fitnessTrendInfo.color) });
-  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", key: "fatigue", sev: severityOf(fatigueTrendInfo.color) });
+  // "charge chronique (fitness)" plutôt que le seul mot "fitness" — traduit ce que l'indicateur
+  // mesure réellement (même vocabulaire que trendDimInfo()/METRIC_DEFINITIONS.fitness) tout en
+  // gardant le lien avec le libellé du badge ("FITNESS ↗") juste au-dessus dans la carte.
+  if (fitnessTrendInfo) items.push({ name: coach ? "sa charge chronique (fitness)" : "ta charge chronique (fitness)", text: fitnessTrendInfo.text, key: "fitness", sev: severityOf(fitnessTrendInfo.color) });
+  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", text: fatigueTrendInfo.text, key: "fatigue", sev: severityOf(fatigueTrendInfo.color) });
   const alerts = items.filter(i => i.sev === "alert");
   const watches = items.filter(i => i.sev === "watch");
   if (alerts.length >= 2) return coach
@@ -189,14 +199,21 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
   if (alerts.length === 1) {
     const key = alerts[0].key as "load" | "monotony" | "strain"; // fitness/fatigue jamais "alert"
     const action = CHARGE_METRIC_ACTION[key][coach ? "coach" : "athlete"];
-    return `${alerts[0].name} est en zone de risque : ${action}`;
+    return `${cap(alerts[0].name)} est en zone de risque : ${action}`;
   }
   if (watches.length >= 2) return coach
-    ? `${watches.map(w => w.name).join(" et ")} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`
-    : `${watches.map(w => w.name).join(" et ")} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`;
-  if (watches.length === 1) return coach
-    ? `${watches[0].name} est à surveiller : le reste de ses indicateurs est bon.`
-    : `${watches[0].name} est à surveiller : le reste de tes indicateurs est bon.`;
+    ? `${cap(watches.map(w => w.name).join(" et "))} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`
+    : `${cap(watches.map(w => w.name).join(" et "))} sont à surveiller ensemble : lève le pied si l'un des deux continue de se dégrader.`;
+  // Réutilise le texte déjà écrit pour CET indicateur (sigDimInfo/trendDimInfo, déjà pédagogique —
+  // explique la direction, ex. "Ta charge chronique est en baisse : possible perte de forme si ça
+  // dure.") plutôt qu'un gabarit générique "{nom} est à surveiller" qui ne dit rien de ce que ça
+  // signifie concrètement. Vaut pour les 5 indicateurs, pas seulement fitness (2026-08-31, retour de
+  // Gildas — "il manque aussi la majuscule" sur le cas fatigue confirmait que le gabarit générique
+  // n'était pas assez explicite non plus).
+  if (watches.length === 1) {
+    const tail = coach ? "Le reste de ses indicateurs est bon." : "Le reste de tes indicateurs est bon.";
+    return `${watches[0].text} ${tail}`;
+  }
   const extra = (fitnessTrendInfo || fatigueTrendInfo) ? ", fitness et fatigue" : "";
   return `Charge, monotonie, strain${extra} sont tous dans des zones saines : rien à ajuster.`;
 }
