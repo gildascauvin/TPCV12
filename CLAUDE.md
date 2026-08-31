@@ -2518,3 +2518,50 @@ Retour de Gildas sur le wording livré ci-dessus : la phrase à un seul indicate
 Vérifié en direct sur la sandbox (`/sandbox/athlete/conseils`) avant déploiement — texte confirmé conforme à l'Option 1 proposée, zéro erreur console. `tsc --noEmit` propre (via `tsconfig.temp.json`, qui exclut `.next` — piège de faux positif `.next/types` déjà documenté ailleurs dans ce fichier, `next dev` de Gildas actif en parallèle).
 
 Déployé en prod le 2026-08-31, commit `cdb4061`, push direct sur `main`.
+
+## Paywall obligatoire-mais-skippable après célébration, même composant qu'in-app (2026-08-31)
+
+Point de départ : bilan chiffré du funnel signup/paywall (funnel détaillé étape par étape, requêtes PostHog directes) — depuis le retrait du paywall obligatoire de l'onboarding le 19-20/08 (modèle produit-gated), presque personne ne voyait plus jamais de paywall : le seul trigger restant (gating in-app, `PrimingJourneyModal`) ne se déclenchait qu'~1,5 fois/jour. Gildas a d'abord proposé "après célébration", puis "avant (pour que le skip mène vers une suite guidée)", puis est revenu à "après" — tranché : obligatoire dans le sens "sur le chemin de tout le monde qui termine l'onboarding", mais réellement **skippable**, sans jamais rouvrir le modèle CB-obligatoire abandonné le 19-20/08.
+
+### Path
+`paywall_priming`/`paywall_form` réinsérés dans les 4 tableaux (`ATHLETE_PATH`/`COACH_PATH`/`PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH`), juste après `celebration` — avant `wellness_q` côté sportif (qui reste donc guidé après un skip), en toute fin de path côté coach (déjà la sortie normale, l'invitation ayant eu lieu dans `celebration` elle-même).
+
+### Skip → mêmes composants que le gating in-app, pas une copie
+1re version : `Actions` avec un bouton texte "Plus tard →" (comme `invite_team`). **Retour explicite de Gildas** : "je veux pas le 'plus tard', je veux le X comme in-app, et le même habillage autour" — les deux écrans ne reconstruisent plus `PricingPrimingContent`/`CheckoutForm` à la main dans `OnboardingFlow.tsx`, ils rendent **directement** `PrimingJourneyModal`/`PaywallModal` (les vrais composants du gating in-app, `src/components/paywall/`). Skip = le "×" natif de `PrimingJourneyModal` (`onDismiss`), pas un lien texte. `PaywallModal.onClose` câblé sur `goBack()` — comportement identique à l'in-app (ramène vers `priming`, jamais un skip complet direct depuis le formulaire Stripe).
+
+`PrimingJourneyModal.tsx` gagne 6 props optionnelles (`headline`/`sub`/`sport`/`sessionCount`/`weaknessLabels`/`name`) pour préserver la personnalisation onboarding ("Ton programme {nom} t'attend", faiblesses réelles, prénom) à travers le composant partagé — absentes par défaut, **zéro impact** sur les 6+ appelants in-app existants (`TodayClient.tsx` etc., qui ne les passent jamais).
+
+`skipPaywall()` (`OnboardingFlow.tsx`) saute `paywall_priming` ET `paywall_form` d'un coup, jamais juste le step courant — quelqu'un qui ferme l'offre ne doit jamais atterrir malgré lui sur le formulaire Stripe qu'il vient de refuser. Nouvel event `onboarding_paywall_skipped` (role, ab_variant) — c'est le chiffre qui manquait pour distinguer "personne ne voit le paywall" de "les gens le voient et skippent".
+
+`onboarding_done` reste posé à l'activation (`createAccount()`/`finishAthleteActivation()`/`finishCoachActivation()`, déjà le cas depuis le 19/08) — payer ou fermer le paywall n'a aucun effet sur l'accès, le modèle produit-gated n'est pas rouvert.
+
+### Nettoyage
+Retiré (devenu redondant avec ce que `PrimingJourneyModal`/`PaywallModal` gèrent déjà en interne) : `clientSecret`/`loadingIntent`/`setupError`/`footerPortalNode` (state), les 2 `useEffect` dupliqués (fetch setup-intent Stripe, tracking `paywall_priming_viewed`), et `paidExtras` (state déjà mort depuis le 19/08 — une seule écriture jamais lue, laissée en place jusqu'ici).
+
+### Vérifié
+`tsc --noEmit` propre (via `tsconfig.notnext.json` temporaire, `next dev` de Gildas actif en parallèle — piège de faux positif `.next/types` déjà documenté ailleurs dans ce fichier). Pas de clic réel par Claude (jamais de vraie inscription/paiement) — à valider par Gildas en conditions réelles.
+
+Déployé en prod le 2026-08-31, commit `5051548`, push direct sur `main`.
+
+## Jauge de forme déplacée de `week_preview` vers `decision`, sportif uniquement (2026-08-31, suite)
+
+Point de départ : retour direct de Gildas sur le bilan onboarding — "personne ne joue avec la jauge dans le prog" (la simulation de forme vivait sur `week_preview_2a/2b` depuis le 28/08). Décision : la déplacer sur `decision_2a/2b`, le seul écran cadré comme "le premier vrai geste" — `week_preview` vend encore le produit à ce stade, `decision` est celui qui demande une action.
+
+### `week_preview` redevient 100% passif
+Slider/`PlanningRing`/`relativeZoneLabel`/`syntheticBaselineFor`/`computeAutoregSuggestion`/`AlertBox`/`renderExerciseLine` (avant/après barré) — tout retiré de `WeekPreviewStep.tsx`. Retour au principe d'origine du 17/08 ("Jamais de ring, de numéro de jour... ce n'est pas un planning calendaire, c'est un programme") : chaque jour affiche à nouveau uniquement la boîte `loadRule` (enchaînement dur/modéré/léger), sans condition. `pickPreviewWeek()` (cherchait une semaine avec un jour dur, nécessaire uniquement pour garantir le déclenchement de la suggestion forme) supprimée — repli simple sur `template.weeks[0]`.
+
+### `decision` gagne la jauge — sportif uniquement
+Slider continu 0-100, mêmes 3 ancres `-28/0/+22` et même style visuel que l'ex-`week_preview` (déplacés tels quels dans `DecisionStep.tsx`) — mais réservé au sportif (`role !== "coach"` gate tout le bloc "Ta forme aujourd'hui" du `heroBlock`). **Retour explicite de Gildas** : le coach a déjà 3 cas distincts à observer dans son Coach Control (Thomas/Emma/Pierre), une jauge en plus serait redondante — le coach reste sur les 3 wellness fixes d'origine (38/70/88).
+
+### Bug de calibration trouvé par calcul direct, pas deviné
+1re version : `ATHLETE_BASE_WELLNESS` repris du `FORCED_WELLNESS=38` d'origine (le score fixe qui garantissait "Toi" toujours en Alléger avant que ce chantier ne le rende interactif). Gildas a signalé que le ring ne bougeait jamais. Diagnostic par un script Node reproduisant exactement `coachWellnessScoreFor()`/`rollingMeanStd()`/`computeWellnessBaselineAt()` (`sandboxFixtures.ts`/`wellnessBaseline.ts`) plutôt que de deviner : la baseline synthétique tourne autour d'une moyenne ~73 (dominée par 19 des 21 jours de la fenêtre glissante, indépendants du score du jour même — voir `coachWellnessScoreFor`, seuls les offsets -1/-2 en dépendent partiellement). Avec base=38 et le delta `[-28,+22]`, le score brut plafonne à 60 — toujours nettement sous cette moyenne — donc `baseline.relativeScore` (le percentile qui pilote désormais À LA FOIS le ring ET `computeAutoregSuggestion`, depuis le chantier "autorégulation continue" de la veille, voir section dédiée plus haut) restait saturé à son plancher (5) sur toute la course du curseur : ring et reco figés, quel que soit le slider.
+
+Recalibré à `ATHLETE_BASE_WELLNESS=65` (vérifié par le même script avant d'éditer le code) : le percentile balaie réellement 5→95 sur toute la plage du slider, avec une vraie bascule Alléger→Maintenir aux alentours de la 2e moitié de la course — jamais Surcharger, hors de portée d'une seule carte utilisant `demoHardest` (toujours une séance dure, diff≥8).
+
+### Reset propre au changement de curseur
+Une décision déjà "traitée" (`overrides`/`decidedIds`, via `AutoregButtons`) sous l'ancienne forme n'a plus de sens si le curseur bouge après coup — nouveau `useEffect([formSlider])` réinitialise `overrides`/`decidedIds`/`celebratedRef` à chaque changement (aucune écriture réelle sur cet écran, zéro perte de donnée, cohérent avec le fait que c'est un aperçu).
+
+### Vérifié
+`tsc --noEmit` propre à chaque étape. Calibration vérifiée par script Node reproduisant les formules réelles du repo (pas en relisant le code seul, ni en devinant une valeur) — voir `/private/tmp/.../scratchpad/calib.mjs`, jetable, pas committé. Pas de clic réel par Claude — testé en local par Gildas lui-même (`next dev` déjà lancé, laissé à sa disposition).
+
+Déployé en prod le 2026-08-31, commit `6ab13f2`, push direct sur `main`.
