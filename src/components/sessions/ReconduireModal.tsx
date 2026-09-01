@@ -73,10 +73,12 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
     setSaving(false);
   }
 
-  const modeCards: { key: Mode; icon: string; label: string; sub: string }[] = [
-    { key: "deload", icon: "📉", label: "Décharge", sub: `−${fmtNum(customPct)}%` },
-    { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
-    { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtNum(customPct)}%` },
+  // Pas de "sub" (ex. "−10%") sous les 3 cartes — le % réel se choisit avec les chips juste en
+  // dessous, l'action ne se fait pas ici (retour explicite : ça laissait croire à une valeur figée).
+  const modeCards: { key: Mode; icon: string; label: string }[] = [
+    { key: "deload", icon: "📉", label: "Décharge" },
+    { key: "maintien", icon: "⏸", label: "Maintien" },
+    { key: "surcharge", icon: "📈", label: "Surcharge" },
   ];
 
   return (
@@ -120,7 +122,6 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
               >
                 <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
                 <div style={{ fontSize: 12.5, fontWeight: 800, color: mode === m.key ? "#d44000" : "#171b1f" }}>{m.label}</div>
-                <div style={{ fontSize: 10.5, color: "#8a8f94", marginTop: 2 }}>{m.sub}</div>
               </div>
             ))}
           </div>
@@ -154,7 +155,77 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
             </>
           )}
 
-          {/* Sportifs destinataires — coach uniquement */}
+          {/* Aperçu — scroll horizontal par jour, mêmes composants séance/exercice que le planning
+              (WeekSessionCard, DayColumn.tsx) plutôt qu'une liste de cartes diff maison. Sessions
+              en lecture seule (onComplete/onEdit/onDuplicate no-op) : ce n'est qu'un aperçu avant
+              confirmation, pas un éditeur. */}
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+            Aperçu des modifications
+          </div>
+          {totalSessions === 0 ? (
+            <div style={{ fontSize: 13, color: "#8a8f94", fontStyle: "italic", textAlign: "center", padding: "12px 0", marginBottom: 20 }}>
+              Aucune séance cette semaine à reconduire.
+            </div>
+          ) : (
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 220px))", gap: 10,
+              overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "thin" as const,
+              margin: "0 -24px 20px", padding: "2px 24px 6px",
+            }}>
+              {daySlots.map((slot, dayIndex) => (
+                <div key={dayIndex} style={{ scrollSnapAlign: "start", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+                    {DAY_LABELS[dayIndex]}
+                  </div>
+                  {slot.sessions.length === 0 && (
+                    <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                      Repos / libre
+                    </div>
+                  )}
+                  {slot.sessions.map(s => {
+                    const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
+                    const newDiff = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
+                    const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
+                    const previewSession: SessionLike = {
+                      id: s.id, date: s.date, name: s.name, notes: s.notes,
+                      duration: s.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
+                    };
+                    return (
+                      <WeekSessionCard
+                        key={s.id}
+                        session={previewSession}
+                        onComplete={() => {}}
+                        onEdit={() => {}}
+                        onDuplicate={() => {}}
+                        hideActions
+                        cardStyle={{ cursor: "default" }}
+                        renderExerciseLine={(_ex, i) => {
+                          const { line, after } = rendered[i];
+                          const changed = after !== line;
+                          return changed ? (
+                            <div style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                              <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
+                            </div>
+                          ) : (
+                            <div style={{
+                              padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
+                              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff",
+                              whiteSpace: "pre-wrap", wordBreak: "break-word",
+                            }}>
+                              {line}
+                            </div>
+                          );
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Sportifs destinataires — coach uniquement, sous l'aperçu (demandé explicitement). */}
           {showRecipients && (
             <div style={{ marginBottom: 18 }}>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
@@ -201,75 +272,6 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
               {recipients.length === 0 && (
                 <div style={{ fontSize: 12, color: "#c81e1e", marginTop: 8 }}>Sélectionne au moins un sportif.</div>
               )}
-            </div>
-          )}
-
-          {/* Aperçu — scroll horizontal par jour, mêmes composants séance/exercice que le planning
-              (WeekSessionCard, DayColumn.tsx) plutôt qu'une liste de cartes diff maison. Sessions
-              en lecture seule (onComplete/onEdit/onDuplicate no-op) : ce n'est qu'un aperçu avant
-              confirmation, pas un éditeur. */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
-            Aperçu des modifications
-          </div>
-          {totalSessions === 0 ? (
-            <div style={{ fontSize: 13, color: "#8a8f94", fontStyle: "italic", textAlign: "center", padding: "12px 0", marginBottom: 20 }}>
-              Aucune séance cette semaine à reconduire.
-            </div>
-          ) : (
-            <div style={{
-              display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 220px))", gap: 10,
-              overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "thin" as const,
-              margin: "0 -24px 20px", padding: "2px 24px 6px",
-            }}>
-              {daySlots.map((slot, dayIndex) => (
-                <div key={dayIndex} style={{ scrollSnapAlign: "start", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
-                    {DAY_LABELS[dayIndex]}
-                  </div>
-                  {slot.sessions.length === 0 && (
-                    <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
-                      Repos / libre
-                    </div>
-                  )}
-                  {slot.sessions.map(s => {
-                    const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
-                    const newDiff = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
-                    const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
-                    const previewSession: SessionLike = {
-                      id: s.id, date: s.date, name: s.name, notes: s.notes,
-                      duration: s.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
-                    };
-                    return (
-                      <WeekSessionCard
-                        key={s.id}
-                        session={previewSession}
-                        onComplete={() => {}}
-                        onEdit={() => {}}
-                        onDuplicate={() => {}}
-                        cardStyle={{ cursor: "default" }}
-                        renderExerciseLine={(_ex, i) => {
-                          const { line, after } = rendered[i];
-                          const changed = after !== line;
-                          return changed ? (
-                            <div style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                              <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
-                            </div>
-                          ) : (
-                            <div style={{
-                              padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-                              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff",
-                              whiteSpace: "pre-wrap", wordBreak: "break-word",
-                            }}>
-                              {line}
-                            </div>
-                          );
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
             </div>
           )}
         </div>

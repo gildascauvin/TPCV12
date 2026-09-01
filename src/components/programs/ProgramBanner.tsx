@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { Program } from "@/types";
-import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<string, string> = {
@@ -51,7 +50,6 @@ export default function ProgramBanner({
   program, currentWeek, onEdit, onStop, onReconduire,
   freeLabel, onEditFreeLabel, compact = false,
 }: Props) {
-  const { isMd } = useBreakpoint();
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const curWi = currentWeek ?? -1;
@@ -109,8 +107,11 @@ export default function ProgramBanner({
     return (
       <div style={{
         background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px",
-        display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "flex-start",
-        justifyContent: "space-between", gap: isMd ? 12 : 10,
+        // Toujours en ligne, même mobile (2026-09-01) — le CTA Reconduire doit rester à droite,
+        // pas passer en dessous ; "Les séances libres restent disponibles" raccourci en
+        // "Séances libres disponibles" pour laisser assez de place au titre à gauche.
+        display: "flex", flexDirection: "row", alignItems: "center",
+        justifyContent: "space-between", gap: 10,
       }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           {editingLabel ? (
@@ -124,19 +125,23 @@ export default function ProgramBanner({
           ) : (
             <div
               onClick={startEditing}
-              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2, display: "inline-flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default" }}
+              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2, display: "flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default", minWidth: 0 }}
             >
-              {displayLabel}
-              {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45 }}>✏️</span>}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
+              {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45, flexShrink: 0 }}>✏️</span>}
             </div>
           )}
-          <div style={{ fontSize: 11, color: "#8a8f94" }}>Les séances libres restent disponibles</div>
+          <div style={{ fontSize: 11, color: "#8a8f94", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Séances libres disponibles</div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, width: isMd ? "auto" : "100%" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
           {onReconduire && (
-            <button onClick={onReconduire} style={{ flex: isMd ? undefined : 1, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
-              Reconduire la semaine →
+            <button onClick={onReconduire} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
+              Reconduire la semaine
+              <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 1 2.6 6.36" />
+                <path d="M3 21v-6h6" />
+              </svg>
             </button>
           )}
         </div>

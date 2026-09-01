@@ -48,7 +48,7 @@ export interface SessionLike {
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
    à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine }: {
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions }: {
   session: T;
   onComplete: (s: T) => void;
   onEdit: (s: T) => void;
@@ -62,6 +62,10 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   /* Réordonnancement des exercices par drag & drop — remplace le rendu par défaut d'une ligne
      d'exercice quand fourni. */
   renderExerciseLine?: (line: string, index: number) => React.ReactNode;
+  /* Masque le bloc Terminer/Dupliquer — réservé aux aperçus en lecture seule (ReconduireModal.tsx)
+     où onComplete/onEdit/onDuplicate ne sont que des no-ops requis par le type : ce n'est pas
+     l'endroit où l'action se fait, les boutons n'ont donc pas leur place à l'écran. */
+  hideActions?: boolean;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   // Single gauge: rpe if done, target_difficulty if planned
@@ -126,25 +130,27 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       )}
 
       {/* 4. Actions */}
-      <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-        <button
-          data-tour="terminer-btn"
-          onClick={() => onComplete(session)}
-          style={{
-            flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer",
-            background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
-            color: session.done ? "#171b1f" : "#fff",
-            border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
-            boxShadow: session.done ? "none" : "0 4px 12px rgba(212,64,0,.20)",
-          }}
-        >
-          {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
-        </button>
-        <button
-          onClick={() => onDuplicate(session)} title="Dupliquer"
-          style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-        >⎘</button>
-      </div>
+      {!hideActions && (
+        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+          <button
+            data-tour="terminer-btn"
+            onClick={() => onComplete(session)}
+            style={{
+              flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer",
+              background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
+              color: session.done ? "#171b1f" : "#fff",
+              border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
+              boxShadow: session.done ? "none" : "0 4px 12px rgba(212,64,0,.20)",
+            }}
+          >
+            {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
+          </button>
+          <button
+            onClick={() => onDuplicate(session)} title="Dupliquer"
+            style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >⎘</button>
+        </div>
+      )}
     </div>
   );
 }
