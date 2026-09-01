@@ -120,8 +120,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
+  // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
+  // création ("new"), jamais sur l'écran liste (voir ProgramLibraryPage.tsx : la liste n'est plus
+  // jamais affichée depuis cette modale, seule /coach/programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
-  const [libraryInitialStep, setLibraryInitialStep] = useState<"new" | undefined>(undefined);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -158,7 +160,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const quickAdd = searchParams.get("quickadd");
     if (!quickAdd) return;
     if (quickAdd === "session") setAddingDate(todayStr);
-    else if (quickAdd === "program") { setLibraryInitialStep("new"); setShowLibrary(true); }
+    else if (quickAdd === "program") setShowLibrary(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("quickadd");
     router.replace(params.toString() ? `/coach/planning?${params.toString()}` : "/coach/planning");
@@ -599,7 +601,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           <ProgramBanner
             program={viewedProgram}
             currentWeek={viewedWeek}
-            onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
+            onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/coach/programmes" : "/coach/programmes") : undefined}
             onReconduire={() => setShowReconduire(true)}
             freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
             onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
@@ -1024,8 +1026,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           requireSubscription={requireSubscription}
           isActive={isActive}
           sandboxMode={sandboxMode}
-          initialStep={libraryInitialStep}
-          onClose={() => { setShowLibrary(false); setLibraryInitialStep(undefined); }}
+          initialStep="new"
+          onClose={() => setShowLibrary(false)}
         />
       )}
       {paywallStep === "priming" && (

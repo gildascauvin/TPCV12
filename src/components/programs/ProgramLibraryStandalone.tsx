@@ -39,6 +39,7 @@ export default function ProgramLibraryStandalone({ mode, userId, subscriptionSta
         requireSubscription={requireSubscription}
         isActive={isActive}
         sandboxMode={sandboxMode}
+        standalone
         onClose={() => router.push(backHref)}
       />
       {paywallStep === "priming" && (

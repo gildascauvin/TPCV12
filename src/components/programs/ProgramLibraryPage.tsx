@@ -71,6 +71,15 @@ interface Props {
   /* Routage rapide depuis le "+" central de la nav (2026-08-31) : "new" saute directement
      l'écran liste pour ouvrir le picker de création (ProgramCreatePicker). */
   initialStep?: "new";
+  /* Onglet "Programmes" de la bottom nav (2026-09-01) — true uniquement depuis
+     ProgramLibraryStandalone (route /programmes). L'écran liste devient alors une page normale
+     (plus de position:fixed plein écran, plus de flèche retour) pour laisser la bottom nav
+     visible en dessous, comme n'importe quelle autre page. Les autres steps (new/criteria/
+     builder/assign) restent des overlays plein écran dans tous les cas — cohérent avec le fait
+     que le builder a déjà ses propres boutons sticky Enregistrer/Assigner, pas besoin de la nav
+     à cet endroit. Absent/false = comportement modal historique inchangé (usage WeekClient.tsx/
+     CoachPlanningClient.tsx via le "+" central, flèche retour + plein écran). */
+  standalone?: boolean;
 }
 
 type UIStep =
@@ -86,7 +95,7 @@ const LIBRARY_URL = "https://www.theperfclub.com/bibliotheque-de-programmes-dent
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, standalone = false }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -94,6 +103,14 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : { type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
+
+  /* Sortie d'un step "création" (new/criteria/builder/assign) — 2026-09-01. En standalone
+     (/programmes), revient à l'écran liste de CETTE page. En modal (WeekClient.tsx/
+     CoachPlanningClient.tsx, ouvert via le "+" central) : l'écran liste n'est plus jamais
+     affiché depuis ce contexte (position:fixed retirée uniquement pour le rendu standalone —
+     le montrer non-fixed ici s'empilerait sous le contenu réel de /week) — fermer doit donc
+     rendre la main à la page d'origine (onClose), jamais retomber sur "list". */
+  const closeOrList = () => { if (standalone) setStep({ type: "list" }); else onClose(); };
 
   function createBlankProgram() {
     const week: Record<string, never[]> = {};
@@ -183,7 +200,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   if (step.type === "new") {
     return (
       <ProgramCreatePicker
-        onClose={() => setStep({ type: "list" })}
+        onClose={closeOrList}
         onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
         onImport={() => setStep({ type: "criteria", mode: "import" })}
         onTemplate={() => window.open(LIBRARY_URL, "_blank", "noopener,noreferrer")}
@@ -198,7 +215,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     return (
       <ProgramCriteriaModal
         mode={mode}
-        onClose={() => setStep({ type: "list" })}
+        onClose={closeOrList}
         onBack={() => setStep({ type: "new" })}
         onGenerate={(template, meta) => {
           const defaultName = mode === "import" ? "Programme importé" : (meta.sport ? `Programme ${meta.sport}` : "Mon programme");
@@ -223,7 +240,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           if (isEdit) await updateProgram(step.programId!, name, template);
           else await saveProgram(name, template, step.meta);
           await fetchPrograms();
-          setStep({ type: "list" });
+          closeOrList();
         }}
         onSaveAndAssign={async (name, template) => {
           let id = step.programId;
@@ -231,7 +248,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           else id = await saveProgram(name, template, step.meta) ?? undefined;
           await fetchPrograms();
           if (id) setStep({ type: "assign", programId: id, programName: name });
-          else setStep({ type: "list" });
+          else closeOrList();
         }}
       />
     );
@@ -245,19 +262,27 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         programName={step.programName}
         athletes={athletes}
         selfUserId={selfUserId}
-        onClose={() => setStep({ type: "list" })}
-        onAssigned={() => { fetchPrograms(); setStep({ type: "list" }); }}
+        onClose={closeOrList}
+        onAssigned={() => { fetchPrograms(); closeOrList(); }}
       />
     );
   }
 
   /* ─── Library list (pleine page) ─── */
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", zIndex: 2147483100, display: "flex", flexDirection: "column" }}>
-      {/* Topbar */}
-      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+    <div style={standalone
+      ? { background: "#f1f0ee" }
+      : { position: "fixed", inset: 0, background: "#f1f0ee", zIndex: 2147483100, display: "flex", flexDirection: "column" }
+    }>
+      {/* Topbar — sticky (pas fixed) en standalone pour rester dans le flux normal de la page,
+          laissant la bottom nav du layout visible en dessous plutôt que recouverte. */}
+      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, ...(standalone ? { position: "sticky" as const, top: 0, zIndex: 5 } : {}) }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>←</button>
+          {/* Flèche retour absente en standalone : /programmes est une vraie page atteinte via la
+              bottom nav, pas une modale — rien à quoi "revenir" depuis ce titre. */}
+          {!standalone && (
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>←</button>
+          )}
           <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
         </div>
         {/* Générer/visualiser/modifier un programme reste libre (voir spec gating save,
@@ -276,7 +301,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
       </div>
 
       {/* Body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+      <div style={standalone ? { padding: "16px 20px 24px" } : { flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>

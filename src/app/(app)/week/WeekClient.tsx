@@ -86,8 +86,10 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [editing, setEditing] = useState<Session | null>(null);
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
+  // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
+  // création ("new"), jamais sur l'écran liste (voir ProgramLibraryPage.tsx : la liste n'est plus
+  // jamais affichée depuis cette modale, seule /programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
-  const [libraryInitialStep, setLibraryInitialStep] = useState<"new" | undefined>(undefined);
   const [showReconduire, setShowReconduire] = useState(false);
   const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
@@ -111,7 +113,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     const quickAdd = searchParams.get("quickadd");
     if (!quickAdd) return;
     if (quickAdd === "session") setAddingDate(todayStr);
-    else if (quickAdd === "program") { setLibraryInitialStep("new"); setShowLibrary(true); }
+    else if (quickAdd === "program") setShowLibrary(true);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("quickadd");
     router.replace(params.toString() ? `/week?${params.toString()}` : "/week");
@@ -449,7 +451,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       <ProgramBanner
         program={viewedProgram}
         currentWeek={viewedProgramWeek}
-        onEdit={viewedProgram ? () => setShowLibrary(true) : undefined}
+        onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/athlete/programmes" : "/programmes") : undefined}
         onReconduire={() => setShowReconduire(true)}
         freeLabel={freeLabels[format(dates[0], "yyyy-MM-dd")] ?? null}
         onEditFreeLabel={label => setFreeLabelForWeek(format(dates[0], "yyyy-MM-dd"), label)}
@@ -836,8 +838,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           requireSubscription={requireSubscription}
           isActive={isActive}
           sandboxMode={sandboxMode}
-          initialStep={libraryInitialStep}
-          onClose={async () => { setShowLibrary(false); setLibraryInitialStep(undefined); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}
+          initialStep="new"
+          onClose={async () => { setShowLibrary(false); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}
         />
       )}
       {paywallStep === "priming" && (
