@@ -2610,3 +2610,76 @@ Redondant avec le nouvel onglet nav. Prop `onOpenLibrary` devenu mort, retiré d
 `tsc --noEmit` propre (`tsconfig.temp.json`, `.next` exclu) après chaque round — nombreux, chantier construit sur plusieurs tours de retours visuels successifs de Gildas plutôt qu'en un seul passage. Pas de `npm run build` (dev server de Gildas actif en continu, risque de corruption `.next` déjà documenté ailleurs dans ce fichier). **Pas de clic réel par Claude** sur ce chantier — Gildas a testé chaque itération lui-même en local et remonté les corrections (nav mobile trop étroite, "+" décentré, espacement inégal) qui ont directement piloté les 3 rounds de spacing ci-dessus.
 
 Déployé en prod le 2026-09-01, commit `47a31aa`, push direct sur `main`.
+
+## Retour à l'architecture POC : wizard post-signup complet (2026-09-02→04)
+
+Chantier majeur, exécuté sur plusieurs jours de la même conversation — remplace le flow "zéro problem awareness" (2026-08-17→08-31, qui collectait sport/faiblesses/jours/aperçu réel AVANT le signup) par l'architecture d'origine du POC `theperfclub_poc_onboarding_builder_first_v1.html` (plan `/Users/Gildas/.claude/plans/optimized-drifting-sutton.md`) : un onboarding pré-signup ultra-court (value+rôle+AHA), suivi d'un **wizard post-signup à actions 100% libres** (générer/importer/choisir un modèle/partir de zéro, éditer, activer, assigner), le paywall n'arrivant qu'à la toute fin, skippable.
+
+### Nouveau parcours
+```
+value_intro (rôle inclus, ses 2 cartes de rôle sont son propre CTA)
+→ decision_2a/2b (AHA illustratif — voir DecisionStep.tsx plus bas)
+→ account (signup)
+→ [WIZARD, actions 100% libres]
+   wizard_picker (Générer/Importer/Modèle/Vierge) → wizard_library (si "Modèle") →
+   wizard_criteria (sport/faiblesses/objectif/jours, ou import texte/photo) →
+   wizard_builder (édition libre, S2+ flouté visuellement) →
+   wizard_activate (WellnessModal réel côté sportif, InviteModal réel côté coach) →
+   wizard_assign (ProgramAssignModal réel, skippable)
+→ paywall_priming → paywall_form (skippable, jamais gaté)
+→ app gated (S1 visible / S2+ flouté, déjà construit sur /week et /coach/planning)
+```
+Programme claimé (`PROGRAM_ATHLETE_PATH`/`PROGRAM_COACH_PATH`) : `value_intro → decision_2a/2b → account → wizard_builder → wizard_activate → wizard_assign → paywall_priming → paywall_form` — saute `wizard_picker`/`wizard_library`/`wizard_criteria`, `wizard_builder` s'ouvre pré-rempli avec le template claimé (`GET /api/programs/[id]`), avec un `onBack` vers `wizard_picker` en échappatoire pour qui préfère finalement importer/générer son propre programme. `INVITE_ATHLETE_PATH` (sportif invité par un coach) reste `value_intro → account`, aucun wizard/paywall pour ce trafic déjà gratuit.
+
+**`sport_2a`/`role` retirés des paths actifs le 2026-09-04** (expérimentation "value+rôle fusionnés → AHA générique → signup", décidée sans A/B — même absence de test que les repositionnements précédents documentés plus haut dans ce fichier) : le sport n'est plus demandé qu'au wizard (`wizard_criteria`), l'AHA (`decision_2a/2b`) devient générique (`getSessionTemplates("")`, banque par défaut universelle squats/pompes/gainage). `level_2a`/`days_2a`/`week_preview_2a`/`week_preview_2b`/`celebration`/`wellness_q` sortent aussi des paths — leur contenu réel est soit redevenu inutile (faiblesses/jours/aperçu se collectent désormais dans le wizard), soit remplacé par les vrais composants in-app montés directement dedans (`WellnessModal` pour wellness_q, `InviteModal`/`ProgramAssignModal` pour ce que `celebration` faisait à la main). **Tout le JSX/state de ces steps dépréciés reste dans le fichier** (dead code assumé, même principe déjà appliqué à `context_2b`/`sport_2b`/`count_2b`/`tool_2b` — jamais supprimé pour limiter le risque d'un changement de cette ampleur).
+
+**Aller-retour complet sur decision/account le 2026-09-04** (4 itérations la même journée, retracé dans le code pour qu'un futur lecteur ne rejoue pas le même chemin) : 1) fusion en un seul écran carrousel→formulaire, 2) split desktop form-à-droite/carrousel-à-gauche, 3) "trop chargé, en mobile ça passera jamais" → bloc statique, 4) retour final à 3 steps séparés (value/aha/signup) pour avoir "de l'impact et de l'espace" — `decision_2a`/`decision_2b` redevient un step à part entière, `account` reprend sa place standalone dans les 4 tableaux.
+
+**Frise de progression pré-signup retirée entièrement** (2026-09-03, "le stepper que je veux dans le wizard, plus pré-signup") — seul le wizard post-signup a un indicateur (dots 1/2/3 dans `WizardHero`, voir plus bas). `PHASE_*_STEPS`/`friseCurrentPhase`/`frisePct` restent calculés (dead code, plus lus par rien de visible).
+
+**Règle tenue tout du long** : `DecisionStep.tsx`/`ProgramCreatePicker.tsx`/`ProgramCriteriaModal.tsx`/`ProgramBuilderModal.tsx`/`InviteModal.tsx`/`WellnessModal.tsx`/`ProgramAssignModal.tsx` sont réutilisés tels quels, jamais dupliqués — écart commis une fois par erreur pendant la conception, corrigé avant exécution (voir mémoire `feedback-reuse-real-components-not-onboarding-duplicates`).
+
+### `WizardHero` — habillage partagé du wizard
+Nouveau composant local à `OnboardingFlow.tsx` : chacun des 7 composants réels ci-dessus gagne un prop optionnel `wizardHero?: React.ReactNode` rendu au-dessus de son propre en-tête (absent = comportement in-app inchangé). 2 variantes fidèles au POC : `dark` (plein-bleed `#141414`, "Étape 1/3 — Programme", utilisé sur Picker/Bibliothèque/Critères/Constructeur) vs `light` (eyebrow+titre+sous-titre simple, utilisé sur Activer/Assigner). Placement : colonne à gauche du drawer sur desktop (`heroOnLeft`, calculé dans chaque composant), inline en haut du drawer sur mobile — même convention partout.
+
+### `DecisionStep.tsx` — l'AHA, rebâti en plusieurs passes le 2026-09-02
+Écran affiché juste après `value_intro`, avant `account` — remplace un ancien carrousel par un split "wizard coupé en 2" (desktop : bullets à gauche sur fond `#141414`/`#f1f0ee`, illustration à droite ; mobile : accordéon en flux normal, toute la page en fond sombre). 3 items, chacun avec un timer horizontal façon Instagram Stories (`AUTO_MS=5000`, barres qui se remplissent, pause au clic manuel) :
+1. **Score de forme** — `FullWellnessPreview()`/`FullCoachControlPreview()` (`FrisePreviews.tsx`) : le VRAI `CoachCard` (`CoachAthleteCard.tsx`), pas une variante compacte. Coach : 2 cartes côte à côte sur desktop (Karim→Alléger, Sofia→Surcharger), 1 seule sur mobile.
+2. **Ajuste tes séances** — `ProgramPreview3Days({role,sport})` : 2 jours (le jour de l'alerte en premier), le vrai `DayColumn`/`PlanningRing`/`WeekSessionCard` (desktop, avec exercices) ou une version sans exercices (mobile), alerte "Alléger recommandé" au-dessus de la carte séance, CTA "+ Ajouter une séance"/Alléger-Maintenir réservés au desktop (`hideAddSession` sur `DayColumn.tsx`, nouveau prop).
+3. **Recommandations** — `CombinedInsightPreview({perspective})` : un seul `SparkLineClient` (ligne wellness + ligne charge co-tracées via `acwrToChartPosition`), insight croisé (`TrendInsight`) au-dessus.
+
+Titre/sous-titre de l'item actif alignés sur la typographie de `WizardHero` (26px/950/-0.03em titre, 15px/rgba(.6) sous-titre). Wording coach de l'item 1 : "Suis la forme de tes sportifs" (pas "score de forme", ajusté après retour direct). Toujours sans geste interactif réel (boutons `pointerEvents:none`) — décision du 2026-08-31 (voir plus haut dans ce fichier), le vrai geste Alléger/Surcharger reste post-signup, dans le vrai `/week`/Coach Control.
+
+**Incident de tooling pendant ce chantier** : un `Write` destiné à remplacer une seule section de `FrisePreviews.tsx` a écrasé le fichier entier (686→79 lignes) faute d'avoir utilisé `Edit`. Récupéré intégralement (aucune perte) via le sourcemap dev embarqué dans le chunk webpack compilé (`.next/static/chunks/...`, `sourcesContent` en base64 dans le `//# sourceMappingURL`) — la version présente dans le chunk datait d'avant l'écrasement. Leçon : pour un remplacement partiel d'un fichier déjà lu, toujours `Edit`, jamais `Write` avec un contenu plus court que l'existant.
+
+### Wording du wizard, clarifié étape par étape
+- `wizard_criteria` : titre/sous-titre désormais conditionnels au mode (`wizardCriteriaMode`) — génération : "Calibre ton programme" / "Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler." ; import : "Importe ton programme" / "Colle le texte de ton programme, ou prends-le en photo." (le `WizardHero` répétait la version "génération" même en mode import, qui n'explique pas comment faire — l'en-tête interne du drawer, lui, était déjà mode-aware).
+- `wizard_builder` : bandeau "⚡ {programme} est prêt à être personnalisé" retiré entièrement (prenait trop de place) ; CTA renommé "Assigner ce programme →" → "Continuer avec ce programme →" (l'assignation réelle est désormais un step séparé, skippable).
+- `wizard_activate` (coach) : sous-titre réécrit pour lever une ambiguïté produit réelle — "Pas besoin qu'ils créent un compte pour que tu commences à utiliser ThePerfClub — ajoute-les et assigne-leur déjà un programme. C'est encore mieux quand ils rejoignent : tout se synchronise automatiquement." (le mécanisme existait déjà — `InviteModal` crée une carte Coach Control synthétique dès l'invite, avant même que l'athlète ait un compte — mais n'était dit nulle part).
+
+### `InviteModal.tsx` — CTA sticky
+"Ajouter et inviter →" et le lien annuler/rappel restent désormais visibles en permanence (footer `flexShrink:0` non-scrollable, même convention que `ProgramCriteriaModal.tsx`/`ProgramBuilderModal.tsx`) au lieu d'être les derniers éléments d'une zone scrollable — s'applique aux 2 usages (wizard et in-app, composant partagé).
+
+### `ProgramAssignModal.tsx` — rapide par défaut, jamais forcé
+Discussion avant exécution (Gildas a explicitement demandé un avis avant d'implémenter) : plutôt que de retirer l'étape d'assignation et la remplacer par un simple message "ton compte est prêt", garder l'étape réelle (c'est le seul endroit où on choisit/confirme qui reçoit le programme et à quelle date) mais la rendre rapide par défaut :
+- `defaultStartDate="today"` (nouveau prop, `"nextMonday" | "today"`, défaut `"nextMonday"` = comportement in-app inchangé) — dans le wizard, la date de départ est préremplie à aujourd'hui plutôt qu'au lundi suivant, pour que sportif et coach aient des données dans leur planning dès la fin du wizard. Appliqué aux deux rôles (pas seulement le sportif — vérifié explicitement après une question de Gildas).
+- Chip "Aujourd'hui" ajouté aux 3 raccourcis existants (Lundi prochain/+2 sem./+1 mois) — sans lui, aucun bouton ne s'affichait sélectionné même quand `startDate` valait bien aujourd'hui, rendant le défaut invisible ("c'est pas évident que le défaut c'est aujourd'hui").
+- `onSkip`/`skipLabel` (nouveau, "Plus tard") — l'assignation n'est plus obligatoire pour aucun des deux rôles (avant : `hideClose` masquait le seul moyen de sortir sans assigner, aucun skip n'existait). `finishWizard()` ne dépendait déjà pas d'une assignation réussie, donc câbler `onSkip={finishWizard}` ne change rien côté données, juste l'affordance.
+
+### Gating S2+ étendu de l'édition au vrai planning assigné
+Jusqu'ici, le flou S2+ (`weekLocked`, modèle du 2026-08-19/20) ne portait que sur `ProgramBuilderModal.tsx` (l'éditeur). Étendu à `WeekClient.tsx`/`CoachPlanningClient.tsx` : consulter/utiliser le planning réellement assigné au-delà de la semaine 1 est désormais aussi gaté pour un compte `!isActive` (même overlay flouté + CTA "Débloquer →"). `ProgramBuilderModal.tsx` gagne aussi `onUnlockClick` (ouvre le paywall du wizard directement, sans passer par `requireSubscription` qui aurait aussi gaté l'édition/sauvegarde — censées rester libres dans le wizard).
+
+### Bibliothèque de programmes native (remplace le lien externe WordPress)
+`ProgramLibraryBrowser.tsx` (nouveau) — la carte "Modèle" du picker de création (`ProgramCreatePicker.tsx`) ouvrait jusqu'ici un nouvel onglet vers la page WordPress ; ouvre désormais un vrai écran listant les programmes publics (`GET /api/programs/library`, nouvelle route, bypass RLS via client admin — même posture que `/api/sandbox/library`/`/p/[id]`), avec filtres par catégorie et recherche. `SPORT_CATEGORIES`/`guessSportChip()` extraits en module partagé (`src/lib/sportCategories.ts`, déjà utilisés par `sport_2a`) ; 2 catégories supplémentaires locales à ce composant (Rééducation & Prévention, Concours & Sélections) + repli générique "Autres sports" — 28 des 66 programmes réels ne matchaient aucune des 8 catégories de `sport_2a`, vérifié en base.
+
+### Invités "fantômes" — historique synthétique dès l'invite
+`POST /api/invite/create` accepte désormais `athleteName` et crée immédiatement un historique synthétique (`buildCoachDemoSessions()`, nouveau module partagé `src/lib/coachDemoSessions.ts`, extrait de `completeProfile()`) pour le sportif invité — sa carte Coach Control n'est plus vide en attendant qu'il rejoigne pour de vrai. `POST /api/invite/join` et `POST /api/invite/link` suppriment ces `coach_sessions` synthétiques une fois que le vrai sportif a de vraies `sessions`, pour éviter des séances fantômes dupliquées dans le planning.
+
+### 2 bugs réels trouvés et corrigés en chemin
+1. **`register/page.tsx`** : un utilisateur qui n'avait jamais atteint le paywall (`onboarding_done` encore `false` — email de confirmation tardif, ou clic tardif sur "créer ton mot de passe") revenait sur `/register` nu (middleware) sans que `OnboardingFlow` sache où le faire reprendre — tout le funnel (value_intro/decision/account) était rejoué depuis zéro. Fix : nouveau prop `resumeRole` (déduit de `profiles.mode`, déjà posé à la création réelle du compte) fait atterrir directement dans le wizard, là où l'utilisateur s'était réellement arrêté.
+2. **`sessionTemplates.ts`** : la moitié des sports réels (Haltérophilie/Powerlifting/Musculation-Hypertrophie/Fitness-CrossFit) ne matchait aucun des 5 anciens buckets génériques et retombait sur un vague "Bloc principal technique" au lieu d'un vrai contenu squat/bench/deadlift/arraché — corrigé avec 8 buckets spécifiques par sport, alignés sur les ids exacts de `SPORT_CATEGORIES`. Chaque ligne de séance porte désormais un token que `parseAndApply()` (autorégulation) reconnaît réellement (`NxM`, `@X%`, `Xmin`...) — sinon l'aperçu Alléger/Surcharger de `decision_2a/2b` n'aurait rien de concret à ajuster visuellement.
+
+### Vérifié
+`tsc --noEmit` propre à chaque round (tsconfig temporaire excluant `.next`, piège de faux positif déjà documenté ailleurs dans ce fichier). Pas de clic réel par Claude sur le funnel complet (jamais de vraie inscription — règle permanente) ; Gildas a testé une large partie de ce chantier lui-même en local au fil des itérations (nombreux retours directs ayant piloté les corrections ci-dessus). Le tsc final (25 fichiers, ~2400 lignes nettes) a été revérifié sur l'ensemble du diff juste avant commit.
+
+Déployé en prod le 2026-09-02, commit `ab07844`, push direct sur `main`.
