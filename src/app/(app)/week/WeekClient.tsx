@@ -427,6 +427,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const viewedProgram = viewedMatch?.program ?? null;
   const viewedProgramWeek = viewedMatch?.week ?? -1;
   const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
+  // S1 du planning réel visible pour tout le monde, S2+ flouté tant que non abonné — même
+  // pattern que ProgramBuilderModal.tsx (weekLocked), étendu ici au vrai planning assigné :
+  // "assigner" n'est plus le gate (peut se faire gratuitement pendant le wizard post-signup),
+  // le gate est désormais "voir/utiliser le planning complet au quotidien".
+  const weekLocked = !isActive && viewedProgramWeek > 0;
 
   return (
     <>
@@ -497,6 +502,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
       {/* ── Vue semaine ── */}
       {viewMode === "week" && (
+        <div style={{ position: "relative" }}>
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
@@ -506,6 +512,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           padding: isMd ? "14px 20px 18px" : "14px 14px 18px",
           scrollSnapType: "x proximity",
           scrollbarWidth: "thin",
+          filter: weekLocked ? "blur(7px)" : "none",
+          pointerEvents: weekLocked ? "none" : "auto",
+          userSelect: weekLocked ? "none" : "auto",
         }}>
           {dates.map((date, idx) => {
             const dstr = format(date, "yyyy-MM-dd");
@@ -611,6 +620,18 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           })}
         </div>
         </DndContext>
+        {weekLocked && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
+            <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
+              <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
+              <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Ton programme est bien assigné — l&apos;abonnement débloque le reste de ton planning.</div>
+              <button onClick={() => requireSubscription(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+                Débloquer →
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
       )}
 
       {/* ── Vue mois ── */}

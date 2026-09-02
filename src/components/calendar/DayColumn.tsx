@@ -158,7 +158,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
+export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
@@ -166,6 +166,9 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
   /* Props optionnelles réservées à l'aperçu programme de l'onboarding (WeekPreviewStep.tsx) —
      `false`/`undefined` par défaut, donc zéro impact sur /week et /coach/planning. */
   hideDayNumber?: boolean;
+  /* Masque le CTA "+ Ajouter une séance" en pied de colonne — réservé à l'aperçu mobile de
+     DecisionStep.tsx (FrisePreviews.tsx, `ProgramPreview3Days`), qui n'a aucun geste réel à offrir. */
+  hideAddSession?: boolean;
   recoveryAdvice?: string;
   /* Remplace tout l'encart (prioritaire sur recoveryAdvice) — réservé à la carte "aujourd'hui",
      reprend le style/logique réels de l'alerte wellness de TodayClient.tsx (sportif) ou de
@@ -262,13 +265,15 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
         {sessions.map(s => renderSession ? renderSession(s) : (
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
-        <div
-          data-tour="add-session-btn"
-          onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
-          style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
-        >
-          + Ajouter une séance
-        </div>
+        {!hideAddSession && (
+          <div
+            data-tour="add-session-btn"
+            onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
+            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
+          >
+            + Ajouter une séance
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { sendCoachInviteEmail } from "@/lib/email/inviteEmail";
+import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
+
+// Score de départ neutre pour un placeholder d'invitation — même logique que les sportifs démo
+// (coach_athletes.wellness_score dénormalisé), en attendant que le vrai sportif rejoigne et
+// renseigne son propre wellness réel.
+const PLACEHOLDER_WELLNESS_SCORE = 68;
+const PLACEHOLDER_RPE_BASE = 5;
 
 async function linkAthleteToCoach(admin: ReturnType<typeof createAdminClient>, coachId: string, athleteUserId: string) {
   const [{ data: athleteProfile }, { data: wellness }] = await Promise.all([
@@ -20,7 +27,7 @@ async function linkAthleteToCoach(admin: ReturnType<typeof createAdminClient>, c
 }
 
 export async function POST(req: Request) {
-  const { athleteEmail } = await req.json();
+  const { athleteEmail, athleteName } = await req.json();
   if (!athleteEmail) return Response.json({ error: "Email manquant" }, { status: 400 });
 
   const supabase = await createClient();
@@ -29,7 +36,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
 
-  const { data: coach } = await supabase.from("profiles").select("mode, name, invite_code").eq("user_id", user.id).single();
+  const { data: coach } = await supabase.from("profiles").select("mode, name, invite_code, sport").eq("user_id", user.id).single();
   if (!coach || coach.mode !== "coach") return Response.json({ error: "Accès réservé aux coachs" }, { status: 403 });
 
   const email = athleteEmail.trim().toLowerCase();
@@ -55,14 +62,23 @@ export async function POST(req: Request) {
   const { error } = await admin.from("coach_invites").insert({ coach_id: user.id, email });
   if (error) return Response.json({ error: "Erreur lors de la création de l'invitation." }, { status: 500 });
 
-  await admin.from("coach_athletes").insert({
+  const placeholderSport = coach.sport || "";
+  const { data: placeholder } = await admin.from("coach_athletes").insert({
     coach_id: user.id,
     user_id: null,
-    name: email.split("@")[0],
-    sport: "",
-    wellness_score: 0,
+    name: (athleteName as string | undefined)?.trim() || email.split("@")[0],
+    sport: placeholderSport,
+    wellness_score: PLACEHOLDER_WELLNESS_SCORE,
     invite_email: email,
-  });
+  }).select("id").single();
+
+  // Histoire synthétique immédiate (même mécanisme que les sportifs démo, buildCoachDemoSessions)
+  // pour que la carte du coach ne soit jamais vide en attendant que le sportif rejoigne réellement.
+  if (placeholder) {
+    const sessions = buildCoachDemoSessions(user.id, placeholder.id, placeholderSport, PLACEHOLDER_RPE_BASE);
+    const { error: sessionsError } = await admin.from("coach_sessions").insert(sessions);
+    if (sessionsError) console.error("[invite/create] seed coach_sessions échoué", sessionsError);
+  }
 
   if (coach.invite_code) {
     try {

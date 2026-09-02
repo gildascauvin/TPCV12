@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { computeWellnessScore } from "@/lib/wellness";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -46,9 +47,22 @@ interface Props {
     score: number;
   }) => Promise<void>;
   onClose: () => void;
+  /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
+     injectée au-dessus du header réel — absent = comportement inchangé (usage in-app). */
+  wizardHero?: React.ReactNode;
+  /* Wizard onboarding (2026-09-03) : le bouton "Annuler" du 1er step devient "Me le rappeler plus
+     tard" (même mécanisme que le "🔔 Plus tard" de célébration/InviteModal) — absent = "Annuler"
+     inchangé (usage in-app). */
+  cancelLabel?: string;
+  /* Wizard onboarding (2026-09-04) : "←" vers l'étape wizard précédente, affiché uniquement au 1er
+     step (step>0 a déjà son propre "← Retour" intra-formulaire) — absent = pas de bouton retour
+     (usage in-app). */
+  onBack?: () => void;
 }
 
-export default function WellnessModal({ date, onSave, onClose }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
+  const { isMd } = useBreakpoint();
+  const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
   const [sleep, setSleep] = useState(7);
   const [bedtime, setBedtime] = useState("23to00");
@@ -83,28 +97,43 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
   const positiveCount = behaviors.filter(b => POSITIVE_BEHAVIORS.some(p => p.key === b)).length;
   const penalty = Math.min(negativeCount * 3, 15);
 
+  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
+     ProgramCriteriaModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx — "tout le wizard doit
+     utiliser les drawer", demande explicite de Gildas, appliqué aussi à l'usage in-app /today). */
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
+        zIndex: 2147483100, overflow: "hidden",
+      }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+        </div>
+      )}
       <div style={{
         background: "#fff",
         color: "#171b1f",
-        border: "1px solid rgba(0,0,0,.10)",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 34,
-        padding: 34,
-        width: "100%",
-        maxWidth: 560,
-        maxHeight: "90vh",
-        overflowY: "auto",
-        animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
+        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
+        <div style={{ flex: 1, overflowY: "auto", padding: 34 }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
-            💓 Wellness du jour
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
+            <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
+              💓 Wellness du jour
+            </div>
           </div>
           <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {WQ_TOTAL}</div>
         </div>
@@ -285,8 +314,10 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
           </div>
         )}
 
-        {/* Navigation */}
-        <div style={{ display: "flex", gap: 8, position: "sticky", bottom: 0, margin: "16px -34px 0", padding: "14px 34px 20px", background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)" }}>
+        </div>
+        {/* Navigation — flex item non-scrollable (pas position:sticky, voir convention "Footer
+            non-scrollable des modales" déjà établie dans ce repo pour ce genre de carte). */}
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: "20px 34px 20px", background: "#fff" }}>
           {step > 0 ? (
             <button
               onClick={goBack}
@@ -299,7 +330,7 @@ export default function WellnessModal({ date, onSave, onClose }: Props) {
               onClick={onClose}
               style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
-              Annuler
+              {cancelLabel}
             </button>
           )}
           <button

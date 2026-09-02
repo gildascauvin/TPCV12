@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import posthog from "posthog-js";
 import { PricingPrimingContent, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 interface Props {
   mode: "athlete" | "coach";
@@ -33,6 +34,7 @@ interface Props {
    l'onboarding (OnboardingFlow.tsx) doivent rester "exactement le même composant" — toute
    modification de contenu se fait uniquement dans PricingPriming.tsx. */
 export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name }: Props) {
+  const { isMd } = useBreakpoint();
   useEffect(() => {
     posthog.capture("paywall_priming_viewed", { plan: mode });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,25 +48,49 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10,
   };
 
+  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
+     ProgramCriteriaModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx/WellnessModal.tsx — demande
+     explicite de Gildas : le paywall doit lui aussi s'afficher en drawer, "onboarding comme
+     inapp" puisque c'est déjà exactement le même composant sur les deux surfaces). Toujours
+     dismissible (le "×" reste géré par `allowDismiss`, jamais retiré par ce changement). */
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto" }}>
-      {allowDismiss && (
-        <button onClick={onDismiss} style={{ position: "fixed", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
-      )}
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483100, overflow: "hidden",
+      }}
+      onClick={e => { if (allowDismiss && e.target === e.currentTarget) onDismiss(); }}
+    >
+      <div style={{
+        position: "relative",
+        background: "#f1f0ee",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+      }}>
+        {allowDismiss && (
+          <button onClick={onDismiss} style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
+        )}
 
-      <div style={{ minHeight: "100%", display: "flex", justifyContent: "center" }}>
-        <div style={{ width: "100%", maxWidth: 640, padding: "36px 20px 140px" }}>
-          <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} />
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 20px 20px" }}>
+            <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} />
+          </div>
         </div>
-      </div>
 
-      <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: "#f1f0ee", padding: "16px 20px 20px" }}>
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
-            {PAYWALL_CTA_LABEL[mode]}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
-            {PRICING_PRIMING_GUARANTEE_CAPTION}
+        <div style={{ flexShrink: 0, background: "#f1f0ee", borderTop: "1px solid rgba(0,0,0,.06)", padding: "16px 20px 20px" }}>
+          <div style={{ maxWidth: 640, margin: "0 auto" }}>
+            <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
+              {PAYWALL_CTA_LABEL[mode]}
+            </button>
+            <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
+              {PRICING_PRIMING_GUARANTEE_CAPTION}
+            </div>
           </div>
         </div>
       </div>

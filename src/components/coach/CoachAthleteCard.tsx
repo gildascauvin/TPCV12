@@ -137,7 +137,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView, isActive, baseline }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, coachName, selfView, isActive, baseline, externalPreviewPct }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -174,6 +174,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      calcul dans les deux cas, jamais deux formules séparées). `undefined`/absent = repli automatique
      sur les seuils absolus actuels, comportement 100% inchangé. */
   baseline?: WellnessBaselineResult | null;
+  /* Aperçu live imposé par le parent (2026-09-04, aperçu onboarding — DecisionStep.tsx, jauge de
+     forme démo) — prioritaire sur `previewPct` interne (piloté par les chips d'AutoregButtons via
+     `onPreviewChange`). `undefined` par défaut = comportement 100% inchangé (previewPct interne
+     pilote seul, ex. /coach, /coach/planning). `null` explicite = force l'absence de preview même si
+     l'état interne en a un (jamais utilisé aujourd'hui, gardé pour symétrie). */
+  externalPreviewPct?: number | null;
 }) {
   const maxDiff = maxDiffToday(athlete.id, sessions);
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
@@ -195,6 +201,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      par CETTE carte", distinct du `displayScore` de TodayClient.tsx — post-impact fatigue même jour,
      concept différent, jamais confondu). */
   const displayScore = baseline?.hasEnoughHistory ? baseline.relativeScore : absoluteScore;
+  /* Calculé une seule fois, réutilisé au petit badge (toujours) et au gros libellé (selfView
+     uniquement, voir plus bas — remplace "Toi"/prénom vide par le vrai vocabulaire de zone déjà
+     utilisé en prod, "Frais"/"Équilibré"/"Fatigué"/"Zone optimale"..., demande explicite de Gildas
+     2026-09-04 : la carte "toi" de l'onboarding n'a pas de vrai prénom à afficher, le signup arrive
+     après l'AHA depuis le repositionnement du même jour). */
+  const zoneText = zoneLabelFor(displayScore, baseline, perspective);
 
   /* Suggestion décharge/surcharge — seulement sur une séance encore prévue (une séance déjà
      terminée n'a plus de sens à ajuster). Indépendant de isPriority : une "surcharge" (forme au
@@ -206,6 +218,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     ? computeAutoregSuggestion(absoluteScore, topSession.target_difficulty, baseline)
     : null;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
+  const effectivePreviewPct = externalPreviewPct !== undefined ? externalPreviewPct : previewPct;
 
   /* Le halo pulsant "attention requise" vit sur le CONTOUR DE LA CARTE ENTIÈRE (pas sur l'encart de
      suggestion interne, qui reste statique — un seul signal de mouvement par carte). Couleur du
@@ -253,9 +266,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           resourceType="coach_athlete"
           variant="dark"
           buildSnapshot={() => ({
-            athleteName: athlete.name,
+            athleteName: selfView ? zoneText : athlete.name,
             score: displayScore,
-            zoneLabel: zoneLabelFor(displayScore, baseline, perspective),
+            zoneLabel: zoneText,
             decision,
             isPriority,
             behaviors: behaviors.map(b => BEHAVIOR_META[b]
@@ -268,7 +281,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             } : undefined,
             authorName: coachName ?? "Coach",
           })}
-          title={`${firstName} — ${zoneLabelFor(displayScore, baseline, perspective)}`}
+          title={selfView ? zoneText : `${firstName} — ${zoneText}`}
           text={decision}
         />
       </div>
@@ -278,10 +291,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         <WellnessRing score={displayScore} size={72} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
-            {zoneLabelFor(displayScore, baseline, perspective)}
+            {selfView ? "Ta forme" : zoneText}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.03em" }}>{firstName}</div>
+            <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.03em" }}>{selfView ? zoneText : firstName}</div>
+            {!!athlete.invite_email && (
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,.1)", color: "#c7ccd1", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "3px 8px" }}>
+                ⏳ En attente
+              </div>
+            )}
             {showBadge && (
               <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
                 Attention requise
@@ -399,7 +417,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       })()}
 
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
-         surcharge est en cours de sélection ou déjà appliquée (previewPct). */}
+         surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct
+         interne, ou externalPreviewPct si le parent le pilote — voir sa doc plus haut). */}
       {topSession && (
         <div onClick={onDecide} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
@@ -416,7 +435,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           {topSession.notes && (
             <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
               {topSession.notes.split("\n").filter(Boolean).map((ex, i) => {
-                const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
+                const modified = effectivePreviewPct != null ? parseAndApply(ex, effectivePreviewPct) : ex;
                 const changed = modified !== ex;
                 const unseen = hasUnseenAttachment(topSession.exercise_media?.[String(i)], "coach", topSession.viewed_by_coach_at);
                 return (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CoachAthlete } from "@/types";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 interface Props {
   programId: string;
@@ -10,6 +11,28 @@ interface Props {
   selfUserId?: string;
   onClose: () => void;
   onAssigned: () => void;
+  /* Wizard onboarding (2026-09-02) : préselectionne plusieurs sportifs d'un coup (3 démo + invités
+     réels) plutôt qu'un seul — absent = comportement inchangé ([athletes[0].id]). */
+  initialSelectedIds?: string[];
+  /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
+     injectée au-dessus du titre réel — absent = comportement inchangé (usage in-app). */
+  wizardHero?: React.ReactNode;
+  /* Wizard onboarding (2026-09-04) : masque le "✕" (on veut inciter la config, pas offrir une
+     sortie) et affiche "←" (retour à l'étape wizard précédente) à la place — absents = comportement
+     inchangé (usage in-app : "✕" visible, pas de "←"). */
+  hideClose?: boolean;
+  onBack?: () => void;
+  /* Wizard onboarding (2026-09-02) : préremplit la date de départ à aujourd'hui plutôt qu'au lundi
+     suivant — objectif : que le sportif ait des données dans son planning dès la fin du wizard,
+     sans attendre. Absent = comportement inchangé (in-app : lundi prochain, un vrai départ
+     d'entraînement mi-semaine est un cas rare, pas le bon défaut pour un usage réel). Reste
+     éditable via les raccourcis/le champ date, comme toujours. */
+  defaultStartDate?: "nextMonday" | "today";
+  /* Wizard onboarding (2026-09-02, demande explicite de Gildas) : "Plus tard" — l'assignation ne
+     doit pas être obligatoire, ni côté coach ni côté sportif. Absent = pas de lien (usage in-app,
+     `hideClose` y est de toute façon absent donc le "✕" reste le moyen de sortir sans assigner). */
+  onSkip?: () => void;
+  skipLabel?: string;
 }
 
 function nextMonday(): string {
@@ -18,6 +41,10 @@ function nextMonday(): string {
   const diff = day === 0 ? 1 : 8 - day;
   d.setDate(d.getDate() + diff);
   return d.toISOString().split("T")[0];
+}
+
+function todayISO(): string {
+  return new Date().toISOString().split("T")[0];
 }
 
 function addWeeks(dateStr: string, weeks: number): string {
@@ -30,11 +57,13 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned }: Props) {
+export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned, initialSelectedIds, wizardHero, hideClose, onBack, defaultStartDate = "nextMonday", onSkip, skipLabel }: Props) {
+  const { isMd } = useBreakpoint();
+  const heroOnLeft = !!wizardHero && isMd;
   const isSelfMode = athletes.length === 0 && !!selfUserId;
   const monNext = nextMonday();
-  const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>(athletes[0] ? [athletes[0].id] : []);
-  const [startDate, setStartDate] = useState(monNext);
+  const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>(initialSelectedIds ?? (athletes[0] ? [athletes[0].id] : []));
+  const [startDate, setStartDate] = useState(defaultStartDate === "today" ? todayISO() : monNext);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -95,25 +124,41 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
     }
   }
 
+  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
+     ProgramCriteriaModal.tsx/InviteModal.tsx — appliqué aussi bien pour l'onboarding que pour
+     l'usage in-app, demande explicite de Gildas : "onboarding comme inapp"). */
   return (
     <div
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 2147483100, padding: 18,
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
+        zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+        </div>
+      )}
       <div style={{
-        background: "#fff", borderRadius: 30, padding: "28px 28px 0",
-        width: "100%", maxWidth: 420, maxHeight: "85vh",
-        display: "flex", flexDirection: "column",
-        boxShadow: "0 42px 120px rgba(0,0,0,.34)",
+        background: "#fff",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        padding: "28px 28px 0",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
+        {wizardHero && !isMd && <div style={{ margin: "-28px -28px 16px" }}>{wizardHero}</div>}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Assigner le programme</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Assigner le programme</div>
+          </div>
+          {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
         </div>
         <div style={{ fontSize: 12.5, color: "#8a8f94", marginBottom: 22 }}>{programName}</div>
 
@@ -178,8 +223,14 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
                   Début du programme
                 </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                {/* "Aujourd'hui" ajouté (2026-09-02, retour de Gildas : "c'est pas évident que le
+                    défaut c'est aujourd'hui") — sans lui, aucun des 3 raccourcis existants ne
+                    correspondait au défaut du wizard, donc rien ne s'affichait sélectionné même si
+                    `startDate` valait bien aujourd'hui. `flexWrap` : 4 chips passent sur 2 lignes
+                    sur un mobile étroit plutôt que de s'écraser. */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                   {[
+                    { label: "Aujourd'hui", value: todayISO() },
                     { label: `Lundi prochain (${fmtDate(monNext)})`, value: monNext },
                     { label: `+2 sem. (${fmtDate(addWeeks(monNext, 2))})`, value: addWeeks(monNext, 2) },
                     { label: `+1 mois (${fmtDate(addWeeks(monNext, 4))})`, value: addWeeks(monNext, 4) },
@@ -188,7 +239,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                       key={opt.value}
                       onClick={() => setStartDate(opt.value)}
                       style={{
-                        flex: 1, padding: "7px 6px", borderRadius: 10, cursor: "pointer", fontSize: 10.5, fontWeight: 600,
+                        flex: "1 1 auto", minWidth: 90, padding: "7px 6px", borderRadius: 10, cursor: "pointer", fontSize: 10.5, fontWeight: 600,
                         border: startDate === opt.value ? "2px solid #d44000" : "2px solid #e8e4df",
                         background: startDate === opt.value ? "#fff4f0" : "#faf9f7",
                         color: startDate === opt.value ? "#d44000" : "#555",
@@ -236,6 +287,14 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                       ? `Assigner à ${selectedAthleteIds.length} sportifs`
                       : "Assigner le programme"}
               </button>
+              {onSkip && (
+                <button
+                  onClick={onSkip}
+                  style={{ width: "100%", padding: "10px", marginTop: 4, background: "none", border: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
+                >
+                  {skipLabel ?? "Plus tard"}
+                </button>
+              )}
             </div>
           </>
         )}

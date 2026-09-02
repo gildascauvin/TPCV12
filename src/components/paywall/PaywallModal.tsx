@@ -6,6 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 let _stripePromise: ReturnType<typeof loadStripe> | null = null;
 export function getStripePromise() {
@@ -231,6 +232,7 @@ export function CheckoutForm({
 }
 
 export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling, headline, abVariant }: PaywallModalProps) {
+  const { isMd } = useBreakpoint();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -255,80 +257,105 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
   const p = PRICING[mode];
 
+  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
+     PrimingJourneyModal.tsx — demande explicite de Gildas, "le paywall aussi en drawer"). Le portail
+     du footer Stripe (form="checkout-form", voir CheckoutForm ci-dessus) n'a plus besoin de
+     position:fixed plein viewport : simple flex item flexShrink:0 après la région scrollable, comme
+     tous les autres drawers du repo (convention "Footer non-scrollable des modales"). */
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto" }}>
-      {allowDismiss && onClose && (
-        <button onClick={onClose} style={{ position: "fixed", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
-      )}
-      <div style={{ minHeight: "100%", display: "flex", justifyContent: "center" }}>
-      <div style={{ width: "100%", maxWidth: 560, padding: "36px 20px 140px" }}>
-
-        {/* Back button */}
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        zIndex: 2147483100, overflow: "hidden",
+      }}
+      onClick={e => { if (allowDismiss && onClose && e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{
+        position: "relative",
+        background: "#f1f0ee",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+      }}>
         {allowDismiss && onClose && (
-          <button
-            onClick={onClose}
-            style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "0 0 16px 0", display: "block" }}>
-            ← Retour
-          </button>
+          <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
         )}
 
-        {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
-            badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-          🔒 Garanti 14j
+        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ width: "100%", maxWidth: 560, margin: "0 auto", padding: "36px 20px 20px" }}>
+
+          {/* Back button */}
+          {allowDismiss && onClose && (
+            <button
+              onClick={onClose}
+              style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: "0 0 16px 0", display: "block" }}>
+              ← Retour
+            </button>
+          )}
+
+          {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
+              badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+            🔒 Garanti 14j
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Passe au niveau supérieur."}</div>
+          <div
+            onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
+            <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{billing === "monthly" ? "Facturé mensuellement" : "Facturé annuellement"}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{billing === "monthly" ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+            <div style={{ display: "flex" }}>
+              {PAYWALL_AVATARS.map((src, i) => (
+                <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                  <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+              <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+            </div>
+          </div>
+
+          {loadingIntent && (
+            <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>
+              Chargement du formulaire...
+            </div>
+          )}
+
+          {setupError && (
+            <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>
+              {setupError}
+            </div>
+          )}
+
+          {clientSecret && (
+            <Elements
+              stripe={getStripePromise()}
+              options={{
+                clientSecret,
+                appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } },
+              }}
+            >
+              <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} />
+            </Elements>
+          )}
         </div>
-        <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Passe au niveau supérieur."}</div>
-        <div
-          onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
-          style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
-          <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{billing === "monthly" ? "Facturé mensuellement" : "Facturé annuellement"}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{billing === "monthly" ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
-          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-          <div style={{ display: "flex" }}>
-            {PAYWALL_AVATARS.map((src, i) => (
-              <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-              </div>
-            ))}
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-          </div>
-        </div>
-
-        {loadingIntent && (
-          <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>
-            Chargement du formulaire...
-          </div>
-        )}
-
-        {setupError && (
-          <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>
-            {setupError}
-          </div>
-        )}
-
-        {clientSecret && (
-          <Elements
-            stripe={getStripePromise()}
-            options={{
-              clientSecret,
-              appearance: { theme: "stripe", variables: { colorPrimary: "#d44000", borderRadius: "12px" } },
-            }}
-          >
-            <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} />
-          </Elements>
-        )}
+        <div ref={setFooterPortalNode} style={{ flexShrink: 0, background: "#f1f0ee" }} />
       </div>
-      </div>
-
-      <div ref={setFooterPortalNode} style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: "#f1f0ee" }} />
     </div>
   );
 }

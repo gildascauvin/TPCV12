@@ -348,12 +348,27 @@ interface Props {
   /* Vue au-delà de S1 gatée (2026-08-19) — voir doc dans ProgramLibraryPage.tsx. Absent = jamais
      floué (repli permissif). */
   isActive?: boolean;
+  /* CTA "Débloquer →" de l'overlay S2+ (2026-09-03) : quand fourni, remplace le passthrough
+     `gate(() => {})` par cet appel direct — permet à un appelant (le wizard onboarding) d'ouvrir
+     son propre paywall sans jamais devoir passer `requireSubscription` (qui gaterait aussi les
+     actions d'édition/enregistrement, qu'on veut garder libres dans le wizard). Absent = repli sur
+     `gate(() => {})`, comportement in-app inchangé. */
+  onUnlockClick?: () => void;
   onSaveToLibrary: (name: string, template: ProgramTemplate) => Promise<void>;
   onSaveAndAssign: (name: string, template: ProgramTemplate) => Promise<void>;
   onBack: () => void;
+  /* Wizard onboarding (2026-09-02) : un seul CTA au lieu des 2 boutons habituels — réutilise
+     `onSaveToLibrary` tel quel (vraie écriture POST /api/programs), l'assignation réelle se fait
+     à l'étape suivante du wizard (ProgramAssignModal), pas ici. Absent = comportement inchangé
+     (2 boutons), utilisé par ProgramLibraryPage.tsx. */
+  footerVariant?: "default" | "wizardSingle";
+  wizardSingleLabel?: string;
+  /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
+     injectée au-dessus de la topbar réelle — absent = comportement inchangé (usage in-app). */
+  wizardHero?: React.ReactNode;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onSaveToLibrary, onSaveAndAssign, onBack }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
@@ -524,6 +539,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", display: "flex", flexDirection: "column", zIndex: 2147483100 }}>
+      {wizardHero}
       {/* Topbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>
@@ -668,7 +684,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
           <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
             <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
             <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Visualise et personnalise l&apos;intégralité du programme généré, pas seulement la première semaine.</div>
-            <button onClick={() => gate(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+            <button onClick={() => onUnlockClick ? onUnlockClick() : gate(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
               Débloquer →
             </button>
           </div>
@@ -683,12 +699,20 @@ export default function ProgramBuilderModal({ programName: initialName, template
         </div>
       )}
       <div style={{ background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)", padding: "12px 18px 20px", display: "flex", gap: 10, flexShrink: 0 }}>
-        <button onClick={() => gate(() => handleSave("library"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "#faf9f7" : "#f5f5f5", color: name.trim() && !saving ? "#555" : "#aaa", fontWeight: 700, fontSize: 13 }}>
-          {saving === "library" ? "Enregistrement…" : "💾 Enregistrer en librairie"}
-        </button>
-        <button onClick={() => gate(() => handleSave("assign"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df", color: name.trim() && !saving ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, boxShadow: name.trim() && !saving ? "0 4px 12px rgba(212,64,0,.20)" : "none" }}>
-          {saving === "assign" ? "Assignation…" : "👤 Assigner →"}
-        </button>
+        {footerVariant === "wizardSingle" ? (
+          <button onClick={() => gate(() => handleSave("library"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df", color: name.trim() && !saving ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, boxShadow: name.trim() && !saving ? "0 4px 12px rgba(212,64,0,.20)" : "none" }}>
+            {saving === "library" ? "Enregistrement…" : wizardSingleLabel}
+          </button>
+        ) : (
+          <>
+            <button onClick={() => gate(() => handleSave("library"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "2px solid rgba(0,0,0,.10)", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "#faf9f7" : "#f5f5f5", color: name.trim() && !saving ? "#555" : "#aaa", fontWeight: 700, fontSize: 13 }}>
+              {saving === "library" ? "Enregistrement…" : "💾 Enregistrer en librairie"}
+            </button>
+            <button onClick={() => gate(() => handleSave("assign"))} disabled={!name.trim() || saving !== null} style={{ flex: 1, padding: "13px", borderRadius: 12, border: "none", cursor: name.trim() && !saving ? "pointer" : "not-allowed", background: name.trim() && !saving ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df", color: name.trim() && !saving ? "#fff" : "#aaa", fontWeight: 700, fontSize: 13, boxShadow: name.trim() && !saving ? "0 4px 12px rgba(212,64,0,.20)" : "none" }}>
+              {saving === "assign" ? "Assignation…" : "👤 Assigner →"}
+            </button>
+          </>
+        )}
       </div>
 
       {showReconduire && (() => {

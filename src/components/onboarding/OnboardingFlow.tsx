@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
-import type { ProgramTemplate, ProgramFocus, SessionTemplate } from "@/types";
+import { SPORT_CATEGORIES, guessSportChip } from "@/lib/sportCategories";
+import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
+import type { ProgramTemplate, ProgramFocus, SessionTemplate, CoachAthlete } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import WeekPreviewStep from "@/components/onboarding/WeekPreviewStep";
@@ -23,6 +25,13 @@ import WellnessRing from "@/components/wellness/WellnessRing";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { subscribeToPush, needsInstallForPush } from "@/lib/push";
 import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
+import ProgramCreatePicker from "@/components/programs/ProgramCreatePicker";
+import ProgramCriteriaModal from "@/components/programs/ProgramCriteriaModal";
+import ProgramLibraryBrowser from "@/components/programs/ProgramLibraryBrowser";
+import ProgramBuilderModal from "@/components/programs/ProgramBuilderModal";
+import ProgramAssignModal from "@/components/programs/ProgramAssignModal";
+import InviteModal from "@/components/coach/InviteModal";
+import WellnessModal from "@/components/wellness/WellnessModal";
 
 type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
@@ -44,6 +53,7 @@ type StepId =
   | "celebration"
   | "concept_autoreg" | "profile_recap"
   | "invite_team"
+  | "wizard_picker" | "wizard_library" | "wizard_criteria" | "wizard_builder" | "wizard_activate" | "wizard_assign"
   | "paywall_priming" | "paywall_form";
 
 type PendingData = {
@@ -53,71 +63,96 @@ type PendingData = {
   name: string; wSleep: number; wBedtime: string; wStress: number; wRecovery: number;
   wBehaviors: string[]; wMotivation: number; wScore: number | null;
 };
-interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role }
+interface Props { userId?: string; pendingData?: PendingData | null; initialRole?: Role; resumeRole?: Role }
 
-/* Refonte "zéro problem awareness" (2026-08-17) — remplace l'ancien diagnostic self-report
-   (pain points → score → concept) par une construction directe : sport+faiblesses (un seul écran,
-   fusionnés) → jours → programme réel (aperçu éphémère, aucun compte requis) → rôle → décision
-   d'autorégulation vécue (week_preview_2a/2b, déjà l'aha réel depuis le 2026-08-14) → compte →
-   célébration → formule (paywall obligatoire-mais-skippable, réintroduit le 2026-08-31 après
-   celebration — voir doc juste avant les 4 tableaux de path plus bas). Rôle et Signup repositionnés
-   le 2026-08-18/19 (voir discussion funnel du 2026-08-16→19) :
-   le rôle attend d'avoir montré un programme concret ("Pour moi / Pour mes sportifs" plutôt qu'une
-   catégorisation à froid), le signup attend le vrai AHA (decision_2a/2b) — seul moment où il y a
-   quelque chose de réel à vouloir sauvegarder. Ancienne distinction control/test "position du
-   signup" abandonnée pour tous (plus de bras A/B sur cette question, tranché sans test formel —
-   volume historiquement trop faible pour en tirer une conclusion propre sur ce funnel, voir les 2
-   tests précédents `short-onboarding-signup`/`skip-value-intro`).
-   Les anciens écrans (frustration_2a/overload_2a/planning_2a/fatigue_2a, autoreg_score,
-   concept_autoreg, profile_recap, goal_2a, et leurs équivalents coach) restent dans le fichier
-   (JSX + state) mais ne sont plus référencés par aucun path actif — dead code assumé, même
-   principe que context_2b/sport_2b/count_2b/tool_2b déjà toléré ailleurs dans ce fichier. */
-/* wellness_reveal / invite_team retirés des paths (2026-08-27) — leur contenu unique (rappel
-   notification, formulaire d'invitation) est désormais dans celebration elle-même, voir son rendu
-   plus bas. JSX/state des deux steps gardés intacts mais jamais atteints (dead code assumé, même
-   principe que context_2b/sport_2b déjà toléré ailleurs dans ce fichier) — pas supprimés pour
-   limiter le risque de ce changement. */
-/* wellness_check_2a/2b retiré des paths actifs (2026-08-28) — fusionné dans week_preview_2a/2b
-   (simulation de forme + reco déjà intégrées à l'aperçu du programme, voir WeekPreviewStep.tsx).
-   StepId/JSX/state gardés intacts (dead code assumé, même principe que les autres steps dépréciés
-   documentés en tête de ce bloc). */
-/* paywall_priming/paywall_form réintroduits dans les 4 paths actifs (2026-08-31), APRÈS celebration
-   — pas avant comme avant le retrait du 2026-08-19. Différence structurelle avec l'ancien modèle
-   CB-obligatoire : ce paywall est vu par 100% de ceux qui terminent l'onboarding (obligatoire dans
-   le sens "sur le chemin", jamais sauté silencieusement) mais **skippable** — voir skipPaywall(),
-   câblé sur le "×" de PrimingJourneyModal/PaywallModal (les 2 écrans sont désormais rendus en
-   important directement ces composants du gating in-app, "exactement le même habillage", demande
-   explicite de Gildas — plus une copie parallèle "Plus tard →" spécifique à l'onboarding, tentée
-   puis retirée le jour même). onboarding_done reste posé à l'activation
-   (createAccount/finishAthleteActivation/finishCoachActivation), jamais gaté par ce paywall — payer
-   ou fermer n'a aucun effet sur l'accès (modèle produit-gated du 2026-08-19/20 inchangé, seul un
-   save ultérieur reste gaté). Position choisie précisément pour que fermer laisse toujours une
-   suite naturelle : wellness_q côté sportif (déjà le dernier step), /coach côté coach (déjà la
-   sortie normale) — jamais un cul-de-sac. */
+/* Retour à l'architecture POC (2026-09-02, voir plan /Users/Gildas/.claude/plans/
+   optimized-drifting-sutton.md) — remplace le flow "zéro problem awareness" (2026-08-17→08-31,
+   qui collectait déjà sport+faiblesses+jours+aperçu réel AVANT le signup) par le flow original du
+   POC `theperfclub_poc_onboarding_builder_first_v1.html`, Option A, à la lettre (décision explicite
+   de Gildas, y compris pour le trafic "programme claimé" — voir doc de PROGRAM_ATHLETE_PATH plus
+   bas) :
+     value_intro → sport_2a (léger, sport seul) → role → decision_2a/2b (AHA illustratif, sur
+     getSessionTemplates(sport) — plus de génération réelle avant signup) → account (signup="
+     Connecter") → [WIZARD post-signup, actions 100% libres] wizard_picker → wizard_criteria →
+     wizard_builder (S2+ flouté visuellement, ajouté le 2026-09-03 — voir sa doc plus bas) →
+     wizard_activate → wizard_assign → paywall_priming → paywall_form → app gated (S1 visible/S2+
+     flouté, déjà construit sur /week et /coach/planning).
+
+   Expérimentation "value+rôle fusionnés → AHA générique → signup" (2026-09-04, décidée sans A/B —
+   même absence de test que les repositionnements précédents, voir doc du path plus bas) : `sport_2a`
+   ET `role` sortent à leur tour des paths actifs. `value_intro` porte désormais lui-même le choix de
+   rôle (ses 2 cartes deviennent son propre CTA — repli sur un CTA unique si le rôle est déjà connu à
+   l'arrivée, `?role=`/programme claimé/reprise Google) ; `sport_2a` disparaît purement et simplement,
+   le sport ne se demande plus qu'au wizard (`wizard_criteria`), comme faiblesses/jours déjà avant
+   lui. Flow réel : value_intro (rôle inclus) → decision_2a/2b (AHA, désormais générique — `sport`
+   reste "" tout du long, `getSessionTemplates("")` retombe sur sa banque par défaut, mouvements
+   universels squats/pompes/gainage, wording explicite "marche pour tous les sports") → account →
+   wizard. `sport_2a`/`role` restent dans StepId/JSX (dead code assumé, même principe).
+   `level_2a`/`days_2a`/`week_preview_2a`/`week_preview_2b`/`celebration`/`wellness_q` sortent des
+   paths actifs — leur contenu réel est soit redevenu inutile (faiblesses/jours/aperçu se collectent
+   désormais DANS le wizard, via les vrais `ProgramCriteriaModal`/`ProgramBuilderModal`), soit
+   remplacé par les vrais composants in-app montés directement dans le wizard (`WellnessModal` pour
+   wellness_q, `InviteModal`/`ProgramAssignModal` pour ce que celebration faisait à la main) — voir
+   le rendu de ces 5 steps plus bas. JSX/state de tous les steps dépréciés restent dans le fichier
+   (dead code assumé, même principe déjà appliqué à context_2b/sport_2b/count_2b/tool_2b) — jamais
+   supprimés pour limiter le risque de ce changement.
+   `DecisionStep.tsx`/`ProgramCreatePicker.tsx`/`ProgramCriteriaModal.tsx`/`ProgramBuilderModal.tsx`/
+   `InviteModal.tsx`/`WellnessModal.tsx`/`ProgramAssignModal.tsx` sont réutilisés tels quels (aucune
+   duplication maison — règle enfreinte une fois par erreur pendant la conception de ce chantier,
+   corrigée avant exécution, voir mémoire feedback-reuse-real-components-not-onboarding-duplicates).
+   paywall_priming/paywall_form restent skippables (`skipPaywall()`, inchangé), juste repositionnés
+   après le wizard plutôt qu'après celebration — `onboarding_done` reste posé à l'activation
+   (`finishAthleteActivation`/`finishCoachActivation`, désormais appelées en fin de wizard_assign),
+   jamais gaté par ce paywall (modèle produit-gated du 2026-08-19/20 inchangé). */
+/* Rôle fusionné dans value_intro, sport_2a retiré (2026-09-04, expérimentation "value+rôle → AHA
+   générique → signup" — voir doc du bloc value_intro plus bas pour le détail). value_intro devient
+   le seul step pré-AHA : ses propres cartes de rôle servent de CTA, l'AHA (decision_2a/2b) n'a plus
+   besoin du sport (banque générique de sessionTemplates.ts, toujours atteinte puisque `sport` reste
+   vide jusqu'au wizard) — le vrai sport n'est plus demandé qu'à wizard_criteria, post-signup, comme
+   faiblesses/jours déjà avant lui. `sport_2a`/`role` restent dans StepId et leur JSX (dead code,
+   jamais supprimés — même convention que les autres steps dépréciés de ce fichier). */
+/* Aller-retour complet sur decision/account le 2026-09-04, 4 itérations successives de Gildas la
+   même journée — retracé ici pour qu'un futur lecteur ne rejoue pas le même chemin :
+     1. Fusion en un seul écran, toggle séquentiel démo→formulaire ("account" retiré de ces 4
+        tableaux, DecisionStep rendait un carrousel puis cédait la place au formulaire).
+     2. "c'est pas ça que je voulais... je veux que le form d'inscription soit à droite, et que le
+        carousel soit à gauche" — split desktop, les deux visibles ensemble, "account" toujours
+        retiré des tableaux (fondu dans decision_2a/2b).
+     3. "je suis perdu... la démo avec le carrousel je suis pas convaincu... c'est trop chargé...
+        en mobile ça passera jamais" — DecisionStep devient un bloc statique (3 points), toujours
+        dans le même split fondu avec le formulaire.
+     4. "finalement il vaut mieux avoir l'étape propre 'aha' avant le signup (Value, aha, signup)
+        pour avoir de l'impact et de l'espace" — RETOUR à 3 steps séparés : "account" reprend sa
+        place dans ces 4 tableaux (comme avant la fusion), `decision_2a`/`decision_2b` redevient un
+        step à part entière (accordéon+illustration, voir DecisionStep.tsx), `renderAccountForm()`
+        n'est plus jamais appelée qu'au step "account" standalone (son option `embedded` retirée,
+        n'a plus d'appelant). Les 3 continuations (`inviteJoinFailed`/`googleInitDone`/
+        `resumeRoleApplied`, plus bas) gardent leur repli `decisionStepIdFor(role)` en filet de
+        sécurité (jamais atteint tant que "account" est dans le path résolu, mais inoffensif à
+        laisser — évite de rouvrir ce fichier une 5e fois pour un simple retrait défensif). */
 const ATHLETE_PATH: StepId[] = [
   "value_intro",
-  "sport_2a",
-  "level_2a",
-  "days_2a",
-  "week_preview_2a",
-  "role",
   "decision_2a",
   "account",
-  "celebration",
+  "wizard_picker",
+  "wizard_library",
+  "wizard_criteria",
+  "wizard_builder",
+  "wizard_activate",
+  "wizard_assign",
   "paywall_priming",
   "paywall_form",
-  "wellness_q",
 ];
 const COACH_PATH: StepId[] = [
   "value_intro",
-  "sport_2a",
-  "level_2a",
-  "days_2a",
-  "week_preview_2b",
-  "role",
   "decision_2b",
   "account",
-  "celebration",
+  "wizard_picker",
+  "wizard_library",
+  "wizard_criteria",
+  "wizard_builder",
+  "wizard_activate",
+  "wizard_assign",
   "paywall_priming",
   "paywall_form",
 ];
@@ -125,24 +160,24 @@ const COACH_PATH: StepId[] = [
 const POST_PROGRESS: StepId[] = ["value_intro", "wellness_q", "wellness_reveal", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "profile_recap", "invite_team", "paywall_priming", "paywall_form", "week_preview_2a", "week_preview_2b"];
 
 const DARK_STEPS: StepId[] = ["value_intro", "autoreg_score", "autoreg_score_coach", "celebration", "concept_autoreg", "wellness_reveal"];
-/* week_preview_2a/2b restent en fond clair (page) : leur héros sombre est géré localement par
-   WeekPreviewStep, qui reçoit aussi la frise en prop pour l'afficher dans ce même bloc sombre. */
-const FRISE_INLINE_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "decision_2a", "decision_2b"];
+const FRISE_INLINE_STEPS: StepId[] = ["decision_2a", "decision_2b"];
 
-/* Frise 4 étapes (Programme/Aperçu/Adaptation/Formule, 2026-08-19 — remplace le regroupement
-   Profil/Programme/Adaptation/Formule du 2026-08-17) — regroupe les steps réels par phase pour
-   calculer une progression persistante. Réordonnancement rôle/signup (voir doc des paths
-   ci-dessus) : "role" rejoint la phase "Aperçu" (juste après avoir vu le programme, avant de
-   vivre l'adaptation) et "account" rejoint "Formule" (juste avant le paywall, plus au tout début)
-   — les deux restent de toute façon masqués de la frise elle-même (HIDE_FRISE_STEPS), ce
-   regroupement ne pilote que le calcul de progression affiché sur les écrans adjacents. Filtré
-   par le `path` actif pour rester cohérent avec les variantes (programme claimé, etc.) qui sautent
-   des steps. */
-const PHASE_1_STEPS: StepId[] = ["sport_2a", "level_2a", "days_2a"];
-const PHASE_2_STEPS: StepId[] = ["week_preview_2a", "week_preview_2b", "role"];
+/* Plus de frise du tout avant le signup (2026-09-03, retour à l'architecture POC, correction
+   explicite de Gildas — "le stepper que je veux dans le wizard, plus pré-signup") : le POC n'a
+   aucun indicateur de progression sur value/sport/role/decision/account, seul le wizard post-
+   signup a des dots (1/2/3, voir WizardHero). `sport_2a` ajouté à HIDE_FRISE_STEPS (dernier step
+   qui affichait encore la frise), `frise` retiré des 2 call sites de DecisionStep (son heroBlock
+   la rendait inline même quand HIDE_FRISE_STEPS masquait la frise externe). PHASE_*_STEPS/
+   friseCurrentPhase/frisePct restent calculés (plus lus par rien de visible) — dead code assumé,
+   même principe que les autres steps dépréciés de ce fichier, pas supprimés pour limiter le risque. */
+const PHASE_1_STEPS: StepId[] = ["sport_2a"];
+const PHASE_2_STEPS: StepId[] = ["role"];
 const PHASE_3_STEPS: StepId[] = ["decision_2a", "decision_2b"];
-const PHASE_4_STEPS: StepId[] = ["account", "paywall_priming", "paywall_form"];
-const HIDE_FRISE_STEPS: StepId[] = ["value_intro", "celebration", "role", "account"];
+const PHASE_4_STEPS: StepId[] = ["account"];
+const HIDE_FRISE_STEPS: StepId[] = [
+  "value_intro", "sport_2a", "celebration", "role", "account",
+  "wizard_picker", "wizard_criteria", "wizard_builder", "wizard_activate", "wizard_assign",
+];
 
 /* Rendu de la frise, extrait en composant pour pouvoir être affiché soit à sa position par défaut
    (au-dessus du step), soit injecté par WeekPreviewStep dans son propre héros sombre. */
@@ -154,6 +189,35 @@ function ProgressFrise({ currentPhase, pct, dark }: { currentPhase: number; pct:
           <div style={{ height: "100%", borderRadius: 2, background: "#d44000", width: `${Math.round(p * 100)}%`, transition: "width .3s" }} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/* Habillage du wizard post-signup (2026-09-03, retour à l'architecture POC — correction explicite
+   de Gildas : les vrais composants (ProgramCreatePicker/ProgramCriteriaModal/ProgramBuilderModal/
+   InviteModal/WellnessModal/ProgramAssignModal) restent inchangés dans leur logique, mais chacun
+   gagne un prop optionnel `wizardHero` (React.ReactNode) rendu au-dessus de leur propre en-tête —
+   c'est ce bloc-ci. 2 variantes, fidèles au POC : `dark` (plein-bleed #141414, POC's
+   `constructeur-hero`, utilisé sur Picker/Critères/Constructeur — "Étape 1/3, Programme") vs
+   `light` (simple eyebrow+titre+sous-titre, POC's `.hdr`, utilisé sur Activer/Assigner). */
+function WizardHero({ step, dark, eyebrow, title, sub }: { step: 1 | 2 | 3; dark: boolean; eyebrow: string; title: string; sub: string }) {
+  const dotInactive = dark ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.10)";
+  return (
+    <div style={{ padding: dark ? "22px 28px 24px" : "26px 28px 6px", background: dark ? "#141414" : "transparent" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i <= step ? "#d44000" : dotInactive }} />
+        ))}
+      </div>
+      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase", color: dark ? "rgba(255,255,255,.4)" : "#d44000", marginBottom: 9 }}>
+        {eyebrow}
+      </div>
+      <div style={{ fontSize: dark ? 26 : 18, fontWeight: 950, letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8, color: dark ? "#fff" : "#171b1f" }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 15, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94", lineHeight: 1.5 }}>
+        {sub}
+      </div>
     </div>
   );
 }
@@ -197,65 +261,27 @@ function GenerationLoadingScreen({ role }: { role: Role | null }) {
   );
 }
 
-/* Transition automatique entre le programme (pur) et l'écran de décision (2026-08-17) — vend la
-   valeur de la reconduction automatique de charge semaine après semaine SANS jamais nommer la
-   fonctionnalité elle-même (demande explicite de Gildas). Purement cosmétique/minutée, même
-   pattern que GenerationLoadingScreen — voir advanceMaybeReconduction(). */
-function ReconductionTeaserScreen({ role }: { role: Role | null }) {
-  const [grown, setGrown] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setGrown(true), 200);
-    return () => clearTimeout(t);
-  }, []);
-  const bars = [42, 64, 88];
-  return (
-    <OnboardingBackground variant="dark" center>
-      <div style={{ textAlign: "center", maxWidth: 280, margin: "0 auto" }}>
-        <div style={{ fontSize: 19, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff", marginBottom: 8 }}>
-          Et ton programme continue d&apos;évoluer.
-        </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", lineHeight: 1.5, marginBottom: 28 }}>
-          {role === "coach"
-            ? "Chaque semaine, la charge de tes sportifs s'ajuste toute seule à leur progression — jamais figée, jamais à reprendre de zéro."
-            : "Chaque semaine, ta charge s'ajuste toute seule à ta progression — jamais figée, jamais à reprendre de zéro."}
-        </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", justifyContent: "center", height: 90 }}>
-          {bars.map((h, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, width: 44 }}>
-              <div style={{
-                width: "100%", borderRadius: "8px 8px 0 0", background: "linear-gradient(180deg,#ff8a54,#d44000)",
-                height: grown ? h : 0, transition: `height .6s cubic-bezier(.2,.8,.2,1) ${i * 0.12}s`,
-              }} />
-              <div style={{ fontSize: 10.5, fontWeight: 800, color: "rgba(255,255,255,.5)" }}>S{i + 1}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </OnboardingBackground>
-  );
-}
-
-/* Programme claimé : "sport_2a" réintégré le 2026-08-29 — le sport reste pré-rempli depuis le
-   claim (setSport(data.sport) dans l'effet de claim plus bas), la chip correspondante s'affiche
-   donc déjà sélectionnée. L'user peut confirmer telle quelle (clic direct sur "Suivant →", même
-   sport que le programme claimé), changer de sport (choisit une autre chip), ou importer son
-   propre programme (remplace le programme claimé — même mécanisme que le chemin classique,
-   advanceToWeekPreviewViaImport() saute alors level_2a/days_2a). Raison : le trafic "programme
-   claimé" est un profil qui cherche activement des programmes en ligne, donc un candidat naturel
-   à l'import de son propre contenu — sans ça, ce chemin ne voyait jamais l'option. "level_2a" ne
-   sert plus que d'écran faiblesses seul (voir son rendu, réécrit le 2026-08-17 pour ne plus
-   brancher sur le rôle). Convergé avec la version courte : plus de distinction control/test, une
-   seule forme par rôle. */
+/* Programme claimé (2026-09-02, retour à l'architecture POC — "aucune exception", décision
+   explicite de Gildas) : "sport_2a" est SAUTÉ (contrairement au 2026-08-29 → 2026-09-01, où il
+   restait accessible pour changer de sport/importer avant signup) — value_intro montre déjà le nom
+   du programme claimé, role suit directement. Le contenu réel du programme claimé n'est montré
+   qu'après signup, dans wizard_builder (pré-rempli avec le template claimé, fetch existant
+   `GET /api/programs/[id]`) — wizard_picker/wizard_criteria sont sautés eux aussi, wizard_builder
+   garde un `onBack` vers wizard_picker pour l'utilisateur claimed qui préfère finalement importer/
+   générer son propre programme plutôt que garder le claim (échappatoire non prévue par le POC mais
+   qui évite de perdre une fonctionnalité réelle sans bonne raison). */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
-  "sport_2a", "level_2a", "days_2a",
-  "week_preview_2a", "role", "decision_2a", "account", "celebration",
-  "paywall_priming", "paywall_form", "wellness_q",
+  "decision_2a",
+  "account",
+  "wizard_builder", "wizard_activate", "wizard_assign",
+  "paywall_priming", "paywall_form",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
-  "sport_2a", "level_2a", "days_2a",
-  "week_preview_2b", "role", "decision_2b", "account", "celebration",
+  "decision_2b",
+  "account",
+  "wizard_builder", "wizard_activate", "wizard_assign",
   "paywall_priming", "paywall_form",
 ];
 
@@ -273,8 +299,17 @@ const SHORT_PROGRAM_COACH_PATH: StepId[] = PROGRAM_COACH_PATH;
    ni diagnostic ni paywall n'ont de sens ici — l'accès est gratuit tant que le lien tient, même
    logique que hasCoach dans usePaywall.ts/(app)/layout.tsx. Priorité absolue sur assignedVariant ET
    hasClaimedProgram dans getPath() : une invitation coach est plus spécifique qu'un bras A/B ou un
-   programme claimé. */
-const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account", "celebration"];
+   programme claimé. "celebration" retiré (2026-09-02, plus un step actif ailleurs — voir doc en
+   tête de fichier) : ce trafic n'a jamais eu de wizard non plus (pas de programme à construire),
+   next() après "account" redirige donc directement vers l'app réelle (/today ou /coach). */
+const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account"];
+
+/* Fusion decision/account (2026-09-04, voir doc des paths plus haut) — les 3 continuations qui
+   recalculaient un stepIdx "juste après account" (Google OAuth, reprise magic-link, invite coach
+   échoué) doivent désormais viser juste après decision_2a/2b sur les paths où "account" a disparu. */
+function decisionStepIdFor(r: Role): StepId {
+  return r === "coach" ? "decision_2b" : "decision_2a";
+}
 
 function getNextMonday(): string {
   const today = new Date();
@@ -288,6 +323,10 @@ function getNextMonday(): string {
 const LEVEL_TO_DB: Record<Level, string> = { beginner: "debutant", intermediate: "intermediaire", elite: "elite" };
 const DB_TO_LEVEL: Record<string, Level> = { debutant: "beginner", intermediaire: "intermediate", avance: "elite", elite: "elite" };
 const DOW_NAMES = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+/* Wizard post-signup (2026-09-02) — même valeur que ProgramLibraryPage.tsx/ProgramCriteriaModal.tsx
+   (BLANK_PROGRAM_DAYS), pas partagée entre les fichiers (même choix déjà fait pour
+   SPORTS/WEAKNESSES_BY_SPORT avant ce chantier). */
+const WIZARD_BLANK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 // Remplace l'ancien buildProgramTemplate() (banque statique getSessionTemplates(), 4 semaines
 // fixes, target_difficulty par simple décalage, type "volume" partout) — appelle désormais le
@@ -405,38 +444,8 @@ function nextSessionDayLabel(trainingDays: number[]): string | null {
 // routage getSportCategory(). Remplace l'ancien bucket générique "Force & puissance" qui matchait
 // toujours le mot-clé power/force, impossible d'atteindre le curriculum haltérophilie/musculation
 // depuis l'onboarding (même bug déjà corrigé côté in-app le 2026-08-05).
-const SPORT_CATEGORIES = [
-  { id: "Haltérophilie",              icon: "🏋️", sub: "Arraché, épaulé-jeté" },
-  { id: "Powerlifting",               icon: "🦍", sub: "Squat, développé couché, soulevé de terre" },
-  { id: "Musculation / Hypertrophie", icon: "💪", sub: "Prise de masse, split par groupe musculaire" },
-  { id: "Fitness / CrossFit",         icon: "🔥", sub: "Conditionnement croisé" },
-  { id: "Athlétisme & vitesse",       icon: "🏃", sub: "Sprint, saut, lancer…" },
-  { id: "Sports collectifs",          icon: "⚽", sub: "Rugby, handball, basket, foot…" },
-  { id: "Endurance",                  icon: "🏊", sub: "Course, cyclisme, natation…" },
-  { id: "Arts martiaux & combat",     icon: "🥋", sub: "Judo, MMA, boxe…" },
-];
-
-/* Devine à quelle chip de SPORT_CATEGORIES rattacher visuellement le sport déduit d'un programme
-   claimé (2026-08-29) — programs.sport porte des libellés de bibliothèque bien plus fins que les 8
-   catégories de cet écran (ex. "Musculation/Hypertrophie" sans espaces, "Course à pied/Endurance",
-   des titres de spécialisation type "Powerlifting — Spécialisation Squat"...) : une égalité stricte
-   sur `sport === s.id` ne matcherait quasiment jamais, et aucune chip n'apparaîtrait présélectionnée
-   — silencieusement, sans erreur. Mots-clés plutôt qu'égalité, purement pour l'affichage : `sport`
-   garde sa valeur précise déduite pour la génération réelle (/api/programs/generate re-catégorise
-   déjà finement via getSportCategory() côté serveur), seul le rendu de la chip s'appuie sur ce
-   repli. */
-function guessSportChip(raw: string): string | null {
-  const s = raw.toLowerCase();
-  if (/hypertroph|musculation/.test(s)) return "Musculation / Hypertrophie";
-  if (/power(lifting)?|squat|bench|deadlift/.test(s)) return "Powerlifting";
-  if (/halt[ée]rophil|arrach|[ée]paul|snatch|clean.?jerk/.test(s)) return "Haltérophilie";
-  if (/crossfit|hyrox|fitness/.test(s)) return "Fitness / CrossFit";
-  if (/sprint|athl[ée]tisme|\bsaut|vitesse/.test(s)) return "Athlétisme & vitesse";
-  if (/collectif|rugby|foot|hand|basket|volley/.test(s)) return "Sports collectifs";
-  if (/endurance|course|cyclisme|natation|trail|triathlon|aviron|v[ée]lo|marathon|semi/.test(s)) return "Endurance";
-  if (/combat|martiaux|boxe|judo|\bmma\b/.test(s)) return "Arts martiaux & combat";
-  return null;
-}
+// SPORT_CATEGORIES/guessSportChip extraits dans src/lib/sportCategories.ts (2026-09-04) — partagés
+// avec ProgramLibraryBrowser.tsx (filtres de la bibliothèque publique native), voir sa doc.
 
 const SPORT_QUALITIES: Record<string, string> = {
   "Haltérophilie":              "Explosivité, technique de mouvement, mobilité",
@@ -675,51 +684,6 @@ function buildAthleteHistory(userId: string, sport: string, level: Level, days: 
   }
 
   return { sessions, wellnessRows };
-}
-
-function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number) {
-  const templates = getSessionTemplates(sport);
-  const today = new Date();
-  const todayDow = today.getDay();
-  const daysToCurrentMonday = todayDow === 0 ? -6 : 1 - todayDow;
-  const dateForDow = (d: number, weekOffset: number): string => {
-    const offset = d === 0 ? 6 : d - 1;
-    const result = new Date(today);
-    result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
-    return toIso(result);
-  };
-  const sessions: object[] = [];
-
-  // 4 semaines passées
-  for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
-    [1, 3, 5, 6].forEach((d, i) => {
-      const offset = d === 0 ? 6 : d - 1;
-      const result = new Date(today);
-      result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
-      if (result >= today) return;
-      const sessionRpe = Math.max(1, Math.min(10, rpeBase + Math.round((Math.random() - 0.5) * 4)));
-      const duration = 45 + Math.round(Math.random() * 30);
-      const [name, notes] = templates[i % templates.length];
-      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: toIso(result), name, notes, done: true, target_difficulty: rpeBase, rpe: sessionRpe, duration });
-    });
-  }
-
-  // 2 semaines futures (S0 + S1)
-  const scheduledDays = [1, 3, 5, 6];
-  for (const weekOffset of [0, 1]) {
-    scheduledDays.forEach((d, i) => {
-      const [name, notes] = templates[i % templates.length];
-      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: dateForDow(d, weekOffset), name, notes, done: false, target_difficulty: rpeBase });
-    });
-  }
-
-  // Garantir une séance aujourd'hui pour le coach control (filtre hasSessions)
-  if (!scheduledDays.includes(todayDow)) {
-    const [name, notes] = templates[0];
-    sessions.push({ coach_id: coachId, athlete_id: athleteId, date: today.toISOString().split("T")[0], name, notes, done: false, target_difficulty: rpeBase });
-  }
-
-  return sessions;
 }
 
 function GoogleIcon() {
@@ -1049,7 +1013,7 @@ const RECAP_SHORT_TAGS_ATHLETE = ["Tu ignores ce qui freine", "Tu pousses à l'a
 const RECAP_SHORT_TAGS_COACH = ["Tes sportifs peu visibles", "Le RPE t'échappe", "Planifié au feeling", "Fatigue jamais repérée"];
 
 /* ── main ── */
-export default function OnboardingFlow({ userId, pendingData, initialRole }: Props) {
+export default function OnboardingFlow({ userId, pendingData, initialRole, resumeRole }: Props) {
   const router   = useRouter();
   const supabase = createClient();
   /* Une continuation Google (pendingData) a déjà un userId (compte créé), mais c'est toujours
@@ -1182,6 +1146,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }, [hasClaimedProgram, claimedProgramName]);
 
   /* invite_team */
+  const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [extraInviteEmails, setExtraInviteEmails] = useState<string[]>([]);
   const [inviteSending, setInviteSending] = useState(false);
@@ -1225,8 +1190,6 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const importFileInputRef = useRef<HTMLInputElement>(null);
   /* Transition de génération (2026-08-17) — voir advanceMaybeGenerating() et GenerationLoadingScreen. */
   const [genLoading, setGenLoading]               = useState(false);
-  /* Transition "reconduction" (2026-08-17) — voir advanceMaybeReconduction() et ReconductionTeaserScreen. */
-  const [reconLoading, setReconLoading]           = useState(false);
   // "level_2a" ne fait plus choisir de niveau (remplacé par les faiblesses, voir plus bas) —
   // `level`/`setLevel` restent réels (pas une constante) car `setLevel` est encore utilisé pour le
   // chemin "programme claimé" (ligne ~979, infère le niveau du programme réellement claimé, sans
@@ -1282,6 +1245,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* initializing — true quand on arrive depuis Google OAuth avec pendingData */
   const [initializing, setInitializing] = useState(!!pendingData);
   const [googleInitDone, setGoogleInitDone] = useState(false);
+  /* Reprise après clic sur un lien reçu par email (2026-09-03, bug réel trouvé par Gildas) — un
+     compte créé sans session immédiate (confirmation email requise) OU un utilisateur qui clique
+     le lien "crée ton mot de passe" (resetPasswordForEmail) avant d'avoir fini le wizard atterrit
+     authentifié sur une page non-publique avec `onboarding_done` encore false — le middleware
+     (`src/lib/supabase/middleware.ts`) le renvoie alors vers `/register` nu, sans aucun moyen de
+     reprendre. Avant ce fix, `register/page.tsx` montait `OnboardingFlow` à froid dans ce cas
+     (`userId` seul, sans `pendingData`) — value_intro/sport_2a/role/decision étaient rejoués en
+     entier avant de retomber sur "account" (déjà fait, no-op). `resumeRole` (posé par
+     `register/page.tsx` via `profiles.mode`, déjà écrit par `createAccount()` lors du vrai signup)
+     saute directement dans le wizard — même mécanique à 2 effets que la continuation Google
+     ci-dessous (mount → applique le rôle, effet séparé → path à jour → jump), volontairement PAS
+     la même continuation que pendingData (éviterait de redéclencher account_created/brevo/
+     posthog.identify une 2e fois, faussement tagués "method:google"). */
+  const [resuming, setResuming] = useState(!!resumeRole);
+  const [resumeRoleApplied, setResumeRoleApplied] = useState(false);
 
   /* iOS Safari n'expose PushManager que si le site est ajouté à l'écran d'accueil — calculé
      une fois au montage (window/navigator indisponibles côté SSR malgré "use client"). */
@@ -1303,6 +1281,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* Toggle notif de la célébration sportif — actif par défaut (voir CelebrationScreen), lu au clic
      du CTA principal (handleCelebrationAthleteNext), jamais au montage. */
   const [wantsPushReminder, setWantsPushReminder] = useState(true);
+
+  /* Wizard post-signup (2026-09-02, retour à l'architecture POC — voir doc en tête de fichier) :
+     construction réelle du programme (wizard_picker/criteria/builder), gratuite, aucune écriture
+     tant que le CTA de wizard_builder n'est pas cliqué. wizardTemplate est seedé directement par
+     l'effet de claim ci-dessus pour le trafic "programme claimé". */
+  const [wizardTemplate, setWizardTemplate] = useState<ProgramTemplate | null>(null);
+  const [wizardProgramName, setWizardProgramName] = useState("Mon programme");
+  const [wizardProgramId, setWizardProgramId] = useState<string | null>(null);
+  const [wizardCoachAthletes, setWizardCoachAthletes] = useState<CoachAthlete[]>([]);
+  const [wizardCriteriaMode, setWizardCriteriaMode] = useState<"criteria" | "import">("criteria");
+  /* CTA "Débloquer →" de l'overlay S2+ de wizard_builder (2026-09-03) — ouvre le même paywall
+     skippable que paywall_priming/paywall_form, en overlay par-dessus le wizard (stepIdx inchangé,
+     pas de navigation : wizard_activate/wizard_assign restent intacts derrière). Un paiement réussi
+     lève wizardUnlocked, qui passe isActive=true à ProgramBuilderModal (le flou S2+ disparaît
+     réellement, pas juste cosmétique). */
+  const [wizardPaywallStage, setWizardPaywallStage] = useState<"priming" | "form" | null>(null);
+  const [wizardUnlocked, setWizardUnlocked] = useState(false);
 
   function toggleBehavior(key: string) {
     setWBehaviors(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -1339,6 +1334,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   useEffect(() => {
     if (stepIdx > path.length - 1) setStepIdx(path.length - 1);
   }, [path.length, stepIdx]);
+
+  /* wizard_assign (coach) : fresh fetch de coach_athletes juste avant de rendre ce step — inclut
+     les 3 démo créées par completeProfile() ET les invités réels ajoutés à wizard_activate
+     (InviteModal → /api/invite/create). Placé avant tout early-return (règle des hooks React). */
+  useEffect(() => {
+    if (currentStep !== "wizard_assign" || role !== "coach") return;
+    const uid = userId || newUserId;
+    if (!uid) return;
+    supabase.from("coach_athletes").select("*").eq("coach_id", uid)
+      .then(({ data }) => { if (data) setWizardCoachAthletes(data as CoachAthlete[]); });
+  }, [currentStep, role, userId, newUserId]);
 
   useEffect(() => {
     const code = localStorage.getItem("coach_invite_code");
@@ -1380,6 +1386,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           if (data.level && DB_TO_LEVEL[data.level]) setLevel(DB_TO_LEVEL[data.level]);
           if (data.name) setClaimedProgramName(data.name);
           if (data.weeks_count) setClaimedProgramWeeks(data.weeks_count);
+          /* Contenu réel du programme claimé (2026-09-02, retour à l'architecture POC) — pré-remplit
+             wizard_builder directement (skip picker/criteria pour ce trafic, voir PROGRAM_ATHLETE_PATH/
+             PROGRAM_COACH_PATH). Même fetch que ci-dessus (GET /api/programs/[id] renvoie déjà le
+             template complet) — pas de 2e appel réseau nécessaire. */
+          if (data.template) { setWizardTemplate(data.template); setWizardProgramName(data.name || "Mon programme"); }
         })
         .catch(() => {});
     }
@@ -1402,7 +1413,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     const props = {
       step: currentStep,
       step_index: stepIdx,
-      role: currentStep === "role" ? "selecting" : (role || "unknown"),
+      role: currentStep === "value_intro" && !roleChosen && !initialRole && !pendingData?.role ? "selecting" : (role || "unknown"),
       mode: isRegisterMode ? "register" : "auth",
       ab_variant: assignedVariant ?? "pending",
     };
@@ -1593,20 +1604,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     }
   }
 
-  /* Même principe qu'advanceMaybeGenerating(), pour la transition entre le choix du rôle et
-     l'écran de décision — voir ReconductionTeaserScreen. Générique (regarde path[stepIdx+1], pas
-     le step courant) : "role" précède désormais directement decision_2a/2b (2026-08-28,
-     wellness_check_2a/2b fusionné dans week_preview et retiré des paths, voir doc en tête de
-     fichier) — appelée par le clic sur une carte de l'écran "role". */
+  /* Transition "reconduction" retirée (2026-09-04, retour explicite de Gildas — "on peut dégager
+     la transition") : appelée par le clic sur une carte de rôle de value_intro, avance désormais
+     directement. Nom/signature gardés (pas de raison de toucher les 3 call sites) au cas où une
+     future transition cosmétique voudrait ce même point d'accroche. */
   function advanceMaybeReconduction() {
-    if (path[stepIdx + 1] === "decision_2a" || path[stepIdx + 1] === "decision_2b") {
-      setReconLoading(true);
-      // 3,4s (retour de Gildas : 1,9s "tellement courte qu'on a pas le temps de lire") — assez pour
-      // lire le texte + voir les 3 barres monter en cascade (dernière barre finit vers ~2,1s).
-      setTimeout(() => { setReconLoading(false); next(); }, 3400);
-    } else {
-      next();
-    }
+    next();
   }
 
   // Même route/logique que ProgramCriteriaModal.tsx (in-app, validé le 2026-08-06) — sportPrecision
@@ -1684,24 +1687,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
 
     if (role === "athlete") {
       const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
-      /* Programme non-claimé : plus généré+assigné ici — l'assignation immédiate à "lundi prochain"
-         empêchait tout choix de date réel en célébration (route assign INSERT-only, 409 si on la
-         rappelait sur une assignation déjà active). Les opts sont mémorisées, le vrai appel part à
-         la fin de wellness_q (finishAthleteActivation), même point d'appel et même date que le
-         programme claimé (claimAndAssignProgram) — plus de différence entre les deux au-delà du
-         sport déjà déduit ou non. */
-      /* Importé (2026-08-29, suite) : prioritaire sur hasClaimedProgram — un programme importé
-         remplace le programme claimé, pas l'inverse. Sans le `|| importedTemplate`, un claimed qui
-         importe son propre programme n'aurait jamais ses opts mémorisées ici, et
-         finishAthleteActivation() retomberait sur claimAndAssignProgram() (le claim, abandonné). */
-      if (!hasClaimedProgram || importedTemplate) {
-        pendingAthleteProgramOptsRef.current = {
-          sport: sportValue, level, days: trainingDays, target: { user_id: uid }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
-          duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          ...(importedTemplate ? { template: importedTemplate } : {}),
-          ...(!sport && !importedTemplate && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
-        };
-      }
+      /* Programme (claimé ou non) : plus généré+assigné ici depuis le 2026-09-02 (retour à
+         l'architecture POC) — se construit désormais DANS le wizard post-signup (wizard_builder,
+         réel ProgramBuilderModal) puis s'assigne réellement à wizard_assign (réel
+         ProgramAssignModal). pendingAthleteProgramOptsRef/claimAndAssignProgram/
+         generateAndAssignProgram restent dans le fichier (dead code, plus jamais appelés depuis
+         ici) — voir doc en tête de fichier. */
       const [sessionsRes, baselineRes, historyRes] = await Promise.all([
         supabase.from("sessions").insert(pastSessions),
         supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
@@ -1737,23 +1728,53 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase));
         }
       }
-
-      // Auto-generate a program and assign to first demo athlete — même appel pour un programme
-      // claimé (sport/niveau/duration déjà déduits) ou non (duration retombe sur 4 par défaut).
-      const firstAthleteId = demoAthleteIds[0];
-      if (firstAthleteId && trainingDays.length > 0) {
-        await supabase.from("coach_sessions").delete().eq("coach_id", uid).eq("athlete_id", firstAthleteId);
-        const ok = await generateAndAssignProgram(uid, {
-          sport: sportValue, level, days: trainingDays, target: { athlete_id: firstAthleteId }, focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
-          duration: (claimedProgramWeeks ?? 4) as 4 | 6 | 8 | 12 | 16,
-          // Importé (2026-08-29, suite) : remplace la génération/le claim, même principe que côté sportif.
-          ...(importedTemplate ? { template: importedTemplate } : {}),
-          ...(!sport && !importedTemplate && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
-        });
-        if (ok) localStorage.setItem("program_start_date", getNextMonday());
-      }
-      if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
+      /* Plus d'auto-génération+assignation synchrone ici depuis le 2026-09-02 (retour à
+         l'architecture POC) — le coach construit son vrai programme dans le wizard post-signup
+         (wizard_builder) et l'assigne réellement (démo + invités réels) à wizard_assign. Les 3
+         démos restent créées ici pour que Coach Control ne soit jamais vide entre-temps. */
     }
+  }
+
+  /* wizard_builder (2026-09-02) — un seul CTA ("Assigner ce programme →"), réutilise le prop
+     onSaveToLibrary de ProgramBuilderModal tel quel (vraie écriture POST /api/programs, capture
+     l'id créé pour que wizard_assign puisse l'assigner réellement ensuite via ProgramAssignModal).
+     Correction explicite de Gildas : pas de 2e bouton "Enregistrer en librairie" séparé dans le
+     wizard, voir footerVariant="wizardSingle" sur ProgramBuilderModal. */
+  async function handleWizardSaveToLibrary(name: string, template: ProgramTemplate) {
+    const week1 = template.weeks[0] ?? {};
+    const sessionsPerWeek = Object.values(week1).filter(sessions => (sessions as unknown[]).length > 0).length;
+    const res = await fetch("/api/programs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name, sport: sport || "Autre", level: LEVEL_TO_DB[level], focus: GOAL_TO_FOCUS[goal] ?? "mixte",
+        weeks_count: template.weeks.length, sessions_per_week: sessionsPerWeek, template,
+      }),
+    });
+    if (!res.ok) throw new Error("Erreur lors de l'enregistrement du programme.");
+    const { program } = await res.json() as { program: { id: string } };
+    setWizardProgramId(program.id);
+    /* Rattrape profiles.sport (2026-09-04) — completeProfile() l'a déjà écrit à "Autre" au signup
+       (sport plus jamais connu à ce stade depuis le retrait de sport_2a), le vrai sport n'existe
+       qu'à partir d'ici. Best-effort, ne bloque jamais la suite du wizard si ça échoue. */
+    const uid = userId || newUserId;
+    if (uid && sport) {
+      const { error } = await supabase.from("profiles").update({ sport }).eq("user_id", uid);
+      if (error) console.error("[handleWizardSaveToLibrary] profiles.sport update error:", error);
+    }
+    if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
+    next();
+  }
+
+  /* Fin du wizard (2026-09-02) — remplace finishAthleteActivation()/finishCoachActivation() pour
+     le nouveau flow : les deux rôles font désormais exactement la même chose à la fin de
+     wizard_assign (marquer onboarding_done, avancer vers le paywall) — l'assignation réelle vient
+     d'avoir lieu via ProgramAssignModal lui-même (onAssigned/onClose), la wellness réelle a déjà
+     été écrite à wizard_activate (WellnessModal.onSave, sportif). */
+  async function finishWizard() {
+    const uid = userId || newUserId;
+    if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    next();
   }
 
   /* Claim + assign du programme claimé — appelé depuis finishAthleteActivation() (fin de
@@ -1929,7 +1950,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           setSaving(false);
           return;
         }
-        if (!profileCompleteGuardRef.current && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+        if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
           profileCompleteGuardRef.current = true;
           await completeProfile(uid);
         }
@@ -1940,7 +1961,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         next();
       } else {
         await createAccount(userId!);
-        if (!profileCompleteGuardRef.current && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+        if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
           profileCompleteGuardRef.current = true;
           await completeProfile(userId!);
         }
@@ -1956,13 +1977,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   /* Rattrapage après un échec de /api/invite/join en cours de handleFinish() : `path` est ici
      recalculé par le render qui suit setHasCoachInvite(false), pas la closure figée de
      handleFinish(). Ne jamais utiliser next() ici — "account" n'est pas au même index dans
-     ATHLETE_PATH/SHORT_ATHLETE_PATH (après les pain points) que dans INVITE_ATHLETE_PATH (juste
-     après "role") ; c'est la même classe de bug que "atterrissage systématique sur role" déjà
-     rencontrée sur la continuation Google OAuth. */
+     ATHLETE_PATH/SHORT_ATHLETE_PATH que dans INVITE_ATHLETE_PATH (juste après "value_intro") ;
+     c'est la même classe de bug que "atterrissage systématique sur role" déjà rencontrée sur la
+     continuation Google OAuth. Repli sur `decisionStepIdFor(role)` (2026-09-04, fusion decision/
+     account) : ATHLETE_PATH/COACH_PATH n'ont plus "account" comme step séparé — l'utilisateur
+     atterrit directement juste après decision_2a/2b, wizard_picker, exactement l'équivalent de
+     l'ancien "juste après account". */
   useEffect(() => {
     if (!inviteJoinFailed) return;
-    const idx = path.indexOf("account");
-    setStepIdx(idx >= 0 ? idx + 1 : 0);
+    const accountIdx = path.indexOf("account");
+    const decisionIdx = path.indexOf(decisionStepIdFor(role));
+    setStepIdx(accountIdx >= 0 ? accountIdx + 1 : decisionIdx >= 0 ? decisionIdx + 1 : 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inviteJoinFailed]);
 
@@ -1977,14 +2002,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   }
 
   async function handleInviteSend() {
-    const emails = [inviteEmail, ...extraInviteEmails].map(e => e.trim()).filter(Boolean);
-    if (!emails.length) return;
+    const rows = [
+      { email: inviteEmail.trim(), name: inviteName.trim() },
+      ...extraInviteEmails.map(e => ({ email: e.trim(), name: "" })),
+    ].filter(r => r.email);
+    if (!rows.length) return;
     setInviteSending(true);
-    const results = await Promise.all(emails.map(email =>
+    const results = await Promise.all(rows.map(row =>
       fetch("/api/invite/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ athleteEmail: email }),
+        body: JSON.stringify({ athleteEmail: row.email, athleteName: row.name || undefined }),
       }).then(async res => ({ ok: res.ok, linked: (await res.json().catch(() => ({}))).linked }))
     ));
     setInviteSending(false);
@@ -2104,23 +2132,183 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
        s'exécute, alors que la closure de init() est figée au tout premier render, avant que
        hasClaimedProgram ait pu résoudre. userId est garanti non-null ici (googleInitDone ne passe
        à true qu'après la fin de init(), qui a déjà créé le compte). */
-    if (!profileCompleteGuardRef.current && userId && (path.includes("week_preview_2a") || path.includes("week_preview_2b"))) {
+    if (!profileCompleteGuardRef.current && userId && path.includes("wizard_builder")) {
       profileCompleteGuardRef.current = true;
       completeProfile(userId);
     }
     /* next() suppose un stepIdx figé à 0 et avance d'une seule position — ça atterrissait
        systématiquement sur "role" (juste après value_intro) depuis que "account" a été
        repositionné plus tôt dans le path (variantes A/B, voir refonte onboarding v2). On saute
-       directement juste après "account" dans le path résolu, quelle que soit sa position réelle. */
+       directement juste après "account" dans le path résolu, quelle que soit sa position réelle —
+       ou, depuis la fusion decision/account (2026-09-04), juste après decision_2a/2b quand
+       "account" n'existe plus comme step séparé (ATHLETE_PATH/COACH_PATH/PROGRAM_*_PATH). */
     const accountIdx = path.indexOf("account");
-    setStepIdx(accountIdx >= 0 ? accountIdx + 1 : path.length - 1);
+    const decisionIdx = path.indexOf(decisionStepIdFor(role));
+    setStepIdx(accountIdx >= 0 ? accountIdx + 1 : decisionIdx >= 0 ? decisionIdx + 1 : path.length - 1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleInitDone]);
+
+  /* Reprise post-email (voir doc de `resumeRole` plus haut) — mount effect : applique le rôle déjà
+     connu (profiles.mode), un effet séparé (ci-dessous) capture un `path` à jour pour le jump —
+     même raison que pour Google (closure figée sinon). */
+  useEffect(() => {
+    if (!resumeRole || !userId) return;
+    setRole(resumeRole);
+    setRoleChosen(true);
+    setResumeRoleApplied(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!resumeRoleApplied || !userId) return;
+    if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
+      profileCompleteGuardRef.current = true;
+      completeProfile(userId);
+    }
+    /* Même repli que googleInitDone ci-dessus (fusion decision/account, 2026-09-04) — juste après
+       decision_2a/2b quand "account" n'est plus un step séparé du path résolu. */
+    const accountIdx = path.indexOf("account");
+    const decisionIdx = path.indexOf(decisionStepIdFor(role));
+    setStepIdx(accountIdx >= 0 ? accountIdx + 1 : decisionIdx >= 0 ? decisionIdx + 1 : path.length - 1);
+    setResuming(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeRoleApplied]);
 
   const inputStyle: React.CSSProperties = {
     width: "100%", boxSizing: "border-box", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)",
     borderRadius: 12, padding: "12px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", marginBottom: 12,
   };
+
+  /* Formulaire de compte — reste une fonction (héritage du chantier fusion decision/account du
+     2026-09-04, finalement abandonné le même jour — "finalement il vaut mieux avoir l'étape propre
+     'aha' avant le signup... pour avoir de l'impact et de l'espace" — voir doc des paths en tête de
+     fichier pour l'historique complet des 4 itérations) plutôt que redevenir un bloc JSX inline :
+     ça ne change rien fonctionnellement (un seul appelant désormais, le step "account" standalone
+     ci-dessous), mais réextraire manuellement n'aurait apporté aucun bénéfice. L'option `embedded`
+     (footer confiné à une colonne de split) a été retirée avec elle — plus aucun appelant ne la
+     demande. */
+  function renderAccountForm(opts?: { onBack?: () => void; showBack?: boolean }) {
+    const doBack = opts?.onBack ?? goBack;
+    const showBack = opts?.showBack ?? canGoBack;
+    /* Repositionné le 2026-08-19 (voir doc des paths en tête de fichier) : arrive désormais
+       après decision_2a/2b (l'AHA vécu), plus juste après le rôle — le signup demande de
+       sauvegarder ce qui vient d'être construit et décidé, pas de s'inscrire à froid pour
+       débloquer un "bilan" pas encore construit. `assignedVariant` continue de se résoudre
+       (tagging analytics inchangé) mais ne pilote plus ce wording (aucun A/B formel sur la
+       position du signup — tranché sans test, voir la doc des paths).
+
+       Refonte visuelle 2026-08-18 (POC signup v3, theperfclub-signup-v3.html) : plus
+       d'eyebrow pill ni de frise au-dessus (retirée via HIDE_FRISE_STEPS). Champs regroupés
+       dans un unique bloc blanc (form-card) comme le reste des cartes de l'onboarding,
+       réassurance = la même bande de confiance que paywall_priming (PAYWALL_AVATARS,
+       réutilisée telle quelle plutôt que dupliquée), placée sous le titre — avant la carte,
+       comme le "social-proof" du POC. Retirée de value_intro le même jour (redondante avec
+       celle-ci).
+
+       Titre = ligne de positionnement identitaire ("Le programme de ceux qui...", benchmark
+       Claude "l'IA de ceux qui résolvent des problèmes"), pas une promesse produit — reste
+       pertinent maintenant que ce step arrive après l'AHA plutôt que juste après le rôle
+       (plus de risque de diluer le hook de value_intro, les deux sont maintenant séparés par
+       tout le reste du flow).
+
+       Titre "Connecter" plutôt que "S'inscrire" (2026-09-02, retour à l'architecture POC,
+       benchmark pages de connexion device-pairing) : l'inscription devient une formalité sur
+       la next step, pas ce qu'on demande explicitement — l'ancien titre de positionnement
+       identitaire redescend en sous-titre, juste en dessous.
+
+       CTA sticky unique, adaptatif (2026-09-04, retour explicite de Gildas) — remplace les 2
+       CTA distincts (bouton Google dans la carte + Actions "Créer mon espace..." en dessous,
+       désactivé tant que les 2 champs n'étaient pas remplis). Un seul contrôle, jamais
+       caché/désactivé par la saisie : au repos (aucun champ touché) il porte le logo Google et
+       lance `handleGoogleRegister` ; dès qu'un caractère existe dans Prénom OU Email, son
+       libellé et son action basculent sur le formulaire email (`handleFinish`) — et repassent
+       en état Google si les 2 champs sont revidés. Prénom/Email restent toujours visibles dans
+       le contenu (jamais révélés par un clic). */
+    const accountTyped = name.trim().length > 0 || email.trim().length > 0;
+
+    const content = (
+      <>
+        <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8, lineHeight: "normal" }}>
+          {role === "coach" ? "Connecte l'entraînement de tes sportifs à ThePerfClub" : "Connecte tes entraînements à ThePerfClub"}
+        </div>
+        <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 16, lineHeight: 1.4 }}>
+          {role === "coach" ? "Le système d'entraînement des coachs professionnels." : "Le programme de ceux qui refusent de stagner."}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+          <div style={{ display: "flex" }}>
+            {PAYWALL_AVATARS.map((src, i) => (
+              <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+          </div>
+        </div>
+
+        {error && (
+          <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+            {error}{" "}
+            {(error.toLowerCase().includes("déjà") || error.toLowerCase().includes("already") || error.toLowerCase().includes("registered")) && (
+              <Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Me connecter</Link>
+            )}
+          </div>
+        )}
+
+        <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
+          <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
+          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
+          <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+        </div>
+      </>
+    );
+
+    const ctaButtons = (
+      <>
+        {showBack && (
+          <button
+            onClick={doBack} aria-label="Retour"
+            style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}
+          >←</button>
+        )}
+        <button
+          type="button"
+          onClick={() => { if (saving) return; if (accountTyped) handleFinish(); else handleGoogleRegister(); }}
+          disabled={saving}
+          style={{
+            flex: 1, height: 52, borderRadius: 14, border: "none",
+            background: accountTyped ? "linear-gradient(180deg,#f04a08,#d44000)" : "#171b1f",
+            color: "#fff", fontSize: 15, fontWeight: 900, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            boxShadow: accountTyped ? "0 8px 20px rgba(212,64,0,.26)" : "none",
+          }}
+        >
+          {!accountTyped && <GoogleIcon />}
+          {saving
+            ? (accountTyped ? "Création…" : "Connexion…")
+            : accountTyped
+            ? "Connecter mes séances"
+            : "Continuer avec Google"}
+        </button>
+      </>
+    );
+
+    return (
+      <div>
+        {content}
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#f1f0ee" }}>
+          <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>{ctaButtons}</div>
+        </div>
+        <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
+          Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
+        </div>
+      </div>
+    );
+  }
 
   const sessionCount  = trainingDays.length + (trainingDays.length < 6 ? 1 : 0);
   const showFrise = !HIDE_FRISE_STEPS.includes(currentStep) && !FRISE_INLINE_STEPS.includes(currentStep);
@@ -2133,75 +2321,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
   const weaknessLabels = weaknesses.map(k => weaknessOptions.find(w => w.key === k)?.label).filter((l): l is string => !!l);
   const sportSentenceLabel = sport || sportPrecision.trim() || undefined;
 
-  /* Source unique du programme d'aperçu (2026-08-17, 3e itération) — auparavant WellnessCheckStep
-     et DecisionStep faisaient chacun leur propre appel à /api/programs/generate : déterministe donc
-     censé produire le même résultat, mais deux appels réseau indépendants plutôt qu'UNE vraie
-     séance partagée entre les deux écrans (retour de Gildas : "je veux une vraie séance du
-     programme créée... sinon ça defeat the purpose"). Un seul fetch ici, passé en prop aux deux
-     composants — garantit la même référence d'objet, pas seulement "la même valeur en théorie".
-     Depuis la fusion de wellness_check dans week_preview (2026-08-28), ce fetch n'alimente plus
-     que DecisionStep (demoHardest/demoLightest/demoMiddle) — WeekPreviewStep.tsx fait son propre
-     appel indépendant pour sa grille 7 jours (jamais consolidé avec celui-ci, cf. sa propre doc). */
-  const [previewTemplate, setPreviewTemplate] = useState<ProgramTemplate | null>(null);
-  useEffect(() => {
-    if (!trainingDays.length) return;
-    const dayStrings = trainingDays.map(d => DOW_NAMES[d]).filter(Boolean);
-    if (!dayStrings.length) return;
-    let cancelled = false;
-    fetch("/api/programs/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sport, level: LEVEL_TO_DB[level], days: dayStrings, duration: (claimedProgramWeeks ?? 4), focus: GOAL_TO_FOCUS[goal] ?? "mixte", weaknesses,
-        ...(!sport && customSport?.status === "generated" ? { customExercises: customSport.exercises, customWeaknessMeta: customSport.weaknessMeta, customSessionLabels: customSport.sessionLabels } : {}),
-      }),
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: { template: ProgramTemplate } | null) => {
-        if (!cancelled && data?.template) setPreviewTemplate(data.template);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sport, level, JSON.stringify(trainingDays), goal, JSON.stringify(weaknesses), claimedProgramWeeks, JSON.stringify(customSport)]);
-
-  /* Sélection des séances démo pour DecisionStep — centralisée ici (2026-08-17, 5e itération,
-     à l'origine pour que WellnessCheckStep et DecisionStep pointent vers EXACTEMENT le même objet ;
-     WellnessCheckStep fusionné dans week_preview le 2026-08-28, seul DecisionStep consomme encore
-     demoHardest/demoLightest/demoMiddle). Bug réel trouvé
-     par Gildas en testant ("j'ai pas toujours un sportif à alléger et un sportif à surcharger") :
-     restreindre la recherche à la semaine 1 (pour cette continuité) peut la priver d'un vrai jour
-     difficile (diff≥8) ou léger (diff≤4) — computeAutoregSuggestion exige ces seuils réels, aucun
-     wellness forcé ne peut compenser une difficulté qui ne les franchit pas. Repli en 2 temps :
-     cherche d'abord dans la semaine 1 (préserve la continuité la plupart du temps), élargit à tout
-     le programme SEULEMENT si la semaine 1 n'atteint pas le seuil requis — jamais l'inverse. */
-  /* Les séances "test" comptent désormais comme les autres (2026-08-30, retour explicite de Gildas
-     — "sans exception" : un test de fin de bloc reste une vraie séance avec une vraie difficulté,
-     la reco Alléger/Surcharger doit s'y déclencher comme ailleurs, même si le texte lui-même n'a pas
-     de token numérique à faire varier visiblement — voir WeekPreviewStep.tsx). Avant ce chantier,
-     l'exclusion faisait qu'un "Bilan de cycle" pouvait devenir le SEUL jour dur de la semaine sans
-     jamais déclencher la démo Alléger. */
-  function flattenWeeks(t: ProgramTemplate | null, onlyFirst: boolean) {
-    const out: SessionTemplate[] = [];
-    const weeks = onlyFirst ? (t?.weeks?.[0] ? [t.weeks[0]] : []) : (t?.weeks ?? []);
-    weeks.forEach(week => Object.values(week).forEach(sessions => (sessions as SessionTemplate[]).forEach(s => out.push(s))));
-    return out;
+  /* Source de l'AHA (2026-09-04, expérimentation "rôle fusionné dans value_intro, sport_2a retiré,
+     AHA générique" — voir doc des paths en tête de fichier) : `sport` reste "" tout le long du
+     pré-signup désormais (plus de sport_2a avant decision), donc getSessionTemplates("") retombe
+     systématiquement sur sa banque générique par défaut (mouvements universels squats/pompes/
+     gainage, wording de DecisionStep explicite sur le "marche pour tous les sports") — plus un
+     calcul sport-aware comme avant le 2026-09-04, mais toujours le même calcul synchrone, aucun
+     appel réseau, aucun état de chargement. Le vrai sport n'est demandé qu'au wizard post-signup
+     (wizard_criteria), qui construit le vrai programme. */
+  const sessionTuples = getSessionTemplates(sport);
+  function tupleToTemplate([name, notes, diff]: [string, string, number]): SessionTemplate {
+    return { name, notes, target_difficulty: diff, load: 2, type: "volume" };
   }
-  const week1Pool = flattenWeeks(previewTemplate, true);
-  const allPool = flattenWeeks(previewTemplate, false);
-  function pickHardest(): SessionTemplate | null {
-    const inWeek1 = [...week1Pool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-    if (inWeek1 && (inWeek1.target_difficulty ?? 0) >= 8) return inWeek1;
-    return [...allPool].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? inWeek1;
-  }
-  function pickLightest(): SessionTemplate | null {
-    const inWeek1 = [...week1Pool].sort((a, b) => (a.target_difficulty ?? 0) - (b.target_difficulty ?? 0))[0] ?? null;
-    if (inWeek1 && (inWeek1.target_difficulty ?? 0) <= 4) return inWeek1;
-    return [...allPool].sort((a, b) => (a.target_difficulty ?? 0) - (b.target_difficulty ?? 0))[0] ?? inWeek1;
-  }
-  const demoHardest = pickHardest();
-  const demoLightest = pickLightest();
-  const demoMiddle = week1Pool.length ? week1Pool[Math.floor(week1Pool.length / 2)] : (allPool[0] ?? null);
+  const demoHardest = tupleToTemplate(sessionTuples[0]);
+  const demoLightest = tupleToTemplate(sessionTuples[1]);
+  const demoMiddle = tupleToTemplate(sessionTuples[3]);
 
   const frisePhases = [PHASE_1_STEPS, PHASE_2_STEPS, PHASE_3_STEPS, PHASE_4_STEPS].map(phaseSteps => path.filter(s => phaseSteps.includes(s)));
   const friseCurrentPhase = frisePhases.findIndex(steps => steps.includes(currentStep));
@@ -2239,6 +2373,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     );
   }
 
+  if (resuming) {
+    return (
+      <OnboardingBackground variant="dark">
+        <div style={{ textAlign: "center", color: "#fff" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Reprise de ton inscription…</div>
+          <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
+        </div>
+      </OnboardingBackground>
+    );
+  }
+
   /* Transition automatique (2026-08-17, refonte "zéro problem awareness") entre le dernier écran
      d'input (days_2a, ou sport_2a côté coach/programme claimé) et week_preview_2a/2b — dramatise le
      moment où le vrai programme se construit plutôt qu'un simple changement d'écran instantané.
@@ -2248,10 +2394,201 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
     return <GenerationLoadingScreen role={role} />;
   }
 
-  if (reconLoading) {
-    return <ReconductionTeaserScreen role={role} />;
+  /* ═══════════ WIZARD post-signup (2026-09-02, retour à l'architecture POC) ═══════════
+     5 steps, montés en early-return plein écran (même principe que genLoading ci-dessus)
+     puisque les 6 composants réels réutilisés ici (ProgramCreatePicker/
+     ProgramCriteriaModal/ProgramBuilderModal/InviteModal/WellnessModal/ProgramAssignModal) sont
+     déjà des overlays position:fixed autonomes — les nester dans le wrapper OnboardingBackground/
+     frise plus bas serait sans effet visuel, juste un rendu inutile derrière l'overlay.
+     Actions 100% libres (aucun requireSubscription passé — gate() reste un passthrough partout) :
+     éditer/enregistrer/assigner ne sont jamais bloqués. Seule exception, ajoutée le 2026-09-03
+     (retour explicite de Gildas, hors POC) : `isActive={wizardUnlocked ? true : false}` sur
+     wizard_builder floute visuellement S2+ (teaser) tant qu'aucun paiement n'a eu lieu dans le
+     wizard, sans jamais gater d'action. Le bouton "Débloquer →" de l'overlay ouvre désormais le
+     même paywall skippable (PrimingJourneyModal/PaywallModal) en overlay, sans changer `stepIdx` —
+     wizard_activate/wizard_assign restent intacts derrière ; un paiement réussi lève wizardUnlocked
+     et referme l'overlay, faisant réellement disparaître le flou. */
+
+  if (currentStep === "wizard_picker") {
+    return (
+      <ProgramCreatePicker
+        wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Connecte tes séances" sub={role === "coach"
+          ? "Le mécanisme que tu viens de voir s'applique au vrai programme de tes sportifs — choisis comment le construire."
+          : "Le mécanisme que tu viens de voir s'applique à ton vrai entraînement — choisis comment le construire."} />}
+        onClose={() => {}}
+        hideClose
+        onGenerate={() => { setWizardCriteriaMode("criteria"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+        onImport={() => { setWizardCriteriaMode("import"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+        onTemplate={() => { const idx = path.indexOf("wizard_library"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+        onBlank={() => {
+          const week: Record<string, never[]> = {};
+          WIZARD_BLANK_DAYS.forEach(d => { week[d] = []; });
+          setWizardTemplate({ weeks: [week] });
+          setWizardProgramName("Programme vierge");
+          const idx = path.indexOf("wizard_builder");
+          setStepIdx(idx === -1 ? stepIdx + 2 : idx);
+        }}
+      />
+    );
   }
 
+  /* Bibliothèque publique, native (2026-09-04, remplace le lien externe WordPress — demande
+     explicite de Gildas, "que ça passe à une step suivante avec la liste des programmes avec des
+     filtres, comme ça c'est natif"). Sélectionner un programme saute directement wizard_criteria
+     (skip vers wizard_builder, même principe que onBlank ci-dessus) — le contenu de départ vient
+     d'être choisi, wizard_builder reste éditable librement ensuite. */
+  if (currentStep === "wizard_library") {
+    return (
+      <ProgramLibraryBrowser
+        wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
+        onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+        hideClose
+        onSelect={(template, meta, name) => {
+          setWizardTemplate(template);
+          setWizardProgramName(name);
+          if (meta.sport) setSport(meta.sport);
+          const idx = path.indexOf("wizard_builder");
+          setStepIdx(idx === -1 ? stepIdx + 1 : idx);
+        }}
+      />
+    );
+  }
+
+  if (currentStep === "wizard_criteria") {
+    return (
+      <ProgramCriteriaModal
+        wizardHero={wizardCriteriaMode === "import"
+          ? <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
+          : <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Calibre ton programme" sub="Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler. Tout reste personnalisable ensuite." />}
+        mode={wizardCriteriaMode}
+        lockedSport={sport || (customSport?.status === "generated" ? customSport.sportLabel : undefined) || sportPrecision.trim() || undefined}
+        onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+        hideClose
+        onGenerate={(template, meta) => {
+          setWizardTemplate(template);
+          setWizardProgramName(meta.sport ? `Programme ${meta.sport}` : "Mon programme");
+          /* Sync vers le state top-level (2026-09-04) : depuis que sport_2a est retiré du path,
+             `sport` n'est plus jamais renseigné avant le wizard — sans cette sync,
+             handleWizardSaveToLibrary() (plus bas, POST /api/programs) retomberait toujours sur
+             son repli "Autre" malgré un vrai sport choisi ici, dans wizard_criteria. */
+          if (meta.sport) setSport(meta.sport);
+          next();
+        }}
+      />
+    );
+  }
+
+  if (currentStep === "wizard_builder") {
+    if (hasClaimedProgram && !wizardTemplate) {
+      return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
+    }
+    return (
+      <>
+        <ProgramBuilderModal
+          programName={wizardProgramName}
+          template={wizardTemplate ?? { weeks: [{}] }}
+          isActive={wizardUnlocked ? true : false}
+          onUnlockClick={() => setWizardPaywallStage("priming")}
+          footerVariant="wizardSingle"
+          wizardSingleLabel="Continuer avec ce programme →"
+          onBack={() => {
+            if (hasClaimedProgram) {
+              setHasClaimedProgram(false);
+              setWizardTemplate(null);
+              const newPath = role === "coach" ? COACH_PATH : ATHLETE_PATH;
+              setStepIdx(Math.max(0, newPath.indexOf("wizard_picker")));
+            } else {
+              const idx = path.indexOf("wizard_picker");
+              setStepIdx(idx === -1 ? Math.max(0, stepIdx - 1) : idx);
+            }
+          }}
+          onSaveToLibrary={handleWizardSaveToLibrary}
+          onSaveAndAssign={handleWizardSaveToLibrary}
+        />
+        {wizardPaywallStage === "priming" && (
+          <PrimingJourneyModal
+            mode={role === "coach" ? "coach" : "athlete"}
+            billing={billing}
+            setBilling={setBilling}
+            allowDismiss
+            onContinue={() => setWizardPaywallStage("form")}
+            onDismiss={() => setWizardPaywallStage(null)}
+          />
+        )}
+        {wizardPaywallStage === "form" && (
+          <PaywallModal
+            mode={role === "coach" ? "coach" : "athlete"}
+            allowDismiss
+            onClose={() => setWizardPaywallStage("priming")}
+            onSuccess={async () => {
+              const uid = userId || newUserId;
+              if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+              setWizardUnlocked(true);
+              setWizardPaywallStage(null);
+            }}
+            initialBilling={billing}
+            abVariant={assignedVariant ?? "control"}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (currentStep === "wizard_activate") {
+    const notifCancelLabel = pushBlockedIOS ? "📲 Me le rappeler plus tard" : "🔔 Me le rappeler plus tard";
+    if (role === "coach") {
+      return (
+        <InviteModal
+          wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Pas besoin qu'ils créent un compte pour que tu commences à utiliser ThePerfClub — ajoute-les et assigne-leur déjà un programme. C'est encore mieux quand ils rejoignent : tout se synchronise automatiquement." />}
+          onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
+          onLinked={() => {}}
+          inviteCode={inviteCode}
+          cancelLabel={notifCancelLabel}
+          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+        />
+      );
+    }
+    return (
+      <WellnessModal
+        wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
+        date={new Date().toISOString().split("T")[0]}
+        onSave={async data => {
+          const uid = userId || newUserId;
+          if (uid) {
+            const { error } = await supabase.from("wellness_daily").upsert({ user_id: uid, date: new Date().toISOString().split("T")[0], ...data }, { onConflict: "user_id,date" });
+            if (error) console.error("[wizard_activate] wellness_daily upsert error:", error);
+          }
+          next();
+        }}
+        onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
+        cancelLabel={notifCancelLabel}
+        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+      />
+    );
+  }
+
+  if (currentStep === "wizard_assign") {
+    return (
+      <ProgramAssignModal
+        wizardHero={<WizardHero step={3} dark eyebrow="Étape 3/3 — Assigner" title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
+          ? "Le programme apparaît directement dans le planning de tes sportifs, prêt à suivre au jour le jour."
+          : "Ton programme apparaît directement dans ton planning, prêt à suivre au jour le jour."} />}
+        programId={wizardProgramId ?? ""}
+        programName={wizardProgramName}
+        athletes={role === "coach" ? wizardCoachAthletes : []}
+        selfUserId={role === "athlete" ? (userId || newUserId || undefined) : undefined}
+        initialSelectedIds={role === "coach" ? wizardCoachAthletes.map(a => a.id) : undefined}
+        defaultStartDate="today"
+        onAssigned={finishWizard}
+        onClose={finishWizard}
+        onSkip={finishWizard}
+        hideClose
+        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_activate")))}
+      />
+    );
+  }
 
   const isDarkStep = DARK_STEPS.includes(currentStep);
 
@@ -2274,11 +2611,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
             transition "reconduction" juste avant decision — voir sa doc. */}
         {currentStep === "role" && (
           <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 24 }}>Pour qui construis-tu ce programme ?</div>
+            {/* Wording aligné sur le POC (2026-09-02) : "Qui va s'entraîner avec ThePerfClub ?"
+                (remplace "Pour qui construis-tu ce programme ?"), cartes "Moi"/"Mes sportifs" avec
+                les icônes/sous-textes exacts du POC. */}
+            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 24 }}>Qui va s&apos;entraîner avec ThePerfClub ?</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
               {[
-                { r: "athlete" as Role, icon: "🏋️", label: "Pour moi",         sub: "Je veux adapter mes séances à mon niveau de forme.", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
-                { r: "coach"   as Role, icon: "📋", label: "Pour mes sportifs", sub: "Je veux ajuster les séances de mes sportifs.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
+                { r: "athlete" as Role, icon: "🏃", label: "Moi",         sub: "Un programme qui s'ajuste à ta forme du jour.", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
+                { r: "coach"   as Role, icon: "🧑‍🏫", label: "Mes sportifs", sub: "Fais progresser toute ton équipe sans t'épuiser à tout replanifier.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
               ].map(({ r, icon, label, sub, badgeBg }) => (
                 <div key={r} onClick={() => {
                   if (advancingRef.current) return;
@@ -2300,23 +2640,36 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           </div>
         )}
 
-        {/* ── VALUE INTRO — CTA générique unique (2026-08-06) : le choix du rôle vit à nouveau sur
-            son propre step juste après (voir ci-dessus), value_intro ne le devine plus jamais via
-            roleChosen/initialRole. Photo en fond plein viewport (POC v62), contenu neutre (pas de
-            branche par rôle, puisque le rôle n'est plus connu ici pour un visiteur frais). */}
+        {/* ── VALUE INTRO — rôle fusionné dedans (2026-09-04, expérimentation "value+rôle → AHA
+            générique → signup", voir doc des paths en tête de fichier) : plus de step "role" séparé
+            juste après, les 2 cartes de rôle sont désormais le CTA de cet écran lui-même — même
+            mécanique de choix qu'avant (jamais présélectionné, clic = avance direct avec la
+            transition "reconduction" avant decision), juste fusionnée avec le pitch de valeur au
+            lieu d'un clic supplémentaire pour l'atteindre. Repli sur un CTA unique (pas de cartes)
+            quand le rôle est déjà connu à l'arrivée (`?role=`/programme claimé, ou reprise Google) —
+            redemander un choix déjà fait ailleurs serait une friction gratuite. Photo en fond plein
+            viewport (POC v62) inchangée. */}
         {currentStep === "value_intro" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
+          const roleKnownUpfront = !!(pendingData?.role || initialRole);
 
           const headline = isClaimed
             ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
-            : "Des séances qui s'adaptent enfin aux sportifs, pas l'inverse.";
+            : "Un programme qui s'adapte enfin à toi, pas l'inverse.";
 
-          const subhead = "ThePerfClub ajuste les programmes selon la forme du jour. Plus de progrès, moins de blessures.";
+          const subhead = "Sommeil, stress, courbatures — ta forme du jour ajuste la charge de tes séances. Le plan, lui, ne bouge pas.";
 
-          const steps = [
-            { title: "Comprends ton profil", sub: "Tes préférences d'entraînement, habitudes de récupération ou celles de tes sportifs." },
-            { title: isClaimed ? "Personnalise ton programme" : "Ajuste ton programme", sub: isClaimed ? `${claimedProgramName} s'ajuste à ta forme du jour.` : "Chaque séance évolue selon ta forme du jour ou celle de tes sportifs." },
-            { title: "Progresse durablement", sub: "Des recommandations quotidiennes pour mieux performer et récupérer." },
+          function chooseRole(r: Role) {
+            if (advancingRef.current) return;
+            advancingRef.current = true;
+            setRole(r); setRoleChosen(true); posthog.setPersonProperties({ role: r });
+            if (abEligible && !assignedVariant) setAssignedVariant("control");
+            setTimeout(() => advanceMaybeReconduction(), 300);
+          }
+
+          const roleCards = [
+            { r: "athlete" as Role, icon: "🏃", label: "Pour moi",         sub: "Un programme qui s'ajuste à ta forme du jour.", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
+            { r: "coach"   as Role, icon: "🧑‍🏫", label: "Pour mes sportifs", sub: "Fais progresser toute ton équipe sans t'épuiser à tout replanifier.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
           ];
 
           return (
@@ -2334,65 +2687,56 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,10,10,.6) 0%, rgba(10,10,10,.75) 40%, rgba(8,8,8,.95) 85%)" }} />
               </div>
 
-              <div style={{ position: "relative", zIndex: 1 }}>
+              <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "62vh", paddingBottom: roleKnownUpfront ? 110 : 245 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", textAlign: "center", marginBottom: 10 }}>ThePerfClub</div>
                 <div style={{ fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 14, color: "#fff", textAlign: "center" }}>{headline}</div>
-                <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, margin: "0 auto 28px", textAlign: "center" }}>{subhead}</div>
-
-                <div style={{
-                  background: "radial-gradient(circle at 87% 5%, rgba(212,64,0,.32), transparent 30%), linear-gradient(135deg,#1d1d1d 0%,#2b2b2b 54%,#161616 100%)",
-                  border: "1px solid rgba(255,255,255,.06)", borderRadius: 22, padding: "22px 22px 20px", marginBottom: 22,
-                }}>
-                  {steps.map((s, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "13px 0", borderTop: i > 0 ? "1px solid rgba(255,255,255,.08)" : "none" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
-                        <div style={{ flexShrink: 0, width: 26, height: 26, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "rgba(255,255,255,.75)" }}>{i + 1}</div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 3, color: "#fff" }}>{s.title}</div>
-                          <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", lineHeight: 1.45 }}>{s.sub}</div>
-                        </div>
-                      </div>
-                      {i === 0 && (
-                        <div style={{ flexShrink: 0, width: 104, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "9px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <div style={{ position: "relative", width: 26, height: 26, flexShrink: 0 }}>
-                              <svg viewBox="0 0 44 44" width="26" height="26">
-                                <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth={6} />
-                                <circle cx="22" cy="22" r="18" fill="none" stroke="#f28a00" strokeWidth={6} strokeDasharray="113.1" strokeDashoffset="19" strokeLinecap="round" transform="rotate(-90 22 22)" />
-                              </svg>
-                              <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, fontWeight: 1000, color: "#fff" }}>73</span>
-                            </div>
-                            <div style={{ fontSize: 8, fontWeight: 800, color: "#fff" }}>Zone stable</div>
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                            <span style={{ fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>🌙 Couché tardif</span>
-                            <span style={{ fontSize: 7, fontWeight: 700, padding: "2px 6px", borderRadius: 999, background: "rgba(255,255,255,.1)", color: "rgba(255,255,255,.8)", whiteSpace: "nowrap" }}>📱 Écran tard</span>
-                          </div>
-                        </div>
-                      )}
-                      {i === 1 && (
-                        <div style={{ flexShrink: 0, width: 104, background: "#fff", borderRadius: 12, padding: "9px 9px" }}>
-                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#171b1f", marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Circuit modéré</div>
-                          <div style={{ height: 4, borderRadius: 999, background: "#e7e4df", overflow: "hidden", marginBottom: 6 }}>
-                            <div style={{ height: "100%", width: "55%", background: "linear-gradient(90deg,#ffe0a0,#f28a00)", borderRadius: 999 }} />
-                          </div>
-                          <div style={{ fontSize: 6.5, color: "#8a8f94", lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>AMRAP 15min : wall balls...</div>
-                          <div style={{ fontSize: 6.5, color: "#8a8f94", lineHeight: 1.3, marginTop: 2 }}>Mobilité épaules : 5 min</div>
-                        </div>
-                      )}
-                      {i === 2 && (
-                        <div style={{ flexShrink: 0, width: 104, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "9px 10px" }}>
-                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#ffb37a" }}>⚡ Entraîn.</div>
-                          <div style={{ fontSize: 6.5, color: "rgba(255,255,255,.5)", lineHeight: 1.3, marginBottom: 5 }}>Séance dure avant modérée...</div>
-                          <div style={{ fontSize: 7.5, fontWeight: 800, color: "#b9e0a5" }}>🌿 Récup.</div>
-                          <div style={{ fontSize: 6.5, color: "rgba(255,255,255,.5)", lineHeight: 1.3 }}>Charge élevée aujourd&apos;hui...</div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, margin: "0 auto 8px", textAlign: "center" }}>{subhead}</div>
               </div>
 
-              <Actions variant="dark" onNext={next} nextLabel="Continuer →" />
+              {roleKnownUpfront ? (
+                <Actions
+                  variant="dark"
+                  onNext={() => {
+                    if (advancingRef.current) return;
+                    advancingRef.current = true;
+                    setRoleChosen(true);
+                    posthog.setPersonProperties({ role });
+                    if (abEligible && !assignedVariant) setAssignedVariant("control");
+                    advanceMaybeReconduction();
+                  }}
+                  nextLabel={isClaimed ? "Voir mon programme personnalisé →" : "Commencer →"}
+                />
+              ) : (
+                <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px" }}>
+                  <div style={{ maxWidth: colMaxWidth, margin: "0 auto" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.75)", textAlign: "center", marginBottom: 10 }}>
+                      Comment vas-tu l&apos;utiliser ?
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {roleCards.map(({ r, icon, label, sub, badgeBg }) => {
+                        const picked = roleChosen && role === r;
+                        return (
+                          <div key={r} onClick={() => chooseRole(r)}
+                            style={{
+                              cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "16px 18px",
+                              border: picked ? "2px solid #d44000" : "1.5px solid rgba(255,255,255,.16)",
+                              background: picked ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.08)",
+                              backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+                              transition: "all .15s",
+                            }}>
+                            <div style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 14, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{icon}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.01em", color: picked ? "#ff8a55" : "#fff", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.35 }}>{sub}</div>
+                            </div>
+                            <div style={{ flexShrink: 0, color: "rgba(255,255,255,.35)", fontSize: 18 }}>→</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}
@@ -2410,11 +2754,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
              ces écrans d'input pré-rôle que le ternaire a été retiré. ── */}
         {currentStep === "sport_2a" && (
           <div>
+            {/* Wording (2026-09-02) : "Quel est ton sport ?" reprend le POC à la lettre. Sous-titre
+                réécrit — la copie du POC ("le reste... viendra au moment de générer ton vrai
+                programme") lisait comme une liste technique, remplacée par un wording orienté valeur
+                (jugé "mauvais" par Gildas, retour explicite). */}
             <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", lineHeight: "normal", marginBottom: 10 }}>
-              Crée ton programme
+              Quel est ton sport ?
             </div>
             <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 18 }}>
-              À partir de ton sport, ou importe celui que tu utilises déjà.
+              Pour te montrer tout de suite un aperçu personnalisé. Tu affineras faiblesses, jours et objectifs juste après.
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
               {SPORT_CATEGORIES.map(s => (
@@ -2467,88 +2815,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
               </div>
             )}
 
-            {/* Diviseur "ou" — même style que le POC (theperfclub_poc_import_programme). */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#b5b0aa", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "16px 0" }}>
-              <div style={{ flex: 1, height: 1, background: "rgba(23,27,31,.10)" }} />
-              ou
-              <div style={{ flex: 1, height: 1, background: "rgba(23,27,31,.10)" }} />
-            </div>
-
-            {/* Import — plus de carte cliquable ni de tabs (2026-08-29, 2e itération) : trop de
-                bruit une fois révélé (tabs + dropzone bordée + erreur = 3 éléments). Benchmark
-                Levels ("What did you eat last?") : un textarea directement visible + un simple
-                badge pour le fichier, jamais de mode/tabs séparés. Le placeholder du textarea et
-                le libellé du badge portent l'explication, pas de titre/sous-titre séparé. Texte et
-                fichier restent mutuellement exclusifs (remplir l'un vide l'autre, même principe que
-                sport/Autre) — /api/programs/import n'accepte qu'un seul des deux à la fois.
-                Petit label ajouté au-dessus (2026-08-29, 2e retour) : contrairement au benchmark
-                Levels (chips + texte parlent du même sujet, couvert par le H1 de la page), ici le
-                H1 de sport_2a ne parle que du sport — passé le "ou" on change de sujet (le
-                programme), sans que rien ne le signale sans ce label. Même typographie que les
-                labels de section déjà utilisés ailleurs (petit, majuscules, discret). */}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#171b1f", marginBottom: 8 }}>
-                Importe ton programme
-              </div>
-              <textarea
-                value={importText}
-                onChange={e => {
-                  setImportText(e.target.value);
-                  setImportError(null);
-                  if (e.target.value.trim()) {
-                    setSport(""); setAutreChipSelected(false); setSportPrecision(""); setCustomSport(null);
-                    if (importPhotoFile) setImportPhotoFile(null);
-                  }
-                }}
-                placeholder={"Ou colle ton programme existant ici (ex : Lundi : Squat 5x5 @100kg...)"}
-                rows={4}
-                style={{ width: "100%", boxSizing: "border-box", padding: "14px", borderRadius: 16, border: "1.5px solid rgba(0,0,0,.12)", fontFamily: "inherit", fontSize: 13.5, lineHeight: 1.5, resize: "vertical", outline: "none" }}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                <button
-                  onClick={() => importFileInputRef.current?.click()}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999,
-                    border: importPhotoFile ? "1.5px solid #2f9e44" : "1.5px solid rgba(212,64,0,.4)",
-                    background: "#fff", color: importPhotoFile ? "#2f9e44" : "#d44000",
-                    fontFamily: "inherit", fontWeight: 700, fontSize: 12.5, cursor: "pointer",
-                  }}
-                >
-                  📷 {importPhotoFile ? importPhotoFile.name : "Importer un fichier"}
-                </button>
-                {importPhotoFile && (
-                  <button
-                    onClick={() => setImportPhotoFile(null)}
-                    style={{ background: "none", border: "none", color: "#8a8f94", fontSize: 15, cursor: "pointer", padding: 0 }}
-                  >
-                    ✕
-                  </button>
-                )}
-                <input
-                  ref={importFileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" style={{ display: "none" }}
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setImportPhotoFile(f);
-                      setImportError(null);
-                      setSport(""); setAutreChipSelected(false); setSportPrecision(""); setCustomSport(null);
-                      if (importText.trim()) setImportText("");
-                    }
-                  }}
-                />
-              </div>
-              {importError && <p style={{ fontSize: 11, color: "#c0392b", marginTop: 8 }}>{importError}</p>}
-            </div>
-
-            {/* Exception au "clic = avance direct" des autres steps à choix unique (2026-08-29) :
-                les chips sont sélectionnables, il faut cliquer le CTA pour avancer — même mécanique
-                que level_2a (faiblesses). Décidé pour permettre la présélection du sport déduit d'un
-                programme claimé (l'user garde la main pour la confirmer ou la changer) sans avoir à
-                construire un composant de confirmation séparé. */}
-            {canSubmitImport
-              ? <Actions onBack={canGoBack ? goBack : undefined} onNext={handleImportNext} nextLabel={importAnalyzing ? "Analyse en cours…" : "Analyser mon programme →"} nextDisabled={importAnalyzing} />
-              : <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || (!sport && !(autreChipSelected && sportPrecision.trim()))} />
-            }
+            {/* Import retiré de cet écran (2026-09-02, retour à l'architecture POC) — redondant
+                avec l'option "Importer un programme" du wizard post-signup (wizard_picker). sport_2a
+                redevient sport seul, comme le POC : chips + "Autre" (analyse Claude), rien d'autre.
+                Exception au "clic = avance direct" des autres steps à choix unique (2026-08-29) :
+                les chips sont sélectionnables, il faut cliquer le CTA pour avancer — permet la
+                présélection du sport déduit d'un programme claimé sans carte de confirmation dédiée. */}
+            <Actions onBack={canGoBack ? goBack : undefined} onNext={handleSportNext} nextLabel={analyzingSport ? "Analyse en cours…" : "Suivant →"} nextDisabled={analyzingSport || (!sport && !(autreChipSelected && sportPrecision.trim()))} />
           </div>
         )}
 
@@ -2971,84 +3244,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
         )}
 
         {/* ── 3. ACCOUNT ── */}
-        {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : (() => {
-          /* Repositionné le 2026-08-19 (voir doc des paths en tête de fichier) : arrive désormais
-             après decision_2a/2b (l'AHA vécu), plus juste après le rôle — le signup demande de
-             sauvegarder ce qui vient d'être construit et décidé, pas de s'inscrire à froid pour
-             débloquer un "bilan" pas encore construit. `assignedVariant` continue de se résoudre
-             (tagging analytics inchangé) mais ne pilote plus ce wording (aucun A/B formel sur la
-             position du signup — tranché sans test, voir la doc des paths).
-
-             Refonte visuelle 2026-08-18 (POC signup v3, theperfclub-signup-v3.html) : plus
-             d'eyebrow pill ni de frise au-dessus (retirée via HIDE_FRISE_STEPS). Champs regroupés
-             dans un unique bloc blanc (form-card) comme le reste des cartes de l'onboarding,
-             réassurance = la même bande de confiance que paywall_priming (PAYWALL_AVATARS,
-             réutilisée telle quelle plutôt que dupliquée), placée sous le titre — avant la carte,
-             comme le "social-proof" du POC. Retirée de value_intro le même jour (redondante avec
-             celle-ci).
-
-             Titre = ligne de positionnement identitaire ("Le programme de ceux qui...", benchmark
-             Claude "l'IA de ceux qui résolvent des problèmes"), pas une promesse produit — reste
-             pertinent maintenant que ce step arrive après l'AHA plutôt que juste après le rôle
-             (plus de risque de diluer le hook de value_intro, les deux sont maintenant séparés par
-             tout le reste du flow). */
-          return (
-          <div>
-            <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 16, lineHeight: "normal" }}>
-              {role === "coach" ? "Le système d'entraînement des coachs professionnels." : "Le programme de ceux qui refusent de stagner."}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-              <div style={{ display: "flex" }}>
-                {PAYWALL_AVATARS.map((src, i) => (
-                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-                <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-              </div>
-            </div>
-
-            {error && (
-              <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
-                {error}{" "}
-                {(error.toLowerCase().includes("déjà") || error.toLowerCase().includes("already") || error.toLowerCase().includes("registered")) && (
-                  <Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Me connecter</Link>
-                )}
-              </div>
-            )}
-
-            <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
-              <button
-                type="button" onClick={handleGoogleRegister} disabled={saving}
-                style={{ width: "100%", height: 48, borderRadius: 16, border: "none", background: "#171b1f", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginBottom: 18 }}
-              >
-                <GoogleIcon />
-                Continuer avec Google
-              </button>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
-                <span style={{ fontSize: 12, color: "#8a8f94" }}>ou avec email</span>
-                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
-              </div>
-
-              <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
-              <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
-            </div>
-
-            <Actions onBack={canGoBack ? goBack : undefined} onNext={handleFinish} nextLabel={saving ? "Création…" : (role === "coach" ? "Créer mon espace coach →" : "Créer mon espace sportif →")} nextDisabled={saving || !name.trim() || !email.trim()} />
-            <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
-              Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
-            </div>
-          </div>
-          ); })()
-        )}
+        {currentStep === "account" && (emailSent ? <EmailSentScreen email={email} /> : renderAccountForm())}
 
         {/* ── RECAP PROFIL (interstitiel avant la preview du programme) ── */}
         {currentStep === "profile_recap" && (() => {
@@ -3120,10 +3316,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
-        {/* ── DÉCISION — intégration wellness + aha d'autorégulation, écran séparé du programme
-             (2026-08-17, voir DecisionStep.tsx) ── */}
+        {/* ── DÉCISION — step propre à part entière (2026-09-04, retour final après 3 itérations la
+             même journée — voir doc des paths en tête de fichier pour l'historique complet : fusion
+             en toggle, puis split avec le carrousel, puis split avec un bloc statique, PUIS "il vaut
+             mieux avoir l'étape propre 'aha' avant le signup... pour avoir de l'impact et de
+             l'espace"). Accordéon+illustration (voir DecisionStep.tsx) — plein écran, son propre
+             `onNext`/`onBack`, plus aucun lien avec le formulaire de compte. ── */}
         {currentStep === "decision_2a" && (
-          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} athleteName={name} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} athleteName={name} onNext={next} onBack={canGoBack ? goBack : undefined} />
         )}
 
         {/* ── WEEK PREVIEW COACH ── */}
@@ -3142,8 +3342,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
           <WellnessCheckStep demoSession={demoHardest} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
         )}
 
+        {/* Même step propre que decision_2a ci-dessus, voir sa doc. */}
         {currentStep === "decision_2b" && (
-          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} frise={<ProgressFrise currentPhase={friseCurrentPhase} pct={frisePct} dark />} />
+          <DecisionStep demoHardest={demoHardest} demoLightest={demoLightest} demoMiddle={demoMiddle} sport={sport} role={role} onNext={next} onBack={canGoBack ? goBack : undefined} />
         )}
 
         {/* ── WELLNESS QUESTIONS (athlete, avant account) ── */}
@@ -3556,6 +3757,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole }: Pro
                   </div>
                 </div>
               )}
+              <input
+                type="text"
+                value={inviteName}
+                onChange={e => setInviteName(e.target.value)}
+                placeholder="Prénom du sportif"
+                style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.06)", border: "1.5px solid rgba(255,255,255,0.16)", borderRadius: 12, padding: "11px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", color: "#fff", marginBottom: 8 }}
+              />
               <input
                 type="email"
                 value={inviteEmail}

@@ -156,12 +156,25 @@ interface Props {
      explicitement par Gildas pour pouvoir changer de méthode sans repartir de zéro. */
   onBack: () => void;
   onGenerate: (template: ProgramTemplate, meta: ProgramMeta) => void;
+  /* Sport déjà connu par l'appelant (onboarding : sport_2a, ou programme claimé) — remplace la
+     sélection de chips par un pill statique, jamais éditable ici. Absent = comportement inchangé
+     (sélection libre), utilisé par ProgramLibraryPage.tsx. */
+  lockedSport?: string;
+  /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre) —
+     absent = comportement inchangé (usage in-app). Sur desktop, colonne à GAUCHE du drawer
+     (2026-09-04), inline en haut du drawer sur mobile — voir ProgramCreatePicker.tsx. */
+  wizardHero?: React.ReactNode;
+  /* Wizard onboarding (2026-09-04) : masque le "✕" — on veut inciter la configuration plutôt
+     qu'offrir une sortie, "←" (onBack) reste le seul moyen de reculer. Absent = comportement
+     inchangé (usage in-app). */
+  hideClose?: boolean;
 }
 
-export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate }: Props) {
+export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate, lockedSport, wizardHero, hideClose }: Props) {
   const { isMd } = useBreakpoint();
+  const heroOnLeft = !!wizardHero && isMd;
   const importMode = mode === "import";
-  const [sport, setSport] = useState("");
+  const [sport, setSport] = useState(lockedSport || "");
   const [focus, setFocus] = useState<ProgramFocus | "">("");
   const [days, setDays] = useState<string[]>(["Lun", "Mer", "Ven"]);
   const [duration, setDuration] = useState<4 | 8 | 12>(8);
@@ -305,11 +318,16 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+        </div>
+      )}
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
@@ -319,6 +337,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
+        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
         {/* Header — dépend du mode fixé par le picker "+ Nouveau", plus de bascule interne. "←"
             (retour au picker) même style que le "←" déjà utilisé par ProgramBuilderModal.tsx,
@@ -331,7 +350,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
               <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>{importMode ? "Colle ton texte ou prends une photo — une semaine suffit, tu pourras la reconduire ensuite." : "Remplis les critères — généré en un clic"}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>
+          {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
         </div>
 
         {/* Plus de tabs (2026-08-29, même simplification que l'onboarding — voir OnboardingFlow.tsx,
@@ -392,8 +411,15 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
 
         {!importMode && (
         <>
-          {/* Sport — chips compactes comme le POC (icône inline, pas de carte haute) */}
+          {/* Sport — chips compactes comme le POC (icône inline, pas de carte haute), OU pill
+              statique si l'appelant connaît déjà le sport (lockedSport). */}
           <Section label="🏋️ Sport">
+            {lockedSport ? (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f1f0ee", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 800, color: "#171b1f" }}>
+                🏋️ {lockedSport}
+              </div>
+            ) : (
+            <>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {SPORT_META.map(s => (
                 <Pill key={s.value} active={sport === s.value} onClick={() => selectSport(s.value)} title={s.sub}>
@@ -445,6 +471,8 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
                 <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
               )}
             </div>
+            </>
+            )}
           </Section>
 
           {/* Faiblesses — biaise réellement la génération, voir generate/route.ts. Pour un sport

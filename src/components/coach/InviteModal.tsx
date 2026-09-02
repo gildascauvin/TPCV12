@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 interface Props {
   onClose: () => void;
@@ -11,28 +12,49 @@ interface Props {
      email "comme si le sportif s'était inscrit lui-même" (lien vers /register, pas de lien
      coach↔sportif enregistré, voir la route pour le détail). */
   sandboxMode?: boolean;
+  /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
+     injectée au-dessus du titre réel — absent = comportement inchangé (usage in-app). */
+  wizardHero?: React.ReactNode;
+  /* Wizard onboarding (2026-09-03) : le bouton "Annuler" du 1er écran devient "Me le rappeler plus
+     tard" (même mécanisme que le "🔔 Plus tard" de célébration) — absent = "Annuler" inchangé
+     (usage in-app). */
+  cancelLabel?: string;
+  /* Wizard onboarding (2026-09-04) : "←" vers l'étape wizard précédente — absent = pas de bouton
+     retour (usage in-app, ce composant n'a jamais eu besoin de reculer d'une étape). */
+  onBack?: () => void;
 }
 
-export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode = false }: Props) {
-  const [email, setEmail] = useState("");
-  const [extraEmails, setExtraEmails] = useState<string[]>([]);
+interface InviteRow {
+  name: string;
+  email: string;
+}
+
+export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
+  const { isMd } = useBreakpoint();
+  const heroOnLeft = !!wizardHero && isMd;
+  // Prénom + email ensemble, une ligne = un sportif — plus deux blocs déconnectés (un pour
+  // nommer, un pour l'email) : l'invitation part et le sportif apparaît immédiatement dans le
+  // Coach Control du coach (carte synthétique, prénom réel), en attendant qu'il rejoigne pour
+  // de vrai — voir /api/invite/create pour la synchro.
+  const [invites, setInvites] = useState<InviteRow[]>([{ name: "", email: "" }]);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<"linked" | "pending" | null>(null);
   const [sentCount, setSentCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const firstEmail = invites[0]?.email ?? "";
 
   async function handleInvite() {
-    const emails = [email, ...extraEmails].map(e => e.trim()).filter(Boolean);
-    if (!emails.length) return;
+    const rows = invites.map(r => ({ name: r.name.trim(), email: r.email.trim() })).filter(r => r.email);
+    if (!rows.length) return;
     setSaving(true);
     setError(null);
     const endpoint = sandboxMode ? "/api/sandbox/invite" : "/api/invite/create";
-    const results = await Promise.all(emails.map(async athleteEmail => {
+    const results = await Promise.all(rows.map(async row => {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ athleteEmail }),
+        body: JSON.stringify({ athleteEmail: row.email, athleteName: row.name || undefined }),
       });
       const json = await res.json().catch(() => ({}));
       return { ok: res.ok, linked: sandboxMode ? false : (json.linked as boolean | undefined), error: json.error as string | undefined };
@@ -48,16 +70,39 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
     if (failed.length && !sent.length) {
       setError(failed[0].error || "Une erreur est survenue.");
     } else if (failed.length) {
-      setError(`${failed.length} invitation${failed.length > 1 ? "s" : ""} sur ${emails.length} n'${failed.length > 1 ? "ont" : "a"} pas pu être envoyée${failed.length > 1 ? "s" : ""}.`);
+      setError(`${failed.length} invitation${failed.length > 1 ? "s" : ""} sur ${rows.length} n'${failed.length > 1 ? "ont" : "a"} pas pu être envoyée${failed.length > 1 ? "s" : ""}.`);
     }
   }
 
+  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
+     ProgramCriteriaModal.tsx/ProgramBuilderModal.tsx — appliqué ici aussi bien pour l'onboarding
+     que pour l'usage in-app, demande explicite de Gildas : "onboarding comme inapp"). */
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
+        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
+        zIndex: 2147483100, overflow: "hidden",
+      }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+        </div>
+      )}
+      <div style={{
+        background: "#fff",
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
+        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
+        height: "100dvh",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+      }}>
+        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
+        <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
 
         {result ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
@@ -69,12 +114,12 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
               {sandboxMode
                 ? (sentCount > 1
                     ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> viennent de recevoir un lien pour créer leur compte.</>
-                    : <><strong style={{ color: "#171b1f" }}>{email}</strong> vient de recevoir un lien pour créer son compte.</>)
+                    : <><strong style={{ color: "#171b1f" }}>{firstEmail}</strong> vient de recevoir un lien pour créer son compte.</>)
                 : sentCount > 1
                 ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> rejoindront ton espace dès qu&apos;ils créeront leur compte.</>
                 : result === "linked"
-                ? <><strong style={{ color: "#171b1f" }}>{email}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
-                : <>Dès que <strong style={{ color: "#171b1f" }}>{email}</strong> créera son compte sur ThePerfClub, il sera automatiquement lié à ton espace.</>
+                ? <><strong style={{ color: "#171b1f" }}>{firstEmail}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
+                : <>Dès que <strong style={{ color: "#171b1f" }}>{firstEmail}</strong> créera son compte sur ThePerfClub, il sera automatiquement lié à ton espace.</>
               }
             </div>
             <button
@@ -86,8 +131,11 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
           </div>
         ) : (
           <>
-            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 6 }}>
-              Inviter un sportif
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
+              <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>
+                Inviter un sportif
+              </div>
             </div>
 
             {/* Lien d'invitation */}
@@ -136,58 +184,67 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
             )}
 
             <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
-              Email du sportif
+              Sportif à inviter
             </div>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && email.trim() && handleInvite()}
-              placeholder="sportif@exemple.com"
-              autoFocus
-              style={{ width: "100%", boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 10 }}
-            />
 
-            {extraEmails.map((extraEmail, i) => (
+            {invites.map((invite, i) => (
               <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <input
-                  type="email"
-                  value={extraEmail}
-                  onChange={e => setExtraEmails(arr => arr.map((v, idx) => idx === i ? e.target.value : v))}
-                  onKeyDown={e => e.key === "Enter" && email.trim() && handleInvite()}
-                  placeholder="sportif@exemple.com"
+                  type="text"
+                  value={invite.name}
+                  onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, name: e.target.value } : v))}
+                  onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
+                  placeholder="Prénom"
+                  autoFocus={i === 0}
                   style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
                 />
-                <button
-                  onClick={() => setExtraEmails(arr => arr.filter((_, idx) => idx !== i))}
-                  style={{ width: 44, flexShrink: 0, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
-                >
-                  ✕
-                </button>
+                <input
+                  type="email"
+                  value={invite.email}
+                  onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, email: e.target.value } : v))}
+                  onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
+                  placeholder="sportif@exemple.com"
+                  style={{ flex: 1.4, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                />
+                {invites.length > 1 && (
+                  <button
+                    onClick={() => setInvites(arr => arr.filter((_, idx) => idx !== i))}
+                    style={{ width: 40, flexShrink: 0, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             ))}
 
             <button
-              onClick={() => setExtraEmails(arr => [...arr, ""])}
-              style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0, marginBottom: 16 }}
+              onClick={() => setInvites(arr => [...arr, { name: "", email: "" }])}
+              style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}
             >
               + Inviter un autre sportif
             </button>
-
+          </>
+        )}
+        </div>
+        {/* CTA sticky (2026-09-02, demande explicite de Gildas) — footer non-scrollable, même
+            convention que ProgramCriteriaModal.tsx/ProgramBuilderModal.tsx : les 2 boutons restent
+            toujours visibles/accessibles même si la liste de sportifs à inviter s'allonge. */}
+        {!result && (
+          <div style={{ flexShrink: 0, padding: "16px 28px 20px", background: "#fff", borderTop: "1px solid rgba(0,0,0,.06)", display: "flex", flexDirection: "column", gap: 10 }}>
             <button
               onClick={handleInvite}
-              style={{ width: "100%", height: 48, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", opacity: saving || !email.trim() ? 0.6 : 1, marginBottom: 10 }}
+              style={{ width: "100%", height: 48, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", opacity: saving || !invites.some(r => r.email.trim()) ? 0.6 : 1 }}
             >
-              {saving ? "Vérification…" : "Inviter par email →"}
+              {saving ? "Vérification…" : "Ajouter et inviter →"}
             </button>
 
             <button
               onClick={onClose}
               style={{ width: "100%", height: 44, borderRadius: 14, background: "none", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
-              Annuler
+              {cancelLabel}
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>

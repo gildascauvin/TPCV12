@@ -26,14 +26,22 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     /* User connecté sans pendingData : si l'onboarding n'est pas vraiment fini
        (paywall jamais atteint), on le fait rentrer à nouveau dans le flow plutôt que
        de forcer onboarding_done=true — sinon un compte créé mais jamais payé bascule
-       en accès gratuit permanent sans jamais voir le paywall obligatoire. */
+       en accès gratuit permanent sans jamais voir le paywall obligatoire.
+       Bug réel corrigé (2026-09-03) : ce cas couvre aussi bien un email de confirmation
+       (session pas immédiate à l'inscription) qu'un clic tardif sur le lien "crée ton mot
+       de passe" (resetPasswordForEmail → /reset-password → /today) — le middleware
+       (src/lib/supabase/middleware.ts) renvoie alors ce user vers /register nu dès que
+       onboarding_done est encore false. Sans resumeRole, OnboardingFlow repartait de zéro
+       (value_intro/sport_2a/role/decision rejoués en entier) — resumeRole (déjà connu via
+       profiles.mode, écrit par createAccount() lors du vrai signup) saute directement
+       dans le wizard, où l'utilisateur était réellement resté. */
     const { data: profile } = await supabase
       .from("profiles")
       .select("mode, onboarding_done")
       .eq("user_id", user.id)
       .single();
     if (!profile?.onboarding_done) {
-      return <OnboardingFlow userId={user.id} />;
+      return <OnboardingFlow userId={user.id} resumeRole={profile?.mode === "coach" ? "coach" : "athlete"} />;
     }
     redirect(profile?.mode === "coach" ? "/coach" : "/today");
   }

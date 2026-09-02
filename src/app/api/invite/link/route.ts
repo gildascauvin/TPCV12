@@ -50,6 +50,10 @@ export async function POST() {
           sport: athleteProfile?.sport || "",
           wellness_score: wellness?.score ?? 70,
         }),
+    // Le sportif a désormais ses propres vraies séances (table sessions) — les séances
+    // synthétiques posées à l'invitation (coach_sessions, voir /api/invite/create) deviendraient
+    // des doublons fantômes sur son planning coach si on les laissait.
+    placeholder ? admin.from("coach_sessions").delete().eq("athlete_id", placeholder.id) : Promise.resolve(),
   ]);
 
   return Response.json({ ok: true });

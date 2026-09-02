@@ -551,6 +551,21 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     );
   }
 
+  // Programme + semaine correspondant à la semaine réellement affichée (pas juste
+  // `activeProgram`, "pertinent aujourd'hui") — hissé ici (au lieu de l'IIFE locale au
+  // ProgramBanner) pour être aussi utilisable par le lock S2+ de la grille plus bas.
+  // `weekStart` tombe à minuit heure locale — findProgramForWeek reparse en "T12:00:00" en
+  // interne, cohérent avec les dates de démarrage des programmes (convention anti-DST déjà
+  // utilisée partout ailleurs dans ce fichier).
+  const viewedMondayStr = format(weekStart, "yyyy-MM-dd");
+  const viewedMatch = findProgramForWeek(activeAssignments, viewedMondayStr);
+  const viewedProgram = viewedMatch?.program ?? null;
+  const viewedWeek = viewedMatch?.week ?? -1;
+  // S1 visible pour tout le monde, S2+ flouté tant que non abonné — même principe que /week
+  // (WeekClient.tsx) et ProgramBuilderModal.tsx : assigner n'est plus le gate, voir/utiliser
+  // le planning complet au quotidien l'est.
+  const weekLocked = !isActive && viewedWeek > 0;
+
   return (
     <>
       {!isActive && (
@@ -590,21 +605,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
           (qui reste "le programme pertinent aujourd'hui"). */}
       {athlete && (() => {
-        // `weekStart` (startOfWeek) tombe à minuit heure locale — findProgramForWeek reparse
-        // en "T12:00:00" en interne, cohérent avec les dates de démarrage des programmes
-        // (convention anti-DST déjà utilisée partout ailleurs dans ce fichier).
-        const mondayStr = format(weekStart, "yyyy-MM-dd");
-        const match = findProgramForWeek(activeAssignments, mondayStr);
-        const viewedProgram = match?.program ?? null;
-        const viewedWeek = match?.week ?? -1;
         return (
           <ProgramBanner
             program={viewedProgram}
             currentWeek={viewedWeek}
             onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/coach/programmes" : "/coach/programmes") : undefined}
             onReconduire={() => setShowReconduire(true)}
-            freeLabel={freeLabelsFor(athlete)[mondayStr] ?? null}
-            onEditFreeLabel={label => setFreeLabelForWeek(athlete, mondayStr, label)}
+            freeLabel={freeLabelsFor(athlete)[viewedMondayStr] ?? null}
+            onEditFreeLabel={label => setFreeLabelForWeek(athlete, viewedMondayStr, label)}
           />
         );
       })()}
@@ -801,6 +809,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
       {/* 7-column scrollable grid — semaine — même DayColumn générique que /week (WeekClient.tsx) */}
       {viewMode === "week" && (
+        <div style={{ position: "relative" }}>
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
@@ -810,6 +819,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
           scrollSnapType: "x proximity",
           scrollbarWidth: "thin",
+          filter: weekLocked ? "blur(7px)" : "none",
+          pointerEvents: weekLocked ? "none" : "auto",
+          userSelect: weekLocked ? "none" : "auto",
         }}>
           {weekDates.map((date, idx) => {
             const dstr = format(date, "yyyy-MM-dd");
@@ -930,6 +942,18 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           })}
         </div>
         </DndContext>
+        {weekLocked && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
+            <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
+              <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
+              <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Ce programme est bien assigné — l&apos;abonnement débloque le reste du planning.</div>
+              <button onClick={() => requireSubscription(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
+                Débloquer →
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
       )}
 
       {(addingDate || editingSession) && athlete && (

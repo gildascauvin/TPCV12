@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Program, CoachAthlete, ProgramAssignment } from "@/types";
 import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
 import ProgramCreatePicker from "./ProgramCreatePicker";
+import ProgramLibraryBrowser from "./ProgramLibraryBrowser";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
@@ -86,12 +87,12 @@ type UIStep =
   | { type: "list" }
   | { type: "new" }
   | { type: "criteria"; mode: "criteria" | "import" }
+  | { type: "library" }
   | { type: "builder"; template: ProgramTemplate; meta: ProgramMeta; programId?: string; programName?: string; assignmentCount?: number }
   | { type: "assign"; programId: string; programName: string };
 
 const BLANK_PROGRAM_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const NEUTRAL_LEVEL = "intermediaire" as const;
-const LIBRARY_URL = "https://www.theperfclub.com/bibliotheque-de-programmes-dentrainement-sportif/";
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
@@ -203,8 +204,20 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         onClose={closeOrList}
         onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
         onImport={() => setStep({ type: "criteria", mode: "import" })}
-        onTemplate={() => window.open(LIBRARY_URL, "_blank", "noopener,noreferrer")}
+        onTemplate={() => setStep({ type: "library" })}
         onBlank={() => createBlankProgram()}
+      />
+    );
+  }
+
+  /* ─── Bibliothèque publique (2026-09-04, remplace le lien externe WordPress — "natif",
+       demande explicite de Gildas) ─── */
+  if (step.type === "library") {
+    return (
+      <ProgramLibraryBrowser
+        onClose={closeOrList}
+        onBack={() => setStep({ type: "new" })}
+        onSelect={(template, meta, name) => setStep({ type: "builder", template, meta, programName: name })}
       />
     );
   }
