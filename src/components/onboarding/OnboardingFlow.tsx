@@ -26,7 +26,8 @@ import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { subscribeToPush, needsInstallForPush } from "@/lib/push";
-import { zoneLabel, getContextualInsight, getAdvice } from "@/lib/wellness";
+import { zoneLabel, getContextualInsight, getAdvice, wellnessColor } from "@/lib/wellness";
+import { BEHAVIOR_META } from "@/lib/behaviors";
 import ProgramCreatePicker from "@/components/programs/ProgramCreatePicker";
 import ProgramCriteriaModal from "@/components/programs/ProgramCriteriaModal";
 import ProgramLibraryBrowser from "@/components/programs/ProgramLibraryBrowser";
@@ -219,6 +220,85 @@ function WizardHero({ step, dark, eyebrow, title, sub }: { step: 1 | 2 | 3; dark
       </div>
       <div style={{ fontSize: 15, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94", lineHeight: 1.5 }}>
         {sub}
+      </div>
+    </div>
+  );
+}
+
+/* Illustration "Signal du jour" sur value_intro (2026-09-03, demande explicite de Gildas — 2
+   benchmarks publicitaires fournis, "qui marchent pas mal") : reprend la structure de la 1re pub
+   (petite carte compacte, ring + zone + conseil court), placée en `position:fixed` en haut de
+   l'écran (2e passe, même jour — en flux normal elle ajoutait de la hauteur au document, poussant le
+   bloc titre sous le footer CTA sur les viewports courts ; en fixed, elle ne participe plus au
+   calcul de hauteur du reste de l'écran).
+   2e passe également sur le contenu, pour rester fidèle au vrai produit plutôt qu'au rouge d'alerte
+   de la pub d'origine — retour explicite de Gildas :
+   - Ring : VRAI `wellnessColor()` (@/lib/wellness, le même dégradé séquentiel bleu que
+     `PlanningRing.tsx` en prod) au lieu d'une couleur rouge inventée pour l'effet pub.
+   - Comportements : VRAIS badges `BEHAVIOR_META` (@/lib/behaviors, même style exact que
+     `CoachAthleteCard.tsx` — fond teinté vert/orange selon `positive`) au lieu d'un texte "Fatigue
+     élevée" fixe.
+   - "Fatigué" reprend le vocabulaire réel des zones relatives (`relativeZoneLabel()`,
+     wellnessBaseline.ts — Fatigué/Équilibré/Frais), pas "Zone basse" (wording pub, absent du
+     vocabulaire produit).
+   Rétrécit sur mobile (`isMd`, prop dérivé de `colIsMd` déjà résolu plus haut dans le composant) —
+   padding/tailles réduits, jamais juste zoomé/dézoomé en bloc.
+   4e passe (même jour) : carte poussée SOUS le voile dégradé de la photo (retour explicite,
+   "sous l'overlay de l'image") — la rendre plus lisible sans toucher au voile lui-même s'est donc
+   fait uniquement en renforçant la carte : fond plus opaque (.6→.85), bordure plus visible
+   (.16→.28), + une ombre portée propre pour la détacher visuellement du fond assombri. */
+function SignalDuJourCard({ isMd }: { isMd: boolean }) {
+  const score = 52;
+  const ringSize = isMd ? 52 : 42;
+  const r = isMd ? 20 : 16, sw = isMd ? 5 : 4;
+  const circ = +(2 * Math.PI * r).toFixed(1);
+  const offset = +(circ * (1 - score / 100)).toFixed(1);
+  const ringColor = wellnessColor(score);
+  const behaviorKeys = ["late_sleep", "stretching"];
+
+  return (
+    <div style={{
+      display: "inline-block", background: "rgba(24,24,24,.85)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+      border: "1.5px solid rgba(255,255,255,.28)", borderRadius: isMd ? 18 : 14, padding: isMd ? "14px 16px" : "10px 12px",
+      maxWidth: isMd ? 270 : 208, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
+    }}>
+      <div style={{ fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a70", marginBottom: isMd ? 10 : 7 }}>
+        Signal du jour
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: isMd ? 12 : 9, marginBottom: isMd ? 12 : 9 }}>
+        <div style={{ position: "relative", width: ringSize, height: ringSize, flexShrink: 0 }}>
+          <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
+            <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke="rgba(255,255,255,.16)" strokeWidth={sw} />
+            <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke={ringColor} strokeWidth={sw} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
+          </svg>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: isMd ? 15 : 12, fontWeight: 1000, color: "#fff" }}>{score}</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: isMd ? 15 : 13, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", marginBottom: 3 }}>Fatigué</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {behaviorKeys.map(b => {
+              const meta = BEHAVIOR_META[b];
+              return (
+                <span key={b} style={{
+                  fontSize: isMd ? 9 : 8, padding: "2px 6px", borderRadius: 999,
+                  background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
+                  color: meta.positive ? "#bfeec8" : "#ffd2bf",
+                }}>
+                  {meta.emoji} {meta.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.12)", marginBottom: isMd ? 10 : 7 }} />
+      <div style={{ fontSize: isMd ? 9.5 : 8.5, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 5 }}>
+        ⚠ Conseil séance
+      </div>
+      <div style={{ fontSize: isMd ? 12 : 11, color: "rgba(255,255,255,.8)", lineHeight: 1.45 }}>
+        Allège modérément la séance.
       </div>
     </div>
   );
@@ -2724,7 +2804,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           return (
             <div>
               {/* Fond photo plein viewport, cadré haut (comme le POC : background-position center top)
-                  pour garder la tête du sportif visible plutôt que le centre géométrique de la photo. */}
+                  pour garder la tête du sportif visible plutôt que le centre géométrique de la photo.
+                  "Signal du jour" (2026-09-03, 3e passe) déplacée à DROITE et sous le voile dégradé
+                  (entre l'img et l'overlay, pas au-dessus) — demande explicite de Gildas : "sous
+                  l'overlay de l'image". Toujours en flux propre à ce calque `position:fixed, inset:0`
+                  (donc `position:absolute` ici, pas `fixed` — plus besoin de son propre `position:
+                  fixed`, elle hérite déjà du calque photo qui couvre tout le viewport), donc aucun
+                  impact sur la hauteur du reste de l'écran (voir doc de SignalDuJourCard plus haut :
+                  la raison d'être du passage en position hors-flux). Même colonne que le footer
+                  "Comment vas-tu l'utiliser ?" (padding 20 + maxWidth:colMaxWidth) mais poussée à
+                  droite via `justifyContent:"flex-end"` au lieu du texte, aligné à gauche, juste en
+                  dessous — outer wrapper en `pointerEvents:"none"` (bande décorative, purement
+                  illustrative). */}
               <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
                 <img
                   src="https://www.theperfclub.com/wp-content/uploads/2026/07/value-intro-BG.jpeg"
@@ -2733,13 +2824,42 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                   fetchPriority="high"
                   style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 35%", display: "block" }}
                 />
+                <div style={{ position: "absolute", left: 0, right: 0, top: colIsMd ? 72 : 56, padding: "0 20px", display: "flex", pointerEvents: "none" }}>
+                  <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", display: "flex", justifyContent: "flex-end" }}>
+                    <SignalDuJourCard isMd={colIsMd} />
+                  </div>
+                </div>
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,10,10,.6) 0%, rgba(10,10,10,.75) 40%, rgba(8,8,8,.95) 85%)" }} />
               </div>
 
-              <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "62vh", paddingBottom: roleKnownUpfront ? 110 : 245 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", textAlign: "center", marginBottom: 10 }}>ThePerfClub</div>
-                <div style={{ fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 14, color: "#fff", textAlign: "center" }}>{headline}</div>
-                <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, margin: "0 auto 8px", textAlign: "center" }}>{subhead}</div>
+              {/* Justifié à gauche + titre descendu (2026-09-03, demande explicite de Gildas, capture
+                  de référence à l'appui) — `minHeight` monté 62vh→70vh pour que le bloc de texte,
+                  ancré en bas de ce conteneur (`justifyContent:"flex-end"`), descende d'autant.
+                  Alignement corrigé (3e passe, même jour — capture à l'appui montrant un vrai écart
+                  entre ce bloc et le footer "Comment vas-tu l'utiliser ?", pas juste un problème de
+                  cache) : la VRAIE cause n'était pas la formule de centrage elle-même mais l'endroit
+                  où elle s'appliquait — ce bloc reste dans le flux normal, DANS la colonne déjà
+                  centrée/paddée par `OnboardingBackground.tsx` (maxWidth 560/640/720 + padding
+                  "36px 20px 120px", centrée via flex `justifyContent:center`), alors que le footer
+                  juste en dessous y échappe entièrement via `position:fixed` et recalcule sa propre
+                  colonne directement depuis la largeur du viewport. Deux bases de calcul différentes
+                  = deux résultats différents, quelle que soit la formule utilisée à l'intérieur.
+                  Fix : ce bloc échappe maintenant lui aussi à la colonne d'OnboardingBackground (même
+                  technique "100vw + marges négatives" déjà utilisée ailleurs dans l'onboarding pour
+                  sortir d'un parent paddé, ex. DecisionStep.tsx), puis applique EXACTEMENT la même
+                  colonne que le footer (padding 20px + `maxWidth:colMaxWidth, margin:"0 auto"`) —
+                  les deux blocs partent désormais de la même base (le viewport), garantissant un
+                  alignement identique à toute largeur d'écran plutôt que deux formules qui ne
+                  pouvaient que coïncider par hasard. */}
+              <div style={{
+                width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw", boxSizing: "border-box",
+                zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "70vh", paddingBottom: roleKnownUpfront ? 110 : 100, paddingLeft: 20, paddingRight: 20,
+              }}>
+                <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 10 }}>ThePerfClub</div>
+                  <div style={{ fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 14, color: "#fff" }}>{headline}</div>
+                  <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, marginBottom: 8 }}>{subhead}</div>
+                </div>
               </div>
 
               {roleKnownUpfront ? (
@@ -2758,7 +2878,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               ) : (
                 <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto" }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.75)", textAlign: "center", marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "rgba(255,255,255,.75)", marginBottom: 10 }}>
                       Comment vas-tu l&apos;utiliser ?
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
