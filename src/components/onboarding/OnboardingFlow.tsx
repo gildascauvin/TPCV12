@@ -9,6 +9,8 @@ import { computeWellnessScore } from "@/lib/wellness";
 import { getSessionTemplates, nextDateForDow } from "@/lib/sessionTemplates";
 import { SPORT_CATEGORIES, guessSportChip } from "@/lib/sportCategories";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
+import { computeAutoregSuggestion } from "@/lib/autoregulation";
+import { computeWellnessBaselineAt, wellnessSignal } from "@/lib/wellnessBaseline";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate, CoachAthlete } from "@/types";
 import Link from "next/link";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
@@ -1708,14 +1710,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       setInviteCode(code);
       await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
 
-      // 3 profils (pas 5) garantissant les 3 issues réelles de computeAutoregSuggestion
-      // (Alléger/Maintenir/Surcharger) — même mapping wellness/difficulté que les 3 sportifs de
-      // preview de DecisionStep.tsx (Thomas=alléger sévère, Emma=cohérent, Pierre=surcharger),
-      // pour que le tableau de bord réel raconte la même histoire que l'aperçu déjà vu à l'onboarding.
+      // 1 seul profil démo (pas 3, 2026-09-03 — retour explicite de Gildas : "ça fait trop de bruit,
+      // il doit les supprimer après"). Garde le cas Alléger (pas Maintenir/Surcharger) : un coach qui
+      // découvre son Coach Control pour la 1re fois doit voir "quelqu'un a besoin de toi" — la vraie
+      // proposition de valeur du produit — pas un cas "tout va bien". Même paire wellness/rpeBase que
+      // le placeholder d'invitation (PLACEHOLDER_WELLNESS_SCORE/PLACEHOLDER_RPE_BASE,
+      // invite/create/route.ts) : un seul mapping calibré, réutilisé partout où un sportif démo/
+      // placeholder doit démontrer le geste réel dès aujourd'hui (voir buildCoachDemoSessions()).
       const DEMO_ATHLETES = [
         { name: "Thomas M. (démo)", wellness_score: 35, rpeBase: 9 },
-        { name: "Emma L. (démo)",   wellness_score: 70, rpeBase: 6 },
-        { name: "Pierre D. (démo)", wellness_score: 85, rpeBase: 3 },
       ];
       const demoAthleteIds: string[] = [];
       for (const demo of DEMO_ATHLETES) {
@@ -1730,8 +1733,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       }
       /* Plus d'auto-génération+assignation synchrone ici depuis le 2026-09-02 (retour à
          l'architecture POC) — le coach construit son vrai programme dans le wizard post-signup
-         (wizard_builder) et l'assigne réellement (démo + invités réels) à wizard_assign. Les 3
-         démos restent créées ici pour que Coach Control ne soit jamais vide entre-temps. */
+         (wizard_builder) et l'assigne réellement (démo + invités réels) à wizard_assign. Le démo
+         reste créé ici pour que Coach Control ne soit jamais vide entre-temps. */
     }
   }
 
@@ -1766,6 +1769,49 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     next();
   }
 
+  /* Séance démo garantie le jour de l'inscription — sportif solo (2026-09-03, demande explicite de
+     Gildas). Problème visé : le geste Alléger/Surcharger réel ne se déclenche que s'il existe une
+     séance datée d'aujourd'hui avec un mismatch wellness/difficulté — or l'assignation à
+     wizard_assign est skippable ("Plus tard") et sa date de départ, bien que par défaut aujourd'hui,
+     reste éditable vers une date future. Si aucune vraie séance n'existe pour aujourd'hui à la fin du
+     wizard, on en crée une explicitement titrée "Séance démo" — même principe que côté coach
+     (buildCoachDemoSessions()/PLACEHOLDER_WELLNESS_SCORE, voir leur doc), pas un mécanisme différent.
+     Contenu : un exemple réel du sport choisi (getSessionTemplates(sport)). Difficulté : choisie
+     parmi 2 extrêmes (9 très dure / 2 très légère) en rejouant la VRAIE fonction
+     computeAutoregSuggestion contre le wellness réel du jour (déjà écrit à wizard_activate,
+     WellnessModal.onSave) — pas une paire fixe devinée comme côté coach (où le wellness est lui-même
+     fictif) : ici le wellness est réel, donc la calibration doit l'être aussi pour garantir le
+     déclenchement quel que soit le score entré. Repli neutre (7) si le wellness du jour est inconnu
+     (WellnessModal skippée via "Annuler") — la séance existe quand même, juste sans garantie de
+     mismatch ; ce gap-là (aha qui dépend aussi du wellness, pas seulement de la séance) reste
+     assumé, distinct de ce que ce chantier corrige. */
+  async function ensureTodayDemoSession(uid: string) {
+    const todayIso = new Date().toISOString().split("T")[0];
+    const { data: existing } = await supabase.from("sessions").select("id").eq("user_id", uid).eq("date", todayIso).limit(1);
+    if (existing && existing.length > 0) return; // déjà une vraie séance aujourd'hui (assignation réelle à today)
+
+    const { data: history } = await supabase
+      .from("wellness_daily")
+      .select("date, sleep, stress, recovery, motivation, base_score, score")
+      .eq("user_id", uid)
+      .order("date", { ascending: true });
+    const todayRow = history?.find(r => r.date === todayIso) ?? null;
+    const priorHistory = (history ?? []).filter(r => r.date < todayIso);
+    const baseline = todayRow ? computeWellnessBaselineAt(priorHistory, todayRow) : null;
+    const wellness = todayRow ? wellnessSignal(todayRow) : null;
+
+    let difficulty = 7;
+    for (const candidate of [9, 2]) {
+      if (computeAutoregSuggestion(wellness, candidate, baseline)) { difficulty = candidate; break; }
+    }
+
+    const [, notes] = getSessionTemplates(sport || "Autre")[0];
+    const { error } = await supabase.from("sessions").insert({
+      user_id: uid, date: todayIso, name: "Séance démo", notes, done: false, target_difficulty: difficulty,
+    });
+    if (error) console.error("[ensureTodayDemoSession] insert error:", error);
+  }
+
   /* Fin du wizard (2026-09-02) — remplace finishAthleteActivation()/finishCoachActivation() pour
      le nouveau flow : les deux rôles font désormais exactement la même chose à la fin de
      wizard_assign (marquer onboarding_done, avancer vers le paywall) — l'assignation réelle vient
@@ -1773,7 +1819,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      été écrite à wizard_activate (WellnessModal.onSave, sportif). */
   async function finishWizard() {
     const uid = userId || newUserId;
-    if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    if (uid) {
+      if (role === "athlete") await ensureTodayDemoSession(uid);
+      await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    }
     next();
   }
 

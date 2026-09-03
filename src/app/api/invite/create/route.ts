@@ -3,11 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { sendCoachInviteEmail } from "@/lib/email/inviteEmail";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
 
-// Score de départ neutre pour un placeholder d'invitation — même logique que les sportifs démo
-// (coach_athletes.wellness_score dénormalisé), en attendant que le vrai sportif rejoigne et
-// renseigne son propre wellness réel.
-const PLACEHOLDER_WELLNESS_SCORE = 68;
-const PLACEHOLDER_RPE_BASE = 5;
+// Calibré pour déclencher un vrai mismatch Alléger (2026-09-03, demande explicite de Gildas :
+// "séance démo" garantie sur le jour de l'inscription, y compris pour un invité pas-encore-rejoint —
+// avant, un score neutre 68/5 ne franchissait jamais le seuil de computeAutoregSuggestion, donc le
+// coach ne voyait jamais le vrai geste Alléger/Surcharger sur cette carte tant que le sportif n'avait
+// pas rejoint). Même paire que le sportif démo unique (Thomas M., OnboardingFlow.tsx) — un seul
+// mapping calibré, réutilisé partout où un profil démo/placeholder doit démontrer le geste réel.
+const PLACEHOLDER_WELLNESS_SCORE = 35;
+const PLACEHOLDER_RPE_BASE = 9;
 
 async function linkAthleteToCoach(admin: ReturnType<typeof createAdminClient>, coachId: string, athleteUserId: string) {
   const [{ data: athleteProfile }, { data: wellness }] = await Promise.all([
