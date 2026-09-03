@@ -2734,3 +2734,37 @@ Nouvel encart compact ajouté dans l'espace libéré en haut de l'écran, inspir
 `tsc --noEmit` propre à chaque round. Pas de clic réel par Claude après l'incident ci-dessus (Gildas testait lui-même en local) — le reste des vérifications (structure du bundle compilé, absence d'erreurs TypeScript) faites côté serveur uniquement.
 
 Déployé en prod le 2026-09-03, commit `fd840af`, push direct sur `main`.
+
+## DecisionStep — illustrations fidèles aux vraies surfaces prod, wording AHA, layout mobile (2026-09-04)
+
+Suite de plusieurs retours successifs de Gildas sur les 3 illustrations de `DecisionStep.tsx` (l'AHA post-`value_intro`, pré-`account`) — le 1er passage (2026-09-02, réutilisant `FullWellnessPreview`/`FullCoachControlPreview`, deux vraies `CoachCard` côte à côte) a été jugé pas assez fidèle aux vraies surfaces `/today`/`/coach/athletes` une fois testé en local.
+
+### Wording des 3 items — copies fournies verbatim par Gildas
+`items` (`DecisionStep.tsx`) mis à jour sur les 6 textes (titre+desc ×3, rôle-aware) : sportif "Découvre ta vraie forme du jour"/"Ajuste tes séances intelligemment"/"Anticipe tes pics de forme", coach "Vois qui est vraiment en forme"/"Ajuste les séances en un clic"/"Anticipe les risques de ton équipe" — remplace le wording de la 1re itération.
+
+### Step 1 sportif — `FullWellnessAdvicePreview` (remplace `FullWellnessPreview`/CoachCard)
+Reconstruit fidèlement la vraie carte "Score & conseils" de `/today` plutôt que de réutiliser `CoachCard` (dont le layout — ring+nom+séance imbriquée — ne correspond pas à cet écran) : ring (`WellnessRing`, score = `baseline.relativeScore`), zone relative (`relativeZoneLabel()`, "Fatigué"), 2 badges de comportements réels (`BEHAVIOR_META`), puis un bloc "✦ Conseils" à 2 encarts — ⚡ Entraînement (`loadRule()`, combinaison score bas + 3 jours durs consécutifs pour un texte concret "Bloc de surcharge...") et 🌿 Récupération (`getRecoveryAdvice()`, comportement négatif `late_sleep` loggé en premier pour le tip dédié "vise un coucher avant 23h ce soir") — **aucun encart d'ajustement/suggestion** ("sans ajustements", demande explicite). Réduite à `maxWidth:460` + centrée en desktop (retour ultérieur, "réduit un peu la largeur").
+
+### Step 1 coach — `CoachAthleteRowsPreview` (remplace les 2 `CoachCard` côte à côte)
+3 lignes empilées verticalement, reproduisant EXACTEMENT le rendu de la liste `/coach/athletes` (ring, nom, sport, badges Charge/Récupération, bandeau d'insight coloré) plutôt que le layout Coach Control (`CoachCard`) — demande explicite avec capture à l'appui ("3 avec 3 wellness différents comme dans /athletes"). `AthleteRing`/`athleteStatus` (`AthletesClient.tsx`) exportées pour l'occasion (zéro changement de comportement, juste le mot-clé `export`) et réutilisées telles quelles ; le badge Charge utilise `sigDimInfo("load",...)` déjà importée dans `FrisePreviews.tsx`. Données illustratives (Léa Girard/Karim Haddad/Sofia Renard, 3 scores/insights différents) calquées sur une vraie capture fournie par Gildas. Aucune séance, aucun encart de décision/ajustement — juste ce que la liste repliée de `/coach/athletes` montre.
+
+### Step 2 sportif — `SingleSessionAdjustPreview` (nouveau, remplace `ProgramPreview3Days` pour ce rôle)
+Une seule carte séance (aujourd'hui) au lieu de 2 jours — `DayColumn`/`WeekSessionCard` réels, alerte Alléger au-dessus, et le rendu avant/après barré de chaque ligne d'exercice (`parseAndApply(line, suggestion.reco)`, même convention que `CoachCard`'s propre bloc séance — ancienne valeur barrée grise au-dessus, nouvelle en gras orange). Élargie (`maxWidth:280→360`) et exercices toujours visibles (retours ultérieurs). Coach garde `ProgramPreview3Days` inchangée (2 jours, tabs sportifs) — ce nouveau composant est réservé au sportif.
+
+### Step 2 coach — `ProgramPreview3Days` : centrée + exercices barrés
+Deux retouches sur le composant existant (2026-09-04, retours ultérieurs) : (1) grille 2 colonnes centrée en desktop (`maxWidth:500, margin:"0 auto"`, elle tenait déjà largement dans la colonne 720px, pas de scroll nécessaire) ; (2) le jour d'alerte affiche désormais ses exercices barrés/ajustés (`renderExerciseLine`, même style que le nouveau composant sportif) — sur desktop **et** mobile (`notes` n'est plus conditionné à `isMd`, demande explicite "je voudrais aussi qu'on voit les exercices barrés" en mobile).
+
+### CTA retirés — illustrations 100% passives
+Sur demande explicite ("enlève les CTA → Maintenir / ⬇ Alléger → et + Ajouter une séance"), les 2 composants ci-dessus perdent leurs derniers éléments interactifs : `alertActions` (le bloc `AutoregButtons` avec les boutons Maintenir/Alléger, jusque-là visible en desktop) supprimé entièrement, `hideAddSession` toujours vrai (plus de CTA "+ Ajouter une séance"). L'encart d'alerte texte reste affiché, juste sans bouton. `noopOriginal` (devenu mort après ce retrait) supprimé au passage.
+
+### Layout mobile — restructuré en 2 temps
+1. **Illustration dans un emplacement unique, pas interleavée** (capture de référence à l'appui, "le texte en haut, et l'image toujours en bas des 3 textes") : `BulletItem` ne rend plus jamais l'illustration lui-même (`showIllustration` retiré) — les 3 titres (+ sous-titre de l'actif) restent groupés en haut, l'illustration de l'item actif se déplie dans un unique bloc `key={activeIdx}` sous la liste complète des 3 bullets, qui peut déborder en bas (zone scrollable, CTA reste dans son footer `flexShrink:0` sticky).
+2. **Fond de ce bloc** : 1re version posait un fond clair `#f1f0ee` façon "sheet" derrière l'illustration (cohérent avec la colonne desktop) — retiré sur retour explicite ("laisse le BG dark en mobile derrière les illustrations") : le bloc est redevenu transparent, les illustrations (cartes dark ou carte blanche `DayColumn`) reposent directement sur le fond `#141414` de toute la page mobile.
+
+### Step 3 (les 2 rôles) — `CombinedInsightPreview`, largeur/hauteur ajustées
+2 retours successifs : largeur desktop resserrée (`chartMaxWidth` 620→460, carte+chart resserrés ensemble, `maxWidth:460` + centrage sur le wrapper) ; puis hauteur mobile fixée en aspect-ratio exact — le viewBox interne de `SparkLineClient` a une largeur fixe `W=400` (`preserveAspectRatio="none"`, le SVG s'étire à 100% de la largeur du conteneur avec ce ratio W/H), donc passer `height=230` sur mobile donne très précisément `aspect-ratio: 400 / 230` (demande explicite), sans changer le composant partagé lui-même.
+
+### Vérifié
+`tsc --noEmit` propre après chaque round (tsconfig temporaire excluant `.next`, `next dev` de Gildas actif en continu pendant toute la session). Pas de clic réel par Claude — serveur local laissé à sa disposition, comme demandé explicitement à plusieurs reprises dans les chantiers précédents ("je vais tester moi-même").
+
+Déployé en prod le 2026-09-04, commit `3f18e8d`, push direct sur `main`.
