@@ -33,7 +33,9 @@ import type { LastTestByAthlete } from "@/lib/testSummary";
 // l'ancienne scoreColor(s) ignorait le paramètre trend, donc un score élevé (vert) avec un trend
 // "accumulation"/"fatigue_persistante" affichait "À surveiller" en vert au lieu de rouge.
 const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
-function athleteStatus(s: number | null, trend?: TrendCode | null): { label: string; color: string } {
+// Exportée : réutilisée telle quelle par l'illustration onboarding "3 sportifs" (DecisionStep,
+// via FrisePreviews.tsx) — même règle produit, pas une réimplémentation locale (2026-09-04).
+export function athleteStatus(s: number | null, trend?: TrendCode | null): { label: string; color: string } {
   if (s === null) return { label: "Non renseigné", color: "#8a8f94" };
   if (trend && TREND_WATCH.has(trend)) return { label: "À surveiller", color: "#d10000" };
   if (s >= 75) return { label: "Disponible", color: "#2f9e44" };
@@ -179,7 +181,8 @@ function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, t
   );
 }
 
-function AthleteRing({ score }: { score: number | null }) {
+// Exportée pour la même raison qu'athleteStatus ci-dessus.
+export function AthleteRing({ score }: { score: number | null }) {
   const r = 20;
   const circ = +(2 * Math.PI * r).toFixed(1);
   const offset = score === null ? circ : +(circ * (1 - score / 100)).toFixed(1);

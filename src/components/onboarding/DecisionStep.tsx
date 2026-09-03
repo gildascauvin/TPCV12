@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { FullWellnessPreview, FullCoachControlPreview, ProgramPreview3Days, CombinedInsightPreview } from "@/components/paywall/FrisePreviews";
+import { FullWellnessAdvicePreview, CoachAthleteRowsPreview, ProgramPreview3Days, SingleSessionAdjustPreview, CombinedInsightPreview } from "@/components/paywall/FrisePreviews";
 import type { SessionTemplate } from "@/types";
 
 /* Écran de décision — 9e itération (2026-09-02, dernière refonte de la journée) : garde le split
@@ -33,14 +33,21 @@ import type { SessionTemplate } from "@/types";
    passé de blanc à `#f1f0ee` (2026-09-02, "bg gris comme en prod") — les 3 illustrations sont soit
    des cartes dark, soit des cartes blanches (SessionMiniCard) : les secondes doivent reposer sur le
    vrai fond de page de l'app, pas sur du blanc pur.
-   Illustrations, réutilisent les VRAIS composants prod tels quels (FrisePreviews.tsx) :
-     1 → FullWellnessPreview() (le vrai CoachCard, selfView, score "Frais") /
-         FullCoachControlPreview() (2 vraies CoachCard côte à côte, coach — une alléger, une surcharger).
-     2 → ProgramPreview3Days({role,sport}) — SessionMiniCard + vrai PlanningRing sur 2 jours (hier +
-         aujourd'hui), tabs sportifs pour le coach, vraie alerte "Alléger recommandé" au-dessus de la
-         séance du jour.
+   Illustrations, réutilisent les VRAIS composants prod tels quels (FrisePreviews.tsx) — révisées
+   une 2e fois le 2026-09-04 (retour de Gildas après un 1er passage jugé pas assez fidèle) :
+     1 → FullWellnessAdvicePreview() côté sportif — reconstruit la vraie carte "Score & conseils" de
+         /today (ring, zone relative, comportements, blocs ⚡ Entraînement/🌿 Récupération via
+         loadRule()/getRecoveryAdvice()), SANS encart d'ajustement (pas de suggestion affichée).
+         CoachAthleteRowsPreview() côté coach — 3 lignes empilées, exactement le rendu de la liste
+         /coach/athletes (AthleteRing/athleteStatus réexportées d'AthletesClient.tsx, badge Charge
+         via sigDimInfo), 3 scores différents, sans séance ni encart de décision/ajustement.
+     2 → SingleSessionAdjustPreview({sport}) côté sportif — une seule carte séance (DayColumn/
+         WeekSessionCard), alerte Alléger + rendu avant/après barré de chaque ligne d'exercice
+         (parseAndApply()). ProgramPreview3Days({role,sport}) inchangée côté coach (2 jours, tabs
+         sportifs), désormais centrée en desktop et avec le même rendu avant/après barré sur le jour
+         d'alerte.
      3 → CombinedInsightPreview({perspective}) — un seul vrai SparkLineClient, ligne wellness +
-         ligne charge, avec l'insight croisé (TrendInsight) au-dessus.
+         ligne charge, avec l'insight croisé (TrendInsight) au-dessus. Inchangée.
    `role` déjà connu à ce stade (choisi sur `value_intro`, qui précède ce step et reste inchangé) :
    wording role-aware normal. Toujours sans geste interactif réel (Alléger/Surcharger + célébration)
    — décision de Gildas plus tôt le même jour, reportée post-signup ; les boutons visibles dans les
@@ -88,24 +95,24 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
 
   const items = [
     {
-      title: coach ? "Suis la forme de tes sportifs" : "Obtiens ton score de forme",
+      title: coach ? "Vois qui est vraiment en forme" : "Découvre ta vraie forme du jour",
       desc: coach
         ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
-        : "Sommeil, stress, courbatures et comportements de la veille : ton score calculé chaque matin.",
-      illustration: coach ? <FullCoachControlPreview /> : <FullWellnessPreview athleteName={athleteName} />,
+        : "Sommeil, stress, courbatures et comportements de la veille : ton score est calculé chaque matin.",
+      illustration: coach ? <CoachAthleteRowsPreview /> : <FullWellnessAdvicePreview />,
     },
     {
-      title: "Ajuste tes séances",
+      title: coach ? "Ajuste les séances en un clic" : "Ajuste tes séances intelligemment",
       desc: coach
-        ? "Surcharge ou allège les séances de tes sportifs afin d'optimiser leurs gains de performance et éviter les blessures."
-        : "Surcharge ou allège tes séances afin d'optimiser tes gains de performance et éviter les blessures.",
-      illustration: <ProgramPreview3Days role={role} sport={sport} athleteName={athleteName} />,
+        ? "Surcharge ou allège les séances de tes sportifs pour optimiser leurs gains de performance et éviter les blessures."
+        : "Surcharge ou allège tes séances pour optimiser tes gains de performance et éviter les blessures.",
+      illustration: coach ? <ProgramPreview3Days role={role} sport={sport} athleteName={athleteName} /> : <SingleSessionAdjustPreview sport={sport} />,
     },
     {
-      title: "Obtiens des recommandations",
+      title: coach ? "Anticipe les risques de ton équipe" : "Anticipe tes pics de forme",
       desc: coach
         ? "Sache ce qui freine ou aide la performance de tes sportifs, prédit leurs pics de forme et évite le sur-entraînement."
-        : "Sache ce qui te freine et ce qui aide ta performance, prédit tes pics de forme et évite le sur-entraînement.",
+        : "Sache ce qui te freine et ce qui t'aide, prédit tes pics de forme et évite le sur-entraînement.",
       illustration: <CombinedInsightPreview perspective={coach ? "coach" : "athlete"} />,
     },
   ];
@@ -139,11 +146,12 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
     </div>
   );
 
-  // Une seule ligne d'item, partagée desktop/mobile — `showIllustration` bascule entre le mode
-  // desktop (illustration pinnée séparément dans la colonne blanche, jamais rendue ici) et le mode
-  // accordéon mobile (2026-09-02 : "titre, sous titre, image (quand étendu)" — l'illustration de
-  // l'item actif se déplie directement sous son texte, en flux normal).
-  function BulletItem({ item, i, showIllustration }: { item: typeof items[number]; i: number; showIllustration: boolean }) {
+  // Une seule ligne d'item, partagée desktop/mobile — ne rend plus jamais l'illustration elle-même
+  // (2026-09-04, retour de Gildas : les 3 titres/sous-titre doivent tous rester visibles en haut,
+  // l'illustration de l'item actif se déplie dans un unique emplacement partagé SOUS la liste des
+  // 3 bullets, jamais interleavée entre deux d'entre eux — voir le bloc dédié dans chaque branche
+  // desktop/mobile plus bas, qui remplace l'ancien `showIllustration` sur ce composant).
+  function BulletItem({ item, i }: { item: typeof items[number]; i: number }) {
     const isActive = i === activeIdx;
     return (
       <button
@@ -176,11 +184,6 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
               {item.desc}
             </div>
           )}
-          {isActive && showIllustration && (
-            <div key={i} style={{ marginTop: 16, animation: "stepIn 0.25s ease" }}>
-              {item.illustration}
-            </div>
-          )}
         </div>
       </button>
     );
@@ -188,7 +191,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
 
   const bulletsList = (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {items.map((item, i) => <BulletItem key={item.title} item={item} i={i} showIllustration={false} />)}
+      {items.map((item, i) => <BulletItem key={item.title} item={item} i={i} />)}
     </div>
   );
 
@@ -236,9 +239,13 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
   }
 
   // Mobile — accordéon en flux normal, toute la page en fond sombre (2026-09-02, remplace le split
-  // "illustration pinnée / bullets fixes" de la même journée — voir doc en tête de fichier) : frise
-  // → items (titre toujours visible, sous-titre + illustration dépliés sous l'item actif) → CTA en
-  // footer non-scrollable, même fond sombre continu du haut en bas de l'écran.
+  // "illustration pinnée / bullets fixes" de la même journée — voir doc en tête de fichier). Refonte
+  // 2026-09-04 (retour explicite de Gildas, capture à l'appui) : les 3 titres (+ sous-titre de
+  // l'actif) restent TOUJOURS tous visibles en haut, jamais coupés par une illustration interleavée
+  // — l'illustration de l'item actif se déplie dans un unique bloc blanc à coins arrondis SOUS la
+  // liste complète des 3 bullets (peut déborder en bas, la zone est scrollable), plutôt que sous
+  // l'item lui-même. CTA reste un footer `flexShrink:0` non-scrollable en bas (même convention que
+  // partout ailleurs dans l'onboarding) — toujours visible même si l'illustration est haute.
   return (
     <div style={{
       width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw",
@@ -247,8 +254,13 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
     }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 8px" }}>
         {timerBars}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {items.map((item, i) => <BulletItem key={item.title} item={item} i={i} showIllustration />)}
+        {bulletsList}
+        {/* Fond sombre conservé derrière l'illustration (2026-09-04, retour de Gildas) — pas de
+            carte claire dessous, contrairement à la colonne desktop (#f1f0ee) : ici l'illustration
+            (carte dark ou carte blanche selon l'item) repose directement sur le fond `#141414` de
+            toute la page. */}
+        <div key={activeIdx} style={{ marginTop: 24, animation: "stepIn 0.25s ease" }}>
+          {active.illustration}
         </div>
       </div>
       <div style={{ flexShrink: 0, background: "#141414", padding: "14px 20px 24px", display: "flex", gap: 10 }}>

@@ -8,15 +8,17 @@ import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, WELLNESS_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
 import DayColumn, { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
-import { CoachCard } from "@/components/coach/CoachAthleteCard";
+import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
 import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
+import { parseAndApply } from "@/lib/loadAdjust";
+import { loadRule } from "@/lib/loadRule";
 import { classifyTrend, describeTrend, trendSeverity, trendActionWord, type TrendInput } from "@/lib/trainingLoad";
 import { sigDimInfo, chargeCrossInsight, recoveryCrossInsight } from "@/lib/fatigueSignature";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
+import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import type { CoachAthlete, CoachViewSession } from "@/types";
 
 /* Illustrations sous chaque point de la frise paywall_priming (Enregistre/Cible/Progresse) —
    fonctions/composants réels de l'app, alimentés par des données illustratives statiques (aucun
@@ -346,74 +348,123 @@ export function CoachControlPreview({ name }: { name?: string }) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
-   Obtiens ton score de forme — 2026-09-04, demande explicite de Gildas : "une wellness card
-   complète avec un bon score 'Frais', et coach control cards pour le coach (les mêmes composants
-   qu'en prod, avec animation des wellness ring en arrivant)". Remplace WellnessCardPreview/
-   CoachControlPreview ci-dessus (compacts, `zoom:0.85`, pas le vrai CoachCard) pour CE step —
-   celles-ci restent utilisées ailleurs (frise paywall_priming), pas touchées. Réutilise le VRAI
-   `CoachCard` (CoachAthleteCard.tsx, /coach en prod) tel quel — l'animation du ring (stroke-
-   dashoffset) est déjà intégrée au composant, se déclenche simplement au montage avec un vrai
-   score. `pointerEvents:none` (illustration passive — décision de Gildas plus tôt le même jour :
-   "le geste on le fera post signup"), handlers en no-op. */
-const noopOriginal = async () => undefined;
-function buildPreviewAthlete(id: string, name: string, score: number, behaviors: string[]): CoachAthlete {
-  return {
-    id, coach_id: "preview", name, sport: "", wellness_score: score, behaviors,
-    wellnessFilledToday: true, user_id: null, invite_email: null, created_at: new Date().toISOString(),
-  };
-}
-function buildPreviewSession(id: string, athleteId: string, name: string, notes: string, diff: number): CoachViewSession {
-  return {
-    id, athlete_id: athleteId, date: formatDate(new Date(), "yyyy-MM-dd"),
-    name, notes, duration: null, rpe: null, done: false,
-    target_difficulty: diff, created_at: new Date().toISOString(), _real: false,
-  };
-}
+   Obtiens ton score de forme (2026-09-04, item 1 de DecisionStep) — `pointerEvents:none`
+   (illustration passive, décision de Gildas : "le geste on le fera post signup").
+   ──────────────────────────────────────────────────────────────────────── */
 
-export function FullWellnessPreview({ athleteName }: { athleteName?: string }) {
-  const score = 88; // "Frais" — bon score, demande explicite
-  const baseline = syntheticBaselineFor(score, "preview-form-full");
-  const athlete = buildPreviewAthlete("preview-form-full", athleteName?.trim() || "Toi", score, ["hydration", "stretching"]);
-  const session = buildPreviewSession("preview-form-full-session", "preview-form-full", "Séance du jour", "Squat — 5×5 @ 80kg\nGainage complet — 3×40s", 6);
+/* Athlète, step 1 (2026-09-04, retour explicite de Gildas — remplace la version CoachCard/selfView
+   ci-dessus, jugée pas assez proche de la vraie carte "Score & conseils" de /today) : reconstruit
+   fidèlement cette carte — ring, zone relative (`relativeZoneLabel`), badges de comportements réels
+   (`BEHAVIOR_META`), puis un bloc "✦ Conseils" à 2 encarts (⚡ Entraînement via `loadRule()`, 🌿
+   Récupération via `getRecoveryAdvice()` — mêmes fonctions que /today, texte non réinventé) —
+   AUCUN encart de suggestion/ajustement ("sans ajustements", demande explicite). Score bas +
+   3 jours durs consécutifs + comportement négatif loggé : combinaison choisie pour que loadRule()
+   ET getRecoveryAdvice() retournent chacun un texte concret et réaliste (pas un repli générique). */
+export function FullWellnessAdvicePreview() {
+  const { isMd } = useBreakpoint();
+  const wellnessScore = 20;
+  const baseline = syntheticBaselineFor(wellnessScore, "preview-wellness-advice");
+  const zone = relativeZoneLabel(baseline);
+  const behaviors = ["late_sleep", "social_out"];
+  const rule = loadRule([{ target_difficulty: 8, done: false }], { prevMax: 8, nextMax: 8 });
+  const advice = getRecoveryAdvice({ sleep: 4, stress: 7, recovery: 3, motivation: 5, behaviors }, rule.cls, baseline);
+
+  // Réduite en desktop (2026-09-04, retour de Gildas) — pas de maxWidth en mobile (pleine largeur
+  // de la colonne, comme partout ailleurs dans ce fichier).
   return (
-    <div style={{ pointerEvents: "none" }}>
-      <CoachCard
-        athlete={athlete} sessions={[session]} isPriority={false} isReviewed={false} selfView
-        baseline={baseline}
-        onDecide={noop} onApplyAdjust={noopOriginal} onUndoAdjust={noopAsync}
-        onAutoregDecided={noop} onAutoregUndone={noop}
-      />
+    <div style={{
+      width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
+      background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 18,
+      color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)", pointerEvents: "none",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+        <WellnessRing score={baseline?.relativeScore ?? wellnessScore} size={72} strokeWidth={6} dark />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
+            Score & conseils
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 7 }}>{zone}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+            {behaviors.map(b => {
+              const meta = BEHAVIOR_META[b];
+              if (!meta) return null;
+              return (
+                <span key={b} style={{ fontSize: 9.5, padding: "3px 7px", borderRadius: 999, background: "rgba(212,64,0,.22)", color: "#ffd2bf" }}>
+                  {meta.emoji} {meta.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 14 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 9 }}>
+          ✦ Conseils
+        </div>
+        <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <span style={{ fontSize: 13 }}>⚡</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Entraînement</div>
+              <div style={{ fontSize: 12, lineHeight: 1.45, color: "#fff" }}>{rule.title}. {rule.text}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", borderTop: "1px solid rgba(255,255,255,.07)", paddingTop: 10 }}>
+            <span style={{ fontSize: 13 }}>🌿</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Récupération</div>
+              <div style={{ fontSize: 12, lineHeight: 1.45, color: "#fff" }}>{advice}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* Coach : 2 vraies CoachCard côte à côte (2026-09-02, demande explicite de Gildas : "j'en veux 2
-   côte à côté, une à surcharger, l'autre à alléger") — plus 3 cartes empilées. Karim (score bas +
-   séance dure) déclenche une suggestion "Alléger", Sofia (score haut + séance légère) déclenche
-   "Surcharger" — les 2 issues réelles du mécanisme visibles d'un coup d'œil. Côte à côte dès `isMd`,
-   empilées sur mobile (2 CoachCard pleine largeur l'une à côté de l'autre y serait illisibles). */
-export function FullCoachControlPreview() {
-  const { isMd } = useBreakpoint();
-  const allAthletes: { athlete: CoachAthlete; session: CoachViewSession; baselineScore: number }[] = [
-    { athlete: buildPreviewAthlete("preview-karim", "Karim Haddad", 38, ["late_sleep", "screen_late"]), session: buildPreviewSession("preview-karim-s", "preview-karim", "Sprint — Vitesse max", "Accélérations — 6×20m\nSprint — 4×40m", 8), baselineScore: 38 },
-    { athlete: buildPreviewAthlete("preview-sofia", "Sofia Renard", 90, ["hydration", "stretching"]), session: buildPreviewSession("preview-sofia-s", "preview-sofia", "Récupération active", "Mobilité — 15min\nCardio léger — 20min", 3), baselineScore: 90 },
-  ];
-  // Une seule carte en mobile (2026-09-02, demande explicite de Gildas) — garde Karim (Alléger),
-  // cohérent avec le jour d'alerte mis en premier sur l'item 2 juste à côté.
-  const athletes = isMd ? allAthletes : allAthletes.slice(0, 1);
+/* Coach, step 1 (2026-09-04, retour explicite de Gildas — remplace les 2 CoachCard côte à côte
+   ci-dessus, jugées pas fidèles à ce qu'il voulait : "3 avec 3 wellness différents comme dans
+   /athletes") : 3 lignes empilées, EXACTEMENT le rendu de la liste `/coach/athletes` (ring, nom,
+   sport, badges Charge/Récupération, bandeau d'insight coloré) — `AthleteRing`/`athleteStatus`
+   réutilisées telles quelles depuis AthletesClient.tsx (exportées pour l'occasion, aucun changement
+   de comportement), `sigDimInfo("load",...)` déjà importée dans ce fichier pour le badge Charge.
+   Aucune séance, aucun encart de décision/ajustement — juste ce que /athletes montre en ligne
+   repliée + son bandeau d'insight. Données illustratives calquées sur une vraie capture de Gildas. */
+interface RowPreviewData { name: string; sport: string; recovery: number; acwr: number; emoji: string; action: string; text: string }
+const COACH_ROWS_PREVIEW: RowPreviewData[] = [
+  { name: "Léa Girard", sport: "Haltérophilie", recovery: 35, acwr: 1.0, emoji: "🟡", action: "Réduire", text: "À charge stable (0%), sa récupération se dégrade : sa tolérance à la charge semble baisser." },
+  { name: "Karim Haddad", sport: "Sprint", recovery: 50, acwr: 1.0, emoji: "🟡", action: "Réduire", text: "À charge stable (0%), sa récupération se dégrade : sa tolérance à la charge semble baisser." },
+  { name: "Sofia Renard", sport: "CrossFit", recovery: 85, acwr: 1.0, emoji: "🟢", action: "Maintenir", text: "Charge et signaux corporels stables cette semaine : rien de notable, le plan actuel lui convient." },
+];
+export function CoachAthleteRowsPreview() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMd ? "1fr 1fr" : "1fr", gap: 10, pointerEvents: "none" }}>
-      {athletes.map(({ athlete, session, baselineScore }) => {
-        const baseline = syntheticBaselineFor(baselineScore, athlete.id);
-        const suggestion = computeAutoregSuggestion(baselineScore, session.target_difficulty ?? 6, baseline);
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, pointerEvents: "none" }}>
+      {COACH_ROWS_PREVIEW.map(row => {
+        const status = athleteStatus(row.recovery);
+        const chargeInfo = sigDimInfo("load", row.acwr, "coach");
         return (
-          <CoachCard
-            key={athlete.id}
-            athlete={athlete} sessions={[session]} isPriority={!!suggestion} isReviewed={false}
-            baseline={baseline}
-            onDecide={noop} onApplyAdjust={noopOriginal} onUndoAdjust={noopAsync}
-            onAutoregDecided={noop} onAutoregUndone={noop}
-          />
+          <div key={row.name} style={{ background: "#fff", border: "1px solid rgba(47,158,68,.20)", borderRadius: 26, padding: 18, boxShadow: "0 8px 24px rgba(47,158,68,.07)" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <AthleteRing score={row.recovery} />
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428" }}>{row.name}</div>
+                <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>{row.sport}</div>
+              </div>
+              <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: chargeInfo.color, whiteSpace: "nowrap" }}>{chargeInfo.label}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 12, padding: "9px 13px", borderRadius: 12, background: "rgba(0,0,0,.035)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
+              {row.emoji} <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{row.action} — </span>{row.text}
+            </div>
+          </div>
         );
       })}
     </div>
@@ -428,12 +479,12 @@ export function FullCoachControlPreview() {
    `DayColumn` (ring, zone label `formLabel()`, encart alerte/rule-box, "Séances · N" — même
    composant que /week/coach/planning, même grille horizontale `--wk-col` que `HyroxWeekPlanning`
    plus haut) remplace le rendu maison SessionMiniCard+PlanningRing, DESKTOP ET MOBILE désormais
-   (un seul rendu, plus de branche `isMd` séparée) — seuls 3 détails restent conditionnels :
-   1) le jour de l'alerte est TOUJOURS la 1re colonne (demande explicite : "mets le jour de l'alerte
-      en premier"), 2) les exercices ne s'affichent que sur desktop (`notes` vide sur mobile — la
-      capture de référence n'en montre pas), 3) le CTA "+ Ajouter une séance" (`hideAddSession` sur
-      DayColumn, voir calendar/DayColumn.tsx) et les boutons Alléger/Maintenir de l'alerte ne sont
-      rendus qu'en desktop — le mobile reste un pur aperçu texte, sans aucun geste actionnable. */
+   (un seul rendu, plus de branche `isMd` séparée) — le jour de l'alerte est TOUJOURS la 1re colonne
+   (demande explicite : "mets le jour de l'alerte en premier"), avec ses exercices barrés/ajustés
+   (`renderExerciseLine`, visible desktop et mobile depuis le 2026-09-04). Aucun geste actionnable
+   nulle part (illustration passive) : ni CTA "+ Ajouter une séance" (`hideAddSession` toujours vrai)
+   ni boutons Alléger/Maintenir de l'alerte — les deux retirés le 2026-09-04, demande explicite de
+   Gildas. */
 const PROGRAM3_TABS = ["Léa Girard", "Karim Haddad", "Sofia Renard", "Thomas Morel", "Nora Lefebvre"];
 // Score du jour de l'alerte bas, score de l'autre jour sain — le ring raconte visuellement pourquoi
 // l'alerte se déclenche sur ce jour précis, pas sur l'autre.
@@ -456,18 +507,6 @@ export function ProgramPreview3Days({ role, sport, athleteName }: { role: "athle
     border: `${badgeColor}66`, glow: badgeColor,
     text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, alertDiff, coach ? name : undefined)}`,
   } : undefined;
-  // Réservés au desktop (2026-09-02, demande explicite : "enlève-les des 2 layouts, ne les laisse
-  // qu'en desktop") — mobile n'a jamais de CTA actionnable.
-  const alertActions = isMd && suggestion ? (
-    <div style={{ pointerEvents: "none" }}>
-      <AutoregButtons
-        sessionId="program3-alert" dir={suggestion.dir} reco={suggestion.reco}
-        advice="" sessionLabel={previews[0]?.name ?? ""} severityColor={badgeColor} variant="light"
-        onPreviewChange={noop} onApply={noopOriginal} onMaintenir={noop}
-      />
-    </div>
-  ) : undefined;
-
   // Jour de l'alerte en premier, l'autre jour ensuite.
   const days = [0, 1].map(i => ({
     date: addDays(today, i === 0 ? 0 : -1), isAlertDay: i === 0,
@@ -491,12 +530,15 @@ export function ProgramPreview3Days({ role, sport, athleteName }: { role: "athle
     <div style={{ width: "100%" }}>
       {tabs}
       <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, var(--wk-col, 240px))", gap: 10 }}>
+        {/* Centré en desktop (2026-09-04, retour explicite de Gildas) — 2 colonnes tiennent
+            largement dans la colonne d'illustration (720px), plus besoin de scroll ni d'ancrage
+            à gauche ; mobile garde son scroll horizontal naturel, jamais de largeur maximale. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, var(--wk-col, 240px))", gap: 10, maxWidth: isMd ? 500 : undefined, margin: isMd ? "0 auto" : undefined }}>
           {days.map(({ date, isAlertDay, score }, i) => {
             const p = previews[i] ?? previews[0];
             const sessions: SessionLike[] = [{
               id: `program3-demo-${i}`, date: formatDate(date, "yyyy-MM-dd"),
-              name: p.name, notes: isMd ? p.exercises.join("\n") : null,
+              name: p.name, notes: p.exercises.join("\n"),
               duration: null, rpe: isAlertDay ? null : p.diff, done: !isAlertDay, target_difficulty: p.diff,
             }];
             return (
@@ -504,15 +546,99 @@ export function ProgramPreview3Days({ role, sport, athleteName }: { role: "athle
                 key={i}
                 date={date} sessions={sessions} wellness={{ score }} todayStr={todayStr}
                 onAddSession={HYROX_NOOP} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} onWellness={HYROX_NOOP}
-                hideAddSession={!isMd}
-                alert={isAlertDay ? alert : undefined} alertActions={isAlertDay ? alertActions : undefined}
+                hideAddSession
+                alert={isAlertDay ? alert : undefined}
                 renderSession={s => (
-                  <WeekSessionCard session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }} />
+                  <WeekSessionCard
+                    session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }}
+                    renderExerciseLine={isAlertDay && suggestion ? (line, li) => {
+                      const modified = parseAndApply(line, suggestion.reco);
+                      const changed = modified !== line;
+                      return (
+                        <div style={{ padding: "6px 9px", borderTop: li > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                          {changed && (
+                            <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>
+                              {line}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600 }}>
+                            {modified}
+                          </div>
+                        </div>
+                      );
+                    } : undefined}
+                  />
                 )}
               />
             );
           })}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* Athlète, step 2 (2026-09-04, retour explicite de Gildas — remplace `ProgramPreview3Days` pour
+   ce rôle : "une seule [séance] avec ajustement de décharge, il faudrait montrer les exos barrés
+   aussi") : une seule carte séance (aujourd'hui), même `DayColumn`/`WeekSessionCard` que le reste
+   de ce fichier, avec l'alerte Alléger + le rendu avant/après barré des exercices — aucun CTA
+   actionnable (bouton Alléger/Maintenir retiré, illustration passive, même règle que
+   `ProgramPreview3Days`). Coach garde `ProgramPreview3Days` inchangée (2 jours, tabs sportifs) —
+   ce composant est réservé au sportif. */
+export function SingleSessionAdjustPreview({ sport }: { sport?: string }) {
+  const { isMd } = useBreakpoint();
+  const today = new Date();
+  const todayStr = formatDate(today, "yyyy-MM-dd");
+  const previews = (sport && SPORT_SESSION_PREVIEW[sport]) || DEFAULT_SESSIONS;
+  const p = previews[0];
+
+  const score = 35;
+  const diff = p?.diff ?? 8;
+  const baseline = syntheticBaselineFor(score, "preview-single-session-alert");
+  const suggestion = computeAutoregSuggestion(score, diff, baseline);
+  const badgeColor = suggestion ? suggestionSeverityColor(suggestion) : "#d44000";
+  const alert = suggestion ? {
+    border: `${badgeColor}66`, glow: badgeColor,
+    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, diff)}`,
+  } : undefined;
+  const sessions: SessionLike[] = [{
+    id: "single-session-demo", date: todayStr,
+    name: p?.name ?? "Séance du jour", notes: (p?.exercises ?? []).join("\n"),
+    duration: null, rpe: null, done: false, target_difficulty: diff,
+  }];
+
+  // Largeur élargie (2026-09-04, retour de Gildas) — n'est plus contrainte à var(--wk-col), qui
+  // vise une grille multi-colonnes non pertinente ici (une seule carte, jamais de scroll horizontal).
+  return (
+    <div style={{ width: "100%", display: "flex", justifyContent: isMd ? "center" : "flex-start" }}>
+      <div style={{ width: "100%", maxWidth: 360 }}>
+        <DayColumn
+          date={today} sessions={sessions} wellness={{ score }} todayStr={todayStr}
+          onAddSession={HYROX_NOOP} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} onWellness={HYROX_NOOP}
+          hideAddSession
+          alert={alert}
+          renderSession={s => (
+            <WeekSessionCard
+              session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }}
+              renderExerciseLine={suggestion ? (line, li) => {
+                const modified = parseAndApply(line, suggestion.reco);
+                const changed = modified !== line;
+                return (
+                  <div style={{ padding: "6px 9px", borderTop: li > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
+                    {changed && (
+                      <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>
+                        {line}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600 }}>
+                      {modified}
+                    </div>
+                  </div>
+                );
+              } : undefined}
+            />
+          )}
+        />
       </div>
     </div>
   );
@@ -685,11 +811,15 @@ function acwrToChartPosition(v: number): number {
 }
 export function CombinedInsightPreview({ perspective }: { perspective: "athlete" | "coach" }) {
   const { isMd } = useBreakpoint();
-  const chartHeight = isMd ? 190 : 110;
-  const chartMaxWidth = isMd ? 620 : 460;
+  // Desktop réduit (2026-09-04, retour de Gildas : 620→460, carte+chart resserrés ensemble) ;
+  // mobile en aspect-ratio 400/230 (le viewBox SVG de SparkLineClient a une largeur interne fixe
+  // W=400 — passer height=230 donne exactement ce ratio, demande explicite de Gildas).
+  const chartHeight = isMd ? 190 : 230;
+  const chartMaxWidth = 460;
   return (
     <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
+      width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
+      background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
       boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       <TrendInsight perspective={perspective} />
