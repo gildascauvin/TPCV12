@@ -1,12 +1,12 @@
 "use client";
 
-import { startOfWeek, addDays, format as formatDate } from "date-fns";
+import { addDays, format as formatDate } from "date-fns";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
-import SparkLineClient, { FORM_ZONES, WELLNESS_ZONES, formToChartPosition } from "@/components/conseils/SparkLineClient";
+import SparkLineClient, { WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
 import DayColumn, { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
 import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
 import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
@@ -15,7 +15,7 @@ import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSev
 import { parseAndApply } from "@/lib/loadAdjust";
 import { loadRule } from "@/lib/loadRule";
 import { classifyTrend, describeTrend, trendSeverity, trendActionWord, type TrendInput } from "@/lib/trainingLoad";
-import { sigDimInfo, chargeCrossInsight, recoveryCrossInsight } from "@/lib/fatigueSignature";
+import { sigDimInfo } from "@/lib/fatigueSignature";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -138,100 +138,10 @@ export function ProgramWithRingsPreview({ sport }: { sport?: string }) {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────────────
-   Enregistre (2026-09-04, retour explicite de Gildas : "plutôt qu'une
-   animation coûteuse, mets des icônes Excel/PDF/Word avec des flèches vers
-   le program preview") — remplace l'ancienne séquence à 3 phases minutées
-   (tableau Excel simulé → champ collé → révélé, `setTimeout` en cascade,
-   plusieurs `@keyframes` tournant en boucle) par un rendu STATIQUE : 3
-   badges de format (Excel/PDF/Word, couleurs officielles de chaque format)
-   + une flèche, posés au-dessus du programme déjà révélé. Un seul rendu,
-   aucun state/effect/timer — le sens ("importe où que soit ton programme")
-   reste identique, le coût (CPU, re-renders, complexité) disparaît.
-   Programme affiché : VRAIE semaine (7 jours) dans le VRAI composant
-   planning (`DayColumn`/`WeekSessionCard`, calendar/DayColumn.tsx —
-   littéralement le même composant que /week et /coach/planning, pas une
-   reconstruction — voir HyroxWeekPlanning ci-dessous, inchangée par ce
-   passage). Contenu fixe (vrai vocabulaire Hyrox — curriculum réel
-   `selectHyrox()`, voir CLAUDE.md — plutôt qu'un exemple générique). */
-const FILE_TYPES: { label: string; emoji: string; bg: string }[] = [
-  { label: "Excel", emoji: "📊", bg: "#217346" },
-  { label: "PDF", emoji: "📄", bg: "#b30b00" },
-  { label: "Word", emoji: "📝", bg: "#2b579a" },
-];
-
-/* Contenu par jour (index 0=Lun...6=Dim), null = repos — 4 séances réelles du curriculum Hyrox
-   (selectHyrox(), generate/route.ts), espacées avec repos entre pour ne jamais enchaîner 2 jours
-   durs (même règle que le vrai générateur). */
-const HYROX_WEEK_SESSIONS: (({ name: string; notes: string; diff: number }) | null)[] = [
-  { name: "Endurance fonctionnelle", notes: "Course — 45min Zone 2\nGainage complet — 3×40s", diff: 5 },
-  { name: "Force & Conditioning", notes: "Sled push — 4×20m\nKettlebell swings — 4×15\nRowing — 500m", diff: 7 },
-  null,
-  { name: "Simulation de stations", notes: "Ski erg — 500m\nBurpees broad jump — 40m\nWall balls — 50 reps @ 9kg\nFarmers carry — 200m", diff: 8 },
-  null,
-  { name: "Run long", notes: "Course — 60min Zone 2", diff: 6 },
-  null,
-];
+// HYROX_NOOP : partagé avec ProgramPreview3Days/SingleSessionAdjustPreview plus bas (handlers
+// no-op pour DayColumn/WeekSessionCard dans une illustration passive) — pas seulement propre à
+// une ancienne illustration "Importe ton programme" (retirée le 2026-09-05, dead code).
 const HYROX_NOOP = () => {};
-
-function HyroxWeekPlanning() {
-  const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const todayStr = formatDate(new Date(), "yyyy-MM-dd");
-  return (
-    <div style={{ width: "100%", overflowX: "auto", paddingBottom: 4 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 240px))", gap: 10 }}>
-        {HYROX_WEEK_SESSIONS.map((meta, i) => {
-          const date = addDays(monday, i);
-          const sessions: SessionLike[] = meta ? [{
-            id: `hyrox-demo-${i}`, date: formatDate(date, "yyyy-MM-dd"), name: meta.name, notes: meta.notes,
-            duration: null, rpe: null, done: false, target_difficulty: meta.diff,
-          }] : [];
-          return (
-            <DayColumn
-              key={i}
-              date={date} sessions={sessions} wellness={null} todayStr={todayStr}
-              onAddSession={HYROX_NOOP} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} onWellness={HYROX_NOOP}
-              renderSession={s => (
-                <WeekSessionCard session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }} />
-              )}
-            />
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export function ImportWowPreview() {
-  return (
-    <div style={{ width: "100%" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 8 }}>
-        📥 Importe ton programme existant
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 18, marginBottom: 6 }}>
-        {FILE_TYPES.map(f => (
-          <div key={f.label} style={{ textAlign: "center" }}>
-            <div style={{
-              width: 42, height: 42, borderRadius: 12, background: f.bg, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 19,
-              boxShadow: "0 4px 12px rgba(0,0,0,.14)",
-            }}>
-              {f.emoji}
-            </div>
-            <div style={{ fontSize: 9, fontWeight: 800, color: "#8a8f94", marginTop: 4 }}>{f.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ textAlign: "center", fontSize: 18, color: "#c7ccd1", marginBottom: 10 }}>↓</div>
-
-      <div>
-        <HyroxWeekPlanning />
-      </div>
-    </div>
-  );
-}
 
 /* ────────────────────────────────────────────────────────────────────────
    Cible (sportif) : carte "Score & conseils" + reco décharge/surcharge —
@@ -713,92 +623,15 @@ export function AthleteChargePreview() {
   );
 }
 
-/* ────────────────────────────────────────────────────────────────────────
-   Signature (charge + récupération) : les 2 vrais charts de /conseils —
-   ZoneSparkline (charge) et SparkLineClient (récupération, dégradé bleu +
-   Forme pointillée) — chacun avec SON insight croisé (chargeCrossInsight/
-   recoveryCrossInsight, mêmes fonctions que /conseils, fatigueSignature.ts),
-   empilés dans une seule carte. Remplace ChargePreview/AthleteChargePreview
-   au step 3 de la séquence DecisionStep (2026-09-04, demande explicite de
-   Gildas : "le chart de charge et celui de récupération avec les insight à
-   chaque fois"). Données illustratives statiques (aucun historique n'existe
-   encore à ce stade du funnel) — même arc narratif positif déjà établi pour
-   DEMO_ACWR ci-dessus (surcharge → correction → stabilisé) et prolongé côté
-   récupération (amélioration progressive, Forme qui remonte) : cohérent
-   avec "Progresse", pas un signal négatif juste avant le paywall. */
 // Variation jour à jour volontairement plus marquée (2026-09-04, retour de Gildas : "plus de
 // variation") — jamais monotone comme une vraie semaine ne l'est, tout en gardant le dernier jour
 // positif (cohérent avec l'arc narratif "Progresse" déjà établi côté charge, voir DEMO_ACWR).
+// Réutilisée par CombinedInsightPreview plus bas (série wellness du chart co-tracé).
 const DEMO_RECOVERY = [55, 38, 62, 48, 70, 58, 82];
-const DEMO_FORM_PCT = [-15, -5, -10, 3, -2, 8, 14];
-
-function SignatureSectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 6 }}>
-      {children}
-    </div>
-  );
-}
-
-function ChargeSection({ perspective, chartHeight, chartMaxWidth }: { perspective: "athlete" | "coach"; chartHeight: number; chartMaxWidth: number }) {
-  const loadInfo = sigDimInfo("load", DEMO_ACWR[DEMO_ACWR.length - 1], perspective);
-  const monotonyInfo = sigDimInfo("monotony", DEMO_MONOTONY[DEMO_MONOTONY.length - 1], perspective);
-  const strainInfo = sigDimInfo("strain", DEMO_STRAIN[DEMO_STRAIN.length - 1], perspective);
-  const insight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo, undefined, undefined, perspective);
-  return (
-    <div>
-      <SignatureSectionLabel>⚡ Charge</SignatureSectionLabel>
-      <div style={{ marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>{insight}</div>
-      <div style={{ maxWidth: chartMaxWidth }}>
-        <ZoneSparkline points={DEMO_ACWR} dates={DEMO_DATES} loads={DEMO_LOADS} monotony={DEMO_MONOTONY} strain={DEMO_STRAIN} hideDayLabels height={chartHeight} />
-      </div>
-    </div>
-  );
-}
-
-function RecoverySection({ perspective, chartHeight, chartMaxWidth }: { perspective: "athlete" | "coach"; chartHeight: number; chartMaxWidth: number }) {
-  const recoveryInfo = sigDimInfo("recovery", DEMO_RECOVERY[DEMO_RECOVERY.length - 1], perspective);
-  const formValue = DEMO_FORM_PCT[DEMO_FORM_PCT.length - 1];
-  const insight = recoveryCrossInsight(recoveryInfo, formValue, perspective);
-  return (
-    <div>
-      <SignatureSectionLabel>🌿 Récupération</SignatureSectionLabel>
-      <div style={{ marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>{insight}</div>
-      <div style={{ maxWidth: chartMaxWidth }}>
-        <SparkLineClient
-          points={DEMO_RECOVERY} dates={DEMO_DATES} color={recoveryInfo.color} maxVal={100} height={chartHeight}
-          metricType="recovery" uid="frise-recovery-demo" chartType="line" sequentialFill zones1={WELLNESS_ZONES}
-          points2={DEMO_FORM_PCT.map(formToChartPosition)} points2Raw={DEMO_FORM_PCT} zones2={FORM_ZONES}
-        />
-      </div>
-    </div>
-  );
-}
-
-// Charts plus hauts en desktop (2026-09-04, retour de Gildas : "que les 2 charts prennent plus de
-// place en hauteur en desktop") — 96px partout à l'origine, calibré pour la colonne mobile étroite ;
-// isMd élargit aussi le plafond de largeur en proportion, pour ne pas étirer les charts au point de
-// les rendre disproportionnés.
-export function SignaturePreview({ perspective }: { perspective: "athlete" | "coach" }) {
-  const { isMd } = useBreakpoint();
-  const chartHeight = isMd ? 190 : 100;
-  const chartMaxWidth = isMd ? 620 : 460;
-  return (
-    <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
-      boxShadow: "0 14px 36px rgba(0,0,0,.24)", display: "flex", flexDirection: "column", gap: 16,
-    }}>
-      <ChargeSection perspective={perspective} chartHeight={chartHeight} chartMaxWidth={chartMaxWidth} />
-      <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
-      <RecoverySection perspective={perspective} chartHeight={chartHeight} chartMaxWidth={chartMaxWidth} />
-    </div>
-  );
-}
 
 /* Obtiens des recommandations — 2026-09-04, demande explicite de Gildas : "qu'un seul graph dans
    lequel il y aura le chart avec une ligne pour le wellness et l'autre pour la charge, toujours avec
-   sparkline et insight croisé en haut" — remplace SignaturePreview (2 charts empilés) pour CE step
-   (SignaturePreview reste utilisée ailleurs si besoin, pas touchée). Insight croisé = TrendInsight,
+   sparkline et insight croisé en haut". Insight croisé = TrendInsight,
    déjà réel (classifyTrend/describeTrend, combine charge+récupération+RPE en une seule phrase — voir
    ChargePreview/AthleteChargePreview ci-dessus, même fonction, pas dupliquée). Chart = le vrai
    SparkLineClient (même composant que /conseils), série principale = wellness (déjà 0-100), série
