@@ -710,7 +710,21 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   const isToday = dstr === todayStr;
                   const inMonth = date.getMonth() === anchor.getMonth();
                   const daySessions = monthSessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-                  const wellScore = dayWellness(athlete, dstr, monthWellnessMap, wellnessBaselineHistory);
+                  const wellRaw = dayWellness(athlete, dstr, monthWellnessMap, wellnessBaselineHistory);
+                  /* Score relatif (baseline Z-score), pas absolu — vue Mois oubliée lors de
+                     l'unification wellness relatif (2026-08-30/31), même bug que côté sportif
+                     (WeekClient.tsx) trouvé par Gildas : ring différent entre header/vue Semaine et
+                     grille Mois pour le même jour, alors que loadMonth() fetch déjà
+                     wellnessBaselineHistory pour ce calcul. Même pattern que la vue Semaine
+                     ci-dessous (dayRelativeScore, ~ligne 856) — un seul chiffre, jamais deux. */
+                  const monthAthleteHistory = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
+                  const monthDayBaseline = wellRaw !== null
+                    ? computeWellnessBaselineAt(
+                        monthAthleteHistory.filter(w => w.date < dstr),
+                        { score: wellRaw, base_score: wellRaw, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
+                      )
+                    : null;
+                  const wellScore = monthDayBaseline?.hasEnoughHistory ? monthDayBaseline.relativeScore : wellRaw;
 
                   return (
                     <div

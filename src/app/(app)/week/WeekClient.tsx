@@ -675,7 +675,18 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   const inMonth = date.getMonth() === anchor.getMonth();
                   const daySessions = monthSessions.filter(s => s.date === dstr);
                   const wellness = monthWellness.find(w => w.date === dstr) ?? null;
-                  const score = wellness ? wellnessSignal(wellness) : null;
+                  /* Score relatif (baseline Z-score), pas absolu — vue Mois oubliée lors de
+                     l'unification wellness relatif (2026-08-30/31), seule surface encore sur
+                     wellnessSignal() brut alors que loadMonth() fetch déjà wellnessBaselineHistory
+                     pour ça (bug réel trouvé par Gildas : ring différent entre header/chart et
+                     grille Mois pour le même jour). Même calcul que la vue Semaine ci-dessus
+                     (dayRelativeScore) — un seul chiffre, jamais deux. */
+                  const monthDayBaseline = wellness?.bedtime != null
+                    ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < dstr), wellness)
+                    : null;
+                  const score = monthDayBaseline?.hasEnoughHistory
+                    ? monthDayBaseline.relativeScore
+                    : (wellness ? wellnessSignal(wellness) : null);
 
                   return (
                     <div
