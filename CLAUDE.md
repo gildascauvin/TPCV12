@@ -2795,3 +2795,28 @@ Décisions prises avec Gildas avant exécution (`AskUserQuestion`) : retirer le 
 `tsc --noEmit` propre — vérifié indépendamment après le rapport des forks (pas seulement pris pour acquis), avec un spot-check manuel supplémentaire : lecture directe du type `StepId`/des 5 tableaux de path/`getPath()` dans le fichier final, `grep` de contrôle confirmant zéro référence réelle résiduelle (imports/appels) aux fichiers/fonctions supprimés à travers tout `src/` (seules les mentions en commentaire ci-dessus subsistent), et confirmation que la régression `advanceMaybeGenerating` est bien résolue (plus aucune occurrence). `npm run build` jamais lancé (dev server de Gildas actif en continu — risque de corruption `.next` déjà documenté ailleurs dans ce fichier).
 
 Déployé en prod le 2026-09-05, commit `19f519b`, push direct sur `main`.
+
+## Nettoyage du code mort — hors onboarding (2026-09-05, suite)
+
+Gildas a demandé s'il restait du code mort ailleurs dans le repo, le chantier précédent n'ayant couvert que l'onboarding ("Je n'ai pas audité tout le reste du repo — routes API, autres pages `(app)/`, scripts"). Même méthode : audit en lecture seule d'abord (fork), liste vérifiée présentée à Gildas, décision explicite sur le seul cas ambigu, puis exécution.
+
+### Audit
+Exploite d'abord les mentions déjà auto-documentées dans ce fichier (grep sur "code mort"/"jamais utilisé"/"orphelin"/etc.), reconfirmées une par une sur le code actuel plutôt que prises pour acquises, puis un balayage systématique "zéro import" sur `src/components/`, `src/lib/`, `src/hooks/` et les routes `src/app/api/**/route.ts`. Explicitement exclus du périmètre : les duplications connues et toujours utilisées (`WellnessRingPOC`/`WellnessRing`/`PlanningRing`, 3 rings distincts mais tous vivants — pas du code mort), les scripts `scripts/*.mjs` (convention du repo : gardés comme référence historique), et les routes webhook/cron externes (`/api/push/send`, `/api/stripe/webhook` — zéro appelant interne par design, normal).
+
+### Exécuté
+- **9 fichiers/routes entiers supprimés** (zéro référence ailleurs, vérifié individuellement par `grep` avant chaque suppression) :
+  - `WellnessCheckStep.tsx` — raté par le nettoyage précédent : le step `wellness_check_2a`/`wellness_check_2b` avait déjà disparu de tous les paths actifs (chantier du 2026-08-28), mais le fichier composant lui-même n'avait jamais été supprimé.
+  - `PWAInstallBanner.tsx`, `WeekGrid.tsx` (superseded par `DayColumn`/`CalendarHeader`), `AddAthleteModal.tsx`.
+  - La paire `AgentCard.tsx` + `/api/ai/route.ts` — toute la fonctionnalité "conseil IA" (distincte de l'analyse Claude du sport libre, `/api/sports/custom`, toujours vivante) semble abandonnée entièrement, aucun des deux côtés n'a plus d'appelant.
+  - `/api/invite/unlink` (superseded par `/api/athlete/delete`, utilisée par le bouton "Retirer" d'`AthletesClient.tsx`), `/api/onboarding/complete` (`onboarding_done` se pose désormais directement dans `OnboardingFlow.tsx`), `/api/stripe/checkout` (superseded par `/api/stripe/setup-intent`+`/api/stripe/subscribe` — ne connaissait même pas les prix annuels ajoutés le 2026-08-07, signe qu'il n'avait pas suivi l'évolution du vrai flux).
+- **10 exports isolés retirés de fichiers par ailleurs vivants**, chacun revérifié par `grep` sur tout `src/` avant suppression :
+  - `wellness.ts` : `computeDisplayScore`, `scoreLabel`, `getContextualInsight`, `getAdvice` (avec ses 3 helpers privés dédiés `yesterdayNote`/`trainingChainAdvice`/`recoveryAdvice`, uniquement appelés par elle) — `getContextualInsight`/`getAdvice` n'avaient plus qu'un seul appelant, le step `wellness_reveal`, supprimé par le chantier précédent. L'import `Session` (devenu inutile) retiré aussi.
+  - `trainingLoad.ts` (`buildLoadSeries`), `loadAdjust.ts` (`hasLoadChange`), `exerciseAutocomplete.ts` (`highlightMatch`), `conseilsData.ts` (`OBJECTIVE_LABELS`), `sessionTemplates.ts` (`nextDateForDow`), `sandboxFixtures.ts` (`debugCoachOutcomes`, avec son import `computeAutoregSuggestion` devenu mort — décision explicite de Gildas, "supprimer aussi" malgré le nom évoquant un helper debug console).
+  - `types/index.ts` : `AIAdvice` retiré, n'était plus utilisé que par la paire `AgentCard`/`api/ai` supprimée.
+
+**Résultat** : 17 fichiers touchés, **888 lignes supprimées, 1 insérée**.
+
+### Vérifié
+`tsc --noEmit` propre après chaque suppression et une dernière fois sur l'ensemble. `grep` de contrôle final sur les 10 noms d'export supprimés à travers tout `src/` : zéro résidu. `npm run build` jamais lancé (même précaution que d'habitude, dev server actif en parallèle).
+
+Déployé en prod le 2026-09-05, commit `2d0c54f`, push direct sur `main`.
