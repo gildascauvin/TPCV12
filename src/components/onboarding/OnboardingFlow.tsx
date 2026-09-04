@@ -840,7 +840,32 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      jours ne sont pas encore connus à ce moment-là. N'upsert que ce qui est déjà collecté ;
      complete Profile() referme le reste une fois le diagnostic terminé (déclenché à l'entrée de
      profile_recap, voir l'effet dédié plus bas). */
+  /* Garde-fou anti-écrasement (2026-09-05) — trouvé sur le compte réel de Gildas : une session
+     authentifiée retombée dans OnboardingFlow (reprise "auth mode", edge case Google OAuth déjà
+     documenté ailleurs dans ce fichier — ou un simple `onboarding_done` repassé à `false` à la main
+     pour retester l'écran, comme Gildas l'a fait lui-même) a réexécuté completeProfile() sur un
+     compte qui avait déjà terminé son onboarding, écrasant silencieusement 28 jours de wellness_daily
+     réel (comportements, scores) + le profil (sport/jours d'entraînement/objectif) avec les valeurs
+     générées/placeholder de ces deux fonctions. `profileCompleteGuardRef` protège déjà contre un
+     double appel DANS la même session ; `onboarding_done` seul ne suffit pas (contournable en 1 UPDATE
+     SQL, ce que Gildas a fait explicitement pour prévisualiser l'écran) — la vraie garantie est donc
+     posée sur la présence de données réelles déjà existantes (`wellness_daily`/`sessions` non vides
+     pour ce `uid`), jamais sur un flag qui peut mentir. Ne bloque jamais un premier passage légitime
+     (compte tout juste créé, aucune des deux tables n'a encore de ligne pour lui). */
+  async function alreadyHasRealHistory(uid: string): Promise<boolean> {
+    const [{ data: w }, { data: s }, { data: p }] = await Promise.all([
+      supabase.from("wellness_daily").select("id").eq("user_id", uid).limit(1),
+      supabase.from("sessions").select("id").eq("user_id", uid).limit(1),
+      supabase.from("profiles").select("onboarding_done").eq("user_id", uid).maybeSingle(),
+    ]);
+    return (w?.length ?? 0) > 0 || (s?.length ?? 0) > 0 || p?.onboarding_done === true;
+  }
+
   async function createAccount(uid: string) {
+    if (await alreadyHasRealHistory(uid)) {
+      console.error("[createAccount] refusé : compte avec historique réel, écriture bloquée", uid);
+      return;
+    }
     await supabase.from("profiles").upsert({
       user_id: uid,
       ...(name.trim() ? { name: name.trim() } : {}),
@@ -851,6 +876,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
 
   async function completeProfile(uid: string) {
+    if (await alreadyHasRealHistory(uid)) {
+      console.error("[completeProfile] refusé : compte avec historique réel, écriture bloquée (profil + wellness + sessions)", uid);
+      return;
+    }
     const sportValue = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre";
     await supabase.from("profiles").upsert({
       user_id: uid,
