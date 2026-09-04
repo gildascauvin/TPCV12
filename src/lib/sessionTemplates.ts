@@ -84,11 +84,3 @@ export function getSessionTemplates(sport: string): [string, string, number][] {
     ["Renforcement général",     "Squats au poids du corps 3x15\nGainage 3x30s\nFentes 3x10", 5],
   ];
 }
-
-export function nextDateForDow(dow: number): string {
-  const today = new Date();
-  const diff = ((dow - today.getDay()) + 7) % 7;
-  const d = new Date(today);
-  d.setDate(d.getDate() + diff);
-  return d.toISOString().split("T")[0];
-}

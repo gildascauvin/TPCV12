@@ -1,4 +1,4 @@
-import type { WellnessDaily, Session } from "@/types";
+import type { WellnessDaily } from "@/types";
 import { describeDrivingDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 export const POSITIVE_BEHAVIOR_KEYS = new Set([
@@ -25,20 +25,6 @@ export function computeWellnessScore(
 
 export function computeFatigueImpact(rpe: number, durationMinutes: number): number {
   return Math.min(Math.round((rpe * durationMinutes) / 60), 25);
-}
-
-export function computeDisplayScore(
-  wellnessScore: number,
-  dailyImpacts: number[]
-): number {
-  const totalImpact = dailyImpacts.reduce((a, b) => a + b, 0);
-  return Math.max(0, wellnessScore - totalImpact);
-}
-
-export function scoreLabel(score: number): "s-great" | "s-ok" | "s-low" {
-  if (score >= 70) return "s-great";
-  if (score >= 45) return "s-ok";
-  return "s-low";
 }
 
 export function zoneLabel(score: number | null): string {
@@ -85,96 +71,6 @@ export function wellnessColor(score: number | null): string {
   return rgbToHex([r1 + (r2 - r1) * localT, g1 + (g2 - g1) * localT, b1 + (b2 - b1) * localT]);
 }
 export { WELLNESS_RAMP };
-
-export function getContextualInsight(
-  wellness: Pick<WellnessDaily, "sleep" | "stress" | "recovery" | "motivation" | "score">,
-  postSession?: { displayScore: number; totalImpact: number }
-): string {
-  if (postSession && postSession.totalImpact > 0) {
-    const { displayScore, totalImpact } = postSession;
-    if (displayScore >= 65) return `Séance encaissée (−${totalImpact} pts) — récupération encore confortable`;
-    if (displayScore >= 45) return `Séance qui pèse (−${totalImpact} pts) — hydratation et sommeil ce soir`;
-    return `Charge élevée aujourd'hui (−${totalImpact} pts) — récupération prioritaire ce soir`;
-  }
-  const { sleep, stress, recovery, motivation } = wellness;
-  const signals = [
-    { value: sleep, low: sleep < 5, msg: "Sommeil court — intensité réduite recommandée" },
-    { value: 10 - stress, low: stress > 6, msg: "Stress élevé — favorise la récupération aujourd'hui" },
-    { value: recovery, low: recovery < 5, msg: "Récupération insuffisante — séance légère ou repos" },
-    { value: motivation, low: motivation < 5, msg: "Motivation en berne — commence doucement, ça viendra" },
-  ];
-  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
-  if (weakest) return weakest.msg;
-  if ((wellness.score ?? 0) >= 82) return "Tous les signaux au vert — fenêtre idéale pour t'entraîner";
-  return "Signaux stables — bon entraînement possible";
-}
-
-function yesterdayNote(doneYesterday: Session[]): string {
-  if (!doneYesterday.length) return "Hier : repos.";
-  const maxRpe = Math.max(...doneYesterday.map(s => s.rpe!));
-  return `Hier : séance à ${maxRpe}/10.`;
-}
-
-function trainingChainAdvice(doneToday: Session[], plannedToday: Session[], doneYesterday: Session[]): string {
-  const note = yesterdayNote(doneYesterday);
-  if (doneToday.length) {
-    const avgRpe = +(doneToday.reduce((a, s) => a + s.rpe!, 0) / doneToday.length).toFixed(1);
-    const mins = doneToday.reduce((a, s) => a + s.duration!, 0);
-    return `${doneToday.length} séance${doneToday.length > 1 ? "s" : ""} terminée${doneToday.length > 1 ? "s" : ""} · Effort moy. ${avgRpe}/10 · ${mins} min. ${note}`;
-  }
-  if (plannedToday.length) {
-    const diff = Math.max(...plannedToday.map(s => s.target_difficulty!));
-    return `Séance à ${diff}/10 prévue aujourd'hui. ${note}`;
-  }
-  return `Aucune séance prévue aujourd'hui. ${note}`;
-}
-
-function recoveryAdvice(
-  wellness: Pick<WellnessDaily, "score" | "sleep" | "stress" | "recovery" | "motivation"> | null,
-  doneToday: Session[],
-  postSession?: { totalImpact: number }
-): string {
-  if (!wellness) return "Remplis ta récupération pour voir ton état de forme.";
-  const score = wellness.score ?? 0;
-
-  if (doneToday.length && postSession && postSession.totalImpact > 0) {
-    const load = doneToday.reduce((a, s) => a + s.rpe! * s.duration!, 0);
-    const loadTip = load > 600 ? "Hydratation + glucides/protéines post-séance, coucher tôt et mobilité douce."
-      : load > 300 ? "Hydrate-toi bien, 10 min de mobilité et sommeil régulier."
-      : "Routine simple : hydratation, marche légère et sommeil stable.";
-    return `Récupération −${postSession.totalImpact} pts après l'effort. ${loadTip}`;
-  }
-
-  const { sleep, stress, recovery, motivation } = wellness;
-  const signals = [
-    { value: sleep, low: sleep < 5, msg: "Sommeil court", tip: "vise un coucher avant 23h ce soir" },
-    { value: 10 - stress, low: stress > 6, msg: "Stress élevé", tip: "priorise la récupération aujourd'hui" },
-    { value: recovery, low: recovery < 5, msg: "Récupération insuffisante", tip: "mobilité douce et hydratation prioritaires" },
-    { value: motivation, low: motivation < 5, msg: "Motivation en berne", tip: "sommeil et charge mentale à surveiller" },
-  ];
-  const weakest = signals.filter(s => s.low).sort((a, b) => a.value - b.value)[0];
-  if (weakest) return `${weakest.msg} (${score}/100) — ${weakest.tip}.`;
-
-  if (score >= 82) return `Tous les signaux au vert (${score}/100) — hydratation et sommeil réguliers suffisent.`;
-  if (score >= 65) return `Signaux stables (${score}/100) — routine simple : hydratation, sommeil régulier.`;
-  if (score >= 45) return `Récupération prudente (${score}/100) — priorise hydratation et sommeil ce soir.`;
-  return `Récupération fragile (${score}/100) — sommeil, nutrition simple, pas d'effort intense.`;
-}
-
-export function getAdvice(
-  wellness: Pick<WellnessDaily, "score" | "sleep" | "stress" | "recovery" | "motivation"> | null,
-  todaySessions: Session[],
-  yesterdaySessions: Session[] = [],
-  postSession?: { displayScore: number; totalImpact: number }
-): { training: string; recovery: string } {
-  const doneToday = todaySessions.filter(s => s.done && s.rpe && s.duration);
-  const plannedToday = todaySessions.filter(s => !s.done && s.target_difficulty);
-  const doneYesterday = yesterdaySessions.filter(s => s.done && s.rpe && s.duration);
-  return {
-    training: trainingChainAdvice(doneToday, plannedToday, doneYesterday),
-    recovery: recoveryAdvice(wellness, doneToday, postSession),
-  };
-}
 
 const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
   alcohol:       { label: "Alcool hier soir",     tip: "hydrate-toi bien, évite d'en reprendre ce soir" },

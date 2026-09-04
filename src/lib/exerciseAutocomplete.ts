@@ -1162,10 +1162,3 @@ export function getClickToken(text: string, pos: number): { token: string; token
 
   return { token, tokenStart, tokenEnd, fullLine };
 }
-
-export function highlightMatch(text: string, query: string): { pre: string; match: string; post: string } | null {
-  if (!query || query.length < 1) return null;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return null;
-  return { pre: text.slice(0, idx), match: text.slice(idx, idx + query.length), post: text.slice(idx + query.length) };
-}

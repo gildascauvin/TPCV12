@@ -1,6 +1,5 @@
 import { format, addDays } from "date-fns";
 import type { Profile, Session, WellnessDaily, CoachAthlete, CoachSession } from "@/types";
-import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -357,16 +356,4 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
   }
 
   return { signatures, trends, trendInsights, baselines, baselineSeries };
-}
-
-/* Vérification de cohérence — les 3 issues (Alléger/Maintenir/Surcharger) doivent bien apparaître
-   dans le dataset coach, sinon la démo "recommandation" ne montre pas tout ce qu'elle promet. Pas
-   un test formel (pas de suite de tests dans ce repo), juste une garde lisible en review de code. */
-export function debugCoachOutcomes(fixture: CoachFixture): { name: string; outcome: "alléger" | "surcharger" | "stable" }[] {
-  const today = fixture.sessionsByDate[fixture.todayStr] ?? [];
-  return fixture.athletes.map(a => {
-    const s = today.find(x => x.athlete_id === a.id);
-    const suggestion = s ? computeAutoregSuggestion(a.wellness_score, s.target_difficulty) : null;
-    return { name: a.name, outcome: suggestion ? (suggestion.dir === "low" ? "alléger" : "surcharger") : "stable" };
-  });
 }

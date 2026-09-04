@@ -87,10 +87,6 @@ export function parseAndApply(text: string, pct: number): string {
   return result;
 }
 
-export function hasLoadChange(before: string, pct: number): boolean {
-  return parseAndApply(before, pct) !== before;
-}
-
 // Répercute le même % sur la difficulté prévue (1-10) — une surcharge/décharge (charge ET volume)
 // doit aussi se voir sur la jauge, sinon la séance affiche un texte plus dur/plus léger avec une
 // difficulté inchangée. Alimente aussi les jauges dérivées (avgWeekRpe côté programmes).

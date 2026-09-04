@@ -31,16 +31,6 @@ export function dailyLoad(sessions: Pick<Session, "rpe" | "duration" | "done">[]
 
 export type LoadPoint = { date: string; load: number };
 
-export function buildLoadSeries(sessions: Session[], days: number, anchor: Date = new Date()): LoadPoint[] {
-  const points: LoadPoint[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const date = daysAgoStr(i, anchor);
-    const load = dailyLoad(sessions.filter(s => s.date === date));
-    points.push({ date, load });
-  }
-  return points;
-}
-
 export function rollingStats(series: LoadPoint[], windowDays: number): { mean: number; stdDev: number; sum: number } {
   const slice = series.slice(-windowDays);
   const vals = slice.map(p => p.load);

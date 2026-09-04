@@ -147,11 +147,6 @@ export interface FatigueLog {
   created_at: string;
 }
 
-export interface AIAdvice {
-  training: string;
-  recovery: string;
-}
-
 export type ProgramLevel = "debutant" | "intermediaire" | "avance" | "elite";
 export type ProgramFocus = "mixte" | "technique" | "volume" | "intensite" | "competition" | "combat" | "autre";
 export type SessionLoad = 1 | 2 | 3;

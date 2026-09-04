@@ -10,15 +10,6 @@ import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSigna
    voir ConseilsClient.tsx). Isolé de la génération/mise en page (JSX) qui reste dans ConseilsClient
    et BehaviorImpactCard. */
 
-export const OBJECTIVE_LABELS: Record<string, string> = {
-  performance:  "Performance",
-  longevite:    "Longévité",
-  stress:       "Gestion du stress",
-  composition:  "Composition corporelle",
-  equilibre:    "Équilibre",
-  rehab:        "Réhabilitation",
-};
-
 export function sessionStatusInfo(done: number, target: number): { label: string; color: string } {
   if (done >= target) return { label: "OBJECTIF ATTEINT", color: "#2f9e44" };
   if (done > 0)       return { label: "EN COURS",         color: "#f28a00" };
