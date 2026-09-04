@@ -2820,3 +2820,37 @@ Exploite d'abord les mentions déjà auto-documentées dans ce fichier (grep sur
 `tsc --noEmit` propre après chaque suppression et une dernière fois sur l'ensemble. `grep` de contrôle final sur les 10 noms d'export supprimés à travers tout `src/` : zéro résidu. `npm run build` jamais lancé (même précaution que d'habitude, dev server actif en parallèle).
 
 Déployé en prod le 2026-09-05, commit `2d0c54f`, push direct sur `main`.
+
+## Reconduire 1 séance (fix aperçu) + partage de programme (2026-09-05)
+
+Deux demandes distinctes de Gildas traitées dans le même chantier.
+
+### Reconduire une seule séance depuis le planning — CTA fantômes sur l'aperçu
+`DuplicateModal.tsx` (`/week`, `/coach/planning`) affichait déjà un aperçu de la copie via `WeekSessionCard` (même carte que le planning, avec la charge ajustée), mais sans le prop `hideActions` — contrairement à `ReconduireModal.tsx`, qui l'avait déjà (fix du 2026-08-29, section "Dupliquer une séance avec charge décharge/surcharge"). Les boutons Terminer/Dupliquer restaient donc visibles et cliquables sur une carte qui n'est qu'un aperçu en lecture seule. Fix en une ligne : `hideActions` ajouté sur le `WeekSessionCard` de l'aperçu — même prop déjà exposé par `DayColumn.tsx`, jamais branché ici par oubli.
+
+### Lien de partage `/p/[id]` — remplace "Se connecter"
+Sur demande de Gildas ("plutôt que 'Se connecter' en haut à droite des programmes partagés, je veux un lien de partage qui copie l'URL de l'iframe public") : `PublicProgramView.tsx` remplace le lien `/login` par un bouton "🔗 Partager" qui copie `window.location.href` (l'URL de la page elle-même, celle utilisée en iframe WP) dans le presse-papier, avec confirmation "✓ Copié" transitoire.
+
+### Même bouton dans l'éditeur de programme, in-app et wizard
+`ProgramBuilderModal.tsx` gagne un prop optionnel `onShare?: (name, template) => Promise<string>` — bouton "🔗 Partager" dans la topbar, à côté du nom éditable. Réponse à la question de Gildas ("un programme pas encore sauvegardé est quand même partageable ?") : **oui, volontairement** — cliquer Partager sauvegarde silencieusement le programme (crée la ligne en base si elle n'existe pas, la met à jour sinon) avant de copier le lien, un lien `/p/[id]` ayant besoin d'une vraie ligne pour exister.
+- **In-app** (`ProgramLibraryPage.tsx`) : `onShare` crée/met à jour via les mêmes routes que "Enregistrer en librairie", jamais gaté par abonnement — seule S1 est visible pour un visiteur non connecté sur `/p/[id]` (verrouillage déjà en place depuis le 2026-07-15/2026-08-19), donc partager reste un bon levier PLG même pour un compte gratuit.
+- **Wizard onboarding** (`OnboardingFlow.tsx`, `wizard_builder`) : `handleWizardShare()`, même logique (réutilise `wizardProgramId` s'il existe déjà), mais **sans jamais appeler `next()`** — partager n'est pas terminer le wizard, contrairement à `handleWizardSaveToLibrary`.
+- **Sandbox** : nouveau prop `shareGated?: boolean` sur `ProgramBuilderModal.tsx` — en sandbox, le clic passe par `gate()` (ouvre `SandboxGateModal`, "Créer ton compte") au lieu d'appeler `onShare` directement, puisqu'aucun compte réel n'existe pour persister le programme en cours d'édition. Décision de Gildas après discussion sur le risque d'une route publique d'écriture anonyme (spam potentiel sur des URLs publiques `go.theperfclub.com/p/[id]`) : "nice to have, pas besoin, on peut laisser gated" — pas de route publique construite pour ce cas.
+
+### Bibliothèque publique (`ProgramLibraryBrowser.tsx`, "Modèle") — partage ungated, y compris en sandbox
+Nuance soulevée par Gildas : contrairement au programme en cours d'édition (pas encore sauvegardé), les programmes de la bibliothèque "Modèle" (servie par `/api/programs/library`, publique, sans auth) sont **déjà** `is_public=true` en base — l'URL `/p/[id]` existe déjà, aucune écriture n'est nécessaire pour la partager. Bouton "🔗 Partager" ajouté sur chaque carte, ungated dans tous les contextes (sandbox incluse) : copie directement `${origin}/p/${p.id}`, jamais d'appel réseau. La ligne (`<button>`) a dû être changée en `<div onClick=...>` pour permettre d'y nester le bouton Partager sans bouton-dans-bouton (HTML invalide).
+
+### `ProgramLibraryPage.tsx` — réorganisation des cartes
+Demande explicite : ne garder que "Assigner →" et "✏️ Modifier" comme CTA visibles en permanence dans la ligne d'actions du bas ; Dupliquer et Supprimer passent derrière un menu "⋯" (petit dropdown ancré, backdrop `position:fixed` pour fermer au clic extérieur) ; le bouton Partager reste en haut à droite de la carte (`position:absolute`), pas dans la ligne d'actions.
+
+### Bug réel trouvé et corrigé : "Partager" pouvait dépublier un programme déjà partagé
+Signalé par Gildas en repensant au bouton une fois déployé : *"pourquoi le bouton change d'aspect ensuite comme étant 'partagé' ? Si je veux repartager un programme déjà public [ex. les 64 de son compte coach], ça va le unshare ?"* — root cause confirmée par lecture de code : l'ancien `toggleShare(p)` inversait bêtement `is_public` à chaque clic (`next = !p.is_public`) ; recliquer "Partager" sur un programme déjà public le rendait donc **privé** au lieu de simplement recopier le lien. Vérifié en base (`execute_sql`, lecture seule) que le compte coach `contact@theperfclub.com` (id `8d73ebd5-f200-4d09-af0c-707fd223836a`) possède bien les 64 programmes publics de la bibliothèque — c'était exactement le compte concerné par ce bug.
+
+**Fix, en 2 temps** : une 1re version a introduit une distinction explicite public/privé (`sharePublicly` idempotent + "🔒 Rendre privé" séparé dans le menu "⋯") — puis simplifiée sur demande directe de Gildas ("tous les programmes sont partageables par défaut, pas besoin de rendre public ou privé") : `toggleShare` → **`shareProgram`**, qui ne fait plus **jamais** basculer un programme vers privé — il s'assure juste que `is_public=true` (écrit seulement si nécessaire, no-op sinon) puis copie le lien. Aucune notion public/privé exposée à l'utilisateur ; le style du bouton ne réagit plus qu'à la confirmation transitoire "✓ Copié", plus jamais à `p.is_public`.
+
+**Confirmé à Gildas, explicitement vérifié avant de répondre** : aucune de ces corrections n'a touché aux vrais programmes de la bibliothèque — seules des requêtes `SELECT` en lecture seule ont été exécutées en base pendant l'investigation (jamais d'écriture), la route `/p/[id]` elle-même n'a pas été modifiée, et les ids/URLs existants sont inchangés. Les liens déjà partagés (bibliothèque WP, `/p/[id]` existants) continuent de fonctionner à l'identique.
+
+### Vérifié
+`tsc --noEmit` propre après chaque round (via un `tsconfig.notnext.json` temporaire excluant `.next` — le dev server de Gildas restait actif en parallèle, piège de faux positif `.next/types` déjà documenté ailleurs dans ce fichier). **Non testé au clic réel** — Gildas a testé lui-même en local avant de demander le déploiement (c'est en testant ainsi qu'il a trouvé le bug `toggleShare`).
+
+Déployé en prod le 2026-09-05, commit `1410b0c`, push direct sur `main`, confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
