@@ -209,6 +209,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
             onComplete={() => {}}
             onEdit={() => {}}
             onDuplicate={() => {}}
+            hideActions
             cardStyle={{ cursor: "default" }}
             renderExerciseLine={(_ex, i) => {
               const { line, after } = rendered[i];

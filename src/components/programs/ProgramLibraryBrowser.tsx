@@ -73,6 +73,19 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
   const [error, setError] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
+
+  /* Toujours ungated, y compris en sandbox : ces programmes sont déjà `is_public=true` en base
+     (bibliothèque publique réelle, servie par la même route que /p/[id]) — l'URL existe déjà,
+     copier le lien n'écrit rien nulle part. Différent du bouton de ProgramBuilderModal.tsx (le
+     programme y est encore local, potentiellement jamais sauvegardé — celui-là reste gaté en
+     sandbox, voir sa doc). */
+  function copyLink(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(`${window.location.origin}/p/${id}`).catch(() => {});
+    setLinkCopied(c => ({ ...c, [id]: true }));
+    setTimeout(() => setLinkCopied(c => ({ ...c, [id]: false })), 2000);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -179,14 +192,14 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
               {filtered.map(p => {
                 const icon = categoryFor(p.sport).icon;
                 return (
-                  <button
+                  <div
                     key={p.id}
                     onClick={() => selectProgram(p)}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: 14,
                       padding: "16px", borderRadius: 18, border: "1px solid rgba(0,0,0,.08)",
                       background: "#fff", boxShadow: "0 2px 10px rgba(0,0,0,.03)",
-                      cursor: "pointer", textAlign: "left",
+                      cursor: "pointer", textAlign: "left", boxSizing: "border-box" as const,
                     }}
                   >
                     <div style={{ width: 46, height: 46, borderRadius: 13, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
@@ -198,8 +211,20 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
                         {[p.sport, p.level ? LEVEL_LABELS[p.level] : null, `${p.weeks_count} semaines`, `${p.sessions_per_week}j/sem`].filter(Boolean).join(" · ")}
                       </div>
                     </div>
+                    <button
+                      onClick={e => copyLink(e, p.id)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 5, flexShrink: 0, whiteSpace: "nowrap",
+                        padding: "7px 11px", borderRadius: 10,
+                        border: `1.5px solid ${linkCopied[p.id] ? "#d44000" : "rgba(0,0,0,.10)"}`,
+                        background: linkCopied[p.id] ? "rgba(212,64,0,0.06)" : "#fff",
+                        color: linkCopied[p.id] ? "#d44000" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      {linkCopied[p.id] ? "✓ Copié" : "🔗 Partager"}
+                    </button>
                     <span style={{ color: "#c7ccd1", fontSize: 16, flexShrink: 0 }}>›</span>
-                  </button>
+                  </div>
                 );
               })}
             </div>

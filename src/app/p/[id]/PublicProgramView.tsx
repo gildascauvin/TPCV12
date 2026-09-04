@@ -20,6 +20,19 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
   const [isEmbedded, setIsEmbedded] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  function handleCopyLink() {
+    posthog.capture("program_cta_clicked", {
+      program_id: program.id,
+      program_name: program.name,
+      cta: "copy_share_link",
+      is_embedded: isEmbedded,
+    });
+    navigator.clipboard.writeText(window.location.href).catch(() => {});
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
 
   useEffect(() => {
     let embedded = false;
@@ -118,7 +131,18 @@ export default function PublicProgramView({ program, coachName }: Props) {
             )}
           </div>
         </div>
-        <a href="/login" target={isEmbedded ? "_blank" : undefined} rel="noreferrer" style={{ fontSize: 13, fontWeight: 600, color: "#8a8f94", textDecoration: "none" }}>Se connecter</a>
+        <button
+          onClick={handleCopyLink}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+            padding: "7px 12px", borderRadius: 10, cursor: "pointer",
+            border: `1.5px solid ${linkCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
+            background: linkCopied ? "rgba(212,64,0,0.06)" : "#fff",
+            color: linkCopied ? "#d44000" : "#8a8f94", fontSize: 13, fontWeight: 700,
+          }}
+        >
+          {linkCopied ? "✓ Copié" : "🔗 Partager"}
+        </button>
       </div>
 
       {/* Week tabs */}

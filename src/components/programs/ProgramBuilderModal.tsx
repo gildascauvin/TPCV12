@@ -366,9 +366,23 @@ interface Props {
   /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
      injectée au-dessus de la topbar réelle — absent = comportement inchangé (usage in-app). */
   wizardHero?: React.ReactNode;
+  /* Lien de partage /p/[id] (2026-09-04) — sauvegarde/rend public le programme (via l'appelant,
+     qui sait créer ou mettre à jour selon le contexte) et retourne l'URL à copier. Jamais gaté
+     par abonnement (requireSubscription) pour un compte réel : seule S1 est visible pour un
+     visiteur non connecté sur /p/[id] (PublicProgramView.tsx), donc partager reste utile — et
+     souhaité — pour un compte gratuit (acquisition PLG). Absent = pas de bouton (repli permissif,
+     aucun appelant n'est cassé). */
+  onShare?: (name: string, template: ProgramTemplate) => Promise<string>;
+  /* Sandbox uniquement (2026-09-05) : aucun compte n'existe encore, donc rien n'est réellement
+     persistable — le clic doit passer par `gate()` (qui ouvre SandboxGateModal sans jamais
+     appeler `onShare`, exactement le même comportement que "Enregistrer en librairie"/"Assigner"
+     en sandbox) plutôt que d'appeler `onShare` directement (qui viserait des routes
+     authentifiées et échouerait). Absent/false = comportement inchangé (in-app + wizard,
+     partage jamais gaté). */
+  shareGated?: boolean;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
@@ -378,6 +392,24 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const [duplicateDay, setDuplicateDay] = useState<{ weekIdx: number; day: string } | null>(null);
   const [saving, setSaving] = useState<"library" | "assign" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  async function handleShare() {
+    if (!onShare || sharing) return;
+    setSharing(true);
+    setSaveError(null);
+    try {
+      const url = await onShare(name, template);
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      setSaveError("Erreur lors du partage.");
+    } finally {
+      setSharing(false);
+    }
+  }
 
   const week = template.weeks[weekIdx];
   /* Flou + overlay au-delà de S1 pour un compte non actif — même pattern que /p/[id]
@@ -548,6 +580,22 @@ export default function ProgramBuilderModal({ programName: initialName, template
           style={{ flex: 1, fontSize: 16, fontWeight: 800, color: "#171b1f", border: "none", outline: "none", background: "transparent", letterSpacing: "-0.02em", minWidth: 0 }}
           placeholder="Nom du programme"
         />
+        {onShare && (
+          <button
+            onClick={() => (shareGated ? gate(handleShare) : handleShare())}
+            disabled={sharing}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+              padding: "7px 12px", borderRadius: 10, whiteSpace: "nowrap",
+              border: `1.5px solid ${shareCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
+              background: shareCopied ? "rgba(212,64,0,0.06)" : "#fff",
+              color: shareCopied ? "#d44000" : "#8a8f94",
+              fontSize: 13, fontWeight: 700, cursor: sharing ? "not-allowed" : "pointer", opacity: sharing ? 0.6 : 1,
+            }}
+          >
+            {shareCopied ? "✓ Copié" : "🔗 Partager"}
+          </button>
+        )}
       </div>
 
       {/* Week tabs */}

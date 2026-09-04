@@ -104,6 +104,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : { type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   /* Sortie d'un step "création" (new/criteria/builder/assign) — 2026-09-01. En standalone
      (/programmes), revient à l'écran liste de CETTE page. En modal (WeekClient.tsx/
@@ -172,20 +173,26 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     fetchPrograms();
   }
 
-  async function toggleShare(p: Program) {
-    const next = !p.is_public;
-    await fetch(`/api/programs/${p.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_public: next }),
-    });
-    if (next) {
-      const url = `${window.location.origin}/p/${p.id}`;
-      navigator.clipboard.writeText(url).catch(() => {});
-      setLinkCopied(c => ({ ...c, [p.id]: true }));
-      setTimeout(() => setLinkCopied(c => ({ ...c, [p.id]: false })), 2000);
+  /* Partager — tous les programmes sont partageables par défaut (2026-09-05, simplifié à la
+     demande de Gildas après un 1er design public/privé jugé inutilement compliqué — bug réel
+     trouvé au passage : l'ancienne version "toggleShare" inversait is_public à chaque clic, donc
+     re-cliquer "Partager" sur un programme déjà public — ex. les 64 de la bibliothèque du compte
+     coach — le rendait privé). Aucune notion de public/privé exposée à l'user : le clic garantit
+     juste que le lien existe (is_public reste un détail d'implémentation, requis par la route
+     GET /p/[id] pour bypasser RLS) et le copie — jamais de bascule, jamais de "rendre privé". */
+  async function shareProgram(p: Program) {
+    if (!p.is_public) {
+      await fetch(`/api/programs/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_public: true }),
+      });
+      fetchPrograms();
     }
-    fetchPrograms();
+    const url = `${window.location.origin}/p/${p.id}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+    setLinkCopied(c => ({ ...c, [p.id]: true }));
+    setTimeout(() => setLinkCopied(c => ({ ...c, [p.id]: false })), 2000);
   }
 
   async function duplicateProgram(p: Program) {
@@ -262,6 +269,23 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           await fetchPrograms();
           if (id) setStep({ type: "assign", programId: id, programName: name });
           else closeOrList();
+        }}
+        shareGated={sandboxMode}
+        onShare={async (name, template) => {
+          let id = step.programId;
+          if (isEdit) await updateProgram(id!, name, template);
+          else {
+            id = await saveProgram(name, template, step.meta) ?? undefined;
+            if (id) setStep(prev => prev.type === "builder" ? { ...prev, programId: id } : prev);
+          }
+          if (!id) throw new Error("Échec du partage");
+          await fetch(`/api/programs/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_public: true }),
+          });
+          await fetchPrograms();
+          return `${window.location.origin}/p/${id}`;
         }}
       />
     );
@@ -340,7 +364,26 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               });
 
               return (
-                <div key={p.id} style={{ background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: "1px solid rgba(0,0,0,.07)", boxShadow: "0 2px 12px rgba(0,0,0,.04)" }}>
+                <div key={p.id} style={{ position: "relative", background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: "1px solid rgba(0,0,0,.07)", boxShadow: "0 2px 12px rgba(0,0,0,.04)" }}>
+                  {/* Partager — haut à droite de la carte (2026-09-05, demande explicite de
+                      Gildas) — reste ici plutôt que dans la ligne d'actions du bas, qui ne garde
+                      que les 2 CTA principaux + le menu "⋯" (Dupliquer/Supprimer). Style piloté
+                      uniquement par la confirmation "Copié" (transitoire) — aucune notion de
+                      public/privé exposée (voir `shareProgram`). */}
+                  <button
+                    onClick={() => gate(() => shareProgram(p))}
+                    title="Copier le lien de partage"
+                    style={{
+                      position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+                      padding: "6px 10px", borderRadius: 9,
+                      border: `1.5px solid ${linkCopied[p.id] ? "#d44000" : "rgba(0,0,0,.10)"}`,
+                      background: linkCopied[p.id] ? "rgba(212,64,0,0.06)" : "#fff",
+                      color: linkCopied[p.id] ? "#d44000" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    }}
+                  >
+                    {linkCopied[p.id] ? "✓ Copié" : "🔗 Partager"}
+                  </button>
+
                   {/* Sport icon */}
                   <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 10 }}>
                     {emoji}
@@ -420,15 +463,29 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                     >
                       ✏️ Modifier
                     </button>
-                    <button onClick={() => gate(() => duplicateProgram(p))} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}>⎘</button>
-                    <button
-                      onClick={() => gate(() => toggleShare(p))}
-                      title={p.is_public ? "Copier le lien" : "Partager ce programme"}
-                      style={{ padding: "9px 10px", borderRadius: 10, border: `1.5px solid ${p.is_public ? "#d44000" : "rgba(0,0,0,.10)"}`, background: p.is_public ? "rgba(212,64,0,0.06)" : "#fff", fontSize: 14, cursor: "pointer", color: p.is_public ? "#d44000" : "#8a8f94" }}
-                    >
-                      {linkCopied[p.id] ? "✓" : "🔗"}
-                    </button>
-                    <button onClick={() => gate(() => deleteProgram(p.id))} style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#d44000" }}>🗑</button>
+                    {/* Dupliquer/Supprimer derrière "⋯" (2026-09-05, demande explicite de Gildas)
+                        — seuls Assigner/Modifier restent des CTA visibles en permanence. */}
+                    <div style={{ position: "relative" }}>
+                      <button
+                        onClick={() => setMenuOpenId(id => id === p.id ? null : p.id)}
+                        style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}
+                      >⋯</button>
+                      {menuOpenId === p.id && (
+                        <>
+                          <div onClick={() => setMenuOpenId(null)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                          <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
+                            <button
+                              onClick={() => { setMenuOpenId(null); gate(() => duplicateProgram(p)); }}
+                              style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#171b1f" }}
+                            >⎘ Dupliquer</button>
+                            <button
+                              onClick={() => { setMenuOpenId(null); gate(() => deleteProgram(p.id)); }}
+                              style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", borderTop: "1px solid rgba(0,0,0,.06)", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#d44000" }}
+                            >🗑 Supprimer</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

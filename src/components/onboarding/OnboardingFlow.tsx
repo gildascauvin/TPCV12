@@ -944,6 +944,43 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     next();
   }
 
+  /* Lien de partage /p/[id] sur wizard_builder (2026-09-04) — même geste que le bouton 🔗 de la
+     librairie in-app (ProgramLibraryPage.tsx), mais sans jamais avancer le wizard (contrairement à
+     handleWizardSaveToLibrary ci-dessus) : partager n'est pas terminer. Réutilise wizardProgramId
+     s'il existe déjà (déjà sauvegardé une 1re fois, ex. via un partage précédent) au lieu de
+     recréer un programme en double à chaque clic. */
+  async function handleWizardShare(name: string, template: ProgramTemplate): Promise<string> {
+    let id = wizardProgramId;
+    if (id) {
+      await fetch(`/api/programs/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, template, weeks_count: template.weeks.length, is_public: true }),
+      });
+    } else {
+      const week1 = template.weeks[0] ?? {};
+      const sessionsPerWeek = Object.values(week1).filter(sessions => (sessions as unknown[]).length > 0).length;
+      const res = await fetch("/api/programs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name, sport: sport || "Autre", level: LEVEL_TO_DB[level], focus: GOAL_TO_FOCUS[goal] ?? "mixte",
+          weeks_count: template.weeks.length, sessions_per_week: sessionsPerWeek, template,
+        }),
+      });
+      if (!res.ok) throw new Error("Erreur lors du partage.");
+      const { program } = await res.json() as { program: { id: string } };
+      id = program.id;
+      setWizardProgramId(id);
+      await fetch(`/api/programs/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_public: true }),
+      });
+    }
+    return `${window.location.origin}/p/${id}`;
+  }
+
   /* Séance démo garantie le jour de l'inscription — sportif solo (2026-09-03, demande explicite de
      Gildas). Problème visé : le geste Alléger/Surcharger réel ne se déclenche que s'il existe une
      séance datée d'aujourd'hui avec un mismatch wellness/difficulté — or l'assignation à
@@ -1559,6 +1596,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           }}
           onSaveToLibrary={handleWizardSaveToLibrary}
           onSaveAndAssign={handleWizardSaveToLibrary}
+          onShare={handleWizardShare}
         />
         {wizardPaywallStage === "priming" && (
           <PrimingJourneyModal
