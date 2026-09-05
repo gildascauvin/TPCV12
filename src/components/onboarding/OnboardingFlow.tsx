@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import posthog from "posthog-js";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -1366,39 +1366,46 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
        Titre "Connecter" plutôt que "S'inscrire" (2026-09-02, retour à l'architecture POC,
        benchmark pages de connexion device-pairing) : l'inscription devient une formalité sur
-       la next step, pas ce qu'on demande explicitement — l'ancien titre de positionnement
-       identitaire redescend en sous-titre, juste en dessous.
+       la next step, pas ce qu'on demande explicitement.
 
-       CTA sticky unique, adaptatif (2026-09-04, retour explicite de Gildas) — remplace les 2
-       CTA distincts (bouton Google dans la carte + Actions "Créer mon espace..." en dessous,
-       désactivé tant que les 2 champs n'étaient pas remplis). Un seul contrôle, jamais
-       caché/désactivé par la saisie : au repos (aucun champ touché) il porte le logo Google et
-       lance `handleGoogleRegister` ; dès qu'un caractère existe dans Prénom OU Email, son
-       libellé et son action basculent sur le formulaire email (`handleFinish`) — et repassent
-       en état Google si les 2 champs sont revidés. Prénom/Email restent toujours visibles dans
-       le contenu (jamais révélés par un clic). */
-    const accountTyped = name.trim().length > 0 || email.trim().length > 0;
+       Refonte 2026-09-05 (retour explicite de Gildas, POC signup v3 remis à plat) : le sous-titre
+       de positionnement identitaire ("Le programme de ceux qui...") est remplacé par un titre
+       générique unique ("Connecte tes séances à ThePerfClub", même libellé pour les 2 rôles).
+       Une mini frise 1-2-3 (objectif : ressentir ce step comme un pairing d'appareil plutôt qu'un
+       formulaire froid) a été essayée puis retirée le même jour — Gildas a jugé que `decision_2a/2b`
+       juste avant montre déjà 3 temps forts (score de forme/ajuste tes séances/recommandations),
+       une 2e frise juste après aurait fait doublon et surchargé un écran déjà dense (réassurance +
+       Google + formulaire). Le titre reste seul, sans sous-titre ni frise.
+
+       CTA à nouveau scindé en 2 contrôles distincts (retour sur le "CTA sticky unique adaptatif"
+       du 2026-09-04) : bouton Google statique DANS la carte, au-dessus du séparateur "ou avec
+       email" — toujours visible, jamais dépendant de la saisie (le POC place Google en clair,
+       jugé plus lisible qu'un bouton qui change de forme selon ce qu'on tape). Le CTA sticky du
+       bas ne sert plus qu'à l'email (`handleFinish`), désactivé tant que Prénom OU Email est
+       vide — même garde qu'avant le 09-04. */
+    const emailValid = name.trim().length > 0 && email.trim().length > 0;
 
     const content = (
       <>
-        <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 8, lineHeight: "normal" }}>
-          {role === "coach" ? "Connecte l'entraînement de tes sportifs à ThePerfClub" : "Connecte tes entraînements à ThePerfClub"}
-        </div>
-        <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 16, lineHeight: 1.4 }}>
-          {role === "coach" ? "Le système d'entraînement des coachs professionnels." : "Le programme de ceux qui refusent de stagner."}
+        <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 28, lineHeight: "normal", textAlign: "center" }}>
+          {role === "coach" ? "Connecte les séances de tes sportifs à ThePerfClub" : "Connecte tes séances à ThePerfClub"}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "14px 16px", background: "#fff7f2", border: "1px solid rgba(212,64,0,.14)", borderRadius: 16 }}>
           <div style={{ display: "flex" }}>
-            {PAYWALL_AVATARS.map((src, i) => (
-              <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+            {PAYWALL_AVATARS.slice(0, 3).map((src, i) => (
+              <div key={i} style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #fff7f2", marginLeft: i > 0 ? -10 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i, boxShadow: "0 1px 3px rgba(0,0,0,.12)" }}>
                 <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             ))}
+            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #fff7f2", marginLeft: -10, background: "#1f2428", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0, position: "relative", zIndex: 1 }}>+</div>
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+            <div style={{ fontSize: 13, fontWeight: 900, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ color: "#f28a00", letterSpacing: 1 }}>★★★★★</span>
+              <span>font confiance à ThePerfClub</span>
+            </div>
           </div>
         </div>
 
@@ -1412,6 +1419,27 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         )}
 
         <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
+          <button
+            type="button"
+            onClick={() => { if (!saving) handleGoogleRegister(); }}
+            disabled={saving}
+            style={{
+              width: "100%", height: 48, borderRadius: 14, border: "none", background: "#171b1f",
+              color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
+              opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 10, marginBottom: 18,
+            }}
+          >
+            <GoogleIcon />
+            Continuer avec Google
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+            <span style={{ fontSize: 11, color: "#8a8f94" }}>ou avec email</span>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+          </div>
+
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
           <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
@@ -1430,22 +1458,22 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         )}
         <button
           type="button"
-          onClick={() => { if (saving) return; if (accountTyped) handleFinish(); else handleGoogleRegister(); }}
-          disabled={saving}
+          onClick={() => { if (!saving && emailValid) handleFinish(); }}
+          disabled={saving || !emailValid}
           style={{
             flex: 1, height: 52, borderRadius: 14, border: "none",
-            background: accountTyped ? "linear-gradient(180deg,#f04a08,#d44000)" : "#171b1f",
-            color: "#fff", fontSize: 15, fontWeight: 900, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1,
+            background: "linear-gradient(180deg,#f04a08,#d44000)",
+            color: "#fff", fontSize: 15, fontWeight: 900, cursor: (saving || !emailValid) ? "default" : "pointer",
+            opacity: (saving || !emailValid) ? 0.5 : 1,
             display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-            boxShadow: accountTyped ? "0 8px 20px rgba(212,64,0,.26)" : "none",
+            boxShadow: (saving || !emailValid) ? "none" : "0 8px 20px rgba(212,64,0,.26)",
           }}
         >
-          {!accountTyped && <GoogleIcon />}
           {saving
-            ? (accountTyped ? "Création…" : "Connexion…")
-            : accountTyped
-            ? "Connecter mes séances"
-            : "Continuer avec Google"}
+            ? "Création…"
+            : role === "coach"
+            ? "Activer mon espace coach →"
+            : "Activer mon espace →"}
         </button>
       </>
     );
