@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 const THRESHOLD = 30; // deltaX minimal pour un vrai geste horizontal délibéré (trackpad)
+const TOUCH_THRESHOLD = 50; // dx minimal au doigt (mobile) — même ordre de grandeur que le swipe déjà en place sur CalendarHeader (55px)
 const COOLDOWN_MS = 600; // même cadence que la navigation verticale déjà en place (/week, /coach/planning)
 const BOUNDARY_EPSILON = 4; // tolérance sur scrollLeft (arrondis sub-pixel)
 
@@ -35,11 +36,7 @@ export function useHorizontalScrollNav<T extends HTMLElement>(
     const el = ref.current;
     if (!el || !enabled) return;
 
-    function handler(e: WheelEvent) {
-      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      if (Math.abs(e.deltaX) < THRESHOLD) return;
-      const dir: "prev" | "next" = e.deltaX < 0 ? "prev" : "next";
-
+    function tryNavigate(dir: "prev" | "next") {
       if (mode === "boundary") {
         const target = el!;
         if (dir === "prev" && target.scrollLeft > BOUNDARY_EPSILON) return;
@@ -53,7 +50,46 @@ export function useHorizontalScrollNav<T extends HTMLElement>(
       else onNextRef.current();
     }
 
-    el.addEventListener("wheel", handler, { passive: true });
-    return () => el.removeEventListener("wheel", handler);
+    function handleWheel(e: WheelEvent) {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (Math.abs(e.deltaX) < THRESHOLD) return;
+      tryNavigate(e.deltaX < 0 ? "prev" : "next");
+    }
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchTracking = false;
+
+    function handleTouchStart(e: TouchEvent) {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchTracking = true;
+    }
+
+    /* Même convention de sens qu'un vrai swipe carrousel (et que CalendarHeader.tsx) : glisser le
+       doigt vers la gauche (dx < 0) = avancer ("next"), vers la droite (dx > 0) = reculer ("prev")
+       — signe inverse de deltaX au wheel, cohérent car deltaX représente le mouvement du contenu
+       (convention "scroll naturel"), pas le déplacement brut du doigt. */
+    function handleTouchEnd(e: TouchEvent) {
+      if (!touchTracking) return;
+      touchTracking = false;
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if (Math.abs(dx) <= Math.abs(dy)) return;
+      if (Math.abs(dx) < TOUCH_THRESHOLD) return;
+      tryNavigate(dx < 0 ? "next" : "prev");
+    }
+
+    el.addEventListener("wheel", handleWheel, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchend", handleTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchend", handleTouchEnd);
+    };
   }, [ref, enabled, mode]);
 }
