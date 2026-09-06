@@ -2508,7 +2508,8 @@ function selectVoile(n: number): Archetype[] {
 // déclenché la correction automatique de collision RPE (Phase B) et fait perdre son contenu nommé
 // à l'un des deux. Les 2 séances gym sont full body (pas de split bas/haut) — l'une force max
 // (charges lourdes, faible volume), l'autre puissance/explosivité (méthode contraste, charge
-// modérée + geste pliométrique enchaîné sans récup, façon Pletnev).
+// modérée + geste pliométrique enchaîné sans récup, façon Pletnev). Anaérobie lactique déplacé de
+// la séance Mardi (démarrage pur, jamais demandé) vers la séance Samedi (déjà starts+groupe).
 const BMX_MUSCU_FORCE: Archetype = { name: "Musculation — Force max (full body)", type: "intensite", exercises: [
   "Squat — 5×3@85%", "Développé couché — 5×3@85%", "Soulevé de terre — 4×3@85%",
   "Tractions lestées — 4×6", "Presse à cuisses — 3×6@75%", "Gainage complet — 3×45s",
@@ -2520,11 +2521,11 @@ const BMX_MUSCU_PUISSANCE: Archetype = { name: "Musculation — Puissance & expl
   "Squat — 4×5@70%", "Saut groupé enchaîné sans récup — 3×6", "Développé couché — 4×5@70%",
   "Pompes claquées — 3×8", "Fentes sautées — 3×8", "Gainage dynamique — 3×12",
 ]};
-const BMX_SPRINT: Archetype = { name: "Vitesse de démarrage / Anaérobie lactique", type: "intensite", exercises: [
-  "Accélération en côte — 6×15m (récup 3 min)", "Puissance anaérobie lactique — 4×40s (récup 3 min)", "Gainage dynamique — 3×12",
+const BMX_SPRINT: Archetype = { name: "Vitesse de démarrage", type: "intensite", exercises: [
+  "Accélération en côte — 6×15m (récup 3 min)", "Accélération sur le plat — 6×15m (récup 3 min)", "Gainage dynamique — 3×12",
 ]};
-const BMX_TECHNIQUE_STARTS: Archetype = { name: "BMX Technique — Starts intensité & groupe", type: "volume", exercises: [
-  "Starts intensité 100% (1ère ligne droite) — 6 reps (récup 5 min)", "Travail en groupe (virages, relances, trajectoires) — 30 min", "Récupération active vélo sur le plat — 10 min",
+const BMX_TECHNIQUE_STARTS: Archetype = { name: "BMX Technique — Starts intensité & anaérobie lactique", type: "volume", exercises: [
+  "Starts intensité 100% (1ère ligne droite) — 6 reps (récup 5 min)", "Puissance anaérobie lactique — 4×40s (récup 3 min)", "Travail en groupe (virages, relances, trajectoires) — 20 min", "Récupération active vélo sur le plat — 10 min",
 ]};
 const BMX_PRIORITY: Archetype[] = [BMX_MUSCU_PUISSANCE, BMX_SPRINT, BMX_TECHNIQUE, BMX_MUSCU_FORCE, BMX_TECHNIQUE_STARTS];
 function selectBmx(n: number): Archetype[] {
