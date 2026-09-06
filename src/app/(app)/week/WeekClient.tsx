@@ -20,6 +20,7 @@ import AutoregButtons from "@/components/sessions/AutoregButtons";
 import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
+import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import type { LoadContext } from "@/lib/loadRule";
 import { athleteAlertFor } from "@/lib/alerts";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
@@ -68,6 +69,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const slideDirRef  = useRef<"left" | "right">("left");
   const lastWheelNav = useRef(0);
   const weekGridRef  = useRef<HTMLDivElement>(null);
+  const weekScrollRef = useRef<HTMLDivElement>(null);
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
@@ -304,6 +306,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     return () => el.removeEventListener("wheel", handler);
   });
 
+  // Scroll horizontal de la grille 7 jours = change de semaine, mais uniquement une fois le scroll
+  // interne déjà à son extrémité dans le sens du geste (sinon on navigue simplement entre les jours
+  // de la semaine affichée, comme d'habitude) — mêmes gardes que la navigation verticale ci-dessus.
+  useHorizontalScrollNav(weekScrollRef, {
+    onPrev: () => navigatePeriod("prev"),
+    onNext: () => navigatePeriod("next"),
+    mode: "boundary",
+    enabled: viewMode === "week" && !addingDate && !completing && !pendingCompleteSession && !editing && !duplicating && !showReconduire && !adjustCtx,
+  });
+
   const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
     const { data: saved } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (saved) setSessions(prev => [...prev, saved as Session]);
@@ -504,7 +516,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       {viewMode === "week" && (
         <div style={{ position: "relative" }}>
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
-        <div style={{
+        <div ref={weekScrollRef} style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
           gap: isMd ? 12 : 10,

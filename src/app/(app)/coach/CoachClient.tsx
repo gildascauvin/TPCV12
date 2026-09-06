@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
+import { format, addDays, subDays } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -10,6 +11,7 @@ import CoachSessionModal from "@/components/coach/CoachSessionModal";
 import ReviewCompleteModal from "@/components/coach/ReviewCompleteModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
+import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -87,6 +89,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const sandboxPaywall = useSandboxGate("coach");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
+  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
@@ -200,6 +203,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         : { ...a, wellnessFilledToday: false };
     }));
   }, [supabase, userId, athletes]);
+
+  // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
+  // est ouverte, même garde que les autres pages.
+  useHorizontalScrollNav(dayScrollRef, {
+    onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    enabled: !reviewAthlete && !showReviewComplete && !adjustChainCtx && !showInviteModal,
+  });
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
     const res = await fetch("/api/coach/session", {
@@ -380,7 +391,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
 
-      <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
+      <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         {/* ── Welcome overlay handled below ── */}
 

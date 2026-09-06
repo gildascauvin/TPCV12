@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
 import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
@@ -137,6 +139,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
 
 export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, isDemoData = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; isDemoData?: boolean }) {
   const router = useRouter();
+  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
@@ -157,6 +160,13 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       setLoading(false);
     }
   }
+
+  // Scroll horizontal (trackpad) = change de jour avant/après — coupé pendant un fetch en cours.
+  useHorizontalScrollNav(dayScrollRef, {
+    onPrev: () => handleDateChange(format(subDays(new Date(data.referenceDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    onNext: () => handleDateChange(format(addDays(new Date(data.referenceDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    enabled: !loading,
+  });
 
   const {
     sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
@@ -223,7 +233,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
         profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"}
       />
 
-      <div className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
+      <div ref={dayScrollRef} className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
 
         <SectionTabs active={section} onChange={setSection} />
 

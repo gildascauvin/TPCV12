@@ -13,6 +13,7 @@ import { loadRule, type LoadContext } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
+import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
@@ -312,6 +313,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
+  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
@@ -474,6 +476,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const yesterdaySessions = allSessions.filter(s => s.date === yesterdayDate);
   const tomorrowSessions = allSessions.filter(s => s.date === tomorrowDate);
+
+  // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
+  // est ouverte, même garde que les autres pages pour ne jamais désynchroniser une modale du jour
+  // affiché sous elle.
+  useHorizontalScrollNav(dayScrollRef, {
+    onPrev: () => handleDateChange(yesterdayDate),
+    onNext: () => handleDateChange(tomorrowDate),
+    enabled: !showWellness && !showAddSession && !completing && !pendingCompleteSession && !editing,
+  });
   const loadCtx: LoadContext = {
     prevMax: yesterdaySessions.length ? Math.max(...yesterdaySessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
     nextMax: tomorrowSessions.length ? Math.max(...tomorrowSessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
@@ -604,7 +615,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
       <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"} />
 
-      <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
+      <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         {/* ── Welcome handled by overlay modal below ── */}
 

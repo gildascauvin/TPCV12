@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { format, addDays, subDays } from "date-fns";
+import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import InviteModal from "@/components/coach/InviteModal";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -274,6 +276,7 @@ interface Props {
 export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialBaselineSeries = {}, initialLastTests, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
   const { isMd } = useBreakpoint();
+  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -310,6 +313,14 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     }
   }
 
+  // Scroll horizontal (trackpad) = change de jour avant/après — coupé pendant une invitation/
+  // suppression en cours.
+  useHorizontalScrollNav(dayScrollRef, {
+    onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
+    enabled: !showInvite && !deleting,
+  });
+
   async function handleDelete(athlete: CoachAthlete) {
     await requireSubscription(async () => {
       const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
@@ -340,7 +351,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"}
       />
 
-      <div className="page-shell">
+      <div ref={dayScrollRef} className="page-shell">
 
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
