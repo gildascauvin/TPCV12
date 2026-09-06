@@ -2496,21 +2496,29 @@ function selectVoile(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => VOILE_PRIORITY[i % VOILE_PRIORITY.length]);
 }
 
-// ---- BMX : départ (explosivité pure, le facteur le plus déterminant en course) > gainage (position
-// basse sur le vélo) > force des jambes (relances, franchissements) > réactivité (sauts, réception).
-const BMX_DEPART: Archetype = { name: "Départ & explosivité", type: "intensite", exercises: [
-  "Départs explosifs porte — 6 reps (récup 3 min)", "Squat jump — 4×6", "Sprint 10m départ arrêté — 6 reps",
+// ---- BMX : refonte 2026-09-06, inspirée des grandes lignes d'un vrai plan de club (cycle "Force
+// Explosive") apporté par Gildas — l'ancien curriculum était 100% hors-vélo (que du gym), aucune
+// séance technique/piste. Priorité pensée pour un programme à 5 jours (Lun/Mer/Jeu/Ven/Sam, jours
+// de club = Mercredi et Samedi) : positions 1 et 4 de BMX_PRIORITY (0-indexé) sont les 2 séances
+// vélo/technique, pour tomber sur ces 2 jours une fois triés calendairement. Muscu bas/haut du
+// corps utilise la méthode contraste (charge lourde + geste pliométrique enchaîné sans récup,
+// façon Pletnev) plutôt qu'un simple bloc force séparé d'un bloc plyo.
+const BMX_MUSCU_BAS: Archetype = { name: "Musculation — Bas du corps (contraste)", type: "volume", exercises: [
+  "Squat — 5×5@75%", "Saut groupé enchaîné sans récup — 3×6", "Soulevé de terre — 4×5@70%",
 ]};
-const BMX_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
-  "Gainage complet — 3×45s", "Gainage dynamique — 3×12", "Anti-rotation Pallof press — 3×10 par côté",
+const BMX_TECHNIQUE: Archetype = { name: "BMX Technique — Starts & piste", type: "technique", exercises: [
+  "Starts (gestuelle, 1ère ligne droite) — 6×15m (récup 3 min)", "Passages techniques piste (bosses, virages) — 20 min", "Gainage complet — 3×45s",
 ]};
-const BMX_FORCE_JAMBES: Archetype = { name: "Force des jambes", type: "volume", exercises: [
-  "Squat — 4×6@75%", "Fentes sautées — 3×10", "Soulevé de terre — 3×6@75%",
+const BMX_MUSCU_HAUT: Archetype = { name: "Musculation — Haut du corps (contraste)", type: "volume", exercises: [
+  "Développé couché — 4×5@75%", "Tractions — 4×max", "Lombaires (banc à lombaires) — 3×15",
 ]};
-const BMX_REACTIVITE: Archetype = { name: "Réactivité", type: "technique", exercises: [
-  "Sauts réactifs (rebonds) — 4×8", "Proprioception plateau instable — 3×30s", "Mobilité chevilles et hanches — 15 min",
+const BMX_SPRINT: Archetype = { name: "Vitesse de démarrage / Anaérobie lactique", type: "intensite", exercises: [
+  "Accélération en côte — 6×15m (récup 3 min)", "Puissance anaérobie lactique — 4×40s (récup 3 min)", "Gainage dynamique — 3×12",
 ]};
-const BMX_PRIORITY: Archetype[] = [BMX_DEPART, BMX_GAINAGE, BMX_FORCE_JAMBES, BMX_REACTIVITE];
+const BMX_TECHNIQUE_STARTS: Archetype = { name: "BMX Technique — Starts intensité & groupe", type: "volume", exercises: [
+  "Starts intensité 100% (1ère ligne droite) — 6 reps (récup 5 min)", "Travail en groupe (virages, relances, trajectoires) — 30 min", "Récupération active vélo sur le plat — 10 min",
+]};
+const BMX_PRIORITY: Archetype[] = [BMX_MUSCU_BAS, BMX_TECHNIQUE, BMX_MUSCU_HAUT, BMX_SPRINT, BMX_TECHNIQUE_STARTS];
 function selectBmx(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => BMX_PRIORITY[i % BMX_PRIORITY.length]);
 }
