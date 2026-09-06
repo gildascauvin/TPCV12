@@ -2499,11 +2499,16 @@ function selectVoile(n: number): Archetype[] {
 // ---- BMX : refonte 2026-09-06, inspirée des grandes lignes d'un vrai plan de club (cycle "Force
 // Explosive") apporté par Gildas — l'ancien curriculum était 100% hors-vélo (que du gym), aucune
 // séance technique/piste. Priorité pensée pour un programme à 5 jours (Lun/Mar/Mer/Ven/Sam, Jeu et
-// Dim repos, jours de club = Mercredi et Samedi) : positions 2 et 4 de BMX_PRIORITY (0-indexé) sont
-// les 2 séances vélo/technique, pour tomber sur ces 2 jours une fois triés calendairement. Les 2
-// séances gym sont full body (pas de split bas/haut) — l'une force max (charges lourdes, faible
-// volume), l'autre puissance/explosivité (méthode contraste, charge modérée + geste pliométrique
-// enchaîné sans récup, façon Pletnev).
+// Dim repos, jours de club = Mercredi et Samedi) : Lun muscu / Mar sprint / Mer technique / Ven
+// muscu / Sam technique+starts — les 2 séances muscu ne sont JAMAIS calendairement adjacentes
+// (Lun et Ven, séparées par sprint+technique+repos), contrairement à un premier essai qui les avait
+// enchaînées Lun-Mar (mauvaise conception : aucune récup entre 2 séances full body proches du
+// max). BMX_MUSCU_PUISSANCE (volume, modéré) est volontairement adjacente à BMX_SPRINT (intensite,
+// dur) plutôt que BMX_MUSCU_FORCE (intensite aussi) — deux jours "intensite" collés auraient
+// déclenché la correction automatique de collision RPE (Phase B) et fait perdre son contenu nommé
+// à l'un des deux. Les 2 séances gym sont full body (pas de split bas/haut) — l'une force max
+// (charges lourdes, faible volume), l'autre puissance/explosivité (méthode contraste, charge
+// modérée + geste pliométrique enchaîné sans récup, façon Pletnev).
 const BMX_MUSCU_FORCE: Archetype = { name: "Musculation — Force max (full body)", type: "intensite", exercises: [
   "Squat — 5×3@85%", "Développé couché — 5×3@85%", "Soulevé de terre — 4×3@85%",
   "Tractions lestées — 4×6", "Presse à cuisses — 3×6@75%", "Gainage complet — 3×45s",
@@ -2521,7 +2526,7 @@ const BMX_SPRINT: Archetype = { name: "Vitesse de démarrage / Anaérobie lactiq
 const BMX_TECHNIQUE_STARTS: Archetype = { name: "BMX Technique — Starts intensité & groupe", type: "volume", exercises: [
   "Starts intensité 100% (1ère ligne droite) — 6 reps (récup 5 min)", "Travail en groupe (virages, relances, trajectoires) — 30 min", "Récupération active vélo sur le plat — 10 min",
 ]};
-const BMX_PRIORITY: Archetype[] = [BMX_MUSCU_FORCE, BMX_MUSCU_PUISSANCE, BMX_TECHNIQUE, BMX_SPRINT, BMX_TECHNIQUE_STARTS];
+const BMX_PRIORITY: Archetype[] = [BMX_MUSCU_PUISSANCE, BMX_SPRINT, BMX_TECHNIQUE, BMX_MUSCU_FORCE, BMX_TECHNIQUE_STARTS];
 function selectBmx(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => BMX_PRIORITY[i % BMX_PRIORITY.length]);
 }
