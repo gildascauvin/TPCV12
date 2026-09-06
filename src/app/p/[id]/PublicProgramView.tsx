@@ -21,17 +21,51 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const [claimed, setClaimed] = useState(false);
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Repli manuel si le copier-coller échoue — arrive systématiquement dans les iframes WordPress
+  // (Clipboard API bloquée par la Permissions Policy tant que l'iframe n'a pas `allow="clipboard-write"`,
+  // ce qui n'est jamais posé côté WP). L'ancien code avalait l'erreur (`.catch(() => {})`) et affichait
+  // quand même "✓ Copié" — faux positif signalé par Gildas, rien n'était réellement copié dans ce cas.
+  const [linkCopyFallback, setLinkCopyFallback] = useState(false);
 
-  function handleCopyLink() {
+  async function handleCopyLink() {
     posthog.capture("program_cta_clicked", {
       program_id: program.id,
       program_name: program.name,
       cta: "copy_share_link",
       is_embedded: isEmbedded,
     });
-    navigator.clipboard.writeText(window.location.href).catch(() => {});
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
+    const url = window.location.href;
+    let copied = false;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      }
+    } catch { /* Permissions Policy bloquée (iframe) ou API absente — repli ci-dessous */ }
+    if (!copied) {
+      // execCommand est déprécié mais reste le seul mécanisme de copie fiable dans une iframe
+      // cross-origin sans `allow="clipboard-write"` (pas soumis à la même Permissions Policy).
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch { /* voir repli manuel ci-dessous */ }
+    }
+    if (copied) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } else {
+      // Ni l'API moderne ni execCommand n'ont fonctionné — on ne prétend plus avoir copié quoi que
+      // ce soit, on affiche le lien en clair, sélectionné, pour un copier-coller manuel (Ctrl/Cmd+C).
+      setLinkCopyFallback(true);
+    }
   }
 
   useEffect(() => {
@@ -131,18 +165,38 @@ export default function PublicProgramView({ program, coachName }: Props) {
             )}
           </div>
         </div>
-        <button
-          onClick={handleCopyLink}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-            padding: "7px 12px", borderRadius: 10, cursor: "pointer",
-            border: `1.5px solid ${linkCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
-            background: linkCopied ? "rgba(212,64,0,0.06)" : "#fff",
-            color: linkCopied ? "#d44000" : "#8a8f94", fontSize: 13, fontWeight: 700,
-          }}
-        >
-          {linkCopied ? "✓ Copié" : "🔗 Partager"}
-        </button>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <button
+            onClick={handleCopyLink}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+              padding: "7px 12px", borderRadius: 10, cursor: "pointer",
+              border: `1.5px solid ${linkCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
+              background: linkCopied ? "rgba(212,64,0,0.06)" : "#fff",
+              color: linkCopied ? "#d44000" : "#8a8f94", fontSize: 13, fontWeight: 700,
+            }}
+          >
+            {linkCopied ? "✓ Copié" : "🔗 Partager"}
+          </button>
+          {linkCopyFallback && (
+            <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 20, background: "#fff", borderRadius: 12, boxShadow: "0 12px 32px rgba(0,0,0,.18)", padding: 12, width: 260 }}>
+              <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 6 }}>Copie manuelle (Ctrl/Cmd+C) :</div>
+              <input
+                readOnly
+                value={typeof window !== "undefined" ? window.location.href : ""}
+                onFocus={e => e.currentTarget.select()}
+                autoFocus
+                style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 8, padding: "6px 8px", fontSize: 12, color: "#171b1f" }}
+              />
+              <button
+                onClick={() => setLinkCopyFallback(false)}
+                style={{ marginTop: 8, background: "none", border: "none", color: "#8a8f94", fontSize: 11, cursor: "pointer", padding: 0 }}
+              >
+                Fermer
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Week tabs */}
