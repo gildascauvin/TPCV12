@@ -29,7 +29,7 @@ export async function GET() {
     .from("programs")
     .select("*")
     .in("id", CURATED_PROGRAM_IDS)
-    .eq("is_public", true);
+    .eq("is_official_template", true);
 
   const byId = new Map((data ?? []).map(p => [p.id, p]));
   const programs = CURATED_PROGRAM_IDS.map(id => byId.get(id)).filter(Boolean);
