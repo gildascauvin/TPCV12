@@ -9,6 +9,7 @@ import ProgramLibraryBrowser from "./ProgramLibraryBrowser";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
+import { programSportEmoji } from "@/lib/sportCategories";
 
 const LEVEL_LABELS: Record<string, string> = {
   debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite",
@@ -31,17 +32,6 @@ function loadBarColor(avg: number): string {
   if (avg <= 4) return "#2f9e44";
   if (avg <= 7) return "#f28a00";
   return "#d44000";
-}
-
-function sportEmoji(sport?: string | null): string {
-  if (!sport) return "🏋️";
-  const s = sport.toLowerCase();
-  if (s.includes("halt") || s.includes("force") || s.includes("power")) return "🏋️";
-  if (s.includes("sprint") || s.includes("athlé")) return "⚡";
-  if (s.includes("combat") || s.includes("art")) return "🥊";
-  if (s.includes("fitness") || s.includes("forme")) return "💪";
-  if (s.includes("collectif")) return "⚽";
-  return "🏃";
 }
 
 function initials(name: string): string {
@@ -353,7 +343,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
             {programs.map(p => {
               const bars = weekAvgRpes(p);
               const maxBar = Math.max(...bars, 1);
-              const emoji = sportEmoji(p.sport);
+              const emoji = programSportEmoji(p.sport);
               const programAssignments = assignments.filter(a => {
                 if (a.program_id !== p.id || a.status !== "active") return false;
                 // N'affiche que les sportifs dont le programme n'est pas encore terminé

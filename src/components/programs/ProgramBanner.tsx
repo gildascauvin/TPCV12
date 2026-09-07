@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Program } from "@/types";
+import { programSportEmoji } from "@/lib/sportCategories";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<string, string> = {
@@ -19,17 +20,6 @@ function loadColor(avg: number): string {
   if (avg <= 4) return "#2f9e44";
   if (avg <= 7) return "#f28a00";
   return "#d44000";
-}
-
-function sportEmoji(sport?: string | null): string {
-  if (!sport) return "🏋️";
-  const s = sport.toLowerCase();
-  if (s.includes("halt") || s.includes("force") || s.includes("power")) return "🏋️";
-  if (s.includes("sprint") || s.includes("athlé")) return "⚡";
-  if (s.includes("combat") || s.includes("art")) return "🥊";
-  if (s.includes("fitness") || s.includes("forme")) return "💪";
-  if (s.includes("collectif")) return "⚽";
-  return "🏃";
 }
 
 interface Props {
@@ -161,7 +151,7 @@ export default function ProgramBanner({
         background: "#fff", border: "1px solid rgba(212,64,0,.18)", borderRadius: 10,
         padding: "5px 8px",
       }}>
-        <span style={{ flexShrink: 0, fontSize: 12 }}>{sportEmoji(program!.sport)}</span>
+        <span style={{ flexShrink: 0, fontSize: 12 }}>{programSportEmoji(program!.sport)}</span>
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 800, color: "#171b1f" }}>
           {program!.name}
         </span>
@@ -174,7 +164,7 @@ export default function ProgramBanner({
     <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       {/* Sport icon */}
       <div style={{ width: 38, height: 38, borderRadius: 11, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-        {sportEmoji(program!.sport)}
+        {programSportEmoji(program!.sport)}
       </div>
 
       {/* Info */}

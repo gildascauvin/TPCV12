@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import type { ProgramMeta } from "./ProgramCriteriaModal";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
-import { SPORT_CATEGORIES, guessSportChip } from "@/lib/sportCategories";
+import { SPORT_CATEGORIES, EXTRA_CATEGORIES, OTHER_CATEGORY, guessSportChip, programSportEmoji } from "@/lib/sportCategories";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 /* Bibliothèque publique, native (2026-09-04) — remplace le lien externe vers la page WordPress
@@ -40,11 +40,8 @@ const LEVEL_LABELS: Record<string, string> = {
   debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite",
 };
 
-const EXTRA_CATEGORIES = [
-  { id: "Rééducation & Prévention", icon: "🩹", match: /pr[ée]vention|r[ée][ée]ducation/i },
-  { id: "Concours & Sélections",    icon: "🎖️", match: /gendarmerie|police|sapeur|gign|arm[ée]e/i },
-] as const;
-const OTHER_CATEGORY = { id: "Autres sports", icon: "🧭" };
+// EXTRA_CATEGORIES/OTHER_CATEGORY vivent désormais dans sportCategories.ts (2026-09-07) —
+// réutilisés aussi par programSportEmoji(), voir sa doc.
 
 // Ne renvoie jamais null — repli sur OTHER_CATEGORY si rien ne matche, pour que chaque programme
 // ait toujours un chip (voir doc en tête de fichier).
@@ -191,7 +188,9 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {filtered.map(p => {
-                const icon = categoryFor(p.sport).icon;
+                // Icône spécifique au programme (Rugby→🏉, Natation→🏊…), distincte de categoryFor()
+                // qui reste au niveau large (regroupement des filtres, voir doc en tête de fichier).
+                const icon = programSportEmoji(p.sport);
                 return (
                   <div
                     key={p.id}
