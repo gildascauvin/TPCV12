@@ -153,7 +153,11 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
         {FRISE_STEPS[role].map((s, i) => (
           <div key={i} style={{ display: "flex", gap: 14, padding: "26px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
             <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "rgba(212,64,0,.09)", color: "#d44000", fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
-            <div>
+            {/* minWidth:0 (2026-09-06) : sans ça, cet item flex refuse de rétrécir sous la taille
+                intrinsèque de PlanningPreview (width:max-content) — c'est ce qui forçait toute la
+                ligne (titre compris) à déborder au lieu de rester dans le scroll interne de
+                PlanningPreview. Piège flexbox classique (min-width:auto par défaut sur un item). */}
+            <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>{s.title}</span>
                 <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.period}</span>

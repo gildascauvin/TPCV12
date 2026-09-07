@@ -89,9 +89,11 @@ const DEFAULT_SESSIONS: SessionPreview[] = [
   { name: "Séance C — Récupération active", exercises: ["Cardio léger — 20min", "Mobilité — 10min"], diff: 4 },
 ];
 
-function SessionMiniCard({ preview }: { preview: SessionPreview }) {
+function SessionMiniCard({ preview, width }: { preview: SessionPreview; width?: number }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}>
+    <div style={width
+      ? { flexShrink: 0, width, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }
+      : { flex: 1, minWidth: 0, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}>
       <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 8 }}>{preview.name}</div>
       <div style={{ marginBottom: 8 }}>
         <DiffGauge value={preview.diff} height={9} />
@@ -107,11 +109,18 @@ function SessionMiniCard({ preview }: { preview: SessionPreview }) {
   );
 }
 
+/* Scroll horizontal interne à la rangée (2026-09-06) — les 3 cartes ne rétrécissaient plus
+   assez sur mobile pour tenir dans la largeur de l'écran (texte des exercices trop long), et
+   comme rien ici ne posait d'overflow-x explicite, c'est la page entière qui héritait du
+   scroll horizontal au lieu de cette seule section. Largeur de carte fixe (`width`) + wrapper
+   `overflowX:"auto"` : le débordement est contenu ici, jamais transmis aux ancêtres. */
 export function PlanningPreview({ sport }: { sport?: string }) {
   const previews = (sport && SPORT_SESSION_PREVIEW[sport]) || DEFAULT_SESSIONS;
   return (
-    <div style={{ width: "100%", display: "flex", gap: 8 }}>
-      {previews.map((p, i) => <SessionMiniCard key={i} preview={p} />)}
+    <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ display: "flex", gap: 8, width: "max-content" }}>
+        {previews.map((p, i) => <SessionMiniCard key={i} preview={p} width={150} />)}
+      </div>
     </div>
   );
 }
