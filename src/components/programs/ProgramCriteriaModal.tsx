@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { guessSportChip } from "@/lib/sportCategories";
 
 const IMPORT_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -283,6 +284,15 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
 
   const canSubmit = focus && days.length > 0;
 
+  // Sport libre reconnu ("matched", ex. "Aviron") : pas une des 8 cartes SPORT_META, donc aucune
+  // ne s'allumait et les faiblesses retombaient sur le menu générique "Autre" — donnait l'impression
+  // d'un bug (Gildas : "on croit à un bug"). guessSportChip() rattache visuellement au sport le plus
+  // proche (Aviron → Endurance) pour éclairer la bonne carte ET récupérer un menu de faiblesses
+  // pertinent, sans changer `sport` lui-même (la génération réelle repose sur sportLabel, déjà
+  // exacte via getSportCategory() côté serveur).
+  const matchedChip = customSport?.status === "matched" ? guessSportChip(customSport.sportLabel) : null;
+  const activeWeaknessSport = sport || matchedChip || "";
+
   async function handleGenerate() {
     if (!canSubmit) return;
     setLoading(true);
@@ -427,6 +437,22 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
                   {s.icon} {s.label}
                 </Pill>
               ))}
+              {/* Sport libre reconnu/généré — chip à part entière dans la même rangée que les 8
+                  cartes, jamais fusionné visuellement avec la carte générique la plus proche
+                  (matchedChip ne sert plus qu'au menu de faiblesses ci-dessous) : "Natation" doit
+                  se lire comme "Natation", pas comme "Endurance" (retour direct de Gildas — sinon
+                  ça ne fait pas personnalisé). Non cliquable : ce n'est pas un choix parmi d'autres,
+                  c'est le reflet du texte déjà tapé plus bas. */}
+              {(customSport?.status === "matched" || customSport?.status === "generated") && (
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: "7px 14px", borderRadius: 20,
+                  border: "2px solid #2f9e44", background: "rgba(47,158,68,0.10)",
+                  color: "#2f9e44", fontWeight: 700, fontSize: 13,
+                }}>
+                  ✓ {customSport.sportLabel}
+                </div>
+              )}
             </div>
 
             {/* Champ libre toujours visible (2026-08-06, plus de badge "Autre" séparé à cliquer
@@ -462,12 +488,6 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
               >
                 {analyzing ? "Analyse en cours…" : "Analyser mon sport →"}
               </button>
-              {customSport?.status === "matched" && (
-                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Sport reconnu — utilise un programme déjà spécialisé pour "{customSport.sportLabel}".</p>
-              )}
-              {customSport?.status === "generated" && (
-                <p style={{ fontSize: 11, color: "#2f9e44", marginTop: 6 }}>Contenu personnalisé généré pour "{customSport.sportLabel}".</p>
-              )}
               {customSport?.status === "failed" && (
                 <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
               )}
@@ -478,12 +498,13 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
 
           {/* Faiblesses — biaise réellement la génération, voir generate/route.ts. Pour un sport
               libre "matched" (reconnu comme un curriculum existant sans correspondre à une des 8
-              cartes), pas de menu taillé disponible côté frontend — repli sur le menu générique
-              "Autre" plutôt que masquer la section entière. */}
+              cartes), guessSportChip() rattache au menu de faiblesses le plus proche (ex. Aviron →
+              Endurance) plutôt que de retomber sur le générique "Autre" — sinon la personnalisation
+              reste invisible et fait croire à un bug (retour direct de Gildas). */}
           {(sport || sportDescription.trim()) && (
             <Section label="🎯 Points à travailler en priorité">
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-                {(customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[sport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
+                {(customSport?.status === "generated" ? customSport.weaknessOptions : WEAKNESSES_BY_SPORT[activeWeaknessSport] ?? WEAKNESSES_BY_SPORT["Autre"]).map(w => (
                   <Pill key={w.key} active={weaknesses.includes(w.key)} onClick={() => toggleWeakness(w.key)}>{w.label}</Pill>
                 ))}
               </div>
