@@ -2974,3 +2974,15 @@ Suite directe des 2 sections précédentes. Retour de Gildas sur les cartes de l
 Vérifié : `tsc --noEmit` propre, script Node ad-hoc rejouant `programSportEmoji()`/`guessSportChip()` contre ~75 valeurs réelles de `profiles.sport`/`programs.sport` (requête directe en base) + un jeu de mots français courants pour détecter les faux positifs — les 2 bugs ci-dessus trouvés ainsi, corrigés, re-vérifiés propres. Pas de test au clic réel par Claude.
 
 Déployé en prod le 2026-09-07, commit `3a91e28`, push direct sur `main`.
+
+## Fix : bibliothèque de programmes affichait des programmes déjà supprimés (2026-09-07)
+
+Repéré par Gildas : un programme public supprimé ("Maxi aita test") restait visible dans la bibliothèque ("Modèle") — **confirmé absent en base** (requête SQL directe sur `programs`, par nom et par forme exacte 1 semaine/4j-sem, deux fois zéro résultat) avant de creuser plus loin, plutôt que de supposer un cache navigateur simple (1re hypothèse, insuffisante — Gildas a confirmé que ça persistait).
+
+**Root cause** : `/api/programs/library/route.ts` (et `/api/sandbox/library/route.ts`, même pattern) n'utilisent aucune fonction dynamique (pas de `cookies()`/`headers()`/params de requête) — Next.js App Router traite un Route Handler `GET` sans API dynamique comme **statique par défaut**, mis en cache au build/CDN et jamais revalidé après une écriture en base. Une liste censée refléter l'état réel de la bibliothèque publique (créations/suppressions fréquentes) servait donc une snapshot figée depuis le déploiement du chantier "Bibliothèque publique native" du 2026-09-04, invisible tant que personne n'avait supprimé de programme depuis.
+
+**Fix** : `export const dynamic = "force-dynamic";` sur les deux routes — force une vraie requête à chaque appel.
+
+Vérifié `tsc --noEmit` propre. Pas de re-vérification en clic réel par Claude après déploiement (dépend du cache déjà servi côté client de Gildas) — à confirmer par lui après un rechargement.
+
+Déployé en prod le 2026-09-07, commit `458ca34`, push direct sur `main`.
