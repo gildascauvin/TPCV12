@@ -18,6 +18,11 @@ const CURATED_PROGRAM_IDS = [
   "1a6275e6-0f4c-448f-8389-0ce8d4bf9151", // 🥋 Arts martiaux & combat
 ];
 
+// Même correctif que /api/programs/library (2026-09-07) — aucune fonction dynamique utilisée ici
+// non plus, même risque de mise en cache statique par Next.js si l'un des 8 programmes curés est
+// modifié après coup.
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const admin = createAdminClient();
   const { data } = await admin
