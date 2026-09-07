@@ -2932,3 +2932,15 @@ Pour un compte non actif (produit-gated), `requireSubscription()` (`usePaywall.t
 `tsc --noEmit` propre après chaque round (via un `tsconfig.notnext.json` temporaire excluant `.next`). Pas de clic réel par Claude sur l'ensemble du chantier — serveur local laissé à la disposition de Gildas comme il l'a demandé à plusieurs reprises dans les chantiers précédents de ce fichier.
 
 Déployé en prod le 2026-09-06, commit `25e3d2c`, push direct sur `main`, confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
+
+## Fix : sport libre reconnu ("matched") invisible dans le sélecteur de sport (2026-09-07)
+
+Repéré par Gildas ("un user a mis 'Aviron' qui est reconnu comme appartenant à un curriculum, mais rien n'est visible et le user est resté bloqué") — `getSportCategory("aviron")` matche bien un curriculum existant (`/api/sports/custom` répond `{matched:true}` sans appel Claude, quasi instantané), pas un bug de matching. Le vrai problème (`ProgramCriteriaModal.tsx`, utilisé à la fois in-app et dans `wizard_criteria`) : le seul retour visuel était un texte gris-vert de 11px sous le bouton "Analyser mon sport →" (*"Sport reconnu — utilise un programme déjà spécialisé pour 'Aviron'."*, tournure qui sonne comme une instruction à l'utilisateur, pas une confirmation), et la section "Points à travailler en priorité" retombait systématiquement sur le menu générique "Autre" (jamais personnalisée pour un sport "matched", contrairement à un sport "generated" par Claude) — un utilisateur qui tape un sport reconnu ne voit donc aucune différence avec un sport non reconnu, d'où l'impression de bug.
+
+**Fix, 2 volets** :
+- **Chip "✓ {sport}" dans la rangée des 8 cartes sport** (pas un simple texte en dessous) — `guessSportChip()` (déjà existant dans `src/lib/sportCategories.ts`, utilisé jusque-là uniquement pour deviner la carte d'un programme claimé) est réutilisé pour rattacher le sport tapé au menu de faiblesses le plus proche. **1re version envoyée à Gildas mettait aussi ce chip deviné en surbrillance sur la carte générique correspondante** (ex. "Endurance" pour "Aviron") — retour direct : *"ça fait l'amalgame, ça fait pas personnalisé"*. Corrigé : `matchedChip` ne sert plus qu'en interne (menu de faiblesses), le chip visuel affiché est un chip à part entière avec le nom réel tapé ("✓ Natation"), jamais fusionné avec une carte existante.
+- **Menu de faiblesses personnalisé** : `WEAKNESSES_BY_SPORT[activeWeaknessSport]` (`activeWeaknessSport = sport || matchedChip`) au lieu du repli systématique sur `WEAKNESSES_BY_SPORT["Autre"]` pour un sport "matched" — Aviron affiche désormais le menu Endurance (vitesse/endurance de fond/explosivité/technique de course/récupération) plutôt que le menu générique à 4 options.
+
+Vérifié `tsc --noEmit` propre après chaque itération. Pas de test au clic réel par Claude.
+
+Déployé en prod le 2026-09-07, commit `afd2042`, push direct sur `main`.
