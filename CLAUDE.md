@@ -2896,3 +2896,39 @@ Rappel fait par Gildas en fin de chantier : le diagnostic initial notait déjà 
 `tsc --noEmit` propre après chaque round (via un `tsconfig.notnext.json` temporaire excluant `.next`, piège de faux positif déjà documenté ailleurs dans ce fichier — dev server de Gildas actif en continu pendant toute la session). Serveur dev revérifié responsive (`curl` sur `localhost:3000`) après chaque round de modifications. **Non testé au clic réel par Claude** — les 2 régressions (titre recouvert, footers hors écran) ont été trouvées par Gildas lui-même en testant en local via `?dbgstep=`, pas par Claude.
 
 Déployé en prod le 2026-09-06, commit `2aa92fc`, push direct sur `main`.
+
+## Autosave dans le drawer de séance — planning et programmes (2026-09-06)
+
+Demande de Gildas : remplacer le bouton "Enregistrer"/"Créer" explicite d'`AddSessionModal.tsx` (`/week`, program builder) et `CoachSessionModal.tsx` (`/coach/planning`) par un autosave continu, façon Notion — d'abord en édition seule, puis étendu à la création sur demande de suivi, puis raffiné une 2e fois (autosave caractère par caractère + tout le feedback dans le bouton sticky, sur un POC HTML fourni par Gildas).
+
+### Upsert universel — création ET édition, un seul id qui se stabilise
+`onSave` change de signature dans les deux composants : `(data, id?) => Promise<{id}|void>` (`CoachSessionModal` garde en plus `athleteIds`). Le premier autosave d'une séance neuve n'a pas d'id (`persistedId` interne à `null`) — l'appelant **crée** la ligne et retourne son id ; tous les autosaves suivants passent cet id et l'appelant **met à jour** la même ligne. `lastSavedRef` vaut `null` tant que rien n'est encore persisté (n'importe quel nom saisi devient alors "dirty"), sinon un snapshot JSON du dernier état écrit — évite de réémettre un save identique.
+
+`saveSession(data, id?)` unifie les anciennes paires `addSession`/`saveEdit` dans `WeekClient.tsx` et `TodayClient.tsx` ; `saveSession(data, athleteIds, id?)` fait de même dans `CoachPlanningClient.tsx`. Aucune de ces fonctions ne ferme plus jamais le drawer — c'est toujours `onClose` (séparé) qui s'en charge, avec le `router.refresh()` qui va avec.
+
+**Bug trouvé et corrigé en marge** : `/today` avait sa propre `saveEdit` (édition d'une séance existante) qui fermait encore le drawer immédiatement après le save — oubliée lors du premier chantier d'autosave (qui n'avait vérifié que `/week`/`/coach/planning`/le program builder). Sans ce fix, éditer une séance sur `/today` se serait auto-fermée ~600ms après la première frappe. Unifiée dans le même `saveSession`.
+
+### Coach — cible fixe, extras en action séparée
+`CoachSessionModal.tsx` : la "cible" de l'autosave est toujours `initialAthleteId` (le sportif dont le planning est affiché), en édition comme en création. Si le coach décoche explicitement ce sportif des destinataires pendant une création (pour envoyer uniquement à d'autres), l'autosave se désactive et l'ancien geste manuel multi-destinataires (`handleSave`, "Ajouter →"/"Partager (N) →") reprend la main — pas de notion de "cible unique" cohérente dans ce cas. Les destinataires **en plus** de la cible ("Dupliquer aussi vers") restent une action ponctuelle explicite (`handleDuplicateExtras`, bouton "Dupliquer (N) →"), jamais déclenchée par l'autosave lui-même — sinon chaque frappe créerait une nouvelle séance dupliquée. Le mode chaîné "Traiter les décisions" de Coach Control (`reviewContext`) reste entièrement hors de ce mécanisme — `autosaveEnabled = !reviewContext && !!autosaveTargetId` — et garde son flux manuel "Suivant/Terminer" inchangé.
+
+### Autosave caractère par caractère dans l'éditeur d'exercices
+`ExerciseBlockEditor.tsx` ne propageait au parent (`onChange`, donc à l'autosave du drawer) que sur commit d'une ligne (Entrée/blur) — éditer un exercice sans jamais valider ne déclenchait rien. Nouveau callback `onLiveEdit(text)` sur `ExerciseCard` : même effet que `onCommitEdit` (répercute dans `lines`/`onChange`) mais **sans** `setEditingId(null)` — appelé à chaque frappe pendant l'édition libre d'une ligne (`TokenInput onChange`), le mode édition reste ouvert. Le clic sur un token isolé (panneau de suggestions, `updateClickValue`) propageait déjà par caractère avant ce chantier — rien à changer là.
+
+### Feedback 100% dans le bouton sticky (`AutosaveFooterButton.tsx`, nouveau)
+Remplace le statut texte sous la date (retiré des deux headers, il n'était plus sticky) par un bouton unique à 4 états, partagé entre `AddSessionModal`/`CoachSessionModal` :
+- **idle** — "Fermer"
+- **saving** — spinner + "Enregistrement…" (nouveau `@keyframes spinBtn` dans `globals.css`)
+- **saved** — "✓ Enregistré", 1,8s puis retour à idle (`savedRevertTimer`)
+- **error** — "⚠ Erreur — Réessayer" ; un clic relance `persist()` au lieu de fermer
+
+Debounce ramené de 800ms à 600ms. Le bouton n'est **jamais** `disabled` (contrairement au POC de référence) — cliquer pendant "saving" ferme quand même (le save en vol continue en arrière-plan, fire-and-forget). `flushAndClose()` (backdrop, croix, et le bouton hors état erreur) annule le debounce en attente et appelle `persist()` immédiatement avant de fermer, pour ne jamais perdre les dernières frappes.
+
+**Erreurs remontées explicitement** — nécessaire pour que l'état "error" ait un sens : `saveSession` (les 3 fichiers) et le nouveau chemin `create`/`update` de `CoachPlanningClient` lèvent désormais une exception sur échec Supabase/`callSessionAPI` (`if (error) throw error` / `if (!result.ok) throw ...`) au lieu de l'avaler silencieusement comme avant. `persist()` catch et bascule sur `"error"`.
+
+### Limite connue, signalée à Gildas mais pas corrigée dans ce chantier
+Pour un compte non actif (produit-gated), `requireSubscription()` (`usePaywall.ts`) ne rejette jamais — elle ouvre le paywall et résout silencieusement à `undefined`. Vu de `persist()`, ça ressemble à un succès sans id : le bouton affichera "✓ Enregistré" alors que rien n'a été écrit en base, juste avant que le paywall ne s'ouvre par-dessus. Préexistant au geste manuel d'avant ce chantier, mais plus visible maintenant que la confirmation est automatique et proéminente. Pas traité ici (demanderait de distinguer "bloqué par le paywall" de "vraiment sauvegardé" dans le contrat de `requireSubscription`, appelant par appelant).
+
+### Vérifié
+`tsc --noEmit` propre après chaque round (via un `tsconfig.notnext.json` temporaire excluant `.next`). Pas de clic réel par Claude sur l'ensemble du chantier — serveur local laissé à la disposition de Gildas comme il l'a demandé à plusieurs reprises dans les chantiers précédents de ce fichier.
+
+Déployé en prod le 2026-09-06, commit `25e3d2c`, push direct sur `main`, confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
