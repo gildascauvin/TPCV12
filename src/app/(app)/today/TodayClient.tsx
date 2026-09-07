@@ -19,6 +19,7 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
+import DuplicateModal from "@/components/sessions/DuplicateModal";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -124,11 +125,15 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
 }
 
 /* ─── Today session card (v59 POC exact layout) ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, onReorderExercises, authorName }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
-  onDelete: (s: Session) => void;
+  /* Remplace l'ancien bouton "🗑 Supprimer" à côté du CTA Terminer/Résultat — exactement le même
+     bouton "⎘ Dupliquer" que WeekSessionCard (/week, /coach/planning). La suppression reste
+     accessible via le clic sur la carte (ouvre AddSessionModal en édition, qui a son propre
+     bouton Supprimer), donc rien n'est retiré, juste déplacé derrière un clic supplémentaire. */
+  onDuplicate: (s: Session) => void;
   authorName: string;
   /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
      orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
@@ -258,7 +263,8 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, o
           {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
         </button>
         <button
-          onClick={() => onDelete(session)}
+          onClick={() => onDuplicate(session)}
+          title="Dupliquer"
           style={{
             width: 46, height: 46, borderRadius: 14, flexShrink: 0,
             background: "rgba(0,0,0,0.04)", color: "#8a8f94",
@@ -266,7 +272,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDelete, previewPct, o
             fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
-          🗑
+          ⎘
         </button>
       </div>
     </div>
@@ -574,6 +580,26 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
     router.refresh();
   }, [supabase, router]);
+
+  // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
+  // surcharge), déclenchée depuis le bouton "⎘" de TodaySessionCard.
+  const [duplicating, setDuplicating] = useState<Session | null>(null);
+  const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
+    if (!duplicating) return;
+    const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
+    const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
+    const { data: saved } = await supabase.from("sessions").insert({
+      user_id: userId,
+      name: duplicating.name,
+      notes,
+      date: newDate,
+      target_difficulty,
+      done: false,
+    }).select().single();
+    if (saved) setAllSessions((prev) => [...prev, saved as Session]);
+    setDuplicating(null);
+    router.refresh();
+  }, [supabase, userId, duplicating, router]);
 
   // Réordonner les exercices d'une séance par drag & drop — même mécanique que WeekClient.tsx
   // (reorderExercises), pour que /today utilise le même composant/geste que le Planning.
@@ -955,7 +981,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     session={s}
                     onComplete={(s) => handleTerminer(s)}
                     onEdit={(s) => setEditing(s)}
-                    onDelete={(s) => requireSubscription(() => deleteSession(s))}
+                    onDuplicate={(s) => setDuplicating(s)}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
@@ -1000,6 +1026,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onSave={data => requireSubscription(() => saveEdit(data))}
           onDelete={() => requireSubscription(async () => { await deleteSession(editing); setEditing(null); })}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {duplicating && (
+        <DuplicateModal
+          session={duplicating}
+          onDuplicate={(date, _targetAthleteIds, pct) => requireSubscription(() => duplicateSession(date, pct))}
+          onClose={() => setDuplicating(null)}
         />
       )}
       {paywallStep === "priming" && (
