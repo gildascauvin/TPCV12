@@ -222,7 +222,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
     <>
       {!isActive && (
         <UnsavedBanner
-          message="Mode démo · débloque le suivi complet de ta récupération."
+          role="athlete"
           onAction={() => setPaywallStep("priming")}
           roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />

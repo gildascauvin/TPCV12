@@ -380,9 +380,15 @@ interface Props {
      authentifiées et échouerait). Absent/false = comportement inchangé (in-app + wizard,
      partage jamais gaté). */
   shareGated?: boolean;
+  /* Wizard onboarding (2026-09-06) : contrairement aux 6 autres écrans du wizard, cet écran ne
+     reçoit jamais de `wizardHero` (son propre Topbar avec le nom éditable du programme sert déjà
+     de titre — ajouter un bloc WizardHero décoratif au-dessus mangerait de l'espace de travail).
+     `topOffset` est donc un signal séparé, explicite, pour laisser la place à la bannière fixe
+     (UnsavedBanner) au lieu de dériver (à tort) ce calcul de `wizardHero`, toujours undefined ici. */
+  topOffset?: number;
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
@@ -570,7 +576,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
   } : undefined;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", display: "flex", flexDirection: "column", zIndex: 2147483100 }}>
+    <div style={{ position: "fixed", top: topOffset ?? 0, right: 0, bottom: 0, left: 0, background: "#f1f0ee", display: "flex", flexDirection: "column", zIndex: 2147483100 }}>
       {wizardHero}
       {/* Topbar */}
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -777,6 +783,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             title="Reconduire la dernière semaine"
             onClose={() => setShowReconduire(false)}
             onConfirm={async (weeksOut) => applyReconduire(weeksOut)}
+            topOffset={topOffset}
           />
         );
       })()}
@@ -808,6 +815,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
           }}
           onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); }}
           onClose={() => setEditingTarget(null)}
+          topOffset={topOffset}
         />
       )}
     </div>

@@ -608,6 +608,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     <>
       {!isActive && (
         <UnsavedBanner
+          role="athlete"
           onAction={() => requireSubscription(() => {})}
           roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />

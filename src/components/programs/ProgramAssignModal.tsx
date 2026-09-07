@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 
 interface Props {
   programId: string;
@@ -130,7 +131,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
   return (
     <div
       style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
+        position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
@@ -147,7 +148,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
         borderRadius: isMd ? "28px 0 0 28px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
-        height: "100dvh",
+        height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         padding: "28px 28px 0",
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",

@@ -36,13 +36,15 @@ interface ReconduireModalProps {
      ProgramBuilderModal (aucun sélecteur affiché). */
   athletes?: CoachAthlete[];
   sourceAthleteId?: string;
+  /** Wizard onboarding — voir la même doc sur AddSessionModalProps.topOffset. */
+  topOffset?: number;
 }
 
 function fmtNum(n: number): string {
   return n % 1 === 0 ? String(n) : String(n).replace(".", ",");
 }
 
-export default function ReconduireModal({ daySlots, title, onClose, onConfirm, athletes = [], sourceAthleteId }: ReconduireModalProps) {
+export default function ReconduireModal({ daySlots, title, onClose, onConfirm, athletes = [], sourceAthleteId, topOffset }: ReconduireModalProps) {
   const { isMd } = useBreakpoint();
   const [mode, setMode] = useState<Mode>("maintien");
   const [customPct, setCustomPct] = useState(10);
@@ -84,7 +86,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
   return (
     <div
       style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
+        position: "fixed", top: topOffset ?? 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
@@ -96,7 +98,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
         borderRadius: isMd ? "28px 0 0 28px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
-        height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
+        height: topOffset ? `calc(100dvh - ${topOffset}px)` : "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

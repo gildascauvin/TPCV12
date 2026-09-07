@@ -383,7 +383,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     <>
       {!isActive && (
         <UnsavedBanner
-          message="Mode démo · l'ajustement des séances de tes sportifs n'est pas encore sauvegardé."
+          role="coach"
           onAction={() => requireSubscription(() => {})}
           roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />

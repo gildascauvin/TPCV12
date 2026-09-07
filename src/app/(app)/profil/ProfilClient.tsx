@@ -86,7 +86,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
     <>
       {!isActive && (
         <UnsavedBanner
-          message="Mode démo · débloque l'accès complet à ThePerfClub."
+          role={profile.mode}
           onAction={() => (sandboxMode ? setSandboxGateOpen(true) : setPaywallOpen(true))}
           roleToggle={sandboxMode ? { role: profile.mode, onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />

@@ -15,6 +15,7 @@ import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import DecisionStep from "@/components/onboarding/DecisionStep";
 import PaywallModal, { PAYWALL_AVATARS, type Billing } from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
+import UnsavedBanner, { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import Actions from "@/components/onboarding/Actions";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -1556,26 +1557,38 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      wizard_activate/wizard_assign restent intacts derrière ; un paiement réussi lève wizardUnlocked
      et referme l'overlay, faisant réellement disparaître le flou. */
 
+  /* Bannière prix (2026-09-06, POC "Paywall Repensé") — rendue en `fixed` (voir UnsavedBanner.tsx)
+     au-dessus de chaque étape du wizard plutôt qu'imbriquée dans WizardHero : les 6 modals
+     wizard_* (drawer docké à droite/colonne de gauche sur desktop) sont trop étroits à cet
+     endroit pour une bannière "pleine largeur d'écran" — un `position:fixed` séparé, au-dessus de
+     tout (zIndex 2147483200), est le seul moyen d'obtenir le même rendu que sur les pages in-app.
+     Chaque modal wizard_* laisse WIZARD_BANNER_H de marge en haut quand `wizardHero` est fourni
+     (voir leur prop `wizardHero` réutilisé comme signal, pas de nouveau prop). */
+  const wizardBanner = <UnsavedBanner role={role} onAction={() => setWizardPaywallStage("priming")} fixed />;
+
   if (currentStep === "wizard_picker") {
     return (
-      <ProgramCreatePicker
-        wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Connecte tes séances" sub={role === "coach"
-          ? "Le mécanisme que tu viens de voir s'applique au vrai programme de tes sportifs — choisis comment le construire."
-          : "Le mécanisme que tu viens de voir s'applique à ton vrai entraînement — choisis comment le construire."} />}
-        onClose={() => {}}
-        hideClose
-        onGenerate={() => { setWizardCriteriaMode("criteria"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
-        onImport={() => { setWizardCriteriaMode("import"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
-        onTemplate={() => { const idx = path.indexOf("wizard_library"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
-        onBlank={() => {
-          const week: Record<string, never[]> = {};
-          WIZARD_BLANK_DAYS.forEach(d => { week[d] = []; });
-          setWizardTemplate({ weeks: [week] });
-          setWizardProgramName("Programme vierge");
-          const idx = path.indexOf("wizard_builder");
-          setStepIdx(idx === -1 ? stepIdx + 2 : idx);
-        }}
-      />
+      <>
+        {wizardBanner}
+        <ProgramCreatePicker
+          wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Connecte tes séances" sub={role === "coach"
+            ? "Le mécanisme que tu viens de voir s'applique au vrai programme de tes sportifs — choisis comment le construire."
+            : "Le mécanisme que tu viens de voir s'applique à ton vrai entraînement — choisis comment le construire."} />}
+          onClose={() => {}}
+          hideClose
+          onGenerate={() => { setWizardCriteriaMode("criteria"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+          onImport={() => { setWizardCriteriaMode("import"); const idx = path.indexOf("wizard_criteria"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+          onTemplate={() => { const idx = path.indexOf("wizard_library"); setStepIdx(idx === -1 ? stepIdx + 1 : idx); }}
+          onBlank={() => {
+            const week: Record<string, never[]> = {};
+            WIZARD_BLANK_DAYS.forEach(d => { week[d] = []; });
+            setWizardTemplate({ weeks: [week] });
+            setWizardProgramName("Programme vierge");
+            const idx = path.indexOf("wizard_builder");
+            setStepIdx(idx === -1 ? stepIdx + 2 : idx);
+          }}
+        />
+      </>
     );
   }
 
@@ -1586,44 +1599,50 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      d'être choisi, wizard_builder reste éditable librement ensuite. */
   if (currentStep === "wizard_library") {
     return (
-      <ProgramLibraryBrowser
-        wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
-        onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
-        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
-        hideClose
-        onSelect={(template, meta, name) => {
-          setWizardTemplate(template);
-          setWizardProgramName(name);
-          if (meta.sport) setSport(meta.sport);
-          const idx = path.indexOf("wizard_builder");
-          setStepIdx(idx === -1 ? stepIdx + 1 : idx);
-        }}
-      />
+      <>
+        {wizardBanner}
+        <ProgramLibraryBrowser
+          wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
+          onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+          hideClose
+          onSelect={(template, meta, name) => {
+            setWizardTemplate(template);
+            setWizardProgramName(name);
+            if (meta.sport) setSport(meta.sport);
+            const idx = path.indexOf("wizard_builder");
+            setStepIdx(idx === -1 ? stepIdx + 1 : idx);
+          }}
+        />
+      </>
     );
   }
 
   if (currentStep === "wizard_criteria") {
     return (
-      <ProgramCriteriaModal
-        wizardHero={wizardCriteriaMode === "import"
-          ? <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
-          : <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Calibre ton programme" sub="Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler. Tout reste personnalisable ensuite." />}
-        mode={wizardCriteriaMode}
-        lockedSport={sport || sportPrecision.trim() || undefined}
-        onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
-        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
-        hideClose
-        onGenerate={(template, meta) => {
-          setWizardTemplate(template);
-          setWizardProgramName(meta.sport ? `Programme ${meta.sport}` : "Mon programme");
-          /* Sync vers le state top-level (2026-09-04) : depuis que sport_2a est retiré du path,
-             `sport` n'est plus jamais renseigné avant le wizard — sans cette sync,
-             handleWizardSaveToLibrary() (plus bas, POST /api/programs) retomberait toujours sur
-             son repli "Autre" malgré un vrai sport choisi ici, dans wizard_criteria. */
-          if (meta.sport) setSport(meta.sport);
-          next();
-        }}
-      />
+      <>
+        {wizardBanner}
+        <ProgramCriteriaModal
+          wizardHero={wizardCriteriaMode === "import"
+            ? <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
+            : <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Calibre ton programme" sub="Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler. Tout reste personnalisable ensuite." />}
+          mode={wizardCriteriaMode}
+          lockedSport={sport || sportPrecision.trim() || undefined}
+          onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
+          hideClose
+          onGenerate={(template, meta) => {
+            setWizardTemplate(template);
+            setWizardProgramName(meta.sport ? `Programme ${meta.sport}` : "Mon programme");
+            /* Sync vers le state top-level (2026-09-04) : depuis que sport_2a est retiré du path,
+               `sport` n'est plus jamais renseigné avant le wizard — sans cette sync,
+               handleWizardSaveToLibrary() (plus bas, POST /api/programs) retomberait toujours sur
+               son repli "Autre" malgré un vrai sport choisi ici, dans wizard_criteria. */
+            if (meta.sport) setSport(meta.sport);
+            next();
+          }}
+        />
+      </>
     );
   }
 
@@ -1633,7 +1652,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
     return (
       <>
+        {/* Masquée dès que le paywall overlay est ouvert (2026-09-06) : PrimingJourneyModal/
+            PaywallModal sont aussi des drawers plein écran sans notion de WIZARD_BANNER_H, et
+            son message ("Économiser X%") devient redondant une fois qu'on est réellement sur
+            l'écran de prix. */}
+        {!wizardPaywallStage && wizardBanner}
         <ProgramBuilderModal
+          topOffset={WIZARD_BANNER_H}
           programName={wizardProgramName}
           template={wizardTemplate ?? { weeks: [{}] }}
           isActive={wizardUnlocked ? true : false}
@@ -1687,53 +1712,62 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const notifCancelLabel = pushBlockedIOS ? "📲 Me le rappeler plus tard" : "🔔 Me le rappeler plus tard";
     if (role === "coach") {
       return (
-        <InviteModal
-          wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Pas besoin qu'ils créent un compte pour que tu commences à utiliser ThePerfClub — ajoute-les et assigne-leur déjà un programme. C'est encore mieux quand ils rejoignent : tout se synchronise automatiquement." />}
-          onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
-          onLinked={() => {}}
-          inviteCode={inviteCode}
-          cancelLabel={notifCancelLabel}
-          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
-        />
+        <>
+          {wizardBanner}
+          <InviteModal
+            wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Pas besoin qu'ils créent un compte pour que tu commences à utiliser ThePerfClub — ajoute-les et assigne-leur déjà un programme. C'est encore mieux quand ils rejoignent : tout se synchronise automatiquement." />}
+            onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
+            onLinked={() => {}}
+            inviteCode={inviteCode}
+            cancelLabel={notifCancelLabel}
+            onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+          />
+        </>
       );
     }
     return (
-      <WellnessModal
-        wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
-        date={new Date().toISOString().split("T")[0]}
-        onSave={async data => {
-          const uid = userId || newUserId;
-          if (uid) {
-            const { error } = await supabase.from("wellness_daily").upsert({ user_id: uid, date: new Date().toISOString().split("T")[0], ...data }, { onConflict: "user_id,date" });
-            if (error) console.error("[wizard_activate] wellness_daily upsert error:", error);
-          }
-          next();
-        }}
-        onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
-        cancelLabel={notifCancelLabel}
-        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
-      />
+      <>
+        {wizardBanner}
+        <WellnessModal
+          wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
+          date={new Date().toISOString().split("T")[0]}
+          onSave={async data => {
+            const uid = userId || newUserId;
+            if (uid) {
+              const { error } = await supabase.from("wellness_daily").upsert({ user_id: uid, date: new Date().toISOString().split("T")[0], ...data }, { onConflict: "user_id,date" });
+              if (error) console.error("[wizard_activate] wellness_daily upsert error:", error);
+            }
+            next();
+          }}
+          onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
+          cancelLabel={notifCancelLabel}
+          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+        />
+      </>
     );
   }
 
   if (currentStep === "wizard_assign") {
     return (
-      <ProgramAssignModal
-        wizardHero={<WizardHero step={3} dark eyebrow="Étape 3/3 — Assigner" title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
-          ? "Le programme apparaît directement dans le planning de tes sportifs, prêt à suivre au jour le jour."
-          : "Ton programme apparaît directement dans ton planning, prêt à suivre au jour le jour."} />}
-        programId={wizardProgramId ?? ""}
-        programName={wizardProgramName}
-        athletes={role === "coach" ? wizardCoachAthletes : []}
-        selfUserId={role === "athlete" ? (userId || newUserId || undefined) : undefined}
-        initialSelectedIds={role === "coach" ? wizardCoachAthletes.map(a => a.id) : undefined}
-        defaultStartDate="today"
-        onAssigned={finishWizard}
-        onClose={finishWizard}
-        onSkip={finishWizard}
-        hideClose
-        onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_activate")))}
-      />
+      <>
+        {wizardBanner}
+        <ProgramAssignModal
+          wizardHero={<WizardHero step={3} dark eyebrow="Étape 3/3 — Assigner" title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
+            ? "Le programme apparaît directement dans le planning de tes sportifs, prêt à suivre au jour le jour."
+            : "Ton programme apparaît directement dans ton planning, prêt à suivre au jour le jour."} />}
+          programId={wizardProgramId ?? ""}
+          programName={wizardProgramName}
+          athletes={role === "coach" ? wizardCoachAthletes : []}
+          selfUserId={role === "athlete" ? (userId || newUserId || undefined) : undefined}
+          initialSelectedIds={role === "coach" ? wizardCoachAthletes.map(a => a.id) : undefined}
+          defaultStartDate="today"
+          onAssigned={finishWizard}
+          onClose={finishWizard}
+          onSkip={finishWizard}
+          hideClose
+          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_activate")))}
+        />
+      </>
     );
   }
 

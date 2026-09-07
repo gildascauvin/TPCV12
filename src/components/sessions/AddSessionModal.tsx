@@ -22,9 +22,14 @@ interface AddSessionModalProps {
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
+  /* Wizard onboarding (2026-09-06) : ProgramBuilderModal ouvre cette modale par-dessus sa propre
+     bannière fixe (UnsavedBanner, WIZARD_BANNER_H) — sans ce décalage, l'écran plein-page de
+     cette modale (position:fixed inset:0) démarre à y=0 et la bannière (zIndex plus haut) se
+     retrouve à recouvrir son propre header. Absent = comportement inchangé (usage in-app normal). */
+  topOffset?: number;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose, topOffset }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
 
   useEffect(() => {
@@ -88,7 +93,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   return (
     <div
       style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
+        position: "fixed", top: topOffset ?? 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
@@ -100,7 +105,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
         borderRadius: isMd ? "28px 0 0 28px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
-        height: "100dvh",
+        height: topOffset ? `calc(100dvh - ${topOffset}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>

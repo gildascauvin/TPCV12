@@ -340,7 +340,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     <>
       {!isActive && (
         <UnsavedBanner
-          message="Mode démo · le suivi de tes sportifs n'est pas encore sauvegardé."
+          role="coach"
           onAction={() => setPaywallStep("priming")}
           roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />

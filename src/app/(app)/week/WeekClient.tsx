@@ -449,6 +449,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     <>
       {!isActive && (
         <UnsavedBanner
+          role="athlete"
           onAction={() => requireSubscription(() => {})}
           roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
