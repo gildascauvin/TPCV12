@@ -37,7 +37,13 @@ const SPORT_META: { value: string; icon: string; label: string; sub: string }[] 
   { value: "Fitness / CrossFit", icon: "🔥", label: "Fitness / CrossFit", sub: "Conditionnement croisé" },
   { value: "Athlétisme & vitesse", icon: "🏃", label: "Athlétisme & vitesse", sub: "Sprint, demi-fond…" },
   { value: "Sports collectifs", icon: "⚽", label: "Sports collectifs", sub: "Foot, rugby, hand…" },
-  { value: "Endurance", icon: "🏊", label: "Endurance", sub: "Course, trail, natation, vélo…" },
+  // Libellé uniquement — `value` reste "Endurance" en interne (clé WEAKNESSES_BY_SPORT,
+  // référence de guessSportChip() pour aviron/natation/vélo/trail tapés en texte libre,
+  // compatible getSportCategory() côté serveur). Renommé car le contenu réel de cette
+  // catégorie est 100% course à pied (banque d'exercices vérifiée) — l'ancien sous-texte
+  // "Course, trail, natation, vélo…" promettait une couverture qu'un clic ne livre jamais.
+  // Natation/vélo/trail restent accessibles en texte libre (banques dédiées réelles).
+  { value: "Endurance", icon: "👟", label: "Course à pied", sub: "Fond, fractionné, sortie longue" },
   { value: "Arts martiaux & combat", icon: "🥋", label: "Arts martiaux & combat", sub: "MMA, boxe, judo…" },
 ];
 
