@@ -2986,3 +2986,17 @@ Repéré par Gildas : un programme public supprimé ("Maxi aita test") restait v
 Vérifié `tsc --noEmit` propre. Pas de re-vérification en clic réel par Claude après déploiement (dépend du cache déjà servi côté client de Gildas) — à confirmer par lui après un rechargement.
 
 Déployé en prod le 2026-09-07, commit `458ca34`, push direct sur `main`.
+
+## Découplage Partage (`is_public`) / Bibliothèque officielle (`is_official_template`) (2026-09-07)
+
+Suite directe du fix précédent. Question de Gildas ("dès que je crée un programme, il apparaît dans les templates ?") — vérifié dans le code : faux pour la création normale (`handleWizardSaveToLibrary()`/`POST /api/programs` n'envoient jamais `is_public`, colonne à `false` par défaut) — mais **vrai pour le bouton "🔗 Partager"** (`handleWizardShare()`/`shareProgram()`), qui force `is_public=true`, et jusqu'ici `is_public=true` était le SEUL critère utilisé par `/api/programs/library` pour peupler la bibliothèque vue par tout le monde. Confirmé en base : 2 programmes du compte personnel de Gildas (`CrossFit — Base 8 Semaines` doublon, `Powerlifting — Spécialisation Squat`, tous deux créés à des dates correspondant à des sessions de test connues) s'étaient glissés dans la bibliothèque publique via ce mécanisme.
+
+**Fix — nouvelle colonne `programs.is_official_template`** (migration Supabase, défaut `false`) : découple les deux notions.
+- `is_public` reste inchangé — pilote uniquement `/p/[id]` (lien de partage) et `/api/programs/claim` — "Partager" continue de fonctionner exactement comme avant.
+- `is_official_template` pilote désormais seul `/api/programs/library` et `/api/sandbox/library` — **jamais posé à `true` par un chemin de création/partage de l'app**, uniquement via une action manuelle en base (comme tout le reste de la bibliothèque officielle, construite via scripts/SQL direct depuis le début du projet) — élimine structurellement toute récidive future, même si "Partager" est cliqué en boucle par n'importe quel compte.
+
+**Backfill, avec un vrai cas particulier trouvé en vérifiant** (pas juste "tout ce qui appartient au compte coach") : 64 programmes du compte coach officiel (`contact@theperfclub.com`, `8d73ebd5-f200-4d09-af0c-707fd223836a`) passent à `true` — **plus `"Programme Haltérophilie"` (`d85c3fff-51df-466c-92cf-54b675fa7ed4`)**, le tout premier programme public jamais créé (2026-06-11, avant que la convention du compte coach dédié existe), resté sous le compte personnel de Gildas mais **référencé en dur dans `CURATED_PROGRAM_IDS` de `/api/sandbox/library/route.ts`** — l'exclure aurait cassé la démo sandbox. Total : **65 templates officiels**. Les 2 programmes de test restent `is_public=true` (lien de partage toujours valide s'il existe déjà) mais `is_official_template=false` — invisibles de la bibliothèque, **non supprimés** (Gildas a confirmé "invisible mais gardé" suffisant plutôt qu'un DELETE irréversible, une fois le cas particulier Haltérophilie porté à sa connaissance — la demande initiale "supprime les autres" datait d'avant cette découverte).
+
+Vérifié `tsc --noEmit` propre, backfill confirmé par requête SQL directe (65 `is_official_template=true`, répartition attendue par owner). Pas de test au clic réel par Claude.
+
+Déployé en prod le 2026-09-07, commit `1bcf4a7`, push direct sur `main`.
