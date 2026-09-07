@@ -618,6 +618,12 @@ interface CardProps {
   editing: boolean;
   onStartEdit: () => void;
   onCommitEdit: (text: string) => void;
+  /* Autosave "à chaque caractère" (2026-09-06) — même effet que onCommitEdit (répercute le texte
+     dans `lines`/`onChange` du parent) mais SANS quitter le mode édition (pas de `setEditingId(null)`
+     côté ExerciseBlockEditor) : appelé à chaque frappe pendant l'édition libre d'une ligne, pour que
+     l'autosave du drawer parent (AddSessionModal/CoachSessionModal) voie le texte en temps réel sans
+     attendre Entrée/blur. `onCommitEdit` reste la finalisation (trim, sortie du mode édition). */
+  onLiveEdit: (text: string) => void;
   onDeleteEmpty: () => void;
   onDelete: () => void;
   attachments: ExerciseAttachments;
@@ -639,7 +645,7 @@ interface CardProps {
   sessionDate: string;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate }: CardProps) {
+function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
@@ -902,7 +908,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onDeleteEmpty,
         {editing ? (
           <div style={{ flex: 1, minWidth: 0 }}>
             <TokenInput
-              value={draftText} onChange={setDraftText} autoFocus
+              value={draftText} onChange={text => { setDraftText(text); onLiveEdit(text); }} autoFocus
               isPanelOwner={isPanelOwner} requestPanel={requestPanel} releasePanel={releasePanel}
               onCommit={() => {
                 const trimmed = draftText.trim();
@@ -1291,6 +1297,7 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
                   commitLines(lines.map(x => (x.id === l.id ? { ...x, text } : x)));
                   setEditingId(null);
                 }}
+                onLiveEdit={text => commitLines(lines.map(x => (x.id === l.id ? { ...x, text } : x)))}
                 onDeleteEmpty={() => {
                   deleteLine(l.id);
                   setEditingId(null);

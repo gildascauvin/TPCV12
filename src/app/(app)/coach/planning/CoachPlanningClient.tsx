@@ -338,34 +338,29 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return res.json();
   }
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => {
-    const results = await Promise.all(
-      athleteIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data }))
-    );
-    const newSessions: CoachViewSession[] = results
+  /* Autosave universel (2026-09-06) — création ET édition, un seul upsert :
+     - `id` fourni → met à jour cette ligne pour `athleteIds[0]` (toujours un seul destinataire, la
+       "cible" autosave côté CoachSessionModal — voir ce fichier).
+     - `id` absent → crée une ligne par `athleteId` fourni. Sert à la fois le tout premier autosave
+       (un seul id, la cible) et l'action explicite "Dupliquer (N) →" (les extras uniquement, jamais
+       la cible déjà créée par ailleurs). Ne ferme jamais le drawer — `onClose` s'en charge. */
+  const saveSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[], id?: string) => {
+    if (id) {
+      const primaryId = athleteIds[0];
+      if (!primaryId) return;
+      const result = await callSessionAPI({ action: "update", athleteId: primaryId, sessionId: id, data });
+      if (!result.ok) throw new Error("update failed");
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, ...data } as CoachViewSession : s));
+      return { id };
+    }
+    const results = await Promise.all(athleteIds.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
+    if (results.every(r => !r.ok)) throw new Error("create failed");
+    const created: CoachViewSession[] = results
       .filter(r => r.ok && r.session)
       .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
-    setSessions(prev => [...prev, ...newSessions]);
-    setAddingDate(null);
+    setSessions(prev => [...prev, ...created]);
+    return created[0] ? { id: created[0].id } : undefined;
   }, [athletes]);
-
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => {
-    if (!editingSession || !athlete) return;
-    const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: editingSession.id, data });
-    if (result.ok) {
-      const updated: CoachViewSession = { ...editingSession, ...data };
-      setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
-    }
-    const extras = athleteIds.filter(id => id !== athlete.id);
-    if (extras.length > 0) {
-      const results = await Promise.all(extras.map(aid => callSessionAPI({ action: "add", athleteId: aid, data })));
-      const newSessions: CoachViewSession[] = results
-        .filter(r => r.ok && r.session)
-        .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
-      setSessions(prev => [...prev, ...newSessions]);
-    }
-    setEditingSession(null);
-  }, [editingSession, athlete, athletes]);
 
   const deleteSession = useCallback(async () => {
     if (!editingSession || !athlete) return;
@@ -1002,7 +997,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           } : null}
           athletes={athletes}
           initialAthleteId={athlete.id}
-          onSave={(data, athleteIds) => requireSubscription(() => (editingSession ? saveEdit(data, athleteIds) : addSession(data, athleteIds)))}
+          onSave={(data, athleteIds, id) => requireSubscription(() => saveSession(data, athleteIds, id))}
           onDelete={editingSession ? (() => requireSubscription(() => deleteSession())) : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
           onMarkViewed={() => {

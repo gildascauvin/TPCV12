@@ -810,8 +810,10 @@ export default function ProgramBuilderModal({ programName: initialName, template
           hideDate
           userName={userName ?? "Toi"}
           onSave={async (data) => {
+            // Autosave (2026-09-06) — mutation locale du template à chaque frappe (aucune écriture
+            // DB tant que le programme n'est pas enregistré/assigné), ne ferme plus le drawer :
+            // onClose s'en charge séparément.
             updateSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx, { name: data.name, notes: data.notes || null, target_difficulty: data.target_difficulty, exercise_media: data.exercise_media });
-            setEditingTarget(null);
           }}
           onDelete={async () => { removeSession(editingTarget.weekIdx, editingTarget.day, editingTarget.sessionIdx); setEditingTarget(null); }}
           onClose={() => setEditingTarget(null)}

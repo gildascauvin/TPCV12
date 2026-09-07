@@ -557,14 +557,22 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     }
   }
 
-  const addSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
-    const { data: saved } = await supabase
+  /* Autosave universel (2026-09-06) — création ET édition, un seul upsert : `id` absent = créer
+     (1er autosave d'une séance neuve), `id` fourni = mettre à jour cette même ligne. Ne ferme jamais
+     le drawer — c'est `onClose` qui s'en charge, séparément, avec le `router.refresh()`. */
+  const saveSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, id?: string) => {
+    if (id) {
+      const { data: saved, error } = await supabase.from("sessions").update(data).eq("id", id).select().single();
+      if (error) throw error;
+      if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+      return saved ? { id: saved.id } : undefined;
+    }
+    const { data: saved, error } = await supabase
       .from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
+    if (error) throw error;
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
-    setShowAddSession(false);
-    setAddSessionInitialName(undefined);
-    router.refresh();
-  }, [supabase, userId, router]);
+    return saved ? { id: saved.id } : undefined;
+  }, [supabase, userId]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     if (!completing) return;
@@ -618,14 +626,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (error) setAllSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
   }, [supabase, allSessions]);
 
-  const saveEdit = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => {
-    if (!editing) return;
-    const { data: saved } = await supabase
-      .from("sessions").update(data).eq("id", editing.id).select().single();
-    if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved as Session : s));
-    setEditing(null);
-    router.refresh();
-  }, [supabase, editing, router]);
 
   const ringSize = isLg ? 120 : isMd ? 112 : 96;
   const pad = isLg ? 32 : isMd ? 24 : 16;
@@ -1013,7 +1013,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={data => requireSubscription(() => addSession(data))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => requireSubscription(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={data => requireSubscription(() => saveComplete(data))} onClose={() => setCompleting(null)} />
@@ -1023,9 +1023,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           date={editing.date}
           session={editing}
           userName={profile.name ?? "Toi"}
-          onSave={data => requireSubscription(() => saveEdit(data))}
+          onSave={(data, id) => requireSubscription(() => saveSession(data, id ?? editing.id))}
           onDelete={() => requireSubscription(async () => { await deleteSession(editing); setEditing(null); })}
-          onClose={() => setEditing(null)}
+          onClose={() => { setEditing(null); router.refresh(); }}
         />
       )}
       {duplicating && (

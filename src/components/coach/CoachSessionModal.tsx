@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { CoachSession, CoachAthlete, ExerciseAttachments } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import { Z_MODERATE, Z_SWC, relativeZoneLabel, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
+import AutosaveFooterButton, { type AutosaveFooterState } from "@/components/sessions/AutosaveFooterButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 import { syncTestResultsFromSession } from "@/lib/testResults";
 import { createClient } from "@/lib/supabase/client";
@@ -33,7 +34,10 @@ interface Props {
   athletes?: CoachAthlete[];
   initialAthleteId?: string;
   reviewContext?: ReviewContext;
-  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[]) => Promise<void>;
+  /* Autosave (2026-09-06) — création ET édition (hors reviewContext). `id` est absent au tout
+     premier appel ; l'appelant crée alors la séance pour `athleteIds` et DOIT retourner son id pour
+     que les autosaves suivants mettent à jour cette même ligne au lieu d'en recréer une. */
+  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[], id?: string) => Promise<{ id: string } | void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
   /* Marque la séance vue par le coach (fait disparaître le point de notification côté sportif) —
@@ -119,6 +123,16 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
 
   const isEdit = !!session;
   const showRecipients = athletes.length > 0;
+  /* Autosave (2026-09-06, étendu à la création) — jamais dans le mode chaîné "Traiter les
+     décisions" (reviewContext), où "Suivant/Terminer" pilote l'avancée de la file, pas juste la
+     persistance. La "cible" autosave reste toujours `initialAthleteId` (le sportif dont le planning
+     est affiché), en édition comme en création. Si, en création, le coach décoche explicitement ce
+     sportif des destinataires (pour envoyer uniquement à d'autres), on retombe sur le geste manuel
+     multi-destinataires d'origine — pas de notion de "cible unique" cohérente dans ce cas précis. */
+  const autosaveTargetId = isEdit
+    ? initialAthleteId
+    : (initialAthleteId && recipients.includes(initialAthleteId) ? initialAthleteId : undefined);
+  const autosaveEnabled = !reviewContext && !!autosaveTargetId;
 
   const diffCls = difficulty >= 8 ? "hard" : difficulty >= 5 ? "moderate" : "easy";
   const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
@@ -134,6 +148,80 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
   }
 
   const canSave = name.trim() && (isEdit || recipients.length > 0);
+
+  function buildPayload() {
+    const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
+    return { name: name.trim(), notes, date: sessionDate, target_difficulty: difficulty, exercise_media: exerciseMedia };
+  }
+
+  const lastSavedRef = useRef<string | null>(session ? JSON.stringify({
+    name: session.name.trim(),
+    notes: session.notes ?? "",
+    date: session.date,
+    target_difficulty: session.target_difficulty ?? 6,
+    exercise_media: session.exercise_media ?? {},
+  }) : null);
+  const [persistedId, setPersistedId] = useState<string | null>(session?.id ?? null);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRevertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [footerState, setFooterState] = useState<AutosaveFooterState>("idle");
+  const [duplicatingExtras, setDuplicatingExtras] = useState(false);
+  // Extras déjà cochés ("Dupliquer aussi vers") — action distincte, jamais déclenchée par
+  // l'autosave (créerait une nouvelle séance à chaque frappe), un bouton dédié l'exécute une fois.
+  const extraRecipients = autosaveTargetId ? recipients.filter(id => id !== autosaveTargetId) : [];
+
+  async function persist() {
+    if (!autosaveTargetId) return;
+    const payload = buildPayload();
+    const snapshot = JSON.stringify(payload);
+    if (!payload.name || snapshot === lastSavedRef.current) return;
+    if (savedRevertTimer.current) { clearTimeout(savedRevertTimer.current); savedRevertTimer.current = null; }
+    setFooterState("saving");
+    try {
+      const result = await onSave(payload, [autosaveTargetId], persistedId ?? undefined);
+      if (result?.id) setPersistedId(result.id);
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) await syncTestResultsFromSession(user.id, { subjectCoachAthleteId: autosaveTargetId }, payload.notes, exerciseMedia, sessionDate);
+      lastSavedRef.current = snapshot;
+      setFooterState("saved");
+      savedRevertTimer.current = setTimeout(() => setFooterState("idle"), 1800);
+    } catch {
+      setFooterState("error");
+    }
+  }
+
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+    const payload = buildPayload();
+    if (!payload.name) return;
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === lastSavedRef.current) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(persist, 600);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosaveEnabled, autosaveTargetId, name, sessionDate, difficulty, exercisesText, exerciseMedia]);
+
+  function flushAndClose() {
+    if (autosaveEnabled && autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
+    onClose();
+  }
+
+  // Bouton unique du footer : en erreur, un clic relance l'enregistrement plutôt que de fermer —
+  // le clic sur le fond/la croix, eux, ferment toujours (voir flushAndClose ci-dessus).
+  function handleFooterClick() {
+    if (autosaveEnabled && footerState === "error") { persist(); return; }
+    flushAndClose();
+  }
+
+  async function handleDuplicateExtras() {
+    if (extraRecipients.length === 0) return;
+    setDuplicatingExtras(true);
+    await onSave(buildPayload(), extraRecipients);
+    setRecipients(autosaveTargetId ? [autosaveTargetId] : []);
+    setDuplicatingExtras(false);
+  }
 
   async function handleSave() {
     if (!canSave) return;
@@ -171,7 +259,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) flushAndClose(); }}
     >
       <div style={{
         background: "#fff",
@@ -209,7 +297,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                 })()}
               />
             )}
-            <button onClick={onClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
+            <button onClick={flushAndClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
           </div>
         </div>
         <input
@@ -371,48 +459,87 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         )}
       </div>
 
-        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu */}
-        <div style={{
-          flexShrink: 0,
-          display: "grid",
-          gridTemplateColumns: isEdit && onDelete ? "auto 1fr 1fr" : "1fr 1fr",
-          gap: 8, alignItems: "center",
-          padding: "20px 28px 20px",
-          background: "#fff",
-          borderTop: "1px solid rgba(0,0,0,.08)",
-        }}>
-          {isEdit && onDelete && (
-            <div>
-              {!confirmDelete ? (
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
-                >
-                  🗑
-                </button>
-              ) : (
-                <button
-                  onClick={handleDelete} disabled={deleting}
-                  style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
-                >
-                  {deleting ? "..." : "Confirmer 🗑"}
-                </button>
-              )}
-            </div>
-          )}
-          <button
-            onClick={onClose}
-            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleSave} disabled={saving || !canSave}
-            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !canSave ? 0.6 : 1 }}
-          >
-            {saveLabel}
-          </button>
-        </div>
+        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu.
+            En édition normale (autosaveEnabled) : plus de bouton "Enregistrer" — juste "Fermer",
+            et un "Dupliquer (N) →" séparé si des destinataires supplémentaires ont été cochés
+            (action ponctuelle, jamais déclenchée par l'autosave lui-même). */}
+        {autosaveEnabled ? (
+          <div style={{
+            flexShrink: 0, display: "flex", gap: 8, alignItems: "center",
+            padding: "20px 28px 20px", background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)",
+          }}>
+            {onDelete && (
+              <div style={{ flexShrink: 0 }}>
+                {!confirmDelete ? (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
+                  >
+                    🗑
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDelete} disabled={deleting}
+                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
+                  >
+                    {deleting ? "..." : "Confirmer 🗑"}
+                  </button>
+                )}
+              </div>
+            )}
+            <AutosaveFooterButton state={footerState} onClick={handleFooterClick} style={{ flex: 1 }} />
+            {extraRecipients.length > 0 && (
+              <button
+                onClick={handleDuplicateExtras} disabled={duplicatingExtras}
+                style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+              >
+                {duplicatingExtras ? "..." : `Dupliquer (${extraRecipients.length}) →`}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div style={{
+            flexShrink: 0,
+            display: "grid",
+            gridTemplateColumns: isEdit && onDelete ? "auto 1fr 1fr" : "1fr 1fr",
+            gap: 8, alignItems: "center",
+            padding: "20px 28px 20px",
+            background: "#fff",
+            borderTop: "1px solid rgba(0,0,0,.08)",
+          }}>
+            {isEdit && onDelete && (
+              <div>
+                {!confirmDelete ? (
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
+                  >
+                    🗑
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDelete} disabled={deleting}
+                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
+                  >
+                    {deleting ? "..." : "Confirmer 🗑"}
+                  </button>
+                )}
+              </div>
+            )}
+            <button
+              onClick={onClose}
+              style={{ height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleSave} disabled={saving || !canSave}
+              style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !canSave ? 0.6 : 1 }}
+            >
+              {saveLabel}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

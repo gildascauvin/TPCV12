@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Session, ExerciseAttachments } from "@/types";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
 import ShareButton from "@/components/sessions/ShareButton";
+import AutosaveFooterButton, { type AutosaveFooterState } from "@/components/sessions/AutosaveFooterButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
 import { syncTestResultsFromSession } from "@/lib/testResults";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +20,10 @@ interface AddSessionModalProps {
   userId?: string;
   /* Signe les commentaires laissés dans l'éditeur d'exercices — pas juste "Sportif" générique. */
   userName?: string;
-  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }) => Promise<void>;
+  /* Autosave (2026-09-06) — création ET édition. `id` est absent au tout premier appel (rien
+     n'existe encore) ; l'appelant crée alors la séance et DOIT retourner son id pour que les
+     autosaves suivants mettent à jour cette même ligne au lieu d'en recréer une à chaque frappe. */
+  onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, id?: string) => Promise<{ id: string } | void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
   /* Wizard onboarding (2026-09-06) : ProgramBuilderModal ouvre cette modale par-dessus sa propre
@@ -56,10 +60,11 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
   const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
   const [exerciseMedia, setExerciseMedia] = useState<Record<string, ExerciseAttachments>>(session?.exercise_media ?? {});
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // `isEdit` reste ancré sur la prop `session` d'origine — pilote l'aperçu initial des champs, le
+  // texte d'accroche et le bouton de partage, qui ont tous besoin d'une vraie séance existante.
   const isEdit = !!session;
 
   const diffCls = targetDiff >= 8 ? "hard" : targetDiff >= 5 ? "moderate" : "easy";
@@ -68,19 +73,73 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   const diffColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[diffCls];
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
 
-  async function handleSave() {
-    if (!name.trim()) return;
-    setSaving(true);
+  function buildPayload() {
     const notes = exercisesText.split("\n").map(l => l.trim()).filter(Boolean).join("\n");
-    await onSave({ name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff, exercise_media: exerciseMedia });
-    // Écriture double vers tests/test_results — jamais pour un template (ProgramBuilderModal,
-    // session?.user_id === "template", pas un vrai sportif authentifié).
-    if (session?.user_id !== "template") {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) await syncTestResultsFromSession(user.id, { subjectUserId: user.id }, notes, exerciseMedia, selectedDate);
+    return { name: name.trim(), notes, date: selectedDate, target_difficulty: targetDiff, exercise_media: exerciseMedia };
+  }
+
+  /* Autosave universel (2026-09-06) — création ET édition. `lastSavedRef` vaut `null` tant que rien
+     n'a encore été persisté (création à blanc) : n'importe quel nom saisi devient alors "dirty". Une
+     fois créée, `persistedId` fait basculer les autosaves suivants en mise à jour de cette même ligne. */
+  const lastSavedRef = useRef<string | null>(session ? JSON.stringify({
+    name: session.name.trim(),
+    notes: session.notes ?? "",
+    date: session.date,
+    target_difficulty: session.target_difficulty ?? 6,
+    exercise_media: session.exercise_media ?? {},
+  }) : null);
+  const [persistedId, setPersistedId] = useState<string | null>(session?.id ?? null);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRevertTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [footerState, setFooterState] = useState<AutosaveFooterState>("idle");
+
+  async function persist() {
+    const payload = buildPayload();
+    const snapshot = JSON.stringify(payload);
+    if (!payload.name || snapshot === lastSavedRef.current) return;
+    if (savedRevertTimer.current) { clearTimeout(savedRevertTimer.current); savedRevertTimer.current = null; }
+    setFooterState("saving");
+    try {
+      const result = await onSave(payload, persistedId ?? undefined);
+      if (result?.id) setPersistedId(result.id);
+      // Écriture double vers tests/test_results — jamais pour un template (ProgramBuilderModal,
+      // session?.user_id === "template", pas un vrai sportif authentifié).
+      if (session?.user_id !== "template") {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) await syncTestResultsFromSession(user.id, { subjectUserId: user.id }, payload.notes, exerciseMedia, selectedDate);
+      }
+      lastSavedRef.current = snapshot;
+      setFooterState("saved");
+      savedRevertTimer.current = setTimeout(() => setFooterState("idle"), 1800);
+    } catch {
+      setFooterState("error");
     }
-    setSaving(false);
+  }
+
+  useEffect(() => {
+    const payload = buildPayload();
+    if (!payload.name) return;
+    const snapshot = JSON.stringify(payload);
+    if (snapshot === lastSavedRef.current) return;
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = setTimeout(persist, 600);
+    return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, selectedDate, targetDiff, exercisesText, exerciseMedia]);
+
+  // Flush immédiat d'un changement pas encore débounçé (évite de perdre les dernières frappes) puis
+  // fermeture — jamais bloquante, le flush part en arrière-plan sans attendre sa résolution.
+  function flushAndClose() {
+    if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
+    onClose();
+  }
+
+  // Bouton unique du footer : en erreur, un clic relance l'enregistrement plutôt que de fermer —
+  // le clic sur le fond, lui, ferme toujours (voir flushAndClose ci-dessus).
+  function handleFooterClick() {
+    if (footerState === "error") { persist(); return; }
+    flushAndClose();
   }
 
   async function handleDelete() {
@@ -98,7 +157,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) flushAndClose(); }}
     >
       <div style={{
         background: "#fff", color: "#171b1f",
@@ -182,11 +241,13 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           />
         </div>
 
-        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu */}
+        {/* Actions — flex item non-scrollable, jamais recouvert par le contenu. Autosave partout
+            (création ET édition) : plus de bouton "Enregistrer"/"Créer" — seul "Fermer" reste, aux
+            côtés de la suppression quand elle est proposée (jamais à la création). */}
         <div style={{
           flexShrink: 0,
           display: "grid",
-          gridTemplateColumns: isEdit && onDelete ? "auto 1fr 1fr" : "1fr 1fr",
+          gridTemplateColumns: isEdit && onDelete ? "auto 1fr" : "1fr",
           gap: 8, alignItems: "center",
           padding: "20px 28px 20px",
           background: "#fff",
@@ -211,18 +272,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
               )}
             </div>
           )}
-          <button
-            onClick={onClose}
-            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-          >
-            Annuler
-          </button>
-          <button
-            onClick={handleSave} disabled={saving || !name.trim()}
-            style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !name.trim() ? 0.6 : 1 }}
-          >
-            {saving ? "..." : isEdit ? "Enregistrer ✓" : "Créer ✓"}
-          </button>
+          <AutosaveFooterButton state={footerState} onClick={handleFooterClick} />
         </div>
       </div>
     </div>

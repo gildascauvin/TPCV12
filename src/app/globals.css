@@ -71,6 +71,9 @@
   from { background-position: -200% 0; }
   to   { background-position: 200% 0; }
 }
+@keyframes spinBtn {
+  to { transform: rotate(360deg); }
+}
 
 html,
 body {
