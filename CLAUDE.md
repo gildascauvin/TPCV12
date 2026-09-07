@@ -2944,3 +2944,15 @@ Repéré par Gildas ("un user a mis 'Aviron' qui est reconnu comme appartenant �
 Vérifié `tsc --noEmit` propre après chaque itération. Pas de test au clic réel par Claude.
 
 Déployé en prod le 2026-09-07, commit `afd2042`, push direct sur `main`.
+
+### Suite — discussion sur la couverture des 8 chips, puis renommage "Endurance" → "Course à pied"
+
+Discussion (sans exécution) sur si les 8 chips `SPORT_META`/`SPORT_CATEGORIES` sont les bons, en confrontant chaque chip au vrai routage `getSportCategory()` plutôt qu'à l'intuition :
+- **"Endurance" (sub-texte "Course, trail, natation, vélo…") mentait** : cliquer ce chip envoie `sport="Endurance"`, qui matche `s.includes("endur")` → catégorie `endurance` dont la banque d'exercices est vérifiée 100% course à pied (Foulées éducatives, Sortie longue, Fartlek, VMA...) — jamais trail/natation/vélo, qui sont des `SportCategory` distinctes (`trail`/`natation`/`cyclisme`, chacune avec sa propre banque d'exercices réelle mais sans curriculum à séances nommées — vérifié, elles existent bien dans `EXERCISES`).
+- **Hyrox** a un vrai curriculum dédié (fidèle à la page WP) mais n'est exposé nulle part en chip — seulement accessible via le texte libre.
+- **Sports collectifs et Combat sont des pièges pour une future segmentation par discipline** : Football/Rugby/Basketball/Handball matchent tous le même mot-clé et retournent la **même** catégorie unique `collectif` (aucune différenciation par sport collectif) ; Boxe/MMA/Judo/Karaté/Lutte retournent tous `combat`, un **seul curriculum unifié** — décision explicite de Gildas déjà documentée plus haut dans ce fichier, pas un manque à corriger. Proposer des chips par discipline dans ces 2 catégories serait activement trompeur (ça promettrait une personnalisation qui n'existe pas dans le contenu réel).
+- `SPORT_CURRICULUM` compte 41 entrées au total contre 8 chips exposés — la liste complète des catégories avec un vrai curriculum dédié est dans `generate/route.ts:2867`.
+
+**Décision de Gildas** (portée réduite au strict nécessaire, pour l'instant) : renommer uniquement le **libellé** du chip "Endurance" → "Course à pied" (`SPORT_META`, `ProgramCriteriaModal.tsx`) — pas de refonte à 2 niveaux, pas de nouveaux chips Hyrox/Triathlon/Calisthenics/Escalade envisagés en discussion. **`value` reste "Endurance" en interne** (changement de libellé/icône seulement, `icon: "🏊"` → `"👟"`) — `WEAKNESSES_BY_SPORT["Endurance"]`, `guessSportChip()` (utilisé pour aviron/natation/vélo/trail tapés en texte libre, ET pour le filtre de la bibliothèque dans `sportCategories.ts`, qui doit rester "Endurance" — regroupe légitimement une famille de sports dans ce contexte-là) et `getSportCategory()` côté serveur restent tous inchangés. Correction d'un 1er plan trop large de Claude ("renommer à 3 endroits ensemble") — Gildas a précisé que le filtre bibliothèque devait rester "Endurance", ce qui a permis de trouver la version purement cosmétique et sans risque de découplage.
+
+Déployé en prod le 2026-09-07, commit `a808823`, push direct sur `main`.
