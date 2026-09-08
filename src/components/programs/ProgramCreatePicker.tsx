@@ -67,8 +67,11 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+          {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — seule la bannière prix
+              (position:fixed, au-dessus) reste sticky ; sur petit écran, le garder flexShrink:0 en
+              plus de la bannière et du footer laissait trop peu de place à la zone scrollable. */}
+          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 20px" }}>{wizardHero}</div>}
           {/* Header — pas de "←" ici, c'est l'écran racine du flux de création */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
             <div>

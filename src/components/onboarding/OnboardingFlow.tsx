@@ -1715,7 +1715,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <>
           {wizardBanner}
           <InviteModal
-            wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Pas besoin qu'ils créent un compte pour que tu commences à utiliser ThePerfClub — ajoute-les et assigne-leur déjà un programme. C'est encore mieux quand ils rejoignent : tout se synchronise automatiquement." />}
+            wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Ajoute-les et assigne-leur un programme sans attendre qu'ils créent un compte. Tout se synchronise dès qu'ils rejoignent." />}
             onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
             onLinked={() => {}}
             inviteCode={inviteCode}

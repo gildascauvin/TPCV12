@@ -149,31 +149,35 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
         borderRadius: isMd ? "28px 0 0 28px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
-        padding: "28px 28px 0",
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        {wizardHero && !isMd && <div style={{ margin: "-28px -28px 16px" }}>{wizardHero}</div>}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Assigner le programme</div>
-          </div>
-          {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
-        </div>
-        <div style={{ fontSize: 12.5, color: "#8a8f94", marginBottom: 22 }}>{programName}</div>
-
-        {success ? (
-          <div style={{ textAlign: "center", padding: "30px 0 40px" }}>
-            <div style={{ fontSize: 36 }}>✅</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#2f9e44", marginTop: 10 }}>
-              {isSelfMode || selectedAthleteIds.length <= 1 ? "Programme assigné !" : `Programme assigné à ${selectedAthleteIds.length} sportifs !`}
+        <div style={{ flex: 1, overflowY: "auto", padding: "28px 28px 20px" }}>
+          {/* Hero déplacé tout en haut de la zone scrollable sur mobile (2026-09-08, fix suite
+              retour de Gildas — la 1re version le laissait coincé entre le header "Assigner le
+              programme" et la liste, hors de propos) : même ordre que les 5 autres écrans du wizard
+              (ProgramCreatePicker.tsx et suivants) — hero d'abord, puis le header du composant. Seule
+              la bannière prix (position:fixed, au-dessus de tout) reste sticky. */}
+          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 20px" }}>{wizardHero}</div>}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
+              <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Assigner le programme</div>
             </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6 }}>Les séances ont été générées dans le planning.</div>
+            {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
           </div>
-        ) : (
-          <>
-            <div style={{ overflowY: "auto", flex: 1 }}>
+          <div style={{ fontSize: 12.5, color: "#8a8f94", marginBottom: 22 }}>{programName}</div>
+
+          {success ? (
+            <div style={{ textAlign: "center", padding: "30px 0 40px" }}>
+              <div style={{ fontSize: 36 }}>✅</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#2f9e44", marginTop: 10 }}>
+                {isSelfMode || selectedAthleteIds.length <= 1 ? "Programme assigné !" : `Programme assigné à ${selectedAthleteIds.length} sportifs !`}
+              </div>
+              <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 6 }}>Les séances ont été générées dans le planning.</div>
+            </div>
+          ) : (
+            <>
               {/* Athletes — or self-mode */}
               {isSelfMode ? (
                 <div style={{ padding: "11px 14px", borderRadius: 12, border: "2px solid #d44000", background: "#fff4f0", marginBottom: 20 }}>
@@ -262,42 +266,43 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
               </div>
 
               {error && <div style={{ color: "#d44000", fontSize: 12.5, marginBottom: 10 }}>{error}</div>}
-            </div>
+            </>
+          )}
+        </div>
 
-            <div style={{
-              position: "sticky", bottom: 0, margin: "16px -28px 0",
-              padding: "14px 28px 20px",
-              background: "linear-gradient(180deg,rgba(255,255,255,.88),#fff 38%)",
-            }}>
+        {/* Footer — flex item non-scrollable, en dehors de la zone scrollable (2026-09-08, même
+            fix que ci-dessus : plus de `position:sticky`/gradient à stop en pourcentage, remplacé
+            par le pattern déjà établi ailleurs dans l'app — flexShrink:0 + fond opaque simple). */}
+        {!success && (
+          <div style={{ flexShrink: 0, padding: "14px 28px 20px", background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)" }}>
+            <button
+              onClick={handleAssign}
+              disabled={(!isSelfMode && selectedAthleteIds.length === 0) || !startDate || loading}
+              style={{
+                width: "100%", padding: "14px", borderRadius: 26, border: "none",
+                cursor: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "pointer" : "not-allowed",
+                background: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
+                color: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "#fff" : "#aaa",
+                fontWeight: 700, fontSize: 14,
+              }}
+            >
+              {loading
+                ? "Génération des séances…"
+                : isSelfMode
+                  ? "Démarrer ce programme"
+                  : selectedAthleteIds.length > 1
+                    ? `Assigner à ${selectedAthleteIds.length} sportifs`
+                    : "Assigner le programme"}
+            </button>
+            {onSkip && (
               <button
-                onClick={handleAssign}
-                disabled={(!isSelfMode && selectedAthleteIds.length === 0) || !startDate || loading}
-                style={{
-                  width: "100%", padding: "14px", borderRadius: 26, border: "none",
-                  cursor: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "pointer" : "not-allowed",
-                  background: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
-                  color: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "#fff" : "#aaa",
-                  fontWeight: 700, fontSize: 14,
-                }}
+                onClick={onSkip}
+                style={{ width: "100%", padding: "10px", marginTop: 4, background: "none", border: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
               >
-                {loading
-                  ? "Génération des séances…"
-                  : isSelfMode
-                    ? "Démarrer ce programme"
-                    : selectedAthleteIds.length > 1
-                      ? `Assigner à ${selectedAthleteIds.length} sportifs`
-                      : "Assigner le programme"}
+                {skipLabel ?? "Plus tard"}
               </button>
-              {onSkip && (
-                <button
-                  onClick={onSkip}
-                  style={{ width: "100%", padding: "10px", marginTop: 4, background: "none", border: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}
-                >
-                  {skipLabel ?? "Plus tard"}
-                </button>
-              )}
-            </div>
-          </>
+            )}
+          </div>
         )}
       </div>
     </div>

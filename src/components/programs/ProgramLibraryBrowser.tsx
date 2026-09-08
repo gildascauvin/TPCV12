@@ -149,8 +149,9 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+          {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx */}
+          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 20px" }}>{wizardHero}</div>}
           <div style={{ display: "flex", alignItems: "center", gap: 4, justifyContent: "space-between", marginBottom: 18 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>

@@ -102,8 +102,9 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
         display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        {wizardHero && !isMd && <div style={{ flexShrink: 0 }}>{wizardHero}</div>}
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+          {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx */}
+          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 20px" }}>{wizardHero}</div>}
 
         {result ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
