@@ -16,7 +16,8 @@ import {
   type TestSubject, type TestResultRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
-import { canonicalMetricKey, suggestCanonicalNames, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, RSI_NORMS, formatDropJumpHeightCm, ftctRatio } from "@/lib/testNorms";
+import { canonicalMetricKey, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, RSI_NORMS, formatDropJumpHeightCm, ftctRatio } from "@/lib/testNorms";
+import { buildMergeSuggestions } from "@/lib/testBattery";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -685,16 +686,23 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
   const [resultHistory, setResultHistory] = useState<TestResultRow[] | null>(null);
   const [resultTestId, setResultTestId] = useState<string | null>(null);
   const [savingResult, setSavingResult] = useState(false);
-  /* Suggestion de nom canonique (2026-09) — si `exerciseName` (déduit du texte de la ligne) ne
-     débloque aucun repère (canonicalMetricKey), on propose de logger le test sous un nom reconnu à
-     la place, SANS jamais renommer la ligne elle-même (qui garde son texte libre, tokens compris) :
-     seul le nom envoyé à upsertTestResult/resolveTest change. Jamais forcé — l'utilisateur peut
-     ignorer la suggestion et valider tel quel (carte brute, sans interprétation, comme avant). */
+  /* Suggestion de nom proche déjà connu (2026-09, suite — retour de Gildas : "quand je crée un test
+     depuis une séance et que je le relie à un test existant normé, ça doit prendre en compte la
+     liaison... je veux le faire dès la séance") — si `exerciseName` (déduit du texte de la ligne) ne
+     débloque aucun repère (canonicalMetricKey), on propose de logger le test sous un nom reconnu à la
+     place, SANS jamais renommer la ligne elle-même (qui garde son texte libre, tokens compris) : seul
+     le nom envoyé à upsertTestResult/resolveTest change. `buildMergeSuggestions` (déplacée dans
+     testBattery.ts, même mécanisme que le "🔗 Relier"/"+ Nouveau test" de TestsPanel.tsx) combine les
+     exercices canoniques (MetricKey) ET les tests recommandés sans MetricKey (ex. "100m départ
+     arrêté") — avant, cette carte ne connaissait que les premiers, laissant certains cas (comme un
+     nom farfelu tapé en séance) sans aucune suggestion alors qu'une cible existait déjà réellement.
+     Jamais forcé — l'utilisateur peut ignorer la suggestion et valider tel quel (carte brute, sans
+     interprétation, comme avant). */
   const [testNameOverride, setTestNameOverride] = useState<string | null>(null);
   const effectiveTestName = testNameOverride ?? exerciseName;
   const testNameRecognized = !!exerciseName && !!canonicalMetricKey(exerciseName);
   const nameSuggestions = resultEditing && exerciseName && !testNameRecognized && !testNameOverride
-    ? suggestCanonicalNames(exerciseName)
+    ? buildMergeSuggestions(exerciseName)
     : [];
 
   /* Saisie fusionnée hauteur+contact (2026-09) — porté ici depuis TestsPanel.tsx (même problème :
@@ -1073,12 +1081,12 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                     Aucun repère automatique pour « {exerciseName} » — nom proche connu :
                   </div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {nameSuggestions.map(key => (
+                    {nameSuggestions.map(s => (
                       <button
-                        key={key} onClick={() => setTestNameOverride(METRIC_DISPLAY[key].name)}
+                        key={s.toName} onClick={() => setTestNameOverride(s.toName)}
                         style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 20, padding: "3px 9px", cursor: "pointer" }}
                       >
-                        {METRIC_DISPLAY[key].name}
+                        {s.label}
                       </button>
                     ))}
                   </div>

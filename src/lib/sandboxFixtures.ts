@@ -187,7 +187,7 @@ export function buildTestFixture(now: Date = new Date()): { merged: MergedTest[]
   const results: TestResultRow[] = [];
   for (const item of items) {
     const testId = sid("test");
-    merged.push({ name_key: item.name.trim().toLowerCase(), name: item.name, unit: item.unit, athleteTestId: testId });
+    merged.push({ name_key: item.name.trim().toLowerCase(), name: item.name, unit: item.unit, qualities: null, athleteTestId: testId });
     results.push({ id: sid("result"), test_id: testId, date: dstr(now, -28), value: item.oldValue, unit: item.unit, video_url: null });
     results.push({ id: sid("result"), test_id: testId, date: dstr(now, -3), value: item.newValue, unit: item.unit, video_url: null });
   }

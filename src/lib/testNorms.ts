@@ -125,6 +125,12 @@ const ALIASES: Record<string, MetricKey> = {
   "oh squat": "ohSquat",
   "oh squat / push press": "ohSquatPushPress",
   "power clean": "powerClean",
+  // "Épaulé debout" (2026-09, bug réel signalé par Gildas — "j'ai créé 'épaulé debout', ça ne me
+  // recommande pas Power Clean qui est la traduction") : terminologie française standard pour le
+  // power clean (réception debout, sans passer par le squat complet) — distincte de "épaulé" seul
+  // (ligne plus bas, alias de `clean`, le squat clean complet). Symétrique côté arraché.
+  "épaulé debout": "powerClean", "epaule debout": "powerClean",
+  "arraché debout": "powerSnatch", "arrache debout": "powerSnatch",
   "power clean box": "powerCleanBox",
   "power clean no feet": "powerCleanNoFeet",
   "power jerk": "powerJerk",

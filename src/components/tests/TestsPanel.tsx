@@ -13,7 +13,7 @@ import {
   computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
   type MetricKey, type CardInsight, type CardStatus, type Sexe,
 } from "@/lib/testNorms";
-import { TEST_BATTERIES, BATTERY_TEST_METRICS, type BatteryTest } from "@/lib/testBattery";
+import { TEST_BATTERIES, BATTERY_TEST_METRICS, type BatteryTest, sharesEnoughWords, buildMergeSuggestions } from "@/lib/testBattery";
 import { QUALITY_ORDER, QUALITY_META, METRIC_QUALITY, BATTERY_TEST_QUALITY, type Quality } from "@/lib/testQualities";
 import { classifySprintProfile, type SprintAxisComparison, type SprintDistance, type FlyKey } from "@/lib/sprintProfile";
 import { estimateOneRepMax, bestStrengthEnduranceComparison } from "@/lib/strengthProfile";
@@ -101,105 +101,17 @@ function formatLong(dateStr: string) {
   return `${d.getDate()} ${MONTH_FR[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-/* Normalisation texte libre (accents/casse/ponctuation) — base commune de findMatchingRawTest
-   ci-dessous. Ex-heuristique "ce test a-t-il déjà été loggué ?" à base de badge texte, remplacée
-   2026-09 par la fusion "Tests recommandés" → cartes (chaque test devient sa propre carte,
-   verrouillée ou remplie — plus besoin d'un badge séparé, voir plus bas). */
-function normalizeTestName(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-/* Score de similarité partagé par findMatchingRawTest (matching auto) et suggestRecommendedTestNames
-   (suggestions de fusion manuelle) ci-dessous — un seul point de vérité, pour ne plus jamais avoir
-   2 heuristiques qui divergent en silence. Historique : ≥2 mots ≥4 lettres partagés (un match sur 1
-   mot générique ne suffit pas — "squat" seul faisait matcher "Back Squat" et "Saut vertical (CMJ et
-   squat jump)", 2 exercices différents).
-
-   Bug réel trouvé par Gildas (2026-09, suite) : relier "100m" à "100m départ arrêté" faisait ensuite
-   AUSSI matcher "60m départ arrêté" — les 2 noms partagent "départ"+"arrêté" (2 mots ≥4 lettres, le
-   seuil), et l'ancien filtre ne retenait jamais "60m"/"100m" comme mots "significatifs" (respectivement
-   3 et 4 caractères, sous le seuil pour "60m"). Or c'est justement le token numérique qui distingue 2
-   tests entre eux dans ce cas, pas les mots génériques qu'ils partagent. Fix : tout token contenant un
-   chiffre (peu importe sa longueur) est traité à part — si les 2 noms en portent, ils doivent être
-   EXACTEMENT les mêmes (comparaison par token entier, jamais une sous-chaîne : "10m" est une
-   sous-chaîne de "100m", `.includes()` s'y ferait piéger). Un token numérique déjà confirmé identique
-   suffit à lui seul quand la requête n'a AUCUN autre mot (ex. "100m" seul, pour que le bouton "🔗
-   Relier" puisse le proposer comme cible malgré son nom trop court pour la logique de mots générique). */
-function sharesEnoughWords(queryName: string, candidateName: string): boolean {
-  const qNorm = normalizeTestName(queryName);
-  const cNorm = normalizeTestName(candidateName);
-  if (!qNorm || !cNorm) return false;
-  if (qNorm === cNorm) return true;
-  const qTokens = qNorm.split(" ");
-  const cTokens = cNorm.split(" ");
-  const qDigits = qTokens.filter(t => /\d/.test(t));
-  const cDigits = cTokens.filter(t => /\d/.test(t));
-  if (qDigits.length && cDigits.length) {
-    const sameDigits = qDigits.length === cDigits.length && qDigits.every(d => cDigits.includes(d));
-    if (!sameDigits) return false;
-    if (qTokens.length === qDigits.length) return true; // requête = uniquement des tokens numériques déjà validés
-  }
-  const words = qTokens.filter(w => !/\d/.test(w) && w.length >= 4);
-  // Seuil proportionnel (2026-09, suite) — un plafond fixe à 2 mots partagés, peu importe combien de
-  // mots compte le nom, était trop laxiste pour un nom long dont seul le PRÉFIXE générique est partagé
-  // avec un autre test : bug réel trouvé par Gildas — "Saut vertical bras libres (CMJ free arms)"
-  // (6 mots ≥4 lettres) matchait "Saut vertical (CMJ)" sur ses 2 seuls mots communs ("saut","vertical"),
-  // sans jamais vérifier "bras"/"libres"/"free"/"arms" — 2 exercices délibérément DISTINCTS (comparer
-  // bras libres vs mains sur les hanches est tout l'intérêt du 2e test) fusionnés à tort en une seule
-  // carte. ≤2 mots : exige TOUS (comportement inchangé, déjà strict). >2 mots : exige une majorité
-  // (60%, arrondi au-dessus, jamais moins de 2) — un préfixe partagé de 2 mots sur 6 ne suffit plus.
-  const minShared = words.length <= 2 ? words.length : Math.max(2, Math.ceil(words.length * 0.6));
-  if (words.length) return words.filter(w => cNorm.includes(w)).length >= minShared;
-  return (qNorm.length >= 4 && cNorm.includes(qNorm)) || (cNorm.length >= 4 && qNorm.includes(cNorm));
-}
-
 /* Retrouve, parmi les tests déjà loggués par l'utilisateur (`merged`), celui qui correspond à un test
    recommandé SANS MetricKey (2026-09, fusion "Tests recommandés" → cartes) — nécessaire pour savoir
    QUELLE ligne réelle afficher en carte remplie plutôt que verrouillée. Exact d'abord (même clé que
    resolveTest produirait, .trim().toLowerCase() — jamais dupliqué ailleurs, voir testResults.ts),
-   flou en repli (sharesEnoughWords) sinon. */
+   flou en repli (sharesEnoughWords, déplacée dans testBattery.ts — voir ce fichier pour le pourquoi)
+   sinon. */
 function findMatchingRawTest(testName: string, candidates: MergedTest[]): MergedTest | undefined {
   const key = testName.trim().toLowerCase();
   const exact = candidates.find(m => m.name_key === key);
   if (exact) return exact;
   return candidates.find(m => sharesEnoughWords(testName, m.name));
-}
-
-/* Suggestions de fusion vers un test recommandé SANS MetricKey (2026-09) — étend le bouton "🔗 Relier",
-   jusqu'ici restreint aux exercices canoniques (suggestCanonicalNames, MetricKey), et qui laissait donc
-   un test comme "100m" sans AUCUNE cible possible vers "100m départ arrêté" (testBattery.ts) — un vrai
-   test recommandé, juste sans interprétation chiffrée derrière. Même heuristique de score que
-   findMatchingRawTest (sharesEnoughWords) : si le score ne suffirait pas à un matching AUTOMATIQUE, il
-   ne mérite pas non plus d'être proposé en fusion MANUELLE — seuil identique, cohérence des deux
-   mécanismes. Classé par nombre de mots génériques partagés (le plus proche en premier, les tokens
-   numériques ayant déjà fait leur travail de filtre dans sharesEnoughWords), pas par ordre
-   d'apparition dans TEST_BATTERIES. */
-function suggestRecommendedTestNames(query: string, limit = 5): string[] {
-  const names = new Set<string>();
-  for (const battery of Object.values(TEST_BATTERIES)) {
-    for (const t of battery.tests) {
-      if (BATTERY_TEST_METRICS[t.name]) continue; // déjà couvert par suggestCanonicalNames (MetricKey)
-      names.add(t.name);
-    }
-  }
-  const qWords = normalizeTestName(query).split(" ").filter(w => w.length >= 4 && !/\d/.test(w));
-  return Array.from(names)
-    .filter(name => sharesEnoughWords(query, name))
-    .map(name => ({ name, shared: qWords.filter(w => normalizeTestName(name).includes(w)).length }))
-    .sort((a, b) => b.shared - a.shared)
-    .slice(0, limit)
-    .map(x => x.name);
-}
-
-/* Combine les 2 sources de suggestions de fusion (2026-09) : exercices canoniques interprétés
-   (suggestCanonicalNames, MetricKey → son nom d'affichage) et tests recommandés sans MetricKey
-   (suggestRecommendedTestNames, déjà le nom final) — un seul type de sortie (`toName` déjà prêt à
-   passer à onMerge/mergeTestInto) pour que TestCard n'ait plus à distinguer les 2 origines. */
-function buildMergeSuggestions(name: string): { label: string; toName: string }[] {
-  return [
-    ...suggestCanonicalNames(name).map(k => ({ label: METRIC_DISPLAY[k].name, toName: METRIC_DISPLAY[k].name })),
-    ...suggestRecommendedTestNames(name).map(n => ({ label: n, toName: n })),
-  ];
 }
 
 const TIME_UNITS = new Set(["s", "min"]);
@@ -397,7 +309,7 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
    résout un MetricKey connu (canonicalMetricKey), sinon apparaît comme un test "brut"/non relié —
    même sort que n'importe quel exercice loggué en séance sous un nom inconnu. */
 function AddCustomTestForm({ onSave, onCancel }: {
-  onSave: (name: string, value: number, unit: string, date: string) => Promise<void>;
+  onSave: (name: string, value: number, unit: string, date: string, qualities: Quality[]) => Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
@@ -405,22 +317,62 @@ function AddCustomTestForm({ onSave, onCancel }: {
   const [value, setValue] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
+  // Qualité(s) physique(s) (2026-09, suite — retour de Gildas, "il faut sûrement aussi pouvoir
+  // ajouter une catégorie/qualité physique quand on créer un test") : uniquement pertinent pour un
+  // nom qui ne résout PAS déjà un MetricKey connu (sinon METRIC_QUALITY gère déjà le filtrage, ce
+  // champ ne serait jamais lu) — masqué dans ce cas plutôt qu'affiché pour rien. Optionnel : ne pas
+  // en choisir garde le comportement historique (toujours affiché, quel que soit le filtre actif).
+  const [selectedQualities, setSelectedQualities] = useState<Quality[]>([]);
+  function toggleQuality(q: Quality) {
+    setSelectedQualities(prev => (prev.includes(q) ? prev.filter(x => x !== q) : [...prev, q]));
+  }
+  // Suggestion de test proche déjà connu (2026-09, suite — retour de Gildas : "je viens de créer
+  // 'épaulé debout', ça ne me recommande pas Power Clean qui est la traduction" / "je veux avoir la
+  // recommandation pour le lier à un existant proche directement, comme on le fait en séance") :
+  // réutilise EXACTEMENT le même mécanisme que le "🔗 Relier" d'un test brut (buildMergeSuggestions —
+  // mot-clés partagés contre les alias canoniques ET les noms de tests recommandés), mais proposé
+  // AVANT la création plutôt qu'après coup. Masquée dès que le nom tapé résout déjà tout seul
+  // (`canonicalMetricKey`) — pas la peine de suggérer un nom qui se lierait de toute façon.
+  const trimmedName = name.trim();
+  const suggestions = trimmedName.length >= 3 && !canonicalMetricKey(trimmedName)
+    ? buildMergeSuggestions(trimmedName).filter(s => s.toName.toLowerCase() !== trimmedName.toLowerCase()).slice(0, 4)
+    : [];
   const canSave = name.trim().length > 0 && parseResultValue(value) !== null && !!date;
+  const showQualityPicker = trimmedName.length >= 3 && !canonicalMetricKey(trimmedName);
   const fieldStyle = { boxSizing: "border-box" as const, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, color: "#fff", fontSize: 13.5 };
   async function handleSubmit() {
     const v = parseResultValue(value);
     if (v === null || !name.trim() || !date || saving) return;
     setSaving(true);
-    await onSave(name.trim(), v, unit, date);
+    await onSave(name.trim(), v, unit, date, selectedQualities);
     setSaving(false);
+  }
+  function applySuggestion(toName: string) {
+    setName(toName);
+    const key = canonicalMetricKey(toName);
+    if (key) setUnit(METRIC_DISPLAY[key].unit);
   }
   return (
     <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 14, padding: 14, marginBottom: 12 }}>
       <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", marginBottom: 10 }}>🆕 Nouveau test</div>
       <input
         value={name} onChange={e => setName(e.target.value)} placeholder="Nom du test (ex. Test T, Beep test...)" autoFocus
-        style={{ ...fieldStyle, width: "100%", padding: "9px 11px", marginBottom: 8 }}
+        style={{ ...fieldStyle, width: "100%", padding: "9px 11px", marginBottom: suggestions.length ? 6 : 8 }}
       />
+      {suggestions.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6, marginBottom: 10 }}>
+          <span style={{ fontSize: 11.5, color: "rgba(255,255,255,.45)", alignSelf: "center" }}>Tu veux dire :</span>
+          {suggestions.map(s => (
+            <button
+              key={s.toName}
+              onClick={() => applySuggestion(s.toName)}
+              style={{ background: "rgba(240,74,8,.16)", border: "1px solid rgba(240,74,8,.4)", borderRadius: 20, color: "#fff", fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}
+            >
+              🔗 {s.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input
           value={value} onChange={e => setValue(e.target.value)} type="number" inputMode="decimal" placeholder="Résultat"
@@ -434,6 +386,33 @@ function AddCustomTestForm({ onSave, onCancel }: {
           style={{ ...fieldStyle, padding: "9px 8px", colorScheme: "dark" as const }}
         />
       </div>
+      {showQualityPicker && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>
+            Qualité(s) physique(s) (optionnel)
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+            {QUALITY_ORDER.map(q => {
+              const meta = QUALITY_META[q];
+              const active = selectedQualities.includes(q);
+              return (
+                <button
+                  key={q}
+                  onClick={() => toggleQuality(q)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    background: active ? "#f04a08" : "rgba(255,255,255,.08)",
+                    border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.16)",
+                    borderRadius: 20, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 11px", cursor: "pointer",
+                  }}
+                >
+                  <span>{meta.emoji}</span>{meta.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit} disabled={!canSave || saving}
@@ -1409,7 +1388,15 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // résolue passe désormais par UNE des 2 voies : `groupInsightsByMetric` (a un vrai CardInsight) ou
   // `resolvedUninterpretedMetrics` ci-dessous (résolu mais sans jauge, ex. sprint60m/100m/200m) —
   // jamais les deux, jamais rawTests. Seuls les tests VRAIMENT jamais résolus (nom libre) restent ici.
-  const rawTests = merged.filter(t => !canonicalMetricKey(t.name_key) && !matchedRawTestKeys.has(t.name_key));
+  // Filtre qualité (2026-09, suite — retour de Gildas, "il faut sûrement aussi pouvoir ajouter une
+  // catégorie/qualité physique quand on créer un test") : un test libre n'a de qualité que si son
+  // créateur en a choisi une (AddCustomTestForm, `tests.qualities`) — `null`/vide = comportement
+  // historique inchangé (toujours affiché, quel que soit le filtre actif), jamais masqué a posteriori
+  // pour ne pas faire disparaître de vieux tests créés avant cette fonctionnalité.
+  const rawTests = merged.filter(t =>
+    !canonicalMetricKey(t.name_key) && !matchedRawTestKeys.has(t.name_key) &&
+    (!activeQuality || !t.qualities?.length || t.qualities.includes(activeQuality))
+  );
 
   // Métriques déjà résolus mais SANS carte interprétée (2026-09, suite — sprint60m/100m/200m : aucune
   // norme sourcée, jamais de CardInsight). Fusionne TOUS les alias d'un même métrique en UNE carte
@@ -1479,9 +1466,11 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // Test recommandé jamais loggué (2026-09, fusion "Tests recommandés" → cartes) — écrit la 1re ligne
   // `tests` sous le nom EXACT du test recommandé, avec l'unité choisie par l'utilisateur dans le
   // dropdown (voir onAddNew, TestCard) ; upsertTestResult/resolveTest créent la fiche puisqu'aucune
-  // n'existe encore sous ce name_key.
-  async function handleAddForNewRecommendedTest(name: string, value: number, unit: string, date: string) {
-    await upsertTestResult(ownerId, subject, { name, unit, value, date });
+  // n'existe encore sous ce name_key. `qualities` (2026-09, suite) : uniquement fourni par "+ Nouveau
+  // test" pour un nom entièrement libre (voir AddCustomTestForm) — un test recommandé a déjà sa
+  // qualité via BATTERY_TEST_QUALITY, jamais besoin de la redemander.
+  async function handleAddForNewRecommendedTest(name: string, value: number, unit: string, date: string, qualities?: Quality[]) {
+    await upsertTestResult(ownerId, subject, { name, unit, value, date, qualities });
     const { ownRes, otherRes, merged: m } = await fetchAll();
     setOwnResults(ownRes);
     setOtherResults(otherRes);
@@ -1761,8 +1750,8 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
             <div style={{ marginTop: showReco ? 14 : 0 }}>
               {addingCustomTest ? (
                 <AddCustomTestForm
-                  onSave={async (name, value, unit, date) => {
-                    await handleAddForNewRecommendedTest(name, value, unit, date);
+                  onSave={async (name, value, unit, date, qualities) => {
+                    await handleAddForNewRecommendedTest(name, value, unit, date, qualities);
                     setAddingCustomTest(false);
                   }}
                   onCancel={() => setAddingCustomTest(false)}

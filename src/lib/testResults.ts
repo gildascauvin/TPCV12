@@ -22,6 +22,12 @@ export interface TestRow {
   name: string;
   name_key: string;
   unit: string;
+  /* Qualité(s) physique(s) choisies à la création (2026-09, demande de Gildas) — UNIQUEMENT pour un
+     test entièrement libre (nom non reconnu) : un test recommandé (testBattery.ts) a déjà la sienne
+     via BATTERY_TEST_QUALITY, un test résolu (canonicalMetricKey) via METRIC_QUALITY — ceux-là
+     ignorent ce champ. `null` = jamais taguée (comportement historique : toujours affiché, quel que
+     soit le filtre qualité actif dans TestsPanel.tsx, voir `rawTests`). */
+  qualities: string[] | null;
 }
 
 export interface TestResultRow {
@@ -48,24 +54,27 @@ export function parseResultValue(raw: string): number | null {
 /* Résout (ou crée) le test scopé à `ownerId` pour ce nom — même mécanique que
    exercise_video_library : toutes les erreurs Supabase sont journalisées (.upsert()/.insert() ne
    lève jamais d'exception JS, un échec silencieux serait invisible sinon). */
-export async function resolveTest(ownerId: string, name: string, unit: string): Promise<TestRow | null> {
+/* `qualities` uniquement utilisé à la CRÉATION (ligne `tests` pas encore existante) — un test déjà
+   existant garde ses qualités d'origine, jamais écrasées par un appel ultérieur (ex. un 2e résultat
+   ajouté sans repasser par le formulaire de création). */
+export async function resolveTest(ownerId: string, name: string, unit: string, qualities?: string[]): Promise<TestRow | null> {
   const supabase = createClient();
   const key = slugify(name);
   if (!key) return null;
   const { data: existing, error: selErr } = await supabase
-    .from("tests").select("id,name,name_key,unit").eq("owner_id", ownerId).eq("name_key", key).maybeSingle();
+    .from("tests").select("id,name,name_key,unit,qualities").eq("owner_id", ownerId).eq("name_key", key).maybeSingle();
   if (selErr) console.error("[tests] lookup a échoué pour", JSON.stringify(key), selErr);
   if (existing) return existing as TestRow;
   const { data: created, error: insErr } = await supabase
-    .from("tests").insert({ owner_id: ownerId, name: name.trim(), name_key: key, unit })
-    .select("id,name,name_key,unit").single();
+    .from("tests").insert({ owner_id: ownerId, name: name.trim(), name_key: key, unit, qualities: qualities?.length ? qualities : null })
+    .select("id,name,name_key,unit,qualities").single();
   if (insErr) { console.error("[tests] création a échoué pour", JSON.stringify(key), insErr); return null; }
   return created as TestRow;
 }
 
 export async function listTests(ownerId: string): Promise<TestRow[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from("tests").select("id,name,name_key,unit").eq("owner_id", ownerId).order("name");
+  const { data, error } = await supabase.from("tests").select("id,name,name_key,unit,qualities").eq("owner_id", ownerId).order("name");
   if (error) { console.error("[tests] liste a échoué", error); return []; }
   return (data ?? []) as TestRow[];
 }
@@ -125,6 +134,7 @@ export interface MergedTest {
   name_key: string;
   name: string;
   unit: string;
+  qualities: string[] | null;
   /* Un même nom de test peut exister comme 2 lignes distinctes en base (une par owner_id) : celle
      créée sous l'owner_id du coach (résultat qu'IL a enregistré pour ce sportif) et celle créée sous
      l'owner_id du sportif (résultat qu'IL a enregistré lui-même) — même nom, 2 id différents. Les
@@ -140,11 +150,11 @@ export interface MergedTest {
    sportif lui-même (scope owner_id=sportif, via fetchAthleteOwnTests) — dédoublonné par name_key. */
 export function mergeTests(coachTests: TestRow[], athleteTests: TestRow[]): MergedTest[] {
   const map = new Map<string, MergedTest>();
-  for (const t of coachTests) map.set(t.name_key, { name_key: t.name_key, name: t.name, unit: t.unit, coachTestId: t.id });
+  for (const t of coachTests) map.set(t.name_key, { name_key: t.name_key, name: t.name, unit: t.unit, qualities: t.qualities, coachTestId: t.id });
   for (const t of athleteTests) {
     const existing = map.get(t.name_key);
-    if (existing) existing.athleteTestId = t.id;
-    else map.set(t.name_key, { name_key: t.name_key, name: t.name, unit: t.unit, athleteTestId: t.id });
+    if (existing) { existing.athleteTestId = t.id; existing.qualities = existing.qualities ?? t.qualities; }
+    else map.set(t.name_key, { name_key: t.name_key, name: t.name, unit: t.unit, qualities: t.qualities, athleteTestId: t.id });
   }
   return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -166,9 +176,9 @@ export async function deleteTestResult(testId: string, date: string, subject: Te
 export async function upsertTestResult(
   ownerId: string,
   subject: TestSubject,
-  params: { name: string; unit: string; value: number; date: string; videoUrl?: string | null }
+  params: { name: string; unit: string; value: number; date: string; videoUrl?: string | null; qualities?: string[] }
 ): Promise<void> {
-  const test = await resolveTest(ownerId, params.name, params.unit);
+  const test = await resolveTest(ownerId, params.name, params.unit, params.qualities);
   if (!test) return;
   const supabase = createClient();
   const subjectCols = "subjectUserId" in subject

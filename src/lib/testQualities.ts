@@ -139,6 +139,12 @@ export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   "Test de force en traction (tirage élastique ou banc de nage)": ["force"],
   "1RM Snatch": ["puissance"],
   "1RM Clean & Jerk": ["puissance"],
+  // 10 mouvements dérivés + 5 métriques endurance (2026-09, suite — "ajouter par défaut tous ceux qui
+  // ont un ratio") — mêmes tags que METRIC_QUALITY pour ces MetricKey (testQualities.ts plus haut).
+  "Power Clean": ["puissance"], "Power Snatch": ["puissance"], "Clean": ["puissance"], "Jerk": ["puissance"],
+  "Power Jerk": ["puissance"], "Clean Pull": ["puissance"], "Snatch Pull": ["puissance"],
+  "OH Squat": ["force"], "Clean Deadlift": ["force"], "Snatch Deadlift": ["force"],
+  "5 km": ["endurance"], "10 km": ["endurance"], "Semi-marathon": ["endurance"], "Marathon": ["endurance"], "VO2max": ["endurance"],
   "1RM Front Squat": ["force"],
   "Test de mobilité overhead squat": ["mobilite"],
   "1RM Développé couché": ["force"],

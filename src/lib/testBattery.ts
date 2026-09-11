@@ -17,7 +17,7 @@
    `Object.values(TEST_BATTERIES)` en entier, `BATTERY_TEST_QUALITY` restant le seul filtre (optionnel,
    transverse à tous les sports). */
 
-import type { MetricKey } from "@/lib/testNorms";
+import { type MetricKey, METRIC_DISPLAY, suggestCanonicalNames } from "@/lib/testNorms";
 
 export interface BatteryTest { name: string; quality: string; desc: string; url: string | null }
 export interface SportBattery { label: string; emoji: string; tests: BatteryTest[] }
@@ -74,6 +74,23 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Drop Jump (RSI)", quality: "Réactivité / enchaînements de sauts (attaque-contre)", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
     ],
   },
+  // Ajouté 2026-09 (n'existe pas dans la source WP) — contrairement à "trail" (spécifique dénivelé/
+  // descente) et "Test 2000m rameur ou 5km course" (crossfit, ambigu rameur/course, sans MetricKey),
+  // ces 5 métriques ont chacune un ratio sourcé (RATIO_CARDS["Endurance"], équivalences VDOT/Jack
+  // Daniels + VO2max≈VMA×3.5) mais n'apparaissaient nulle part comme test recommandé avant d'être
+  // loggué au moins une fois manuellement (retour de Gildas : "ajouter par défaut tous ceux qui ont
+  // un ratio", pas limité à l'haltérophilie — voir aussi les 10 mouvements ajoutés au bucket haltero
+  // plus bas).
+  endurance: {
+    label: "Endurance / Course à pied", emoji: "🏃",
+    tests: [
+      { name: "5 km", quality: "Endurance-vitesse", desc: "Comparé au 10km, au Semi et au Marathon (équivalences VDOT/Jack Daniels) : situe ton profil vitesse vs endurance longue.", url: null },
+      { name: "10 km", quality: "Endurance intermédiaire", desc: "Comparé au 5km, au Semi et au Marathon (équivalences VDOT/Jack Daniels) : distance pivot entre vitesse et endurance longue.", url: null },
+      { name: "Semi-marathon", quality: "Endurance longue", desc: "Comparé au 5km, au 10km et au Marathon (équivalences VDOT/Jack Daniels) : situe ton profil sur les distances longues.", url: null },
+      { name: "Marathon", quality: "Endurance très longue", desc: "Comparé au 5km, au 10km et au Semi (équivalences VDOT/Jack Daniels) : référence ultime d'endurance aérobie.", url: null },
+      { name: "VO2max", quality: "Puissance aérobie maximale", desc: "Comparé à ta VMA (ratio sourcé, VO2max ≈ VMA × 3.5) : mesure directe (terrain ou labo), distincte du protocole ergocycle ci-dessous.", url: null },
+    ],
+  },
   trail: {
     label: "Trail / Course à pied", emoji: "🏔️",
     tests: [
@@ -107,6 +124,23 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "1RM Front Squat", quality: "Force maximale des jambes (position spécifique)", desc: "Position plus proche du réceptionné olympique que le back squat : complète le ratio technique avec la même base de charge.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
       { name: "Test de mobilité overhead squat", quality: "Mobilité spécifique", desc: "La réception en squat complet exige une mobilité de cheville, hanche et épaule rarement présente naturellement.", url: null },
       { name: "Saut vertical (CMJ)", quality: "Puissance de triple extension", desc: "Corrélé à la vitesse de triple extension (cheville-genou-hanche) commune au squat jump et à l'arraché.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
+      // 10 mouvements dérivés (2026-09, retour de Gildas : "ajouter par défaut tous ceux qui ont un
+      // ratio, genre je viens de créer power clean, j'aurais aimé qu'il y soit déjà") — chacun a déjà
+      // un ratio sourcé (RATIO_CARDS, testNorms.ts) mais n'apparaissait nulle part comme test
+      // recommandé avant d'être loggué au moins une fois manuellement. Portée volontairement limitée
+      // à ces 10 (validée explicitement par Gildas) : ~40 autres variantes techniques très pointues
+      // (Tall Muscle Snatch, Box Clean Pull, Snatch Sots Press...) restent découvrables uniquement via
+      // "+ Nouveau test" (avec suggestion de lien si le nom tapé s'en approche), pas dans cette liste.
+      { name: "Power Clean", quality: "Puissance de réception haute", desc: "Comparé au Back Squat, au Clean et au Clean & Jerk (ratios sourcés) : réception plus haute que le clean complet, isole la puissance de tirage.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Power Snatch", quality: "Puissance de réception haute (arraché)", desc: "Comparé au Back Squat et au Snatch (ratios sourcés) : équivalent du Power Clean côté arraché.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Clean", quality: "Épaulé complet (sans le jeté)", desc: "Comparé au Clean & Jerk, au Front Squat et au Clean Deadlift (ratios sourcés) : isole la phase de réception, sans la propulsion overhead.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Jerk", quality: "Propulsion overhead", desc: "Comparé au Back Squat et au Clean & Jerk (ratios sourcés) : isole la propulsion overhead, indépendamment de la réception du clean.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Power Jerk", quality: "Propulsion overhead (réception haute)", desc: "Comparé au Back Squat et au Clean & Jerk (ratios sourcés) : variante du Jerk en réception haute (fente/squat partiel).", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "OH Squat", quality: "Force et stabilité overhead", desc: "Comparé au Back Squat (ratio sourcé) : force et stabilité en position overhead, prérequis technique de l'arraché.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Clean Pull", quality: "Force de tirage (épaulé)", desc: "Comparé au Back Squat (ratio sourcé) : force de tirage pure, sans la réception du clean.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Snatch Pull", quality: "Force de tirage (arraché)", desc: "Comparé au Back Squat et au Snatch (ratios sourcés) : équivalent du Clean Pull côté arraché.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Clean Deadlift", quality: "Force de tirage lourde (épaulé)", desc: "Comparé au Back Squat et au Clean (ratios sourcés) : soulevé de terre en prise étroite, base de force du tirage d'épaulé.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      { name: "Snatch Deadlift", quality: "Force de tirage lourde (arraché)", desc: "Comparé au Back Squat et au Snatch (ratios sourcés) : équivalent du Clean Deadlift côté arraché, prise large.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
     ],
   },
   musculation: {
@@ -247,6 +281,23 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "1RM Développé militaire (OHP)": ["press"],
   "1RM Snatch": ["snatch"],
   "1RM Clean & Jerk": ["cleanJerk"],
+  // 10 mouvements dérivés + 5 métriques endurance (2026-09, suite — "ajouter par défaut tous ceux qui
+  // ont un ratio") — voir les commentaires en tête des buckets haltero/endurance ci-dessus.
+  "Power Clean": ["powerClean"],
+  "Power Snatch": ["powerSnatch"],
+  "Clean": ["clean"],
+  "Jerk": ["jerk"],
+  "Power Jerk": ["powerJerk"],
+  "OH Squat": ["ohSquat"],
+  "Clean Pull": ["cleanPull"],
+  "Snatch Pull": ["snatchPull"],
+  "Clean Deadlift": ["cleanDeadlift"],
+  "Snatch Deadlift": ["snatchDeadlift"],
+  "5 km": ["time5k"],
+  "10 km": ["time10k"],
+  "Semi-marathon": ["timeSemi"],
+  "Marathon": ["timeMarathon"],
+  "VO2max": ["vo2max"],
   "Sprint 30m avec split 10m": ["sprint30m", "sprint10m"],
   "Saut en longueur sans élan (Broad Jump)": ["broadJump"],
   "Saut en longueur unipodal (Single Leg Broad Jump)": ["singleLegBroadJump"],
@@ -270,8 +321,112 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   // s'affiche alors normalement dans `rawTests`, juste sans comparaison chiffrée à ce jour.
   "60m départ arrêté": ["sprint60m"],
   "100m départ arrêté": ["sprint100m"],
+  // Bug réel corrigé (2026-09, même famille que le bug CMJ free arms ci-dessus) : jamais mappé
+  // jusqu'ici — un utilisateur qui loggue sa VMA (Luc Léger, VAMEVAL, ou via le toggle Demi-Cooper de
+  // la carte VMA) voyait sa vraie carte "VMA" ET cette recommandation persister éternellement (jamais
+  // marquée "faite", `notCovered` ne pouvant vérifier aucun MetricKey). "VO2max sur ergocycle"
+  // (mesuré en watts, juste au-dessus dans testBattery.ts) volontairement PAS mappé à `vo2max` — pas
+  // de formule sourcée pour convertir une puissance ergocycle en VO2max (ml/kg/min), contrairement au
+  // Cooper/Demi-Cooper déjà sourcés (voir vo2maxFromCooperDistance/vmaFromDemiCooperDistance).
+  "Test VMA (Cooper ou demi-Cooper)": ["vma"],
 };
 
 // `BATTERY_TO_FAMILY`/`guessBatteryKey()` (matching sport→1 seule batterie) supprimées ici (2026-09,
 // suite) — voir note en tête de fichier : plus aucun filtrage des tests recommandés par sport de
 // profil, `TestsPanel.tsx` scanne désormais toujours `Object.values(TEST_BATTERIES)` en entier.
+
+/* Matching de noms de tests par mots partagés (2026-09, suite) — déplacé ici depuis TestsPanel.tsx
+   (2026-09, encore une suite : "je veux [pouvoir lier à un test existant] dès la séance", pas
+   seulement dans TestsPanel) pour être réutilisable aussi par ExerciseBlockEditor.tsx (composeur de
+   résultat de test directement dans une séance) — un seul point de vérité pour "ce nom tapé
+   ressemble-t-il à un test déjà connu ?", au lieu de 2 heuristiques qui auraient fini par diverger. */
+
+/* Normalisation texte libre (accents/casse/ponctuation) — base commune de sharesEnoughWords/
+   findMatchingRawTest (TestsPanel.tsx). Ex-heuristique "ce test a-t-il déjà été loggué ?" à base de
+   badge texte, remplacée 2026-09 par la fusion "Tests recommandés" → cartes. */
+export function normalizeTestName(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/* Score de similarité partagé par findMatchingRawTest (TestsPanel.tsx, matching auto) et
+   suggestRecommendedTestNames ci-dessous (suggestions de fusion manuelle) — un seul point de vérité,
+   pour ne plus jamais avoir 2 heuristiques qui divergent en silence. Historique : ≥2 mots ≥4 lettres
+   partagés (un match sur 1 mot générique ne suffit pas — "squat" seul faisait matcher "Back Squat" et
+   "Saut vertical (CMJ et squat jump)", 2 exercices différents).
+
+   Bug réel trouvé par Gildas (2026-09, suite) : relier "100m" à "100m départ arrêté" faisait ensuite
+   AUSSI matcher "60m départ arrêté" — les 2 noms partagent "départ"+"arrêté" (2 mots ≥4 lettres, le
+   seuil), et l'ancien filtre ne retenait jamais "60m"/"100m" comme mots "significatifs" (respectivement
+   3 et 4 caractères, sous le seuil pour "60m"). Or c'est justement le token numérique qui distingue 2
+   tests entre eux dans ce cas, pas les mots génériques qu'ils partagent. Fix : tout token contenant un
+   chiffre (peu importe sa longueur) est traité à part — si les 2 noms en portent, ils doivent être
+   EXACTEMENT les mêmes (comparaison par token entier, jamais une sous-chaîne : "10m" est une
+   sous-chaîne de "100m", `.includes()` s'y ferait piéger). Un token numérique déjà confirmé identique
+   suffit à lui seul quand la requête n'a AUCUN autre mot (ex. "100m" seul, pour que le bouton "🔗
+   Relier" puisse le proposer comme cible malgré son nom trop court pour la logique de mots générique). */
+export function sharesEnoughWords(queryName: string, candidateName: string): boolean {
+  const qNorm = normalizeTestName(queryName);
+  const cNorm = normalizeTestName(candidateName);
+  if (!qNorm || !cNorm) return false;
+  if (qNorm === cNorm) return true;
+  const qTokens = qNorm.split(" ");
+  const cTokens = cNorm.split(" ");
+  const qDigits = qTokens.filter(t => /\d/.test(t));
+  const cDigits = cTokens.filter(t => /\d/.test(t));
+  if (qDigits.length && cDigits.length) {
+    const sameDigits = qDigits.length === cDigits.length && qDigits.every(d => cDigits.includes(d));
+    if (!sameDigits) return false;
+    if (qTokens.length === qDigits.length) return true; // requête = uniquement des tokens numériques déjà validés
+  }
+  const words = qTokens.filter(w => !/\d/.test(w) && w.length >= 4);
+  // Seuil proportionnel (2026-09, suite) — un plafond fixe à 2 mots partagés, peu importe combien de
+  // mots compte le nom, était trop laxiste pour un nom long dont seul le PRÉFIXE générique est partagé
+  // avec un autre test : bug réel trouvé par Gildas — "Saut vertical bras libres (CMJ free arms)"
+  // (6 mots ≥4 lettres) matchait "Saut vertical (CMJ)" sur ses 2 seuls mots communs ("saut","vertical"),
+  // sans jamais vérifier "bras"/"libres"/"free"/"arms" — 2 exercices délibérément DISTINCTS (comparer
+  // bras libres vs mains sur les hanches est tout l'intérêt du 2e test) fusionnés à tort en une seule
+  // carte. ≤2 mots : exige TOUS (comportement inchangé, déjà strict). >2 mots : exige une majorité
+  // (60%, arrondi au-dessus, jamais moins de 2) — un préfixe partagé de 2 mots sur 6 ne suffit plus.
+  const minShared = words.length <= 2 ? words.length : Math.max(2, Math.ceil(words.length * 0.6));
+  if (words.length) return words.filter(w => cNorm.includes(w)).length >= minShared;
+  return (qNorm.length >= 4 && cNorm.includes(qNorm)) || (cNorm.length >= 4 && qNorm.includes(cNorm));
+}
+
+/* Suggestions de fusion vers un test recommandé SANS MetricKey (2026-09) — étend le bouton "🔗 Relier",
+   jusqu'ici restreint aux exercices canoniques (suggestCanonicalNames, MetricKey), et qui laissait donc
+   un test comme "100m" sans AUCUNE cible possible vers "100m départ arrêté" (testBattery.ts) — un vrai
+   test recommandé, juste sans interprétation chiffrée derrière. Même heuristique de score que
+   findMatchingRawTest (sharesEnoughWords) : si le score ne suffirait pas à un matching AUTOMATIQUE, il
+   ne mérite pas non plus d'être proposé en fusion MANUELLE — seuil identique, cohérence des deux
+   mécanismes. Classé par nombre de mots génériques partagés (le plus proche en premier, les tokens
+   numériques ayant déjà fait leur travail de filtre dans sharesEnoughWords), pas par ordre
+   d'apparition dans TEST_BATTERIES. */
+export function suggestRecommendedTestNames(query: string, limit = 5): string[] {
+  const names = new Set<string>();
+  for (const battery of Object.values(TEST_BATTERIES)) {
+    for (const t of battery.tests) {
+      if (BATTERY_TEST_METRICS[t.name]) continue; // déjà couvert par suggestCanonicalNames (MetricKey)
+      names.add(t.name);
+    }
+  }
+  const qWords = normalizeTestName(query).split(" ").filter(w => w.length >= 4 && !/\d/.test(w));
+  return Array.from(names)
+    .filter(name => sharesEnoughWords(query, name))
+    .map(name => ({ name, shared: qWords.filter(w => normalizeTestName(name).includes(w)).length }))
+    .sort((a, b) => b.shared - a.shared)
+    .slice(0, limit)
+    .map(x => x.name);
+}
+
+/* Combine les 2 sources de suggestions de fusion (2026-09) : exercices canoniques interprétés
+   (suggestCanonicalNames, MetricKey → son nom d'affichage) et tests recommandés sans MetricKey
+   (suggestRecommendedTestNames, déjà le nom final) — un seul type de sortie (`toName` déjà prêt à
+   passer à onMerge/mergeTestInto/upsertTestResult) pour qu'un appelant n'ait jamais à distinguer les
+   2 origines. Réutilisée par TestsPanel.tsx (bouton "🔗 Relier", formulaire "+ Nouveau test") ET
+   ExerciseBlockEditor.tsx (composeur de résultat de test dans une séance, "🔗 Tu veux dire"). */
+export function buildMergeSuggestions(name: string): { label: string; toName: string }[] {
+  return [
+    ...suggestCanonicalNames(name).map(k => ({ label: METRIC_DISPLAY[k].name, toName: METRIC_DISPLAY[k].name })),
+    ...suggestRecommendedTestNames(name).map(n => ({ label: n, toName: n })),
+  ];
+}

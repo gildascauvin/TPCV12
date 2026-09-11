@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
   const [{ data: tests }, { data: results }] = await Promise.all([
-    admin.from("tests").select("id,name,name_key,unit").eq("owner_id", athlete.user_id).order("name"),
+    admin.from("tests").select("id,name,name_key,unit,qualities").eq("owner_id", athlete.user_id).order("name"),
     admin.from("test_results").select("id,test_id,date,value,unit,video_url")
       .eq("owner_id", athlete.user_id).eq("subject_user_id", athlete.user_id).order("date"),
   ]);
