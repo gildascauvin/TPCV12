@@ -814,9 +814,15 @@ const FORCE_RATIO_CARDS: RatioCardDef[] = [
     { id: "powerSnatchNoFoot_snatch", a: "powerSnatchNoFoot", b: "snatch", bLabel: "Snatch", norms: { homme: [0.7482, 0.8784], femme: [0.7482, 0.8784] }, refValue: { homme: 0.8133, femme: 0.8133 }, fmt: pct0, core: false,
       desc: "Rapporté à ton Snatch, repère théorique ~81% (ThePerfClub).",
       advice: "Isole la puissance de tirage/extension sans la réception basse. Si le ratio est bas, travaille les tirages explosifs et les sauts avec barre légère ; s'il est déjà élevé, c'est plutôt ta réception (mobilité, technique) qui limite que la force de tirage." },
-    { id: "snatchBalance_snatch", a: "snatchBalance", b: "snatch", bLabel: "Snatch", norms: { homme: [1.058, 1.242], femme: [1.058, 1.242] }, refValue: { homme: 1.15, femme: 1.15 }, fmt: pct0, core: false,
-      desc: "Rapporté à ton Snatch, repère théorique ~115% (ThePerfClub).",
+    { id: "snatchBalance_snatch", a: "snatchBalance", b: "snatch", bLabel: "Snatch", norms: { homme: [1.012, 1.188], femme: [1.012, 1.188] }, refValue: { homme: 1.10, femme: 1.10 }, fmt: pct0, core: false,
+      desc: "Rapporté à ton Snatch, repère théorique ~110% (ThePerfClub).",
       advice: "Teste la force et la stabilité overhead. Si le ratio est bas, ajoute du développé militaire strict et du gainage overhead (planches overhead, farmer's walk overhead) ; pour les variantes de jerk, travaille aussi le timing dip-drive (jerks depuis blocks, tempo)." },
+    // OH Squat ↔ Snatch (2026-09, suite — mise à jour de Gildas, "le ratio overhead squat et snatch
+    // balance vs snatch c'est 110% aussi") : n'existait pas encore (ohSquat n'avait qu'un ratio vs
+    // Back Squat jusqu'ici), même repère que Snatch Balance ci-dessus.
+    { id: "ohSquat_snatch", a: "ohSquat", b: "snatch", bLabel: "Snatch", norms: { homme: [1.012, 1.188], femme: [1.012, 1.188] }, refValue: { homme: 1.10, femme: 1.10 }, fmt: pct0, core: false,
+      desc: "Rapporté à ton Snatch, repère théorique ~110% (ThePerfClub).",
+      advice: "Teste la force et la stabilité overhead en position squat complet, prérequis technique de la réception de l'arraché. Si le ratio est bas, ajoute du travail de mobilité (cheville/hanche/épaule) et du squat overhead léger à haute fréquence plutôt que de la charge." },
     { id: "snatchDeadlift_snatch", a: "snatchDeadlift", b: "snatch", bLabel: "Snatch", norms: { homme: [1.38, 1.62], femme: [1.38, 1.62] }, refValue: { homme: 1.5, femme: 1.5 }, fmt: pct0, core: false,
       desc: "Rapporté à ton Snatch, repère théorique ~150% (ThePerfClub).",
       advice: "Isole la force de traction pure, sans le catch. Si le ratio est bas, ajoute 2-3 séries hebdomadaires de tirages lourds (100-120% du lift complet) et de soulevé de terre roumain pour renforcer la chaîne postérieure." },
