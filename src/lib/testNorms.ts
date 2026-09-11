@@ -58,7 +58,7 @@ export type MetricKey =
   // Athlétisme & vitesse (2026-09) — splits sprint en secondes ; hauteurs de saut en cm SAUF
   // dropJumpHeight en MÈTRES (voir RATIO_CARDS ci-dessous : le RSI = hauteur(m)/temps de contact(s),
   // convention de la littérature — mélanger les unités casserait la formule).
-  | "sprint10m" | "sprint30m" | "cmjHeight" | "squatJumpHeight" | "dropJumpHeight" | "dropJumpContact"
+  | "sprint10m" | "sprint30m" | "cmjHeight" | "cmjFreeArms" | "squatJumpHeight" | "dropJumpHeight" | "dropJumpContact"
   // Sprint 20/60/100/200m (2026-09, profil de vitesse) — temps cumulés depuis le départ arrêté, en
   // secondes, mêmes conventions que sprint10m/sprint30m. Sans RATIO_CARD associée (aucune norme de
   // population sourcée) — servent uniquement d'entrée au profil de vitesse (sprintProfile.ts),
@@ -173,6 +173,23 @@ const ALIASES: Record<string, MetricKey> = {
   // créait une 2e carte brute en double, ET rendait "🔗 Relier" destructeur (fusionner un test dans
   // son propre nom == même test_id == mergeTestInto le vidait puis le supprimait, voir son fix).
   "cmj": "cmjHeight", "countermovement jump": "cmjHeight", "saut cmj": "cmjHeight", "saut vertical": "cmjHeight", "saut vertical (cmj)": "cmjHeight", "détente verticale": "cmjHeight", "detente verticale": "cmjHeight",
+  // "CMJ free arms"/"bras libres" (2026-09) — ERREUR CORRIGÉE : un 1er passage l'avait aliasé sur
+  // cmjHeight (même métrique que le CMJ classique), en comprenant à tort "ils devraient être liés
+  // par défaut" comme "ce sont le même test". Gildas a explicitement corrigé : ce sont 2 tests
+  // RÉELLEMENT différents (CMJ bras libres/swing autorisé mesure généralement ~10% plus haut qu'un
+  // CMJ mains sur les hanches — littérature du saut vertical, les 2 sont distingués), déjà traités
+  // comme tels intentionnellement ailleurs dans le code (`testBattery.ts` : recommandé séparément,
+  // description explicite "la comparaison avec ton CMJ standard isole la contribution du balancement
+  // des bras" — une vraie comparaison, impossible si fondus dans la même métrique). Le vrai bug
+  // signalé n'était PAS l'absence de fusion mais l'absence de MetricKey PROPRE : sans lui, ce test
+  // créait 2 fiches séparées une fois loggué (la carte recommandée "jamais faite", jamais marquée
+  // faite car `BATTERY_TEST_METRICS` ne la mappait à rien + une 2e carte brute non reliée demandant
+  // un "🔗 Relier" manuel) au lieu d'être reconnu comme SA PROPRE carte, comme "Saut vertical (CMJ)"
+  // l'est déjà pour cmjHeight. Fixé avec un MetricKey dédié `cmjFreeArms` (voir plus haut/
+  // METRIC_DISPLAY/testBattery.ts BATTERY_TEST_METRICS/testQualities.ts METRIC_QUALITY) plutôt qu'un
+  // alias vers cmjHeight — reconnu automatiquement, jamais fondu avec le CMJ classique.
+  "cmj free arms": "cmjFreeArms", "cmj bras libres": "cmjFreeArms", "saut vertical bras libres": "cmjFreeArms",
+  "saut vertical bras libres (cmj free arms)": "cmjFreeArms", "countermovement jump free arms": "cmjFreeArms",
   // Limite connue : "Squat Jump" désigne aussi un exercice d'entraînement CHARGÉ (squat sauté avec
   // barre, HISTORY sport 🏋️) dans les programmes haltéro/powerlifting — s'il est un jour marqué
   // comme test avec une valeur en kg, il sera interprété à tort comme une hauteur de saut en cm.
@@ -185,6 +202,16 @@ const ALIASES: Record<string, MetricKey> = {
   // pour l'un des 2 noms). Défensif : couvre aussi un éventuel vieux test loggué sous ce nom exact.
   "drop jump (rsi)": "dropJumpHeight",
   "temps de contact": "dropJumpContact", "temps de contact (drop jump)": "dropJumpContact", "contact drop jump": "dropJumpContact",
+  // Tests de terrain qui donnent directement une VMA en km/h (2026-09, suite — manque signalé par
+  // Gildas, "il manque Luc Léger") : "Luc Léger"/"test navette"/VAMEVAL/beep test sont des PROTOCOLES
+  // (façons de mesurer), pas une métrique différente — leur résultat final EST une VMA, donc un alias
+  // direct suffit (contrairement à Cooper/Demi-Cooper, qui donnent une DISTANCE en mètres, pas
+  // directement une VMA — nécessiteraient une vraie formule de conversion sourcée, pas juste un
+  // alias ; non traité ici, à faire séparément si demandé).
+  "luc léger": "vma", "luc leger": "vma", "test de luc léger": "vma", "test de luc leger": "vma",
+  "test luc léger": "vma", "test luc leger": "vma", "test navette": "vma", "navette": "vma",
+  "navette de luc léger": "vma", "navette de luc leger": "vma", "vameval": "vma", "test vameval": "vma",
+  "beep test": "vma", "test vma": "vma",
   "vma": "vma", "vitesse maximale aérobie": "vma", "vitesse maximale aerobie": "vma",
   "vo2max": "vo2max", "vo2 max": "vo2max", "consommation maximale d'oxygène": "vo2max", "consommation maximale d'oxygene": "vo2max",
 };
@@ -209,6 +236,27 @@ export function heightFromFlightTime(tSeconds: number): number {
    jamais redemander la donnée à l'utilisateur. */
 export function flightTimeFromHeight(meters: number): number {
   return 2 * Math.sqrt((2 * meters) / G_ACCEL);
+}
+
+/* Cooper/Demi-Cooper — distance parcourue (m) → VO2max/VMA estimés (2026-09, demande de Gildas).
+   Même principe que heightFromFlightTime ci-dessus : un alternative input method qui convertit vers
+   l'unité canonique déjà stockée (vo2max en ml/kg/min, vma en km/h), jamais un nouveau MetricKey —
+   la valeur écrite reste directement comparable à un VO2max/VMA mesuré autrement (même historique,
+   même graphe). Formules vérifiées par recherche web le jour même (pas recopiées de mémoire) :
+   - Cooper (12 min) : VO2max = (distance_m − 504.9) / 44.73 — régression linéaire originale de
+     Cooper (K.H. Cooper, 1968, JAMA, "A Means of Assessing Maximal Oxygen Intake"), la formule la
+     plus citée pour ce test, confirmée identique sur plusieurs calculateurs indépendants.
+   - Demi-Cooper (6 min) : VMA(km/h) = distance_m / 100 — vitesse moyenne sur la durée du test,
+     convention de terrain (pas une régression physiologique comme Cooper), corroborée à l'identique
+     par 5 sources françaises de coaching indépendantes (irbms.com, wanarun.net, bandax.fr,
+     fitdistance.io, campus.coach). Fenêtre de 6 min jugée par ces mêmes sources plus proche de la
+     durée soutenable à VMA (~4-8 min) que les 12 min de Cooper — d'où son usage pour estimer la VMA
+     plutôt que le VO2max, dans cette littérature. */
+export function vo2maxFromCooperDistance(distanceM: number): number {
+  return (distanceM - 504.9) / 44.73;
+}
+export function vmaFromDemiCooperDistance(distanceM: number): number {
+  return distanceM / 100;
 }
 
 /* Ratio "temps de vol ÷ temps de contact" (2026-09, dit "style MyJump" — FT:CT ratio dans la
@@ -328,6 +376,9 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   fly20m: { name: "Fly 20m", unit: "s" },
   fly30m: { name: "Fly 30m", unit: "s" },
   cmjHeight: { name: "Saut vertical (CMJ)", unit: "cm" },
+  // Distinct de cmjHeight (2026-09) — CMJ avec swing des bras autorisé, un vrai test à part dans la
+  // littérature de saut vertical (voir ALIASES ci-dessous pour l'historique de la correction).
+  cmjFreeArms: { name: "Saut vertical bras libres (CMJ free arms)", unit: "cm" },
   squatJumpHeight: { name: "Squat Jump", unit: "cm" },
   // "Drop Jump (RSI)" — même nom EXACT que testBattery.ts (2026-09, suite, demande de Gildas : un seul
   // nom, avant et après avoir loggué, plutôt que "Drop jump" une fois interprété vs "Drop Jump (RSI)"
@@ -1147,26 +1198,53 @@ export function buildVerdict(insights: CardInsight[]): Verdict {
       emoji: "⚪", action: "Renseigner",
     };
   }
+  // Un seul représentant par mouvement testé (2026-09, suite — retour de Gildas, "insight croisé,
+  // parle des outliers, top 3 forces/top 3 faiblesses") : un exercice avec plusieurs comparaisons
+  // (ex. Front Squat vs Back Squat ET vs Clean) ne doit compter qu'une fois dans le classement — sa
+  // comparaison la plus faible, même convention que la sélection "primary" déjà utilisée pour la
+  // jauge de sa ligne (voir unifiedRowFromInsightGroup, TestsPanel.tsx) — sinon un même mouvement
+  // pourrait apparaître 2 fois dans le "top 3".
+  const byMetric = new Map<MetricKey, CardInsight & { score: number }>();
+  for (const c of scored) {
+    const prev = byMetric.get(c.primaryMetric);
+    if (!prev || c.score < prev.score) byMetric.set(c.primaryMetric, c);
+  }
+  const asc = Array.from(byMetric.values()).sort((a, b) => a.score - b.score);
   const avg = scored.reduce((s, c) => s + c.score, 0) / scored.length;
-  const asc = [...scored].sort((a, b) => a.score - b.score);
-  const weakest = asc[0], strongest = asc[asc.length - 1];
+  // Top 3 de chaque côté, jamais le même mouvement des deux côtés (2026-09, suite) : avec peu de
+  // tests loggués, `weak3`/`strong3` peuvent se chevaucher (le même mouvement serait à la fois
+  // "le plus faible" et "le plus fort" du classement) — `strong3` exclut explicitement tout ce qui
+  // est déjà dans `weak3` plutôt que de répéter un nom des deux côtés.
+  const weak3 = asc.slice(0, Math.min(3, asc.length));
+  const weakIds = new Set(weak3.map(c => c.id));
+  const strong3 = [...asc].reverse().filter(c => !weakIds.has(c.id)).slice(0, 3);
+  const strongest = asc[asc.length - 1];
+  const weakNames = weak3.map(c => c.label).join(", ");
+  const strongNames = strong3.map(c => c.label).join(", ");
+  // Recommandation concrète (2026-09, suite — retour de Gildas, "ça aurait été mieux de phraser une
+  // recommandation") : réutilise le texte `advice` DÉJÀ écrit pour la carte la plus faible (asc[0]/
+  // weak3[0]) — pas une nouvelle phrase générique inventée pour l'occasion, le même conseil déjà
+  // affiché sur la carte du mouvement elle-même (single source de vérité).
+  const priorityAdvice = weak3[0].advice;
   if (avg >= 65) {
     return {
       title: "Profil solide et équilibré",
-      sub: `${strongest.label} est ton point fort actuel. Maintiens ce niveau tout en travaillant les axes encore en retrait.`,
+      sub: strong3.length
+        ? `Points forts : ${strongNames}.${weak3.length && weak3.length < asc.length ? ` Axes encore en retrait : ${weakNames} — ${priorityAdvice}` : ""}`
+        : `${strongest.label} est ton point fort actuel. Maintiens ce niveau tout en travaillant les axes encore en retrait.`,
       emoji: "🟢", action: "Maintenir",
     };
   }
   if (avg >= 40) {
     return {
       title: "Une priorité claire se dégage",
-      sub: `${weakest.label} est l'axe le plus en retrait par rapport aux repères de la littérature : c'est la priorité d'entraînement à court terme.`,
+      sub: `Axes prioritaires : ${weakNames}. ${priorityAdvice}${strong3.length ? ` Points d'appui : ${strongNames}.` : ""}`,
       emoji: "🟠", action: "Prioriser",
     };
   }
   return {
     title: "Profil en construction",
-    sub: `Plusieurs axes sont encore sous les repères attendus, à commencer par ${weakest.label.toLowerCase()}. Une base généraliste reste la priorité avant de se spécialiser.`,
+    sub: `Plusieurs axes sont encore sous les repères attendus : ${weakNames}. ${priorityAdvice}${strong3.length ? ` Point d'appui : ${strongNames}.` : ""}`,
     emoji: "🔴", action: "Construire",
   };
 }

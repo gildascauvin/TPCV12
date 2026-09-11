@@ -75,7 +75,7 @@ export const METRIC_QUALITY: Record<MetricKey, Quality[]> = {
   powerSnatchBox: ["puissance"], powerSnatchNoFoot: ["puissance"], pressBtn: ["puissance"], pressOh: ["puissance"], pushPress: ["puissance"],
   snatchBalance: ["puissance"], snatchPull: ["puissance"], snatchPullBlock: ["puissance"], snatchSotsPress: ["puissance"], sotsPress: ["puissance"],
   tallClean: ["puissance"], tallMuscleClean: ["puissance"], tallMuscleSnatch: ["puissance"], tallSnatch: ["puissance"],
-  cmjHeight: ["puissance", "reactivite"], squatJumpHeight: ["puissance", "reactivite"],
+  cmjHeight: ["puissance", "reactivite"], cmjFreeArms: ["puissance", "reactivite"], squatJumpHeight: ["puissance", "reactivite"],
   // Réactivité
   dropJumpHeight: ["reactivite"], dropJumpContact: ["reactivite"],
   // Vitesse

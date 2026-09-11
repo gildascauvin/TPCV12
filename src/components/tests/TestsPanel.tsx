@@ -10,7 +10,7 @@ import {
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
 import { guessSportChip } from "@/lib/sportCategories";
 import {
-  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio,
+  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
   type MetricKey, type CardInsight, type CardStatus, type Sexe,
 } from "@/lib/testNorms";
 import { TEST_BATTERIES, BATTERY_TEST_METRICS, guessBatteryKey, type BatteryTest } from "@/lib/testBattery";
@@ -41,9 +41,17 @@ const COMPARISON_LABEL_COLOR: Record<"point fort" | "conforme à l'attendu" | "a
   "axe de travail": { text: "#c77700", bg: "rgba(199,119,0,.10)" },
   "conforme à l'attendu": { text: "#8a8f94", bg: "#eeefec" },
 };
-// Métriques Sprint/Course (2026-09, suite) — jamais interprétées comme "couvertes" via une carte
-// interprétée pour sprint60m/100m/200m (aucune norme sourcée) : voir notCovered.
-const MULTI_ENTRY_METRICS = new Set<MetricKey>(["sprint10m", "sprint30m", "sprint60m", "sprint100m", "sprint200m", "time5k", "time10k", "timeSemi", "timeMarathon"]);
+// Métriques résolues (canonicalMetricKey) mais SANS AUCUNE CardInsight (pas de RATIO_CARD/BW_CARD/
+// ABSOLUTE_CARD dont ce serait le `primaryMetric`) — `coveredMetrics` (dérivé des CardInsight) ne
+// peut donc jamais les voir comme "représentées" une fois loggées, malgré `isMetricRepresented`
+// ci-dessous. Sprint60m/100m/200m et les distances d'endurance : aucune norme de population sourcée
+// à ce jour. `cmjFreeArms` (2026-09, suite — bug réel signalé par Gildas, "j'ai 2 Saut vertical bras
+// libres") : absent d'ici par oubli lors de l'ajout de ce MetricKey — sans cette entrée, sa carte
+// recommandée (testBattery.ts) n'était JAMAIS marquée "faite" (notCovered() toujours vrai), et
+// s'affichait donc EN PLUS de sa propre carte "résolue mais sans repère" (resolvedUninterpretedMetrics)
+// — 2 lignes pour le même test. Toute future métrique dans ce cas (résolue, sans CardInsight) doit
+// être ajoutée ici pour éviter la même duplication.
+const MULTI_ENTRY_METRICS = new Set<MetricKey>(["sprint10m", "sprint30m", "sprint60m", "sprint100m", "sprint200m", "time5k", "time10k", "timeSemi", "timeMarathon", "cmjFreeArms"]);
 // Mouvements de force "pure" au sens strict — même liste que METRIC_QUALITY["force"] (testQualities.ts)
 // — seuls ceux-ci ont l'option "reps" (endurance de force, strengthProfile.ts). Exclut délibérément
 // les mouvements olympiques/leurs variantes techniques (snatch, cleanJerk, etc. — qualité "puissance") :
@@ -292,26 +300,19 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
   const targetLabel = targetRealUnitDisplay(insight);
   return (
     <div style={{ marginTop: 4 }}>
-      {/* Les 3 valeurs alignées sur UNE seule ligne (2026-09, suite — retour de Gildas) : résultat à
-          gauche, cible au centre, badge à droite. La cible est positionnée en absolu à 50% de la
-          MÊME largeur que la jauge juste en dessous — donc exactement au-dessus du tick — plutôt que
-          via `justify-content:space-between` (qui ne centrerait pas vraiment le milieu dès que
-          gauche/droite ont des largeurs différentes) ; résultat/badge restent en flex normal,
-          derrière/à côté de cet élément centré. */}
-      <div style={{ position: "relative", minHeight: 18, marginBottom: 6 }}>
-        {targetLabel != null && (
-          <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", fontSize: 10.5, color: "rgba(255,255,255,.45)", whiteSpace: "nowrap" }}>
-            cible vs {insight.compareLabel} : <b style={{ color: "#fff", fontWeight: 700 }}>{targetLabel}</b>
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          {rawValueLabel != null ? (
-            <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
-          ) : <span />}
-          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26` }}>
-            {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
-          </span>
-        </div>
+      {/* Cible déplacée SOUS la jauge (2026-09, suite — retour de Gildas, "en mobile c'est mieux") :
+          l'ancienne version centrait "cible vs X : Y" en absolu PAR-DESSUS la ligne résultat/badge,
+          ce qui pouvait chevaucher un badge large (delta long) sur un écran étroit. Désormais un
+          simple flex normal résultat/badge, puis la cible en centré textuel sous la jauge — plus de
+          `position:absolute`/chevauchement possible, et le centrage sous la même largeur que la
+          jauge reste visuellement aligné avec le tick. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        {rawValueLabel != null ? (
+          <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
+        ) : <span />}
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26` }}>
+          {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
+        </span>
       </div>
       <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
         {targetScore != null ? (
@@ -335,6 +336,11 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
           <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${insight.score}%`, background: c.fill, borderRadius: 6 }} />
         )}
       </div>
+      {targetLabel != null && (
+        <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
+          cible vs {insight.compareLabel} : <b style={{ color: "#fff", fontWeight: 700 }}>{targetLabel}</b>
+        </div>
+      )}
     </div>
   );
 }
@@ -359,16 +365,13 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
           "Recommandations", où plusieurs jauges de distances différentes s'enchaînent sans autre
           repère. */}
       {!hideLabel && <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", marginBottom: 6 }}>{comp.axis}</div>}
-      <div style={{ position: "relative", minHeight: 18, marginBottom: 6 }}>
-        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", fontSize: 10.5, color: "rgba(255,255,255,.45)", whiteSpace: "nowrap" }}>
-          attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{comp.predicted.toFixed(2)}s</b>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
-          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26` }}>
-            {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
-          </span>
-        </div>
+      {/* Attendu déplacé SOUS la jauge (2026-09, suite — même fix que PrimaryGauge, "en mobile c'est
+          mieux") : même raisonnement, plus de position:absolute superposée à la ligne résultat/badge. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26` }}>
+          {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
+        </span>
       </div>
       <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
         <div style={{ position: "absolute", left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
@@ -378,6 +381,9 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
             ...(dir === "left" ? { right: "50%", width: `${width}%` } : { left: "50%", width: `${width}%` }),
           }}
         />
+      </div>
+      <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
+        attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{comp.predicted.toFixed(2)}s</b>
       </div>
     </div>
   );
@@ -511,8 +517,17 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
   const [repsCount, setRepsCount] = useState("");
   const [deletingRepId, setDeletingRepId] = useState<string | null>(null);
   const isDropJumpHeight = metric === "dropJumpHeight";
-  const [inputMode, setInputMode] = useState<"direct" | "flight">("direct");
+  const isVo2max = metric === "vo2max";
+  const isVma = metric === "vma";
+  // Cooper/Demi-Cooper (2026-09, demande de Gildas) : même principe que le toggle drop jump — un
+  // mode de saisie alternatif (distance parcourue en m) qui convertit vers l'unité canonique déjà
+  // stockée (vo2maxFromCooperDistance/vmaFromDemiCooperDistance, testNorms.ts) avant écriture, jamais
+  // un nouveau MetricKey — un VO2max/une VMA obtenus via Cooper rejoignent le même historique/graphe
+  // qu'une mesure directe.
+  const [inputMode, setInputMode] = useState<"direct" | "flight" | "cooper" | "demiCooper">("direct");
   const flightPreview = isDropJumpHeight && inputMode === "flight" ? parseResultValue(value) : null;
+  const cooperPreview = isVo2max && inputMode === "cooper" ? parseResultValue(value) : null;
+  const demiCooperPreview = isVma && inputMode === "demiCooper" ? parseResultValue(value) : null;
   // Rappel doux (2026-09) : sur la carte fusionnée (onAddPair), les 2 valeurs sont de toute façon
   // écrites ensemble — le texte explique juste pourquoi 2 champs. Sur une éventuelle carte "Temps de
   // contact" isolée (cas résiduel, un exercice loggué en séance sous ce nom sans passer par ici),
@@ -534,8 +549,15 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
     // contact) que des décimales de mètres/secondes. Le stockage canonique reste m/s (jamais changé,
     // c'est l'unité que suppose le calcul RSI et les seuils sourcés) : conversion faite ici, à la
     // frontière saisie → écriture, jamais ailleurs.
+    // Cooper/Demi-Cooper (2026-09) — même frontière saisie→écriture que le drop jump ci-dessus :
+    // `raw` est alors une distance en mètres, jamais écrite telle quelle, toujours convertie en
+    // VO2max (ml/kg/min)/VMA (km/h) avant `onAdd`.
     const v = isDropJumpHeight
       ? (inputMode === "flight" ? Math.round(heightFromFlightTime(raw / 1000) * 1000) / 1000 : raw / 100)
+      : isVo2max && inputMode === "cooper"
+      ? Math.round(vo2maxFromCooperDistance(raw) * 10) / 10
+      : isVma && inputMode === "demiCooper"
+      ? Math.round(vmaFromDemiCooperDistance(raw) * 10) / 10
       : raw;
     setSaving(true);
     const reps = onAddRepEntry ? parseInt(repsCount, 10) : NaN;
@@ -719,14 +741,60 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
               ))}
             </div>
           )}
+          {/* Cooper (VO2max)/Demi-Cooper (VMA) — 2026-09, demande de Gildas : mêmes formules sourcées
+              que testNorms.ts (Cooper 1968 ; Demi-Cooper, 5 sources françaises indépendantes). */}
+          {isVo2max && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+              {(["direct", "cooper"] as const).map(m => (
+                <button
+                  key={m} type="button" onClick={() => setInputMode(m)}
+                  style={{
+                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                    border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
+                    background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
+                  }}
+                >
+                  {m === "direct" ? "VO2max direct" : "Test Cooper (12 min)"}
+                </button>
+              ))}
+            </div>
+          )}
+          {isVma && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 9 }}>
+              {(["direct", "demiCooper"] as const).map(m => (
+                <button
+                  key={m} type="button" onClick={() => setInputMode(m)}
+                  style={{
+                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                    border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
+                    background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
+                  }}
+                >
+                  {m === "direct" ? "VMA directe" : "Demi-Cooper (6 min)"}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: 1, minWidth: 90 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>
-                {isDropJumpHeight && inputMode === "flight" ? "Temps de vol (ms)" : onAddPair ? "Hauteur (cm)" : onAddNew ? "Résultat" : `Résultat (${unit})`}
+                {isDropJumpHeight && inputMode === "flight" ? "Temps de vol (ms)"
+                  : (isVo2max && inputMode === "cooper") || (isVma && inputMode === "demiCooper") ? "Distance parcourue (m)"
+                  : onAddPair ? "Hauteur (cm)" : onAddNew ? "Résultat" : `Résultat (${unit})`}
               </div>
-              <input type="number" step={isDropJumpHeight ? (inputMode === "flight" ? "1" : "0.1") : "0.01"} value={value} onChange={e => setValue(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }} />
+              <input
+                type="number"
+                step={isDropJumpHeight ? (inputMode === "flight" ? "1" : "0.1") : (isVo2max && inputMode === "cooper") || (isVma && inputMode === "demiCooper") ? "1" : "0.01"}
+                value={value} onChange={e => setValue(e.target.value)} style={{ ...INPUT_STYLE, fontSize: 14 }}
+              />
               {flightPreview != null && (
                 <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000))}</div>
+              )}
+              {cooperPreview != null && (
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {vo2maxFromCooperDistance(cooperPreview).toFixed(1)} ml/kg/min</div>
+              )}
+              {demiCooperPreview != null && (
+                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.5)", marginTop: 4 }}>≈ {vmaFromDemiCooperDistance(demiCooperPreview).toFixed(1)} km/h</div>
               )}
             </div>
             {onAddNew && (
@@ -1520,42 +1588,6 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
 
   return (
     <div>
-      {onEditProfile && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.06)", borderRadius: 12, padding: "9px 12px", marginBottom: 14, fontSize: 12, color: "#5b5f62" }}>
-          <span>👤 <b style={{ color: "#171b1f" }}>{sport || "Sport non renseigné"}</b> · {sexeLabel(sexe ?? null)} · {poidsLabel(poidsKg)}</span>
-          <button onClick={onEditProfile} style={{ background: "none", border: "none", color: "#d44000", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>✏️ Modifier</button>
-        </div>
-      )}
-
-      {/* Chips de qualité physique (2026-09) — remplace l'ancien filtre par sport. Ne change jamais
-          la famille de normes interprétée (toujours celle du sport de profil) : filtre uniquement
-          QUELLES cartes/tests recommandés s'affichent, transversalement à tous les sports (voir
-          testQualities.ts). */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "#a5a5aa", marginBottom: 8 }}>Filtrer par qualité physique</div>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-          {QUALITY_ORDER.map(q => {
-            const meta = QUALITY_META[q];
-            const active = activeQuality === q;
-            return (
-              <button
-                key={q}
-                onClick={() => setActiveQuality(prev => (prev === q ? null : q))}
-                style={{
-                  flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 13px", borderRadius: 20,
-                  border: active ? "1px solid #171b1f" : "1px solid rgba(0,0,0,.10)",
-                  background: active ? "#171b1f" : "#fff", color: active ? "#fff" : "#171b1f",
-                  fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-                }}
-              >
-                <span>{meta.emoji}</span>{meta.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Carte dark "Recommandations" — s'affiche dès qu'il y a un verdict à montrer OU au moins un
           test à lister (2026-09, suite) : la liste de tests ne doit JAMAIS disparaître faute de
           verdict (ex. aucun sport de profil et aucun signal sprint/force), même si ce sont les 2
@@ -1565,6 +1597,60 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
           {showReco && (
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
+
+              {/* Profil (2026-09, suite — retour de Gildas) : déplacé sous le titre "Recommandations
+                  d'entraînement" (était au-dessus de toute la carte, sur fond clair) — restylé dark
+                  pour rester cohérent avec le reste de la carte. */}
+              {onEditProfile && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "9px 12px", marginBottom: 10, fontSize: 12, color: "rgba(255,255,255,.75)" }}>
+                  <span>👤 <b style={{ color: "#fff" }}>{sport || "Sport non renseigné"}</b> · {sexeLabel(sexe ?? null)} · {poidsLabel(poidsKg)}</span>
+                  <button onClick={onEditProfile} style={{ background: "none", border: "none", color: "#f04a08", fontWeight: 800, fontSize: 12, cursor: "pointer", padding: 0 }}>✏️ Modifier</button>
+                </div>
+              )}
+
+              {/* Chips de qualité physique (2026-09) — remplace l'ancien filtre par sport. Ne change
+                  jamais la famille de normes interprétée (toujours celle du sport de profil) : filtre
+                  uniquement QUELLES cartes/tests recommandés s'affichent, transversalement à tous les
+                  sports (voir testQualities.ts). "Tous" (2026-09, suite — retour de Gildas) : remet
+                  `activeQuality` à `null`, seul moyen de sortir du filtre une fois un chip cliqué
+                  (avant, il fallait recliquer le MÊME chip actif — pas évident). */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 8 }}>Filtrer par qualité physique</div>
+                <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+                  <button
+                    onClick={() => setActiveQuality(null)}
+                    style={{
+                      flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
+                      padding: "8px 13px", borderRadius: 20,
+                      border: activeQuality == null ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
+                      background: activeQuality == null ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
+                      fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                    }}
+                  >
+                    Tous
+                  </button>
+                  {QUALITY_ORDER.map(q => {
+                    const meta = QUALITY_META[q];
+                    const active = activeQuality === q;
+                    return (
+                      <button
+                        key={q}
+                        onClick={() => setActiveQuality(prev => (prev === q ? null : q))}
+                        style={{
+                          flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
+                          padding: "8px 13px", borderRadius: 20,
+                          border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
+                          background: active ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
+                          fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span>{meta.emoji}</span>{meta.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3, marginBottom: 10 }}>{verdict.title}</div>
               <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
                 <b style={{ color: "#fff" }}>{verdict.emoji} {verdict.action} :</b> {verdict.sub}
