@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
@@ -167,11 +167,12 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
 
 export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, isDemoData = false, sport = null, sexe = null, poidsKg = null, testsFixture }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; isDemoData?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
-  const [section, setSection] = useState<TestsSection>("load");
+  const [section, setSection] = useState<TestsSection>(searchParams.get("section") === "tests" ? "tests" : "load");
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
