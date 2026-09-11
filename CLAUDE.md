@@ -3081,3 +3081,38 @@ Point de départ : *"pourquoi je peux relier 'Saut vertical bras libres (CMJ fre
 `tsc --noEmit` propre après chaque round. Résolution des 2 noms CMJ testée en script direct (`canonicalMetricKey`, confirmé 2 `MetricKey` distincts). `buildVerdict()` testé avec un jeu de données réaliste. Pas de clic réel dans le navigateur par Claude — Gildas a testé lui-même en local à chaque étape, ce qui a permis de trouver les 2 bugs CMJ.
 
 Déployé en prod le 2026-09-11, commit `b2aac10`, push direct sur `main`.
+
+## Suite (2026-09-11) — retrait du filtrage par sport, broad jump/agilité/mobilité, jauges comportements
+
+Batch accumulé sur plusieurs demandes de Gildas dans la même session, commité en un seul commit une fois cohérent.
+
+### Retrait complet du filtrage des tests recommandés par sport de profil
+Demande répétée de Gildas ("je veux plus filtrer les tests par sport du profil... tous les tests de l'app pour tous les users, filtrables par qualité physique") : `recommendedTestsForView`/`metricToBatteryTest` (`TestsPanel.tsx`) scannent désormais TOUJOURS `Object.values(TEST_BATTERIES)` en entier — plus jamais limités à la batterie du sport de profil, `activeQuality` redevient un simple filtre optionnel appliqué sur ce même pool complet, avec ou sans qualité sélectionnée. `activeFamily` (dérivé du sport de profil) continue de piloter UNIQUEMENT le scoring des cartes déjà interprétées (RATIO_CARDS), une séparation nette déjà en place mais renforcée par ce chantier. `guessBatteryKey()`/`BATTERY_TO_FAMILY` (`testBattery.ts`) supprimées entièrement — plus aucun appelant une fois ce filtrage retiré.
+
+### Broad Jump / Single Leg / Triple Broad Jump + agilité + mobilité
+Nouveaux `MetricKey` (`testNorms.ts`) : `broadJump`/`singleLegBroadJump`/`tripleBroadJump` (sauts horizontaux, cm — aucune RATIO_CARD sourcée à ce jour, pas fabriquée faute de source vérifiée), `test505`/`illinoisAgility`/`proAgility` (agilité, s), `ankleDorsiflexion`/`kneeToWall`/`hipInternalRotation`/`hipExternalRotation`/`shoulderFlexion`/`apleyScratchTest`/`thomasTest`/`activeStraightLegRaise` (mobilité, ° sauf knee-to-wall/Apley en cm) — `METRIC_DISPLAY`/`ALIASES`/`METRIC_QUALITY` étendus en conséquence. 2 nouveaux buckets `testBattery.ts` (`agilite`/`mobilite`) — explicitement documentés comme NON extraits de BT_DATA (contrairement au reste du fichier), ajoutés directement sur demande de Gildas.
+
+**Bug réel trouvé et corrigé** : l'entrée composite "Saut vertical et saut en longueur sans élan" (`testBattery.ts`) ne mappait QUE `cmjHeight` dans `BATTERY_TEST_METRICS` — la moitié "saut en longueur" (broad jump) n'avait jamais de `MetricKey`, silencieusement ignorée depuis la création de cette liste. Décomposée en 2 entrées séparées ("Saut vertical (CMJ)" + "Saut en longueur sans élan (Broad Jump)").
+
+**2e bug réel, signalé par Gildas** ("je vois pas Single/Triple Broad Jump dans Puissance") : ces 2 métriques avaient déjà un `MetricKey`/une entrée `METRIC_QUALITY` mais aucune entrée `BATTERY_TEST_QUALITY` — sans elle, elles n'apparaissaient jamais comme recommandation "Puissance" tant qu'elles n'avaient pas déjà été loguées au moins une fois (le seul mécanisme qui les aurait fait apparaître avant ça). Ajoutées.
+
+Retiré sur demande explicite de Gildas : "1RM ou 5RM Squat" et "Test RM répété (5RM, 8RM)" (`testBattery.ts`/`testQualities.ts`) — redondants avec le multi-rep déjà loggable directement sur Back Squat.
+
+### `/conseils` — carte "Impact comportements" sur le même langage visuel que les jauges de tests
+Demande de Gildas : "applique les mêmes composants de jauges qu'on a fait pour les tests mais pour les comportements". `ConseilsClient.tsx` : la mini-barre bidirectionnelle 6px (rouge/vert, colonnes fixes) est remplacée par le même langage visuel que `PrimaryGauge` (`TestsPanel.tsx`) — tick central, barre épaisse (12px) qui part du centre vers la droite (aide, vert) ou la gauche (pénalise, rouge), relative à `maxAbs` (comportement le plus marqué de la liste, pas une norme externe puisqu'aucune n'existe pour un impact comportemental). Layout par ligne aligné sur `UnifiedRow` : badge emoji carré 32×32, puis nom + badge de statut sur la même ligne.
+
+3 itérations sur le badge/insight, chacune sur retour direct de Gildas :
+1. **Badge unique** ("enlève -0.9 pts et mets le dans le badge") : plus de grande valeur séparée (22px) à gauche du badge — statut ET points fusionnés dans un seul badge ("Pénalise -0.9 pts").
+2. **Insight en encadré, plus en bas de carte** ("enlève le [sous-titre générique 'Effet des comportements de la veille...'] et mets [le conseil ✓ Continue/✗ Évite] dans un encadré d'insight à la place") : le sous-titre fixe et le bloc "Conseil personnalisé" (dupliqués en bas de carte) fusionnent en un seul encadré (`background: rgba(255,255,255,.06)`, même style que les encarts d'insight ailleurs dans l'app) juste sous le titre — jamais répété deux fois sur la même carte.
+3. **Nom + badge alignés horizontalement** ("aligne 🧘 Stretching et Aide +10.5 pts horizontalement") : le badge quitte sa propre ligne dans `BehaviorGauge` (qui ne rend plus que la barre + le repère "loggué N× sur la période") pour rejoindre le nom sur une seule ligne flex (`justify-content: space-between`) — `behaviorStatus(impact)`, nouvelle fonction pure, calcule couleur/label/texte une seule fois, partagée entre le badge (ligne du nom) et la couleur de la barre (`BehaviorGauge`), pour ne jamais dupliquer le seuil de neutralité entre les deux.
+
+### Courbe pointillée "Forme" — passe du rouge/gris/vert aux 3 bleus
+Demande de Gildas : "la courbe en pointillé de Forme ne doit plus être en gris/rouge/vert mais en 3 variantes de bleus". `FORM_ZONES` (`SparkLineClient.tsx`, pilote les points/le badge de la courbe secondaire Forme sur `/conseils` et `/coach/athletes`) passe de rouge/gris/vert aux 3 mêmes bleus que `WELLNESS_ZONES` (`WELLNESS_RAMP`, aucune nouvelle teinte inventée) — Wellness et Forme partagent désormais la même échelle (déjà le cas, ±8%) ET la même palette. `FORM_ZONES_MIRROR` (`opengraph-image.tsx`, copie à la main pour la route satori qui ne peut pas importer un fichier "use client") mise à jour en miroir, depuis le même `WELLNESS_RAMP` déjà importé dans ce fichier.
+
+### "+ Nouveau test" — création libre depuis `/conseils`
+Demande de Gildas : pouvoir ajouter un test directement depuis la page des tests de performance, pas seulement via un test déjà recommandé par la batterie. Nouveau composant `AddCustomTestForm` (`TestsPanel.tsx`) — nom libre, unité (dropdown `TEST_UNITS`), valeur, date — réutilise EXACTEMENT le même mécanisme d'écriture que `handleAddForNewRecommendedTest` (déjà existant pour un test recommandé jamais loggué) : `upsertTestResult`/`resolveTest` créent la fiche sous le nom exact tapé, sans exiger qu'il existe dans `testBattery.ts`. Rejoint automatiquement une carte interprétée si le nom résout un `MetricKey` connu, sinon apparaît comme un test "brut"/non relié — même sort que n'importe quel exercice loggué en séance sous un nom inconnu. Toggle simple (bouton en pointillé → formulaire), toujours visible indépendamment de `showReco`/du filtre qualité, masqué en sandbox (`fixture`, aucun backend réel).
+
+### Vérifié
+`tsc --noEmit` propre après chaque étape. Diff du filtrage par sport/broad jump/agilité/mobilité relu intégralement avant de committer (accumulé sur plusieurs tours de cette session, jamais poussé entre-temps). Pas de clic réel dans le navigateur par Claude sur ce batch.
+
+Déployé en prod le 2026-09-11, commit `95ed919`, push direct sur `main`.
