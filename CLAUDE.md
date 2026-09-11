@@ -3046,3 +3046,38 @@ Remplace `classifySprintProfile()` (avant : 3 axes fixes, calculables uniquement
 `tsc --noEmit` propre après chaque round. Ratios Baroga et cartes réciproques vérifiés par calcul direct (`computeAllFamiliesInsights`/`groupInsightsByMetric` rejoués en script `tsx`, y compris contre les vraies données Supabase de Gildas via requêtes SQL directes — pas seulement des exemples synthétiques, après un cas où une relecture de code seule n'avait pas suffi à convaincre). Modèle sprint vérifié avec les vraies valeurs de Gildas (60m=7,94s/100m=12,47s → comparaisons "conforme à l'attendu" cohérentes). Pas de clic réel dans le navigateur par Claude sur ce chantier — Gildas a testé lui-même en local, un signalement ("toujours pas vu") s'est avéré être une erreur de lecture de sa part une fois la donnée réelle vérifiée en base.
 
 Déployé en prod le 2026-09-11, commit `7fce08f`, push direct sur `main`.
+
+## Suite (2026-09-11) — jauge mobile, insight avec recommandation, Cooper/VMA, fix CMJ free arms
+
+### UI — cible sous la jauge, header réorganisé
+`PrimaryGauge`/`SprintAxisGauge` (TestsPanel.tsx) : la cible/l'attendu (`cible vs X : Y`/`attendu : Ys`) était centrée en `position:absolute` PAR-DESSUS la ligne résultat/badge — retour de Gildas ("en mobile c'est mieux") : un badge large (delta long) pouvait chevaucher ce texte sur écran étroit. Déplacée en flux normal SOUS la jauge (texte centré), plus aucun `position:absolute` superposé.
+
+Bloc profil (👤 sport/sexe/poids/✏️ Modifier) et filtre "Filtrer par qualité physique" déplacés sous le titre "Recommandations d'entraînement" (étaient au-dessus de toute la carte, sur fond clair) — restylés dark pour rester cohérents. Chip "Tous" ajouté en premier (remet `activeQuality` à `null` — avant, aucun moyen simple de sortir du filtre une fois un chip cliqué).
+
+### `buildVerdict()` — insight croisé top-3/top-3 + vraie recommandation
+Retour de Gildas : *"en insight croisé, parle des outliers (top 3 forces top 3 faiblesses)"*, puis *"ça aurait été mieux de phraser une recommandation"*. Deux itérations :
+1. Dédup par `primaryMetric` (le même mouvement testé 2x, ex. Front Squat vs Back Squat ET vs Clean, ne doit compter qu'une fois — sa comparaison la plus faible, même convention que `unifiedRowFromInsightGroup`), puis top 3 de chaque côté, `strong3` excluant explicitement `weakIds` pour ne jamais répéter un mouvement des deux côtés.
+2. La phrase se termine par le texte `advice` **déjà écrit** pour le mouvement le plus faible (`weak3[0].advice`) — jamais une nouvelle phrase générique inventée, réutilise ce qui existe déjà sur la carte du mouvement (single source de vérité). Testé : *"Axes prioritaires : Clean, Front squat, Jerk. Isole la force de traction pure, sans le catch. Si le ratio est bas, ajoute 2-3 séries hebdomadaires de tirages lourds... Points d'appui : Clean & Jerk, Deadlift, Back squat."*
+
+### Cooper/Demi-Cooper → VO2max/VMA + alias VMA manquants
+Même principe que `heightFromFlightTime` (drop jump) — un mode de saisie alternatif (distance en m) qui convertit vers l'unité canonique déjà stockée, jamais un nouveau MetricKey :
+- Cooper (12 min) : `VO2max = (distance_m − 504.9) / 44.73` — formule linéaire originale de Cooper (1968, JAMA), vérifiée par recherche web (confirmée identique sur plusieurs calculateurs indépendants).
+- Demi-Cooper (6 min) : `VMA(km/h) = distance_m / 100` — vitesse moyenne sur la durée du test (pas une régression physiologique comme Cooper), corroborée à l'identique par 5 sources françaises de coaching indépendantes (irbms.com, wanarun.net, bandax.fr, fitdistance.io, campus.coach).
+- Toggle "direct"/"via distance" sur les cartes VO2max et VMA (`TestCard`, même UX que le toggle drop jump hauteur/temps de vol), preview de la conversion affichée en direct.
+- **Alias VMA manquants** ajoutés (signalé par Gildas, "il manque Luc Léger") : Luc Léger, test navette, VAMEVAL, beep test — tous des PROTOCOLES qui donnent directement une VMA en km/h, donc un simple alias suffit. **Pas ajouté** : Cooper/Demi-Cooper en tant que noms d'alias directs (donneraient une distance mal interprétée comme VO2max/VMA brute sans conversion) — d'où le toggle ci-dessus plutôt qu'un alias.
+
+### CMJ free arms — 2 bugs réels, trouvés en corrigeant un signalement de Gildas
+Point de départ : *"pourquoi je peux relier 'Saut vertical bras libres (CMJ free arms)' à un test connu dont celui sous le même nom ? ils devraient être liés par défaut."*
+
+**Erreur commise puis corrigée** : 1re lecture — j'ai aliasé "CMJ free arms" directement sur `cmjHeight` (même métrique que le CMJ classique), pensant que Gildas voulait les fusionner. **Faux** — signalé sans détour ("t'es con ou quoi ? ... c'est 2 différents") : ce sont 2 tests réellement distincts dans la littérature du saut vertical (CMJ bras libres/swing autorisé mesure généralement ~10% plus haut qu'un CMJ mains sur les hanches), déjà traités comme tels **intentionnellement** dans `testBattery.ts` d'une session antérieure — sa description promettait explicitement "la comparaison avec ton CMJ standard isole la contribution du balancement des bras", une comparaison rendue impossible si fondus dans la même métrique. J'avais aussi supprimé à tort les entrées correspondantes de `testBattery.ts`/`testQualities.ts` en les jugeant "devenues incohérentes" — restaurées telles quelles (`git checkout`).
+
+**Le vrai bug** (ce que Gildas voulait dire par "liés par défaut") : ce test n'avait **jamais eu de `MetricKey` propre** — sans lui, il créait 2 fiches séparées une fois loggué (la carte recommandée, jamais marquée "faite" faute de mapping `BATTERY_TEST_METRICS`, + une 2e carte brute non reliée demandant un "🔗 Relier" manuel) au lieu d'être reconnu comme SA PROPRE carte, comme "Saut vertical (CMJ)" l'est déjà pour `cmjHeight`. Fix définitif : nouveau `MetricKey` dédié `cmjFreeArms` (jamais un alias vers `cmjHeight`) + `METRIC_DISPLAY`/`ALIASES` (testNorms.ts) + `METRIC_QUALITY` (testQualities.ts, type total — obligatoire) + `BATTERY_TEST_METRICS["Saut vertical bras libres (CMJ free arms)"] = ["cmjFreeArms"]` (testBattery.ts, jamais mappé jusqu'ici).
+
+**2e bug, trouvé juste après** ("j'ai 2 Saut vertical bras libres") : `cmjFreeArms` n'a aucune `CardInsight` (aucune RATIO_CARD/BW_CARD dont ce serait le `primaryMetric`) — `coveredMetrics` ne peut donc jamais le voir comme "représenté", et sans l'ajouter à `MULTI_ENTRY_METRICS` (TestsPanel.tsx — le même mécanisme déjà utilisé pour sprint60m/100m/200m, qui ont exactement le même profil "résolu mais sans norme sourcée"), sa carte recommandée restait éternellement "non couverte" et s'affichait EN PLUS de sa carte réelle. Ajouté au même Set déjà éprouvé, pas une nouvelle logique inventée — commentaire du Set étendu pour couvrir explicitement ce cas général ("toute future métrique résolue sans CardInsight doit être ajoutée ici").
+
+**Aucune donnée Supabase touchée à aucun moment sur ce sous-chantier** — uniquement de la logique de reconnaissance côté code (`canonicalMetricKey`), jamais un script de migration/fusion de lignes réelles.
+
+### Vérifié
+`tsc --noEmit` propre après chaque round. Résolution des 2 noms CMJ testée en script direct (`canonicalMetricKey`, confirmé 2 `MetricKey` distincts). `buildVerdict()` testé avec un jeu de données réaliste. Pas de clic réel dans le navigateur par Claude — Gildas a testé lui-même en local à chaque étape, ce qui a permis de trouver les 2 bugs CMJ.
+
+Déployé en prod le 2026-09-11, commit `b2aac10`, push direct sur `main`.
