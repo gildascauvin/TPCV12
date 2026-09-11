@@ -12,7 +12,7 @@ import type { ExerciseAttachments, ExerciseComment } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import {
-  TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTests, listTestResults, deleteTestResult, deleteTestIfEmpty,
+  TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTests, listTestResults, deleteTestResult, deleteTestIfEmpty, mergeTestInto,
   type TestSubject, type TestResultRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
@@ -704,6 +704,44 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
   const nameSuggestions = resultEditing && exerciseName && !testNameRecognized && !testNameOverride
     ? buildMergeSuggestions(exerciseName)
     : [];
+  const [mergingSuggestion, setMergingSuggestion] = useState(false);
+
+  /* 2 bugs réels corrigés (2026-09, suite — signalé par Gildas : "je crée Push press [nom farfelu]
+     que je lie en séance à Push Press, j'ai les 2 tests au lieu de garder que Push Press, en plus ça
+     écrase la valeur d'avant et ça met 0") :
+
+     1. `parseResultValue("")` valait `0` (pas `null`, voir testResults.ts) — un résultat pas encore
+        rempli pouvait donc passer les garde-fous "ne rien écrire si vide" (bouton "Valider"
+        cliquable, `syncTestResultsFromSession` déclenchée par l'autosave) et écrire silencieusement
+        value=0 sur la date du jour, PAR-DESSUS une vraie valeur déjà loguée ce jour-là si le nom
+        effectif résolvait déjà vers un test existant. Corrigé à la source.
+     2. Cliquer une suggestion ne posait QUE `testNameOverride` (state local React) sans jamais le
+        persister dans `attachments.result.testName` tant qu'aucun résultat n'avait encore été validé
+        une 1re fois (`resultTestId` encore null) — un autosave déclenché entre le clic et le "🧪
+        Valider" manuel (l'utilisateur tape encore sa valeur) ignorait donc totalement le lien choisi
+        et réécrivait sous le nom brut de la ligne (resolveExerciseName), créant le doublon. Fix :
+        stamper le nom choisi IMMÉDIATEMENT au clic, jamais seulement au moment de la fusion — l'état
+        local (`testNameOverride`) et l'état persisté (`attachments.result.testName`) ne peuvent plus
+        diverger, quel que soit le timing de l'autosave.
+
+     Le cas "un résultat existait déjà sous l'ancien nom" (`resultTestId` déjà non-null, validé une
+     1re fois avant ce lien) fusionne toujours immédiatement via `mergeTestInto` (même mécanisme que
+     le "🔗 Relier" de TestsPanel.tsx) — plus jamais d'orphelin, qu'on relie avant ou après une 1re
+     validation. */
+  async function handleSelectSuggestion(toName: string) {
+    setTestNameOverride(toName);
+    if (attachments.result) stampedUpdate({ ...attachments, result: { ...attachments.result, testName: toName } });
+    if (resultTestId && canSyncResult) {
+      setMergingSuggestion(true);
+      await mergeTestInto(ownerId!, resultTestId, testSubject!, toName);
+      const test = await resolveTest(ownerId!, toName, attachments.result?.unit ?? "kg");
+      if (test) {
+        setResultTestId(test.id);
+        setResultHistory(await listTestResults(test.id, testSubject!));
+      }
+      setMergingSuggestion(false);
+    }
+  }
 
   /* Saisie fusionnée hauteur+contact (2026-09) — porté ici depuis TestsPanel.tsx (même problème :
      "Temps de contact (drop jump)" n'a aucun autre point d'entrée pour un 1er résultat, et rien ne
@@ -766,7 +804,11 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
       if (contactMs === null) return; // les 2 valeurs sont requises ensemble (voir onAddPair, TestsPanel.tsx)
       contactValueS = contactMs / 1000;
     }
-    stampedUpdate({ ...attachments, result: { value: displayValue, unit } });
+    // `testName` (2026-09, fix réel — voir ExerciseResult, types/index.ts) : stampé systématiquement,
+    // pas seulement pour un lien manuel, pour que syncTestResultsFromSession() (déclenchée à la
+    // sauvegarde de la séance) écrive TOUJOURS sous ce même nom exact au lieu de re-dériver le sien
+    // via resolveExerciseName(line.text) — plus aucun risque de double fiche entre les 2 écritures.
+    stampedUpdate({ ...attachments, result: { value: displayValue, unit, testName: effectiveTestName ?? undefined } });
     if (canSyncResult && effectiveTestName) {
       setSavingResult(true);
       await upsertTestResult(ownerId!, testSubject!, { name: effectiveTestName, unit, value, date: sessionDate });
@@ -1083,10 +1125,10 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {nameSuggestions.map(s => (
                       <button
-                        key={s.toName} onClick={() => setTestNameOverride(s.toName)}
-                        style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 20, padding: "3px 9px", cursor: "pointer" }}
+                        key={s.toName} disabled={mergingSuggestion} onClick={() => handleSelectSuggestion(s.toName)}
+                        style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 20, padding: "3px 9px", cursor: mergingSuggestion ? "default" : "pointer", opacity: mergingSuggestion ? 0.5 : 1 }}
                       >
-                        {s.label}
+                        {mergingSuggestion ? "…" : s.label}
                       </button>
                     ))}
                   </div>

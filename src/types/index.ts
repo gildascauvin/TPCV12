@@ -110,6 +110,15 @@ export interface ExerciseComment {
 export interface ExerciseResult {
   value: string;
   unit: string;
+  /* Nom EXACT sous lequel ce résultat a été écrit dans `tests`/`test_results` (2026-09, fix réel
+     signalé par Gildas : lier en direct "Push press wesh" à "Push Press" écrivait bien la valeur
+     sous "Push Press" au moment du composeur, mais syncTestResultsFromSession() — appelée à la
+     sauvegarde de la séance — ne connaissait rien de ce choix et re-dérivait un nom depuis le texte
+     de la ligne via resolveExerciseName(), créant une 2e fiche "Push press wesh" séparée). Stampé
+     systématiquement (pas seulement en cas de lien manuel) pour que le composeur live et la
+     resynchro à la sauvegarde écrivent TOUJOURS sous le même nom — plus de re-dérivation
+     indépendante possible entre les deux. */
+  testName?: string;
 }
 
 export interface ExerciseAttachments {

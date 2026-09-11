@@ -45,9 +45,19 @@ function slugify(name: string): string {
   return name.trim().toLowerCase();
 }
 
-/* "12,5" (virgule FR) ou "12.5" → 12.5 ; texte vide/non numérique → null. */
+/* "12,5" (virgule FR) ou "12.5" → 12.5 ; texte vide/non numérique → null.
+   Bug réel corrigé (2026-09, découvert en creusant "ça met à 0 la valeur du Push Press" — signalé
+   par Gildas) : `Number("")` vaut `0` en JS, et `Number.isFinite(0)` est `true` — un champ VIDE
+   renvoyait donc `0`, pas `null`. Tous les garde-fous "value === null → ne rien écrire/désactive le
+   bouton" (TestCard, AddCustomTestForm, le composeur de test dans ExerciseBlockEditor,
+   syncTestResultsFromSession...) laissaient donc passer un champ jamais rempli comme un vrai "0"
+   explicite, écrivant/upsertant silencieusement value=0 sur la date du jour — y compris par-dessus
+   une vraie valeur déjà loguée ce jour-là. Fix à la source : chaîne vide/blanche → `null` avant même
+   la conversion, un "0" explicitement tapé reste bien distingué et continue de valoir 0. */
 export function parseResultValue(raw: string): number | null {
-  const n = Number(raw.trim().replace(",", "."));
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed.replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
 
@@ -255,12 +265,21 @@ export async function mergeTestInto(ownerId: string, oldTestId: string, subject:
 
 /* Scanne le texte + les media d'une séance (mêmes formats que ExerciseBlockEditor : notes en lignes
    `\n`-séparées, exercise_media keyé par index de ligne) et écrit un test_results pour chaque ligne
-   marquée comme test avec une valeur numérique valide — appelé depuis handleSave, jamais en live. */
+   marquée comme test avec une valeur numérique valide — appelé depuis handleSave, jamais en live.
+   Bug réel corrigé (2026-09, signalé par Gildas — "Push press wesh" lié en direct à "Push Press" se
+   doublonnait quand même) : cette fonction re-dérivait un nom via resolveExerciseName(line), tout à
+   fait indépendamment du nom sous lequel le composeur live (ExerciseBlockEditor) avait DÉJÀ écrit la
+   même valeur au moment du "🧪 Valider" (`effectiveTestName`, qui peut être un lien manuel vers un
+   test existant — voir testNameOverride) — les 2 écritures pouvaient donc atterrir sous 2 noms
+   différents, créant une fiche fantôme. `media.result.testName` (stampé systématiquement par
+   ExerciseBlockEditor, voir ExerciseResult dans types/index.ts) est désormais la SEULE source de
+   vérité quand elle existe ; `resolveExerciseName(line) || line` ne reste un repli que pour un
+   `exercise_media` déjà sauvegardé avant ce fix (jamais de `testName`). */
 export async function syncTestResultsFromSession(
   ownerId: string,
   subject: TestSubject,
   notes: string,
-  exerciseMedia: Record<string, { result?: { value: string; unit: string } }>,
+  exerciseMedia: Record<string, { result?: { value: string; unit: string; testName?: string } }>,
   date: string
 ): Promise<void> {
   const lines = notes.split("\n").map(l => l.trim()).filter(Boolean);
@@ -272,7 +291,7 @@ export async function syncTestResultsFromSession(
     if (!line || !result) return;
     const value = parseResultValue(result.value);
     if (value === null) return;
-    const name = resolveExerciseName(line) || line;
+    const name = result.testName || resolveExerciseName(line) || line;
     await upsertTestResult(ownerId, subject, { name, unit: result.unit, value, date });
   }));
 }

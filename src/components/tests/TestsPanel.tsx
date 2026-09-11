@@ -51,7 +51,11 @@ const COMPARISON_LABEL_COLOR: Record<"point fort" | "conforme à l'attendu" | "a
 // s'affichait donc EN PLUS de sa propre carte "résolue mais sans repère" (resolvedUninterpretedMetrics)
 // — 2 lignes pour le même test. Toute future métrique dans ce cas (résolue, sans CardInsight) doit
 // être ajoutée ici pour éviter la même duplication.
-const MULTI_ENTRY_METRICS = new Set<MetricKey>(["sprint10m", "sprint30m", "sprint60m", "sprint100m", "sprint200m", "time5k", "time10k", "timeSemi", "timeMarathon", "cmjFreeArms"]);
+// fly10m/fly20m/fly30m (2026-09, suite — ajoutés comme tests recommandés par défaut, "10m/20m/30m
+// lancé") : même raison que sprint10m/30m/60m/100m juste au-dessus, ajoutés d'emblée cette fois
+// (leçon retenue de l'oubli cmjFreeArms) — aucune RATIO_CARD sourcée, sans cette entrée leur carte
+// recommandée ne serait jamais marquée "faite" une fois une vraie valeur loguée.
+const MULTI_ENTRY_METRICS = new Set<MetricKey>(["sprint10m", "sprint30m", "sprint60m", "sprint100m", "sprint200m", "fly10m", "fly20m", "fly30m", "time5k", "time10k", "timeSemi", "timeMarathon", "cmjFreeArms"]);
 // Mouvements de force "pure" au sens strict — même liste que METRIC_QUALITY["force"] (testQualities.ts)
 // — seuls ceux-ci ont l'option "reps" (endurance de force, strengthProfile.ts). Exclut délibérément
 // les mouvements olympiques/leurs variantes techniques (snatch, cleanJerk, etc. — qualité "puissance") :

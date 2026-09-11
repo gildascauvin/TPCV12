@@ -159,8 +159,18 @@ const ALIASES: Record<string, MetricKey> = {
   // l'explique. Chaque entrée ci-dessous correspond à une clé HISTORY vérifiée une par une (pas une
   // supposition) qui manquait encore un alias vers son MetricKey.
   "épaulé": "clean", "epaule": "clean",
-  "jeté": "jerk", "jete": "jerk", "push jerk": "jerk", "split jerk": "jerk",
-  "ohp": "press", "overhead press": "press", "développé militaire": "press", "developpe militaire": "press",
+  // Jerk (2026-09, suite — retour de Gildas, "Jerk, ou split jerk, ou jeté, ou jeté fente") : "jeté
+  // fente" ajouté, synonyme FR de "split jerk" (réception en fente avant/arrière).
+  "jeté": "jerk", "jete": "jerk", "push jerk": "jerk", "split jerk": "jerk", "jeté fente": "jerk", "jete fente": "jerk",
+  // Press/OHP (2026-09, suite — retour de Gildas, "Press et Développé militaire (OHP) c'est la même
+  // chose, ou encore press overhead ou encore développé clavicule") : "overhead press" existait déjà,
+  // "press overhead" (ordre inversé) manquait — canonicalMetricKey fait un lookup EXACT, jamais
+  // insensible à l'ordre des mots. "développé clavicule" = argot FR courant en musculation/CrossFit
+  // (le mouvement finit à hauteur de clavicule), jamais recensé jusqu'ici. Forme exacte avec
+  // parenthèse ajoutée aussi (nom affiché tel quel dans testBattery.ts).
+  "ohp": "press", "overhead press": "press", "press overhead": "press", "développé militaire": "press", "developpe militaire": "press",
+  "développé militaire (ohp)": "press", "developpe militaire (ohp)": "press",
+  "développé clavicule": "press", "developpe clavicule": "press",
   "overhead squat": "ohSquat", "squat arraché": "ohSquat", "squat arrache": "ohSquat",
   "squat avant": "frontSquat",
   "tirage arraché": "snatchPull", "tirage arrache": "snatchPull",
@@ -389,7 +399,14 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   powerSnatch: { name: "Power Snatch", unit: "kg" },
   powerSnatchBox: { name: "Power Snatch Box", unit: "kg" },
   powerSnatchNoFoot: { name: "Power Snatch No Foot", unit: "kg" },
-  press: { name: "Press", unit: "kg" },
+  // Renommé "Press" → "Overhead press" (2026-09, suite — retour de Gildas, "Press et Développé
+  // militaire (OHP) c'est la même chose") : la carte recommandée (testBattery.ts, "1RM Développé
+  // militaire (OHP)") promettait un nom, mais une fois loggué le premier résultat, la carte devenait
+  // "Press" (bare) — nom trop générique/ambigu, source de la confusion. Même convention que les
+  // autres mouvements de force (ex. "Bench press", pas "Développé couché" ni "1RM Bench Press") :
+  // nom terse, unique, jamais changé entre l'état verrouillé et résolu. `press` (MetricKey/id) reste
+  // inchangé, aucune donnée touchée.
+  press: { name: "Overhead press", unit: "kg" },
   pressBtn: { name: "Press BTN", unit: "kg" },
   pressOh: { name: "Press OH", unit: "kg" },
   pushPress: { name: "Push Press", unit: "kg" },
@@ -723,9 +740,33 @@ const FORCE_RATIO_CARDS: RatioCardDef[] = [
     { id: "press_pushPress", a: "press", b: "pushPress", bLabel: "Push Press", norms: { homme: [0.70, 0.75], femme: [0.70, 0.75] }, refValue: { homme: 0.725, femme: 0.725 }, fmt: pct0, core: false,
       desc: "Rapporté à ton Push Press, repère théorique ~72,5% (Greg Everett/Catalyst Athletics).",
       advice: "Isole la force stricte overhead, sans l'aide des jambes. Si le ratio est bas, ajoute du développé militaire strict 2x/semaine et du gainage overhead ; un ratio déjà élevé indique une bonne base de force qui peut davantage exploiter la triple extension (push press/jerk)." },
+    // Réciproque (2026-09, suite — bug réel signalé par Gildas : "il y en a un avec la press overhead
+    // aussi normalement", absent de la carte Push Press car press_pushPress ci-dessus n'a primaryMetric
+    // que "press", jamais "pushPress" — même classe de gap déjà corrigée pour les mouvements
+    // classiques, voir le bloc "Réciproques mouvements classiques" plus haut, Push Press y avait été
+    // oublié). Inverse mathématique pur (1/ref, bornes inversées et permutées), pas une nouvelle source.
+    { id: "pushPress_press", a: "pushPress", b: "press", bLabel: "Overhead press", norms: { homme: [1.3333, 1.4286], femme: [1.3333, 1.4286] }, refValue: { homme: 1.3793, femme: 1.3793 }, fmt: pct0, core: false,
+      desc: "Rapporté à ton Overhead press, repère théorique ~138% (dérivé de l'inverse du ratio OHP:Push Press, Greg Everett/Catalyst Athletics).",
+      advice: "Un Push Press nettement au-dessus de ce repère par rapport à ton OHP indique une bonne contribution des jambes (triple extension) : si le ratio est bas, ajoute du travail de force stricte overhead (développé militaire, gainage overhead)." },
     { id: "pushPress_jerk", a: "pushPress", b: "jerk", bLabel: "Jerk", norms: { homme: [0.75, 0.85], femme: [0.75, 0.85] }, refValue: { homme: 0.8, femme: 0.8 }, fmt: pct0, core: false,
       desc: "Rapporté à ton Jerk, repère théorique ~80% (Greg Everett/Catalyst Athletics).",
       advice: "Le jerk ajoute la réception en fente/split : si le ratio est bas, travaille le timing dip-drive et la réception (jerks depuis blocks, tempo, split jerk) plutôt que la force de poussée elle-même." },
+    // Power Jerk ↔ Push Press (2026-09, suite — retour de Gildas, "il y a des ratios entre jerk,
+    // power jerk, push press aussi") — cherché ET trouvé pour cette paire (BarBend/Lift Big Eat Big :
+    // "a power jerk will allow you to move as much as 30% more weight overhead compared to the push
+    // press"), tolérance élargie (±13%) car source qualitative ("as much as", pas une étude
+    // population-normée comme les ratios haltéro sourcés ailleurs dans ce fichier) — assumé moins
+    // rigoureux, jamais présenté comme un repère aussi solide que Torokhtiy/Baroga.
+    // Jerk ↔ Power Jerk : CHERCHÉ, NON TROUVÉ — aucune source ne donne de pourcentage/ratio chiffré
+    // (confirmé : "split jerks allow for heavier weights than power jerks" mais "they don't provide a
+    // specific percentage or exact ratio") — pas de carte fabriquée, cohérent avec les autres cas de
+    // ratios manquants déjà rapportés cette session plutôt qu'inventés.
+    { id: "powerJerk_pushPress", a: "powerJerk", b: "pushPress", bLabel: "Push Press", norms: { homme: [1.1500, 1.4500], femme: [1.1500, 1.4500] }, refValue: { homme: 1.30, femme: 1.30 }, fmt: pct0, core: false,
+      desc: "Rapporté à ton Push Press, repère indicatif ~130% (« as much as 30% more weight overhead » — BarBend/Lift Big Eat Big — repère qualitatif, tolérance large).",
+      advice: "Le Power Jerk exploite l'impulsion des jambes ET une réception en quart de squat (vs jambes tendues au Push Press) : si le ratio est bas, travaille la vitesse de repli sous la barre (jerks depuis blocks, réception rapide) plutôt que la force de poussée elle-même." },
+    { id: "pushPress_powerJerk", a: "pushPress", b: "powerJerk", bLabel: "Power Jerk", norms: { homme: [0.6897, 0.8696], femme: [0.6897, 0.8696] }, refValue: { homme: 0.7692, femme: 0.7692 }, fmt: pct0, core: false,
+      desc: "Rapporté à ton Power Jerk, repère indicatif ~77% (dérivé de l'inverse du ratio Power Jerk:Push Press, BarBend/Lift Big Eat Big — repère qualitatif, tolérance large).",
+      advice: "Un Push Press proche de ton Power Jerk indique une bonne force de poussée stricte relative à ta capacité à exploiter la réception en quart de squat : si tu veux progresser sur le Power Jerk, travaille la vitesse de repli sous la barre." },
     { id: "snatch_cleanJerk", a: "snatch", b: "cleanJerk", bLabel: "Clean & Jerk", norms: { homme: [0.77, 0.84], femme: [0.77, 0.84] }, refValue: { homme: 0.8, femme: 0.8 }, fmt: pct0, core: true,
       desc: "Rapporté à ton Clean & Jerk, repère théorique ~80% (cross-validé Torokhtiy/Everett).",
       advice: "Ton arraché est en retrait par rapport à ton épaulé-jeté : ajoute du volume technique spécifique (tirages arraché, réceptions en squat complet, mobilité épaule/hanche) plutôt que du travail général de force." },

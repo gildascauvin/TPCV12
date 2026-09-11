@@ -27,7 +27,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
     label: "Football", emoji: "⚽",
     tests: [
       { name: "Yo-Yo Intermittent Recovery Test", quality: "Endurance intermittente", desc: "Navette 20m avec paliers croissants et récupération active de 10s : standard de référence en sports co pour l'endurance spécifique.", url: null },
-      { name: "Sprint 30m avec split 10m", quality: "Vitesse et accélération", desc: "Le split 10m évalue l'accélération pure, les 20m suivants la vitesse de pointe : deux qualités distinctes en football.", url: null },
       { name: "Test T (agilité)", quality: "Changements de direction", desc: "Parcours en T avec sprints latéraux : évalue la capacité à changer de direction sous contrainte de temps.", url: null },
       { name: "Saut vertical (CMJ)", quality: "Puissance des membres inférieurs", desc: "Countermovement jump : corrélé à la capacité de détente pour les duels aériens et les accélérations.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "Drop Jump (RSI)", quality: "Réactivité / relances et duels rapides", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
@@ -39,7 +38,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Saut vertical (CMJ)", quality: "Puissance explosive (contribution élastique)", desc: "Countermovement jump : comparé au squat jump, permet de calculer l'indice d'utilisation de l'élasticité.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "Squat Jump", quality: "Puissance explosive (force concentrique pure)", desc: "Saut sans contre-mouvement : comparé au CMJ, isole la contribution du cycle étirement-détente à la hauteur de saut.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "Lane Agility Drill", quality: "Agilité multidirectionnelle", desc: "Test standard des combines NBA : changements de direction avant/arrière/latéral sur le terrain de basket.", url: null },
-      { name: "Sprint 3/4 terrain", quality: "Vitesse de transition", desc: "Reproduit les courses de contre-attaque, distance spécifique au basket plutôt que le 30-40m classique.", url: null },
       { name: "Test de Sargent", quality: "Détente verticale de terrain", desc: "Alternative simple au CMJ sur plateforme, mesurable avec un simple mur gradué en salle.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "Drop Jump (RSI)", quality: "Réactivité / rebonds répétés", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
     ],
@@ -48,7 +46,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
     label: "Rugby", emoji: "🏉",
     tests: [
       { name: "Bronco Test", quality: "Endurance intermittente spécifique", desc: "Navettes répétées 20-40-60m, très utilisé en rugby professionnel pour l'endurance haute intensité.", url: null },
-      { name: "Sprint 40m avec split 10m", quality: "Vitesse et accélération", desc: "Distance plus longue qu'en football pour capturer la vitesse de pointe recherchée sur les lignes arrières.", url: null },
       { name: "1RM Back Squat", quality: "Force maximale des membres inférieurs", desc: "Référence pour les qualités de contact et de percussion, souvent croisé avec le poids de corps.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
       { name: "Test de pompes / tirage isométrique", quality: "Force du haut du corps", desc: "Pertinent pour les phases de mêlée et de plaquage, moins standardisé mais largement utilisé en club.", url: null },
       { name: "Drop Jump (RSI)", quality: "Réactivité / plaquages et relances", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
@@ -111,7 +108,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
     label: "Natation", emoji: "🏊",
     tests: [
       { name: "Test 400m ou 30min (protocole seuil)", quality: "Endurance au seuil", desc: "Équivalent natation du test de seuil course à pied, utilisé pour caler les allures d'entraînement.", url: null },
-      { name: "Test de vitesse 25m/50m départ plongé", quality: "Vitesse pure", desc: "Distance courte isolant la qualité de vitesse indépendamment de l'endurance.", url: null },
       { name: "Test de force en traction (tirage élastique ou banc de nage)", quality: "Force spécifique de traction", desc: "La force de bras hors de l'eau ne se transfère pas directement : ce test isole le geste spécifique.", url: null },
     ],
   },
@@ -141,6 +137,10 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Snatch Pull", quality: "Force de tirage (arraché)", desc: "Comparé au Back Squat et au Snatch (ratios sourcés) : équivalent du Clean Pull côté arraché.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
       { name: "Clean Deadlift", quality: "Force de tirage lourde (épaulé)", desc: "Comparé au Back Squat et au Clean (ratios sourcés) : soulevé de terre en prise étroite, base de force du tirage d'épaulé.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
       { name: "Snatch Deadlift", quality: "Force de tirage lourde (arraché)", desc: "Comparé au Back Squat et au Snatch (ratios sourcés) : équivalent du Clean Deadlift côté arraché, prise large.", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
+      // Ajouté 2026-09, suite — retour de Gildas ("mets Push Press dans les tests par défaut de
+      // Puissance / Explosivité") : a déjà 3 ratios sourcés (vs Clean & Jerk, vs press/OHP, vs Jerk),
+      // seulement absent de la liste par défaut jusqu'ici.
+      { name: "Push Press", quality: "Propulsion overhead avec impulsion des jambes", desc: "Comparé au Clean & Jerk, au Développé militaire (OHP) et au Jerk (ratios sourcés) : puissance de propulsion overhead avec une impulsion des jambes, entre force pure (press) et technique complète (jerk).", url: "https://www.theperfclub.com/ratios-techniques-en-halterophilie-snatch-cj-squat/" },
     ],
   },
   musculation: {
@@ -167,7 +167,14 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
   sprint_athle: {
     label: "Sprint / Athlétisme", emoji: "⚡",
     tests: [
-      { name: "Sprint 30m avec split 10m", quality: "Accélération et vitesse max", desc: "Prédit tes temps sur d'autres distances à partir de 2 chronos.", url: "https://www.theperfclub.com/simulateur-de-temps-de-sprint/" },
+      // 7 distances/segments sprint (2026-09, suite — retour de Gildas : "en vitesse... mets en test
+      // par défaut 10m, 30m, 60m, 100m, 10mfly, 20mfly, 30mfly", remplace "Sprint 30m avec split
+      // 10m"/"Sprint 3/4 terrain"/"Sprint 40m avec split 10m" retirés des buckets football/basketball/
+      // rugby — jugés redondants avec ces distances/segments discrets) : chacune alimente le profil
+      // de vitesse (sprintProfile.ts, Samozino-Morin), prédit les autres distances à partir de 2
+      // chronos déjà loggués. "60m"/"100m départ arrêté" existaient déjà, inchangés.
+      { name: "10m départ arrêté", quality: "Accélération pure", desc: "Prédit tes temps sur d'autres distances à partir de 2 chronos.", url: "https://www.theperfclub.com/simulateur-de-temps-de-sprint/" },
+      { name: "30m départ arrêté", quality: "Accélération et vitesse max", desc: "Prédit tes temps sur d'autres distances à partir de 2 chronos.", url: "https://www.theperfclub.com/simulateur-de-temps-de-sprint/" },
       // Bug réel corrigé (2026-09) : cette entrée était composite ("Saut vertical ET saut en longueur")
       // mais ne mappait QUE cmjHeight dans BATTERY_TEST_METRICS plus bas — la moitié "saut en longueur
       // sans élan" (broad jump) n'avait jamais de MetricKey ni de carte, silencieusement ignorée depuis
@@ -179,6 +186,8 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Drop Jump (RSI)", quality: "Réactivité / cycle étirement-détente", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
       { name: "Saut vertical bras libres (CMJ free arms)", quality: "Puissance / contribution du balancement des bras", desc: "Même geste que le CMJ classique mais bras libres (swing autorisé) au lieu de mains sur les hanches : la comparaison avec ton CMJ standard isole la contribution du balancement des bras à la hauteur de saut, un facteur souvent négligé dans le profil de réactivité.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "1RM Back Squat", quality: "Force maximale", desc: "Un des meilleurs prédicteurs de la vitesse d'accélération sur les premiers appuis.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
+      { name: "10m lancé (fly 10m)", quality: "Vitesse maximale lancée (segment court)", desc: "Chronométré en course lancée (10-20m d'élan avant le déclenchement) plutôt qu'au départ arrêté : isole un court segment de vitesse de pointe.", url: null },
+      { name: "20m lancé (fly 20m)", quality: "Vitesse maximale lancée", desc: "Chronométré en course lancée (10-20m d'élan avant le déclenchement) plutôt qu'au départ arrêté : isole la vitesse de pointe sur un segment intermédiaire.", url: null },
       { name: "30m lancé (flying 30m)", quality: "Vitesse maximale lancée", desc: "Chronométré en course lancée (10-20m d'élan avant le déclenchement) plutôt qu'au départ arrêté : isole la vitesse de pointe pure, sans la phase d'accélération initiale.", url: null },
       { name: "60m départ arrêté", quality: "Accélération et transition vers la vitesse max", desc: "Distance standard en athlétisme indoor : couvre l'accélération (0-30m) et le début de la vitesse de pointe, plus complet qu'un 10-30m seul.", url: null },
       { name: "100m départ arrêté", quality: "Profil de vitesse complet", desc: "Avec les splits 10/30/60m, permet de construire un profil complet accélération → vitesse maximale (à rapprocher du modèle force-vitesse de Samozino, pas encore interprété automatiquement dans l'app).", url: null },
@@ -293,12 +302,12 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "Snatch Pull": ["snatchPull"],
   "Clean Deadlift": ["cleanDeadlift"],
   "Snatch Deadlift": ["snatchDeadlift"],
+  "Push Press": ["pushPress"],
   "5 km": ["time5k"],
   "10 km": ["time10k"],
   "Semi-marathon": ["timeSemi"],
   "Marathon": ["timeMarathon"],
   "VO2max": ["vo2max"],
-  "Sprint 30m avec split 10m": ["sprint30m", "sprint10m"],
   "Saut en longueur sans élan (Broad Jump)": ["broadJump"],
   "Saut en longueur unipodal (Single Leg Broad Jump)": ["singleLegBroadJump"],
   "Triple saut sans élan (Triple Broad Jump)": ["tripleBroadJump"],
@@ -314,11 +323,20 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "Thomas Test": ["thomasTest"],
   "Active Straight-Leg Raise": ["activeStraightLegRaise"],
   "Drop Jump (RSI)": ["dropJumpHeight", "dropJumpContact"],
-  // Profil de vitesse (2026-09, suite) — sprint60m/100m n'ont aucune RATIO_CARD (pas de norme de
-  // population sourcée), donc jamais "couverts" au sens de `notCovered` : ces 2 lignes restent
-  // affichées en recommandé même une fois loggées, MAIS le test lui-même devient canonique dès qu'il
-  // est nommé "60m"/"100m"/"60m départ arrêté"/"100m départ arrêté" (ALIASES, testNorms.ts) — sa carte
-  // s'affiche alors normalement dans `rawTests`, juste sans comparaison chiffrée à ce jour.
+  // Profil de vitesse (2026-09, suite) — sprint10m/30m/60m/100m/fly10m/20m/30m n'ont aucune
+  // RATIO_CARD (pas de norme de population sourcée), donc jamais "couverts" au sens de `notCovered` :
+  // ces 7 lignes restent affichées en recommandé même une fois loggées, MAIS le test lui-même devient
+  // canonique dès qu'il est nommé avec un alias reconnu (ALIASES, testNorms.ts — déjà tous présents :
+  // "10m"/"30m", "60m départ arrêté"/"100m départ arrêté", "10m/20m/30m lancé") — sa carte s'affiche
+  // alors normalement dans `rawTests`/via sprintAxisComparisons (sprintProfile.ts), juste sans
+  // comparaison de type ratio.
+  "10m départ arrêté": ["sprint10m"],
+  "30m départ arrêté": ["sprint30m"],
+  "10m lancé (fly 10m)": ["fly10m"],
+  "20m lancé (fly 20m)": ["fly20m"],
+  // Bug réel corrigé (2026-09, suite) : "30m lancé (flying 30m)" existait déjà comme test recommandé
+  // mais n'avait jamais été mappé à fly30m — jamais marqué "fait" une fois une vraie valeur loguée.
+  "30m lancé (flying 30m)": ["fly30m"],
   "60m départ arrêté": ["sprint60m"],
   "100m départ arrêté": ["sprint100m"],
   // Bug réel corrigé (2026-09, même famille que le bug CMJ free arms ci-dessus) : jamais mappé
@@ -378,18 +396,32 @@ export function sharesEnoughWords(queryName: string, candidateName: string): boo
     if (!sameDigits) return false;
     if (qTokens.length === qDigits.length) return true; // requête = uniquement des tokens numériques déjà validés
   }
-  const words = qTokens.filter(w => !/\d/.test(w) && w.length >= 4);
-  // Seuil proportionnel (2026-09, suite) — un plafond fixe à 2 mots partagés, peu importe combien de
-  // mots compte le nom, était trop laxiste pour un nom long dont seul le PRÉFIXE générique est partagé
-  // avec un autre test : bug réel trouvé par Gildas — "Saut vertical bras libres (CMJ free arms)"
-  // (6 mots ≥4 lettres) matchait "Saut vertical (CMJ)" sur ses 2 seuls mots communs ("saut","vertical"),
-  // sans jamais vérifier "bras"/"libres"/"free"/"arms" — 2 exercices délibérément DISTINCTS (comparer
-  // bras libres vs mains sur les hanches est tout l'intérêt du 2e test) fusionnés à tort en une seule
-  // carte. ≤2 mots : exige TOUS (comportement inchangé, déjà strict). >2 mots : exige une majorité
-  // (60%, arrondi au-dessus, jamais moins de 2) — un préfixe partagé de 2 mots sur 6 ne suffit plus.
-  const minShared = words.length <= 2 ? words.length : Math.max(2, Math.ceil(words.length * 0.6));
-  if (words.length) return words.filter(w => cNorm.includes(w)).length >= minShared;
-  return (qNorm.length >= 4 && cNorm.includes(qNorm)) || (cNorm.length >= 4 && qNorm.includes(cNorm));
+  // `qAllWords`/`cAllWords` (2026-09, suite) : TOUS les tokens non-numériques comptent dans le total
+  // de mots d'un nom (y compris les très courts type "OH"/"BTN") — seul ce qui est considéré comme
+  // "partagé" (`shared`) reste filtré à ≥4 lettres, pour ne jamais compter un mot trivial comme
+  // preuve de similarité. Nécessaire pour que "Press" (1 mot significatif) ne matche pas "Press OH"
+  // (2 mots au total, dont "OH" — trop court pour compter comme "partagé" mais qui doit quand même
+  // faire monter le total de mots du candidat, sinon le seuil proportionnel ne le distingue plus de
+  // "Press" seul).
+  const qAllWords = qTokens.filter(w => !/\d/.test(w));
+  const cAllWords = cTokens.filter(w => !/\d/.test(w));
+  if (!qAllWords.length) return (qNorm.length >= 4 && cNorm.includes(qNorm)) || (cNorm.length >= 4 && qNorm.includes(cNorm));
+  const shared = qAllWords.filter(w => w.length >= 4 && cNorm.includes(w)).length;
+  // Seuil proportionnel, calculé des 2 côtés (2026-09, suite — 2e bug réel du même genre, trouvé par
+  // Gildas via capture d'écran : sa carte recommandée "Jerk" affichait en fait les données de son
+  // "Clean & Jerk", 117.5kg/26 juil, aucune ligne "Jerk" en base) — l'ancien seuil ne regardait que le
+  // nombre de mots de la REQUÊTE : pour une requête à 1 seul mot ("Jerk", "Clean", "Press" — les
+  // mouvements "principaux" ajoutés ce chantier), minShared valait 1, trivialement satisfait par
+  // N'IMPORTE QUEL candidat contenant ce mot comme un token parmi d'autres ("Clean & Jerk", "Power
+  // Jerk", "Push Press", "Power Clean"...) — vérifié en direct : sharesEnoughWords("Jerk","Clean &
+  // Jerk") valait `true`. Même défaut que le bug CMJ free arms ci-dessous (2026-09, plus haut) mais
+  // dans l'autre sens : là c'était une requête LONGUE qui n'exigeait pas assez du candidat COURT ; ici
+  // c'est une requête COURTE qui n'exigeait rien du candidat LONG. Fix symétrique : le seuil
+  // proportionnel (≤2 mots → tous ; >2 mots → majorité 60%, jamais <2) s'applique maintenant des DEUX
+  // côtés (mots de la requête ET mots du candidat) — un candidat significativement plus long que la
+  // requête ne peut plus matcher sur un simple mot générique commun.
+  const minShared = (words: string[]) => (words.length <= 2 ? words.length : Math.max(2, Math.ceil(words.length * 0.6)));
+  return shared >= minShared(qAllWords) && shared >= minShared(cAllWords);
 }
 
 /* Suggestions de fusion vers un test recommandé SANS MetricKey (2026-09) — étend le bouton "🔗 Relier",

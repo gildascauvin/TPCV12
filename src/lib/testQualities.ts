@@ -107,16 +107,21 @@ export const METRIC_QUALITY: Record<MetricKey, Quality[]> = {
    nom déjà géré côté TestsPanel.tsx). */
 export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   "Yo-Yo Intermittent Recovery Test": ["endurance"],
-  "Sprint 30m avec split 10m": ["vitesse"],
+  // 7 distances sprint (2026-09, suite — retour de Gildas : "en vitesse... mets en test par défaut
+  // 10m, 30m, 60m, 100m, 10mfly, 20mfly, 30mfly") — remplacent "Sprint 30m avec split 10m"/"Sprint
+  // 3/4 terrain"/"Sprint 40m avec split 10m" (retirés, redondants avec les distances/segments
+  // discrets ci-dessous). "60m départ arrêté"/"100m départ arrêté" déjà présents plus bas, inchangés.
+  "10m départ arrêté": ["vitesse"],
+  "30m départ arrêté": ["vitesse"],
+  "10m lancé (fly 10m)": ["vitesse"],
+  "20m lancé (fly 20m)": ["vitesse"],
   "Test T (agilité)": ["agilite"],
   "Saut vertical (CMJ)": ["puissance", "reactivite"],
   "Drop Jump (RSI)": ["reactivite"],
   "Squat Jump": ["puissance", "reactivite"],
   "Lane Agility Drill": ["agilite"],
-  "Sprint 3/4 terrain": ["vitesse"],
   "Test de Sargent": ["puissance", "reactivite"],
   "Bronco Test": ["endurance"],
-  "Sprint 40m avec split 10m": ["vitesse"],
   "1RM Back Squat": ["force"],
   "Test de pompes / tirage isométrique": ["force"],
   "Yo-Yo IR1": ["endurance"],
@@ -135,7 +140,6 @@ export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   "Test de puissance maximale (sprint 6-10s)": ["puissance"],
   "VO2max sur ergocycle": ["endurance"],
   "Test 400m ou 30min (protocole seuil)": ["endurance"],
-  "Test de vitesse 25m/50m départ plongé": ["vitesse"],
   "Test de force en traction (tirage élastique ou banc de nage)": ["force"],
   "1RM Snatch": ["puissance"],
   "1RM Clean & Jerk": ["puissance"],
@@ -144,6 +148,7 @@ export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   "Power Clean": ["puissance"], "Power Snatch": ["puissance"], "Clean": ["puissance"], "Jerk": ["puissance"],
   "Power Jerk": ["puissance"], "Clean Pull": ["puissance"], "Snatch Pull": ["puissance"],
   "OH Squat": ["force"], "Clean Deadlift": ["force"], "Snatch Deadlift": ["force"],
+  "Push Press": ["puissance"],
   "5 km": ["endurance"], "10 km": ["endurance"], "Semi-marathon": ["endurance"], "Marathon": ["endurance"], "VO2max": ["endurance"],
   "1RM Front Squat": ["force"],
   "Test de mobilité overhead squat": ["mobilite"],
