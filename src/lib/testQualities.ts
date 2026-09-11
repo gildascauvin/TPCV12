@@ -76,6 +76,10 @@ export const METRIC_QUALITY: Record<MetricKey, Quality[]> = {
   snatchBalance: ["puissance"], snatchPull: ["puissance"], snatchPullBlock: ["puissance"], snatchSotsPress: ["puissance"], sotsPress: ["puissance"],
   tallClean: ["puissance"], tallMuscleClean: ["puissance"], tallMuscleSnatch: ["puissance"], tallSnatch: ["puissance"],
   cmjHeight: ["puissance", "reactivite"], cmjFreeArms: ["puissance", "reactivite"], squatJumpHeight: ["puissance", "reactivite"],
+  // Sauts horizontaux (2026-09) — puissance concentrique/expression de force explosive, même famille
+  // que CMJ/Squat Jump mais pas taggés "reactivite" (pas de composante SSC/cycle étirement-détente
+  // documentée pour ces 3, contrairement au CMJ).
+  broadJump: ["puissance"], singleLegBroadJump: ["puissance"], tripleBroadJump: ["puissance"],
   // Réactivité
   dropJumpHeight: ["reactivite"], dropJumpContact: ["reactivite"],
   // Vitesse
@@ -83,6 +87,11 @@ export const METRIC_QUALITY: Record<MetricKey, Quality[]> = {
   fly10m: ["vitesse"], fly20m: ["vitesse"], fly30m: ["vitesse"],
   // Endurance
   time5k: ["endurance"], time10k: ["endurance"], timeSemi: ["endurance"], timeMarathon: ["endurance"], vma: ["endurance"], vo2max: ["endurance"],
+  // Agilité (2026-09, demande de Gildas)
+  test505: ["agilite"], illinoisAgility: ["agilite"], proAgility: ["agilite"],
+  // Mobilité (2026-09, demande de Gildas)
+  ankleDorsiflexion: ["mobilite"], kneeToWall: ["mobilite"], hipInternalRotation: ["mobilite"], hipExternalRotation: ["mobilite"],
+  shoulderFlexion: ["mobilite"], apleyScratchTest: ["mobilite"], thomasTest: ["mobilite"], activeStraightLegRaise: ["mobilite"],
 };
 
 /* Qualité(s) par test recommandé (testBattery.ts), keyée par nom EXACT (déduplique naturellement les
@@ -122,7 +131,6 @@ export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   // prime ici sur le pattern moteur (excentrique = famille "force" en général), ce test répond à une
   // question d'endurance/tolérance à la fatigue spécifique course, pas de force maximale.
   "Test de descente (protocole excentrique)": ["endurance"],
-  "1RM ou 5RM Squat": ["force"],
   "Test FTP (Functional Threshold Power)": ["endurance"],
   "Test de puissance maximale (sprint 6-10s)": ["puissance"],
   "VO2max sur ergocycle": ["endurance"],
@@ -133,11 +141,28 @@ export const BATTERY_TEST_QUALITY: Partial<Record<string, Quality[]>> = {
   "1RM Clean & Jerk": ["puissance"],
   "1RM Front Squat": ["force"],
   "Test de mobilité overhead squat": ["mobilite"],
-  "Test RM répété (5RM, 8RM)": ["force"],
   "1RM Développé couché": ["force"],
   "1RM Soulevé de terre": ["force"],
   "1RM Développé militaire (OHP)": ["force"],
-  "Saut vertical et saut en longueur sans élan": ["puissance"],
+  "Saut en longueur sans élan (Broad Jump)": ["puissance"],
+  // Bug réel corrigé (2026-09, signalé par Gildas — "je vois pas Single/Triple Broad Jump dans
+  // Puissance") : ces 2-là avaient un MetricKey/une qualité en interne (METRIC_QUALITY) mais aucune
+  // entrée BATTERY_TEST_QUALITY, donc aucune apparition en tant que test recommandé/verrouillé tant
+  // qu'ils n'étaient pas déjà logués. Taggés "puissance" ici, jamais "agilite" malgré le bucket
+  // testBattery.ts dans lequel ils vivent (organisation de fichier uniquement, sans effet sur ce tag).
+  "Saut en longueur unipodal (Single Leg Broad Jump)": ["puissance"],
+  "Triple saut sans élan (Triple Broad Jump)": ["puissance"],
+  "5-0-5 (505 Test)": ["agilite"],
+  "Illinois Agility Test": ["agilite"],
+  "Pro Agility (5-10-5)": ["agilite"],
+  "Dorsiflexion de cheville": ["mobilite"],
+  "Knee-to-Wall Test": ["mobilite"],
+  "Rotation interne de hanche": ["mobilite"],
+  "Rotation externe de hanche": ["mobilite"],
+  "Flexion d'épaule": ["mobilite"],
+  "Apley Scratch Test": ["mobilite"],
+  "Thomas Test": ["mobilite"],
+  "Active Straight-Leg Raise": ["mobilite"],
   "Test Fran / Grace / Helen (benchmark WOD)": ["polyvalence"],
   "Test 2000m rameur ou 5km course": ["endurance"],
   "Test de vitesse de frappe": ["puissance"],

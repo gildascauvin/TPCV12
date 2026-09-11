@@ -13,7 +13,7 @@ import {
   computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
   type MetricKey, type CardInsight, type CardStatus, type Sexe,
 } from "@/lib/testNorms";
-import { TEST_BATTERIES, BATTERY_TEST_METRICS, guessBatteryKey, type BatteryTest } from "@/lib/testBattery";
+import { TEST_BATTERIES, BATTERY_TEST_METRICS, type BatteryTest } from "@/lib/testBattery";
 import { QUALITY_ORDER, QUALITY_META, METRIC_QUALITY, BATTERY_TEST_QUALITY, type Quality } from "@/lib/testQualities";
 import { classifySprintProfile, type SprintAxisComparison, type SprintDistance, type FlyKey } from "@/lib/sprintProfile";
 import { estimateOneRepMax, bestStrengthEnduranceComparison } from "@/lib/strengthProfile";
@@ -384,6 +384,69 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
       </div>
       <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
         attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{comp.predicted.toFixed(2)}s</b>
+      </div>
+    </div>
+  );
+}
+
+/* Nouveau test entièrement libre (2026-09, suite — retour de Gildas, "ajoute la possibilité d'ajouter
+   un test depuis la page des tests de performance") : réutilise EXACTEMENT le même mécanisme
+   d'écriture que handleAddForNewRecommendedTest (le nom n'a pas besoin d'exister dans testBattery.ts —
+   upsertTestResult/resolveTest crée la fiche sous ce nom exact) mais sans partir d'un test recommandé
+   préexistant, le nom est tapé librement. Rejoint automatiquement une carte interprétée si le nom
+   résout un MetricKey connu (canonicalMetricKey), sinon apparaît comme un test "brut"/non relié —
+   même sort que n'importe quel exercice loggué en séance sous un nom inconnu. */
+function AddCustomTestForm({ onSave, onCancel }: {
+  onSave: (name: string, value: number, unit: string, date: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [unit, setUnit] = useState<string>(TEST_UNITS[0]);
+  const [value, setValue] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [saving, setSaving] = useState(false);
+  const canSave = name.trim().length > 0 && parseResultValue(value) !== null && !!date;
+  const fieldStyle = { boxSizing: "border-box" as const, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, color: "#fff", fontSize: 13.5 };
+  async function handleSubmit() {
+    const v = parseResultValue(value);
+    if (v === null || !name.trim() || !date || saving) return;
+    setSaving(true);
+    await onSave(name.trim(), v, unit, date);
+    setSaving(false);
+  }
+  return (
+    <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 14, padding: 14, marginBottom: 12 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", marginBottom: 10 }}>🆕 Nouveau test</div>
+      <input
+        value={name} onChange={e => setName(e.target.value)} placeholder="Nom du test (ex. Test T, Beep test...)" autoFocus
+        style={{ ...fieldStyle, width: "100%", padding: "9px 11px", marginBottom: 8 }}
+      />
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <input
+          value={value} onChange={e => setValue(e.target.value)} type="number" inputMode="decimal" placeholder="Résultat"
+          style={{ ...fieldStyle, flex: 1, minWidth: 0, padding: "9px 11px" }}
+        />
+        <select value={unit} onChange={e => setUnit(e.target.value)} style={{ ...fieldStyle, padding: "9px 8px" }}>
+          {TEST_UNITS.map(u => <option key={u} value={u} style={{ color: "#111" }}>{u}</option>)}
+        </select>
+        <input
+          value={date} onChange={e => setDate(e.target.value)} type="date"
+          style={{ ...fieldStyle, padding: "9px 8px", colorScheme: "dark" as const }}
+        />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={handleSubmit} disabled={!canSave || saving}
+          style={{ flex: 1, background: canSave ? "#f04a08" : "rgba(255,255,255,.10)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 800, fontSize: 13.5, padding: "9px 0", cursor: canSave ? "pointer" : "default" }}
+        >
+          {saving ? "..." : "Ajouter"}
+        </button>
+        <button
+          onClick={onCancel}
+          style={{ background: "none", border: "1px solid rgba(255,255,255,.18)", borderRadius: 10, color: "rgba(255,255,255,.7)", fontWeight: 700, fontSize: 13.5, padding: "9px 14px", cursor: "pointer" }}
+        >
+          Annuler
+        </button>
       </div>
     </div>
   );
@@ -1024,11 +1087,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   const [merged, setMerged] = useState<MergedTest[] | null>(fixture ? fixture.merged : null);
   const [ownResults, setOwnResults] = useState<TestResultRow[]>(fixture ? fixture.results : []);
   const [otherResults, setOtherResults] = useState<TestResultRow[]>([]);
-  // Filtre par qualité physique (2026-09) — remplace l'ancien filtre par sport (chipSport). Piloté
-  // uniquement l'AFFICHAGE (cartes + tests recommandés) : ne change jamais `activeFamily`/
-  // `activeBatteryKey`, qui restent dérivés du sport de profil comme avant ce chantier (voir
-  // testQualities.ts pour le pourquoi de cette séparation). `null` = aucun filtre, tout s'affiche
-  // (comportement historique). Cliquer le chip déjà actif redonne la main à "tout afficher".
+  // Filtre par qualité physique (2026-09, suite — le seul filtre restant sur les tests recommandés
+  // depuis le retrait complet du filtrage par sport de profil, voir `recommendedTestsForView`) : ne
+  // change jamais `activeFamily` (dérivé du sport de profil, sert UNIQUEMENT au scoring des cartes
+  // déjà interprétées via RATIO_CARDS — testQualities.ts pour le détail de cette séparation). `null` =
+  // aucun filtre, tous les tests recommandés de l'app s'affichent. Cliquer le chip déjà actif redonne
+  // la main à "tout afficher".
   const [activeQuality, setActiveQuality] = useState<Quality | null>(null);
   // Ligne dépliée (accordion, 2026-09, suite) — une seule à la fois, `key` = UnifiedRow.key. La carte
   // complète (TestCard) n'est montée QUE quand sa ligne est ouverte : `autoAddKey` mémorise que
@@ -1036,6 +1100,10 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // avec son formulaire déjà ouvert (`initialOpen`, lu une seule fois au montage).
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [autoAddKey, setAutoAddKey] = useState<string | null>(null);
+  // Nouveau test entièrement libre (2026-09, suite — retour de Gildas, "ajoute la possibilité
+  // d'ajouter un test depuis la page des tests de performance") : un simple toggle, pas un accordion
+  // de plus (le formulaire n'est associé à aucune ligne existante).
+  const [addingCustomTest, setAddingCustomTest] = useState(false);
 
   // Fetch pur (aucun setState ici) — réutilisé à la fois par l'effet de montage (qui applique le
   // résultat seulement si toujours d'actualité, via `cancelled` local ci-dessous) et par l'ajout
@@ -1198,13 +1266,13 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   }
 
   const sportFamily = sport ? guessSportChip(sport) : null;
-  // Famille de normes et batterie de tests (2026-09) : dérivées UNIQUEMENT du sport de profil,
-  // indépendantes du filtre par qualité ci-dessous (qui ne pilote que l'affichage, jamais quelle
-  // famille RATIO_CARDS/BW_CARDS est interprétée — voir testQualities.ts). Avant ce chantier, un chip
-  // "sport" pouvait aussi changer `activeFamily`/`activeBatteryKey` ; ce mécanisme de bascule par
-  // sport a été retiré, remplacé par le filtre par qualité transverse.
-  const defaultBatteryKey = sport ? guessBatteryKey(sport) : null;
-  const activeBatteryKey = defaultBatteryKey;
+  // Famille de normes (2026-09) : dérivée UNIQUEMENT du sport de profil, indépendante du filtre par
+  // qualité ci-dessous (qui ne pilote que l'affichage, jamais quelle famille RATIO_CARDS/BW_CARDS est
+  // interprétée — voir testQualities.ts). Concerne UNIQUEMENT le scoring des cartes déjà interprétées
+  // (RATIO_CARDS) — pas la liste des tests recommandés (voir `recommendedTestsForView` plus bas,
+  // retirée de toute notion de sport de profil, 2026-09, suite — retour de Gildas répété : "je veux
+  // plus filtrer les tests par sport du profil... tous les tests de l'app pour tous les users,
+  // filtrables par qualité physique").
   const activeFamily = sportFamily;
   const allInsights = computeAllInsights(activeFamily, sexe ?? null, poidsKg ?? null, latestByMetric);
   // Un test DÉJÀ LOGUÉ garde sa carte enrichie quel que soit le sport de profil (2026-09) — ex. un
@@ -1272,17 +1340,21 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // construit puis retiré pour cette raison précise, trouvée en vérifiant l'inventaire des corrélations
   // déjà existantes avant de généraliser l'architecture.
   const showReco = !!activeFamily || sprintAxisRows.length > 0 || forceExtraWeak.length > 0;
-  // Contexte "pourquoi ce test" (batteryInfo) pour les cartes à UN SEUL MetricKey de la batterie du
-  // sport de profil (2026-09) — toujours basé sur le sport de profil, jamais filtré par qualité : ce
-  // hint reste "pourquoi CE sport te recommande ce test", indépendant de la qualité parcourue. Les
-  // composés (plusieurs MetricKey) n'ont pas de carte unique à qui l'attacher (ambigu) — ils
-  // disparaissent simplement de la liste une fois tous leurs MetricKey couverts (voir `notCovered`
-  // plus bas), chaque sous-métrique gardant sa propre carte/son propre `batteryInfo`.
+  // Contexte "pourquoi ce test" (batteryInfo) pour les cartes à UN SEUL MetricKey (2026-09, suite —
+  // scanne désormais TOUTES les batteries, plus seulement celle du sport de profil, cohérent avec le
+  // retrait du filtrage par sport ci-dessous). Les composés (plusieurs MetricKey) n'ont pas de carte
+  // unique à qui l'attacher (ambigu) — ils disparaissent simplement de la liste une fois tous leurs
+  // MetricKey couverts (voir `notCovered` plus bas), chaque sous-métrique gardant sa propre carte/son
+  // propre `batteryInfo`. Un même MetricKey peut apparaître dans plusieurs batteries sport avec un
+  // texte différent (ex. CMJ : football/basketball/handball/rugby) — premier match rencontré gagne,
+  // pas de tentative de fusionner/choisir "le meilleur" texte.
   const metricToBatteryTest = new Map<MetricKey, BatteryTest>();
-  if (activeBatteryKey) {
-    for (const t of TEST_BATTERIES[activeBatteryKey].tests) {
+  for (const battery of Object.values(TEST_BATTERIES)) {
+    for (const t of battery.tests) {
       const metrics = BATTERY_TEST_METRICS[t.name];
-      if (metrics?.length === 1 && coveredMetrics.has(metrics[0])) metricToBatteryTest.set(metrics[0], t);
+      if (metrics?.length === 1 && coveredMetrics.has(metrics[0]) && !metricToBatteryTest.has(metrics[0])) {
+        metricToBatteryTest.set(metrics[0], t);
+      }
     }
   }
   // Fusion "Tests recommandés" → cartes, sans exception (2026-09, remplace la section séparée à la
@@ -1305,22 +1377,25 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
     const metrics = BATTERY_TEST_METRICS[t.name];
     return !(metrics?.length && metrics.every(isMetricRepresented));
   };
-  const recommendedTestsForView: BatteryTest[] = activeQuality
-    ? (() => {
-        const seen = new Set<string>();
-        const out: BatteryTest[] = [];
-        for (const battery of Object.values(TEST_BATTERIES)) {
-          for (const t of battery.tests) {
-            if (seen.has(t.name) || !BATTERY_TEST_QUALITY[t.name]?.includes(activeQuality) || !notCovered(t)) continue;
-            seen.add(t.name);
-            out.push(t);
-          }
-        }
-        return out;
-      })()
-    : activeBatteryKey
-    ? TEST_BATTERIES[activeBatteryKey].tests.filter(notCovered)
-    : [];
+  // Liste des tests recommandés — TOUJOURS tous les sports, jamais filtrée par le sport du profil
+  // (2026-09, suite — retour répété de Gildas : "je veux plus filtrer les tests par sport du profil...
+  // tous les tests de l'app pour tous les users, filtrables par qualité physique"). `activeQuality`
+  // ne fait plus basculer entre "1 sport" et "tous les sports" — il ne fait plus qu'un filtre
+  // OPTIONNEL sur ce même pool complet, déjà cross-sport avec ou sans qualité sélectionnée.
+  const recommendedTestsForView: BatteryTest[] = (() => {
+    const seen = new Set<string>();
+    const out: BatteryTest[] = [];
+    for (const battery of Object.values(TEST_BATTERIES)) {
+      for (const t of battery.tests) {
+        if (seen.has(t.name)) continue;
+        if (activeQuality && !BATTERY_TEST_QUALITY[t.name]?.includes(activeQuality)) continue;
+        if (!notCovered(t)) continue;
+        seen.add(t.name);
+        out.push(t);
+      }
+    }
+    return out;
+  })();
   const matchedRawTestKeys = new Set<string>();
   const recommendedCards = recommendedTestsForView.map(t => {
     const match = findMatchingRawTest(t.name, merged);
@@ -1677,6 +1752,29 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                   <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.78)", lineHeight: 1.4 }}><b style={{ color: "#fff" }}>{it.label}</b> — {it.detail}</div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* "+ Nouveau test" (2026-09, suite) — toujours visible (indépendant de showReco/du filtre
+              qualité), masqué en sandbox (fixture, aucun backend réel derrière). */}
+          {!fixture && (
+            <div style={{ marginTop: showReco ? 14 : 0 }}>
+              {addingCustomTest ? (
+                <AddCustomTestForm
+                  onSave={async (name, value, unit, date) => {
+                    await handleAddForNewRecommendedTest(name, value, unit, date);
+                    setAddingCustomTest(false);
+                  }}
+                  onCancel={() => setAddingCustomTest(false)}
+                />
+              ) : (
+                <button
+                  onClick={() => setAddingCustomTest(true)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,.06)", border: "1px dashed rgba(255,255,255,.24)", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 13, padding: "10px 14px", cursor: "pointer", marginBottom: 12 }}
+                >
+                  <span style={{ fontSize: 15 }}>+</span> Nouveau test
+                </button>
+              )}
             </div>
           )}
 

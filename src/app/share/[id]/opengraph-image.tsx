@@ -111,10 +111,12 @@ const CHARGE_ZONES = [
   { min: 0.8, max: 1.3, color: "#2f9e44" },
   { min: 1.3, max: Infinity, color: "#d44000" },
 ];
+// 2026-09, suite — même palette que FORM_ZONES/WELLNESS_ZONES (SparkLineClient.tsx) : 3 bleus de
+// WELLNESS_RAMP, plus l'ancien rouge/gris/vert.
 const FORM_ZONES_MIRROR = [
-  { min: 0, max: 42, color: "#d10000" },
-  { min: 42, max: 58, color: "#8a8f94" },
-  { min: 58, max: 101, color: "#2f9e44" },
+  { min: 0, max: 42, color: WELLNESS_RAMP[0].hex },
+  { min: 42, max: 58, color: WELLNESS_RAMP[2].hex },
+  { min: 58, max: 101, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex },
 ];
 function zoneColorFor(v: number) { return (CHARGE_ZONES.find(z => v < z.max) ?? CHARGE_ZONES[2]).color; }
 function formZoneColorFor(v: number) { return (FORM_ZONES_MIRROR.find(z => v < z.max) ?? FORM_ZONES_MIRROR[2]).color; }

@@ -8,8 +8,14 @@
    Taxonomie plus fine que SPORT_CATEGORIES/guessSportChip (sportCategories.ts) — la batterie
    distingue Football/Rugby/Handball/Volleyball là où les familles de normes les regroupent toutes
    sous "Sports collectifs" (le test pertinent diffère vraiment par sport, contrairement aux repères
-   de force qui restent indicatifs à ce niveau). D'où guessBatteryKey(), une fonction de matching
-   séparée plutôt que de réutiliser guessSportChip(). */
+   de force qui restent indicatifs à ce niveau).
+
+   `guessBatteryKey()` (matching sport→UNE SEULE batterie) a été RETIRÉE (2026-09, suite) — servait à
+   filtrer `TestsPanel.tsx`'s "tests recommandés" par sport de profil, mécanisme abandonné sur demande
+   répétée de Gildas ("je veux plus filtrer les tests par sport du profil... tous les tests de l'app
+   pour tous les users, filtrables par qualité physique"). `TestsPanel.tsx` scanne désormais TOUJOURS
+   `Object.values(TEST_BATTERIES)` en entier, `BATTERY_TEST_QUALITY` restant le seul filtre (optionnel,
+   transverse à tous les sports). */
 
 import type { MetricKey } from "@/lib/testNorms";
 
@@ -74,7 +80,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Test VMA (Cooper ou demi-Cooper)", quality: "Puissance aérobie maximale", desc: "Base de calcul des allures d'entraînement, référence historique en course à pied.", url: null },
       { name: "Test de seuil (30 min max ou Conconi)", quality: "Endurance au seuil", desc: "Plus spécifique que la VMA pour les distances longues où l'intensité reste sous-maximale.", url: null },
       { name: "Test de descente (protocole excentrique)", quality: "Tolérance à l'excentrique", desc: "Spécifique trail : la descente sollicite le quadriceps en excentrique de façon prolongée, rarement testée ailleurs.", url: null },
-      { name: "1RM ou 5RM Squat", quality: "Force des membres inférieurs", desc: "Corrélée à l'économie de course et à la résistance à la fatigue musculaire sur ultra-distance.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
     ],
   },
   velo: {
@@ -110,7 +115,6 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "1RM Back Squat", quality: "Force maximale des jambes", desc: "Estime ta charge sans forcément aller à l'échec, via le barème RPE.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
       { name: "1RM Développé couché", quality: "Force maximale du haut du corps", desc: "Estime ta charge sans forcément aller à l'échec, via le barème RPE.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
       { name: "1RM Soulevé de terre", quality: "Force maximale de la chaîne postérieure", desc: "Estime ta charge sans forcément aller à l'échec, via le barème RPE.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
-      { name: "Test RM répété (5RM, 8RM)", quality: "Force-endurance", desc: "Utile pour les athlètes qui ne veulent/doivent pas tester le vrai 1RM (débutants, retour de blessure).", url: null },
       { name: "Saut vertical (CMJ)", quality: "Puissance et transfert de force", desc: "Mesure si la force maximale se traduit en puissance explosive utilisable.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
     ],
   },
@@ -130,7 +134,14 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
     label: "Sprint / Athlétisme", emoji: "⚡",
     tests: [
       { name: "Sprint 30m avec split 10m", quality: "Accélération et vitesse max", desc: "Prédit tes temps sur d'autres distances à partir de 2 chronos.", url: "https://www.theperfclub.com/simulateur-de-temps-de-sprint/" },
-      { name: "Saut vertical et saut en longueur sans élan", quality: "Puissance explosive", desc: "Corrélation forte avec la performance sur 100m, notamment sur la phase d'accélération.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
+      // Bug réel corrigé (2026-09) : cette entrée était composite ("Saut vertical ET saut en longueur")
+      // mais ne mappait QUE cmjHeight dans BATTERY_TEST_METRICS plus bas — la moitié "saut en longueur
+      // sans élan" (broad jump) n'avait jamais de MetricKey ni de carte, silencieusement ignorée depuis
+      // la création de cette liste. Décomposée en 2 entrées séparées, même convention déjà appliquée
+      // ailleurs dans ce fichier pour tout composé ("un composé ne dit jamais dans quelle case mettre
+      // quelle valeur"). "Saut vertical (CMJ)" seul n'existait pas encore dans cette batterie précise.
+      { name: "Saut vertical (CMJ)", quality: "Puissance explosive", desc: "Corrélation forte avec la performance sur 100m, notamment sur la phase d'accélération.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
+      { name: "Saut en longueur sans élan (Broad Jump)", quality: "Puissance explosive horizontale", desc: "Version horizontale du CMJ : corrélation forte avec la performance sur 100m, notamment sur la phase d'accélération.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "Drop Jump (RSI)", quality: "Réactivité / cycle étirement-détente", desc: "Saute d'un step (30-40cm), rebondis le plus vite et le plus haut possible : demande 2 mesures sur le MÊME saut (hauteur de saut + temps de contact au sol) pour calculer ton Reactive Strength Index.", url: null },
       { name: "Saut vertical bras libres (CMJ free arms)", quality: "Puissance / contribution du balancement des bras", desc: "Même geste que le CMJ classique mais bras libres (swing autorisé) au lieu de mains sur les hanches : la comparaison avec ton CMJ standard isole la contribution du balancement des bras à la hauteur de saut, un facteur souvent négligé dans le profil de réactivité.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
       { name: "1RM Back Squat", quality: "Force maximale", desc: "Un des meilleurs prédicteurs de la vitesse d'accélération sur les premiers appuis.", url: "https://www.theperfclub.com/calculateur-1rm-et-rpe/" },
@@ -163,6 +174,37 @@ export const TEST_BATTERIES: Record<string, SportBattery> = {
       { name: "Test de suspension à la poutre (dead hang)", quality: "Force de préhension maximale", desc: "Temps de suspension max sur une prise de référence : indicateur le plus utilisé en escalade de performance.", url: null },
       { name: "Niveau de bloc à vue", quality: "Technique et lecture de mouvement", desc: "Le niveau enchaîné sans essai préalable reflète la technique réelle, indépendamment de la force pure.", url: null },
       { name: "Test de continuité (4x4)", quality: "Endurance spécifique", desc: "4 blocs enchaînés répétés 4 fois avec récupération courte : évalue la capacité à répéter l'effort en séance.", url: null },
+    ],
+  },
+  // Agilité et mobilité (2026-09, demande de Gildas) — contrairement au reste de ce fichier, ces 2
+  // buckets ne sont PAS extraits de BT_DATA (le guide publié) : ajoutés directement sur sa demande,
+  // organisés par qualité plutôt que par sport (cohérent avec le retrait du filtrage par sport de
+  // TestsPanel.tsx — le bucket n'a plus qu'une valeur d'organisation du fichier, plus aucun rôle de
+  // filtrage). Single/Triple Broad Jump inclus ici (déjà des MetricKey depuis le chantier précédent)
+  // pour corriger le bug signalé par Gildas ("je vois pas Single/Triple Broad Jump dans Puissance") :
+  // sans entrée recommandée, ils n'apparaissaient JAMAIS avant d'être logués au moins une fois,
+  // contrairement à Broad Jump (déjà mappé lui).
+  agilite: {
+    label: "Agilité / Changement de direction", emoji: "↔️",
+    tests: [
+      { name: "5-0-5 (505 Test)", quality: "Changement de direction unilatéral", desc: "5m d'élan, demi-tour à 180°, 5m de retour chronométrés séparément : isole la capacité à changer de direction, sans la phase d'accélération linéaire.", url: null },
+      { name: "Illinois Agility Test", quality: "Agilité multidirectionnelle", desc: "Parcours combinant sprint, virages à 180° et slalom entre plots : test de référence historique en agilité.", url: null },
+      { name: "Pro Agility (5-10-5)", quality: "Changement de direction latéral", desc: "5m-10m-5m avec 2 changements de direction à 180° : standard des combines américains (NFL/NBA).", url: null },
+      { name: "Saut en longueur unipodal (Single Leg Broad Jump)", quality: "Puissance horizontale unilatérale / symétrie", desc: "Comparé jambe gauche vs jambe droite (limb symmetry index) : test standard des protocoles de retour au sport après blessure.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
+      { name: "Triple saut sans élan (Triple Broad Jump)", quality: "Puissance horizontale répétée", desc: "3 bonds enchaînés sans élan : évalue la capacité à ré-exprimer de la puissance horizontale sur des appuis successifs, au-delà d'un seul saut.", url: "https://www.theperfclub.com/calculateur-de-detente-verticale-vertical-jump/" },
+    ],
+  },
+  mobilite: {
+    label: "Mobilité / Prévention", emoji: "🤸",
+    tests: [
+      { name: "Dorsiflexion de cheville", quality: "Mobilité de cheville", desc: "Mesure au goniomètre (degrés) : une amplitude limitée est un facteur de risque documenté (entorses, tendinopathies, technique de squat).", url: null },
+      { name: "Knee-to-Wall Test", quality: "Mobilité de cheville (protocole terrain)", desc: "Distance orteil-mur maximale genou touchant le mur sans lever le talon (cm), sans goniomètre : mesure la même qualité que la dorsiflexion de cheville via un protocole terrain différent, 2 tests distincts plutôt qu'un seul.", url: null },
+      { name: "Rotation interne de hanche", quality: "Mobilité de hanche", desc: "Amplitude mesurée en décubitus ventral ou assis, genou fléchi à 90° : une limitation est associée aux douleurs lombaires et de hanche chez l'athlète.", url: null },
+      { name: "Rotation externe de hanche", quality: "Mobilité de hanche", desc: "Même protocole que la rotation interne, dans l'autre sens : les 2 mesures ensemble donnent l'arc de rotation total de la hanche.", url: null },
+      { name: "Flexion d'épaule", quality: "Mobilité d'épaule", desc: "Amplitude bras tendu au-dessus de la tête : limite fréquemment le verrouillage overhead (jerk, snatch, développé militaire).", url: null },
+      { name: "Apley Scratch Test", quality: "Mobilité combinée d'épaule (rotation interne+externe)", desc: "Une main dans le dos par-dessus l'épaule, l'autre par en-dessous : distance entre les mains, test de dépistage rapide de la mobilité globale d'épaule.", url: null },
+      { name: "Thomas Test", quality: "Souplesse des fléchisseurs de hanche", desc: "Allongé, une jambe ramenée vers la poitrine : l'angle de la jambe opposée qui reste au sol dépiste un raccourcissement du psoas/droit fémoral.", url: null },
+      { name: "Active Straight-Leg Raise", quality: "Mobilité de hanche postérieure (ischio-jambiers)", desc: "Jambe tendue levée activement, genou opposé au sol : dépistage rapide de la mobilité postérieure de hanche, utilisé dans plusieurs batteries de screening (ex. FMS).", url: null },
     ],
   },
 };
@@ -206,7 +248,20 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "1RM Snatch": ["snatch"],
   "1RM Clean & Jerk": ["cleanJerk"],
   "Sprint 30m avec split 10m": ["sprint30m", "sprint10m"],
-  "Saut vertical et saut en longueur sans élan": ["cmjHeight"],
+  "Saut en longueur sans élan (Broad Jump)": ["broadJump"],
+  "Saut en longueur unipodal (Single Leg Broad Jump)": ["singleLegBroadJump"],
+  "Triple saut sans élan (Triple Broad Jump)": ["tripleBroadJump"],
+  "5-0-5 (505 Test)": ["test505"],
+  "Illinois Agility Test": ["illinoisAgility"],
+  "Pro Agility (5-10-5)": ["proAgility"],
+  "Dorsiflexion de cheville": ["ankleDorsiflexion"],
+  "Knee-to-Wall Test": ["kneeToWall"],
+  "Rotation interne de hanche": ["hipInternalRotation"],
+  "Rotation externe de hanche": ["hipExternalRotation"],
+  "Flexion d'épaule": ["shoulderFlexion"],
+  "Apley Scratch Test": ["apleyScratchTest"],
+  "Thomas Test": ["thomasTest"],
+  "Active Straight-Leg Raise": ["activeStraightLegRaise"],
   "Drop Jump (RSI)": ["dropJumpHeight", "dropJumpContact"],
   // Profil de vitesse (2026-09, suite) — sprint60m/100m n'ont aucune RATIO_CARD (pas de norme de
   // population sourcée), donc jamais "couverts" au sens de `notCovered` : ces 2 lignes restent
@@ -217,47 +272,6 @@ export const BATTERY_TEST_METRICS: Record<string, MetricKey[]> = {
   "100m départ arrêté": ["sprint100m"],
 };
 
-export const BATTERY_TO_FAMILY: Record<keyof typeof TEST_BATTERIES, string | null> = {
-  football: "Sports collectifs",
-  basketball: "Sports collectifs",
-  rugby: "Sports collectifs",
-  handball: "Sports collectifs",
-  basketball_volley: "Sports collectifs",
-  trail: "Endurance",
-  velo: "Endurance",
-  natation: "Endurance",
-  haltero: "Haltérophilie",
-  musculation: "Musculation / Hypertrophie",
-  powerlifting: "Powerlifting",
-  sprint_athle: "Athlétisme & vitesse",
-  crossfit: "Fitness / CrossFit",
-  combat: "Arts martiaux & combat",
-  escalade: null,
-};
-
-/* Matching par mots-clés sur le sport libre du profil — volontairement plus fin que
-   guessSportChip() (sportCategories.ts), voir note en tête de fichier. Ordre des tests important :
-   "handball"/"volley" avant "hand"/"basket" génériques pour éviter les faux positifs. */
-export function guessBatteryKey(sport: string): keyof typeof TEST_BATTERIES | null {
-  const s = sport.toLowerCase();
-  if (/hand/.test(s)) return "handball";
-  if (/volley/.test(s)) return "basketball_volley";
-  if (/basket/.test(s)) return "basketball";
-  if (/rugby/.test(s)) return "rugby";
-  if (/foot(ball)?/.test(s)) return "football";
-  if (/trail/.test(s)) return "trail";
-  if (/v[ée]lo|cycl/.test(s)) return "velo";
-  if (/natation|nage|swim/.test(s)) return "natation";
-  if (/halt[ée]rophil/.test(s)) return "haltero";
-  // Vérifié AVANT "musculation" générique : "powerlifting"/"squat"/"bench"/"deadlift" routent
-  // vers la batterie dédiée (ajoutée 2026-09, absente de la source WP d'origine — voir sa note) —
-  // sans ce test, "Powerlifting" retombait sur `null` (aucun chip, aucun repère par défaut) alors
-  // que RATIO_CARDS["Powerlifting"] est maintenant exhaustif (testNorms.ts).
-  if (/power(lifting)?|\bsquat\b|\bbench\b|deadlift|soulev[ée] de terre/.test(s)) return "powerlifting";
-  if (/musculation|hypertroph/.test(s)) return "musculation";
-  if (/sprint|athl[ée]tisme|\bvitesse\b/.test(s)) return "sprint_athle";
-  if (/crossfit|hyrox/.test(s)) return "crossfit";
-  if (/combat|boxe|judo|\bmma\b|martiaux|lutte/.test(s)) return "combat";
-  if (/escalade|grimpe/.test(s)) return "escalade";
-  return null;
-}
+// `BATTERY_TO_FAMILY`/`guessBatteryKey()` (matching sport→1 seule batterie) supprimées ici (2026-09,
+// suite) — voir note en tête de fichier : plus aucun filtrage des tests recommandés par sport de
+// profil, `TestsPanel.tsx` scanne désormais toujours `Object.values(TEST_BATTERIES)` en entier.

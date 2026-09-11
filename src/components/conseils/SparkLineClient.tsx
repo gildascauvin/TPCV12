@@ -71,20 +71,27 @@ export type Zone2 = { min: number; max: number; label: string; color: string };
 // 3 bandes (pas 5) — mêmes bornes que sigDimInfo("form",...) dans fatigueSignature.ts (±8%, soit
 // 42/58 dans cet espace "position" 50+%) : la version à 5 paliers testée d'abord ajoutait plus de
 // bruit que de lecture utile sur un chart aussi compact.
+// Couleurs (2026-09, suite — retour de Gildas, "les points de la courbe Forme ne doivent plus être en
+// gris/rouge/vert mais en 3 variantes de bleus") : remplace l'ancienne palette d'alerte rouge/gris/
+// vert par les mêmes 3 bleus que WELLNESS_ZONES (WELLNESS_RAMP, aucune nouvelle teinte inventée) —
+// Wellness et Forme partagent désormais la même échelle ET la même palette sur ce chart.
 export const FORM_ZONES: Zone2[] = [
-  { min: 0,  max: 42,  label: "FATIGUÉ",    color: "#d10000" },
-  { min: 42, max: 58,  label: "ÉQUILIBRÉ",  color: "#8a8f94" },
-  { min: 58, max: 101, label: "FRAIS",      color: "#2f9e44" },
+  { min: 0,  max: 42,  label: "FATIGUÉ",    color: WELLNESS_RAMP[0].hex },
+  { min: 42, max: 58,  label: "ÉQUILIBRÉ",  color: WELLNESS_RAMP[2].hex },
+  { min: 58, max: 101, label: "FRAIS",      color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex },
 ];
 
-/* Zones relatives de la courbe principale (Wellness) — mêmes bornes que relativeZoneLabel()
+/* Zones relatives de la courbe principale (Wellness) — mêmes BORNES que relativeZoneLabel()
    (wellnessBaseline.ts, Z_SWC=0.2 × conversion percentile Φ(z)×100 : Φ(0.2)×100≈58, Φ(-0.2)×100≈42)
-   — coïncide presque exactement avec les bornes déjà existantes de FORM_ZONES ci-dessus (42/58,
-   ±8%). Wellness et Forme partagent donc littéralement la même échelle/légende sur ce chart (voir
-   zones1 côté gauche plus bas, qui remplace la légende dégradée quand fourni, et la suppression du
-   2e jeu de libellés côté droit pour zones2 dans ce cas — une seule légende, pas deux jeux du même
-   vocabulaire). Alias direct sur FORM_ZONES plutôt qu'un 2e tableau à valeurs dupliquées. */
-export const WELLNESS_ZONES: Zone2[] = FORM_ZONES;
+   — coïncide exactement avec les bornes de FORM_ZONES ci-dessus (42/58, ±8%), et désormais aussi avec
+   sa palette (même WELLNESS_RAMP) — Wellness et Forme partagent donc la même échelle ET la même
+   famille de couleurs sur ce chart (voir zones1 côté gauche plus bas, qui remplace la légende
+   dégradée quand fourni). */
+export const WELLNESS_ZONES: Zone2[] = [
+  { min: 0,  max: 42,  label: "FATIGUÉ",    color: WELLNESS_RAMP[0].hex },
+  { min: 42, max: 58,  label: "ÉQUILIBRÉ",  color: WELLNESS_RAMP[2].hex },
+  { min: 58, max: 101, label: "FRAIS",      color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex },
+];
 
 function zone2For(zones: Zone2[], v: number): Zone2 {
   return zones.find(z => v < z.max) ?? zones[zones.length - 1];

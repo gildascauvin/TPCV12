@@ -59,6 +59,7 @@ export type MetricKey =
   // dropJumpHeight en MÈTRES (voir RATIO_CARDS ci-dessous : le RSI = hauteur(m)/temps de contact(s),
   // convention de la littérature — mélanger les unités casserait la formule).
   | "sprint10m" | "sprint30m" | "cmjHeight" | "cmjFreeArms" | "squatJumpHeight" | "dropJumpHeight" | "dropJumpContact"
+  | "broadJump" | "singleLegBroadJump" | "tripleBroadJump"
   // Sprint 20/60/100/200m (2026-09, profil de vitesse) — temps cumulés depuis le départ arrêté, en
   // secondes, mêmes conventions que sprint10m/sprint30m. Sans RATIO_CARD associée (aucune norme de
   // population sourcée) — servent uniquement d'entrée au profil de vitesse (sprintProfile.ts),
@@ -70,7 +71,18 @@ export type MetricKey =
   // dérivée du modèle de vitesse (sprintProfile.ts, comparaison réel-vs-attendu via Vmax).
   | "fly10m" | "fly20m" | "fly30m"
   // Endurance (suite, 2026-09) — VMA en km/h, VO2max en ml/kg/min.
-  | "vma" | "vo2max";
+  | "vma" | "vo2max"
+  // Agilité/changement de direction (2026-09, demande de Gildas) — temps en secondes, mêmes
+  // conventions que les splits sprint. "Test T (agilité)" déjà présent dans testBattery.ts reste
+  // sans MetricKey/protocole numérique fixe (temps total variable selon variante du protocole) —
+  // ceux-ci ont un protocole standardisé assez fixe pour un vrai chiffre comparable dans le temps.
+  | "test505" | "illinoisAgility" | "proAgility"
+  // Mobilité (2026-09, demande de Gildas) — degrés (goniomètre/app) sauf knee-to-wall (cm, distance
+  // au mur, protocole standard du Weight-Bearing Lunge Test). "Test de mobilité overhead squat"
+  // (testBattery.ts) reste sans MetricKey — protocole habituellement qualitatif/noté 0-3 (façon FMS),
+  // pas un seul chiffre continu comparable comme les mesures ci-dessous.
+  | "ankleDorsiflexion" | "kneeToWall" | "hipInternalRotation" | "hipExternalRotation" | "shoulderFlexion"
+  | "apleyScratchTest" | "thomasTest" | "activeStraightLegRaise";
 
 /* name_key réel (déjà .trim().toLowerCase(), voir testResults.ts) → clé canonique. Couvre les
    variantes FR/EN déjà observées dans la banque d'autocomplete (HISTORY) — ex. "clean & jerk"
@@ -190,6 +202,29 @@ const ALIASES: Record<string, MetricKey> = {
   // alias vers cmjHeight — reconnu automatiquement, jamais fondu avec le CMJ classique.
   "cmj free arms": "cmjFreeArms", "cmj bras libres": "cmjFreeArms", "saut vertical bras libres": "cmjFreeArms",
   "saut vertical bras libres (cmj free arms)": "cmjFreeArms", "countermovement jump free arms": "cmjFreeArms",
+  // Sauts horizontaux (2026-09, demande de Gildas) — `canonicalMetricKey` fait un lookup EXACT
+  // (`ALIASES[nameKey.trim().toLowerCase()]`), jamais une cascade de règles ordonnées comme
+  // `guessSportChip` : "triple broad jump" et "broad jump" sont 2 clés distinctes dans cet objet,
+  // aucun risque qu'une règle plus large en avale une autre par accident.
+  "triple broad jump": "tripleBroadJump", "triple saut sans élan": "tripleBroadJump", "triple saut sans elan": "tripleBroadJump",
+  "triple bond": "tripleBroadJump", "triple saut horizontal": "tripleBroadJump",
+  "single leg broad jump": "singleLegBroadJump", "saut en longueur unipodal": "singleLegBroadJump",
+  "saut en longueur sur une jambe": "singleLegBroadJump", "saut en longueur sans élan unipodal": "singleLegBroadJump",
+  "broad jump": "broadJump", "saut en longueur sans élan": "broadJump", "saut en longueur sans elan": "broadJump",
+  "standing broad jump": "broadJump", "standing long jump": "broadJump", "saut en longueur": "broadJump",
+  // Agilité (2026-09, demande de Gildas).
+  "5-0-5": "test505", "505": "test505", "test 505": "test505", "505 test": "test505", "test 5-0-5": "test505",
+  "illinois": "illinoisAgility", "illinois agility test": "illinoisAgility", "test d'illinois": "illinoisAgility", "test illinois": "illinoisAgility",
+  "pro agility": "proAgility", "5-10-5": "proAgility", "20 yard shuttle": "proAgility", "pro agility shuttle": "proAgility", "pro agility (5-10-5)": "proAgility",
+  // Mobilité (2026-09, demande de Gildas).
+  "dorsiflexion cheville": "ankleDorsiflexion", "dorsiflexion de cheville": "ankleDorsiflexion", "ankle dorsiflexion": "ankleDorsiflexion",
+  "knee to wall": "kneeToWall", "knee-to-wall": "kneeToWall", "knee to wall test": "kneeToWall", "test du mur": "kneeToWall",
+  "rotation interne hanche": "hipInternalRotation", "rotation interne de hanche": "hipInternalRotation", "hip internal rotation": "hipInternalRotation",
+  "rotation externe hanche": "hipExternalRotation", "rotation externe de hanche": "hipExternalRotation", "hip external rotation": "hipExternalRotation",
+  "shoulder flexion": "shoulderFlexion", "flexion épaule": "shoulderFlexion", "flexion d'épaule": "shoulderFlexion", "flexion epaule": "shoulderFlexion",
+  "apley": "apleyScratchTest", "apley scratch test": "apleyScratchTest", "test d'apley": "apleyScratchTest",
+  "thomas test": "thomasTest", "test de thomas": "thomasTest",
+  "active straight leg raise": "activeStraightLegRaise", "aslr": "activeStraightLegRaise", "élévation de jambe tendue active": "activeStraightLegRaise",
   // Limite connue : "Squat Jump" désigne aussi un exercice d'entraînement CHARGÉ (squat sauté avec
   // barre, HISTORY sport 🏋️) dans les programmes haltéro/powerlifting — s'il est un jour marqué
   // comme test avec une valeur en kg, il sera interprété à tort comme une hauteur de saut en cm.
@@ -379,6 +414,25 @@ export const METRIC_DISPLAY: Record<MetricKey, { name: string; unit: string }> =
   // Distinct de cmjHeight (2026-09) — CMJ avec swing des bras autorisé, un vrai test à part dans la
   // littérature de saut vertical (voir ALIASES ci-dessous pour l'historique de la correction).
   cmjFreeArms: { name: "Saut vertical bras libres (CMJ free arms)", unit: "cm" },
+  // Sauts horizontaux (2026-09, demande de Gildas) — distincts des sauts verticaux ci-dessus (CMJ/
+  // Squat Jump), même unité (cm) pour rester cohérent avec le reste de la famille "saut". Aucune
+  // RATIO_CARD/norme sourcée pour ces 3 à ce jour (contrairement à CMJ/Squat Jump/Drop Jump) — reste
+  // à faire si Gildas veut un repère (ex. limb symmetry index single leg vs bilatéral, ratio triple
+  // vs simple), pas fabriqué faute de source vérifiée.
+  broadJump: { name: "Saut en longueur sans élan (Broad Jump)", unit: "cm" },
+  singleLegBroadJump: { name: "Saut en longueur unipodal (Single Leg Broad Jump)", unit: "cm" },
+  tripleBroadJump: { name: "Triple saut sans élan (Triple Broad Jump)", unit: "cm" },
+  test505: { name: "5-0-5 (505 Test)", unit: "s" },
+  illinoisAgility: { name: "Illinois Agility Test", unit: "s" },
+  proAgility: { name: "Pro Agility (5-10-5)", unit: "s" },
+  ankleDorsiflexion: { name: "Dorsiflexion de cheville", unit: "°" },
+  kneeToWall: { name: "Knee-to-Wall Test", unit: "cm" },
+  hipInternalRotation: { name: "Rotation interne de hanche", unit: "°" },
+  hipExternalRotation: { name: "Rotation externe de hanche", unit: "°" },
+  shoulderFlexion: { name: "Flexion d'épaule", unit: "°" },
+  apleyScratchTest: { name: "Apley Scratch Test", unit: "cm" },
+  thomasTest: { name: "Thomas Test", unit: "°" },
+  activeStraightLegRaise: { name: "Active Straight-Leg Raise", unit: "°" },
   squatJumpHeight: { name: "Squat Jump", unit: "cm" },
   // "Drop Jump (RSI)" — même nom EXACT que testBattery.ts (2026-09, suite, demande de Gildas : un seul
   // nom, avant et après avoir loggué, plutôt que "Drop jump" une fois interprété vs "Drop Jump (RSI)"

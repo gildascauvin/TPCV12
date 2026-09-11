@@ -25,6 +25,44 @@ import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
 import type { SubscriptionStatus } from "@/types";
 
+/* Statut d'un comportement (2026-09, suite) — calcul pur partagé entre le badge (rendu sur la même
+   ligne que le nom, voir BehaviorImpactCard) et la barre (BehaviorGauge), pour ne jamais dupliquer le
+   seuil de neutralité/la couleur entre les deux. */
+function behaviorStatus(impact: number) {
+  const isPositive = impact > 0;
+  const isNeutral  = Math.abs(impact) < 0.3;
+  const color      = isNeutral ? "rgba(255,255,255,.35)" : isPositive ? "#2f9e44" : "#d10000";
+  const impactStr  = isNeutral ? "0 pt" : `${impact > 0 ? "+" : ""}${impact.toFixed(1)} pts`;
+  const statusLabel = isNeutral ? "Neutre" : isPositive ? "Aide" : "Pénalise";
+  return { isPositive, isNeutral, color, impactStr, statusLabel };
+}
+
+/* Jauge par comportement (2026-09, suite — retour de Gildas, "applique les mêmes composants de
+   jauges qu'on a fait pour les tests mais pour les comportements") : même langage visuel que
+   PrimaryGauge (TestsPanel.tsx) — tick central, barre qui part du centre vers la droite (aide, vert)
+   ou la gauche (pénalise, rouge), texte de repère centré en dessous. Le badge lui-même vit désormais
+   sur la ligne du nom (2026-09, suite — retour de Gildas, "aligne 🧘 Stretching et Aide +10.5 pts
+   horizontalement"), pas ici — cette jauge ne rend plus que la barre + le repère. Le centre représente
+   ici un impact nul, pas une cible sourcée — donc la barre est toujours relative à `maxAbs`
+   (comportement le plus marqué de la liste), pas à une norme externe. */
+function BehaviorGauge({ c, maxAbs }: { c: BehaviorCorrelation; maxAbs: number }) {
+  const { isPositive, isNeutral, color } = behaviorStatus(c.impact);
+  const width = Math.min(50, Math.abs(c.impact) / maxAbs * 50);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ position: "relative" as const, height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
+        <div style={{ position: "absolute" as const, left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
+        {!isNeutral && (
+          <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 6, background: color, ...(isPositive ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }) }} />
+        )}
+      </div>
+      <div style={{ marginTop: 6, textAlign: "center" as const, fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
+        loggué <b style={{ color: "#fff", fontWeight: 700 }}>{c.occurrences}×</b> sur la période
+      </div>
+    </div>
+  );
+}
+
 function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
   const MIN_DAYS = 10;
 
@@ -63,74 +101,63 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
     <div data-tour="conseils-chart" style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 28, padding: 22, marginBottom: 14, color: "#fff", position: "relative" as const, overflow: "hidden" }}>
       <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 2 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
             <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t'aide ou te pénalise</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.50)", marginTop: 3 }}>Effet des comportements de la veille sur ta récupération</div>
           </div>
           <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
         </div>
 
-        {/* En-têtes colonnes */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center", marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>Comportement</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 2px 1fr", alignItems: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#d10000", textAlign: "right" as const }}>Pénalise</div>
-            <div />
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "#2f9e44" }}>Aide</div>
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)", textAlign: "right" as const }}>Impact</div>
+        {/* Encadré d'insight (2026-09, suite — retour de Gildas, "enlève le [sous-titre générique] et
+            mets [la recommandation] dans un encadré d'insight à la place") : remplace le sous-titre
+            fixe ET le bloc "Conseil personnalisé" qui vivait tout en bas de la carte — une seule
+            phrase actionnable, en haut, jamais répétée deux fois sur la même carte. */}
+        <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 6 }}>
+          {bestHelper && (
+            <div>
+              <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
+              <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
+              {" "}améliore ta récupération de{" "}
+              <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
+            </div>
+          )}
+          {worstHurt && (
+            <div>
+              <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
+              <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
+              {" "}pénalise ta récupération de{" "}
+              <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
+            </div>
+          )}
+          {!bestHelper && !worstHurt && (
+            <div style={{ color: "rgba(255,255,255,.60)" }}>Aucun comportement n&apos;a d&apos;effet marqué sur ta récupération pour l&apos;instant.</div>
+          )}
         </div>
 
-        {/* Lignes */}
-        <div style={{ display: "flex", flexDirection: "column" as const, gap: 12 }}>
+        {/* Lignes — même layout que UnifiedRow (TestsPanel.tsx) : badge emoji carré, puis nom + badge
+            de statut sur UNE MÊME ligne (2026-09, suite — retour de Gildas, "aligne 🧘 Stretching et
+            Aide +10.5 pts horizontalement" — avant, le badge vivait dans BehaviorGauge, sur sa propre
+            ligne en dessous), la jauge en pleine largeur ensuite. */}
+        <div style={{ display: "flex", flexDirection: "column" as const }}>
           {correlations.map(c => {
-            const pct = Math.min(Math.abs(c.impact) / maxAbs * 100, 100);
-            const isPositive = c.impact > 0;
-            const isNeutral  = Math.abs(c.impact) < 0.3;
-            const barColor   = isPositive ? "#2f9e44" : "#d10000";
-            const impactStr  = isNeutral ? "0" : `${c.impact > 0 ? "+" : ""}${c.impact.toFixed(1)}`;
-            const textColor  = isNeutral ? "rgba(255,255,255,.35)" : barColor;
+            const { color, statusLabel, impactStr } = behaviorStatus(c.impact);
             return (
-              <div key={c.key} style={{ display: "grid", gridTemplateColumns: "1fr 120px 52px", gap: 8, alignItems: "center" }}>
-                <div style={{ fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, color: "rgba(255,255,255,.85)" }}>{c.label}</span>
+              <div key={c.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{c.emoji}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{c.label}</div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap" as const, color, background: `${color}26` }}>
+                      {statusLabel} {impactStr}
+                    </span>
+                  </div>
+                  <BehaviorGauge c={c} maxAbs={maxAbs} />
                 </div>
-                <div style={{ position: "relative" as const, height: 6, background: "rgba(255,255,255,.08)", borderRadius: 3 }}>
-                  <div style={{ position: "absolute" as const, left: "50%", top: -3, width: 1, height: 12, background: "rgba(255,255,255,.20)", transform: "translateX(-50%)" }} />
-                  {!isNeutral && (
-                    <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 3, background: barColor, width: `${pct / 2}%`, ...(isPositive ? { left: "50%" } : { right: "50%" }) }} />
-                  )}
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 900, color: textColor, textAlign: "right" as const, letterSpacing: "-0.02em" }}>{impactStr} pts</div>
               </div>
             );
           })}
         </div>
-
-        {/* Conseil personnalisé */}
-        {(bestHelper || worstHurt) && (
-          <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14, display: "flex", flexDirection: "column" as const, gap: 8 }}>
-            {bestHelper && (
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
-                <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
-                {" "}améliore ta récupération de{" "}
-                <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
-              </div>
-            )}
-            {worstHurt && (
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
-                <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
-                {" "}pénalise ta récupération de{" "}
-                <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
-              </div>
-            )}
-          </div>
-        )}
 
         <div style={{ marginTop: 12, fontSize: 12, color: "rgba(255,255,255,.28)", lineHeight: 1.5 }}>Basé sur tes {filledDays} derniers jours · veille → jour même</div>
       </div>
