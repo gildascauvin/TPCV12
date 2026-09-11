@@ -36,6 +36,7 @@ export default function SandboxProfilPage({ params }: { params: { role: string }
       id: "sandbox-coach-profile", user_id: "sandbox-coach", name: coachName, sport: null, objective: null,
       freq_target: null, mode: "coach", subscription_status: "free", stripe_customer_id: null,
       onboarding_done: true, invite_code: null, training_days: null, free_training_label: {},
+      sexe: null, poids_kg: null,
       created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
     return (

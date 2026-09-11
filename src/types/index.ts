@@ -23,6 +23,10 @@ export interface Profile {
   training_days: number[] | null;
   /** Label "Séances libres" par semaine — clé = lundi "yyyy-MM-dd", pas un label global. */
   free_training_label: Record<string, string>;
+  /** Optionnels — servent uniquement à situer un test de performance sur les repères de la
+      littérature (force relative, W/kg...), voir testNorms.ts. Jamais requis ailleurs. */
+  sexe: "homme" | "femme" | null;
+  poids_kg: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +74,8 @@ export interface CoachAthlete {
   user_id: string | null; // null = démo ou invite pending, string = vrai sportif lié
   invite_email: string | null; // non-null = invitation pending (sportif pas encore inscrit)
   free_training_label?: Record<string, string>; // label "Séances libres" par semaine (clé = lundi) — pour un vrai sportif, la valeur réelle vient de profiles.free_training_label (fusionnée côté page.tsx), cette colonne ne sert que pour les démo
+  sexe?: "homme" | "femme" | null; // même principe que free_training_label : réel = profiles.sexe (fusionné), cette colonne ne sert que pour les démo
+  poids_kg?: number | null; // idem, profiles.poids_kg pour un vrai sportif
   created_at: string;
 }
 

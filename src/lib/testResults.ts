@@ -181,6 +181,68 @@ export async function upsertTestResult(
   if (error) console.error("[test_results] upsert a échoué pour", test.name_key, params.date, error);
 }
 
+/* Bug réel corrigé (2026-09) : supprimer le DERNIER résultat d'un test (deleteTestResult, ou "Retirer
+   le test" dans ExerciseBlockEditor.tsx) ne supprimait jamais la ligne `tests` elle-même — un
+   catalogue vidé restait visible indéfiniment dans le panneau de tests ("Aucun résultat encore."),
+   sans plus aucun rapport avec une vraie séance. `subject` DOIT être `{subjectUserId}` (jamais
+   `{subjectCoachAthleteId}`) : une ligne `tests` côté coach est PARTAGÉE entre tous ses sportifs (même
+   owner_id, name_key identique) — vider les résultats d'UN sportif ne veut pas dire que les autres
+   n'ont plus de données sous ce même test, donc jamais de suppression automatique dans ce cas (no-op
+   silencieux). Pour un sportif solo, `owner_id` lui appartient en propre : 0 résultat pour lui = 0
+   résultat tout court, sans risque de vider l'historique de quelqu'un d'autre. */
+export async function deleteTestIfEmpty(testId: string, ownerId: string, subject: TestSubject): Promise<void> {
+  if (!("subjectUserId" in subject)) return;
+  const remaining = await listTestResults(testId, subject);
+  if (remaining.length > 0) return;
+  const supabase = createClient();
+  const { error } = await supabase.from("tests").delete().eq("id", testId).eq("owner_id", ownerId);
+  if (error) console.error("[tests] suppression (catalogue vidé) a échoué pour", testId, error);
+}
+
+/* Suppression complète d'un test (2026-09) — contrairement à deleteTestIfEmpty (ne supprime QUE si
+   déjà vide), celle-ci efface d'abord tous les résultats du sujet courant puis, si sûr de le faire,
+   la ligne `tests` elle-même. Déclenchée par le menu "⋯" d'une carte non reliée (TestsPanel.tsx),
+   qu'elle ait déjà des résultats ou non. Même garde que deleteTestIfEmpty pour la ligne `tests` :
+   jamais supprimée côté coach (catalogue partagé entre plusieurs sportifs, même owner_id/name_key) —
+   seuls LES RÉSULTATS de CE sujet précis sont effacés dans ce cas, la carte peut donc réapparaître
+   vide pour ce sportif si un autre a encore des données dessus (comportement assumé, pas un bug). */
+export async function deleteTestCompletely(ownerId: string, testId: string, subject: TestSubject): Promise<void> {
+  const results = await listTestResults(testId, subject);
+  for (const r of results) await deleteTestResult(testId, r.date, subject);
+  if ("subjectUserId" in subject) {
+    const supabase = createClient();
+    const { error } = await supabase.from("tests").delete().eq("id", testId).eq("owner_id", ownerId);
+    if (error) console.error("[tests] suppression complète a échoué pour", testId, error);
+  }
+}
+
+/* Filet de sécurité "test orphelin" (2026-09) — relie un test existant (typiquement non reconnu par
+   canonicalMetricKey, testNorms.ts, faute d'un nom canonique) à un nom connu : copie chaque résultat
+   sous ce nouveau nom (upsertTestResult, réutilise resolveTest pour créer/retrouver la ligne cible en
+   conservant l'unité déjà loguée pour chaque point plutôt que d'en imposer une nouvelle), supprime
+   l'ancien point puis l'ancien test lui-même une fois vidé. Jamais automatique — déclenché
+   uniquement par l'action "🔗 Relier" du panneau de tests (TestsPanel.tsx), sur choix explicite de
+   l'utilisateur. Best-effort : les échecs individuels sont déjà journalisés par
+   upsertTestResult/deleteTestResult, n'interrompent pas la boucle sur les autres points datés. */
+export async function mergeTestInto(ownerId: string, oldTestId: string, subject: TestSubject, toName: string): Promise<void> {
+  // Bug réel corrigé (2026-09, trouvé par Gildas) : si `toName` se résout (via slugify) sur LE MÊME
+  // test que `oldTestId` (ex. relier "Saut vertical (CMJ)" vers... "Saut vertical (CMJ)", cas rendu
+  // possible par un alias manquant ailleurs — voir ALIASES dans testNorms.ts, déjà corrigé), la boucle
+  // ci-dessous écrivait puis supprimait CHAQUE point sur la même ligne (upsert et delete ciblent le
+  // même test_id+date), avant de supprimer la fiche elle-même : un "relier" qui aurait dû être un
+  // no-op vidait et détruisait le test entier. Vérifié AVANT toute écriture, jamais après coup.
+  const target = await resolveTest(ownerId, toName, "kg");
+  if (target?.id === oldTestId) return;
+  const results = await listTestResults(oldTestId, subject);
+  for (const r of results) {
+    await upsertTestResult(ownerId, subject, { name: toName, unit: r.unit, value: r.value, date: r.date, videoUrl: r.video_url });
+    await deleteTestResult(oldTestId, r.date, subject);
+  }
+  const supabase = createClient();
+  const { error } = await supabase.from("tests").delete().eq("id", oldTestId).eq("owner_id", ownerId);
+  if (error) console.error("[tests] suppression de l'ancien test a échoué pour", oldTestId, error);
+}
+
 /* Scanne le texte + les media d'une séance (mêmes formats que ExerciseBlockEditor : notes en lignes
    `\n`-séparées, exercise_media keyé par index de ligne) et écrit un test_results pour chaque ligne
    marquée comme test avec une valeur numérique valide — appelé depuis handleSave, jamais en live. */
@@ -203,4 +265,64 @@ export async function syncTestResultsFromSession(
     const name = resolveExerciseName(line) || line;
     await upsertTestResult(ownerId, subject, { name, unit: result.unit, value, date });
   }));
+}
+
+/* Séries reps×poids sous-maximales (2026-09, `strength_reps`, table SÉPARÉE de `test_results`) — même
+   catalogue `tests` (même test_id qu'un vrai 1RM du même mouvement), mais jamais lues par
+   combinedByMetric/latestByMetric (TestsPanel.tsx), qui n'interrogent que `test_results` : garantie
+   STRUCTURELLE (pas une simple discipline de filtrage à retenir partout) que l'estimation Epley
+   n'alimente jamais les RATIO_CARDS sourcées — exigence explicite de Gildas. */
+export interface StrengthRepRow {
+  id: string;
+  test_id: string;
+  date: string;
+  reps: number;
+  weight: number;
+}
+
+/* Toutes les séries reps×poids d'un sujet, tous mouvements confondus — une seule requête, même
+   principe que listOwnResults. Portée volontairement réduite (2026-09, v1) : contrairement à
+   test_results, PAS de fusion croisée coach/sportif pour l'instant (pas de route admin dédiée) — un
+   coach ne voit que les séries qu'IL a lui-même enregistrées pour ce sportif, jamais celles que le
+   sportif aurait pu logger de son côté, et réciproquement. Limite assumée, pas un oubli. */
+export async function listOwnStrengthReps(subject: TestSubject): Promise<StrengthRepRow[]> {
+  const supabase = createClient();
+  let q = supabase.from("strength_reps").select("id,test_id,date,reps,weight");
+  q = "subjectUserId" in subject ? q.eq("subject_user_id", subject.subjectUserId) : q.eq("subject_coach_athlete_id", subject.subjectCoachAthleteId);
+  const { data, error } = await q.order("date");
+  if (error) { console.error("[strength_reps] liste (sujet) a échoué", error); return []; }
+  return (data ?? []) as StrengthRepRow[];
+}
+
+export async function listStrengthReps(testId: string, subject: TestSubject): Promise<StrengthRepRow[]> {
+  const supabase = createClient();
+  let q = supabase.from("strength_reps").select("id,test_id,date,reps,weight").eq("test_id", testId);
+  q = "subjectUserId" in subject ? q.eq("subject_user_id", subject.subjectUserId) : q.eq("subject_coach_athlete_id", subject.subjectCoachAthleteId);
+  const { data, error } = await q.order("date");
+  if (error) { console.error("[strength_reps] liste a échoué", error); return []; }
+  return (data ?? []) as StrengthRepRow[];
+}
+
+export async function upsertStrengthRep(
+  ownerId: string,
+  subject: TestSubject,
+  params: { name: string; unit: string; reps: number; weight: number; date: string }
+): Promise<void> {
+  const test = await resolveTest(ownerId, params.name, params.unit);
+  if (!test) return;
+  const supabase = createClient();
+  const subjectCols = "subjectUserId" in subject
+    ? { subject_user_id: subject.subjectUserId, subject_coach_athlete_id: null }
+    : { subject_coach_athlete_id: subject.subjectCoachAthleteId, subject_user_id: null };
+  const { error } = await supabase.from("strength_reps").upsert(
+    { owner_id: ownerId, test_id: test.id, date: params.date, reps: params.reps, weight: params.weight, ...subjectCols },
+    { onConflict: "test_id,date,subject_key,reps" }
+  );
+  if (error) console.error("[strength_reps] upsert a échoué pour", test.name_key, params.date, error);
+}
+
+export async function deleteStrengthRep(id: string): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("strength_reps").delete().eq("id", id);
+  if (error) console.error("[strength_reps] suppression a échoué pour", id, error);
 }

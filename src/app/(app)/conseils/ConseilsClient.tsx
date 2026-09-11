@@ -13,6 +13,7 @@ import ShareButton from "@/components/sessions/ShareButton";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
 import TestsPanel from "@/components/tests/TestsPanel";
+import type { MergedTest, TestResultRow } from "@/lib/testResults";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -137,7 +138,7 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
   );
 }
 
-export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, isDemoData = false }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; isDemoData?: boolean }) {
+export default function ConseilsClient({ initialData, subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, isDemoData = false, sport = null, sexe = null, poidsKg = null, testsFixture }: { initialData: ConseilsData; subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; isDemoData?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] } }) {
   const router = useRouter();
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState(initialData);
@@ -239,7 +240,17 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
 
         {section === "tests" ? (
           userId ? (
-            <TestsPanel ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach />
+            <TestsPanel
+              ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
+              sport={sport} sexe={sexe} poidsKg={poidsKg}
+              onEditProfile={() => router.push(sandboxMode ? "/sandbox/athlete/profil" : "/profil")}
+            />
+          ) : testsFixture ? (
+            <TestsPanel
+              ownerId="sandbox-athlete" subject={{ subjectUserId: "sandbox-athlete" }}
+              sport={sport} sexe={sexe} poidsKg={poidsKg}
+              fixture={testsFixture}
+            />
           ) : (
             <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, padding: "8px 2px" }}>Le suivi de tests n'est pas disponible en mode démo.</div>
           )

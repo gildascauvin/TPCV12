@@ -247,6 +247,7 @@ function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsi
         <TestsPanel
           ownerId={userId} subject={{ subjectCoachAthleteId: athlete.id }} linkedUserId={athlete.user_id}
           emptyHint={`Aucun test enregistré pour ${athlete.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
+          sport={athlete.sport} sexe={athlete.sexe ?? null} poidsKg={athlete.poids_kg ?? null}
         />
       ) : (
         <AthleteSignatureBlock signature={signature} athleteId={athlete.id} athleteName={athlete.name} rangeMode={rangeMode} trendInsight={trendInsight} baselineSeries={baselineSeries} />

@@ -1,5 +1,6 @@
 import { format, addDays } from "date-fns";
 import type { Profile, Session, WellnessDaily, CoachAthlete, CoachSession } from "@/types";
+import type { MergedTest, TestResultRow } from "@/lib/testResults";
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -97,6 +98,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
     id: sid("profile"), user_id: userId, name: "Toi (démo)", sport: "CrossFit", objective: "performance",
     freq_target: 4, mode: "athlete", subscription_status: "free", stripe_customer_id: null,
     onboarding_done: true, invite_code: null, training_days: [1, 3, 5, 6], free_training_label: {},
+    sexe: "homme", poids_kg: 78,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };
 
@@ -154,6 +156,42 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
   }
 
   return { profile, todayStr, sessions, wellnessByDate };
+}
+
+/* Tests de performance factices (2026-09) — pour la sandbox uniquement : `TestsPanel` n'a aucun
+   backend réel à interroger pour un visiteur non authentifié (voir `fixture` prop de TestsPanel).
+   Couvre volontairement PLUSIEURS sports (haltéro, sprint, saut, endurance) — pas juste "CrossFit"
+   (le sport officiel du profil sandbox) — pour que les chips de filtre par sport (TestsPanel.tsx)
+   aient chacune des données à montrer : Haltérophilie, Athlétisme & vitesse (sprint + saut/RSI) et
+   Endurance (5km/10km) donnent tous les trois de vrais repères forts/faibles, pas des cartes
+   verrouillées vides. Valeurs choisies (pas au hasard) pour donner un profil "réaliste" avec un
+   mélange volontaire de vert/rouge/amber sur les 3 familles — vérifié via testNorms.computeAllInsights
+   avant d'être figées ici. */
+export function buildTestFixture(now: Date = new Date()): { merged: MergedTest[]; results: TestResultRow[] } {
+  const items: { name: string; unit: string; oldValue: number; newValue: number }[] = [
+    { name: "Back Squat", unit: "kg", oldValue: 125, newValue: 130 },
+    { name: "Front Squat", unit: "kg", oldValue: 100, newValue: 105 },
+    { name: "Snatch", unit: "kg", oldValue: 72, newValue: 75 },
+    { name: "Clean & Jerk", unit: "kg", oldValue: 90, newValue: 95 },
+    { name: "Sprint 10m", unit: "s", oldValue: 1.75, newValue: 1.70 },
+    { name: "Sprint 30m", unit: "s", oldValue: 4.42, newValue: 4.35 },
+    { name: "CMJ", unit: "cm", oldValue: 36, newValue: 38 },
+    { name: "Squat Jump", unit: "cm", oldValue: 33, newValue: 34 },
+    { name: "Drop Jump (RSI)", unit: "m", oldValue: 0.33, newValue: 0.35 },
+    { name: "Temps de contact (drop jump)", unit: "s", oldValue: 0.17, newValue: 0.16 },
+    { name: "5 km", unit: "min", oldValue: 23.2, newValue: 22.5 },
+    { name: "10 km", unit: "min", oldValue: 48.5, newValue: 47 },
+  ];
+
+  const merged: MergedTest[] = [];
+  const results: TestResultRow[] = [];
+  for (const item of items) {
+    const testId = sid("test");
+    merged.push({ name_key: item.name.trim().toLowerCase(), name: item.name, unit: item.unit, athleteTestId: testId });
+    results.push({ id: sid("result"), test_id: testId, date: dstr(now, -28), value: item.oldValue, unit: item.unit, video_url: null });
+    results.push({ id: sid("result"), test_id: testId, date: dstr(now, -3), value: item.newValue, unit: item.unit, video_url: null });
+  }
+  return { merged, results };
 }
 
 /* ============================= COACH — 5 sportifs, 5 sports ============================= */

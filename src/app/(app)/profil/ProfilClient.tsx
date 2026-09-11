@@ -62,7 +62,7 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
 
   function goToSignup() { router.push(`/register?role=${profile.mode}`); }
 
-  async function handleSaveProfile(data: { name: string; sport: string; objective: Objective; freq_target: number }) {
+  async function handleSaveProfile(data: { name: string; sport: string; objective: Objective; freq_target: number; sexe: "homme" | "femme" | null; poids_kg: number | null }) {
     if (sandboxMode) {
       setProfile(prev => ({ ...prev, ...data }));
       setEditOpen(false);
@@ -220,6 +220,8 @@ export default function ProfilClient({ profile: initialProfile, email, doneSessi
           initialSport={profile.sport || ""}
           initialObjective={profile.objective}
           initialFreq={profile.freq_target}
+          initialSexe={profile.sexe ?? null}
+          initialPoids={profile.poids_kg ?? null}
           onSave={handleSaveProfile}
           onClose={() => setEditOpen(false)}
         />

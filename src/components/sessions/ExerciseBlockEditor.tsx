@@ -12,10 +12,11 @@ import type { ExerciseAttachments, ExerciseComment } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import {
-  TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTestResults, deleteTestResult,
+  TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTests, listTestResults, deleteTestResult, deleteTestIfEmpty,
   type TestSubject, type TestResultRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
+import { canonicalMetricKey, suggestCanonicalNames, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, RSI_NORMS, formatDropJumpHeightCm, ftctRatio } from "@/lib/testNorms";
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -684,32 +685,89 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
   const [resultHistory, setResultHistory] = useState<TestResultRow[] | null>(null);
   const [resultTestId, setResultTestId] = useState<string | null>(null);
   const [savingResult, setSavingResult] = useState(false);
+  /* Suggestion de nom canonique (2026-09) — si `exerciseName` (déduit du texte de la ligne) ne
+     débloque aucun repère (canonicalMetricKey), on propose de logger le test sous un nom reconnu à
+     la place, SANS jamais renommer la ligne elle-même (qui garde son texte libre, tokens compris) :
+     seul le nom envoyé à upsertTestResult/resolveTest change. Jamais forcé — l'utilisateur peut
+     ignorer la suggestion et valider tel quel (carte brute, sans interprétation, comme avant). */
+  const [testNameOverride, setTestNameOverride] = useState<string | null>(null);
+  const effectiveTestName = testNameOverride ?? exerciseName;
+  const testNameRecognized = !!exerciseName && !!canonicalMetricKey(exerciseName);
+  const nameSuggestions = resultEditing && exerciseName && !testNameRecognized && !testNameOverride
+    ? suggestCanonicalNames(exerciseName)
+    : [];
+
+  /* Saisie fusionnée hauteur+contact (2026-09) — porté ici depuis TestsPanel.tsx (même problème :
+     "Temps de contact (drop jump)" n'a aucun autre point d'entrée pour un 1er résultat, et rien ne
+     garantissait que les 2 valeurs viennent du même saut). Quand la ligne résout sur dropJumpHeight,
+     le composeur ajoute un champ temps de contact et écrit les 2 métriques d'un coup, même date. */
+  const resolvedMetric = effectiveTestName ? canonicalMetricKey(effectiveTestName) : null;
+  const isDropJumpHeight = resolvedMetric === "dropJumpHeight";
+  const [resultInputMode, setResultInputMode] = useState<"direct" | "flight">("direct");
+  const [contactDraftValue, setContactDraftValue] = useState("");
+  const flightPreview = isDropJumpHeight && resultInputMode === "flight" ? parseResultValue(resultDraftValue) : null;
+  // RSI affiché directement sur la ligne (2026-09) — recalculé au moment de valider (les 2 valeurs
+  // sont déjà en mémoire) et re-résolu au montage si la ligne était déjà marquée (lookup en lecture
+  // seule via listTests, jamais resolveTest qui créerait une fiche "Temps de contact" vide si absente).
+  const [rsiValue, setRsiValue] = useState<number | null>(null);
+  const [rsiContactSec, setRsiContactSec] = useState<number | null>(null);
 
   // Charge l'historique une fois si la ligne est déjà marquée comme test au montage (séance rouverte)
   // — jamais pendant l'édition du composeur, jamais si la synchro live est indisponible.
   useEffect(() => {
-    if (!hasResult || resultEditing || resultHistory !== null || !canSyncResult || !exerciseName) return;
+    if (!hasResult || resultEditing || resultHistory !== null || !canSyncResult || !effectiveTestName) return;
     let cancelled = false;
     (async () => {
-      const test = await resolveTest(ownerId!, exerciseName, attachments.result?.unit ?? "kg");
+      const test = await resolveTest(ownerId!, effectiveTestName, attachments.result?.unit ?? "kg");
       if (cancelled || !test) return;
       setResultTestId(test.id);
       const rows = await listTestResults(test.id, testSubject!);
       if (!cancelled) setResultHistory(rows);
+      if (isDropJumpHeight) {
+        // attachments.result?.value est déjà en CM (voir handleValidateResult) — reconverti en m pour
+        // le calcul RSI (canonique, jamais changé) avant d'être comparé au temps de contact en s.
+        const heightCm = parseResultValue(attachments.result?.value ?? "");
+        const allTests = await listTests(ownerId!);
+        const contactTest = allTests.find(t => canonicalMetricKey(t.name_key) === "dropJumpContact");
+        if (!cancelled && contactTest && heightCm !== null) {
+          const contactRows = await listTestResults(contactTest.id, testSubject!);
+          const sameDate = contactRows.find(r => r.date === sessionDate);
+          if (!cancelled && sameDate) { setRsiContactSec(sameDate.value); setRsiValue((heightCm / 100) / sameDate.value); }
+        }
+      }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasResult, resultEditing, exerciseName, canSyncResult]);
+  }, [hasResult, resultEditing, effectiveTestName, canSyncResult]);
 
   async function handleValidateResult() {
-    const value = parseResultValue(resultDraftValue);
-    if (value === null) return;
-    const unit = resultDraftUnit;
-    stampedUpdate({ ...attachments, result: { value: resultDraftValue, unit } });
-    if (canSyncResult && exerciseName) {
+    const raw = parseResultValue(resultDraftValue);
+    if (raw === null) return;
+    // Saisie en cm/ms pour le drop jump (2026-09, même convention que TestsPanel.tsx) — `raw` est en
+    // cm (mode direct) ou en ms (mode temps de vol). Stockage canonique toujours en mètres (jamais
+    // changé, c'est l'unité qu'attend le calcul RSI et les seuils sourcés [1.5, 2.5]) ; `displayValue`
+    // (caché sur la ligne, réutilisé au ré-affichage/à la ré-édition) reste en cm.
+    const value = isDropJumpHeight
+      ? (resultInputMode === "flight" ? Math.round(heightFromFlightTime(raw / 1000) * 1000) / 1000 : raw / 100)
+      : raw;
+    const displayValue = isDropJumpHeight ? (value * 100).toFixed(2) : resultDraftValue;
+    const unit = isDropJumpHeight ? "m" : resultDraftUnit;
+    let contactValueS: number | null = null;
+    if (isDropJumpHeight) {
+      const contactMs = parseResultValue(contactDraftValue);
+      if (contactMs === null) return; // les 2 valeurs sont requises ensemble (voir onAddPair, TestsPanel.tsx)
+      contactValueS = contactMs / 1000;
+    }
+    stampedUpdate({ ...attachments, result: { value: displayValue, unit } });
+    if (canSyncResult && effectiveTestName) {
       setSavingResult(true);
-      await upsertTestResult(ownerId!, testSubject!, { name: exerciseName, unit, value, date: sessionDate });
-      const test = await resolveTest(ownerId!, exerciseName, unit);
+      await upsertTestResult(ownerId!, testSubject!, { name: effectiveTestName, unit, value, date: sessionDate });
+      if (isDropJumpHeight && contactValueS !== null) {
+        await upsertTestResult(ownerId!, testSubject!, { name: METRIC_DISPLAY.dropJumpContact.name, unit: METRIC_DISPLAY.dropJumpContact.unit, value: contactValueS, date: sessionDate });
+        setRsiContactSec(contactValueS);
+        setRsiValue(value / contactValueS);
+      }
+      const test = await resolveTest(ownerId!, effectiveTestName, unit);
       if (test) {
         setResultTestId(test.id);
         setResultHistory(await listTestResults(test.id, testSubject!));
@@ -717,27 +775,42 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
       setSavingResult(false);
     }
     setResultEditing(false);
+    setResultInputMode("direct");
+    setContactDraftValue("");
   }
 
   function handleEditResult() {
     setResultDraftValue(attachments.result?.value ?? "");
     setResultDraftUnit(attachments.result?.unit ?? "kg");
+    setResultInputMode("direct");
+    setContactDraftValue(rsiContactSec != null ? String(Math.round(rsiContactSec * 1000)) : "");
     setResultEditing(true);
   }
 
   async function handleDeleteResult() {
-    if (canSyncResult && resultTestId) await deleteTestResult(resultTestId, sessionDate, testSubject!);
+    if (canSyncResult && resultTestId) {
+      await deleteTestResult(resultTestId, sessionDate, testSubject!);
+      await deleteTestIfEmpty(resultTestId, ownerId!, testSubject!);
+    }
     stampedUpdate({ ...attachments, result: undefined });
     setResultHistory(null);
     setResultTestId(null);
     setResultEditing(false);
+    setTestNameOverride(null);
+    setRsiValue(null);
+    setRsiContactSec(null);
   }
 
   function handleMarkAsTest() {
     stampedUpdate({ ...attachments, result: { value: "", unit: "kg" } });
     setResultDraftValue("");
     setResultDraftUnit("kg");
+    setTestNameOverride(null);
     setResultEditing(true);
+    setResultInputMode("direct");
+    setContactDraftValue("");
+    setRsiValue(null);
+    setRsiContactSec(null);
   }
 
   /* Toute mutation (média ou commentaire) est horodatée + attribuée — pilote le point de
@@ -988,8 +1061,54 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
       {hasResult && (
         <div style={{ marginTop: 8, marginLeft: 18 }}>
           {resultEditing ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#9a9ea1", flexShrink: 0 }}>Résultat</span>
+            <div>
+              {testNameOverride ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, color: "#5b5f62" }}>🎯 Sera loggué comme « <b>{testNameOverride}</b> »</span>
+                  <button onClick={() => setTestNameOverride(null)} style={{ fontSize: 10.5, fontWeight: 700, color: "#8a8f94", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Annuler</button>
+                </div>
+              ) : nameSuggestions.length > 0 && (
+                <div style={{ marginBottom: 6, padding: "7px 9px", background: "#fff7ed", border: "1px dashed rgba(212,64,0,.25)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: "#8a5a2a", marginBottom: 5 }}>
+                    Aucun repère automatique pour « {exerciseName} » — nom proche connu :
+                  </div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                    {nameSuggestions.map(key => (
+                      <button
+                        key={key} onClick={() => setTestNameOverride(METRIC_DISPLAY[key].name)}
+                        style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 20, padding: "3px 9px", cursor: "pointer" }}
+                      >
+                        {METRIC_DISPLAY[key].name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            {isDropJumpHeight && (
+              <div style={{ fontSize: 10.5, color: "#8a8f94", lineHeight: 1.4, marginBottom: 6 }}>
+                💡 RSI = hauteur de saut ÷ temps de contact au sol : les 2 valeurs sont enregistrées ensemble, pour le même saut.
+              </div>
+            )}
+            {isDropJumpHeight && (
+              <div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+                {(["direct", "flight"] as const).map(m => (
+                  <button
+                    key={m} type="button" onClick={() => setResultInputMode(m)}
+                    style={{
+                      fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 20, cursor: "pointer",
+                      border: resultInputMode === m ? "1px solid #171b1f" : "1px solid rgba(0,0,0,.10)",
+                      background: resultInputMode === m ? "#171b1f" : "#fff", color: resultInputMode === m ? "#fff" : "#171b1f",
+                    }}
+                  >
+                    {m === "direct" ? "Hauteur (cm)" : "Temps de vol (ms)"}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isDropJumpHeight ? 6 : 0 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#9a9ea1", flexShrink: 0 }}>
+                {isDropJumpHeight ? (resultInputMode === "flight" ? "Temps de vol" : "Hauteur") : "Résultat"}
+              </span>
               <input
                 type="text" inputMode="decimal" autoFocus
                 value={resultDraftValue}
@@ -998,31 +1117,65 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                 placeholder="Ex. 12,5"
                 style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, padding: "6px 9px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#171b1f" }}
               />
-              <select
-                value={resultDraftUnit} onChange={e => setResultDraftUnit(e.target.value)}
-                style={{ fontSize: 13, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#5b5f62", flexShrink: 0 }}
-              >
-                {TEST_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
+              {!isDropJumpHeight && (
+                <select
+                  value={resultDraftUnit} onChange={e => setResultDraftUnit(e.target.value)}
+                  style={{ fontSize: 13, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#5b5f62", flexShrink: 0 }}
+                >
+                  {TEST_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              )}
+              {isDropJumpHeight && <span style={{ fontSize: 12, fontWeight: 700, color: "#8a8f94", flexShrink: 0 }}>{resultInputMode === "flight" ? "ms" : "cm"}</span>}
+            </div>
+            {flightPreview != null && (
+              <div style={{ fontSize: 10.5, color: "#8a8f94", marginBottom: 6, marginLeft: 60 }}>≈ {formatDropJumpHeightCm(heightFromFlightTime(flightPreview / 1000))}</div>
+            )}
+            {isDropJumpHeight && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#9a9ea1", flexShrink: 0 }}>Contact sol (ms)</span>
+                <input
+                  type="text" inputMode="decimal"
+                  value={contactDraftValue}
+                  onChange={e => setContactDraftValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleValidateResult(); }}
+                  placeholder="Ex. 220"
+                  style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, padding: "6px 9px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#171b1f" }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#8a8f94", flexShrink: 0 }}>s</span>
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button
                 onClick={handleValidateResult}
-                disabled={parseResultValue(resultDraftValue) === null || savingResult}
-                style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#d44000", border: "none", borderRadius: 8, height: 32, padding: "0 10px", cursor: "pointer", flexShrink: 0, opacity: parseResultValue(resultDraftValue) === null ? 0.5 : 1 }}
+                disabled={parseResultValue(resultDraftValue) === null || savingResult || (isDropJumpHeight && parseResultValue(contactDraftValue) === null)}
+                style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "#d44000", border: "none", borderRadius: 8, height: 32, padding: "0 14px", cursor: "pointer", flexShrink: 0, opacity: (parseResultValue(resultDraftValue) === null || (isDropJumpHeight && parseResultValue(contactDraftValue) === null)) ? 0.5 : 1 }}
               >
                 {savingResult ? "…" : "Valider"}
               </button>
+            </div>
             </div>
           ) : (
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                 <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f" }}>
-                  {attachments.result?.value || "—"} {attachments.result?.unit}
+                  {attachments.result?.value || "—"} {isDropJumpHeight ? "cm" : attachments.result?.unit}
+                  {isDropJumpHeight && rsiContactSec != null && ` · ${Math.round(rsiContactSec * 1000)} ms`}
                 </span>
                 <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
                   <button onClick={handleEditResult} style={{ fontSize: 11, fontWeight: 700, color: "#62686e", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Modifier</button>
                   <button onClick={handleDeleteResult} style={{ fontSize: 11, fontWeight: 700, color: "#c81e1e", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Supprimer</button>
                 </div>
               </div>
+              {isDropJumpHeight && rsiValue != null && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#d44000", marginTop: 3 }}>
+                  RSI : {Math.round(rsiValue * 100) / 100} (repère : {RSI_NORMS[0]}-{RSI_NORMS[1]}){rsiContactSec != null && ` · ${dropJumpProfile(rsiContactSec)?.label ?? ""}`}
+                </div>
+              )}
+              {isDropJumpHeight && rsiValue != null && rsiContactSec != null && (
+                <div style={{ fontSize: 10.5, color: "#9a9ea1", marginTop: 2 }}>
+                  Ratio temps de vol/contact (style MyJump) : {ftctRatio(rsiValue * rsiContactSec, rsiContactSec).toFixed(2)} · non normé, indicatif
+                </div>
+              )}
               {resultHistory && resultHistory.length >= 2 && (
                 <div style={{ marginTop: 8 }}>
                   <TestEvolutionChart points={resultHistory.map(r => ({ date: r.date, value: r.value }))} height={54} />

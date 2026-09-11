@@ -55,6 +55,20 @@ export default async function CoachAthletesPage() {
 
   const athletes = (rawAthletes || []) as CoachAthlete[];
 
+  // Sexe/poids d'un vrai sportif lié viennent de SON profil (jamais coach_athletes.sexe/poids_kg,
+  // qui ne sert que pour les démo) — même pattern déjà en place pour free_training_label, voir
+  // coach/planning/page.tsx. Uniquement pour l'insight "vs littérature" de TestsPanel ; aucun autre
+  // champ de coach_athletes n'est concerné.
+  const realUserIds = athletes.map(a => a.user_id).filter((id): id is string => !!id);
+  if (realUserIds.length > 0) {
+    const { data: profileRows } = await admin.from("profiles").select("user_id, sexe, poids_kg").in("user_id", realUserIds);
+    const byUserId = new Map((profileRows || []).map(r => [r.user_id, r]));
+    for (const a of athletes) {
+      const p = a.user_id ? byUserId.get(a.user_id) : null;
+      if (p) { a.sexe = p.sexe; a.poids_kg = p.poids_kg; }
+    }
+  }
+
   const today = new Date().toISOString().split("T")[0];
   const [{ signatures, trends, trendInsights, baselines, baselineSeries }, lastTests] = await Promise.all([
     getAthletesSignatures(admin, athletes, today),
