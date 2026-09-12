@@ -3185,6 +3185,24 @@ Gildas avait signalé 2 fois que le fix précédent (2026-09-11) ne suffisait pa
 
 Déployé en prod le 2026-09-12, commit `68567e4`, push direct sur `main`.
 
+## 17 pages guide WordPress — hero banners, CTA sticky, repositionnement iframe, sections "Comprendre X" + fix ratio Muscle Snatch (contact) (2026-09-12/13)
+
+Suite du chantier "Bibliothèque SEO Upgrade"/"Pillar Pages" (voir mémoire projet `project_bibliotheque_seo_upgrade`/section plus haut dans ce fichier) — 17 pages guide WordPress déjà créées (ratios mouvements de force/haltéro/qualités physiques : Squat/Bench/Deadlift/Snatch/Clean & Jerk/OHP, Force maximale, Puissance, Réactivité, Vitesse, Endurance, Agilité, Mobilité, Yo-Yo Test, Bronco Test) enrichies pour atteindre le même niveau que les pages programme (36 pages déjà upgradées, considérées "gold standard" dans ce fichier).
+
+**Hero banners avec vraies images réutilisées** (jamais inventées — extraites d'autres pages WP existantes via `get-post`) : Powerlifting/Force/Deadlift/OHP → photo `Powerlifting-logiciels-pour-coach-sportifs-et-RPE-scaled.jpg` ; Back/Front Squat → photo squat existante ; Bench Press → photo dédiée ; Snatch/Clean & Jerk → photo haltéro générique (pas de photo dédiée sur le site) ; Puissance/Réactivité → photo pliométrie ; Vitesse → photo sprint ; Endurance → photo aérobie ; Agilité/Yo-Yo → photo rugby générique ; Bronco → photo rugby dédiée ; Mobilité → photo étirements.
+
+**CTA sticky final** (après retour de Gildas "pas de background ou de box-shadow derrière le CTA") : wrapper `position:fixed` transparent avec `pointer-events:none`, seul le bouton lui-même (`pointer-events:auto`, léger drop-shadow) reste visible et cliquable — évite qu'une bande transparente pleine largeur bloque les clics/le scroll du reste de la page.
+
+**Repositionnement de l'iframe live** (`?section=tests`, sandbox) : déplacé de juste-après-le-hero vers le milieu de page (après le tableau de ratios sourcés, avant "Comment lire un écart"/FAQ) — retour de Gildas ("ça fait un peu pushy si haut dans le contenu").
+
+**Sections "Comprendre X" ajoutées** (2 paragraphes, ~150-200 mots, juste après le hero, avant le premier `<h2>` de contenu) sur les 17 pages, pour la parité de profondeur avec les pages programme — chaque section grounded strictement dans des faits déjà présents ailleurs sur la même page (ratios/sources déjà cités), aucune nouvelle affirmation inventée : Force maximale, Back Squat, Front Squat, Bench Press, Deadlift, Snatch, Clean & Jerk, Overhead Press, Puissance, Réactivité, Vitesse, Endurance, Agilité, Mobilité, Yo-Yo Test, Bronco Test (16 pages — la 17e, "Ratios techniques en powerlifting", avait déjà 2 sections équivalentes, exclue de l'ajout).
+
+**Fix ratio Muscle Snatch (contact) vs Snatch : 75% → 65%** (`src/lib/testNorms.ts`, card `muscleSnatchContact_snatch`) — demande explicite de Gildas après vérification de l'app (2 variantes distinctes existent : "Muscle Snatch (no leg)" resté à 60%/cross-validé Table de Baroga, inchangé ; "Muscle Snatch (contact)" corrigé de 75% à 65%, `norms` recalculées en bande ±8% relative). Vérifié `tsc --noEmit -p tsconfig.notnext.json` propre, déployé en prod le 2026-09-12 (commit `9674da7`), confirmé `READY` sur Vercel (alias `go.theperfclub.com`).
+
+**Incident de tooling en cours de route** : deux forks lancés en parallèle pour appliquer le fix CTA et le repositionnement iframe sur les 17 pages ont chacun échoué à mi-parcours (`monthly spend limit`, HTTP 429) — un avait en réalité terminé les 17 pages avant l'échec (confirmé par relecture individuelle), l'autre seulement 3/17. Plutôt que de relancer d'autres forks (risque de retrigger la limite), les 14 pages restantes ont été vérifiées et corrigées une par une manuellement (`get-post`+`update-post`) — leçon déjà documentée ailleurs dans ce fichier : ne jamais faire confiance au résumé auto-rapporté d'un fork sans revérifier l'état réel.
+
+**Travail 100% WordPress** (aucun commit git pour le contenu des pages elles-mêmes, seul le fix `testNorms.ts` ci-dessus est un vrai changement de code) — pas de sitemap resoumis à Search Console dans cette session (rappel existant dans la mémoire `feedback_searchconsole_sitemap`, à faire).
+
 ## Suite (2026-09-12) — ratio OH Squat mis à jour, plan SEO/PLG (aucune exécution)
 
 Mise à jour de Gildas : "le ratio overhead squat et snatch balance vs snatch c'est 110% aussi". `snatchBalance_snatch` (`testNorms.ts`) passe de ~115% (refValue 1.15, norms [1.058,1.242]) à ~110% (refValue 1.10, norms [1.012,1.188]). Nouvelle carte `ohSquat_snatch` (n'existait pas — OH Squat n'avait jusqu'ici qu'un ratio vs Back Squat), même repère ~110%, même famille `FORCE_RATIO_CARDS`, `core: false`.
