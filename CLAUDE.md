@@ -3275,3 +3275,24 @@ En creusant "pourquoi mes sportifs invités à l'étape 2 n'apparaissent pas à 
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Diagnostic du point précédent mené intégralement via Supabase (`execute_sql`, lecture seule) + Vercel (`get_runtime_errors`/`get_runtime_logs`), pas par supposition. Pas de clic réel par Claude sur l'ensemble du chantier — à valider par Gildas en local.
 
 Déployé en prod le 2026-09-14, commit `e7500f1`, push direct sur `main`.
+
+## Suite (2026-09-14) — ring/statut agrandis à l'étape 2 sportif, retrait du sticky mobile (ligne blanche parasite)
+
+Trois retours successifs de Gildas sur le rendu réel de `WellnessModal.tsx` (`wizard_activate`, sportif) et `InviteModal.tsx` (`wizard_activate`, coach) en mobile.
+
+### Ring + statut agrandis, alignés sur `FullWellnessAdvicePreview`
+Le ring/statut de l'Étape 2 sportif (52px/13.5px) étaient nettement plus petits que ceux de la même carte réutilisée sur la slide 1 de `DecisionStep.tsx` ("Découvre ta vraie forme du jour" → `FullWellnessAdvicePreview`, `FrisePreviews.tsx`, ring 72px/statut 22px). Alignés en desktop (72px/strokeWidth 6, statut 22px/950/`letterSpacing:-0.03em`), demandé ensuite aussi en mobile ("sur mobile aussi la même taille. Et la taille du texte du status aussi") — appliqué à l'identique sur les deux breakpoints dans un 1er temps.
+
+### Encadré coloré étendu au mobile
+"Encapsule [ring/statut/chips] dans l'encadré de couleur comme en desktop" — la barre mobile n'avait jusque-là qu'un simple fond `#141414` plat (flush avec `WizardHero`), sans le encadré translucide (`rgba(255,255,255,.05)`, bordure, `borderRadius:16`) que le hero desktop a depuis toujours. Ajouté en nichant l'encadré à l'intérieur de la bande dark (qui reste flush avec `wizardHero`, pas de seam) plutôt que de le faire bleeder lui-même — un encadré à bords arrondis qui bleed hors du viewport perdrait ses coins visibles. Padding de l'encadré (desktop + mobile) resserré ensuite (`14px 16px` → `10px 12px`, "réduit un peu le padding dans cet encadré").
+
+### Retrait du `position:sticky` mobile — ligne blanche parasite
+Deux retours groupés : "trop d'espace entre les card et le texte du dessus" (les deux fichiers, mobile) et "une espece de ligne blanche au dessus de la carte" (sportif uniquement) — puis, avant diagnostic complet, Gildas a lui-même identifié la piste : "dans les 2 cas mobile, cette zone soit pas être sticky, juste collé au header". `position:"sticky"`/`top:0`/`zIndex:5` retirés des deux bandes mobile (`WellnessModal.tsx` et `InviteModal.tsx`) — cause la plus probable de la ligne blanche : un seam de rendu classique quand un élément `position:sticky` vit dans un ancêtre à `backdropFilter`/`animation` (le drawer, `backdropFilter:blur(16px)` + `animation:drawerInRight`/`modalIn`). Les deux bandes restent en flux normal, collées directement sous `WizardHero` (padding-top retiré, `10px→0`, le padding-bottom de `WizardHero` — 24px en dark — suffit déjà comme espacement).
+
+### Taille mobile réduite à nouveau, un cran sous le desktop
+Dernier retour : "réduit un peu la taille de la ring et du status en mobile" — ring mobile 72→60px (strokeWidth 6→5), statut 22→18px, desktop inchangé (72px/22px). Concerne uniquement `WellnessModal.tsx` (le ring/statut d'`InviteModal.tsx` n'avait jamais été porté à 72/22, resté à sa taille d'origine — signalé explicitement à Gildas plutôt que deviné).
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Pas de clic réel par Claude — tous les retours viennent de Gildas testant en local (`next dev`), y compris le diagnostic final du sticky (posé par lui-même avant que Claude n'ait eu à investiguer la cause exacte de la ligne blanche).
+
+Déployé en prod le 2026-09-14, commit `e4c7d61`, push direct sur `main`.
