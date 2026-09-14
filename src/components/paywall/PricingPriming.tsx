@@ -4,21 +4,26 @@ import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
 import { PlanningPreview, WellnessCardPreview, CoachControlPreview, ChargePreview, AthleteChargePreview } from "./FrisePreviews";
 import { INTERVIEWS } from "./interviews";
+import ShareButton from "@/components/sessions/ShareButton";
 
 /* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
    paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
-   le prix, la garantie, les bullets de valeur, la frise, le témoignage, la bande de confiance et
-   la FAQ. Décision explicite de Gildas (2026-08-07) : ces deux écrans doivent être "exactement le
-   même composant" pour ne plus jamais diverger sur le wording. Le shell (modal dismissible vs
-   page pleine largeur) et le CTA final restent propres à chaque appelant — seul le contenu entre
-   le badge et le CTA vit ici.
+   le prix, les bullets de valeur, la frise, le témoignage, la bande de confiance et la FAQ.
+   Décision explicite de Gildas (2026-08-07) : ces deux écrans doivent être "exactement le même
+   composant" pour ne plus jamais diverger sur le wording. Le shell (modal dismissible vs page
+   pleine largeur) et le CTA final restent propres à chaque appelant — seul le contenu entre le
+   badge et le CTA vit ici.
 
-   Plus d'essai gratuit (retiré 2026-08-07, remplacé par une garantie remboursé 14 jours) — voir
-   CLAUDE.md section correspondante pour l'historique complet de la décision. */
+   2026-09-13 — retour de l'essai (14 jours, CB requise, 0€ dû aujourd'hui), remplace la garantie
+   remboursé 14 jours du 2026-08-07 — voir CLAUDE.md pour l'historique complet des deux décisions.
+   Consigne explicite de Gildas : ne jamais communiquer sur "essai gratuit" ni sur un rappel avant
+   facturation — le wording parle de "14 jours offerts" et d'annulation en 1 clic, jamais d'un
+   email de rappel à venir. */
+const TRIAL_DAYS = 14;
 
 /* Sous le CTA "Continuer →" de l'écran priming (pas dans la carte prix elle-même — retiré de là
    le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
-export const PRICING_PRIMING_GUARANTEE_CAPTION = "🛡️ Remboursé sous 14 jours si besoin, sans justification.";
+export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans engagement.";
 
 const BULLETS: Record<"athlete" | "coach", string[]> = {
   athlete: [
@@ -51,7 +56,7 @@ const FRISE_STEPS: Record<"athlete" | "coach", { title: string; period: string; 
 
 function faqItems(role: "athlete" | "coach") {
   return [
-    { q: "Puis-je être remboursé si ça ne me convient pas ?", a: "Oui, sous 14 jours après ton paiement, sans justification. Écris-nous à contact@theperfclub.com." },
+    { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: "Oui, sauf annulation avant la fin des 14 jours — annulable en un clic depuis ton profil, sans engagement." },
     { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
     { q: "Puis-je changer de formule après ?", a: "Oui, tu peux basculer entre mensuel et annuel à tout moment depuis ton profil." },
     role === "coach"
@@ -86,9 +91,15 @@ export interface PricingPrimingProps {
       coach) pour rester personnel. Repli "Toi" si absent, même convention que coachFirstName dans
       WeekPreviewStep.tsx. */
   name?: string;
+  /** Sportif uniquement (2026-09-14, voir CLAUDE.md — simplifié le lendemain d'une 1re version
+      "comme un programme claimé" du 13/09 : plus de dépendance à un programme existant) — id du
+      compte sportif courant, pour "Inviter mon coach →" (construit /register?role=coach&
+      athleteId=...&athleteName=..., aucun appel réseau). Disponible dès la création du compte,
+      pas seulement après avoir construit un programme dans le wizard. */
+  athleteSelfId?: string;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, weaknessLabels, name }: PricingPrimingProps) {
+export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, weaknessLabels, name, athleteSelfId }: PricingPrimingProps) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
@@ -119,13 +130,15 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
         marginBottom: 22, marginTop: sub ? 0 : 18, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
       }}>
         <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
-          ✓ Garanti 14j
+          ✓ {TRIAL_DAYS} jours offerts
         </div>
         <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
-          {isMonthly ? `${p.monthly}€` : `${p.annualMonthly.toFixed(2).replace(".", ",")}€`}<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>/mois</span>
+          0€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>aujourd&apos;hui</span>
         </div>
         <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
-          {isMonthly ? `Facturé chaque mois, soit ${(p.monthly / 30).toFixed(2).replace(".", ",")}€/jour.` : `Facturé ${p.annual}€/an. Tu économises ${annualSavingsPct}%.`}
+          {isMonthly
+            ? `Puis ${p.monthly}€/mois après tes ${TRIAL_DAYS} jours offerts.`
+            : `Puis ${p.annual}€/an (${p.annualMonthly.toFixed(2).replace(".", ",")}€/mois) après tes ${TRIAL_DAYS} jours offerts.`}
         </div>
         <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
           <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
@@ -144,6 +157,38 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
         <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.92)", fontWeight: 700, lineHeight: 1.5, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.1)" }}>
           {UNLOCK_LINE[role]}
         </div>
+
+        {/* CTA secondaire dans l'encadré dark, comme le POC (.coach-free-box) — coach : le
+            persona a besoin d'une intro chaude, pas seulement d'un funnel self-serve froid.
+            Sportif : "gratuit avec un coach", lien /register direct (id + prénom en clair dans
+            l'URL, aucun programme requis — voir doc de athleteSelfId ci-dessus). Absent si
+            athleteSelfId inconnu (repli sûr, jamais un lien qui pointerait vers personne). */}
+        {role === "coach" ? (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)", marginBottom: 10, lineHeight: 1.4 }}>
+              Une question ?
+            </div>
+            <a
+              href="https://calendly.com/cauvingildas/30min" target="_blank" rel="noopener noreferrer"
+              style={{ display: "block", width: "100%", height: 42, lineHeight: "42px", borderRadius: 12, border: "1px solid rgba(255,255,255,.22)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 13, fontWeight: 800, textDecoration: "none" }}
+            >
+              Demander une démo
+            </a>
+          </div>
+        ) : athleteSelfId && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)", marginBottom: 10, lineHeight: 1.4 }}>
+              Gratuit avec un coach
+            </div>
+            <ShareButton
+              buttonLabel="Inviter mon coach →"
+              title="Hey coach, ThePerfClub m'aide à structurer mon entraînement — rejoins-moi pour me coacher dessus !"
+              getShareUrl={async () =>
+                `${window.location.origin}/register?role=coach&athleteId=${encodeURIComponent(athleteSelfId)}&athleteName=${encodeURIComponent(name ?? "")}`
+              }
+            />
+          </div>
+        )}
       </div>
 
       <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.02em", color: "#1f2428", marginBottom: 14 }}>

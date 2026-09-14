@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 
+// Doit rester en phase avec TRIAL_DAYS dans PricingPriming.tsx/PaywallModal.tsx (copie affichée).
+const TRIAL_DAYS = 14;
+
 export async function POST(request: Request) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
   const supabase = await createClient();
@@ -48,16 +51,16 @@ export async function POST(request: Request) {
     customer: customerId,
     items: [{ price: priceId }],
     default_payment_method: paymentMethodId,
+    trial_period_days: TRIAL_DAYS,
     metadata: { user_id: user.id, plan },
   });
 
-  // Sans essai, le premier prélèvement est tenté ici même (synchrone) — contrairement à l'ancien
-  // comportement avec trial_period_days, où Stripe ne tentait jamais de charge à cet instant
-  // (status="trialing" garanti). Un paiement refusé/nécessitant une authentification renvoie
-  // status="incomplete" sans lever d'exception : ne jamais accorder l'accès dans ce cas, sous
-  // peine de désynchroniser subscription_status de la réalité Stripe (même classe de bug que la
-  // résiliation pendant l'essai corrigée le 2026-07-15).
-  if (subscription.status !== "active") {
+  // 2026-09-13, retour de l'essai (14j, voir CLAUDE.md) : Stripe ne tente jamais de prélèvement à
+  // la création avec trial_period_days posé, status="trialing" garanti — le check restait
+  // nécessaire quand l'essai avait été retiré (08/08, prélèvement synchrone immédiat pouvant
+  // renvoyer status="incomplete" sans exception). Gardé mais élargi à "trialing" : filet de
+  // sécurité si l'essai est un jour retiré à nouveau sans qu'on pense à retoucher ce check.
+  if (subscription.status !== "active" && subscription.status !== "trialing") {
     return NextResponse.json({ error: "Le paiement n'a pas pu être confirmé. Vérifie ta carte et réessaie." }, { status: 402 });
   }
 

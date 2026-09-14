@@ -34,11 +34,16 @@ interface Props {
   onEditFreeLabel?: (label: string) => void;
   /** Variante compacte une ligne — utilisée par-dessus chaque semaine en vue Mois. */
   compact?: boolean;
+  /** Sportif uniquement (WeekClient.tsx) — absent côté coach (CoachPlanningClient.tsx). Un
+      ReactNode (pas un simple callback) : c'est directement <ShareButton/>, qui gère son propre
+      menu positionné sur son bouton — pas séparable en trigger+composant. Rendu seulement sur la
+      vue non-compacte, à côté de "✏️ Modifier" (2026-09-13, voir CLAUDE.md). */
+  inviteCoachAction?: React.ReactNode;
 }
 
 export default function ProgramBanner({
   program, currentWeek, onEdit, onStop, onReconduire,
-  freeLabel, onEditFreeLabel, compact = false,
+  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction,
 }: Props) {
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
@@ -191,7 +196,8 @@ export default function ProgramBanner({
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+        {inviteCoachAction}
         {onEdit && (
           <button data-tour="modifier-btn" onClick={onEdit} style={{ padding: "6px 12px", borderRadius: 8, border: "1.5px solid rgba(212,64,0,.25)", cursor: "pointer", background: "#fff", color: "#d44000", fontWeight: 700, fontSize: 11 }}>
             ✏️ Modifier<span className="tour-lock">🔒</span>

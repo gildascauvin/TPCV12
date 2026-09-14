@@ -545,6 +545,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [claimedProgramName, setClaimedProgramName] = useState<string | null>(null);
   const [claimedProgramWeeks, setClaimedProgramWeeks] = useState<number | null>(null);
+  /* Sportif→coach (2026-09-14, voir CLAUDE.md — remplace une 1re version "comme un programme
+     claimé" du 13/09, simplifiée le lendemain pour ne plus dépendre d'un programme existant).
+     Posés directement depuis ?athleteId=/&athleteName= dans l'URL (lien /register partagé par le
+     sportif). Pilotent le wording "Ton sportif {Prénom} t'attend" (value_intro/paywall_priming) et
+     la création de coach_athletes dans completeProfile() à la création du compte coach. */
+  const [claimedAthleteName, setClaimedAthleteName] = useState<string | null>(null);
+  const [claimedAthleteUserId, setClaimedAthleteUserId] = useState<string | null>(null);
   /* Sur réseau mobile réel, le fetch /api/programs/[id] (qui pose claimedProgramName) peut prendre
      assez longtemps pour que value_intro affiche d'abord le wording générique puis se corrige sous
      les yeux de l'utilisateur — invisible sur un réseau rapide (dev, wifi), repéré par Gildas
@@ -689,6 +696,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
 
     const params = new URLSearchParams(window.location.search);
+
+    /* Sportif→coach (2026-09-14, voir CLAUDE.md) — simplifié : plus de dépendance à un programme
+       existant ("le plus simple serait de ne pas partager le programme"). Le lien de partage
+       (PricingPriming.tsx) pointe directement vers /register avec l'id + le prénom du sportif en
+       clair dans l'URL — aucun fetch nécessaire, disponible dès la création du compte plutôt que
+       seulement après wizard_builder. La vraie vérification (le propriétaire est-il un sportif
+       pas encore coaché ?) reste côté serveur dans claim-athlete-link/route.ts, jamais fait
+       confiance à l'URL seule pour l'écriture réelle. */
+    const inviteAthleteId = params.get("athleteId");
+    const inviteAthleteName = params.get("athleteName");
+    if (inviteAthleteId) setClaimedAthleteUserId(inviteAthleteId);
+    if (inviteAthleteName) setClaimedAthleteName(inviteAthleteName);
+
     const claimParam = params.get("claim");
     if (claimParam && !localStorage.getItem("claim_program_id")) {
       localStorage.setItem("claim_program_id", claimParam);
@@ -940,6 +960,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
          l'architecture POC) — le coach construit son vrai programme dans le wizard post-signup
          (wizard_builder) et l'assigne réellement (démo + invités réels) à wizard_assign. Le démo
          reste créé ici pour que Coach Control ne soit jamais vide entre-temps. */
+
+      // Sportif→coach "comme un programme claimé" (2026-09-13, voir CLAUDE.md) — best-effort,
+      // ne bloque jamais la création du compte coach si ça échoue.
+      if (claimedAthleteUserId) {
+        try {
+          await fetch("/api/programs/claim-athlete-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ athleteUserId: claimedAthleteUserId }),
+          });
+        } catch { /* le coach garde quand même son compte + le programme pré-rempli du wizard */ }
+      }
     }
   }
 
@@ -1565,11 +1597,46 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      Chaque modal wizard_* laisse WIZARD_BANNER_H de marge en haut quand `wizardHero` est fourni
      (voir leur prop `wizardHero` réutilisé comme signal, pas de nouveau prop). */
   const wizardBanner = <UnsavedBanner role={role} onAction={() => setWizardPaywallStage("priming")} fixed />;
+  /* 2026-09-14 — fix : jusqu'ici rendu seulement dans le bloc wizard_builder, donc un clic sur
+     wizardBanner depuis n'importe quelle autre étape (picker/library/criteria/activate/assign)
+     changeait wizardPaywallStage sans que rien ne l'observe ("le clic ne fait rien"), ET cet état
+     restait vrai jusqu'à atterrir sur wizard_builder — qui l'ouvrait alors tout seul, sans nouveau
+     clic ("le paywall s'affiche après le programme sans avoir rien demandé"). Même variable
+     partagée que wizardBanner, référencée depuis les 6 étapes plutôt qu'une seule. */
+  const wizardPaywallOverlay = (
+    <>
+      {wizardPaywallStage === "priming" && (
+        <PrimingJourneyModal
+          mode={role === "coach" ? "coach" : "athlete"}
+          billing={billing}
+          setBilling={setBilling}
+          allowDismiss
+          onContinue={() => setWizardPaywallStage("form")}
+          onDismiss={() => setWizardPaywallStage(null)}
+          athleteSelfId={role === "coach" ? undefined : ((userId || newUserId) ?? undefined)}
+        />
+      )}
+      {wizardPaywallStage === "form" && (
+        <PaywallModal
+          mode={role === "coach" ? "coach" : "athlete"}
+          allowDismiss
+          onClose={() => setWizardPaywallStage("priming")}
+          onSuccess={async () => {
+            const uid = userId || newUserId;
+            if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+            setWizardUnlocked(true);
+            setWizardPaywallStage(null);
+          }}
+          initialBilling={billing}
+        />
+      )}
+    </>
+  );
 
   if (currentStep === "wizard_picker") {
     return (
       <>
-        {wizardBanner}
+        {!wizardPaywallStage && wizardBanner}
         <ProgramCreatePicker
           wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Connecte tes séances" sub={role === "coach"
             ? "Le mécanisme que tu viens de voir s'applique au vrai programme de tes sportifs — choisis comment le construire."
@@ -1588,6 +1655,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             setStepIdx(idx === -1 ? stepIdx + 2 : idx);
           }}
         />
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1600,7 +1668,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   if (currentStep === "wizard_library") {
     return (
       <>
-        {wizardBanner}
+        {!wizardPaywallStage && wizardBanner}
         <ProgramLibraryBrowser
           wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
           onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
@@ -1614,6 +1682,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             setStepIdx(idx === -1 ? stepIdx + 1 : idx);
           }}
         />
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1621,7 +1690,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   if (currentStep === "wizard_criteria") {
     return (
       <>
-        {wizardBanner}
+        {!wizardPaywallStage && wizardBanner}
         <ProgramCriteriaModal
           wizardHero={wizardCriteriaMode === "import"
             ? <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
@@ -1642,6 +1711,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             next();
           }}
         />
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1680,30 +1750,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           onSaveAndAssign={handleWizardSaveToLibrary}
           onShare={handleWizardShare}
         />
-        {wizardPaywallStage === "priming" && (
-          <PrimingJourneyModal
-            mode={role === "coach" ? "coach" : "athlete"}
-            billing={billing}
-            setBilling={setBilling}
-            allowDismiss
-            onContinue={() => setWizardPaywallStage("form")}
-            onDismiss={() => setWizardPaywallStage(null)}
-          />
-        )}
-        {wizardPaywallStage === "form" && (
-          <PaywallModal
-            mode={role === "coach" ? "coach" : "athlete"}
-            allowDismiss
-            onClose={() => setWizardPaywallStage("priming")}
-            onSuccess={async () => {
-              const uid = userId || newUserId;
-              if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
-              setWizardUnlocked(true);
-              setWizardPaywallStage(null);
-            }}
-            initialBilling={billing}
-          />
-        )}
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1713,7 +1760,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (role === "coach") {
       return (
         <>
-          {wizardBanner}
+          {!wizardPaywallStage && wizardBanner}
           <InviteModal
             wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Ajoute-les et assigne-leur un programme sans attendre qu'ils créent un compte. Tout se synchronise dès qu'ils rejoignent." />}
             onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
@@ -1722,12 +1769,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             cancelLabel={notifCancelLabel}
             onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
           />
+          {wizardPaywallOverlay}
         </>
       );
     }
     return (
       <>
-        {wizardBanner}
+        {!wizardPaywallStage && wizardBanner}
         <WellnessModal
           wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
           date={new Date().toISOString().split("T")[0]}
@@ -1743,6 +1791,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           cancelLabel={notifCancelLabel}
           onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
         />
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1750,7 +1799,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   if (currentStep === "wizard_assign") {
     return (
       <>
-        {wizardBanner}
+        {!wizardPaywallStage && wizardBanner}
         <ProgramAssignModal
           wizardHero={<WizardHero step={3} dark eyebrow="Étape 3/3 — Assigner" title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
             ? "Le programme apparaît directement dans le planning de tes sportifs, prêt à suivre au jour le jour."
@@ -1767,6 +1816,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           hideClose
           onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_activate")))}
         />
+        {wizardPaywallOverlay}
       </>
     );
   }
@@ -1791,7 +1841,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
           const roleKnownUpfront = !!(pendingData?.role || initialRole);
 
-          const headline = isClaimed
+          const headline = claimedAthleteName
+            ? <>Ton sportif <em>{claimedAthleteName}</em> t&apos;attend.</>
+            : isClaimed
             ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
             : "Un programme qui s'adapte enfin à toi, pas l'inverse.";
 
@@ -1938,7 +1990,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {/* ── PAYWALL PRIMING — même composant que le gating in-app (2026-08-31) ── */}
         {currentStep === "paywall_priming" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
-          const headline = isClaimed
+          const headline = claimedAthleteName
+            ? `Ton sportif ${claimedAthleteName} t'attend.`
+            : isClaimed
             ? `Ton programme ${claimedProgramName} t'attend.`
             : undefined; // repli sur le headline générique par rôle de PrimingJourneyModal, identique à l'in-app
           const displaySport = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : (sport || undefined);
@@ -1957,6 +2011,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               sessionCount={role === "coach" ? undefined : realSessionCount}
               weaknessLabels={role === "coach" ? undefined : weaknessLabels}
               name={name}
+              athleteSelfId={role === "coach" ? undefined : ((userId || newUserId) ?? undefined)}
             />
           );
         })()}

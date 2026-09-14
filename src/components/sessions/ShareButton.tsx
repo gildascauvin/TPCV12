@@ -6,19 +6,27 @@ import { createShare, type ShareResourceType } from "@/lib/share";
 /* Icône de partage générique, réutilisée sur tous les types partageables (Wellness, Séance, Charge,
    Récupération, Coach Control).
 
-   2026-08-16, dernière révision — retour explicite de Gildas après avoir testé le menu personnalisé
-   à 3 options sur son téléphone : "les 3 options servent à rien, il faut juste que le clic sur le
-   picto déclenche les options de partage" (comparé à la vraie share sheet iOS, avec tous ses
-   contacts WhatsApp/Messages/Mail/AirDrop). Un menu maison qui ne fait que réimplémenter un
-   sous-ensemble de ce que l'OS propose déjà nativement n'a aucune valeur ajoutée sur un appareil qui
-   supporte `navigator.share()`. Nouveau comportement :
-   - **Si `navigator.share` existe** (quasi tous les navigateurs mobiles) : le clic déclenche
-     directement la vraie share sheet OS, sans aucun menu intermédiaire. L'image est jointe si le
-     navigateur sait partager des fichiers (`navigator.canShare({files})`, Safari/Chrome mobile) ;
-     sinon le partage se fait juste avec titre/texte/lien — toujours mieux que notre mini-menu, la
-     share sheet OS reste plus riche (AirDrop, Mail, Messages, Copier...) dans tous les cas.
-   - **Sinon (desktop, aucun `navigator.share`)** : repli sur le petit menu Copier le lien/WhatsApp,
-     seule situation où il a encore une utilité (rien d'équivalent nativement sur desktop).
+   2026-08-16 — retour explicite de Gildas après avoir testé le menu personnalisé à 3 options sur
+   son téléphone : "les 3 options servent à rien, il faut juste que le clic sur le picto déclenche
+   les options de partage" (comparé à la vraie share sheet iOS, avec tous ses contacts
+   WhatsApp/Messages/Mail/AirDrop). Un menu maison qui ne fait que réimplémenter un sous-ensemble de
+   ce que l'OS propose déjà nativement n'a aucune valeur ajoutée sur un appareil qui supporte
+   `navigator.share()` avec une share sheet riche.
+
+   2026-09-13 — fix : la détection "desktop = pas de `navigator.share`" ne tenait déjà plus. Testé
+   en réel par Gildas sur macOS (Safari/Chrome) : `navigator.share()` existe bien, mais la share
+   sheet macOS qu'il ouvre ne liste ni WhatsApp ni "Copier" — contrairement à iOS, macOS n'a pas
+   d'écosystème d'extensions de partage tiers aussi développé, et l'app web n'a aucun contrôle sur
+   le contenu de cette popup une fois qu'elle délègue à l'OS (même limite déjà documentée plus bas
+   pour l'image jointe sur WhatsApp iOS). Bascule donc sur l'OS réel (iOS/Android) plutôt que sur la
+   seule présence de l'API pour décider qui a droit au partage natif :
+   - **Mobile (iOS/Android)** : le clic déclenche directement la vraie share sheet OS, sans menu
+     intermédiaire — image jointe si le navigateur sait partager des fichiers
+     (`navigator.canShare({files})`), sinon titre/texte/lien seuls. Toujours plus riche que notre
+     mini-menu sur ces OS (AirDrop, Mail, Messages, Copier... tous fiables).
+   - **Desktop (macOS/Windows/Linux, y compris quand `navigator.share` existe techniquement)** :
+     repli sur le petit menu Copier le lien/WhatsApp — seule façon de garantir ces deux destinations
+     précises, qu'une share sheet OS desktop ne propose pas de façon fiable.
 
    Lien toujours transmis (retour explicite : "on a dit image + lien à la base") — passé dans le
    vrai champ `url` de ShareData (pas seulement concaténé dans `text`), l'usage le plus correct de
@@ -30,16 +38,35 @@ import { createShare, type ShareResourceType } from "@/lib/share";
    suivant) — même principe qu'avant, pour ne pas dupliquer les lignes `shares` en base à chaque
    réouverture. */
 interface ShareButtonProps {
-  resourceType: ShareResourceType;
-  buildSnapshot: () => Record<string, unknown>;
+  /** Chemin normal (Wellness/Séance/Charge/Récupération/Coach Control) : passe par la table
+      `shares` (snapshot figé au clic). Absent si `getShareUrl` est fourni à la place. */
+  resourceType?: ShareResourceType;
+  buildSnapshot?: () => Record<string, unknown>;
+  /** 2026-09-13 — alternative pour partager une URL déjà connue (ex. /p/[id], programme d'un
+      sportif) sans passer par la table `shares` : résout et retourne l'URL directement. Réutilise
+      tout le reste du composant (détection mobile/desktop, menu Copier/WhatsApp, partage natif)
+      sans dupliquer cette logique pour un 2e cas d'usage. */
+  getShareUrl?: () => Promise<string>;
   title: string;
   text?: string;
   variant?: "light" | "dark";
   size?: number;
+  /** 2026-09-13 — variante bouton pleine largeur libellé (encadré dark de PricingPriming.tsx,
+      "Inviter mon coach →"), à la place du rond icône seule. Même logique de partage derrière,
+      juste une autre présentation du déclencheur. */
+  buttonLabel?: string;
 }
 
 function shareApiAvailable(): boolean {
   return typeof navigator !== "undefined" && !!navigator.share;
+}
+
+/* iOS/Android uniquement — un desktop dont le navigateur expose `navigator.share()` (Safari/Chrome
+   sur macOS notamment) reste routé vers le menu maison, sa share sheet OS n'étant pas assez riche
+   (voir commentaire de tête). */
+function isMobileOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iphone|ipad|ipod|android/i.test(navigator.userAgent);
 }
 
 function canShareFiles(): boolean {
@@ -62,7 +89,7 @@ function ShareIcon() {
   );
 }
 
-export default function ShareButton({ resourceType, buildSnapshot, title, text, variant = "light", size = 28 }: ShareButtonProps) {
+export default function ShareButton({ resourceType, buildSnapshot, getShareUrl, title, text, variant = "light", size = 28, buttonLabel }: ShareButtonProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState(false);
@@ -72,7 +99,9 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
 
   async function resolveUrl(): Promise<string> {
     if (url) return url;
-    const resolved = await createShare(resourceType, buildSnapshot());
+    const resolved = getShareUrl
+      ? await getShareUrl()
+      : await createShare(resourceType!, buildSnapshot!());
     setUrl(resolved);
     return resolved;
   }
@@ -80,9 +109,9 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
   async function handleClick(e: React.MouseEvent) {
     e.stopPropagation();
 
-    if (!shareApiAvailable()) {
-      // Desktop, pas de share sheet OS — seul cas où le menu maison (Copier le lien/WhatsApp)
-      // apporte encore quelque chose.
+    if (!isMobileOS() || !shareApiAvailable()) {
+      // Desktop (ou navigateur sans navigator.share) — seul cas où le menu maison
+      // (Copier le lien/WhatsApp) garantit ces deux destinations précises.
       setMenuOpen(true);
       if (url || resolveError) return;
       try {
@@ -141,24 +170,41 @@ export default function ShareButton({ resourceType, buildSnapshot, title, text, 
   const waHref = url ? `https://wa.me/?text=${encodeURIComponent([title, text].filter(Boolean).join(" · ") + " " + url)}` : undefined;
   const rowStyle: React.CSSProperties = { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 13px", border: "none", background: "#fff", cursor: "pointer", textAlign: "left", fontSize: 13, fontWeight: 700, color: "#171b1f", textDecoration: "none" };
 
+  const labelDisplay = copyStatus === "copied" ? "✓ Copié !" : copyStatus === "error" ? "Erreur, réessaie" : buttonLabel;
+
   return (
     <>
-      <button
-        ref={btnRef}
-        onClick={handleClick}
-        disabled={sharing}
-        aria-label="Partager"
-        title="Partager"
-        style={{
-          width: size, height: size, borderRadius: Math.round(size * 0.32), flexShrink: 0, border: "none", cursor: sharing ? "default" : "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center", opacity: sharing ? 0.5 : 1,
-          background: dark ? "rgba(255,255,255,.1)" : "rgba(212,64,0,.09)",
-          color: dark ? "rgba(255,255,255,.85)" : "#d44000",
-          fontSize: 12, fontWeight: 900,
-        }}
-      >
-        {label ?? <ShareIcon />}
-      </button>
+      {buttonLabel ? (
+        <button
+          ref={btnRef}
+          onClick={handleClick}
+          disabled={sharing}
+          style={{
+            width: "100%", height: 42, borderRadius: 12, border: "1px solid rgba(255,255,255,.22)",
+            background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 13, fontWeight: 800,
+            cursor: sharing ? "default" : "pointer", opacity: sharing ? 0.6 : 1,
+          }}
+        >
+          {sharing ? "…" : labelDisplay}
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          onClick={handleClick}
+          disabled={sharing}
+          aria-label="Partager"
+          title="Partager"
+          style={{
+            width: size, height: size, borderRadius: Math.round(size * 0.32), flexShrink: 0, border: "none", cursor: sharing ? "default" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", opacity: sharing ? 0.5 : 1,
+            background: dark ? "rgba(255,255,255,.1)" : "rgba(212,64,0,.09)",
+            color: dark ? "rgba(255,255,255,.85)" : "#d44000",
+            fontSize: 12, fontWeight: 900,
+          }}
+        >
+          {label ?? <ShareIcon />}
+        </button>
+      )}
 
       {menuOpen && rect && (
         <>

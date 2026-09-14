@@ -35,6 +35,7 @@ import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
+import ShareButton from "@/components/sessions/ShareButton";
 import type { Session, WellnessDaily, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
 
 /* ─── helpers ─── */
@@ -474,6 +475,24 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         onReconduire={() => setShowReconduire(true)}
         freeLabel={freeLabels[format(dates[0], "yyyy-MM-dd")] ?? null}
         onEditFreeLabel={label => setFreeLabelForWeek(format(dates[0], "yyyy-MM-dd"), label)}
+        /* Sportif→coach "comme un programme claimé" (2026-09-13, voir CLAUDE.md) — absent en
+           sandbox (aucun vrai programme à rendre public). getShareUrl garantit is_public=true
+           avant de renvoyer /p/[id], même logique que shareProgram() dans ProgramLibraryPage.tsx. */
+        inviteCoachAction={!sandboxMode && viewedProgram ? (
+          <ShareButton
+            title="Hey coach, regarde le programme que j'ai fait avec ThePerfClub, viens me l'ajuster !"
+            getShareUrl={async () => {
+              if (!viewedProgram.is_public) {
+                await fetch(`/api/programs/${viewedProgram.id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ is_public: true }),
+                });
+              }
+              return `${window.location.origin}/p/${viewedProgram.id}`;
+            }}
+          />
+        ) : undefined}
       />
 
       {activeProgram && activeProgramWeek === -1 && activeProgramStartDate
@@ -893,7 +912,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           <SandboxGateModal role="athlete" page="week" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode="athlete" billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss}
+            athleteSelfId={userId} />
         )
       )}
       {!sandboxMode && paywallStep === "paywall" && (

@@ -26,6 +26,8 @@ interface Props {
   sessionCount?: number;
   weaknessLabels?: string[];
   name?: string;
+  /** Voir PricingPrimingProps (PricingPriming.tsx) — pilote le bloc "Inviter mon coach →". */
+  athleteSelfId?: string;
 }
 
 /* Shell modal (dismissible) autour du contenu partagé PricingPrimingContent — voir
@@ -33,7 +35,7 @@ interface Props {
    Décision explicite de Gildas (2026-08-07) : ce composant et l'étape paywall_priming de
    l'onboarding (OnboardingFlow.tsx) doivent rester "exactement le même composant" — toute
    modification de contenu se fait uniquement dans PricingPriming.tsx. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name, athleteSelfId }: Props) {
   const { isMd } = useBreakpoint();
   useEffect(() => {
     posthog.capture("paywall_priming_viewed", { plan: mode });
@@ -79,7 +81,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 20px 20px" }}>
-            <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} />
+            <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} athleteSelfId={athleteSelfId} />
           </div>
         </div>
 

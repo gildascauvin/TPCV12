@@ -1,7 +1,5 @@
 "use client";
 
-import { PRICING } from "./PaywallModal";
-
 /* Bandeau sticky (2026-08-19, chantier gating save) — au-dessus de l'app (avant CalendarHeader
    dans chaque page cliente), en flux normal (jamais position:fixed) donc ne recouvre rien quand
    on est en haut de page, puis reste visible au scroll via position:sticky. Affiché en permanence
@@ -36,8 +34,9 @@ interface Props {
   ctaLabel?: string;
   onAction: () => void;
   roleToggle?: { role: "athlete" | "coach"; onToggle: (role: "athlete" | "coach") => void };
-  /** Role reel de la page (pas celui de roleToggle, qui ne reflete que le selecteur sandbox) -
-      pilote le badge d'economie annuelle (28% sportif / 26% coach avec les prix actuels). */
+  /** 2026-09-14 : non consommé par le composant depuis le retrait du badge d'économie annuelle
+      (wording "14 jours offerts" à la place) — gardé dans les props pour ne pas retoucher tous
+      les appelants, qui le passent déjà tous. */
   role: "athlete" | "coach";
   /** Wizard post-signup uniquement - voir doc ci-dessus. Absent = comportement inchange (sticky,
       dans le flux normal de la page). */
@@ -45,15 +44,11 @@ interface Props {
 }
 
 export default function UnsavedBanner({
-  ctaLabel = "Débloquer mon compte →",
+  ctaLabel = "Activer mon compte",
   onAction,
   roleToggle,
-  role,
   fixed = false,
 }: Props) {
-  const p = PRICING[role];
-  const annualSavingsPct = Math.round(((p.monthly * 12 - p.annual) / (p.monthly * 12)) * 100);
-
   return (
     <div
       style={{
@@ -85,10 +80,7 @@ export default function UnsavedBanner({
         </div>
       )}
       <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.88)", lineHeight: 1.4, whiteSpace: "nowrap" }}>
-        🔓 Économiser
-      </span>
-      <span style={{ fontSize: 11.5, fontWeight: 900, padding: "3px 8px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44", flexShrink: 0 }}>
-        -{annualSavingsPct}%
+        🔓 14 jours offerts
       </span>
       <button
         onClick={onAction}

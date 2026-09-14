@@ -47,7 +47,8 @@ export default function ProgramLibraryStandalone({ mode, userId, subscriptionSta
           <SandboxGateModal role={mode} page="programmes" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />
         ) : (
           <PrimingJourneyModal mode={mode} billing={billing} setBilling={setBilling} allowDismiss={allowDismiss}
-            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss} />
+            onContinue={() => setPaywallStep("paywall")} onDismiss={handleDismiss}
+            athleteSelfId={mode === "athlete" ? userId : undefined} />
         )
       )}
       {!sandboxMode && paywallStep === "paywall" && (

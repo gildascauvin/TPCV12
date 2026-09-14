@@ -33,13 +33,18 @@ export const PRICING = {
   coach:   { monthly: 39, annual: 348, annualMonthly: 29.00 },
 };
 
-/* CTA final (soumission Stripe) — plus d'essai gratuit (retiré 2026-08-07), garantie remboursé
-   14 jours à la place. Reste le seul écran qui déclenche un vrai paiement, contrairement à l'écran
-   priming qui ne fait qu'avancer vers celui-ci (voir PricingPriming.tsx / Actions "Continuer →"). */
+/* CTA final (soumission Stripe) — essai 14 jours de retour (2026-09-13, voir CLAUDE.md), CB
+   requise mais 0€ dû aujourd'hui (`trial_period_days` côté /api/stripe/subscribe). Reste le seul
+   écran qui déclenche un vrai paiement (Stripe crée l'abonnement en statut "trialing"),
+   contrairement à l'écran priming qui ne fait qu'avancer vers celui-ci (voir PricingPriming.tsx /
+   Actions "Continuer →"). */
 export const PAYWALL_CTA_LABEL: Record<"athlete" | "coach", string> = {
   athlete: "Débloquer mon programme",
   coach: "Débloquer mon espace coach",
 };
+
+// Doit rester en phase avec TRIAL_DAYS dans /api/stripe/subscribe/route.ts et PricingPriming.tsx.
+const TRIAL_DAYS = 14;
 
 /* Preuve sociale — partagée entre l'onboarding (paywall_form) et le paywall in-app
    (usePaywall/PrimingJourneyModal), pour rester "exactement les mêmes écrans". */
@@ -199,7 +204,7 @@ export function CheckoutForm({
         <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
           {showBillingLegal && (
             <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-              Facturé aujourd&apos;hui : {priceStr}.<br />Remboursable sous 14 jours si besoin, sans justification.
+              0€ dû aujourd&apos;hui — {TRIAL_DAYS} jours offerts.<br />Puis {priceStr}, sauf annulation en 1 clic depuis ton profil.
             </div>
           )}
 
@@ -301,7 +306,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
           {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
               badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
-            🔒 Garanti 14j
+            🔓 {TRIAL_DAYS} jours offerts
           </div>
           <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Passe au niveau supérieur."}</div>
           <div
