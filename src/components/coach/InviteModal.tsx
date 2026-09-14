@@ -153,12 +153,13 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
               est désormais porté par la bande elle-même. */}
           {wizardHero && !isMd && <div style={{ margin: "-28px -28px 0" }}>{wizardHero}</div>}
           {/* Aha réactif mobile (2026-09-14) : mêmes cartes que le hero desktop (AthleteRing/
-              athleteStatus réels, pas de ring réinventé), en pastilles horizontales scrollables et
-              collées en haut (position:sticky) — sinon elles sortiraient de l'écran dès qu'on scrolle
-              vers les champs, juste en dessous sur mobile. Masqué tant qu'aucun prénom n'est tapé
-              (rien à montrer, pas de bande vide). */}
+              athleteStatus réels, pas de ring réinventé), en pastilles horizontales scrollables.
+              Retiré de position:sticky (retour explicite de Gildas — ligne blanche parasite au
+              scroll, probable seam de rendu sticky+backdropFilter du drawer) : reste en flux
+              normal, collée directement au header, pas de padding-top additionnel. Masqué tant
+              qu'aucun prénom n'est tapé (rien à montrer, pas de bande vide). */}
           {wizardHero && !isMd && previewNames.length > 0 && (
-            <div style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "10px 28px", background: "#141414" }}>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "0 28px 10px", background: "#141414" }}>
               {previewNames.map((name, i) => {
                 const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
                 const status = athleteStatus(previewScore);

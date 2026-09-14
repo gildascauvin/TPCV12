@@ -151,15 +151,18 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             {/* Aha réactif (2026-09-14) : le point forme se construit en direct pendant la saisie —
                 même vraie fonction de score que la sauvegarde, jamais une approximation dédiée à
                 l'affichage. Composant additif, ne change rien à la disposition existante du hero. */}
-            <div style={{ padding: "14px 16px", marginTop: 22, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
+            <div style={{ padding: "10px 12px", marginTop: 22, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
               {/* Chips sous le libellé de zone, à droite du ring (retour explicite de Gildas) —
                   plus une ligne pleine largeur sous tout le bloc. */}
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <WellnessRing score={liveBaseScore} size={52} strokeWidth={5} dark />
+                {/* Taille alignée sur FullWellnessAdvicePreview (2026-09-14, retour explicite de
+                    Gildas — "à peu près la même taille que" la slide 1 de DecisionStep.tsx). */}
+                <WellnessRing score={liveBaseScore} size={72} strokeWidth={6} dark />
                 <div>
-                  {/* Statut en blanc (2026-09-14, retour explicite de Gildas) — plus coloré selon
-                      le score, la couleur reste réservée au ring lui-même. */}
-                  <div style={{ fontSize: 13.5, fontWeight: 900, color: "#fff" }}>{liveZone}</div>
+                  {/* Statut en blanc, taille alignée sur FullWellnessAdvicePreview (2026-09-14,
+                      retours explicites de Gildas) — plus coloré selon le score, la couleur reste
+                      réservée au ring lui-même. */}
+                  <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff" }}>{liveZone}</div>
                   {liveChips.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                       {liveChips.map(c => (
@@ -198,25 +201,37 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             accolée au hero (même fond dark, aucun écart blanc entre les deux) — l'espacement de 20px
             avant le formulaire est désormais porté par la bande elle-même. */}
         {wizardHero && !isMd && <div style={{ margin: "-34px -34px 0" }}>{wizardHero}</div>}
-        {/* Aha réactif mobile (2026-09-14) : même carte que le hero desktop, mais collée en haut
-            (position:sticky) — sans ça elle sortirait de l'écran dès qu'on scrolle vers le
-            formulaire, empilé juste en dessous sur mobile. */}
+        {/* Aha réactif mobile (2026-09-14) : même carte que le hero desktop. Retiré de
+            position:sticky (retour explicite de Gildas — ligne blanche parasite au scroll,
+            probable seam de rendu sticky+backdropFilter du drawer) : reste en flux normal,
+            collée directement au header, pas de padding-top additionnel (le padding-bottom de
+            wizardHero suffit déjà comme espacement). */}
         {wizardHero && !isMd && (
-          <div style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", alignItems: "center", gap: 10, margin: "0 -34px 20px", padding: "10px 34px", background: "#141414" }}>
-            <WellnessRing score={liveBaseScore} size={52} strokeWidth={5} dark />
-            {/* Chips ajoutés en mobile (2026-09-14, retour explicite de Gildas) — même disposition
-                que le hero desktop : à droite du ring, sous le statut (blanc, plus coloré). */}
-            <div>
-              <div style={{ fontSize: 12.5, fontWeight: 900, color: "#fff" }}>{liveZone}</div>
-              {liveChips.length > 0 && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-                  {liveChips.map(c => (
-                    <span key={c.label} style={{ fontSize: 10, fontWeight: 700, background: c.positive ? "rgba(47,158,68,.16)" : "rgba(212,64,0,.18)", color: c.positive ? "#7fdb8f" : "#ffb99a", padding: "3px 8px", borderRadius: 999 }}>
-                      {c.positive ? "✓" : "⚠"} {c.emoji} {c.label}
-                    </span>
-                  ))}
+          <div style={{ margin: "0 -34px 20px", padding: "0 34px 10px", background: "#141414" }}>
+            {/* Même encadré que le hero desktop (2026-09-14, retour explicite de Gildas —
+                "encapsule ... dans l'encadré de couleur comme en desktop") : le fond dark reste
+                flush avec wizardHero (pas de seam), l'encadré translucide flotte dedans. */}
+            <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {/* Légèrement réduit vs desktop (2026-09-14, retour explicite de Gildas — "réduit
+                    un peu la taille de la ring et du status en mobile"), toujours alignée sur
+                    FullWellnessAdvicePreview en desktop (72/22). */}
+                <WellnessRing score={liveBaseScore} size={60} strokeWidth={5} dark />
+                {/* Chips ajoutés en mobile (2026-09-14, retour explicite de Gildas) — même disposition
+                    que le hero desktop : à droite du ring, sous le statut (blanc, plus coloré). */}
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff" }}>{liveZone}</div>
+                  {liveChips.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                      {liveChips.map(c => (
+                        <span key={c.label} style={{ fontSize: 10, fontWeight: 700, background: c.positive ? "rgba(47,158,68,.16)" : "rgba(212,64,0,.18)", color: c.positive ? "#7fdb8f" : "#ffb99a", padding: "3px 8px", borderRadius: 999 }}>
+                          {c.positive ? "✓" : "⚠"} {c.emoji} {c.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
