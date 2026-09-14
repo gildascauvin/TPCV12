@@ -76,9 +76,11 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    `InviteModal.tsx`/`WellnessModal.tsx`/`ProgramAssignModal.tsx` sont réutilisés tels quels (aucune
    duplication maison — règle enfreinte une fois par erreur pendant la conception de ce chantier,
    corrigée avant exécution, voir mémoire feedback-reuse-real-components-not-onboarding-duplicates).
-   paywall_priming/paywall_form restent skippables (`skipPaywall()`, inchangé), juste repositionnés
-   après le wizard — `onboarding_done` reste posé à l'activation (`finishWizard()`, en fin de
-   wizard_assign), jamais gaté par ce paywall (modèle produit-gated du 2026-08-19/20 inchangé).
+   paywall_priming/paywall_form arrivent après le wizard — `onboarding_done` reste posé à
+   l'activation (`finishWizard()`, en fin de wizard_assign), jamais gaté par ce paywall (modèle
+   produit-gated du 2026-08-19/20 inchangé). `paywall_priming` n'est plus dismissible depuis le
+   retour de l'essai 14j avec CB (2026-09-14, `skipPaywall()` supprimée) — voir sa doc à l'endroit
+   où il est rendu, plus bas dans ce fichier.
    Nettoyage 2026-09-05 : `role`, `sport_2a` et tous les autres steps dépréciés par les chantiers
    ci-dessus (`level_2a`, `goal_2a`, `frustration_2a`, `days_2a`, les pain points 2a/2b, `concept_
    autoreg`, `autoreg_score(_coach)`, `profile_recap`, `week_preview_2a/2b`, `wellness_check_2a/2b`,
@@ -829,24 +831,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
   const canGoBack = stepIdx > 0 && !["celebration", "wellness_q", "wellness_reveal", "invite_team"].includes(currentStep);
 
-  /* onDismiss du "×" de PrimingJourneyModal sur paywall_priming (2026-08-31, voir doc du path plus
-     haut — même composant/même "×" que le gating in-app, demande explicite de Gildas). Saute
-     paywall_priming ET paywall_form d'un coup, jamais juste le step courant — quelqu'un qui ferme
-     l'offre ne doit jamais atterrir malgré lui sur le formulaire Stripe qu'il vient de refuser.
-     paywall_form a son propre "×"/"← Retour" (onClose de PaywallModal) mais câblé sur goBack, pas
-     celui-ci — comportement identique à l'in-app (onClose y renvoie vers priming, jamais un skip
-     complet). Même filet que next() pour la redirection de fin de path (coach, qui n'a rien après
-     paywall_form). */
-  function skipPaywall() {
-    posthog.capture("onboarding_paywall_skipped", { role });
-    const formIdx = path.indexOf("paywall_form");
-    const targetIdx = formIdx === -1 ? stepIdx + 1 : formIdx + 1;
-    if (targetIdx >= path.length) {
-      window.location.href = role === "coach" ? "/coach" : "/today";
-    } else {
-      setStepIdx(targetIdx);
-    }
-  }
+  /* paywall_priming n'est plus dismissible (2026-09-14, retour de l'essai 14j avec CB — voir doc
+     du path plus haut) : allowDismiss=false sur le PrimingJourneyModal du step, ni "×" ni clic
+     backdrop. `skipPaywall()` (qui sautait paywall_priming ET paywall_form d'un coup vers l'app
+     sans paiement) est donc supprimée, plus aucun appelant. paywall_form garde son "×"/"← Retour"
+     (onClose de PaywallModal, câblé sur goBack) — ramène vers priming, jamais un skip complet, donc
+     rien à changer là : aucun chemin ne permet plus d'atteindre l'app sans passer par le paiement. */
 
   /* Transition "reconduction" retirée (2026-09-04, retour explicite de Gildas — "on peut dégager
      la transition") : appelée par le clic sur une carte de rôle de value_intro, avance désormais
@@ -2003,9 +1993,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               mode={role === "coach" ? "coach" : "athlete"}
               billing={billing}
               setBilling={setBilling}
-              allowDismiss
+              allowDismiss={false}
               onContinue={next}
-              onDismiss={skipPaywall}
+              onDismiss={() => {}}
               headline={headline}
               sport={displaySport}
               sessionCount={role === "coach" ? undefined : realSessionCount}
