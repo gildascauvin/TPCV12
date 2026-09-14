@@ -70,7 +70,15 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  const publicPaths = ["/login", "/register", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/"];
+  /* /reset-password doit rester atteignable même onboarding_done=false : c'est justement
+     l'écran qu'on veut montrer juste après avoir vérifié un lien de recovery reçu en
+     plein onboarding (email "crée ton mot de passe", posé par resetPasswordForEmail dans
+     OnboardingFlow.tsx). Sans cette exclusion, le check onboarding_done juste en dessous
+     redirige vers /register avant que l'utilisateur ait pu définir son mot de passe —
+     ce qui se manifeste comme "le lien me connecte direct" plutôt que de proposer le
+     formulaire. Rien d'insécure à le rendre public : sans session, updateUser() échoue
+     simplement côté page avec une erreur, pas de fuite possible. */
+  const publicPaths = ["/login", "/register", "/reset-password", "/auth/callback", "/api/", "/join/", "/p/", "/share/", "/sandbox/"];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {
