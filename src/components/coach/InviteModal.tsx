@@ -156,10 +156,13 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
               athleteStatus réels, pas de ring réinventé), en pastilles horizontales scrollables.
               Retiré de position:sticky (retour explicite de Gildas — ligne blanche parasite au
               scroll, probable seam de rendu sticky+backdropFilter du drawer) : reste en flux
-              normal, collée directement au header, pas de padding-top additionnel. Masqué tant
-              qu'aucun prénom n'est tapé (rien à montrer, pas de bande vide). */}
+              normal, collée directement au header. Écart du dessus = padding-bottom de WizardHero
+              seul, comme les autres pages. Espace avant le formulaire = margin-bottom 20px
+              ("standard aux autres pages", même valeur que ProgramAssignModal.tsx/etc.) +
+              padding-bottom 14 (dark) pour ne pas coller la bande à la frontière dark/form. Masqué
+              tant qu'aucun prénom n'est tapé (rien à montrer, pas de bande vide). */}
           {wizardHero && !isMd && previewNames.length > 0 && (
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "0 28px 10px", background: "#141414" }}>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "0 28px 14px", background: "#141414" }}>
               {previewNames.map((name, i) => {
                 const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
                 const status = athleteStatus(previewScore);

@@ -204,14 +204,19 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Aha réactif mobile (2026-09-14) : même carte que le hero desktop. Retiré de
             position:sticky (retour explicite de Gildas — ligne blanche parasite au scroll,
             probable seam de rendu sticky+backdropFilter du drawer) : reste en flux normal,
-            collée directement au header, pas de padding-top additionnel (le padding-bottom de
-            wizardHero suffit déjà comme espacement). */}
+            collée directement au header. Écart du dessus = padding-bottom de WizardHero (24px)
+            seul, comme les autres pages du wizard. Espace avant le formulaire = margin-bottom 20px
+            (même valeur que ProgramAssignModal.tsx/ProgramCreatePicker.tsx/etc., "standard aux
+            autres pages") + padding-bottom 14 (dark, dans l'encadré) pour ne pas coller l'encadré
+            à la frontière dark/form (retour explicite — "je veux un espace"). */}
         {wizardHero && !isMd && (
-          <div style={{ margin: "0 -34px 20px", padding: "0 34px 10px", background: "#141414" }}>
+          <div style={{ margin: "0 -34px 20px", padding: "0 28px 14px", background: "#141414" }}>
             {/* Même encadré que le hero desktop (2026-09-14, retour explicite de Gildas —
                 "encapsule ... dans l'encadré de couleur comme en desktop") : le fond dark reste
-                flush avec wizardHero (pas de seam), l'encadré translucide flotte dedans. */}
-            <div style={{ padding: "10px 12px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
+                flush avec wizardHero (pas de seam), l'encadré translucide flotte dedans. Padding
+                horizontal 28 (pas 34) pour rester aligné avec le padding interne de WizardHero
+                ("22px 28px 24px") — le texte du dessus et cet encadré démarrent au même x. */}
+            <div style={{ padding: "8px 10px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 {/* Légèrement réduit vs desktop (2026-09-14, retour explicite de Gildas — "réduit
                     un peu la taille de la ring et du status en mobile"), toujours alignée sur

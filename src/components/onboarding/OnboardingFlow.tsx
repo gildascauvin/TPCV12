@@ -164,7 +164,7 @@ const DARK_STEPS: StepId[] = ["value_intro"];
    c'est ce bloc-ci. 2 variantes, fidèles au POC : `dark` (plein-bleed #141414, POC's
    `constructeur-hero`, utilisé sur Picker/Critères/Constructeur — "Étape 1/3, Programme") vs
    `light` (simple eyebrow+titre+sous-titre, POC's `.hdr`, utilisé sur Activer/Assigner). */
-function WizardHero({ step, dark, eyebrow, title, sub }: { step: 1 | 2 | 3; dark: boolean; eyebrow: string; title: string; sub: string }) {
+function WizardHero({ step, dark, title, sub }: { step: 1 | 2 | 3; dark: boolean; title: string; sub: string }) {
   const dotInactive = dark ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.10)";
   return (
     <div style={{ padding: dark ? "22px 28px 24px" : "26px 28px 6px", background: dark ? "#141414" : "transparent" }}>
@@ -173,9 +173,9 @@ function WizardHero({ step, dark, eyebrow, title, sub }: { step: 1 | 2 | 3; dark
           <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i <= step ? "#d44000" : dotInactive }} />
         ))}
       </div>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", textTransform: "uppercase", color: dark ? "rgba(255,255,255,.4)" : "#d44000", marginBottom: 9 }}>
-        {eyebrow}
-      </div>
+      {/* Eyebrow "Étape N/3 — ..." retiré (2026-09-14, retour explicite de Gildas) : redondant
+          avec les 3 barres de progression ci-dessus (déjà l'étape) et le titre ci-dessous (déjà le
+          nom de l'étape en grand). */}
       <div style={{ fontSize: dark ? 26 : 18, fontWeight: 950, letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8, color: dark ? "#fff" : "#171b1f" }}>
         {title}
       </div>
@@ -1677,7 +1677,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <>
         {!wizardPaywallStage && wizardBanner}
         <ProgramCreatePicker
-          wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Connecte tes séances" sub={role === "coach"
+          wizardHero={<WizardHero step={1} dark title="Connecte tes séances" sub={role === "coach"
             ? "Le mécanisme que tu viens de voir s'applique au vrai programme de tes sportifs — choisis comment le construire."
             : "Le mécanisme que tu viens de voir s'applique à ton vrai entraînement — choisis comment le construire."} />}
           onClose={() => {}}
@@ -1709,7 +1709,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <>
         {!wizardPaywallStage && wizardBanner}
         <ProgramLibraryBrowser
-          wizardHero={<WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
+          wizardHero={<WizardHero step={1} dark title="Choisis un modèle" sub="Un programme existant de la bibliothèque, à personnaliser librement ensuite." />}
           onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
           onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
           hideClose
@@ -1732,8 +1732,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {!wizardPaywallStage && wizardBanner}
         <ProgramCriteriaModal
           wizardHero={wizardCriteriaMode === "import"
-            ? <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
-            : <WizardHero step={1} dark eyebrow="Étape 1/3 — Programme" title="Calibre ton programme" sub="Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler. Tout reste personnalisable ensuite." />}
+            ? <WizardHero step={1} dark title="Importe ton programme" sub="Colle le texte de ton programme, ou prends-le en photo. On le transforme automatiquement en programme éditable, personnalisable ensuite." />
+            : <WizardHero step={1} dark title="Calibre ton programme" sub="Spécifique à ton sport, avec une vraie périodisation et les priorités que tu choisis de travailler. Tout reste personnalisable ensuite." />}
           mode={wizardCriteriaMode}
           lockedSport={sport || sportPrecision.trim() || undefined}
           onClose={() => setStepIdx(Math.max(0, path.indexOf("wizard_picker")))}
@@ -1801,7 +1801,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <>
           {!wizardPaywallStage && wizardBanner}
           <InviteModal
-            wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Activer ton équipe" title="Ajoute tes sportifs" sub="Ajoute-les et assigne-leur un programme sans attendre qu'ils créent un compte. Tout se synchronise dès qu'ils rejoignent." />}
+            wizardHero={<WizardHero step={2} dark title="Ajoute tes sportifs" sub="Ajoute-les et assigne-leur un programme sans attendre qu'ils créent un compte. Tout se synchronise dès qu'ils rejoignent." />}
             onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
             onLinked={() => {}}
             inviteCode={inviteCode}
@@ -1816,7 +1816,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <>
         {!wizardPaywallStage && wizardBanner}
         <WellnessModal
-          wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
+          wizardHero={<WizardHero step={2} dark title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
           wellnessHistory={athleteWellnessHistory}
           date={new Date().toISOString().split("T")[0]}
           onSave={async data => {
@@ -1842,7 +1842,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <>
         {!wizardPaywallStage && wizardBanner}
         <ProgramAssignModal
-          wizardHero={<WizardHero step={3} dark eyebrow="Étape 3/3 — Assigner" title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
+          wizardHero={<WizardHero step={3} dark title={role === "coach" ? "Assigne le programme à tes sportifs" : "Choisis ta date de départ"} sub={role === "coach"
             ? "Le programme apparaît directement dans le planning de tes sportifs, prêt à suivre au jour le jour."
             : "Ton programme apparaît directement dans ton planning, prêt à suivre au jour le jour."} />}
           programId={wizardProgramId ?? ""}
