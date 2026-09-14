@@ -1273,21 +1273,29 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         });
         await fetch("/api/invite/link", { method: "POST" });
 
-        if (pendingData.role === "athlete" && hasCoachInvite) {
-          const storedCode = coachInviteCode ?? (typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null);
+        /* Bug trouvé le 2026-09-14 (cas réel : va.cluzeau56@gmail.com invité par Jérémie Thiébaud
+           via /join/[code], signup Google) : ce bloc vit dans un effet à deps:[] dont la closure
+           `init()` est figée au tout premier render — `hasCoachInvite` y valait encore `null` (sa
+           valeur initiale), même si l'effet séparé qui lit localStorage l'a mis à jour juste après
+           dans le même render. Condition sur `hasCoachInvite` (state réactif) remplacée par une
+           lecture directe de `storedCode` (localStorage, source de vérité stable) — même principe
+           déjà appliqué ailleurs dans ce fichier pour ce type de bug (closure figée sur un state
+           dérivé asynchrone). Un Google signup après un lien coach invalide/expiré ne posait donc
+           jamais `onboarding_done`/`invited_by_coach_id` via /api/invite/join, et l'utilisateur
+           traversait tout le wizard payant au lieu du raccourci gratuit INVITE_ATHLETE_PATH. */
+        const storedCode = coachInviteCode ?? (typeof window !== "undefined" ? localStorage.getItem("coach_invite_code") : null);
+        if (pendingData.role === "athlete" && storedCode) {
           let joinedCoach = false;
-          if (storedCode) {
-            try {
-              const joinRes = await fetch("/api/invite/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ invite_code: storedCode }),
-              });
-              const joinJson = await joinRes.json().catch(() => ({}));
-              joinedCoach = joinRes.ok && joinJson.ok === true;
-            } catch { joinedCoach = false; }
-            localStorage.removeItem("coach_invite_code");
-          }
+          try {
+            const joinRes = await fetch("/api/invite/join", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ invite_code: storedCode }),
+            });
+            const joinJson = await joinRes.json().catch(() => ({}));
+            joinedCoach = joinRes.ok && joinJson.ok === true;
+          } catch { joinedCoach = false; }
+          localStorage.removeItem("coach_invite_code");
           if (joinedCoach) {
             await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", userId);
             posthog.capture("coach_invite_joined", { role: pendingData.role, method: "google" });
