@@ -76,11 +76,18 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    `InviteModal.tsx`/`WellnessModal.tsx`/`ProgramAssignModal.tsx` sont réutilisés tels quels (aucune
    duplication maison — règle enfreinte une fois par erreur pendant la conception de ce chantier,
    corrigée avant exécution, voir mémoire feedback-reuse-real-components-not-onboarding-duplicates).
-   paywall_priming/paywall_form arrivent après le wizard — `onboarding_done` reste posé à
-   l'activation (`finishWizard()`, en fin de wizard_assign), jamais gaté par ce paywall (modèle
-   produit-gated du 2026-08-19/20 inchangé). `paywall_priming` n'est plus dismissible depuis le
-   retour de l'essai 14j avec CB (2026-09-14, `skipPaywall()` supprimée) — voir sa doc à l'endroit
-   où il est rendu, plus bas dans ce fichier.
+   paywall_priming/paywall_form arrivent après le wizard. `onboarding_done` **n'est plus posé à
+   l'activation** (2026-09-14, fix suite à un vrai compte gratuit constaté en prod —
+   gobert.benjamin@gmail.com, entré dans l'app gated sans CB le jour même du passage à l'essai 14j) :
+   `finishWizard()` ne le pose plus du tout, seul `handlePaymentSuccess()` (paiement/essai confirmé
+   réellement, `trial_started`) le fait désormais. Root cause du bug : `middleware.ts` ne vérifie QUE
+   `onboarding_done` pour laisser entrer dans l'app — poser ce flag avant l'écran de paywall (même
+   non-dismissible dans l'UI React) suffisait à laisser filer quiconque fermait l'onglet/l'app à cet
+   instant précis (bouton "×"/clic-fond retirés, mais fermer/naviguer ailleurs restait toujours
+   possible). Modèle produit-gated du 2026-08-19/20 abandonné sur ce point précis : l'accès à l'app
+   dépend à nouveau réellement du paiement, pas seulement de la fin du wizard. `paywall_priming` n'est
+   plus dismissible depuis le retour de l'essai 14j avec CB (2026-09-14, `skipPaywall()` supprimée) —
+   voir sa doc à l'endroit où il est rendu, plus bas dans ce fichier.
    Nettoyage 2026-09-05 : `role`, `sport_2a` et tous les autres steps dépréciés par les chantiers
    ci-dessus (`level_2a`, `goal_2a`, `frustration_2a`, `days_2a`, les pain points 2a/2b, `concept_
    autoreg`, `autoreg_score(_coach)`, `profile_recap`, `week_preview_2a/2b`, `wellness_check_2a/2b`,
@@ -835,8 +842,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      du path plus haut) : allowDismiss=false sur le PrimingJourneyModal du step, ni "×" ni clic
      backdrop. `skipPaywall()` (qui sautait paywall_priming ET paywall_form d'un coup vers l'app
      sans paiement) est donc supprimée, plus aucun appelant. paywall_form garde son "×"/"← Retour"
-     (onClose de PaywallModal, câblé sur goBack) — ramène vers priming, jamais un skip complet, donc
-     rien à changer là : aucun chemin ne permet plus d'atteindre l'app sans passer par le paiement. */
+     (onClose de PaywallModal, câblé sur goBack) — ramène vers priming, jamais un skip complet.
+     Ça ne suffisait PAS à garantir l'accès payant à soi seul (voir doc du path plus haut, bug réel
+     2026-09-14) : `onboarding_done` était posé avant ce step, donc fermer l'onglet/l'app ici laissait
+     quand même entrer. Le vrai verrou est maintenant `onboarding_done` posé uniquement dans
+     `handlePaymentSuccess()` (voir plus bas) — retirer l'UI de sortie de cet écran reste une bonne
+     chose (moins de tentation), mais ce n'est plus ce qui protège l'accès. */
 
   /* Transition "reconduction" retirée (2026-09-04, retour explicite de Gildas — "on peut dégager
      la transition") : appelée par le clic sur une carte de rôle de value_intro, avance désormais
@@ -1078,15 +1089,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   /* Fin du wizard (2026-09-02) — remplace finishAthleteActivation()/finishCoachActivation() pour
      le nouveau flow : les deux rôles font désormais exactement la même chose à la fin de
-     wizard_assign (marquer onboarding_done, avancer vers le paywall) — l'assignation réelle vient
-     d'avoir lieu via ProgramAssignModal lui-même (onAssigned/onClose), la wellness réelle a déjà
-     été écrite à wizard_activate (WellnessModal.onSave, sportif). */
+     wizard_assign (avancer vers le paywall) — l'assignation réelle vient d'avoir lieu via
+     ProgramAssignModal lui-même (onAssigned/onClose), la wellness réelle a déjà été écrite à
+     wizard_activate (WellnessModal.onSave, sportif).
+     Ne pose PLUS `onboarding_done` (2026-09-14, fix — voir doc du path en tête de fichier) : c'était
+     posé ici jusqu'à ce chantier, AVANT l'écran de paywall obligatoire qui suit — puisque
+     middleware.ts ne vérifie que ce flag pour laisser entrer dans l'app, ça suffisait à laisser
+     passer quiconque fermait l'onglet/l'app à cet instant précis, sans jamais payer (constaté en
+     prod le jour même du passage à l'essai 14j : gobert.benjamin@gmail.com, subscription_status
+     "free", accès complet à l'app gated). Seul `handlePaymentSuccess()` le pose désormais. */
   async function finishWizard() {
     const uid = userId || newUserId;
-    if (uid) {
-      if (role === "athlete") await ensureTodayDemoSession(uid);
-      await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
-    }
+    if (uid && role === "athlete") await ensureTodayDemoSession(uid);
     next();
   }
 
@@ -1206,11 +1220,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      (partagé entre les deux écrans, même pattern que usePaywall.ts). */
   const [billing, setBilling] = useState<Billing>("annual");
 
-  /* Paiement confirmé (trial_started, capturé dans CheckoutForm) — onboarding_done est déjà true
-     depuis l'activation (voir createAccount()/finishWizard()), payer ne le repose ici que par
-     défense en profondeur (idempotent), ce n'est plus le jalon qui
-     débloque quoi que ce soit (paywall obligatoire-mais-skippable depuis le 2026-08-31, voir doc du
-     path). wellness_q/coach reste la suite normale du path, next() suffit. */
+  /* Paiement confirmé (trial_started, capturé dans CheckoutForm) — depuis le 2026-09-14, c'est
+     désormais le SEUL endroit qui pose `onboarding_done=true` pour le chemin classique (retiré de
+     `finishWizard()`, qui le posait trop tôt — voir doc du path en tête de fichier). C'est ce flag,
+     lu par middleware.ts, qui conditionne réellement l'entrée dans l'app gated : tant qu'il n'est
+     pas payé, fermer l'onglet/rouvrir l'app ramène sur /register (repris via resumeRole), jamais
+     directement dans l'app. next() avance ensuite normalement vers la suite du path. */
   async function handlePaymentSuccess() {
     const uid = userId || newUserId;
     if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
