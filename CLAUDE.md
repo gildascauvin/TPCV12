@@ -3296,3 +3296,21 @@ Dernier retour : "réduit un peu la taille de la ring et du status en mobile" �
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Pas de clic réel par Claude — tous les retours viennent de Gildas testant en local (`next dev`), y compris le diagnostic final du sticky (posé par lui-même avant que Claude n'ait eu à investiguer la cause exacte de la ligne blanche).
 
 Déployé en prod le 2026-09-14, commit `e4c7d61`, push direct sur `main`.
+
+## Suite (2026-09-14) — retrait de l'eyebrow "Étape N/3", alignement horizontal et espacement vertical de l'encadré mobile
+
+Plusieurs retours successifs de Gildas sur `WellnessModal.tsx`/`InviteModal.tsx` (étape 2) suite au chantier ci-dessus, tous regroupés dans le commit `bad64e7`.
+
+### Alignement horizontal — 34px vs 28px
+Sur `WellnessModal.tsx` mobile, l'encadré ring/statut/chips démarrait à 34px du bord (padding hérité de la colonne scrollable) alors que le texte de `WizardHero` juste au-dessus démarre à 28px (le padding interne de `WizardHero` lui-même, `"22px 28px 24px"`) — décalage visuel de 6px entre les deux. Fix : le padding horizontal de la bande passe de 34 à 28 pour matcher exactement ; padding interne de l'encadré réduit encore, `10px 12px` → `8px 10px`.
+
+### Espacement vertical — aller-retour puis fix définitif
+Une inversion des espaces haut/bas (`margin-top:-14`, `margin-bottom:34`) a été essayée puis rejetée en deux temps : d'abord jugée trop marquée dans un sens ("l'encadré est collé à la frontière entre le dark et le form"), puis Gildas a demandé de revenir à l'espace d'avant côté haut. État final : l'espace au-dessus de la bande revient à son origine (le seul `padding-bottom` de `WizardHero`, 24px, sans `margin-top` négatif) ; l'espace en dessous garde un `padding-bottom` de 14px à l'intérieur de la bande dark (pour ne plus toucher directement la frontière dark/formulaire) mais son `margin-bottom` revient au **standard des autres pages du wizard, 20px** — la même valeur que `ProgramAssignModal.tsx`/`ProgramCreatePicker.tsx`/`ProgramLibraryBrowser.tsx`/`ProgramCriteriaModal.tsx` (le 34px essayé entre-temps n'était qu'une valeur ad hoc de ce chantier, jamais la convention réelle du wizard).
+
+### Eyebrow "Étape N/3 — ..." retiré de `WizardHero`
+Demande explicite : "on connait l'étape avec les 3 lignes [barres de progression], et le nom de la step a déjà un grand titre" — l'eyebrow (`"Étape 2/3 — Activer ton équipe"`, etc.) était effectivement redondant avec les deux. Prop `eyebrow` supprimée du composant `WizardHero` (`OnboardingFlow.tsx`) et des 7 call sites (`wizard_picker`/`wizard_library`/`wizard_criteria` ×2/`wizard_activate` ×2/`wizard_assign`) — reste seulement les 3 barres de progression, le titre, et le sous-titre.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Pas de clic réel par Claude — tous les retours viennent de Gildas testant en local.
+
+Déployé en prod le 2026-09-14, commit `bad64e7`, push direct sur `main`.
