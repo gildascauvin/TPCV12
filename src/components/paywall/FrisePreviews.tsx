@@ -5,7 +5,6 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
 import DayColumn, { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
 import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
@@ -156,10 +155,12 @@ const HYROX_NOOP = () => {};
    Cible (sportif) : carte "Score & conseils" + reco décharge/surcharge —
    non cliquable.
    ──────────────────────────────────────────────────────────────────────── */
-export function WellnessCardPreview() {
-  const score = 45;
-  const plannedDiff = 8;
-  const behaviors = ["alcohol", "late_sleep"];
+/* Params optionnels (2026-09-14, pour reprendre le vrai point forme saisi à l'étape précédente du
+   wizard plutôt qu'une démo figée) — défauts strictement identiques aux valeurs jusque-là codées en
+   dur : zéro impact sur l'appel existant (PricingPriming.tsx). */
+export function WellnessCardPreview({ score = 45, behaviors = ["alcohol", "late_sleep"], plannedDiff = 8 }: {
+  score?: number; behaviors?: string[]; plannedDiff?: number;
+}) {
   const suggestion = computeAutoregSuggestion(score, plannedDiff);
   const advice = getRecoveryAdvice({ sleep: 5, stress: 7, recovery: 4, motivation: 5, behaviors }, "hard");
 
@@ -215,19 +216,30 @@ export function WellnessCardPreview() {
    mais mêmes fonctions réelles (zoneLabel, BEHAVIOR_META, AutoregButtons) —
    ring + zone + prénom + comportements + décision, sans exercices.
    ──────────────────────────────────────────────────────────────────────── */
-export function CoachControlPreview({ name }: { name?: string }) {
-  const score = 88;
-  const plannedDiff = 3;
-  const behaviors = ["hydration", "stretching"];
+/* Params optionnels (2026-09-14, ajoutés pour le nouveau grid wizard_assign ci-dessous) — défauts
+   strictement identiques aux valeurs jusque-là codées en dur : zéro impact sur l'appel existant
+   (PricingPriming.tsx, frise étape 2 coach, `name` seul). */
+export function CoachControlPreview({ name, score = 88, plannedDiff = 3, behaviors = ["hydration", "stretching"], sessionId = "frise-coach-demo", sessionLabel = "Technique — Vitesse", showPreviewBadge = false }: {
+  name?: string; score?: number; plannedDiff?: number; behaviors?: string[]; sessionId?: string; sessionLabel?: string;
+  /* Wizard étape 3 coach (2026-09-14, retour explicite de Gildas) — badge "Aperçu" en coin, pour ne
+     jamais confondre le score/la difficulté factices avec un vrai calcul. Défaut false : n'affecte
+     pas l'appel existant PricingPriming.tsx. */
+  showPreviewBadge?: boolean;
+}) {
   const firstName = name || "Toi";
   const suggestion = computeAutoregSuggestion(score, plannedDiff);
   const advice = suggestion ? `${suggestion.icon} ${autoregAdvice(suggestion.dir, plannedDiff, firstName)}` : "";
 
   return (
     <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 16,
+      width: "100%", position: "relative", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 16,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
+      {showPreviewBadge && (
+        <span style={{ position: "absolute", top: 10, right: 10, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", background: "rgba(255,255,255,.14)", color: "rgba(255,255,255,.85)", padding: "3px 8px", borderRadius: 999 }}>
+          Aperçu
+        </span>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <WellnessRing score={score} size={52} strokeWidth={5} dark />
         <div style={{ minWidth: 0 }}>
@@ -248,20 +260,49 @@ export function CoachControlPreview({ name }: { name?: string }) {
           </div>
         </div>
       </div>
-      {suggestion && (
+      {suggestion ? (
         <div style={{ pointerEvents: "none", ...SHRINK }}>
           <AutoregButtons
-            sessionId="frise-coach-demo"
+            sessionId={sessionId}
             dir={suggestion.dir}
             reco={suggestion.reco}
             advice={advice}
-            sessionLabel="Technique — Vitesse"
+            sessionLabel={sessionLabel}
             onPreviewChange={noop}
             onApply={noopAsync}
             onMaintenir={noop}
           />
         </div>
+      ) : (
+        /* Pas de mismatch actionnable — même texte que decisionText() (CoachAthleteCard.tsx) pour
+           le cas "rien à ajuster", jamais un fallback inventé. */
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.78)" }}>👌 Plan cohérent : suivre la difficulté réelle.</div>
       )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Wizard, Étape 3/3 coach (2026-09-14, retour explicite de Gildas — remplace une 1re tentative
+   "ligne /coach/athletes dépliée" jugée pas la bonne piste : "le top est d'avoir coach control
+   card [...] pour justement avoir l'action surcharger/alléger/maintenir") : grille 2 colonnes de
+   CoachControlPreview (déjà "plus petit que CoachCard", voir sa doc plus haut) pour les VRAIS
+   sportifs sélectionnés dans le formulaire d'assignation (ProgramAssignModal.tsx passe leurs vrais
+   prénoms) — seuls score/difficulté du jour restent factices, cyclés pour garantir les 3 issues
+   (Alléger/Maintenir/Surcharger) quel que soit le nombre de sportifs réellement sélectionnés. */
+const COACH_GRID_PROFILES: { score: number; plannedDiff: number; behaviors: string[]; sessionLabel: string }[] = [
+  { score: 35, plannedDiff: 8, behaviors: ["late_sleep"], sessionLabel: "Squat 5x5@80kg" },       // mismatch 80-35=45 → Alléger
+  { score: 65, plannedDiff: 6, behaviors: ["hydration"], sessionLabel: "Circuit — 4x12" },        // mismatch 60-65=-5 → Plan cohérent
+  { score: 88, plannedDiff: 3, behaviors: ["stretching"], sessionLabel: "Technique — Vitesse" },  // mismatch 30-88=-58 → Surcharger
+];
+export function CoachSelectedAthletesPreview({ names }: { names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, pointerEvents: "none" }}>
+      {names.map((name, i) => {
+        const p = COACH_GRID_PROFILES[i % COACH_GRID_PROFILES.length];
+        return <CoachControlPreview key={name + i} name={name} sessionId={`frise-coach-demo-${i}`} showPreviewBadge {...p} />;
+      })}
     </div>
   );
 }
@@ -577,9 +618,6 @@ function daysAgo(n: number): string {
 const DEMO_DATES = [6, 5, 4, 3, 2, 1, 0].map(daysAgo);
 // Arc narratif : surcharge (2j) → optimal (1j) → récup (2j, correction) → optimal (2j, stabilisé).
 const DEMO_ACWR = [1.45, 1.38, 1.05, 0.68, 0.72, 0.92, 1.08];
-const DEMO_LOADS = [420, 400, 300, 150, 170, 260, 290];
-const DEMO_MONOTONY = [1.9, 1.8, 1.5, 1.2, 1.3, 1.4, 1.5];
-const DEMO_STRAIN = DEMO_LOADS.map((l, i) => Math.round(l * DEMO_MONOTONY[i]));
 
 // Charge en hausse (+22%, retour vers l'optimal après la correction) + récupération qui s'améliore
 // + effort perçu qui diminue → "supercompensation" (positif, cohérent avec "Progresse").
@@ -598,40 +636,6 @@ function TrendInsight({ perspective }: { perspective: "athlete" | "coach" }) {
   );
 }
 
-function ChartBlock() {
-  return (
-    <div style={{ maxWidth: 460 }}>
-      <ZoneSparkline points={DEMO_ACWR} dates={DEMO_DATES} loads={DEMO_LOADS} monotony={DEMO_MONOTONY} strain={DEMO_STRAIN} hideDayLabels height={118} />
-    </div>
-  );
-}
-
-/* Iso sportif/coach : même carte (insight + chart), seul le texte de l'insight change de
-   perspective (tutoiement vs 3e personne) via TrendInsight. */
-export function ChargePreview() {
-  return (
-    <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
-      boxShadow: "0 14px 36px rgba(0,0,0,.24)",
-    }}>
-      <TrendInsight perspective="athlete" />
-      <ChartBlock />
-    </div>
-  );
-}
-
-export function AthleteChargePreview() {
-  return (
-    <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
-      boxShadow: "0 14px 36px rgba(0,0,0,.24)",
-    }}>
-      <TrendInsight perspective="coach" />
-      <ChartBlock />
-    </div>
-  );
-}
-
 // Variation jour à jour volontairement plus marquée (2026-09-04, retour de Gildas : "plus de
 // variation") — jamais monotone comme une vraie semaine ne l'est, tout en gardant le dernier jour
 // positif (cohérent avec l'arc narratif "Progresse" déjà établi côté charge, voir DEMO_ACWR).
@@ -641,8 +645,8 @@ const DEMO_RECOVERY = [55, 38, 62, 48, 70, 58, 82];
 /* Obtiens des recommandations — 2026-09-04, demande explicite de Gildas : "qu'un seul graph dans
    lequel il y aura le chart avec une ligne pour le wellness et l'autre pour la charge, toujours avec
    sparkline et insight croisé en haut". Insight croisé = TrendInsight,
-   déjà réel (classifyTrend/describeTrend, combine charge+récupération+RPE en une seule phrase — voir
-   ChargePreview/AthleteChargePreview ci-dessus, même fonction, pas dupliquée). Chart = le vrai
+   déjà réel (classifyTrend/describeTrend, combine charge+récupération+RPE en une seule phrase).
+   Chart = le vrai
    SparkLineClient (même composant que /conseils), série principale = wellness (déjà 0-100), série
    secondaire = charge (ACWR, DEMO_ACWR déjà défini plus haut) reprojetée sur le même espace
    d'affichage 0-100 via `acwrToChartPosition` — pas une nouvelle donnée, juste une échelle commune

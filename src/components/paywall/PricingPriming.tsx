@@ -2,13 +2,12 @@
 
 import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
-import { PlanningPreview, WellnessCardPreview, CoachControlPreview, ChargePreview, AthleteChargePreview } from "./FrisePreviews";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
 
 /* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
    paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
-   le prix, les bullets de valeur, la frise, le témoignage, la bande de confiance et la FAQ.
+   le prix, les bullets de valeur, le témoignage, la bande de confiance et la FAQ.
    Décision explicite de Gildas (2026-08-07) : ces deux écrans doivent être "exactement le même
    composant" pour ne plus jamais diverger sur le wording. Le shell (modal dismissible vs page
    pleine largeur) et le CTA final restent propres à chaque appelant — seul le contenu entre le
@@ -41,19 +40,6 @@ const UNLOCK_LINE: Record<"athlete" | "coach", string> = {
   coach: "Ton système de suivi est prêt. Débloque-le et laisse ThePerfClub t'aider à prendre les bonnes décisions pour chaque sportif, à chaque séance.",
 };
 
-const FRISE_STEPS: Record<"athlete" | "coach", { title: string; period: string; text: string }[]> = {
-  athlete: [
-    { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre tes séances et ton ressenti pendant 2 semaines. ThePerfClub identifie déjà ce qui joue sur ta récupération et ta forme." },
-    { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur ta forme. Ta charge s'ajuste automatiquement à ta vraie récupération." },
-    { title: "Progresse", period: "Mois 2+", text: "Ton profil d'autorégulation prend forme. Tu sais enfin ce qui te freine et ce qui te fait vraiment avancer." },
-  ],
-  coach: [
-    { title: "Enregistre", period: "Semaine 1-2", text: "Enregistre les séances et le ressenti de tes sportifs pendant 2 semaines. ThePerfClub identifie déjà ce qui joue sur leur récupération." },
-    { title: "Cible", period: "Semaine 3-4", text: "Cible les comportements qui pèsent le plus sur la forme de chacun. Leur charge s'ajuste automatiquement à leur vraie récupération." },
-    { title: "Progresse", period: "Mois 2+", text: "Le profil d'autorégulation de chaque sportif prend forme. Tu sais enfin ce qui les freine et ce qui les fait vraiment avancer." },
-  ],
-};
-
 function faqItems(role: "athlete" | "coach") {
   return [
     { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: "Oui, sauf annulation avant la fin des 14 jours — annulable en un clic depuis ton profil, sans engagement." },
@@ -77,7 +63,9 @@ export interface PricingPrimingProps {
   headline: string;
   /** Ligne secondaire optionnelle sous le titre (ex. programme claimé). */
   sub?: string | null;
-  /** Sport réel de l'utilisateur, pour le titre de la frise ("Ton programme {Sport} devient plus intelligent..."). Repli générique si absent. */
+  /** Sport réel de l'utilisateur — plus consommé ici depuis le retrait de la frise (2026-09-14),
+      gardé dans le contrat pour ne pas casser les appelants (PrimingJourneyModal.tsx/
+      OnboardingFlow.tsx) qui le passent encore. */
   sport?: string;
   /** Nombre réel de séances du programme généré (weeks × jours d'entraînement) — absent en gating in-app (pas de génération en cours), un bullet non chiffré prend le relais. */
   sessionCount?: number;
@@ -99,7 +87,7 @@ export interface PricingPrimingProps {
   athleteSelfId?: string;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sport, sessionCount, weaknessLabels, name, athleteSelfId }: PricingPrimingProps) {
+export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sessionCount, weaknessLabels, name, athleteSelfId }: PricingPrimingProps) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
@@ -113,10 +101,6 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
         ...BULLETS.athlete,
       ]
     : BULLETS.coach;
-
-  const friseTitle = sport
-    ? (role === "coach" ? `Le programme ${sport} de tes sportifs devient plus intelligent à chaque semaine.` : `Ton programme ${sport} devient plus intelligent à chaque semaine.`)
-    : (role === "coach" ? "Le programme de tes sportifs devient plus intelligent à chaque semaine." : "Ton programme devient plus intelligent à chaque semaine.");
 
   return (
     <div>
@@ -189,36 +173,6 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
             />
           </div>
         )}
-      </div>
-
-      <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.02em", color: "#1f2428", marginBottom: 14 }}>
-        {friseTitle}
-      </div>
-      <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "6px 18px", marginBottom: 22 }}>
-        {FRISE_STEPS[role].map((s, i) => (
-          <div key={i} style={{ display: "flex", gap: 14, padding: "26px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-            <div style={{ flexShrink: 0, width: 28, height: 28, borderRadius: "50%", background: "rgba(212,64,0,.09)", color: "#d44000", fontSize: 13, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</div>
-            {/* minWidth:0 (2026-09-06) : sans ça, cet item flex refuse de rétrécir sous la taille
-                intrinsèque de PlanningPreview (width:max-content) — c'est ce qui forçait toute la
-                ligne (titre compris) à déborder au lieu de rester dans le scroll interne de
-                PlanningPreview. Piège flexbox classique (min-width:auto par défaut sur un item). */}
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 14.5, fontWeight: 900, color: "#1f2428" }}>{s.title}</span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textTransform: "uppercase", letterSpacing: "0.04em" }}>{s.period}</span>
-              </div>
-              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 10 }}>{s.text}</div>
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", top: 8, right: 8, zIndex: 2, fontSize: 8.5, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,.9)", background: "rgba(0,0,0,.5)", padding: "3px 8px", borderRadius: 999 }}>
-                  Aperçu
-                </div>
-                {i === 0 && <PlanningPreview sport={sport} />}
-                {i === 1 && (role === "coach" ? <CoachControlPreview name={name} /> : <WellnessCardPreview />)}
-                {i === 2 && (role === "coach" ? <AthleteChargePreview /> : <ChargePreview />)}
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
 
       <div style={{ marginBottom: 28 }}>

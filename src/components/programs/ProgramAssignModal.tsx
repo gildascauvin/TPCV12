@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { WellnessCardPreview, CoachSelectedAthletesPreview } from "@/components/paywall/FrisePreviews";
 
 interface Props {
   programId: string;
@@ -34,6 +35,11 @@ interface Props {
      `hideClose` y est de toute façon absent donc le "✕" reste le moyen de sortir sans assigner). */
   onSkip?: () => void;
   skipLabel?: string;
+  /* Wizard onboarding (2026-09-14, retour explicite de Gildas) : le vrai point forme saisi à
+     wizard_activate (score + comportements), pour que WellnessCardPreview reprenne exactement ce
+     que le sportif vient de remplir plutôt qu'une démo figée — absent = repli sur la démo
+     (usage in-app, aucune notion de "step précédent" ici). */
+  athleteWellness?: { score: number; behaviors: string[] };
 }
 
 function nextMonday(): string {
@@ -58,7 +64,7 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned, initialSelectedIds, wizardHero, hideClose, onBack, defaultStartDate = "nextMonday", onSkip, skipLabel }: Props) {
+export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned, initialSelectedIds, wizardHero, hideClose, onBack, defaultStartDate = "nextMonday", onSkip, skipLabel, athleteWellness }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const isSelfMode = athletes.length === 0 && !!selfUserId;
@@ -140,7 +146,23 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
-          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            {wizardHero}
+            {/* 2026-09-14, retour explicite de Gildas — remplace la 1re tentative (ligne dépliée
+                /coach/athletes) : côté sportif, WellnessCardPreview (carte complète wellness +
+                l'action Alléger/Surcharger/Maintenir, même composant que PricingPriming.tsx/
+                DecisionStep.tsx) ; côté coach, une grille de CoachControlPreview pour les vrais
+                sportifs sélectionnés (2 colonnes, plus petit qu'en prod), même action en jeu. */}
+            <div style={{ marginTop: 22 }}>
+              {isSelfMode ? (
+                <WellnessCardPreview score={athleteWellness?.score} behaviors={athleteWellness?.behaviors} />
+              ) : (
+                <CoachSelectedAthletesPreview
+                  names={selectedAthleteIds.map(id => athletes.find(a => a.id === id)?.name?.split(" ")[0]).filter((n): n is string => !!n)}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
       <div style={{

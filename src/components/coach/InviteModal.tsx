@@ -3,6 +3,19 @@
 import { useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+/* Mêmes composants que la liste /coach/athletes, réutilisés tels quels (2026-09-14) — exportés
+   depuis AthletesClient.tsx pour cet usage précis, déjà le même principe que l'illustration
+   pré-signup CoachAthleteRowsPreview (FrisePreviews.tsx) : jamais de ring/statut réinventés à la
+   main pour une préview, même avec des données factices. */
+import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
+
+/* Variété de scores factices (2026-09-14, retour explicite de Gildas — "mets une variété de score
+   de forme aux sportifs") : le 1er reste PLACEHOLDER_WELLNESS_SCORE (35, /api/invite/create/
+   route.ts — la seule valeur réellement exacte, un tout juste invité n'a que ça), les suivants sont
+   illustratifs (même esprit que COACH_ROWS_PREVIEW dans FrisePreviews.tsx, qui varie déjà ses
+   scores démo) — juste pour que 2 sportifs tapés à la suite n'affichent pas des cartes identiques.
+   Cycle si plus de 3 sportifs sont ajoutés. */
+const PREVIEW_SCORES = [35, 62, 85];
 
 interface Props {
   onClose: () => void;
@@ -44,6 +57,9 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const firstEmail = invites[0]?.email ?? "";
+  /* Aha réactif (2026-09-14, wizard uniquement — voir wizardHero ci-dessous) : un prénom tapé
+     devient immédiatement une carte, avant même l'envoi de l'invitation. */
+  const previewNames = invites.map(r => r.name.trim()).filter(Boolean);
 
   async function handleInvite() {
     const rows = invites.map(r => ({ name: r.name.trim(), email: r.email.trim() })).filter(r => r.email);
@@ -90,7 +106,35 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
-          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            {wizardHero}
+            {/* Aha réactif (2026-09-14) : chaque prénom tapé à droite fait directement apparaître sa
+                carte ici (aucun texte d'accroche tant que la liste est vide, la zone reste juste
+                blanche) — même rendu que la ligne /coach/athletes. */}
+            <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 12 }}>
+              {previewNames.map((name, i) => {
+                const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
+                const status = athleteStatus(previewScore);
+                return (
+                  <div key={i} style={{ position: "relative", background: "#fff", borderRadius: 20, padding: 14, boxShadow: "0 8px 20px rgba(0,0,0,.18)" }}>
+                    {/* Badge "Aperçu" (2026-09-14, retour explicite de Gildas) — le prénom est réel,
+                        le score/statut restent factices tant que le sportif n'a pas rempli sa
+                        propre forme. */}
+                    <span style={{ position: "absolute", top: 8, right: 10, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", background: "rgba(23,27,31,.08)", color: "#7b7f82", padding: "2px 7px", borderRadius: 999 }}>
+                      Aperçu
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <AthleteRing score={previewScore} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 15, fontWeight: 950, color: "#1f2428" }}>{name}</div>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: status.color, marginTop: 2 }}>{status.label}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
       <div style={{
@@ -103,8 +147,33 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
-          {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx */}
-          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 20px" }}>{wizardHero}</div>}
+          {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx.
+              Marge basse retirée (2026-09-14) : la bande live doit être directement accolée au hero
+              (même fond dark, aucun écart blanc entre les deux) — l'espacement avant le formulaire
+              est désormais porté par la bande elle-même. */}
+          {wizardHero && !isMd && <div style={{ margin: "-28px -28px 0" }}>{wizardHero}</div>}
+          {/* Aha réactif mobile (2026-09-14) : mêmes cartes que le hero desktop (AthleteRing/
+              athleteStatus réels, pas de ring réinventé), en pastilles horizontales scrollables et
+              collées en haut (position:sticky) — sinon elles sortiraient de l'écran dès qu'on scrolle
+              vers les champs, juste en dessous sur mobile. Masqué tant qu'aucun prénom n'est tapé
+              (rien à montrer, pas de bande vide). */}
+          {wizardHero && !isMd && previewNames.length > 0 && (
+            <div style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "10px 28px", background: "#141414" }}>
+              {previewNames.map((name, i) => {
+                const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
+                const status = athleteStatus(previewScore);
+                return (
+                  <div key={i} style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 999, padding: "4px 14px 4px 4px" }}>
+                    <AthleteRing score={previewScore} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428", whiteSpace: "nowrap" }}>{name}</div>
+                      <div style={{ fontSize: 9.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
         {result ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
@@ -118,10 +187,10 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                     ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> viennent de recevoir un lien pour créer leur compte.</>
                     : <><strong style={{ color: "#171b1f" }}>{firstEmail}</strong> vient de recevoir un lien pour créer son compte.</>)
                 : sentCount > 1
-                ? <>Tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong> rejoindront ton espace dès qu&apos;ils créeront leur compte.</>
+                ? <>Tu peux déjà créer des séances et un programme pour tes <strong style={{ color: "#171b1f" }}>{sentCount} sportifs</strong>. Tout se synchronisera automatiquement dès qu&apos;ils créeront leur compte.</>
                 : result === "linked"
-                ? <><strong style={{ color: "#171b1f" }}>{firstEmail}</strong> avait déjà un compte — il est maintenant lié à ton espace.</>
-                : <>Dès que <strong style={{ color: "#171b1f" }}>{firstEmail}</strong> créera son compte sur ThePerfClub, il sera automatiquement lié à ton espace.</>
+                ? <><strong style={{ color: "#171b1f" }}>{firstEmail}</strong> avait déjà un compte, il est maintenant lié à ton espace.</>
+                : <>Tu peux déjà créer des séances et un programme pour <strong style={{ color: "#171b1f" }}>{firstEmail}</strong>. Tout se synchronisera automatiquement dès qu&apos;il créera son compte.</>
               }
             </div>
             <button

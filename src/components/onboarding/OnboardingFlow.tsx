@@ -646,6 +646,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [wizardProgramId, setWizardProgramId] = useState<string | null>(null);
   const [wizardCoachAthletes, setWizardCoachAthletes] = useState<CoachAthlete[]>([]);
   const [wizardCriteriaMode, setWizardCriteriaMode] = useState<"criteria" | "import">("criteria");
+  /* Résultat réel du point forme saisi à wizard_activate (2026-09-14, retour explicite de Gildas :
+     "la wellness card de l'étape 3 doit reprendre exactement le score qu'il a fait en étape 2") —
+     jamais reconstruit depuis wellness_daily (RLS + latence d'écriture), juste le retour direct de
+     WellnessModal.onSave, threadé jusqu'à wizard_assign (WellnessCardPreview). */
+  const [wizardWellnessResult, setWizardWellnessResult] = useState<{ score: number; behaviors: string[] } | null>(null);
+  /* Aha réactif wizard_activate (2026-09-14) : les ~28 jours d'historique wellness_daily synthétique
+     déjà seedés par completeProfile() (buildAthleteHistory, appelée juste après la création du
+     compte, bien avant ce step) — permet à WellnessModal de calculer la VRAIE baseline relative
+     (computeWellnessBaselineAt/relativeZoneLabel, wellnessBaseline.ts) pendant la saisie, au lieu du
+     repli zoneLabel() absolu qui s'affichait faute d'historique connu du composant. */
+  const [athleteWellnessHistory, setAthleteWellnessHistory] = useState<
+    { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[]
+  >([]);
   /* CTA "Débloquer →" de l'overlay S2+ de wizard_builder (2026-09-03) — ouvre le même paywall
      skippable que paywall_priming/paywall_form, en overlay par-dessus le wizard (stepIdx inchangé,
      pas de navigation : wizard_activate/wizard_assign restent intacts derrière). Un paiement réussi
@@ -681,6 +694,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (!uid) return;
     supabase.from("coach_athletes").select("*").eq("coach_id", uid)
       .then(({ data }) => { if (data) setWizardCoachAthletes(data as CoachAthlete[]); });
+  }, [currentStep, role, userId, newUserId]);
+
+  /* wizard_activate (sportif) : même principe que l'effet ci-dessus — fetch juste avant de rendre
+     ce step, jamais avant (completeProfile() a eu largement le temps de finir d'écrire l'historique
+     synthétique entre la création du compte et l'arrivée ici, plusieurs steps plus tôt). */
+  useEffect(() => {
+    if (currentStep !== "wizard_activate" || role !== "athlete") return;
+    const uid = userId || newUserId;
+    if (!uid) return;
+    supabase.from("wellness_daily")
+      .select("date,sleep,stress,recovery,motivation,score,base_score")
+      .eq("user_id", uid)
+      .then(({ data }) => { if (data) setAthleteWellnessHistory(data); });
   }, [currentStep, role, userId, newUserId]);
 
   useEffect(() => {
@@ -1791,6 +1817,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {!wizardPaywallStage && wizardBanner}
         <WellnessModal
           wizardHero={<WizardHero step={2} dark eyebrow="Étape 2/3 — Ta forme" title="Ton point forme du jour" sub="Ton premier point forme active vraiment l'autorégulation sur ce programme." />}
+          wellnessHistory={athleteWellnessHistory}
           date={new Date().toISOString().split("T")[0]}
           onSave={async data => {
             const uid = userId || newUserId;
@@ -1798,6 +1825,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               const { error } = await supabase.from("wellness_daily").upsert({ user_id: uid, date: new Date().toISOString().split("T")[0], ...data }, { onConflict: "user_id,date" });
               if (error) console.error("[wizard_activate] wellness_daily upsert error:", error);
             }
+            setWizardWellnessResult({ score: data.base_score, behaviors: data.behaviors });
             next();
           }}
           onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
@@ -1822,6 +1850,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           athletes={role === "coach" ? wizardCoachAthletes : []}
           selfUserId={role === "athlete" ? (userId || newUserId || undefined) : undefined}
           initialSelectedIds={role === "coach" ? wizardCoachAthletes.map(a => a.id) : undefined}
+          athleteWellness={wizardWellnessResult ?? undefined}
           defaultStartDate="today"
           onAssigned={finishWizard}
           onClose={finishWizard}

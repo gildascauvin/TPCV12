@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { computeWellnessScore } from "@/lib/wellness";
+import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
+import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBaseline";
+import { BEHAVIOR_META } from "@/lib/behaviors";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import WellnessRing from "@/components/wellness/WellnessRing";
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -59,9 +62,15 @@ interface Props {
      step (step>0 a déjà son propre "← Retour" intra-formulaire) — absent = pas de bouton retour
      (usage in-app). */
   onBack?: () => void;
+  /* Aha réactif (2026-09-14, wizard uniquement) : historique wellness_daily déjà réel de
+     l'utilisateur (les ~28 jours synthétiques seedés par completeProfile() avant ce step, voir
+     OnboardingFlow.tsx) — permet de calculer la VRAIE baseline relative (comme /today) pendant la
+     saisie, au lieu du seul repli absolu. Absent = comportement inchangé (usage in-app, où ce
+     composant ne connaît de toute façon aucune vraie baseline en dehors de son propre payload). */
+  wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
@@ -72,6 +81,30 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const [behaviors, setBehaviors] = useState<string[]>([]);
   const [motivation, setMotivation] = useState(8);
   const [saving, setSaving] = useState(false);
+
+  /* Aha réactif (2026-09-14, wizard uniquement — voir wizardHero ci-dessous) : la vraie fonction
+     de score, recalculée à chaque frappe. Ring/zone pilotés par `base_score` (jamais `score`,
+     retour explicite de Gildas : "les badges comportements sont pas censés impacter le score") —
+     même convention que wellnessSignal() (wellnessBaseline.ts), qui exclut déjà le bonus/malus
+     comportements de tout calcul de "l'état de forme" pour ne pas rendre la corrélation
+     tautologique (voir /conseils). Les chips restent affichés (ce qui est coché aujourd'hui),
+     ils ne font juste plus bouger le chiffre. */
+  const { base_score: liveBaseScore } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
+  /* Même baseline que /today (computeWellnessBaselineAt) si l'historique fourni suffit. Repli
+     (2026-09-14, retour explicite de Gildas) : toujours "Frais"/"Équilibré"/"Fatigué", jamais
+     l'ancien vocabulaire absolu ("Zone stable"...) — celui-ci n'est plus affiché nulle part
+     ailleurs dans l'app depuis le chantier "Wellness relatif" du 2026-08-30/31, seuils calqués
+     sur Z_SWC=0.2 (Φ(±0.2)×100 ≈ 42/58, mêmes bornes que FORM_ZONES). */
+  const liveBaseline = wellnessHistory
+    ? computeWellnessBaselineAt(
+        wellnessHistory.filter(h => h.date < date),
+        { sleep, stress, recovery, motivation, score: liveBaseScore, base_score: liveBaseScore },
+      )
+    : null;
+  const liveZone = liveBaseline?.hasEnoughHistory
+    ? relativeZoneLabel(liveBaseline, "athlete")
+    : liveBaseScore >= 58 ? "Frais" : liveBaseScore >= 42 ? "Équilibré" : "Fatigué";
+  const liveChips = behaviors.map(k => BEHAVIOR_META[k]).filter(Boolean);
 
   function toggleBehavior(key: string) {
     setBehaviors((prev) =>
@@ -113,7 +146,40 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
-          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            {wizardHero}
+            {/* Aha réactif (2026-09-14) : le point forme se construit en direct pendant la saisie —
+                même vraie fonction de score que la sauvegarde, jamais une approximation dédiée à
+                l'affichage. Composant additif, ne change rien à la disposition existante du hero. */}
+            <div style={{ padding: "14px 16px", marginTop: 22, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16 }}>
+              {/* Chips sous le libellé de zone, à droite du ring (retour explicite de Gildas) —
+                  plus une ligne pleine largeur sous tout le bloc. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <WellnessRing score={liveBaseScore} size={52} strokeWidth={5} dark />
+                <div>
+                  {/* Statut en blanc (2026-09-14, retour explicite de Gildas) — plus coloré selon
+                      le score, la couleur reste réservée au ring lui-même. */}
+                  <div style={{ fontSize: 13.5, fontWeight: 900, color: "#fff" }}>{liveZone}</div>
+                  {liveChips.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                      {liveChips.map(c => (
+                        <span key={c.label} style={{ fontSize: 10.5, fontWeight: 700, background: c.positive ? "rgba(47,158,68,.16)" : "rgba(212,64,0,.18)", color: c.positive ? "#7fdb8f" : "#ffb99a", padding: "4px 9px", borderRadius: 999 }}>
+                          {c.positive ? "✓" : "⚠"} {c.emoji} {c.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Conseil récupération réel (2026-09-14, desktop uniquement — ce bloc heroOnLeft
+                  n'est de toute façon rendu que sur desktop) : même fonction que /today,
+                  getRecoveryAdvice(). loadCls="moderate" par défaut faute de séance du jour
+                  connue à cet endroit (WellnessModal n'a aucune notion de programme/séance). */}
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.08)", fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
+                🌿 {getRecoveryAdvice({ sleep, stress, recovery, motivation, behaviors }, "moderate", liveBaseline)}
+              </div>
+            </div>
+          </div>
         </div>
       )}
       <div style={{
@@ -127,8 +193,33 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 34 }}>
-        {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx */}
-        {wizardHero && !isMd && <div style={{ margin: "-34px -34px 20px" }}>{wizardHero}</div>}
+        {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx.
+            Marge basse retirée (2026-09-14) : la bande live juste en dessous doit être directement
+            accolée au hero (même fond dark, aucun écart blanc entre les deux) — l'espacement de 20px
+            avant le formulaire est désormais porté par la bande elle-même. */}
+        {wizardHero && !isMd && <div style={{ margin: "-34px -34px 0" }}>{wizardHero}</div>}
+        {/* Aha réactif mobile (2026-09-14) : même carte que le hero desktop, mais collée en haut
+            (position:sticky) — sans ça elle sortirait de l'écran dès qu'on scrolle vers le
+            formulaire, empilé juste en dessous sur mobile. */}
+        {wizardHero && !isMd && (
+          <div style={{ position: "sticky", top: 0, zIndex: 5, display: "flex", alignItems: "center", gap: 10, margin: "0 -34px 20px", padding: "10px 34px", background: "#141414" }}>
+            <WellnessRing score={liveBaseScore} size={52} strokeWidth={5} dark />
+            {/* Chips ajoutés en mobile (2026-09-14, retour explicite de Gildas) — même disposition
+                que le hero desktop : à droite du ring, sous le statut (blanc, plus coloré). */}
+            <div>
+              <div style={{ fontSize: 12.5, fontWeight: 900, color: "#fff" }}>{liveZone}</div>
+              {liveChips.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                  {liveChips.map(c => (
+                    <span key={c.label} style={{ fontSize: 10, fontWeight: 700, background: c.positive ? "rgba(47,158,68,.16)" : "rgba(212,64,0,.18)", color: c.positive ? "#7fdb8f" : "#ffb99a", padding: "3px 8px", borderRadius: 999 }}>
+                      {c.positive ? "✓" : "⚠"} {c.emoji} {c.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
