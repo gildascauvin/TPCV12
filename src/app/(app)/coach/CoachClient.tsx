@@ -21,6 +21,7 @@ import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import InviteModal from "@/components/coach/InviteModal";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -108,6 +109,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteError, setInviteError] = useState("");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -389,7 +391,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)} />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
       <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
 

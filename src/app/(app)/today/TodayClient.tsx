@@ -19,6 +19,7 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
@@ -393,6 +394,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
 
   const [showActivation, setShowActivation] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "athlete" }); }
@@ -640,7 +642,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 

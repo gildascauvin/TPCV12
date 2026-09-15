@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { format, addDays, subDays } from "date-fns";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import InviteModal from "@/components/coach/InviteModal";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -280,6 +281,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [signatures, setSignatures] = useState(initialSignatures);
@@ -349,8 +351,9 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       <CalendarHeader
         selectedDate={selectedDate} onDateChange={handleDateChange}
         extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
-        profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"}
+        onProfileClick={() => setProfileOpen(true)}
       />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
       <div ref={dayScrollRef} className="page-shell">
 

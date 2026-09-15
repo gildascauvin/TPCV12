@@ -5,7 +5,7 @@ import { useState } from "react";
 
 /* Miroir de l'interface retournée par usePaywall.ts (mêmes clés, mêmes types) — pour que
    TodayClient/WeekClient/CoachClient/CoachPlanningClient/AthletesClient/ConseilsClient/
-   ProfilClient puissent être réutilisés tels quels en mode sandbox (composant sélectionne l'un ou
+   ProfileDrawer puissent être réutilisés tels quels en mode sandbox (composant sélectionne l'un ou
    l'autre hook selon `sandboxMode`, jamais un nouveau système de gating).
 
    2026-08-20 — la destination n'est plus une redirection immédiate vers /register (jugée "trop

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { format, addDays, startOfWeek, subDays, addMonths, subMonths } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -27,8 +26,9 @@ interface CalendarHeaderProps {
   extraControls?: React.ReactNode;
   /* Icône profil en haut à droite du header (2026-08-31) — remplace l'onglet "Profil" retiré de
      la bottom nav (remplacé par "Programmes"). Un seul endroit à câbler pour toutes les pages qui
-     utilisent ce header plutôt qu'un bouton par page. Absent = pas d'icône (repli permissif). */
-  profileHref?: string;
+     utilisent ce header plutôt qu'un bouton par page. Depuis le 2026-09-15, ouvre ProfileDrawer
+     (callback) au lieu de naviguer vers /profil (page retirée) — absent = pas d'icône. */
+  onProfileClick?: () => void;
 }
 
 const CIRC = 81.68; // 2π × r=13
@@ -55,7 +55,7 @@ export default function CalendarHeader({
   onViewModeChange,
   onSwipe,
   extraControls,
-  profileHref,
+  onProfileClick,
 }: CalendarHeaderProps) {
   const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -153,15 +153,15 @@ export default function CalendarHeader({
           {showControls ? (
             <ViewToggleButton mode={viewMode} onChange={m => onViewModeChange?.(m)} />
           ) : extraControls}
-          {profileHref && (
-            <Link
-              href={profileHref}
+          {onProfileClick && (
+            <button
+              onClick={onProfileClick}
               aria-label="Profil"
               style={{
                 width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.12)",
-                color: "rgba(255,255,255,.85)",
+                color: "rgba(255,255,255,.85)", cursor: "pointer",
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"
@@ -169,7 +169,7 @@ export default function CalendarHeader({
                 strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 12.2a3.8 3.8 0 1 0 0-7.6 3.8 3.8 0 0 0 0 7.6Zm-7.4 8.3a7.4 7.4 0 0 1 14.8 0"/>
               </svg>
-            </Link>
+            </button>
           )}
         </div>
       </div>

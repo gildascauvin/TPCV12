@@ -27,6 +27,7 @@ import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDec
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -94,6 +95,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // jamais affichée depuis cette modale, seule /programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
@@ -465,8 +467,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onSwipe={navigatePeriod}
-        profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"}
+        onProfileClick={() => setProfileOpen(true)}
       />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       <ProgramBanner
         program={viewedProgram}

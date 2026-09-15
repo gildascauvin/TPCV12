@@ -14,13 +14,13 @@ import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
 import TestsPanel from "@/components/tests/TestsPanel";
 import type { MergedTest, TestResultRow } from "@/lib/testResults";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
-import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
 import type { SubscriptionStatus } from "@/types";
@@ -171,6 +171,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState(initialData);
   const [loading, setLoading] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [rangeMode, setRangeMode] = useState<RangeMode>("week");
   const [section, setSection] = useState<TestsSection>(searchParams.get("section") === "tests" ? "tests" : "load");
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
@@ -199,9 +200,8 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
 
   const {
     sig, timeSeries, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight,
-    recoveryAlert, wellnessBaselineSeries, done7Count, avgRpe, freqTarget, sessionStatus,
-    loadTrend, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays,
-    recentBehaviors, allRecentBehaviorKeys,
+    recoveryAlert, wellnessBaselineSeries,
+    trendText, trendEmoji, trendAction, correlations, filledDays,
   } = data;
 
   const dotMap: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
@@ -259,8 +259,9 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       <CalendarHeader
         selectedDate={data.referenceDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={wellnessMap}
         extraControls={section === "load" ? <RangeToggle mode={rangeMode} onChange={setRangeMode} /> : undefined}
-        profileHref={sandboxMode ? "/sandbox/athlete/profil" : "/profil"}
+        onProfileClick={() => setProfileOpen(true)}
       />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       <div ref={dayScrollRef} className="page-shell" style={{ opacity: loading ? 0.6 : 1, transition: "opacity .15s" }}>
 
@@ -271,7 +272,7 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
             <TestsPanel
               ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
               sport={sport} sexe={sexe} poidsKg={poidsKg}
-              onEditProfile={() => router.push(sandboxMode ? "/sandbox/athlete/profil" : "/profil")}
+              onEditProfile={() => setProfileOpen(true)}
             />
           ) : testsFixture ? (
             <TestsPanel
@@ -408,78 +409,12 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Trait dégradé = récupération (clair = en forme) · Pointillé coloré = Forme · Bande = écart entre les deux</div>
                 </div>
               </div>
-
-              {/* Séparateur + bloc "Cette semaine" */}
-              <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 20, paddingTop: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.38)", marginBottom: 12 }}>
-                  7 derniers jours
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
-                    <span style={{ fontSize: 38, fontWeight: 1000, letterSpacing: "-0.055em", lineHeight: 1, color: sessionStatus.color }}>
-                      {done7Count}
-                    </span>
-                    <span style={{ fontSize: 14, color: "rgba(255,255,255,.45)" }}>
-                      / {freqTarget} séances
-                    </span>
-                    {avgRpe !== null && (
-                      <span style={{ fontSize: 14, color: "rgba(255,255,255,.38)" }}>
-                        · RPE moy. {avgRpe}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flexShrink: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: sessionStatus.color, background: `${sessionStatus.color}22`, border: `1px solid ${sessionStatus.color}44`, borderRadius: 999, padding: "4px 10px", letterSpacing: "0.08em", textTransform: "uppercase" as const, whiteSpace: "nowrap" as const }}>
-                      {sessionStatus.label}
-                    </div>
-                    {loadTrend !== null && (
-                      <div style={{ fontSize: 13, fontWeight: 700, color: Math.abs(loadTrend) < 15 ? "rgba(255,255,255,.38)" : loadTrend > 0 ? "#f28a00" : "#2f9e44", whiteSpace: "nowrap" as const }}>
-                        {Math.abs(loadTrend) < 15 ? "→ Stable" : loadTrend > 0 ? `↑ +${loadTrend}%` : `↓ ${loadTrend}%`} vs 7j préc.
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div style={{ fontSize: 14, color: "rgba(255,255,255,.62)", lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 800, color: "#d44000" }}>→</span> {loadAdviceShort}
-                </div>
-                {sig.acwr.hasEnoughHistory && (
-                  <div style={{ marginTop: 10, fontSize: 11, color: "rgba(255,255,255,.35)" }}>
-                    Charge 7j vs 28j ×{sig.acwr.value}
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </div>
 
         {/* Impact comportements (WHOOP + conseil personnalisé) */}
         <BehaviorImpactCard correlations={correlations} filledDays={filledDays} />
-
-        {/* Comportements — 7 jours */}
-        {allRecentBehaviorKeys.length > 0 && (
-          <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 18, boxShadow: "0 4px 12px rgba(0,0,0,.04)" }}>
-            <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: ".10em", textTransform: "uppercase" as const, color: "#62686e", marginBottom: 12 }}>
-              🔍 Comportements — 7 jours
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
-              {allRecentBehaviorKeys.map(b => {
-                const count = recentBehaviors.filter(r => r.behaviors.includes(b)).length;
-                const meta  = BEHAVIOR_META[b];
-                const accentColor = meta?.positive ? "#2f9e44" : "#d44000";
-                return (
-                  <div key={b} style={{ display: "flex", alignItems: "center", gap: 6, border: `1px solid ${accentColor}44`, background: `${accentColor}0d`, borderRadius: 20, padding: "7px 13px" }}>
-                    <span style={{ fontSize: 15 }}>{meta?.emoji ?? "•"}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: accentColor }}>{meta?.label ?? b}</span>
-                    <span style={{ fontSize: 11, fontWeight: 900, background: accentColor, color: "#fff", borderRadius: 999, padding: "1px 6px" }}>{count}×</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ fontSize: 13, color: "#8a8f94", marginTop: 12, lineHeight: 1.45 }}>
-              Renseigné {recentBehaviors.length} jour{recentBehaviors.length > 1 ? "s" : ""} sur 7.
-            </div>
-          </div>
-        )}
         </>
         )}
 

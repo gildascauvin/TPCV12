@@ -30,6 +30,7 @@ import ReconduireModal from "@/components/sessions/ReconduireModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
+import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
@@ -126,6 +127,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // création ("new"), jamais sur l'écran liste (voir ProgramLibraryPage.tsx : la liste n'est plus
   // jamais affichée depuis cette modale, seule /coach/programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -544,7 +546,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   if (!athlete) {
     return (
       <>
-        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
+        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+        {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
@@ -582,7 +585,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} profileHref={sandboxMode ? "/sandbox/coach/profil" : "/profil"} />
+      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
       {/* Athlete tabs bar */}
       <div style={{
