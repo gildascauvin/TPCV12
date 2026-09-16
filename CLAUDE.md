@@ -3314,3 +3314,46 @@ Demande explicite : "on connait l'étape avec les 3 lignes [barres de progressio
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Pas de clic réel par Claude — tous les retours viennent de Gildas testant en local.
 
 Déployé en prod le 2026-09-14, commit `bad64e7`, push direct sur `main`.
+
+## Priming/paywall — split gauche/droite comme le wizard, mécanisme en 3 étapes, form allégé (2026-09-16)
+
+Point de départ : discussion (réflexion pure, sans exécution) sur 2 POC HTML de Grok (fournis par Gildas) proposant de revoir `paywall_priming`/`paywall_form` — garder le layout déjà en place partout dans le wizard (panneau gauche dark avec contenu, formulaire/actions à droite dans le drawer docké) plutôt que le contenu empilé en une seule colonne, avec "la valeur au priming et la réassurance au form de paiement". Avis donné (forces/risques des 2 POC — ordre mobile qui inversait valeur/prix, palette/police divergentes des vrais tokens, champs Stripe recréés à la main irréalistes, duplication de la bande "+600" entre les 2 écrans) avant tout code, puis exécuté en plusieurs rounds sur la même journée à mesure que Gildas testait en local et affinait ses retours.
+
+### Split gauche (valeur)/droite (offre) — `PricingPriming.tsx`, `PrimingJourneyModal.tsx`
+Nouveau `PricingPrimingValue({role, headline, sub, dark})`, extrait de l'ancien `PricingPrimingContent` (qui ne garde que l'offre — badge/prix/toggle/mécanisme/FAQ). `PrimingJourneyModal.tsx` restructuré comme les autres drawers du wizard (`ProgramCreatePicker.tsx`/`WellnessModal.tsx`/etc.) : panneau gauche `flex:1, background:#141414` sur desktop (`heroOnLeft = isMd`) avec `PricingPrimingValue`, drawer docké à droite (50vw) avec `PricingPrimingContent`. **Sur mobile, la valeur reste affichée en PREMIER dans le drawer, avant l'offre** (correction directe du POC de Grok, qui inversait cet ordre sur mobile — précisément la surface où la quasi-totalité du trafic arrive, à l'endroit où montrer la valeur avant le prix compte le plus).
+
+**Bug réel trouvé et corrigé en cours de route** : `PricingPrimingValue` codait son titre/sous-titre en blanc en dur — invisible sur mobile, où il n'y a pas de panneau dark (juste le fond clair `#f1f0ee` du drawer). Nouveau prop `dark` (défaut `true` = panneau gauche desktop), passé `false` explicitement à l'usage mobile.
+
+### Contenu du panneau "valeur" — 4 itérations le même jour
+1. **1re version** : illustration `CombinedInsightPreview` (le chart combiné charge/récupération de `/conseils`, déjà utilisé par `DecisionStep.tsx`).
+2. **Illustration retirée** : retour explicite de Gildas — "il y a eu assez d'illustration dans le wizard [...] il vaut mieux renforcer le bénéfice/proposition de valeur personnalisé" (le sportif l'a déjà vue à `decision_2a/2b`, plus tôt dans le même funnel). Remplacée par une liste de bullets de bénéfice (nombre réel de séances générées, faiblesse ciblée, bullets statiques par rôle) — reprise de l'ancienne liste `BULLETS` qui vivait dans la carte prix avant le passage au mécanisme en 3 étapes.
+3. **Bullets retirées à leur tour** : "j'aimerais supprimer [la liste] on fera plutôt un effort de personnalisation sur [le headline/sub] et le 1,2,3 avec les infos qu'a fait le user sur l'onboarding (sport, wellness, noms des sportifs)". `PricingPrimingValue` ne rend donc plus QUE headline+sous-titre — la personnalisation avec les vraies données onboarding n'est pas encore câblée (propositions de wording données à Gildas, en attente de validation avant implémentation — voir le message correspondant).
+
+### Mécanisme en 3 étapes — 3 itérations de wording
+Fusionné dans la carte prix (`PricingPrimingContent`), remplace l'ancienne liste de bullets + la ligne `UNLOCK_LINE` en gras séparée :
+1. **1re version** ("comme le POC" de Grok) : titres "Aujourd'hui — Accède à tout/Pendant 14 jours — Renseigne tes séances/Ensuite — Reçois tes recommandations", avec une personnalisation de l'étape 1 (séances générées, faiblesse ciblée).
+2. **2e version** : titres gardés ("Aujourd'hui/Pendant 14 jours/Ensuite") mais texte remplacé par celui de l'ancienne frise "Enregistre/Cible/Progresse" (retirée le 2026-09-14) — personnalisation de l'étape 1 abandonnée, le nouveau texte ("Enregistre tes séances...") ne s'y prêtant plus sémantiquement.
+3. **3e version, finale** : titres redevenus juste "Enregistre/Cible/Progresse" (sans préfixe), texte final donné verbatim par Gildas. Numéro du step 1 (`i===0`) qui avait un fond rouge distinctif retiré à la demande de Gildas ("je veux pas que le 1,2,3 soit coloré en fond rouge") — les 3 numéros ont désormais le même style neutre.
+
+### CTA secondaires condensés — `ShareButton.tsx` gagne un mode `linkLabel`
+"Gratuit avec un coach" (sportif, invite le coach via lien) et "Une question ?" (coach, lien Calendly) sont passés d'un bloc à 2 lignes (texte + bouton pleine largeur bordé) à une seule ligne avec un lien texte inline ("Gratuit avec un coach → Inviter mon coach"). `ShareButton.tsx` (déjà utilisé partout dans l'app pour le partage) gagne un nouveau prop `linkLabel` (à côté de l'existant `buttonLabel`) — lien texte souligné, même logique de partage derrière, aucune duplication.
+
+### FAQ en accordéon
+Passé d'un affichage question+réponse toujours dépliées à un vrai accordéon (`<details>/<summary>` natif) — replié par défaut, clic pour dérouler.
+
+### Témoignage + bande "+600" — déplacés du priming vers le form de paiement
+Retour explicite : "c'est censé être au form de paiement". Retirés de `PricingPrimingContent` (ne garde plus que la vidéo carousel "Les experts en parlent" comme preuve sociale) et ajoutés à `PaywallModal.tsx` : panneau gauche dark sur desktop (avec la bande avatars pré-existante qui vivait avant dans le corps du drawer, maintenant relocalisée là pour éviter la duplication), bas du formulaire (après Stripe) sur mobile — "en mobile, on le met dessous".
+
+### Form de paiement allégé — 3 itérations
+1. **Réassurance ajoutée** : 3 blocs (0€ aujourd'hui/Annulation en 1 clic/Programme déjà prêt), panneau gauche desktop + haut du form mobile.
+2. **Réassurance condensée** : retour explicite — "renforcer le testimonial" (qui partageait l'espace avec 3 blocs au-dessus) — remplacés par un sous-titre unique "0€ aujourd'hui · Annulation en 1 clic · Sans engagement" sous le titre du form, visible desktop ET mobile.
+3. **Bloc "Facturé annuellement / Modifier" retiré** — "on peut modifier en faisant retour" (le choix mensuel/annuel se change en revenant à l'écran priming, via "← Retour"). `setBilling`/le state associé nettoyés (`useState<Billing>` sans setter, plus d'appelant après ce retrait).
+4. **Texte légal du reçu simplifié** : "0€ dû aujourd'hui — 14 jours offerts. Puis {prix}" sur une seule ligne, "sauf annulation en 1 clic..." retiré (déjà dit une fois par le badge de garantie sur l'écran priming juste avant — retour explicite : "les écrans sont trop chargés").
+
+### Cancellation feedback — pas de code, une case à cocher Stripe
+Question de Gildas : demander un feedback aux users qui résilient pendant l'essai, avant qu'ils le fassent (sinon personne ne répond par email). Vérifié : la résiliation passe déjà entièrement par le Customer Portal hébergé de Stripe (`/api/stripe/portal`, bouton "Gérer" dans `ProfileDrawer.tsx`), pas par un flux custom dans l'app — Stripe a une fonctionnalité native pour ça (Dashboard → Paramètres → Facturation → Customer portal → section Annulations, sondage de raison de résiliation avant confirmation, configurable sans code). Pas exécuté — action manuelle de Gildas côté Dashboard Stripe, pas un développement.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round (nombreux). Pas de clic réel par Claude sur l'ensemble du chantier — Gildas a testé chaque itération en local (`next dev`) et affiné ses retours au fil de la journée.
+
+Déployé en prod le 2026-09-16, commit `74b4140`, push direct sur `main`.
