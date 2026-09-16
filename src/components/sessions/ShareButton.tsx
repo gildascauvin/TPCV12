@@ -55,6 +55,11 @@ interface ShareButtonProps {
       "Inviter mon coach →"), à la place du rond icône seule. Même logique de partage derrière,
       juste une autre présentation du déclencheur. */
   buttonLabel?: string;
+  /** 2026-09-16 — variante lien texte inline (PricingPriming.tsx : "Gratuit avec un coach →
+      Inviter mon coach", sur une seule ligne — retour explicite de Gildas, "plutôt qu'un bouton un
+      lien"). Même logique de partage, juste du texte souligné au lieu d'un bouton plein. Prioritaire
+      sur `buttonLabel` si les deux sont fournis (ne devrait pas arriver). */
+  linkLabel?: string;
 }
 
 function shareApiAvailable(): boolean {
@@ -89,7 +94,7 @@ function ShareIcon() {
   );
 }
 
-export default function ShareButton({ resourceType, buildSnapshot, getShareUrl, title, text, variant = "light", size = 28, buttonLabel }: ShareButtonProps) {
+export default function ShareButton({ resourceType, buildSnapshot, getShareUrl, title, text, variant = "light", size = 28, buttonLabel, linkLabel }: ShareButtonProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState(false);
@@ -170,11 +175,24 @@ export default function ShareButton({ resourceType, buildSnapshot, getShareUrl, 
   const waHref = url ? `https://wa.me/?text=${encodeURIComponent([title, text].filter(Boolean).join(" · ") + " " + url)}` : undefined;
   const rowStyle: React.CSSProperties = { width: "100%", display: "flex", alignItems: "center", gap: 9, padding: "10px 13px", border: "none", background: "#fff", cursor: "pointer", textAlign: "left", fontSize: 13, fontWeight: 700, color: "#171b1f", textDecoration: "none" };
 
-  const labelDisplay = copyStatus === "copied" ? "✓ Copié !" : copyStatus === "error" ? "Erreur, réessaie" : buttonLabel;
+  const labelDisplay = copyStatus === "copied" ? "✓ Copié !" : copyStatus === "error" ? "Erreur, réessaie" : (buttonLabel ?? linkLabel);
 
   return (
     <>
-      {buttonLabel ? (
+      {linkLabel ? (
+        <button
+          ref={btnRef}
+          onClick={handleClick}
+          disabled={sharing}
+          style={{
+            background: "none", border: "none", padding: 0, cursor: sharing ? "default" : "pointer",
+            fontSize: 13, fontWeight: 800, textDecoration: "underline",
+            color: dark ? "#ff8a55" : "#d44000", opacity: sharing ? 0.6 : 1,
+          }}
+        >
+          {sharing ? "…" : labelDisplay}
+        </button>
+      ) : buttonLabel ? (
         <button
           ref={btnRef}
           onClick={handleClick}

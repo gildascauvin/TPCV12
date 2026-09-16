@@ -203,8 +203,12 @@ export function CheckoutForm({
       {footerPortalNode && createPortal(
         <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
           {showBillingLegal && (
+            /* Sur une seule ligne (2026-09-16, retour explicite de Gildas — "les écrans sont trop
+               chargés") : la mention "sauf annulation en 1 clic..." est retirée d'ici — déjà dite
+               par PRICING_PRIMING_GUARANTEE_CAPTION sur l'écran précédent (priming), pas la peine
+               de la répéter une 2e fois juste avant de payer. */
             <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>
-              0€ dû aujourd&apos;hui — {TRIAL_DAYS} jours offerts.<br />Puis {priceStr}, sauf annulation en 1 clic depuis ton profil.
+              0€ dû aujourd&apos;hui — {TRIAL_DAYS} jours offerts. Puis {priceStr}
             </div>
           )}
 
@@ -243,7 +247,10 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const [setupError, setSetupError] = useState<string | null>(null);
   const [footerPortalNode, setFooterPortalNode] = useState<HTMLDivElement | null>(null);
 
-  const [billing, setBilling] = useState<Billing>(initialBilling ?? "annual");
+  /* Plus de setter (2026-09-16) — le bloc "Facturé annuellement/Modifier" qui l'utilisait a été
+     retiré (voir plus bas) : le choix mensuel/annuel se fait sur l'écran priming, avant celui-ci,
+     et ne change plus une fois ici. */
+  const [billing] = useState<Billing>(initialBilling ?? "annual");
 
   useEffect(() => {
     posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
@@ -260,23 +267,71 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
       .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
   }, []);
 
-  const p = PRICING[mode];
+  /* Réassurance condensée en une ligne (2026-09-16, 2e itération — retour explicite de Gildas :
+     "renforcer le testimonial" plutôt que la faire concurrencer par 3 blocs de réassurance) — sous
+     le titre du form, sur desktop ET mobile (avant, seulement 3 lignes séparées, mobile only). */
+  const reassuranceLine = "0€ aujourd'hui · Annulation en 1 clic · Sans engagement";
+  const testimonial = PAYWALL_TESTIMONIALS[mode];
 
   /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
      PrimingJourneyModal.tsx — demande explicite de Gildas, "le paywall aussi en drawer"). Le portail
      du footer Stripe (form="checkout-form", voir CheckoutForm ci-dessus) n'a plus besoin de
      position:fixed plein viewport : simple flex item flexShrink:0 après la région scrollable, comme
-     tous les autres drawers du repo (convention "Footer non-scrollable des modales"). */
+     tous les autres drawers du repo (convention "Footer non-scrollable des modales").
+     Panneau gauche dark sur desktop (2026-09-16) : ne garde plus que le témoignage + la bande
+     "+600" (réassurance déplacée en sous-titre du form, voir reassuranceLine) — sur mobile, ce même
+     contenu reste affiché sous le formulaire (pas de 2e colonne). */
+  const heroOnLeft = isMd;
   return (
     <div
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (allowDismiss && onClose && e.target === e.currentTarget) onClose(); }}
     >
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: "#141414" }}>
+          <div style={{ maxWidth: 380, width: "100%" }}>
+            <div style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.4)", marginBottom: 10 }}>
+              Ce que disent des {mode === "coach" ? "coachs" : "sportifs"} comme vous
+            </div>
+            <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.9)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
+                &ldquo;{testimonial.quote}&rdquo;
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                  <img src={testimonial.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: "#fff" }}>{testimonial.name}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)" }}>{testimonial.role}</div>
+                </div>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                  {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#f28a00", fontSize: 12 }}>★</span>)}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ display: "flex" }}>
+                {PAYWALL_AVATARS.map((src, i) => (
+                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #141414", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)", marginTop: 1 }}>font confiance à ThePerfClub</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div style={{
         position: "relative",
         background: "#f1f0ee",
@@ -308,30 +363,16 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
             🔓 {TRIAL_DAYS} jours offerts
           </div>
-          <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 20 }}>{headline || "Passe au niveau supérieur."}</div>
-          <div
-            onClick={() => setBilling(b => b === "monthly" ? "annual" : "monthly")}
-            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "14px 16px", marginBottom: 20, cursor: "pointer" }}>
-            <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 700 }}>{billing === "monthly" ? "Facturé mensuellement" : "Facturé annuellement"}</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 14, fontWeight: 900, color: "#171b1f" }}>{billing === "monthly" ? `${p.monthly}€/mois` : `${p.annualMonthly}€/mois · ${p.annual}€/an`}</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", textDecoration: "underline" }}>Modifier</span>
-            </div>
-          </div>
+          <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 6 }}>{headline || "Passe au niveau supérieur."}</div>
+          {/* Sous-titre condensé (2026-09-16, retour explicite de Gildas) — remplace les 3 blocs
+              de réassurance séparés, visible sur desktop ET mobile (avant, mobile only). */}
+          <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 24 }}>{reassuranceLine}</div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-            <div style={{ display: "flex" }}>
-              {PAYWALL_AVATARS.map((src, i) => (
-                <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-                  <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                </div>
-              ))}
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-              <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-            </div>
-          </div>
+          {/* Bloc "Facturé annuellement/Modifier" retiré (2026-09-16, retour explicite de Gildas —
+              "on peut modifier en faisant retour") : le choix mensuel/annuel se change en revenant
+              à l'écran priming (bouton "← Retour" ci-dessus), plus besoin d'un contrôle dupliqué
+              ici. `billing` reste figé à sa valeur d'entrée (initialBilling) pour toute la durée de
+              cet écran — voir le useState plus haut, `setBilling` n'a plus d'appelant. */}
 
           {loadingIntent && (
             <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>
@@ -355,6 +396,47 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             >
               <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} />
             </Elements>
+          )}
+
+          {/* Témoignage + bande "+600" — mobile uniquement, sous le formulaire (retour explicite
+              de Gildas : "en mobile, on le met dessous"). Sur desktop ce même contenu vit dans le
+              panneau de gauche (heroOnLeft, voir plus haut) — jamais dupliqué. */}
+          {!heroOnLeft && (
+            <div style={{ marginTop: 28 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 10 }}>
+                Ce que disent des {mode === "coach" ? "coachs" : "sportifs"} comme vous
+              </div>
+              <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, marginBottom: 14 }}>
+                <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
+                  &ldquo;{testimonial.quote}&rdquo;
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                    <img src={testimonial.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>{testimonial.name}</div>
+                    <div style={{ fontSize: 11, color: "#8a8f94" }}>{testimonial.role}</div>
+                  </div>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                    {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#f28a00", fontSize: 12 }}>★</span>)}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
+                <div style={{ display: "flex" }}>
+                  {PAYWALL_AVATARS.map((src, i) => (
+                    <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+                  <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
         </div>

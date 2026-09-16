@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import posthog from "posthog-js";
-import { PricingPrimingContent, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { PricingPrimingContent, PricingPrimingValue, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
@@ -50,21 +50,32 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10,
   };
 
-  /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
-     ProgramCriteriaModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx/WellnessModal.tsx — demande
-     explicite de Gildas : le paywall doit lui aussi s'afficher en drawer, "onboarding comme
-     inapp" puisque c'est déjà exactement le même composant sur les deux surfaces). Toujours
-     dismissible (le "×" reste géré par `allowDismiss`, jamais retiré par ce changement). */
+  /* Premier jet (2026-09-16, demande explicite de Gildas) : split gauche (dark, la valeur —
+     headline/sous-titre + illustration) / droite (l'offre — prix, bullets, preuve sociale, FAQ,
+     CTA), même convention que le reste du wizard (WizardHero + illustration à gauche, formulaire/
+     actions à droite dans un drawer docké — ProgramCreatePicker.tsx/ProgramCriteriaModal.tsx/
+     WellnessModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx). Mobile : pas de 2e colonne, la
+     valeur reste affichée EN PREMIER dans le drawer (au-dessus de l'offre), jamais après — un
+     split qui inverserait cet ordre sur mobile irait à l'encontre du but même de cet écran
+     ("montrer la valeur avant le prix") sur la surface où la quasi-totalité du trafic arrive. */
+  const heroOnLeft = isMd;
   return (
     <div
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
+        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : "stretch",
         zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={e => { if (allowDismiss && e.target === e.currentTarget) onDismiss(); }}
     >
+      {heroOnLeft && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: "#141414" }}>
+          <div style={{ maxWidth: 460, width: "100%" }}>
+            <PricingPrimingValue role={mode} headline={headline} sub={sub} />
+          </div>
+        </div>
+      )}
       <div style={{
         position: "relative",
         background: "#f1f0ee",
@@ -81,7 +92,14 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ maxWidth: 640, margin: "0 auto", padding: "36px 20px 20px" }}>
-            <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} headline={headline} sub={sub} sport={sport} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} athleteSelfId={athleteSelfId} />
+            {/* Valeur affichée dans le drawer lui-même seulement sur mobile (heroOnLeft=false) —
+                sur desktop, elle vit déjà dans le panneau de gauche ci-dessus. */}
+            {!heroOnLeft && (
+              <div style={{ marginBottom: 28 }}>
+                <PricingPrimingValue role={mode} headline={headline} sub={sub} dark={false} />
+              </div>
+            )}
+            <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} athleteSelfId={athleteSelfId} />
           </div>
         </div>
 

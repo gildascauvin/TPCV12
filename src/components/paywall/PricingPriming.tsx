@@ -1,17 +1,21 @@
 "use client";
 
-import { PRICING, PAYWALL_AVATARS, PAYWALL_TESTIMONIALS } from "./PaywallModal";
+import { PRICING } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
 
 /* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
    paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
-   le prix, les bullets de valeur, le témoignage, la bande de confiance et la FAQ.
+   le prix, le mécanisme en 3 étapes, la vidéo carousel et la FAQ.
    Décision explicite de Gildas (2026-08-07) : ces deux écrans doivent être "exactement le même
    composant" pour ne plus jamais diverger sur le wording. Le shell (modal dismissible vs page
    pleine largeur) et le CTA final restent propres à chaque appelant — seul le contenu entre le
    badge et le CTA vit ici.
+
+   2026-09-16 — split gauche (valeur, PricingPrimingValue)/droite (offre, PricingPrimingContent) :
+   témoignage + bande "+600" déplacés vers PaywallModal.tsx (le form de paiement, pas ici), voir
+   ce fichier pour le détail — "comme le POC" fourni par Gildas.
 
    2026-09-13 — retour de l'essai (14 jours, CB requise, 0€ dû aujourd'hui), remplace la garantie
    remboursé 14 jours du 2026-08-07 — voir CLAUDE.md pour l'historique complet des deux décisions.
@@ -24,20 +28,30 @@ const TRIAL_DAYS = 14;
    le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans engagement.";
 
-const BULLETS: Record<"athlete" | "coach", string[]> = {
-  athlete: [
-    "Ajusté selon ta récupération",
-  ],
-  coach: [
-    "Sportifs illimités dans ton espace coach",
-    "Détection des sportifs qui nécessitent ton attention",
-    "Ajustements basés sur la récupération réelle",
-  ],
+/* Sous-titre par défaut du panneau de valeur (PricingPrimingValue) quand l'appelant n'en fournit
+   pas (cas générique, pas de programme claimé) — remplace l'ancien bloc "UNLOCK_LINE" en gras
+   dans la carte prix, retiré de là le 2026-09-16 (voir STEPS ci-dessous, "comme le POC" de Grok :
+   mécanisme en 3 étapes plutôt qu'une ligne de synthèse + une liste de bullets séparée). */
+const UNLOCK_LINE: Record<"athlete" | "coach", string> = {
+  athlete: "Ton programme est déjà prêt. Débloque-le et laisse ThePerfClub ajuster chaque séance.",
+  coach: "Ton système de suivi est prêt. Débloque-le et laisse ThePerfClub t'aider à prendre les bonnes décisions pour chaque sportif, à chaque séance.",
 };
 
-const UNLOCK_LINE: Record<"athlete" | "coach", string> = {
-  athlete: "Ton programme personnalisé est déjà prêt. Débloque-le et laisse ThePerfClub ajuster chaque séance.",
-  coach: "Ton système de suivi est prêt. Débloque-le et laisse ThePerfClub t'aider à prendre les bonnes décisions pour chaque sportif, à chaque séance.",
+/* Mécanisme en 3 étapes fusionné dans la carte prix (2026-09-16) — 3e itération, retour explicite
+   de Gildas : titres redevenus juste "Enregistre/Cible/Progresse" (sans le préfixe "Aujourd'hui —
+   /Pendant 14 jours —/Ensuite —" de la 2e itération), texte final donné verbatim par Gildas. Coach
+   = même structure, wording en miroir. */
+const STEPS: Record<"athlete" | "coach", { title: string; text: string }[]> = {
+  athlete: [
+    { title: "Enregistre", text: "Enregistre tes séances et ton ressenti et identifie ce qui joue sur tes performances." },
+    { title: "Cible", text: "Cible les comportements qui pèsent le plus et les faiblesses qui te freinent." },
+    { title: "Progresse", text: "Ta charge s'ajuste automatiquement à ta vraie récupération." },
+  ],
+  coach: [
+    { title: "Enregistre", text: "Enregistre les séances et le ressenti de tes sportifs et identifie ce qui joue sur leurs performances." },
+    { title: "Cible", text: "Cible les comportements qui pèsent le plus et les faiblesses qui les freinent." },
+    { title: "Progresse", text: "Leur charge s'ajuste automatiquement à leur vraie récupération." },
+  ],
 };
 
 function faqItems(role: "athlete" | "coach") {
@@ -87,31 +101,54 @@ export interface PricingPrimingProps {
   athleteSelfId?: string;
 }
 
-export function PricingPrimingContent({ role, billing, setBilling, headline, sub, sessionCount, weaknessLabels, name, athleteSelfId }: PricingPrimingProps) {
+/* Panneau "valeur" du split gauche (dark)/droite (actions) — même layout que le reste du wizard
+   (WizardHero + contenu à gauche, formulaire/actions à droite — ProgramCreatePicker.tsx/
+   ProgramCriteriaModal.tsx/WellnessModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx).
+
+   2026-09-16, 4e itération — retour explicite de Gildas : ni illustration (chart recup/fatigue,
+   déjà vu à decision_2a/2b) ni liste de bullets génériques ("Ton programme sur mesure, déjà
+   généré"/"Ajusté selon ta récupération") — l'effort de personnalisation doit porter sur le
+   headline/sub eux-mêmes (avec les vraies infos connues de l'onboarding : sport, wellness, noms
+   des sportifs), pas sur une liste à côté. Ce composant ne rend donc plus que headline+sub — voir
+   OnboardingFlow.tsx/PrimingJourneyModal.tsx pour les propositions de wording personnalisé (pas
+   encore câblées, en attente de validation du wording par Gildas). */
+export function PricingPrimingValue({ role, headline, sub, dark = true }: {
+  role: "athlete" | "coach"; headline: string; sub?: string | null;
+  /** Défaut true = panneau gauche desktop (fond #141414). PrimingJourneyModal.tsx passe false pour
+      l'usage mobile (fond clair du drawer, #f1f0ee) — sans ça le titre/sous-titre blancs
+      deviennent invisibles (bug réel signalé par Gildas, 2026-09-16). */
+  dark?: boolean;
+}) {
+  /* Repli sur UNLOCK_LINE (2026-09-16, retour explicite de Gildas — "améliore tes performances
+     maintenant / ton programme est déjà prêt... comme le POC") quand l'appelant ne fournit pas de
+     sous-titre (cas générique, pas de programme claimé) — `sub === null` reste un moyen explicite
+     de le masquer si un appelant le veut un jour, `undefined` déclenche le repli. */
+  const subText = sub === null ? null : (sub ?? UNLOCK_LINE[role]);
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10, lineHeight: 1.2, color: dark ? "#fff" : "#171b1f" }}>{headline}</div>
+      {subText && <div style={{ fontSize: 14, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94" }}>{subText}</div>}
+    </div>
+  );
+}
+
+/* sessionCount/weaknessLabels ne sont plus consommés ici (2026-09-16) — restent dans
+   PricingPrimingProps (le contrat partagé) mais pas déstructurés, pour éviter une confusion
+   "acceptés mais ignorés". */
+export function PricingPrimingContent({ role, billing, setBilling, name, athleteSelfId }: Omit<PricingPrimingProps, "headline" | "sub">) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
   const annualSavingsPct = Math.round((annualSavings / (p.monthly * 12)) * 100);
-  const testimonial = PAYWALL_TESTIMONIALS[role];
-
-  const bullets = role === "athlete"
-    ? [
-        sessionCount ? `${sessionCount} séances générées` : "Ton programme sur mesure, déjà généré",
-        ...(weaknessLabels?.length ? [`Ciblé sur ta faiblesse : ${weaknessLabels.join(" et ")}`] : []),
-        ...BULLETS.athlete,
-      ]
-    : BULLETS.coach;
+  const steps = STEPS[role];
 
   return (
     <div>
-      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10, lineHeight: 1.2 }}>{headline}</div>
-      {sub && <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 20 }}>{sub}</div>}
-
       <div style={{
         position: "relative", overflow: "hidden",
         background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
         border: "1px solid rgba(255,255,255,.13)", borderRadius: 16, padding: "18px 18px 16px",
-        marginBottom: 22, marginTop: sub ? 0 : 18, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
+        marginBottom: 22, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
       }}>
         <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
           ✓ {TRIAL_DAYS} jours offerts
@@ -131,42 +168,54 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
           <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
         </div>
 
-        <ul style={{ margin: "16px 0 4px", padding: 0, listStyle: "none" }}>
-          {bullets.map((b) => (
-            <li key={b} style={{ display: "flex", gap: 8, fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.82)", lineHeight: 1.5, marginBottom: 6 }}>
-              <span style={{ color: "#7fdb8f", fontWeight: 900, flexShrink: 0 }}>✓</span>{b}
-            </li>
+        {/* Mécanisme en 3 étapes (2026-09-16, "comme le POC" — voir STEPS ci-dessus) : remplace
+            l'ancienne liste de bullets + la ligne UNLOCK_LINE en gras. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, marginBottom: 4 }}>
+          {steps.map((s, i) => (
+            <div key={s.title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              {/* Numéro neutre pour les 3 étapes (2026-09-16, retour explicite de Gildas — "je
+                  veux pas que le 1,2,3 soit coloré en fond rouge") : plus de mise en avant du
+                  step 1. */}
+              <div style={{
+                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 800,
+                background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)",
+              }}>
+                {i + 1}
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 1 }}>{s.title}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.65)", lineHeight: 1.4 }}>{s.text}</div>
+              </div>
+            </div>
           ))}
-        </ul>
-        <div style={{ fontSize: 13.5, color: "rgba(255,255,255,.92)", fontWeight: 700, lineHeight: 1.5, marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.1)" }}>
-          {UNLOCK_LINE[role]}
         </div>
 
-        {/* CTA secondaire dans l'encadré dark, comme le POC (.coach-free-box) — coach : le
-            persona a besoin d'une intro chaude, pas seulement d'un funnel self-serve froid.
-            Sportif : "gratuit avec un coach", lien /register direct (id + prénom en clair dans
-            l'URL, aucun programme requis — voir doc de athleteSelfId ci-dessus). Absent si
-            athleteSelfId inconnu (repli sûr, jamais un lien qui pointerait vers personne). */}
+        {/* CTA secondaire sur une seule ligne (2026-09-16, retour explicite de Gildas — "ca
+            marcherait mieux sur une ligne" + "plutôt qu'un bouton un lien") : plus de bloc
+            bordé pleine largeur, un lien texte inline après le contexte. Coach : intro chaude
+            avant un funnel self-serve froid. Sportif : "gratuit avec un coach", lien /register
+            direct (id + prénom en clair dans l'URL, aucun programme requis — voir doc de
+            athleteSelfId ci-dessus). Absent si athleteSelfId inconnu (repli sûr, jamais un lien
+            qui pointerait vers personne). */}
         {role === "coach" ? (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)", marginBottom: 10, lineHeight: 1.4 }}>
-              Une question ?
-            </div>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center", fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)" }}>
+            Une question ? →{" "}
             <a
               href="https://calendly.com/cauvingildas/30min" target="_blank" rel="noopener noreferrer"
-              style={{ display: "block", width: "100%", height: 42, lineHeight: "42px", borderRadius: 12, border: "1px solid rgba(255,255,255,.22)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 13, fontWeight: 800, textDecoration: "none" }}
+              style={{ color: "#ff8a55", fontWeight: 800, textDecoration: "underline" }}
             >
               Demander une démo
             </a>
           </div>
         ) : athleteSelfId && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center" }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)", marginBottom: 10, lineHeight: 1.4 }}>
-              Gratuit avec un coach
-            </div>
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center", fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)" }}>
+            Gratuit avec un coach →{" "}
             <ShareButton
-              buttonLabel="Inviter mon coach →"
+              linkLabel="Inviter mon coach"
               title="Hey coach, ThePerfClub m'aide à structurer mon entraînement — rejoins-moi pour me coacher dessus !"
+              variant="dark"
               getShareUrl={async () =>
                 `${window.location.origin}/register?role=coach&athleteId=${encodeURIComponent(athleteSelfId)}&athleteName=${encodeURIComponent(name ?? "")}`
               }
@@ -195,53 +244,27 @@ export function PricingPrimingContent({ role, billing, setBilling, headline, sub
         </div>
       </div>
 
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
-          Ce que disent des {role === "coach" ? "coachs" : "sportifs"} comme vous
-        </div>
-        <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-          <div style={{ fontSize: 13, color: "#3a3f44", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
-            &ldquo;{testimonial.quote}&rdquo;
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-              <img src={testimonial.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>{testimonial.name}</div>
-              <div style={{ fontSize: 11, color: "#8a8f94" }}>{testimonial.role}</div>
-            </div>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-              {[0, 1, 2, 3, 4].map(i => <span key={i} style={{ color: "#f28a00", fontSize: 12 }}>★</span>)}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22, padding: "12px 14px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16 }}>
-        <div style={{ display: "flex" }}>
-          {PAYWALL_AVATARS.map((src, i) => (
-            <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #f1f0ee", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
-              <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-            </div>
-          ))}
-        </div>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-          <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>font confiance à ThePerfClub</div>
-        </div>
-      </div>
+      {/* Témoignage + bande "+600" déplacés vers le form de paiement (2026-09-16, retour explicite
+          de Gildas — "c'est censé être au form de paiement") : PaywallModal.tsx, panneau gauche
+          desktop / bas du formulaire mobile. Ne restent plus ici que la vidéo carousel ("Les
+          experts en parlent", ci-dessus) et la FAQ (ci-dessous). */}
 
       <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
           Questions fréquentes
         </div>
-        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, padding: "4px 16px" }}>
+        {/* Accordéon natif <details>/<summary> (2026-09-16, "comme le POC" — retour explicite de
+            Gildas), remplace l'ancien affichage question+réponse toujours dépliées. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {faqItems(role).map((item, i) => (
-            <div key={i} style={{ padding: "14px 0", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#1f2428", marginBottom: 6 }}>{item.q}</div>
-              <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>{item.a}</div>
-            </div>
+            <details key={i} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 12 }}>
+              <summary style={{ padding: "13px 16px", fontSize: 13.5, fontWeight: 800, color: "#1f2428", cursor: "pointer", listStyle: "revert" }}>
+                {item.q}
+              </summary>
+              <div style={{ padding: "0 16px 13px", fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>
+                {item.a}
+              </div>
+            </details>
           ))}
         </div>
       </div>
