@@ -2,6 +2,7 @@
 
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 
 /* Écran racine du flux de création — remplace le menu ancré (dropdown) d'une itération
    précédente. Choix fait avec Gildas après comparaison Drive/Notion (les deux listent leurs
@@ -55,7 +56,13 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
-          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            {wizardHero}
+            {/* Illustration "Enregistre" de la frise (2026-09-14) — même composant réel que
+                PricingPriming.tsx/DecisionStep.tsx (FrisePreviews.tsx), pas de sport connu à ce
+                stade (avant sport_2a/criteria) donc repli sur ses DEFAULT_SESSIONS génériques. */}
+            <div style={{ marginTop: 22 }}><PlanningPreview /></div>
+          </div>
         </div>
       )}
       <div style={{

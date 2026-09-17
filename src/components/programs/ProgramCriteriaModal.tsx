@@ -5,6 +5,7 @@ import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { guessSportChip } from "@/lib/sportCategories";
+import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 
 const IMPORT_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -342,7 +343,14 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
-          <div style={{ maxWidth: 480, width: "100%" }}>{wizardHero}</div>
+          <div style={{ maxWidth: 480, width: "100%" }}>
+            {wizardHero}
+            {/* Illustration "Enregistre" de la frise (2026-09-14) — même composant réel que
+                PricingPriming.tsx/DecisionStep.tsx (FrisePreviews.tsx). Sport réel de cet écran
+                (state local `sport`, jamais un sport figé) : les exemples de séances changent
+                déjà pendant la saisie si un sport avec un curriculum dédié est choisi. */}
+            <div style={{ marginTop: 22 }}><PlanningPreview sport={sport || undefined} /></div>
+          </div>
         </div>
       )}
       <div style={{
