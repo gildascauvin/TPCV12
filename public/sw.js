@@ -35,7 +35,11 @@ self.addEventListener("fetch", (event) => {
         return fetch(event.request).then((response) => {
           if (response.ok && response.type === "basic") {
             const clone = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+            /* .catch() : un fetch annulé (navigation/fermeture avant la fin du téléchargement)
+               ou une extension qui coupe le flux de la réponse fait échouer cache.put() —
+               écriture en cache best-effort, jamais critique pour l'affichage réel de la page,
+               ne doit donc jamais remonter comme une exception non gérée dans la console. */
+            caches.open(CACHE).then((cache) => cache.put(event.request, clone)).catch(() => {});
           }
           return response;
         });
@@ -53,7 +57,7 @@ self.addEventListener("fetch", (event) => {
       .then((response) => {
         if (response.ok && response.type === "basic") {
           const clone = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+          caches.open(CACHE).then((cache) => cache.put(event.request, clone)).catch(() => {});
         }
         return response;
       })
