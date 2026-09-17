@@ -3386,3 +3386,28 @@ Repéré par Gildas en testant ("plein de séances de démo, juste la séance 'd
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Bug RLS confirmé par lecture directe de `pg_policies` en base (pas supposé) **et** reproduit/corrigé en conditions réelles par Gildas (coach payant + sportif gratuit lié, gating constaté puis levé après fix). Value slide personnalisée et bug de perte de séances **pas testés au clic** par Gildas dans cette session (value_intro confirmée fonctionner une fois cache/session de test exclus comme cause ; le fix invite/join reste à tester de bout en bout — voir protocole donné à Gildas : invite avec vrai email, assignation d'un programme au placeholder, inscription via le lien, vérification des deux côtés).
 
 Déployé en prod le 2026-09-17, commit `de33d68`, push direct sur `main`.
+
+## Charge (RPE×durée) de la veille + profil par dimension du comportement, fusionnés dans Impact comportements (2026-09-17)
+
+Suite d'un brainstorm produit (pas de conversation dédiée dans ce fichier avant ce jour — 2 idées retenues sur 5 proposées, voir mémoire de session) : croiser la charge d'entraînement de la veille avec la récupération du lendemain (comme `computeBehaviorCorrelations` le fait déjà pour les comportements déclaratifs), et faire apparaître quelle dimension du wellness (sommeil/stress/récup/motivation) est la plus touchée par chaque comportement, plutôt qu'un seul chiffre composite.
+
+### `dimensionRaw`/`DIMENSION_KEYS`/`DIMENSION_LABELS` exportées (`wellnessBaseline.ts`)
+3 primitives déjà utilisées en interne pour le calcul de baseline (Z-score par dimension) passent en `export` — zéro changement de comportement, juste réutilisées par `conseilsData.ts` pour éviter de dupliquer la normalisation (stress déjà inversé pour rester "plus haut = mieux" uniformément sur les 4 dimensions).
+
+### `computeBehaviorCorrelations()` — dimension dominante par comportement
+Chaque `BehaviorCorrelation` gagne un champ `dominantDimension: {key, label, impact} | null` — même comparaison avec/sans que l'impact composite, mais appliquée à `dimensionRaw()` plutôt qu'au score. `dominantDimensionFor()` (nouvelle, factorisée) compare 2 groupes de jours (`WellnessDaily[]` complets, pas juste des scores) sur les 4 dimensions, retient celle au `|impact|` le plus élevé — `null` si aucune des 4 n'a assez d'occurrences (même seuil que l'impact composite, 2 jours mini de chaque côté).
+
+### `computeLoadBehaviorCorrelations()` — charge de la veille, 2 lignes synthétiques
+**1re version (retirée le jour même, retour direct de Gildas)** : une carte séparée "Charge → Récupération" avec un seul chiffre agrégé (charge élevée vs charge faible/repos combinés). Gildas a demandé (1) de fusionner directement dans la carte "Impact comportements / Ce qui t'aide ou te pénalise" avec le même layout que les comportements, et (2) de séparer "l'impact des séances fatigantes" de "l'impact des jours de récup" plutôt qu'une seule comparaison binaire.
+
+Réécrit en conséquence : `computeLoadBehaviorCorrelations(sessions, wellness)` retourne 0 à 2 `BehaviorCorrelation` synthétiques — "🔥 Séance fatigante la veille" (charge de la veille au-dessus de la médiane des jours chargés de l'utilisateur, seuil relatif à son propre historique comme le reste du module — nécessite au moins 4 jours de charge non nulle) et "🛌 Jour de récup la veille" (charge de la veille strictement nulle, ne dépend pas du seuil médian donc calculable même sans assez d'historique pour lui). Chacune passe par la même fonction `bucket()` interne (comparaison avec/sans + `dominantDimensionFor()`), donc porte aussi sa propre dimension dominante.
+
+`computeConseilsData()` fusionne les deux sources en un seul tableau trié par impact : `[...computeBehaviorCorrelations(allWellness), ...computeLoadBehaviorCorrelations(allSessions, allWellness)].sort((a,b)=>b.impact-a.impact)` — `BehaviorImpactCard` (`ConseilsClient.tsx`) n'a rien à changer côté rendu, elle affiche déjà toute la liste `correlations` avec le même composant de ligne. `LoadRecoveryCard`/`LoadRecoveryCorrelation` (la carte séparée de la 1re version) supprimés entièrement.
+
+### Wording dimension corrigé
+"Surtout via motivation (+1.0)" (1re version, jugé peu clair par Gildas) → "Impacte positivement/négativement la motivation (+1.0)" — nouvelle table `DIMENSION_PHRASE` (`ConseilsClient.tsx`, local à l'UI) avec article accordé au genre du nom (le sommeil/le stress/la récupération musculaire/la motivation), plutôt qu'un label brut collé après "via".
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre à chaque round. Logique rejouée en scripts Node ad-hoc (miroir exact du TS, `~/.nvm/versions/node/v20.20.2/bin` — le node système ne supporte pas `??`) plutôt que relue seule : comportement→dimension dominante confirmé (alcool→sommeil le plus marqué dans un jeu synthétique), charge élevée→impact négatif confirmé, jour de repos→impact positif confirmé, seuil "historique insuffisant"→`null` confirmé, fusion+tri des 2 sources dans une seule liste confirmée. Pas de test au clic réel (serveur local laissé à disposition de Gildas, comme d'habitude).
+
+Déployé en prod le 2026-09-17, commit `6a21938`, push direct sur `main`.
