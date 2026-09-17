@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -12,37 +13,43 @@ import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
-import WelcomeModal from "@/components/onboarding/WelcomeModal";
 
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import DayColumn from "@/components/calendar/DayColumn";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
-import CoachSessionModal from "@/components/coach/CoachSessionModal";
-import CoachCompleteModal from "@/components/coach/CoachCompleteModal";
-import DuplicateModal from "@/components/sessions/DuplicateModal";
-import ReconduireModal from "@/components/sessions/ReconduireModal";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
-import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
 import { coachAlertFor } from "@/lib/alerts";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+
+/* Modales/drawers ouverts sur demande — même traitement next/dynamic que WeekClient.tsx
+   (2026-09-17) : leur JS (CoachSessionModal → ExerciseBlockEditor, ProgramLibraryPage →
+   ProgramBuilderModal → tout l'éditeur de programme + dnd-kit) part dans des chunks séparés,
+   chargés au clic plutôt que dans le bundle initial de /coach/planning. */
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const WelcomeModal = dynamic(() => import("@/components/onboarding/WelcomeModal"));
+const CoachSessionModal = dynamic(() => import("@/components/coach/CoachSessionModal"));
+const CoachCompleteModal = dynamic(() => import("@/components/coach/CoachCompleteModal"));
+const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
+const ReconduireModal = dynamic(() => import("@/components/sessions/ReconduireModal"));
+const ProgramLibraryPage = dynamic(() => import("@/components/programs/ProgramLibraryPage"));
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 
 function dayWellness(
   athlete: CoachAthlete,

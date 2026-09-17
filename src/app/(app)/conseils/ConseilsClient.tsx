@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -13,18 +14,21 @@ import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
-import TestsPanel from "@/components/tests/TestsPanel";
 import type { MergedTest, TestResultRow } from "@/lib/testResults";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
 import type { SubscriptionStatus } from "@/types";
+
+/* Modales/drawers + TestsPanel (1800+ lignes, seulement affiché sous l'onglet "Tests") ouverts sur
+   demande — même traitement next/dynamic que les autres pages (2026-09-17). */
+const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 
 /* Statut d'un comportement (2026-09, suite) — calcul pur partagé entre le badge (rendu sur la même
    ligne que le nom, voir BehaviorImpactCard) et la barre (BehaviorGauge), pour ne jamais dupliquer le

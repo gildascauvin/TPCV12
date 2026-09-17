@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -11,13 +12,8 @@ import DayColumn from "@/components/calendar/DayColumn";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
-import AddSessionModal from "@/components/sessions/AddSessionModal";
-import CompleteModal from "@/components/sessions/CompleteModal";
-import DuplicateModal from "@/components/sessions/DuplicateModal";
-import ReconduireModal from "@/components/sessions/ReconduireModal";
-import WellnessModal from "@/components/wellness/WellnessModal";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
@@ -28,16 +24,28 @@ import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import ProgramLibraryPage from "@/components/programs/ProgramLibraryPage";
 import ShareButton from "@/components/sessions/ShareButton";
+
+/* Modales/drawers ouverts sur demande (état local, jamais montés au premier rendu) — next/dynamic
+   déplace leur JS (dont AddSessionModal → ExerciseBlockEditor 1500+ lignes + dnd-kit d'autocomplete,
+   ProgramLibraryPage → ProgramBuilderModal → tout le program builder) dans des chunks séparés,
+   chargés seulement au clic plutôt que dans le bundle initial de /week. Même principe déjà en place
+   sur /today (2026-07-28) — étendu ici (2026-09-17) sur la 2e page la plus visitée de l'app. */
+const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
+const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
+const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
+const ReconduireModal = dynamic(() => import("@/components/sessions/ReconduireModal"));
+const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
+const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
+const ProgramLibraryPage = dynamic(() => import("@/components/programs/ProgramLibraryPage"));
 import type { Session, WellnessDaily, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
 
 /* ─── helpers ─── */

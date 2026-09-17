@@ -2,28 +2,34 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import posthog from "posthog-js";
 import { format, addDays, subDays } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import CoachSessionModal from "@/components/coach/CoachSessionModal";
-import ReviewCompleteModal from "@/components/coach/ReviewCompleteModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
-import PaywallModal from "@/components/paywall/PaywallModal";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
-import InviteModal from "@/components/coach/InviteModal";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
-import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
+import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
+
+/* Modales/drawers ouverts sur demande — même traitement next/dynamic que /week et
+   /coach/planning (2026-09-17) : leur JS part dans des chunks séparés, chargés au clic
+   plutôt que dans le bundle initial de /coach. */
+const CoachSessionModal = dynamic(() => import("@/components/coach/CoachSessionModal"));
+const ReviewCompleteModal = dynamic(() => import("@/components/coach/ReviewCompleteModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
+const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";

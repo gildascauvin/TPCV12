@@ -2,17 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
-import InviteModal from "@/components/coach/InviteModal";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
-import TestsPanel from "@/components/tests/TestsPanel";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
 import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -21,8 +17,17 @@ import ShareButton from "@/components/sessions/ShareButton";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+
+/* Modales/drawers + TestsPanel (1800+ lignes, ne s'affiche que carte dépliée sur l'onglet
+   Tests) ouverts sur demande — même traitement next/dynamic que les autres pages coach
+   (2026-09-17). */
+const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
+const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
 import { fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
