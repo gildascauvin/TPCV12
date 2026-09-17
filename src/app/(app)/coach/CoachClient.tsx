@@ -206,6 +206,41 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }));
   }, [supabase, userId, athletes]);
 
+  /* Temps réel — séances (2026-09-17) : jusqu'ici seul wellness_daily était écouté ici, jamais
+     sessions/coach_sessions — une séance ajustée/ajoutée ailleurs (Planning, Coach Control d'un
+     autre appareil) ne se répercutait jamais en direct sur ce dashboard. RLS autorise bien un
+     coach à lire les sessions de ses vrais sportifs liés (policy coach_read_athlete_sessions),
+     donc l'abonnement direct fonctionne sans détour par une route admin. Réutilise handleDateChange
+     (déjà le mécanisme de rechargement complet sessions+wellness pour une date) plutôt que de
+     recomposer l'état à la main — seulement si la vue affichée est "aujourd'hui" (jamais de
+     navigation forcée sur un coach en train de consulter un autre jour). Refs pour éviter une
+     resouscription à chaque changement de selectedDate/athletes (même convention que l'effet
+     wellness juste au-dessus, deps []). */
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const handleDateChangeRef = useRef(handleDateChange);
+  handleDateChangeRef.current = handleDateChange;
+  useEffect(() => {
+    if (sandboxMode) return;
+    const realAthletes = athletes.filter(a => a.user_id);
+    const refetchIfToday = () => { if (selectedDateRef.current === today) handleDateChangeRef.current(today); };
+
+    const channels = [
+      ...realAthletes.map(a =>
+        supabase
+          .channel(`dash-sessions-${a.user_id}`)
+          .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${a.user_id}` }, refetchIfToday)
+          .subscribe()
+      ),
+      supabase
+        .channel(`dash-coach-sessions-${userId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "coach_sessions", filter: `coach_id=eq.${userId}` }, refetchIfToday)
+        .subscribe(),
+    ];
+
+    return () => { channels.forEach(c => supabase.removeChannel(c)); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
   // est ouverte, même garde que les autres pages.
   useHorizontalScrollNav(dayScrollRef, {

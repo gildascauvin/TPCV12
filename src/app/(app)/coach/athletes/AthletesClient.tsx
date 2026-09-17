@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import InviteModal from "@/components/coach/InviteModal";
@@ -315,6 +316,44 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       setBaselineSeriesByAthlete(bs ?? {});
     }
   }
+
+  /* Temps réel (2026-09-17) — cette page ne se rafraîchissait jusqu'ici qu'au chargement initial ;
+     aucun abonnement, contrairement à /today, /week, /coach. RLS autorise le coach à lire les
+     sessions/wellness_daily de ses vrais sportifs liés (policies coach_read_athlete_sessions/
+     coach_read_athlete_wellness), donc l'abonnement direct fonctionne sans route admin. Réutilise
+     le même endpoint que handleDateChange (GET /api/coach/athletes, recalcule déjà signatures/
+     trends/baselines côté serveur) — refetch ciblé plutôt qu'un router.refresh() complet. */
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  useEffect(() => {
+    if (sandboxMode) return;
+    const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
+    const supabase = createClient();
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const refetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { handleDateChange(selectedDateRef.current); }, 400);
+    };
+
+    const channels = [
+      ...realUserIds.map(uid =>
+        supabase
+          .channel(`athletes-sessions-${uid}`)
+          .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${uid}` }, refetch)
+          .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${uid}` }, refetch)
+          .subscribe()
+      ),
+      supabase
+        .channel(`athletes-coach-sessions-${userId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "coach_sessions", filter: `coach_id=eq.${userId}` }, refetch)
+        .subscribe(),
+    ];
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      channels.forEach(c => supabase.removeChannel(c));
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll horizontal (trackpad) = change de jour avant/après — coupé pendant une invitation/
   // suppression en cours.

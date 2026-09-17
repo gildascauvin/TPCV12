@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
@@ -211,6 +212,36 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
       setLoading(false);
     }
   }
+
+  /* Temps réel (2026-09-17) — jusqu'ici cette page ne se rafraîchissait qu'au chargement initial
+     ou via une navigation manuelle, contrairement à /today et /week qui écoutent déjà sessions/
+     wellness_daily. Réutilise le même endpoint que la navigation de date (GET /api/conseils, déjà
+     recalcule computeConseilsData côté serveur) plutôt qu'un router.refresh() — évite de re-render
+     tout le server component (paywall, profil...) pour une simple mise à jour de données. */
+  const referenceDateRef = useRef(data.referenceDate);
+  referenceDateRef.current = data.referenceDate;
+  useEffect(() => {
+    if (!userId || sandboxMode) return;
+    const supabase = createClient();
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const refetch = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetch(`/api/conseils?date=${referenceDateRef.current}`)
+          .then(res => (res.ok ? res.json() : null))
+          .then(fresh => { if (fresh) setData(fresh); });
+      }, 400);
+    };
+    const channel = supabase
+      .channel(`conseils-live-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions", filter: `user_id=eq.${userId}` }, refetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${userId}` }, refetch)
+      .subscribe();
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [userId, sandboxMode]);
 
   // Scroll horizontal (trackpad) = change de jour avant/après — coupé pendant un fetch en cours.
   useHorizontalScrollNav(dayScrollRef, {
