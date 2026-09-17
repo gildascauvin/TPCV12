@@ -2,7 +2,13 @@
 
 const nextConfig = {
   images: {
-    remotePatterns: [],
+    // theperfclub.com héberge l'image de fond plein-écran de value_intro (élément LCP de
+    // /register, ~3550x4438px non optimisée servie en <img> brut jusqu'ici) — autorisé ici
+    // pour que next/image puisse la redimensionner/reconvertir automatiquement.
+    remotePatterns: [
+      { protocol: "https", hostname: "www.theperfclub.com" },
+      { protocol: "https", hostname: "theperfclub.com" },
+    ],
   },
   experimental: {
     staleTimes: {

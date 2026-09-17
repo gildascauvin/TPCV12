@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Program, SessionTemplate, WeekTemplate } from "@/types";
-import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/ProgramBuilderModal";
+import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];

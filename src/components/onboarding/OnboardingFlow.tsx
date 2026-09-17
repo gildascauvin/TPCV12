@@ -11,6 +11,7 @@ import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { computeWellnessBaselineAt, wellnessSignal } from "@/lib/wellnessBaseline";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate, CoachAthlete } from "@/types";
 import Link from "next/link";
+import Image from "next/image";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import DecisionStep from "@/components/onboarding/DecisionStep";
 import PaywallModal, { PAYWALL_AVATARS, type Billing } from "@/components/paywall/PaywallModal";
@@ -1924,12 +1925,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                   dessous — outer wrapper en `pointerEvents:"none"` (bande décorative, purement
                   illustrative). */}
               <div style={{ position: "fixed", inset: 0, zIndex: 0 }}>
-                <img
+                {/* next/image (2026-09-17) — remplace l'<img> brut qui servait l'original
+                    3550x4438px tel quel : next/image redimensionne/reconvertit (WebP/AVIF)
+                    automatiquement pour la taille d'écran réelle, `priority` préserve le
+                    comportement `fetchPriority="high"`/`loading="eager"` d'origine (élément LCP
+                    de cet écran, le 1er de l'onboarding). */}
+                <Image
                   src="https://www.theperfclub.com/wp-content/uploads/2026/07/value-intro-BG.jpeg"
                   alt=""
-                  loading="eager"
-                  fetchPriority="high"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 35%", display: "block" }}
+                  fill
+                  priority
+                  sizes="100vw"
+                  style={{ objectFit: "cover", objectPosition: "center 35%" }}
                 />
                 <div style={{ position: "absolute", left: 0, right: 0, top: colIsMd ? 72 : 56, padding: "0 20px", display: "flex", pointerEvents: "none" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", display: "flex", justifyContent: "flex-end" }}>
