@@ -52,6 +52,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
 
   const [profile, setProfile] = useState<Profile | null>(sandboxMode ? buildSandboxProfile(sandboxRole) : null);
   const [email, setEmail] = useState(sandboxMode ? "demo@theperfclub.com" : "");
+  const [coachName, setCoachName] = useState<string | null>(null);
   const [loading, setLoading] = useState(!sandboxMode);
 
   const [name, setName] = useState("");
@@ -71,6 +72,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
         const data = await res.json();
         setProfile(data.profile);
         setEmail(data.email);
+        setCoachName(data.coachName ?? null);
       }
       setLoading(false);
     })();
@@ -237,6 +239,16 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 >
                   {saving ? "..." : "Enregistrer ✓"}
                 </button>
+
+                {/* Coach — lecture seule, pas de retrait/quitter depuis ce drawer */}
+                {coachName && (
+                  <>
+                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Coach</div>
+                    <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 24, fontSize: 14, color: "#171b1f" }}>
+                      Coaché par <strong>{coachName}</strong>
+                    </div>
+                  </>
+                )}
 
                 {/* Abonnement */}
                 <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Abonnement</div>

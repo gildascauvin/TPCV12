@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
 
 /* Logging .error ajouté (2026-09-14) — cas réel trouvé en prod (kouirassbadr@gmail.com, invité par
    jeremie.thiebaud.pro@gmail.com) : cette route s'est déclenchée (200, aucune exception) mais n'a
@@ -63,14 +64,18 @@ export async function POST() {
             sport: athleteProfile?.sport || "",
             wellness_score: wellness?.score ?? 70,
           }),
-      // Le sportif a désormais ses propres vraies séances (table sessions) — les séances
-      // synthétiques posées à l'invitation (coach_sessions, voir /api/invite/create) deviendraient
-      // des doublons fantômes sur son planning coach si on les laissait.
-      placeholder ? admin.from("coach_sessions").delete().eq("athlete_id", placeholder.id) : Promise.resolve(null),
+      // Supprime les séances démo synthétiques ET migre les vraies séances déjà assignées par le
+      // coach avant l'inscription (voir migratePlaceholderSessions.ts) — ne supprime plus tout sans
+      // distinction (bug corrigé le 2026-09-16).
+      placeholder ? migratePlaceholderSessions(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
     ]);
-    const labels = ["profiles.invited_by_coach_id", "coach_invites.status", "coach_athletes", "coach_sessions cleanup"];
+    const labels = ["profiles.invited_by_coach_id", "coach_invites.status", "coach_athletes", "coach_sessions migration"];
     const failed = results
-      .map((r, i) => ({ label: labels[i], error: r && typeof r === "object" && "error" in r ? r.error : null }))
+      .map((r, i) => {
+        const error = r && typeof r === "object" && "error" in r ? r.error : null;
+        const migrationFailed = r && typeof r === "object" && "ok" in r && r.ok === false;
+        return { label: labels[i], error: error || (migrationFailed ? "migration échouée" : null) };
+      })
       .filter(f => f.error);
     if (failed.length > 0) {
       console.error("[invite/link] écriture(s) échouée(s)", user.id, invite.coach_id, failed);

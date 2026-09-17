@@ -523,6 +523,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      échoue au moment de la soumission (voir inviteJoinFailed). */
   const [hasCoachInvite, setHasCoachInvite] = useState<boolean | null>(null);
   const [coachInviteCode, setCoachInviteCode] = useState<string | null>(null);
+  const [coachInviteName, setCoachInviteName] = useState<string | null>(null);
   const [inviteJoinFailed, setInviteJoinFailed] = useState(false);
 
   /* Les A/B tests "short-onboarding-signup" et "skip-value-intro" (control/test de la position du
@@ -725,6 +726,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                qui n'aura jamais lieu. */
             localStorage.removeItem("coach_invite_code");
             setHasCoachInvite(false);
+          } else {
+            setCoachInviteName(data.coachName ?? null);
           }
         })
         .catch(() => {});
@@ -1885,6 +1888,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
           const headline = claimedAthleteName
             ? <>Ton sportif <em>{claimedAthleteName}</em> t&apos;attend.</>
+            : coachInviteName
+            ? <>Ton coach <em>{coachInviteName}</em> t&apos;attend.</>
             : isClaimed
             ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
             : "Un programme qui s'adapte enfin à toi, pas l'inverse.";

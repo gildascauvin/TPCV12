@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
 
 export async function POST(request: Request) {
   const { invite_code } = await request.json();
@@ -52,10 +53,10 @@ export async function POST(request: Request) {
           wellness_score: wellness?.score ?? 70,
         }),
     admin.from("profiles").update({ invited_by_coach_id: coachId }).eq("user_id", user.id),
-    // Le sportif a désormais ses propres vraies séances (table sessions) — les séances
-    // synthétiques posées à l'invitation (coach_sessions, voir /api/invite/create) deviendraient
-    // des doublons fantômes sur son planning coach si on les laissait.
-    placeholder ? admin.from("coach_sessions").delete().eq("athlete_id", placeholder.id) : Promise.resolve(),
+    // Supprime les séances démo synthétiques ET migre les vraies séances déjà assignées par le
+    // coach avant l'inscription (voir migratePlaceholderSessions.ts) — ne supprime plus tout sans
+    // distinction (bug corrigé le 2026-09-16).
+    placeholder ? migratePlaceholderSessions(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
   ]);
 
   return NextResponse.json({ ok: true });

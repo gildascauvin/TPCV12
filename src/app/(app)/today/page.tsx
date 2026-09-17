@@ -31,7 +31,7 @@ export default async function TodayPage() {
 
   const invitedByCoachId = (profile as { invited_by_coach_id?: string | null } | null)?.invited_by_coach_id ?? null;
   const hasCoach = !!invitedByCoachId;
-  const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
+  const hasActiveCoach = await coachIsPaying(invitedByCoachId);
 
   type ActiveProgram = { start_date: string; name: string } | null;
   // Un sportif peut avoir plusieurs programmes actifs enchaînés (futurs) — on prend

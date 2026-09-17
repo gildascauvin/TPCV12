@@ -77,8 +77,10 @@ export async function POST(req: Request) {
 
   // Histoire synthétique immédiate (même mécanisme que les sportifs démo, buildCoachDemoSessions)
   // pour que la carte du coach ne soit jamais vide en attendant que le sportif rejoigne réellement.
+  // `fullHistory: false` (2026-09-17, demande explicite de Gildas) — placeholder temporaire, juste
+  // la séance du jour, pas 6 semaines de faux historique (voir doc de buildCoachDemoSessions).
   if (placeholder) {
-    const sessions = buildCoachDemoSessions(user.id, placeholder.id, placeholderSport, PLACEHOLDER_RPE_BASE);
+    const sessions = buildCoachDemoSessions(user.id, placeholder.id, placeholderSport, PLACEHOLDER_RPE_BASE, false);
     const { error: sessionsError } = await admin.from("coach_sessions").insert(sessions);
     if (sessionsError) console.error("[invite/create] seed coach_sessions échoué", sessionsError);
   }

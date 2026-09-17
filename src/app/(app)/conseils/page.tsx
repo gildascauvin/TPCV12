@@ -35,7 +35,7 @@ export default async function ConseilsPage() {
 
   const subscriptionStatus = (profile?.subscription_status ?? "free") as SubscriptionStatus;
   const invitedByCoachId = profile?.invited_by_coach_id ?? null;
-  const hasActiveCoach = await coachIsPaying(supabase, invitedByCoachId);
+  const hasActiveCoach = await coachIsPaying(invitedByCoachId);
 
   return (
     <ConseilsClient

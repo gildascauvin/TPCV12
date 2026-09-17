@@ -14,8 +14,17 @@ function toIso(d: Date): string {
    exercices que le reste de la banque) ; difficulté fixée à `rpeBase`, qui pilote avec le
    wellness_score du profil (fixé par l'appelant — voir DEMO_ATHLETES dans OnboardingFlow.tsx et
    PLACEHOLDER_WELLNESS_SCORE/PLACEHOLDER_RPE_BASE dans invite/create/route.ts) le vrai geste
-   Alléger/Surcharger (computeAutoregSuggestion), exactement comme n'importe quelle vraie séance. */
-export function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number) {
+   Alléger/Surcharger (computeAutoregSuggestion), exactement comme n'importe quelle vraie séance.
+
+   `fullHistory` (2026-09-17, demande explicite de Gildas) — désactivé uniquement pour le
+   placeholder d'un sportif invité pas encore inscrit (invite/create/route.ts) : ce placeholder est
+   temporaire (remplacé/migré dès que le sportif rejoint réellement, voir migratePlaceholderSessions),
+   6 semaines de faux historique n'ont donc aucune utilité et pouvaient donner au coach une fausse
+   impression d'activité sur un sportif qui n'existe pas encore. Le sportif démo permanent du coach
+   (DEMO_ATHLETES, OnboardingFlow.tsx) garde `fullHistory=true` (par défaut) — lui reste affiché
+   indéfiniment et alimente aussi les graphes "signature de fatigue", un historique réaliste y garde
+   son utilité. */
+export function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number, fullHistory = true) {
   const templates = getSessionTemplates(sport);
   const today = new Date();
   const todayIso = toIso(today);
@@ -29,36 +38,38 @@ export function buildCoachDemoSessions(coachId: string, athleteId: string, sport
   };
   const sessions: object[] = [];
 
-  // 4 semaines passées
-  for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
-    [1, 3, 5, 6].forEach((d, i) => {
-      const offset = d === 0 ? 6 : d - 1;
-      const result = new Date(today);
-      result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
-      if (result >= today) return;
-      const sessionRpe = Math.max(1, Math.min(10, rpeBase + Math.round((Math.random() - 0.5) * 4)));
-      const duration = 45 + Math.round(Math.random() * 30);
-      const [name, notes] = templates[i % templates.length];
-      sessions.push({ coach_id: coachId, athlete_id: athleteId, date: toIso(result), name, notes, done: true, target_difficulty: rpeBase, rpe: sessionRpe, duration });
-    });
-  }
+  if (fullHistory) {
+    // 4 semaines passées
+    for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
+      [1, 3, 5, 6].forEach((d, i) => {
+        const offset = d === 0 ? 6 : d - 1;
+        const result = new Date(today);
+        result.setDate(today.getDate() + daysToCurrentMonday + offset + weekOffset * 7);
+        if (result >= today) return;
+        const sessionRpe = Math.max(1, Math.min(10, rpeBase + Math.round((Math.random() - 0.5) * 4)));
+        const duration = 45 + Math.round(Math.random() * 30);
+        const [name, notes] = templates[i % templates.length];
+        sessions.push({ coach_id: coachId, athlete_id: athleteId, date: toIso(result), name, notes, done: true, target_difficulty: rpeBase, rpe: sessionRpe, duration, is_demo: true });
+      });
+    }
 
-  // 2 semaines futures (S0 + S1) — aujourd'hui exclu de cette rotation, voir "Séance démo" plus bas
-  const scheduledDays = [1, 3, 5, 6];
-  for (const weekOffset of [0, 1]) {
-    scheduledDays.forEach((d, i) => {
-      const date = dateForDow(d, weekOffset);
-      if (date === todayIso) return;
-      const [name, notes] = templates[i % templates.length];
-      sessions.push({ coach_id: coachId, athlete_id: athleteId, date, name, notes, done: false, target_difficulty: rpeBase });
-    });
+    // 2 semaines futures (S0 + S1) — aujourd'hui exclu de cette rotation, voir "Séance démo" plus bas
+    const scheduledDays = [1, 3, 5, 6];
+    for (const weekOffset of [0, 1]) {
+      scheduledDays.forEach((d, i) => {
+        const date = dateForDow(d, weekOffset);
+        if (date === todayIso) return;
+        const [name, notes] = templates[i % templates.length];
+        sessions.push({ coach_id: coachId, athlete_id: athleteId, date, name, notes, done: false, target_difficulty: rpeBase, is_demo: true });
+      });
+    }
   }
 
   // Séance du jour, toujours "Séance démo" (voir doc en tête de fonction) — garantit à la fois
   // qu'aujourd'hui n'est jamais vide (filtre hasSessions de Coach Control) et une difficulté stable
   // (rpeBase) quel que soit le jour de la semaine.
   const [, demoNotes] = templates[0];
-  sessions.push({ coach_id: coachId, athlete_id: athleteId, date: todayIso, name: "Séance démo", notes: demoNotes, done: false, target_difficulty: rpeBase });
+  sessions.push({ coach_id: coachId, athlete_id: athleteId, date: todayIso, name: "Séance démo", notes: demoNotes, done: false, target_difficulty: rpeBase, is_demo: true });
 
   return sessions;
 }
