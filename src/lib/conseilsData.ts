@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
-import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -19,7 +19,42 @@ export function sessionStatusInfo(done: number, target: number): { label: string
 export type BehaviorCorrelation = {
   key: string; impact: number; occurrences: number;
   emoji: string; label: string; positive: boolean;
+  /* Dimension la plus touchée par ce comportement/cette charge ("profil par dimension", 2026-09) —
+     distincte de l'impact composite ci-dessus : "l'alcool baisse ton score de -3" devient "impacte
+     négativement le sommeil (-1.8)" quand une dimension domine nettement les 3 autres. Même
+     comparaison avec/sans que l'impact composite, mais sur dimensionRaw() (wellnessBaseline.ts,
+     stress déjà inversé pour rester "plus haut = mieux" uniformément) au lieu du score composite.
+     null si aucune dimension n'a assez d'occurrences pour être honnête (même seuil que l'impact
+     composite, 2 jours mini de chaque côté). */
+  dominantDimension: { key: DimensionKey; label: string; impact: number } | null;
 };
+
+// score à comparer pour l'impact composite — `score` en priorité, jamais `wellnessSignal()`
+// (base_score en priorité) : seule exception volontaire du module, voir le commentaire dans
+// wellnessBaseline.ts (dimensionRaw) — une corrélation comportement/charge doit regarder le score
+// RÉELLEMENT vécu par l'utilisateur ce jour-là, comportements inclus, pas le score brut du matin.
+function behaviorDayScore(row: Pick<WellnessDaily, "score" | "base_score">): number | null {
+  return row.score ?? row.base_score ?? null;
+}
+
+/* Dimension la plus touchée entre 2 groupes de jours (avec/sans un comportement, ou avant/après une
+   charge) — factorisé une seule fois, réutilisé par computeBehaviorCorrelations() ET
+   computeLoadBehaviorCorrelations() ci-dessous pour ne jamais dupliquer cette comparaison. */
+function dominantDimensionFor(daysWith: WellnessDaily[], daysWithout: WellnessDaily[]): BehaviorCorrelation["dominantDimension"] {
+  if (daysWith.length < 2 || daysWithout.length < 2) return null;
+  let dominantDimension: BehaviorCorrelation["dominantDimension"] = null;
+  let bestAbs = 0;
+  for (const dim of DIMENSION_KEYS) {
+    const dimAvgWith    = daysWith.reduce((a, d) => a + dimensionRaw(d, dim), 0) / daysWith.length;
+    const dimAvgWithout = daysWithout.reduce((a, d) => a + dimensionRaw(d, dim), 0) / daysWithout.length;
+    const dimImpact = Math.round((dimAvgWith - dimAvgWithout) * 10) / 10;
+    if (Math.abs(dimImpact) > bestAbs) {
+      bestAbs = Math.abs(dimImpact);
+      dominantDimension = { key: dim, label: DIMENSION_LABELS[dim], impact: dimImpact };
+    }
+  }
+  return dominantDimension;
+}
 
 export function computeBehaviorCorrelations(wellness: WellnessDaily[]): BehaviorCorrelation[] {
   const sorted = [...wellness].sort((a, b) => a.date.localeCompare(b.date));
@@ -27,23 +62,76 @@ export function computeBehaviorCorrelations(wellness: WellnessDaily[]): Behavior
   const results: BehaviorCorrelation[] = [];
 
   for (const key of allKeys) {
-    const daysWith: number[] = [];
-    const daysWithout: number[] = [];
+    const daysWith: WellnessDaily[] = [];
+    const daysWithout: WellnessDaily[] = [];
     for (const day of sorted) {
-      const dayScore = day.score ?? day.base_score;
-      if (dayScore === null || dayScore === undefined) continue;
-      if ((day.behaviors || []).includes(key)) daysWith.push(dayScore);
-      else daysWithout.push(dayScore);
+      if (behaviorDayScore(day) === null) continue;
+      if ((day.behaviors || []).includes(key)) daysWith.push(day);
+      else daysWithout.push(day);
     }
     if (daysWith.length < 2 || daysWithout.length < 2) continue;
-    const avgWith    = daysWith.reduce((a, b) => a + b, 0) / daysWith.length;
-    const avgWithout = daysWithout.reduce((a, b) => a + b, 0) / daysWithout.length;
+    const avgWith    = daysWith.reduce((a, d) => a + behaviorDayScore(d)!, 0) / daysWith.length;
+    const avgWithout = daysWithout.reduce((a, d) => a + behaviorDayScore(d)!, 0) / daysWithout.length;
     const impact = Math.round((avgWith - avgWithout) * 10) / 10;
     const meta = BEHAVIOR_META[key];
     if (!meta) continue;
-    results.push({ key, impact, occurrences: daysWith.length, emoji: meta.emoji, label: meta.label, positive: meta.positive });
+
+    results.push({ key, impact, occurrences: daysWith.length, emoji: meta.emoji, label: meta.label, positive: meta.positive, dominantDimension: dominantDimensionFor(daysWith, daysWithout) });
   }
   return results.sort((a, b) => b.impact - a.impact);
+}
+
+/* Corrélation "charge (RPE×durée) de la veille → récupération du jour" (2026-09) — même principe que
+   computeBehaviorCorrelations() (comparaison avec/sans) mais sur la charge d'entraînement réelle de
+   la veille plutôt que sur un comportement déclaratif, rendue sous la forme de 2 BehaviorCorrelation
+   synthétiques ("Séance fatigante la veille" / "Jour de récup la veille") pour être fusionnée dans la
+   MÊME liste/le même layout que les comportements — retour explicite de Gildas, pas une carte séparée.
+   Seuil "charge élevée" = médiane des jours avec une charge non nulle DANS L'HISTORIQUE PROPRE de
+   l'utilisateur (dailyLoad, trainingLoad.ts) — pas un seuil absolu, cohérent avec le reste du module
+   (baseline Z-score, ratios de tests) qui compare toujours un utilisateur à lui-même. "Jour de récup"
+   (charge de la veille strictement nulle) ne dépend pas de ce seuil, donc reste calculable même sans
+   assez d'historique pour la médiane. */
+export function computeLoadBehaviorCorrelations(sessions: Session[], wellness: WellnessDaily[]): BehaviorCorrelation[] {
+  const doneByDate = new Map<string, Session[]>();
+  for (const s of sessions) {
+    if (!s.done || !s.rpe) continue;
+    const arr = doneByDate.get(s.date) ?? [];
+    arr.push(s);
+    doneByDate.set(s.date, arr);
+  }
+  const loadOnDate = (date: string): number => {
+    const arr = doneByDate.get(date);
+    return arr ? dailyLoad(arr) : 0;
+  };
+  const nonzeroLoads = Array.from(doneByDate.keys()).map(loadOnDate).filter(l => l > 0).sort((a, b) => a - b);
+  const thresholdLoad = nonzeroLoads.length >= 4 ? nonzeroLoads[Math.floor(nonzeroLoads.length / 2)] : null;
+
+  const sorted = [...wellness].sort((a, b) => a.date.localeCompare(b.date));
+
+  function bucket(key: string, emoji: string, label: string, positive: boolean, isMember: (prevLoad: number) => boolean): BehaviorCorrelation | null {
+    const daysWith: WellnessDaily[] = [];
+    const daysWithout: WellnessDaily[] = [];
+    for (const day of sorted) {
+      if (behaviorDayScore(day) === null) continue;
+      const prevDate = daysAgoStr(1, new Date(day.date + "T12:00:00"));
+      const prevLoad = loadOnDate(prevDate);
+      if (isMember(prevLoad)) daysWith.push(day); else daysWithout.push(day);
+    }
+    if (daysWith.length < 2 || daysWithout.length < 2) return null;
+    const avgWith    = daysWith.reduce((a, d) => a + behaviorDayScore(d)!, 0) / daysWith.length;
+    const avgWithout = daysWithout.reduce((a, d) => a + behaviorDayScore(d)!, 0) / daysWithout.length;
+    const impact = Math.round((avgWith - avgWithout) * 10) / 10;
+    return { key, impact, occurrences: daysWith.length, emoji, label, positive, dominantDimension: dominantDimensionFor(daysWith, daysWithout) };
+  }
+
+  const results: BehaviorCorrelation[] = [];
+  if (thresholdLoad !== null) {
+    const r = bucket("load_high_prev_day", "🔥", "Séance fatigante la veille", false, prevLoad => prevLoad >= thresholdLoad);
+    if (r) results.push(r);
+  }
+  const rest = bucket("load_rest_prev_day", "🛌", "Jour de récup la veille", true, prevLoad => prevLoad === 0);
+  if (rest) results.push(rest);
+  return results;
 }
 
 export type ConseilsData = {
@@ -168,7 +256,10 @@ export function computeConseilsData(
     .map(w => ({ date: w.date, behaviors: w.behaviors }));
   const allRecentBehaviorKeys = Array.from(new Set(recentBehaviors.flatMap(r => r.behaviors)));
 
-  const correlations = computeBehaviorCorrelations(allWellness);
+  // Comportements + charge (2 buckets synthétiques "séance fatigante"/"jour de récup" la veille) —
+  // même liste, même tri par impact, même layout (BehaviorImpactCard, ConseilsClient.tsx).
+  const correlations = [...computeBehaviorCorrelations(allWellness), ...computeLoadBehaviorCorrelations(allSessions, allWellness)]
+    .sort((a, b) => b.impact - a.impact);
   const filledDays   = allWellness.filter(w => w.score !== null || w.base_score !== null).length;
 
   const sig = computeSignature(allSessions, wellnessScore ?? 75, 28, anchor);

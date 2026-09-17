@@ -108,8 +108,11 @@ function compositeValue(row: TodayRow): number | null {
 
 // stress est toujours inversé (10-stress) — même convention que computeWellnessScore() (wellness.ts)
 // — garantit qu'un Z positif signifie toujours "mieux que d'habitude" sur les 4 dimensions comme
-// sur le composite, sans inversion de signe à gérer ailleurs dans l'app.
-function dimensionRaw(row: TodayRow, dim: DimensionKey): number {
+// sur le composite, sans inversion de signe à gérer ailleurs dans l'app. Exportée (2026-09, "profil
+// par dimension du comportement") pour être réutilisée par computeBehaviorCorrelations()
+// (conseilsData.ts), qui a besoin de la même normalisation pour comparer un comportement à chaque
+// dimension plutôt qu'au seul score composite.
+export function dimensionRaw(row: TodayRow, dim: DimensionKey): number {
   return dim === "stress" ? 10 - row.stress : row[dim];
 }
 
@@ -117,7 +120,7 @@ function clamp(min: number, max: number, v: number): number {
   return Math.max(min, Math.min(max, v));
 }
 
-const DIMENSION_KEYS: DimensionKey[] = ["sleep", "stress", "recovery", "motivation"];
+export const DIMENSION_KEYS: DimensionKey[] = ["sleep", "stress", "recovery", "motivation"];
 
 /**
  * Calcule la baseline (composite + par dimension) pour UN jour donné.
@@ -229,7 +232,7 @@ export function relativeZoneLabel(b: WellnessBaselineResult | null, _perspective
   return "Fatigué";
 }
 
-const DIMENSION_LABELS: Record<DimensionKey, string> = {
+export const DIMENSION_LABELS: Record<DimensionKey, string> = {
   sleep: "Sommeil",
   stress: "Stress",
   recovery: "Récup. musculaire", // distinct du titre de page "Récupération" (ex-"Wellness") — voir wellness.ts:211 pour le libellé déjà existant repris ici

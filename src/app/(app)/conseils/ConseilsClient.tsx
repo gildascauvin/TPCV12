@@ -6,7 +6,7 @@ import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor } from "@/lib/wellnessBaseline";
+import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import ShareButton from "@/components/sessions/ShareButton";
@@ -36,6 +36,17 @@ function behaviorStatus(impact: number) {
   const statusLabel = isNeutral ? "Neutre" : isPositive ? "Aide" : "Pénalise";
   return { isPositive, isNeutral, color, impactStr, statusLabel };
 }
+
+/* Wording "profil par dimension" (2026-09, suite — retour de Gildas, "Surtout via motivation (+1.0)"
+   pas clair) : phrase explicite avec article accordé au genre du nom plutôt qu'un simple label brut
+   collé après "via" — DIMENSION_LABELS (wellnessBaseline.ts) reste la source du libellé affiché
+   ailleurs (badges du chart Récupération), cette table-ci ne sert qu'à cette phrase précise. */
+const DIMENSION_PHRASE: Record<DimensionKey, string> = {
+  sleep: "le sommeil",
+  stress: "le stress",
+  recovery: "la récupération musculaire",
+  motivation: "la motivation",
+};
 
 /* Jauge par comportement (2026-09, suite — retour de Gildas, "applique les mêmes composants de
    jauges qu'on a fait pour les tests mais pour les comportements") : même langage visuel que
@@ -142,6 +153,11 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
         <div style={{ display: "flex", flexDirection: "column" as const }}>
           {correlations.map(c => {
             const { color, statusLabel, impactStr } = behaviorStatus(c.impact);
+            // Profil par dimension (2026-09) : n'affiche la dimension dominante que si elle a un
+            // impact réel (>= 0.3 pt, même seuil de neutralité que behaviorStatus ci-dessus) — sinon
+            // "surtout via ta motivation (0 pt)" serait une fausse précision.
+            const dd = c.dominantDimension;
+            const showDominant = dd && Math.abs(dd.impact) >= 0.3;
             return (
               <div key={c.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
                 <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{c.emoji}</div>
@@ -152,6 +168,11 @@ function BehaviorImpactCard({ correlations, filledDays }: { correlations: Behavi
                       {statusLabel} {impactStr}
                     </span>
                   </div>
+                  {showDominant && (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>
+                      Impacte {dd!.impact > 0 ? "positivement" : "négativement"} <b style={{ color: "rgba(255,255,255,.65)" }}>{DIMENSION_PHRASE[dd!.key]}</b> ({dd!.impact > 0 ? "+" : ""}{dd!.impact.toFixed(1)})
+                    </div>
+                  )}
                   <BehaviorGauge c={c} maxAbs={maxAbs} />
                 </div>
               </div>
@@ -413,7 +434,8 @@ export default function ConseilsClient({ initialData, subscriptionStatus, hasAct
           )}
         </div>
 
-        {/* Impact comportements (WHOOP + conseil personnalisé) */}
+        {/* Impact comportements + charge (séance fatigante / jour de récup la veille) — même liste,
+            même layout, 2026-09 */}
         <BehaviorImpactCard correlations={correlations} filledDays={filledDays} />
         </>
         )}
