@@ -8,6 +8,7 @@ import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions
 import DiffGauge from "@/components/calendar/DiffGauge";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -92,6 +93,15 @@ function DroppableProgramDay({ day, children }: { day: string; children: React.R
 
 function DraggableProgramSession({ day, sIdx, session, onClick }: { day: string; sIdx: number; session: SessionTemplate; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `sess:${day}:${sIdx}`, data: { type: "session", day, sIdx } });
+  /* Droppable "séance" — reçoit un exercice glissé depuis une AUTRE séance du template (drag
+     cross-séance, 2026-09-17), uniquement quand cette séance est vide (sinon chaque ligne
+     d'exercice a déjà son propre droppable plus précis, cf. DraggableProgramExercise). */
+  const { setNodeRef: setDropRef } = useDroppable({ id: `sess-drop:${day}:${sIdx}`, data: { type: "session", day, sIdx } });
+  const exerciseCount = session.notes ? session.notes.split("\n").filter(Boolean).length : 0;
+  const cardRef = (el: HTMLDivElement | null) => {
+    setNodeRef(el);
+    if (exerciseCount === 0) setDropRef(el);
+  };
   const style: React.CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.4 : 1,
@@ -103,7 +113,7 @@ function DraggableProgramSession({ day, sIdx, session, onClick }: { day: string;
       session={session}
       onClick={onClick}
       dragHandleProps={{ ...attributes, ...listeners }}
-      cardRef={setNodeRef}
+      cardRef={cardRef}
       cardStyle={style}
       renderExerciseLine={(line, exIdx) => (
         <DraggableProgramExercise key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} text={line} />
@@ -471,22 +481,43 @@ export default function ProgramBuilderModal({ programName: initialName, template
     }));
   }
 
-  function reorderExercisesInSession(day: string, sIdx: number, fromExIdx: number, toExIdx: number) {
-    if (fromExIdx === toExIdx) return;
-    setTemplate(prev => ({
-      weeks: prev.weeks.map((w, wi) => {
-        if (wi !== weekIdx) return w;
-        const sessions = [...((w[day] ?? []) as SessionTemplate[])];
-        const session = sessions[sIdx];
-        if (!session || !session.notes) return w;
-        const lines = session.notes.split("\n").filter(Boolean);
-        if (fromExIdx < 0 || fromExIdx >= lines.length || toExIdx < 0 || toExIdx >= lines.length) return w;
-        const [moved] = lines.splice(fromExIdx, 1);
-        lines.splice(toExIdx, 0, moved);
-        sessions[sIdx] = { ...session, notes: lines.join("\n") };
-        return { ...w, [day]: sessions };
-      }),
-    }));
+  /* Déplace une ligne d'exercice — réordonnancement dans la même séance, ou drag cross-séance
+     (2026-09-17) : `toDay`/`toSIdx` peuvent désigner une autre séance (même jour ou un autre),
+     `toExIdx: null` = ajout en fin de séance cible (drop sur une séance vide). Mutation locale
+     pure sur `template` — aucune écriture DB tant que le programme n'est pas enregistré, comme le
+     reste de l'éditeur. `moveExerciseLine` recale aussi `exercise_media` des deux séances. */
+  function moveExerciseInTemplate(fromDay: string, fromSIdx: number, fromExIdx: number, toDay: string, toSIdx: number, toExIdx: number | null) {
+    const sameSession = fromDay === toDay && fromSIdx === toSIdx;
+    if (sameSession && toExIdx === fromExIdx) return;
+    setTemplate(prev => {
+      const w = prev.weeks[weekIdx];
+      if (!w) return prev;
+      const fromSession = ((w[fromDay] ?? []) as SessionTemplate[])[fromSIdx];
+      const toSession = sameSession ? fromSession : ((w[toDay] ?? []) as SessionTemplate[])[toSIdx];
+      if (!fromSession || !toSession) return prev;
+      const result = moveExerciseLine({
+        fromNotes: fromSession.notes, fromMedia: fromSession.exercise_media, fromIdx: fromExIdx,
+        toNotes: toSession.notes, toMedia: toSession.exercise_media, toIdx: toExIdx,
+        sameSession,
+      });
+      if (!result) return prev;
+      return {
+        weeks: prev.weeks.map((week, wi) => {
+          if (wi !== weekIdx) return week;
+          const fromArr = [...((week[fromDay] ?? []) as SessionTemplate[])];
+          fromArr[fromSIdx] = { ...fromSession, notes: result.source.notes, exercise_media: result.source.media };
+          if (fromDay === toDay) {
+            // Même tableau de jour édité deux fois (2 séances distinctes le même jour) — une
+            // seule affectation `[fromDay]: fromArr` à la fin, sinon la 1ère écrase la 2nde.
+            fromArr[toSIdx] = { ...toSession, notes: result.target.notes, exercise_media: result.target.media };
+            return { ...week, [fromDay]: fromArr };
+          }
+          const toArr = [...((week[toDay] ?? []) as SessionTemplate[])];
+          toArr[toSIdx] = { ...toSession, notes: result.target.notes, exercise_media: result.target.media };
+          return { ...week, [fromDay]: fromArr, [toDay]: toArr };
+        }),
+      };
+    });
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -495,8 +526,14 @@ export default function ProgramBuilderModal({ programName: initialName, template
     const activeData = active.data.current as { type?: string; day?: string; sIdx?: number; exIdx?: number } | undefined;
     if (activeData?.type === "exercise") {
       const overData = over.data.current as { type?: string; day?: string; sIdx?: number; exIdx?: number } | undefined;
-      if (overData?.type !== "exercise" || overData.day !== activeData.day || overData.sIdx !== activeData.sIdx) return;
-      reorderExercisesInSession(activeData.day!, activeData.sIdx!, activeData.exIdx!, overData.exIdx!);
+      if (overData?.type === "exercise" && overData.day !== undefined && overData.sIdx !== undefined) {
+        moveExerciseInTemplate(activeData.day!, activeData.sIdx!, activeData.exIdx!, overData.day, overData.sIdx, overData.exIdx ?? null);
+        return;
+      }
+      if (overData?.type === "session" && overData.day !== undefined && overData.sIdx !== undefined) {
+        moveExerciseInTemplate(activeData.day!, activeData.sIdx!, activeData.exIdx!, overData.day, overData.sIdx, null);
+        return;
+      }
       return;
     }
     if (activeData?.type === "session") {

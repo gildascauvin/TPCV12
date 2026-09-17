@@ -41,6 +41,7 @@ import AdjustSessionModal, { type AdjustSessionTarget } from "@/components/sessi
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 function dayWellness(
@@ -388,19 +389,46 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (!result.ok) setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s));
   }, [athlete]);
 
-  const reorderExercises = useCallback(async (sessionId: string, fromIdx: number, toIdx: number) => {
-    if (fromIdx === toIdx || !athlete) return;
-    const target = sessions.find(s => s.id === sessionId);
-    if (!target || !target.notes) return;
-    const lines = target.notes.split("\n").filter(Boolean);
-    if (fromIdx < 0 || fromIdx >= lines.length || toIdx < 0 || toIdx >= lines.length) return;
-    const [moved] = lines.splice(fromIdx, 1);
-    lines.splice(toIdx, 0, moved);
-    const newNotes = lines.join("\n");
-    const prevNotes = target.notes;
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
-    const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId, data: { notes: newNotes } });
-    if (!result.ok) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
+  /* Déplace une ligne d'exercice — réordonnancement dans la même séance, ou drag cross-séance
+     (2026-09-17) : `toSessionId` peut différer de `fromSessionId` (toujours le même sportif —
+     une seule colonne athlète affichée à la fois), `toIdx: null` = ajout en fin de séance cible.
+     `moveExerciseLine` recale aussi `exercise_media` des deux séances. */
+  const moveExercise = useCallback(async (fromSessionId: string, fromIdx: number, toSessionId: string, toIdx: number | null) => {
+    if (!athlete) return;
+    const sameSession = fromSessionId === toSessionId;
+    if (sameSession && toIdx === fromIdx) return;
+    const fromSession = sessions.find(s => s.id === fromSessionId);
+    const toSession = sameSession ? fromSession : sessions.find(s => s.id === toSessionId);
+    if (!fromSession || !toSession) return;
+    const result = moveExerciseLine({
+      fromNotes: fromSession.notes, fromMedia: fromSession.exercise_media, fromIdx,
+      toNotes: toSession.notes, toMedia: toSession.exercise_media, toIdx,
+      sameSession,
+    });
+    if (!result) return;
+    const prevFrom = { notes: fromSession.notes, exercise_media: fromSession.exercise_media };
+    const prevTo = { notes: toSession.notes, exercise_media: toSession.exercise_media };
+    setSessions(prev => prev.map(s => {
+      if (s.id === fromSessionId) return { ...s, notes: result.source.notes, exercise_media: result.source.media };
+      if (s.id === toSessionId) return { ...s, notes: result.target.notes, exercise_media: result.target.media };
+      return s;
+    }));
+    if (sameSession) {
+      const r = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: fromSessionId, data: { notes: result.source.notes, exercise_media: result.source.media } });
+      if (!r.ok) setSessions(prev => prev.map(s => s.id === fromSessionId ? { ...s, ...prevFrom } : s));
+      return;
+    }
+    const [r1, r2] = await Promise.all([
+      callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: fromSessionId, data: { notes: result.source.notes, exercise_media: result.source.media } }),
+      callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: toSessionId, data: { notes: result.target.notes, exercise_media: result.target.media } }),
+    ]);
+    if (!r1.ok || !r2.ok) {
+      setSessions(prev => prev.map(s => {
+        if (s.id === fromSessionId) return { ...s, ...prevFrom };
+        if (s.id === toSessionId) return { ...s, ...prevTo };
+        return s;
+      }));
+    }
   }, [athlete, sessions]);
 
   const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[], pct: number = 0) => {
@@ -417,7 +445,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     setDuplicating(null);
   }, [duplicating, athlete, athletes]);
 
-  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, reorderExercises }) as (event: DragEndEvent) => void;
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, moveExercise }) as (event: DragEndEvent) => void;
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   async function loadMonth(anchor: string, athleteObj: CoachAthlete) {

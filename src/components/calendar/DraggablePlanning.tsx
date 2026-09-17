@@ -29,6 +29,16 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
   viewerRole: "coach" | "athlete";
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id, data: { type: "session" } });
+  /* Droppable "séance" — reçoit un exercice glissé depuis une AUTRE séance (drag cross-séance,
+     2026-09-17). Rattaché au même noeud que la carte uniquement quand la séance est vide : sinon
+     chaque ligne d'exercice (DraggableExerciseLine, ci-dessous) a déjà son propre droppable plus
+     précis, pas besoin (ni souhaitable) de faire concurrence à ces zones plus petites. */
+  const { setNodeRef: setCardDropRef } = useDroppable({ id: `sess-drop:${session.id}`, data: { type: "session", sessionId: session.id } });
+  const exerciseCount = session.notes ? session.notes.split("\n").filter(Boolean).length : 0;
+  const cardRef = (el: HTMLDivElement | null) => {
+    setNodeRef(el);
+    if (exerciseCount === 0) setCardDropRef(el);
+  };
   const style: React.CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     opacity: isDragging ? 0.4 : 1,
@@ -43,7 +53,7 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
       onEdit={onEdit}
       onDuplicate={onDuplicate}
       dragHandleProps={{ ...attributes, ...listeners }}
-      cardRef={setNodeRef}
+      cardRef={cardRef}
       cardStyle={style}
       renderExerciseLine={(line, index) => (
         <DraggableExerciseLine
@@ -92,13 +102,15 @@ export function DraggableExerciseLine({ sessionId, index, text, originalText, un
   );
 }
 
-/** Handler générique pour DndContext.onDragEnd — session déplacée entre jours OU exercice réordonné
-    dans une séance. `moveSession`/`reorderExercises` restent fournis par l'appelant (écriture DB
-    différente selon /week vs /coach/planning). */
+/** Handler générique pour DndContext.onDragEnd — session déplacée entre jours OU exercice déplacé
+    (réordonné dans sa séance, ou glissé vers une AUTRE séance — 2026-09-17, `toIdx: null` = ajout
+    en fin de séance cible, cas d'un drop sur une séance vide via son droppable de carte).
+    `moveSession`/`moveExercise` restent fournis par l'appelant (écriture DB différente selon
+    /week vs /coach/planning). */
 export function makePlanningDragEndHandler<T extends SessionLike>(opts: {
   sessions: T[];
   moveSession: (session: T, newDate: string) => void;
-  reorderExercises: (sessionId: string, fromIdx: number, toIdx: number) => void;
+  moveExercise: (fromSessionId: string, fromIdx: number, toSessionId: string, toIdx: number | null) => void;
 }) {
   return (event: { active: { id: string | number; data: { current?: unknown } }; over: { id: string | number; data: { current?: unknown } } | null }) => {
     const { active, over } = event;
@@ -106,8 +118,14 @@ export function makePlanningDragEndHandler<T extends SessionLike>(opts: {
     const activeData = active.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
     if (activeData?.type === "exercise") {
       const overData = over.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
-      if (overData?.type !== "exercise" || overData.sessionId !== activeData.sessionId) return;
-      opts.reorderExercises(activeData.sessionId!, activeData.index!, overData.index!);
+      if (overData?.type === "exercise" && overData.sessionId) {
+        opts.moveExercise(activeData.sessionId!, activeData.index!, overData.sessionId, overData.index ?? null);
+        return;
+      }
+      if (overData?.type === "session" && overData.sessionId) {
+        opts.moveExercise(activeData.sessionId!, activeData.index!, overData.sessionId, null);
+        return;
+      }
       return;
     }
     const overData = over.data.current as { type?: string } | undefined;

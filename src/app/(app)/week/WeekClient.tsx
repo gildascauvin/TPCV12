@@ -27,6 +27,7 @@ import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDec
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
@@ -361,22 +362,48 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     router.refresh();
   }, [supabase, router]);
 
-  const reorderExercises = useCallback(async (sessionId: string, fromIdx: number, toIdx: number) => {
-    if (fromIdx === toIdx) return;
-    const target = sessions.find(s => s.id === sessionId);
-    if (!target || !target.notes) return;
-    const lines = target.notes.split("\n").filter(Boolean);
-    if (fromIdx < 0 || fromIdx >= lines.length || toIdx < 0 || toIdx >= lines.length) return;
-    const [moved] = lines.splice(fromIdx, 1);
-    lines.splice(toIdx, 0, moved);
-    const newNotes = lines.join("\n");
-    const prevNotes = target.notes;
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: newNotes } : s));
-    const { error } = await supabase.from("sessions").update({ notes: newNotes }).eq("id", sessionId);
-    if (error) setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
+  /* Déplace une ligne d'exercice — réordonnancement dans la même séance, ou drag cross-séance
+     (2026-09-17) : `toSessionId` peut différer de `fromSessionId`, `toIdx: null` = ajout en fin de
+     séance cible. `moveExerciseLine` (src/lib/exerciseMediaReindex.ts) recale aussi `exercise_media`
+     des deux séances pour que vidéos/photos/commentaires suivent la ligne déplacée. */
+  const moveExercise = useCallback(async (fromSessionId: string, fromIdx: number, toSessionId: string, toIdx: number | null) => {
+    const sameSession = fromSessionId === toSessionId;
+    if (sameSession && toIdx === fromIdx) return;
+    const fromSession = sessions.find(s => s.id === fromSessionId);
+    const toSession = sameSession ? fromSession : sessions.find(s => s.id === toSessionId);
+    if (!fromSession || !toSession) return;
+    const result = moveExerciseLine({
+      fromNotes: fromSession.notes, fromMedia: fromSession.exercise_media, fromIdx,
+      toNotes: toSession.notes, toMedia: toSession.exercise_media, toIdx,
+      sameSession,
+    });
+    if (!result) return;
+    const prevFrom = { notes: fromSession.notes, exercise_media: fromSession.exercise_media };
+    const prevTo = { notes: toSession.notes, exercise_media: toSession.exercise_media };
+    setSessions(prev => prev.map(s => {
+      if (s.id === fromSessionId) return { ...s, notes: result.source.notes, exercise_media: result.source.media };
+      if (s.id === toSessionId) return { ...s, notes: result.target.notes, exercise_media: result.target.media };
+      return s;
+    }));
+    if (sameSession) {
+      const { error } = await supabase.from("sessions").update({ notes: result.source.notes, exercise_media: result.source.media }).eq("id", fromSessionId);
+      if (error) setSessions(prev => prev.map(s => s.id === fromSessionId ? { ...s, ...prevFrom } : s));
+      return;
+    }
+    const [r1, r2] = await Promise.all([
+      supabase.from("sessions").update({ notes: result.source.notes, exercise_media: result.source.media }).eq("id", fromSessionId),
+      supabase.from("sessions").update({ notes: result.target.notes, exercise_media: result.target.media }).eq("id", toSessionId),
+    ]);
+    if (r1.error || r2.error) {
+      setSessions(prev => prev.map(s => {
+        if (s.id === fromSessionId) return { ...s, ...prevFrom };
+        if (s.id === toSessionId) return { ...s, ...prevTo };
+        return s;
+      }));
+    }
   }, [supabase, sessions]);
 
-  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, reorderExercises }) as (event: DragEndEvent) => void;
+  const handleDragEnd = makePlanningDragEndHandler({ sessions, moveSession: moveSessionToDate, moveExercise }) as (event: DragEndEvent) => void;
 
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
