@@ -15,7 +15,14 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode, name, subscription_status").eq("user_id", user.id).maybeSingle();
+  const admin = createAdminClient();
+
+  /* profil + liste des sportifs en parallèle (2026-09-18) — même principe que /coach/page.tsx,
+     aucune dépendance entre les deux, toutes deux ne dépendent que de user.id déjà connu. */
+  const [{ data: profile }, { data: rawAthletes }] = await Promise.all([
+    supabase.from("profiles").select("mode, name, subscription_status").eq("user_id", user.id).maybeSingle(),
+    supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
+  ]);
   if (!profile || profile.mode !== "coach") redirect("/today");
 
   const since = new Date();
@@ -24,15 +31,6 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   until.setDate(until.getDate() + 21);
   const sinceStr = since.toISOString().split("T")[0];
   const untilStr = until.toISOString().split("T")[0];
-
-  const admin = createAdminClient();
-
-  // Use regular client for coach_athletes — RLS allows coach to read own records
-  const { data: rawAthletes } = await supabase
-    .from("coach_athletes")
-    .select("*")
-    .eq("coach_id", user.id)
-    .order("created_at");
 
   const athletes = (rawAthletes || []) as CoachAthlete[];
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);

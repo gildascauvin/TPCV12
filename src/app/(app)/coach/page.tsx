@@ -15,11 +15,18 @@ export default async function CoachPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("mode, name, subscription_status, invite_code")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const today = new Date().toISOString().split("T")[0];
+  const admin = createAdminClient();
+
+  /* profil + liste des sportifs en parallèle (2026-09-18) — aucune dépendance entre les deux,
+     toutes les deux ne dépendent que de user.id déjà connu. Avant : profil -> (check redirect) ->
+     puis coach_athletes en série, un aller-retour réseau de plus sur chaque visite de /coach. Le
+     check de redirection se fait maintenant après les deux — un coach mal routé (cas rare)
+     déclenche quand même la requête coach_athletes avant de rediriger, accepté comme pour /today. */
+  const [{ data: profile }, { data: rawAthletes }] = await Promise.all([
+    supabase.from("profiles").select("mode, name, subscription_status, invite_code").eq("user_id", user.id).maybeSingle(),
+    supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
+  ]);
 
   if (!profile || profile.mode !== "coach") redirect("/today");
 
@@ -32,21 +39,20 @@ export default async function CoachPage() {
     if (!error) inviteCode = code;
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const admin = createAdminClient();
-
-  // Use regular client for coach_athletes — RLS allows coach to read own records
-  const { data: rawAthletes } = await supabase
-    .from("coach_athletes")
-    .select("*")
-    .eq("coach_id", user.id)
-    .order("created_at");
-
   const athletes = (rawAthletes || []) as CoachAthlete[];
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const allAthleteIds = athletes.map(a => a.id);
+  // Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente
+  // decisionText()/attention() du Coach Control (voir src/lib/trainingLoad.ts). Fenêtre élargie à
+  // max(14, WELLNESS_BASELINE_WINDOW_DAYS) pour servir aussi de fenêtre glissante à la baseline
+  // personnelle (Z-score, src/lib/wellnessBaseline.ts) — même requête réutilisée pour les deux.
+  const sinceHistory = daysAgoStr(Math.max(13, WELLNESS_BASELINE_WINDOW_DAYS));
 
-  const [liveWellnessRes, realSessionsRes, demoSessionsRes] = await Promise.all([
+  /* Les données "aujourd'hui" et l'historique 14j n'ont jamais eu de dépendance entre elles —
+     seulement envers realUserIds/allAthleteIds/sinceHistory, déjà connus ici. Étaient dans 2
+     Promise.all séparés l'un après l'autre (2 aller-retours en série) ; fusionnés en un seul
+     (2026-09-18). */
+  const [liveWellnessRes, realSessionsRes, demoSessionsRes, historySessionsRes, historyWellnessRes] = await Promise.all([
     realUserIds.length
       ? admin.from("wellness_daily").select("user_id, score, base_score, behaviors").in("user_id", realUserIds).eq("date", today)
       : Promise.resolve({ data: [] as { user_id: string; score: number | null; base_score: number | null; behaviors: string[] | null }[] }),
@@ -56,6 +62,12 @@ export default async function CoachPage() {
     allAthleteIds.length
       ? admin.from("coach_sessions").select("*").eq("coach_id", user.id).in("athlete_id", allAthleteIds).eq("date", today)
       : Promise.resolve({ data: [] as CoachSession[] }),
+    realUserIds.length
+      ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceHistory)
+      : Promise.resolve({ data: [] as Session[] }),
+    realUserIds.length
+      ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceHistory)
+      : Promise.resolve({ data: [] as WellnessDaily[] }),
   ]);
 
   // base_score en priorité (jamais score, qui inclut le bonus/malus comportements) — voir
@@ -73,20 +85,6 @@ export default async function CoachPage() {
       : { ...a, wellnessFilledToday: false };
   });
 
-  // Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente
-  // decisionText()/attention() du Coach Control (voir src/lib/trainingLoad.ts). Fenêtre élargie à
-  // max(14, WELLNESS_BASELINE_WINDOW_DAYS) pour servir aussi de fenêtre glissante à la baseline
-  // personnelle (Z-score, src/lib/wellnessBaseline.ts) — même requête déjà batchée, zéro fetch
-  // supplémentaire.
-  const sinceHistory = daysAgoStr(Math.max(13, WELLNESS_BASELINE_WINDOW_DAYS));
-  const [historySessionsRes, historyWellnessRes] = await Promise.all([
-    realUserIds.length
-      ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceHistory)
-      : Promise.resolve({ data: [] as Session[] }),
-    realUserIds.length
-      ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceHistory)
-      : Promise.resolve({ data: [] as WellnessDaily[] }),
-  ]);
   const historySessions = (historySessionsRes.data || []) as Session[];
   const historyWellness = (historyWellnessRes.data || []) as WellnessDaily[];
 

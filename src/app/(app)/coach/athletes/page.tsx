@@ -13,24 +13,21 @@ export default async function CoachAthletesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status, invite_code").eq("user_id", user.id).maybeSingle();
-  if (!profile || profile.mode !== "coach") redirect("/today");
-
   const admin = createAdminClient();
 
-  let { data: rawAthletes } = await supabase
-    .from("coach_athletes")
-    .select("*")
-    .eq("coach_id", user.id)
-    .order("created_at");
+  /* profil + liste des sportifs + invitations en attente, les 3 en parallèle (2026-09-18) —
+     aucune dépendance entre elles, toutes les 3 ne dépendent que de user.id déjà connu. Étaient
+     3 aller-retours réseau en série avant ça (profil -> coach_athletes -> coach_invites). */
+  const [{ data: profile }, { data: rawAthletesInitial }, { data: pendingInvites }] = await Promise.all([
+    supabase.from("profiles").select("mode, subscription_status, invite_code").eq("user_id", user.id).maybeSingle(),
+    supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
+    admin.from("coach_invites").select("email").eq("coach_id", user.id).eq("status", "pending"),
+  ]);
+  if (!profile || profile.mode !== "coach") redirect("/today");
+
+  let rawAthletes = rawAthletesInitial;
 
   // Créer les placeholders pour les invitations pending sans placeholder existant
-  const { data: pendingInvites } = await admin
-    .from("coach_invites")
-    .select("email")
-    .eq("coach_id", user.id)
-    .eq("status", "pending");
-
   const existingEmails = new Set((rawAthletes || []).map((a: CoachAthlete) => a.invite_email).filter(Boolean));
   const missing = (pendingInvites || []).filter(i => !existingEmails.has(i.email));
 
