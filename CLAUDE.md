@@ -3411,3 +3411,27 @@ Réécrit en conséquence : `computeLoadBehaviorCorrelations(sessions, wellness)
 `tsc --noEmit -p tsconfig.notnext.json` propre à chaque round. Logique rejouée en scripts Node ad-hoc (miroir exact du TS, `~/.nvm/versions/node/v20.20.2/bin` — le node système ne supporte pas `??`) plutôt que relue seule : comportement→dimension dominante confirmé (alcool→sommeil le plus marqué dans un jeu synthétique), charge élevée→impact négatif confirmé, jour de repos→impact positif confirmé, seuil "historique insuffisant"→`null` confirmé, fusion+tri des 2 sources dans une seule liste confirmée. Pas de test au clic réel (serveur local laissé à disposition de Gildas, comme d'habitude).
 
 Déployé en prod le 2026-09-17, commit `6a21938`, push direct sur `main`.
+
+## Drag & drop d'exercice cross-séance — Planning + program builder (2026-09-17)
+
+Suite de la discussion de faisabilité en début de session (3 pistes passées en revue avant exécution : DnD cross-séance, scroll semaines suivantes, autosave programme — seule la première retenue pour du code réel immédiat). Jusqu'ici, glisser un exercice ne permettait que de le réordonner à l'intérieur de sa propre séance — `overData.sessionId !== activeData.sessionId` (Planning) et `overData.day !== activeData.day || overData.sIdx !== activeData.sIdx` (program builder) rejetaient tout drop cross-séance sur les 2 implémentations DnD distinctes du repo.
+
+### `src/lib/exerciseMediaReindex.ts` — nouveau module partagé
+`moveExerciseLine()` — fonction pure, retourne les nouvelles paires `{notes, media}` pour la séance source et la séance cible (identiques si même séance). Recale `exercise_media` (JSONB indexé par position texte de la ligne) des deux côtés : retire l'entrée à `fromIdx` (décale les suivantes), insère à `toIdx` (décale pour faire de la place), déplace le media de la ligne avec elle. `toIdx: null` = ajout en fin de séance cible (cas d'un drop sur une séance vide). **Corrige au passage un bug latent préexistant** : même le simple réordonnancement intra-séance déjà en prod ne recalait jamais `exercise_media` — vidéos/photos/commentaires attachés à une ligne dérivaient silencieusement d'un cran à chaque drag, invisible tant que personne n'avait de media sur une séance manipulée ainsi.
+
+### Planning (`/week`, `/coach/planning`) — `DraggablePlanning.tsx`
+- `DraggableSessionCard` gagne un droppable de carte (`sess-drop:{id}`, type `"session"`) — **actif uniquement quand la séance est vide** (aucun exercice), pour ne jamais faire concurrence aux droppables plus précis de chaque ligne (`DraggableExerciseLine`, déjà existants). Une séance non-vide ne reçoit un exercice que via une dépose sur une de ses lignes (insertion à cette position).
+- `makePlanningDragEndHandler()` : `reorderExercises` remplacé par `moveExercise(fromSessionId, fromIdx, toSessionId, toIdx)` — 2 branches (`overData.type === "exercise"` → insertion à la position visée ; `overData.type === "session"` → ajout en fin, séance vide) au lieu de rejeter tout `sessionId` différent.
+- `WeekClient.tsx`/`CoachPlanningClient.tsx` : `reorderExercises` → `moveExercise`, écriture Supabase directe (sportif) / `callSessionAPI` admin (coach) — 1 update si même séance, 2 updates en parallèle (`Promise.all`) si cross-séance, rollback optimiste symétrique si l'un des deux échoue.
+
+### Program builder (`ProgramBuilderModal.tsx`)
+Même mécanique côté template (mutation locale pure, `setTemplate`, aucune écriture DB avant "Enregistrer en librairie"/"Assigner") : `DraggableProgramSession` gagne le même droppable de carte conditionnel, `reorderExercisesInSession` remplacé par `moveExerciseInTemplate(fromDay, fromSIdx, fromExIdx, toDay, toSIdx, toExIdx)`. Cas particulier géré explicitement : 2 séances du **même jour** (`fromDay === toDay`, `fromSIdx !== toSIdx`) partagent le même tableau `week[day]` — les deux écritures sont appliquées sur une seule copie avant une unique affectation `[day]: ...`, jamais deux affectations successives qui s'écraseraient.
+
+### Limites assumées pour cette v1
+- Fonctionne uniquement en vue Semaine (le DnD n'existait déjà pas en vue Mois).
+- Déposer sur un jour sans aucune séance ne fait rien — pas de création implicite de séance via un drop d'exercice, il faut une séance cible existante (même vide).
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre. Pas de clic réel par Claude — serveur local de Gildas déjà actif, laissé à sa disposition comme d'habitude pour qu'il teste lui-même.
+
+Déployé en prod le 2026-09-17, commit `71b0b09`, push direct sur `main`.
