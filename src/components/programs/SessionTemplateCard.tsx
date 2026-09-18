@@ -16,16 +16,23 @@ export function loadBarColor(avg: number): string {
   return "#d44000";
 }
 
-export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine }: {
+export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride }: {
   session: SessionTemplate;
   onClick?: () => void;
   dragHandleProps?: Record<string, unknown>;
   cardRef?: (el: HTMLDivElement | null) => void;
   cardStyle?: React.CSSProperties;
   renderExerciseLine?: (line: string, index: number) => React.ReactNode;
+  /* Aperçu autorégulation sur /p/[id] (2026-09) — remplace le badge "Prévu" fixe par la reco
+     ("+10%"/"−20%") quand une suggestion est active pour cette séance. Additif, aucun autre
+     appelant ne le passe (`Prévu` reste le comportement par défaut, inchangé). */
+  badgeOverride?: { label: string; bg: string; color: string };
+  /* Idem pour la jauge : affiche la difficulté ajustée (adjustDifficulty()) plutôt que
+     session.target_difficulty brut, sans jamais muter la séance elle-même. */
+  gaugeOverride?: number;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
-  const gaugeValue = session.target_difficulty ?? null;
+  const gaugeValue = gaugeOverride ?? session.target_difficulty ?? null;
   return (
     <div ref={cardRef} onClick={onClick} style={{
       cursor: onClick ? "pointer" : "default",
@@ -46,8 +53,8 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
         <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
           {session.name}
         </div>
-        <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: "rgba(212,64,0,0.10)", color: "#d44000" }}>
-          Prévu
+        <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: badgeOverride?.bg ?? "rgba(212,64,0,0.10)", color: badgeOverride?.color ?? "#d44000" }}>
+          {badgeOverride?.label ?? "Prévu"}
         </span>
       </div>
       {gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null}
