@@ -10,6 +10,18 @@ import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
+import AlertBox from "@/components/calendar/AlertBox";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPct } from "@/lib/autoregulation";
+import { relativeZoneLabel } from "@/lib/wellnessBaseline";
+import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
+import WellnessRing from "@/components/wellness/WellnessRing";
+import { WELLNESS_RAMP } from "@/lib/wellness";
+
+// Même rampe que WellnessRing/wellnessColor (wellness.ts) — la jauge horizontale du simulateur
+// reste visuellement identique au ring, jamais une couleur dupliquée à l'œil (même construction
+// que PublicProgramView.tsx).
+const WELLNESS_TRACK_GRADIENT = `linear-gradient(to right, ${WELLNESS_RAMP.map(s => `${s.hex} ${s.stop * 100}%`).join(", ")})`;
+const DAY_NAMES: Record<string, string> = { Lun: "Lundi", Mar: "Mardi", Mer: "Mercredi", Jeu: "Jeudi", Ven: "Vendredi", Sam: "Samedi", Dim: "Dimanche" };
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -26,7 +38,16 @@ function DroppableProgramDay({ day, children }: { day: string; children: React.R
   );
 }
 
-function DraggableProgramSession({ day, sIdx, session, onClick }: { day: string; sIdx: number; session: SessionTemplate; onClick: () => void }) {
+function DraggableProgramSession({ day, sIdx, session, onClick, badgeOverride, gaugeOverride, autoregReco }: {
+  day: string; sIdx: number; session: SessionTemplate; onClick: () => void;
+  /* Simulateur d'autorégulation (2026-09-18) — voir ProgramBuilderModal, calcul daySuggestions.
+     badgeOverride/gaugeOverride affichent l'effet de la reco sur la jauge/le badge de la carte ;
+     autoregReco (le %, signé) pilote le rendu barré/gras des lignes d'exercice (voir
+     DraggableProgramExercise) — tous absents = comportement in-app inchangé. */
+  badgeOverride?: { label: string; bg: string; color: string };
+  gaugeOverride?: number;
+  autoregReco?: number;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `sess:${day}:${sIdx}`, data: { type: "session", day, sIdx } });
   /* Droppable "séance" — reçoit un exercice glissé depuis une AUTRE séance du template (drag
      cross-séance, 2026-09-17), uniquement quand cette séance est vide (sinon chaque ligne
@@ -50,17 +71,23 @@ function DraggableProgramSession({ day, sIdx, session, onClick }: { day: string;
       dragHandleProps={{ ...attributes, ...listeners }}
       cardRef={cardRef}
       cardStyle={style}
+      badgeOverride={badgeOverride}
+      gaugeOverride={gaugeOverride}
       renderExerciseLine={(line, exIdx) => (
-        <DraggableProgramExercise key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} text={line} />
+        <DraggableProgramExercise
+          key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} text={line}
+          adjustedText={autoregReco != null ? parseAndApply(line, autoregReco) : undefined}
+        />
       )}
     />
   );
 }
 
-function DraggableProgramExercise({ day, sIdx, exIdx, text }: { day: string; sIdx: number; exIdx: number; text: string }) {
+function DraggableProgramExercise({ day, sIdx, exIdx, text, adjustedText }: { day: string; sIdx: number; exIdx: number; text: string; adjustedText?: string }) {
   const dragId = `ex:${day}:${sIdx}:${exIdx}`;
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
+  const changed = adjustedText !== undefined && adjustedText !== text;
   return (
     <div
       ref={el => { setDragRef(el); setDropRef(el); }}
@@ -75,7 +102,14 @@ function DraggableProgramExercise({ day, sIdx, exIdx, text }: { day: string; sId
         {...attributes} {...listeners}
         style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
       >⠿</span>
-      <span style={{ flex: 1 }}>{text}</span>
+      {changed ? (
+        <span style={{ flex: 1 }}>
+          <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>{text}</div>
+          <div style={{ color: "#d44000", fontWeight: 800 }}>{adjustedText}</div>
+        </span>
+      ) : (
+        <span style={{ flex: 1 }}>{text}</span>
+      )}
     </div>
   );
 }
@@ -331,10 +365,21 @@ interface Props {
      `topOffset` est donc un signal séparé, explicite, pour laisser la place à la bannière fixe
      (UnsavedBanner) au lieu de dériver (à tort) ce calcul de `wizardHero`, toujours undefined ici. */
   topOffset?: number;
+  /* Simulateur d'autorégulation touchable (2026-09-18), même mécanisme que PublicProgramView.tsx
+     (/p/[id]) porté ici — mais réservé au wizard onboarding. Le job-to-be-done du builder in-app
+     (/week, /coach/planning) est l'édition récurrente d'un programme réel : un slider de forme
+     fictive y serait du bruit dès la 2e visite, en concurrence visuelle avec le vrai travail
+     d'édition. `showAutoregSimulator` (absent = false) n'est donc passé `true` que par
+     OnboardingFlow.tsx (wizard_builder), jamais par ProgramLibraryPage.tsx. */
+  showAutoregSimulator?: boolean;
+  /* Wording du bandeau ci-dessus (2e personne "ta forme" vs 3e personne "tes sportifs") — n'a
+     d'effet que si showAutoregSimulator est vrai. Absent = "athlete". */
+  role?: "athlete" | "coach";
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset }: Props) {
+export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset, showAutoregSimulator = false, role = "athlete" }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
+  const { isMd } = useBreakpoint();
   const [name, setName] = useState(initialName || "Mon programme");
   const [template, setTemplate] = useState<ProgramTemplate>(initialTemplate);
   const [weekIdx, setWeekIdx] = useState(0);
@@ -345,6 +390,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [simScore, setSimScore] = useState(72);
 
   async function handleShare() {
     if (!onShare || sharing) return;
@@ -371,6 +417,29 @@ export default function ProgramBuilderModal({ programName: initialName, template
   const weekAvgLoads = template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
   const maxAvgLoad = Math.max(...weekAvgLoads, 0.01);
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  /* Simulateur d'autorégulation touchable (2026-09-18) — wizard uniquement (showAutoregSimulator),
+     voir doc sur le prop. Même mécanisme, mêmes fonctions réelles que PublicProgramView.tsx
+     (/p/[id]) : computeAutoregSuggestion sur la séance la plus dure de chaque jour de la semaine
+     affichée, baseline synthétique via syntheticBaselineFor (même source que la sandbox/
+     l'onboarding démo). Ancre stable (pas program.id, un programme en cours de création n'en a pas
+     forcément un) — la simulation reste cohérente d'un render à l'autre. Désactivé (repli neutre,
+     targetSession/suggestion toujours null) pour le builder in-app. */
+  const simBaseline = showAutoregSimulator ? syntheticBaselineFor(simScore, "program-builder-sim") : null;
+  const simDisplayScore = Math.round(simBaseline?.relativeScore ?? simScore);
+  const simZoneLabel = relativeZoneLabel(simBaseline, role);
+  const daySuggestions = DAYS.map(day => {
+    if (!showAutoregSimulator) return { day, targetSession: null as SessionTemplate | null, suggestion: null };
+    const sessions = (week[day] ?? []) as SessionTemplate[];
+    const targetSession = sessions.reduce<SessionTemplate | null>((best, s) => {
+      if (s.target_difficulty == null) return best;
+      if (!best || (best.target_difficulty ?? 0) < s.target_difficulty) return s;
+      return best;
+    }, null);
+    const suggestion = targetSession ? computeAutoregSuggestion(simScore, targetSession.target_difficulty ?? null, simBaseline) : null;
+    return { day, targetSession, suggestion };
+  });
+  const impactedDays = daySuggestions.filter(d => d.suggestion).length;
 
   const editingSession: SessionTemplate | null = editingTarget
     ? (template.weeks[editingTarget.weekIdx]?.[editingTarget.day]?.[editingTarget.sessionIdx] ?? null)
@@ -547,6 +616,70 @@ export default function ProgramBuilderModal({ programName: initialName, template
     exercise_media: editingSession.exercise_media,
   } : undefined;
 
+  const lowDays = daySuggestions.filter(d => d.suggestion?.dir === "low").map(d => DAY_NAMES[d.day] ?? d.day);
+  const highDays = daySuggestions.filter(d => d.suggestion?.dir === "high").map(d => DAY_NAMES[d.day] ?? d.day);
+  const dayList = (days: string[]) => days.map((d, i) => <span key={d}>{i > 0 && ", "}<b>{d}</b></span>);
+  const effectLine: React.ReactNode = impactedDays === 0
+    ? "Aucun ajustement recommandé cette semaine à ce niveau de forme."
+    : (
+      <>
+        {lowDays.length > 0 && <>Alléger recommandé sur {dayList(lowDays)}.</>}
+        {lowDays.length > 0 && highDays.length > 0 && " "}
+        {highDays.length > 0 && <>Surcharger possible sur {dayList(highDays)}.</>}
+      </>
+    );
+
+  const autoregBanner = !showAutoregSimulator ? null : (
+    <div style={{ margin: "10px 16px 14px", background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 18, padding: "14px 16px", color: "#fff", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ position: "absolute", right: -40, top: -40, width: 130, height: 130, borderRadius: "50%", background: "rgba(212,64,0,.16)", filter: "blur(24px)", pointerEvents: "none" }} />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "stretch", gap: isMd ? 20 : 14 }}>
+
+        {/* Pitch — 50/50 avec le simulateur en desktop. */}
+        <div style={{ flex: isMd ? "1 1 50%" : undefined }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
+            <span style={{ fontSize: 20 }}>⚡</span>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em" }}>Programme autorégulé</h3>
+          </div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.55 }}>
+            {role === "coach"
+              ? "Chaque jour, ThePerfClub compare la forme de tes sportifs à la séance prévue et te propose de l'ajuster pour progresser mieux, plus longtemps et loin des blessures."
+              : "Chaque jour, ThePerfClub compare ta forme à la séance prévue et te propose de l'ajuster pour progresser mieux, plus longtemps et loin des blessures."}
+          </div>
+        </div>
+
+        {/* Simulateur — même encadré que PublicProgramView.tsx (/p/[id]). */}
+        <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "13px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {role === "coach" ? "Simule leur forme" : "Simule ta forme"}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 900, color: "#fff" }}>{simZoneLabel}</div>
+              <WellnessRing score={simDisplayScore} size={50} strokeWidth={5} dark />
+            </div>
+          </div>
+
+          <input
+            type="range" min={0} max={100} value={simScore}
+            onChange={e => setSimScore(Number(e.target.value))}
+            className="tpc-autoreg-slider"
+            style={{ width: "100%", height: 7, borderRadius: 4, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }}
+          />
+          <style>{`
+            .tpc-autoreg-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
+            .tpc-autoreg-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
+          `}</style>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9.5, fontWeight: 800, color: "rgba(255,255,255,.4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            <span>Fatigué</span>
+            <span>Frais</span>
+          </div>
+
+          <div style={{ marginTop: 9, fontSize: 12.5, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>{effectLine}</div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ position: "fixed", top: topOffset ?? 0, right: 0, bottom: 0, left: 0, background: "#f1f0ee", display: "flex", flexDirection: "column", zIndex: 2147483100 }}>
       {wizardHero}
@@ -623,14 +756,14 @@ export default function ProgramBuilderModal({ programName: initialName, template
           flouté/inerte, overlay CTA par-dessus — jamais de troncature côté données). */}
       <div style={{ position: "relative", flex: 1, overflow: "hidden" }}>
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <div style={{ overflowY: "auto", height: "100%" }}>
+      {autoregBanner}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",
-        overflowY: "auto",
-        height: "100%",
         padding: "14px 16px 18px",
         scrollSnapType: "x proximity",
         scrollbarWidth: "thin",
@@ -648,6 +781,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
           };
           const rule = loadRule(daySessions.map(s => ({ target_difficulty: s.target_difficulty })), ctx);
           const tagColor = ruleTagColors[rule.cls];
+          const { targetSession, suggestion } = daySuggestions[dayIdx];
           return (
             <div key={day}>
             <DroppableProgramDay day={day}>
@@ -656,7 +790,16 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>{day}</div>
               </div>
 
-              {(daySessions.length > 0 || rule.cls !== "rest") && (
+              {suggestion ? (
+                <AlertBox
+                  variant="light"
+                  alert={{
+                    glow: suggestionSeverityColor(suggestion),
+                    border: suggestionSeverityColor(suggestion),
+                    text: `${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, targetSession?.target_difficulty ?? 5, role === "coach" ? "tes sportifs" : undefined, simBaseline)}`,
+                  }}
+                />
+              ) : (daySessions.length > 0 || rule.cls !== "rest") && (
                 <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
                     <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
@@ -676,12 +819,18 @@ export default function ProgramBuilderModal({ programName: initialName, template
                     Repos / libre
                   </div>
                 )}
-                {daySessions.map((s, sIdx) => (
-                  <DraggableProgramSession
-                    key={sIdx} day={day} sIdx={sIdx} session={s}
-                    onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
-                  />
-                ))}
+                {daySessions.map((s, sIdx) => {
+                  const isTarget = !!suggestion && s === targetSession;
+                  return (
+                    <DraggableProgramSession
+                      key={sIdx} day={day} sIdx={sIdx} session={s}
+                      onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
+                      badgeOverride={isTarget ? { label: formatAutoregPct(suggestion!.reco), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
+                      gaugeOverride={isTarget ? adjustDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
+                      autoregReco={isTarget ? suggestion!.reco : undefined}
+                    />
+                  );
+                })}
                 <div style={{ display: "flex", gap: 5 }}>
                   <div
                     onClick={() => addSession(day)}
@@ -703,6 +852,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             </div>
           );
         })}
+      </div>
       </div>
       </DndContext>
       {weekLocked && (

@@ -1792,6 +1792,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           onSaveToLibrary={handleWizardSaveToLibrary}
           onSaveAndAssign={handleWizardSaveToLibrary}
           onShare={handleWizardShare}
+          showAutoregSimulator
+          role={role === "coach" ? "coach" : "athlete"}
         />
         {wizardPaywallOverlay}
       </>
