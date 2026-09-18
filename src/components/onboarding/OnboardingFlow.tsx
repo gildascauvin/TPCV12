@@ -269,24 +269,31 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
 /* Programme claimé (2026-09-02, retour à l'architecture POC — "aucune exception", décision
    explicite de Gildas) : "sport_2a" est SAUTÉ (contrairement au 2026-08-29 → 2026-09-01, où il
    restait accessible pour changer de sport/importer avant signup) — value_intro montre déjà le nom
-   du programme claimé, role suit directement. Le contenu réel du programme claimé n'est montré
-   qu'après signup, dans wizard_builder (pré-rempli avec le template claimé, fetch existant
-   `GET /api/programs/[id]`) — wizard_picker/wizard_criteria sont sautés eux aussi, wizard_builder
-   garde un `onBack` vers wizard_picker pour l'utilisateur claimed qui préfère finalement importer/
-   générer son propre programme plutôt que garder le claim (échappatoire non prévue par le POC mais
-   qui évite de perdre une fonctionnalité réelle sans bonne raison). */
+   du programme claimé, role suit directement. wizard_picker/wizard_criteria sont sautés eux aussi.
+   wizard_builder l'était ENCORE jusqu'au 2026-09-18 (pré-rempli avec le template claimé, avec un
+   `onBack` vers wizard_picker pour l'échappatoire "changer de programme") — retiré du path à cette
+   date, voir doc juste en dessous. */
+/* wizard_builder sauté pour ce trafic (2026-09-18, retour explicite de Gildas) — le
+   programme claimé est sauvegardé automatiquement en arrière-plan (voir runClaimedProgramAutoSave
+   plus bas) et l'utilisateur atterrit directement sur wizard_activate. Justification : il a déjà vu
+   ce programme en entier sur /p/[id] (avec le simulateur d'autorégulation) avant même de créer son
+   compte — le lui remontrer dans wizard_builder serait une confirmation redondante, pas une vraie
+   découverte, et c'est le moment de plus forte intention du funnel (CTA "Personnaliser CE
+   programme" cliqué). Un event onboarding_wizard_builder_viewed synthétique est émis quand même à
+   ce moment-là (même principe déjà utilisé pour onboarding_role_viewed lors de la fusion
+   role/value_intro du 2026-07-31) — il l'a techniquement vu, sur /p/[id], juste avant ce funnel. */
 const PROGRAM_ATHLETE_PATH: StepId[] = [
   "value_intro",
   "decision_2a",
   "account",
-  "wizard_builder", "wizard_activate", "wizard_assign",
+  "wizard_activate", "wizard_assign",
   "paywall_priming", "paywall_form",
 ];
 const PROGRAM_COACH_PATH: StepId[] = [
   "value_intro",
   "decision_2b",
   "account",
-  "wizard_builder", "wizard_activate", "wizard_assign",
+  "wizard_activate", "wizard_assign",
   "paywall_priming", "paywall_form",
 ];
 
@@ -668,6 +675,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      réellement, pas juste cosmétique). */
   const [wizardPaywallStage, setWizardPaywallStage] = useState<"priming" | "form" | null>(null);
   const [wizardUnlocked, setWizardUnlocked] = useState(false);
+  /* Sauvegarde auto du programme claimé en arrière-plan (2026-09-18, wizard_builder sauté pour ce
+     trafic — voir doc PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH). claimedProgramSaveError pilote
+     l'écran de transition affiché sur wizard_activate tant que wizardProgramId n'est pas résolu
+     (ProgramAssignModal a besoin d'un vrai id). Guard non-idempotent (même règle que
+     profileCompleteGuardRef/finishGuardRef ailleurs dans ce fichier) : évite un double POST
+     /api/programs si l'effet se redéclenchait pendant l'appel en vol.
+     claimedProgramMinDelayDone (retour explicite de Gildas, 2026-09-18 : "ça rassure que le
+     programme soit bien pris en compte") — un vrai POST répond souvent en <300ms, trop rapide pour
+     être visible ; la transition reste affichée au moins 2s côté succès, jamais côté erreur (l'user
+     doit voir l'erreur/pouvoir retenter tout de suite, pas patienter sur un spinner inutile). */
+  const [claimedProgramSaveError, setClaimedProgramSaveError] = useState<string | null>(null);
+  const [claimedProgramMinDelayDone, setClaimedProgramMinDelayDone] = useState(false);
+  const claimedProgramSaveGuardRef = useRef(false);
 
   const getPath = (r: Role): StepId[] => {
     if (hasCoachInvite && r === "athlete") return INVITE_ATHLETE_PATH;
@@ -761,7 +781,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       fetch(`/api/programs/${claimId}`)
         .then(res => res.ok ? res.json() : null)
         .then(data => {
-          if (!data) return;
+          if (!data) {
+            /* Programme introuvable (supprimé, lien périmé/erroné, is_public passé à false depuis) —
+               même traitement que le code d'invitation coach invalide juste au-dessus : retombe sur
+               le funnel standard plutôt que de laisser wizardTemplate/wizardProgramId ne jamais se
+               résoudre. Sans ce fallback, hasClaimedProgram restait bloqué à `true` (posé uniquement
+               depuis localStorage, indépendamment du succès de CE fetch) — PROGRAM_ATHLETE_PATH/
+               PROGRAM_COACH_PATH sautent wizard_builder pour ce trafic (2026-09-18), donc plus rien
+               ne pouvait jamais déclencher runClaimedProgramAutoSave() : coincé indéfiniment sur
+               "Préparation de Mon programme…" (le nom par défaut jamais écrasé, faute de template).
+               Bug trouvé en conditions réelles par Gildas, confirmé en base : la ligne `programs`
+               correspondante n'existe tout simplement pas. */
+            localStorage.removeItem("claim_program_id");
+            setHasClaimedProgram(false);
+            return;
+          }
           if (data.sport) setSport(data.sport);
           if (data.level && DB_TO_LEVEL[data.level]) setLevel(DB_TO_LEVEL[data.level]);
           if (data.name) setClaimedProgramName(data.name);
@@ -772,7 +806,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
              template complet) — pas de 2e appel réseau nécessaire. */
           if (data.template) { setWizardTemplate(data.template); setWizardProgramName(data.name || "Mon programme"); }
         })
-        .catch(() => {});
+        .catch(() => {
+          localStorage.removeItem("claim_program_id");
+          setHasClaimedProgram(false);
+        });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -787,6 +824,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      chargement). `flowReady` reprend exactement la même condition que le garde de rendu — aucun
      event de vue d'étape ne doit partir tant que le JSX correspondant n'est pas réellement affiché. */
   const flowReady = hasClaimedProgram !== null && hasCoachInvite !== null && claimedNameResolved;
+
+  /* Sauvegarde auto du programme claimé + event synthétique onboarding_wizard_builder_viewed
+     (2026-09-18) — déclarée AVANT l'effet générique juste en dessous pour que le capture synthétique
+     parte avant le vrai onboarding_wizard_activate_viewed dans le même commit (React exécute les
+     effets d'un même render dans leur ordre de déclaration) : ordre chronologique correct pour un
+     funnel PostHog ordonné. Ne se déclenche que pour le segment claimé, jamais pour un classique
+     (dont wizardProgramId est déjà résolu à ce stade via wizard_builder, condition `!wizardProgramId`
+     toujours fausse pour lui ici). */
+  useEffect(() => {
+    if (!flowReady || currentStep !== "wizard_activate" || !hasClaimedProgram || wizardProgramId || !wizardTemplate) return;
+    runClaimedProgramAutoSave();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowReady, currentStep, hasClaimedProgram, wizardProgramId, wizardTemplate]);
+
   useEffect(() => {
     if (!flowReady) return;
     const props = {
@@ -846,7 +897,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      déduits du claim, faiblesses/jours collectés via les écrans dédiés). Ne s'exécute jamais pour
      INVITE_ATHLETE_PATH (aucun diagnostic sur ce chemin) — gardé par un simple `path.includes(...)`
      aux 3 points d'appel, qui reproduit exactement le gate de l'ancien effet (`currentStep ===
-     "week_preview_2a"/"week_preview_2b"`, jamais atteint sur ce path). */
+     "week_preview_2a"/"week_preview_2b"`, jamais atteint sur ce path).
+     Marqueur `path.includes("wizard_activate")` (pas "wizard_builder", 2026-09-18) : depuis que
+     wizard_builder est sauté pour le trafic claimé (voir PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH),
+     "wizard_builder" n'est plus un marqueur fiable de "n'importe quel path sauf INVITE_ATHLETE_PATH"
+     — "wizard_activate", lui, reste présent dans les 4 autres paths (ATHLETE_PATH/COACH_PATH/
+     PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH) et absent d'INVITE_ATHLETE_PATH, même garantie. */
 
   /* Depuis le réordonnancement Paywall → Célébration → Activation, la dernière étape du path
      est désormais wellness_q/wellness_reveal (sportif) ou invite_team (coach) — plus celebration.
@@ -1006,12 +1062,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }
   }
 
-  /* wizard_builder (2026-09-02) — un seul CTA ("Assigner ce programme →"), réutilise le prop
-     onSaveToLibrary de ProgramBuilderModal tel quel (vraie écriture POST /api/programs, capture
-     l'id créé pour que wizard_assign puisse l'assigner réellement ensuite via ProgramAssignModal).
-     Correction explicite de Gildas : pas de 2e bouton "Enregistrer en librairie" séparé dans le
-     wizard, voir footerVariant="wizardSingle" sur ProgramBuilderModal. */
-  async function handleWizardSaveToLibrary(name: string, template: ProgramTemplate) {
+  /* Cœur de la sauvegarde réelle (POST /api/programs) — extrait de handleWizardSaveToLibrary
+     (2026-09-18) pour être réutilisé aussi par runClaimedProgramAutoSave (déclenchée sans clic,
+     wizard_builder sauté pour le trafic claimé — voir doc PROGRAM_ATHLETE_PATH). Ne navigue jamais
+     elle-même (pas de next() ici) : chaque appelant décide de la suite. */
+  async function saveWizardProgram(name: string, template: ProgramTemplate) {
     const week1 = template.weeks[0] ?? {};
     const sessionsPerWeek = Object.values(week1).filter(sessions => (sessions as unknown[]).length > 0).length;
     const res = await fetch("/api/programs", {
@@ -1031,10 +1086,46 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const uid = userId || newUserId;
     if (uid && sport) {
       const { error } = await supabase.from("profiles").update({ sport }).eq("user_id", uid);
-      if (error) console.error("[handleWizardSaveToLibrary] profiles.sport update error:", error);
+      if (error) console.error("[saveWizardProgram] profiles.sport update error:", error);
     }
     if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
+  }
+
+  /* wizard_builder (2026-09-02) — un seul CTA ("Assigner ce programme →"), réutilise le prop
+     onSaveToLibrary de ProgramBuilderModal tel quel (vraie écriture POST /api/programs, capture
+     l'id créé pour que wizard_assign puisse l'assigner réellement ensuite via ProgramAssignModal).
+     Correction explicite de Gildas : pas de 2e bouton "Enregistrer en librairie" séparé dans le
+     wizard, voir footerVariant="wizardSingle" sur ProgramBuilderModal. */
+  async function handleWizardSaveToLibrary(name: string, template: ProgramTemplate) {
+    await saveWizardProgram(name, template);
     next();
+  }
+
+  /* Sauvegarde silencieuse du programme claimé + event synthétique onboarding_wizard_builder_viewed
+     (2026-09-18) — voir doc de l'effet juste au-dessus qui l'appelle, et doc de PROGRAM_ATHLETE_PATH/
+     PROGRAM_COACH_PATH en tête de fichier. Ne navigue jamais (contrairement à
+     handleWizardSaveToLibrary) : l'utilisateur est déjà sur wizard_activate, seul le contenu affiché
+     (transition vs formulaire réel) dépend de wizardProgramId. Retentable via le bouton "Réessayer"
+     de l'écran de transition — le guard se relâche dans le `finally`, jamais bloqué en échec permanent. */
+  async function runClaimedProgramAutoSave() {
+    if (claimedProgramSaveGuardRef.current || !wizardTemplate) return;
+    claimedProgramSaveGuardRef.current = true;
+    setClaimedProgramSaveError(null);
+    setClaimedProgramMinDelayDone(false);
+    const minDelay = new Promise(resolve => setTimeout(resolve, 2000));
+    const props = { step: "wizard_builder", step_index: stepIdx, role: role || "unknown", mode: isRegisterMode ? "register" : "auth" };
+    posthog.capture("onboarding_step_viewed", props);
+    posthog.capture("onboarding_wizard_builder_viewed", props);
+    try {
+      await saveWizardProgram(wizardProgramName, wizardTemplate);
+      await minDelay;
+      setClaimedProgramMinDelayDone(true);
+    } catch {
+      setClaimedProgramSaveError("Erreur lors de la préparation de ton programme.");
+      setClaimedProgramMinDelayDone(true);
+    } finally {
+      claimedProgramSaveGuardRef.current = false;
+    }
   }
 
   /* Lien de partage /p/[id] sur wizard_builder (2026-09-04) — même geste que le bouton 🔗 de la
@@ -1202,7 +1293,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           setSaving(false);
           return;
         }
-        if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
+        if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
           profileCompleteGuardRef.current = true;
           await completeProfile(uid);
         }
@@ -1213,7 +1304,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         next();
       } else {
         await createAccount(userId!);
-        if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
+        if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
           profileCompleteGuardRef.current = true;
           await completeProfile(userId!);
         }
@@ -1362,7 +1453,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        s'exécute, alors que la closure de init() est figée au tout premier render, avant que
        hasClaimedProgram ait pu résoudre. userId est garanti non-null ici (googleInitDone ne passe
        à true qu'après la fin de init(), qui a déjà créé le compte). */
-    if (!profileCompleteGuardRef.current && userId && path.includes("wizard_builder")) {
+    if (!profileCompleteGuardRef.current && userId && path.includes("wizard_activate")) {
       profileCompleteGuardRef.current = true;
       completeProfile(userId);
     }
@@ -1391,7 +1482,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   useEffect(() => {
     if (!resumeRoleApplied || !userId) return;
-    if (!profileCompleteGuardRef.current && path.includes("wizard_builder")) {
+    if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
       profileCompleteGuardRef.current = true;
       completeProfile(userId);
     }
@@ -1760,6 +1851,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
 
   if (currentStep === "wizard_builder") {
+    /* hasClaimedProgram ne peut plus être vrai ici depuis le 2026-09-18 (wizard_builder retiré de
+       PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH, voir leur doc) — branche laissée en l'état plutôt
+       que supprimée, même convention "dead code assumé" que le reste de ce fichier. */
     if (hasClaimedProgram && !wizardTemplate) {
       return <OnboardingBackground variant="dark"><div style={{ minHeight: 280 }} /></OnboardingBackground>;
     }
@@ -1802,6 +1896,46 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   if (currentStep === "wizard_activate") {
     const notifCancelLabel = pushBlockedIOS ? "📲 Me le rappeler plus tard" : "🔔 Me le rappeler plus tard";
+    /* Segment claimé, wizard_builder sauté (2026-09-18) — écran de transition tant que
+       runClaimedProgramAutoSave() n'a pas résolu wizardProgramId (déclenchée par l'effet juste après
+       flowReady plus haut), ET pendant au moins 2s côté succès (claimedProgramMinDelayDone — réassure
+       que le programme est bien pris en compte, même quand le POST répond en <300ms). Jamais vrai
+       pour un classique : wizardProgramId est déjà résolu avant d'atteindre cet écran (CTA de
+       wizard_builder). ProgramAssignModal (wizard_assign, juste après) a besoin d'un vrai id —
+       bloquer ici plutôt que de le laisser filer avec un id vide. */
+    const claimedSkipPending = !!hasClaimedProgram && (!wizardProgramId || !claimedProgramMinDelayDone);
+    if (claimedSkipPending) {
+      /* Même style que les 2 autres transitions "traitement en cours" du fichier (initializing/
+         resuming juste plus bas — ⚡ + titre 18/800 + sous-titre 13/opacity .7) plutôt qu'un spinner
+         inventé (2026-09-18, retour de Gildas — "autant réutiliser le même style"). Nom du programme
+         cité explicitement, pas un "ton programme" générique. */
+      return (
+        <OnboardingBackground variant="dark">
+          {claimedProgramSaveError ? (
+            <div style={{ textAlign: "center", color: "#fff" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>{claimedProgramSaveError}</div>
+              <button
+                onClick={() => runClaimedProgramAutoSave()}
+                style={{ padding: "11px 22px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}
+              >Réessayer →</button>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", color: "#fff" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
+              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Préparation de {wizardProgramName}…</div>
+              <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
+            </div>
+          )}
+        </OnboardingBackground>
+      );
+    }
+    /* wizard_builder absent du path pour le segment claimé (voir plus haut) : Math.max(0, -1) le
+       ferait tomber sur value_intro (redémarrage complet), pas juste "en arrière". Pas d'échappatoire
+       possible pour ce segment — onBack devient undefined, InviteModal/WellnessModal masquent alors
+       simplement la flèche retour (prop déjà optionnelle sur les 2 composants). */
+    const wizardBuilderIdx = path.indexOf("wizard_builder");
+    const backToBuilder = wizardBuilderIdx !== -1 ? () => setStepIdx(wizardBuilderIdx) : undefined;
     if (role === "coach") {
       return (
         <>
@@ -1812,7 +1946,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             onLinked={() => {}}
             inviteCode={inviteCode}
             cancelLabel={notifCancelLabel}
-            onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+            onBack={backToBuilder}
           />
           {wizardPaywallOverlay}
         </>
@@ -1836,7 +1970,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           }}
           onClose={() => { if (!pushBlockedIOS) subscribeToPush().catch(() => {}); next(); }}
           cancelLabel={notifCancelLabel}
-          onBack={() => setStepIdx(Math.max(0, path.indexOf("wizard_builder")))}
+          onBack={backToBuilder}
         />
         {wizardPaywallOverlay}
       </>
