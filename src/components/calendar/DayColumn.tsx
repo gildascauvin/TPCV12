@@ -192,6 +192,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
 
   return (
     <div ref={columnRef} className="week-col-width" style={{
+      position: "relative",
       background: "#fff",
       border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
       borderRadius: 26, padding: 16,

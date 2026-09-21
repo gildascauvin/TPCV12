@@ -37,7 +37,7 @@ function nearestStep(magnitude: number): number {
      mismatch > 0 → séance plus dure que ce que l'état du jour permet → Alléger
      mismatch < 0 → séance plus facile que ce que l'état du jour permet → Surcharger
      |mismatch| < 35 → pas de reco chiffrée (peut rester une alerte informative sans chips, voir
-       decisionText()/coachAlertFor()/athleteAlertFor() — logique Z_SWC séparée, inchangée)
+       decisionText()/computeDecisionCard() — logique Z_SWC séparée, inchangée)
      |mismatch| ≥ 35 → reco actionnable, % = clamp(20, |mismatch|/5) arrondi au chip le plus proche
    `baseline` (optionnel) : dès que l'historique du sportif est suffisant, le score utilisé dans le
    calcul devient le score RELATIF personnel (baseline.relativeScore) plutôt que `wellness` en
@@ -101,30 +101,43 @@ export function formatAutoregPct(v: number): string {
   return sign + (abs % 1 === 0 ? String(abs) : abs.toFixed(1).replace(".", ",")) + "%";
 }
 
-/* subject omis = à la 2e personne (Aujourd'hui, sportif sur sa propre séance) ; fourni = à la 3e
-   personne (Coach Control / Planning coach, prénom du sportif).
-   `baseline` (optionnel, 2026-08-31) : cite la dimension dominante entre parenthèses ("Récupération
+/* `baseline` (optionnel, 2026-08-31) : cite la dimension dominante entre parenthèses ("Récupération
    basse (sommeil)") UNIQUEMENT quand une dimension domine clairement (autoregDimensionLabel(),
    seuil Z_MODERATE — plus strict que les seuils purement descriptifs) — le calcul qui déclenche
    cette reco (computeAutoregSuggestion) regarde le score COMPOSITE, pas une dimension précise ;
    citer une dimension à chaque fois donnerait une fausse impression de précision sur un état bas/
    haut en réalité diffus, réparti sur les 4 dimensions à la fois. Repli sur le texte générique
-   (comportement inchangé) si `baseline` est omis ou si aucune dimension ne ressort. */
+   (comportement inchangé) si `baseline` est omis ou si aucune dimension ne ressort.
+   Exportée séparément (2026-09) pour servir de TITRE de carte décision (decisionCard.ts, "diagnostic
+   en titre, prescription en CTA" — retour de Gildas) sans dupliquer ce préfixe dans le détail. */
+export function autoregStatusLabel(dir: AutoregDir, baseline?: WellnessBaselineResult | null): string {
+  const dimLabel = autoregDimensionLabel(dir === "low" ? "low" : "high", baseline);
+  const dimSuffix = dimLabel ? ` (${dimLabel})` : "";
+  return dir === "low" ? `Récupération basse${dimSuffix}` : `Forme optimale${dimSuffix}`;
+}
+
+/* subject omis = à la 2e personne (Aujourd'hui, sportif sur sa propre séance) ; fourni = à la 3e
+   personne (Coach Control / Planning coach, prénom du sportif). Corps SEUL, sans le préfixe de
+   statut (voir autoregStatusLabel ci-dessus) — decisionCard.ts compose les deux séparément
+   (titre = statut, détail = ce corps) ; autoregAdvice() en dessous recolle les deux pour tout
+   appelant qui veut la phrase complète d'un coup (comportement 100% inchangé). */
+export function autoregDetail(dir: AutoregDir, plannedDifficulty: number, subject?: string): string {
+  const qualif = qualitativeDifficulty(plannedDifficulty);
+  if (dir === "low") {
+    return subject
+      ? `La séance ${qualif} prévue est trop élevée pour l'état de forme de ${subject}.`
+      : `La séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
+  }
+  return subject
+    ? `La séance ${qualif} prévue laisse de la marge pour ${subject}.`
+    : `La séance ${qualif} prévue laisse de la marge. Tu peux pousser plus.`;
+}
+
 export function autoregAdvice(
   dir: AutoregDir, plannedDifficulty: number, subject?: string,
   baseline?: WellnessBaselineResult | null,
 ): string {
-  const qualif = qualitativeDifficulty(plannedDifficulty);
-  const dimLabel = autoregDimensionLabel(dir === "low" ? "low" : "high", baseline);
-  const dimSuffix = dimLabel ? ` (${dimLabel})` : "";
-  if (dir === "low") {
-    return subject
-      ? `Récupération basse${dimSuffix} : la séance ${qualif} prévue est trop élevée pour l'état de forme de ${subject}.`
-      : `Récupération basse${dimSuffix} : la séance ${qualif} prévue est trop élevée pour ta récupération actuelle.`;
-  }
-  return subject
-    ? `Forme optimale${dimSuffix} : la séance ${qualif} prévue laisse de la marge pour ${subject}.`
-    : `Forme optimale${dimSuffix} : la séance ${qualif} prévue laisse de la marge. Tu peux pousser plus.`;
+  return `${autoregStatusLabel(dir, baseline)} : ${autoregDetail(dir, plannedDifficulty, subject)}`;
 }
 
 export function autoregTitle(dir: AutoregDir): string {
@@ -140,6 +153,14 @@ export function autoregHeadline(dir: AutoregDir): string {
 
 export function autoregCtaLabel(dir: AutoregDir): string {
   return dir === "low" ? "⬇ Alléger →" : "⬆ Surcharger →";
+}
+
+/* Même format que autoregCtaLabel() (flèche + verbe + →) mais avec un verbe précis (ex. "Réduire",
+   "Récupérer", "Augmenter") — decisionCard.ts l'utilise quand une tendance nomme une action plus
+   spécifique qu'"Alléger"/"Surcharger" générique. Le titre de la carte porte le diagnostic
+   (statut/tendance), le CTA porte le verbe — jamais les deux à la fois dans le titre. */
+export function autoregCtaWordLabel(dir: AutoregDir, word: string): string {
+  return `${dir === "low" ? "⬇" : "⬆"} ${word} →`;
 }
 
 /* Décision "traitée" pour la journée — persistée en localStorage (pas de colonne DB, V1 assumée

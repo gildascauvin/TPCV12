@@ -5,8 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachClient from "./CoachClient";
 import { realToView, demoToView } from "@/lib/coachSessions";
-import { computeWeekOverWeekTrend, daysAgoStr, type TrendCode } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWeekOverWeekTrend, daysAgoStr, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
+import { wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
 
@@ -42,11 +42,12 @@ export default async function CoachPage() {
   const athletes = (rawAthletes || []) as CoachAthlete[];
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const allAthleteIds = athletes.map(a => a.id);
-  // Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente
-  // decisionText()/attention() du Coach Control (voir src/lib/trainingLoad.ts). Fenêtre élargie à
-  // max(14, WELLNESS_BASELINE_WINDOW_DAYS) pour servir aussi de fenêtre glissante à la baseline
-  // personnelle (Z-score, src/lib/wellnessBaseline.ts) — même requête réutilisée pour les deux.
-  const sinceHistory = daysAgoStr(Math.max(13, WELLNESS_BASELINE_WINDOW_DAYS));
+  /* Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente la
+     carte décision du Coach Control (decisionCard.ts). 42j (pas 21) : la tendance a besoin de 14j,
+     chacun avec jusqu'à 21j d'historique perso derrière lui (wellnessZByDate) pour la baseline Z,
+     soit ~35j au maximum — 42j aligne sur /conseils et athletesData.ts plutôt qu'un nouveau chiffre.
+     Sert aussi de fenêtre pour la monotonie/contrainte (Foster, 7j seulement, largement couvert). */
+  const sinceHistory = daysAgoStr(42);
 
   /* Les données "aujourd'hui" et l'historique 14j n'ont jamais eu de dépendance entre elles —
      seulement envers realUserIds/allAthleteIds/sinceHistory, déjà connus ici. Étaient dans 2
@@ -89,24 +90,36 @@ export default async function CoachPage() {
   const historyWellness = (historyWellnessRes.data || []) as WellnessDaily[];
 
   const trends: Record<string, TrendCode | null> = {};
+  const trendInputs: Record<string, TrendInput | null> = {};
+  /* `baselines` ne porte plus QUE les sportifs démo — la baseline d'un vrai sportif est désormais
+     recalculée côté client (CoachClient.tsx) pour la date réellement affichée, via
+     `wellnessBaselineHistory` ci-dessous (fix 2026-09 : ce calcul, fait une seule fois ici pour
+     "aujourd'hui", restait figé sur ce jour même en naviguant vers le passé — score/conseil faux
+     pour tout autre jour consulté). Un seul point de calcul (computeWellnessBaselineAt), jamais deux
+     qui pourraient diverger. */
   const baselines: Record<string, WellnessBaselineResult | null> = {};
+  const recentSessions: Record<string, Session[]> = {};
+  const wellnessBaselineHistory: Record<string, WellnessDaily[]> = {};
   for (const a of updatedAthletes) {
     if (!a.user_id) {
       // Sportif démo : pas de vraie tendance (pas d'historique réel de séances/wellness), mais une
       // baseline Z-score construite sur un historique synthétique déterministe (coachWellnessScoreFor,
       // même fonction que /coach/athletes et /coach/planning) — sinon la carte de ce sportif restait
-      // en absolu ici alors qu'elle est en relatif partout ailleurs pour le même score.
+      // en absolu ici alors qu'elle est en relatif partout ailleurs pour le même score. Reste statique
+      // (pas de notion de jour pour un démo sur cette page) — limite préexistante, pas aggravée ici.
       trends[a.id] = null;
+      trendInputs[a.id] = null;
       baselines[a.id] = syntheticBaselineFor(a.wellness_score, a.id);
+      recentSessions[a.id] = [];
       continue;
     }
     const mySessions = historySessions.filter(s => s.user_id === a.user_id);
     const myWellness = historyWellness.filter(w => w.user_id === a.user_id);
-    trends[a.id] = computeWeekOverWeekTrend(mySessions, myWellness).code;
-    const todayRow = a.wellnessFilledToday ? myWellness.find(w => w.date === today) ?? null : null;
-    baselines[a.id] = todayRow
-      ? computeWellnessBaselineAt(myWellness.filter(w => w.date < today), todayRow)
-      : null;
+    const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, new Date(), wellnessZByDate(myWellness, 14));
+    trends[a.id] = code;
+    trendInputs[a.id] = input;
+    recentSessions[a.id] = mySessions;
+    wellnessBaselineHistory[a.user_id] = myWellness;
   }
 
   const todaySessions: CoachViewSession[] = [
@@ -124,7 +137,10 @@ export default async function CoachPage() {
       subscriptionStatus={profile.subscription_status ?? "free"}
       inviteCode={inviteCode}
       trends={trends}
+      trendInputs={trendInputs}
       baselines={baselines}
+      wellnessBaselineHistory={wellnessBaselineHistory}
+      recentSessions={recentSessions}
     />
   );
 }

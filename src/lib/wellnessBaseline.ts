@@ -208,6 +208,24 @@ export function computeWellnessBaselineSeries(
   return results;
 }
 
+/* Map date→Z composite — pour tout appelant qui a besoin d'un lookup par date plutôt que la série
+   positionnelle de computeWellnessBaselineSeries() (ex. computeWeekOverWeekTrend, trainingLoad.ts :
+   ce module ne dépend jamais de wellnessBaseline.ts en interne — dépendance circulaire, wellness-
+   Baseline.ts importe déjà daysAgoStr() depuis trainingLoad.ts — donc la map est construite ICI par
+   l'appelant, puis passée en paramètre optionnel). Unifie la tendance hebdomadaire (`describeTrend`)
+   sur la même notion de "norme perso" que le score du jour (`computeWellnessBaselineAt`), au lieu de
+   deux calculs séparés (2026-09, demande explicite de Gildas). */
+export function wellnessZByDate(
+  wellness: WellnessDaily[], days: number, anchor: Date = new Date(), windowDays: number = WELLNESS_BASELINE_WINDOW_DAYS,
+): Map<string, number | null> {
+  const series = computeWellnessBaselineSeries(wellness, days, anchor, windowDays);
+  const map = new Map<string, number | null>();
+  for (let i = 0; i < days; i++) {
+    map.set(daysAgoStr(days - 1 - i, anchor), series[i]?.composite.z ?? null);
+  }
+  return map;
+}
+
 /**
  * Zone relative ("Fatigué"/"Équilibré"/"Frais") — même vocabulaire que FORM_ZONES
  * (SparkLineClient.tsx, système de zones désormais partagé entre Wellness et Forme sur le chart
@@ -289,6 +307,34 @@ export function describeDominantDimension(b: WellnessBaselineResult, perspective
   const dz = directionalZ(dim, z);
   const intensity = deviationIntensity(Math.abs(dz), dz >= 0 ? "above" : "below");
   return `${DIMENSION_LABELS[dim]} ${intensity} de ${poss} norme`;
+}
+
+const DIMENSION_ACTION: Record<DimensionKey, { athlete: string; coach: string }> = {
+  sleep: { athlete: "Vise un coucher plus tôt ce soir.", coach: "Encourage un coucher plus tôt ce soir." },
+  stress: { athlete: "Priorise la récupération mentale ce soir (respiration, marche, écrans coupés).", coach: "Encourage un temps de récupération mentale ce soir." },
+  recovery: { athlete: "Ajoute une séance de récupération active ou des étirements.", coach: "Propose une séance de récupération active ou des étirements." },
+  motivation: { athlete: "Accorde-toi une séance plus courte ou change de stimulus pour relancer l'envie.", coach: "Propose une séance plus courte ou un stimulus différent pour relancer l'envie." },
+};
+
+/* Action concrète pour la dimension dominante de describeDominantDimension() ci-dessus — même
+   dimension/Z recalculés ici (dupliqué plutôt que refactorisé en commun, même pattern déjà établi
+   dans ce fichier : describeDrivingDimension/describeDominantDimension/autoregDimensionLabel sont 3
+   fonctions "dimension dominante" séparées, chacune avec son propre seuil/sens). Retourne null si la
+   dimension dominante est AU-DESSUS de la norme (rien à corriger) — 2026-09, retour de Gildas : la
+   citation seule ("Sommeil nettement en dessous de ta norme.") ne dit jamais quoi faire. */
+export function dominantDimensionAction(b: WellnessBaselineResult, perspective: Perspective = "athlete"): string | null {
+  if (!b.hasEnoughHistory) return null;
+  let dim: DimensionKey | null = null;
+  let bestAbsZ = 0;
+  for (const k of DIMENSION_KEYS) {
+    const z = b.dimensions[k].z;
+    if (z === null) continue;
+    if (Math.abs(z) > bestAbsZ) { bestAbsZ = Math.abs(z); dim = k; }
+  }
+  if (!dim || bestAbsZ < Z_SWC) return null;
+  const dz = directionalZ(dim, b.dimensions[dim].z!);
+  if (dz >= 0) return null;
+  return DIMENSION_ACTION[dim][perspective === "coach" ? "coach" : "athlete"];
 }
 
 /* Libellé court (minuscule, ex. "sommeil") d'une dimension à citer entre parenthèses dans une reco

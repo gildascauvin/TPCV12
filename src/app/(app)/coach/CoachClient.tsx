@@ -18,6 +18,7 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
+import { monotonyStrainFor } from "@/lib/decisionCard";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que /week et
    /coach/planning (2026-09-17) : leur JS part dans des chunks séparés, chargés au clic
@@ -31,9 +32,9 @@ const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import type { TrendCode } from "@/lib/trainingLoad";
-import { wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments } from "@/types";
+import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
+import { computeWellnessBaselineAt, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments, WellnessDaily } from "@/types";
 
 interface Props {
   coachName: string | null;
@@ -44,10 +45,27 @@ interface Props {
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
   trends: Record<string, TrendCode | null>;
-  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) par sportif — clé = athlete.id
-     (comme `trends`), calculée côté page (même fetch batché que `trends`). `undefined`/absent pour
-     un sportif démo ou sans check-in du jour = repli absolu automatique partout où c'est consommé. */
+  /* Input brut de computeWeekOverWeekTrend (loadPct/wellnessDelta/rpeDelta) — nécessaire pour
+     describeTrend() dans la carte décision unifiée (decisionCard.ts, 2026-09), `trends` seul
+     (juste le code) ne suffit plus à produire le texte. `{}` par défaut = aucune donnée de tendance
+     (repli sur le signal du jour seul), comportement inchangé pour tout appelant qui ne le fournit
+     pas encore (sandbox). */
+  trendInputs?: Record<string, TrendInput | null>;
+  /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — désormais UNIQUEMENT pour les
+     sportifs démo (statique, pas de notion de jour pour eux sur cette page). Pour un vrai sportif,
+     la baseline est recalculée à chaque rendu depuis `wellnessBaselineHistory` ci-dessous, pour la
+     date réellement affichée — voir le `const baselines` local plus bas (fix 2026-09 : ce prop
+     restait figé sur "aujourd'hui" même en naviguant vers le passé). */
   baselines?: Record<string, WellnessBaselineResult | null>;
+  /* Historique wellness (toutes dimensions, ~42j glissants) par sportif RÉEL — clé = user_id. Sert à
+     recalculer la baseline Z-score pour n'importe quelle date navigée (computeWellnessBaselineAt),
+     jamais seulement "aujourd'hui". `{}` par défaut = repli absolu (comportement inchangé). */
+  wellnessBaselineHistory?: Record<string, WellnessDaily[]>;
+  /* Historique récent (≥7j) par sportif — pour la monotonie/contrainte (Foster 1998) de la carte
+     décision. `{}` par défaut = signal monotonie/contrainte simplement indisponible (repli gracieux,
+     computeDecisionCard le tolère), comportement inchangé pour tout appelant qui ne le fournit pas
+     encore (sandbox). */
+  recentSessions?: Record<string, Session[]>;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
   sandboxSessionsByDate?: Record<string, CoachViewSession[]>;
@@ -87,7 +105,7 @@ function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], 
   return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
 }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, baselines = {}, sandboxMode = false, sandboxSessionsByDate }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, sandboxMode = false, sandboxSessionsByDate }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -100,6 +118,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
+  const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
   const [reviewAthlete, setReviewAthlete] = useState<CoachAthlete | null>(null);
@@ -190,7 +209,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       demoAthleteIds.length
         ? supabase.from("coach_sessions").select("*").eq("coach_id", userId).in("athlete_id", demoAthleteIds).eq("date", date)
         : Promise.resolve({ data: [] }),
-      fetch(`/api/coach/wellness?date=${date}`).then(r => r.json()).catch(() => ({ wellness: [] })),
+      fetch(`/api/coach/wellness?date=${date}`).then(r => r.json()).catch(() => ({ wellness: [], baselineHistory: {} })),
     ]);
 
     const unified: CoachViewSession[] = [
@@ -210,6 +229,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         ? { ...a, wellness_score: w.score, behaviors: w.behaviors, wellnessFilledToday: true }
         : { ...a, wellnessFilledToday: false };
     }));
+    // Fenêtre 42j se terminant à `date` (inclus), groupée par user_id — remplace l'historique de
+    // baseline pour les sportifs concernés (voir `const baselines` plus bas, recalculé pour
+    // `selectedDate` à chaque rendu — fix du score/conseil figés sur "aujourd'hui" en navigant).
+    setWellnessBaselineHistory(prev => ({ ...prev, ...(wellnessRes.baselineHistory ?? {}) as Record<string, WellnessDaily[]> }));
   }, [supabase, userId, athletes]);
 
   /* Temps réel — séances (2026-09-17) : jusqu'ici seul wellness_daily était écouté ici, jamais
@@ -287,17 +310,42 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     }
   }
 
+  /* Baseline personnelle (Z-score) recalculée pour la date AFFICHÉE, jamais figée sur "aujourd'hui"
+     (bug réel signalé par Gildas : score/conseil faux sur cauvingildas@gmail.com et
+     contact@theperfclub.com, correct pour aujourd'hui mais reproductible sur les jours passés — le
+     prop `baselines` du serveur n'était calculé qu'une fois, pour "aujourd'hui", jamais recalculé à
+     la navigation). Pour un vrai sportif : la vraie ligne wellness_daily du jour affiché (toutes
+     dimensions, via wellnessBaselineHistory) comparée à l'historique STRICTEMENT antérieur — même
+     calcul que /coach/planning (dayBaseline). Pour un sportif démo : baseline statique du serveur
+     (demoBaselines), pas de notion de jour pour lui sur cette page — limite préexistante, inchangée. */
+  const baselines: Record<string, WellnessBaselineResult | null> = {};
+  for (const a of athletes) {
+    if (!a.user_id) { baselines[a.id] = demoBaselines[a.id] ?? null; continue; }
+    const history = wellnessBaselineHistory[a.user_id] ?? [];
+    const dayRow = history.find(w => w.date === selectedDate) ?? null;
+    baselines[a.id] = dayRow ? computeWellnessBaselineAt(history.filter(w => w.date < selectedDate), dayRow) : null;
+  }
+
+  // Monotonie/contrainte (Foster 1998) par sportif — même calcul que la carte décision elle-même
+  // (decisionCard.ts), pour que le tri "À décider maintenant"/"Plan cohérent" ne contredise jamais
+  // ce que la carte affiche (un sportif signalé seulement par sa monotonie doit être classé priorité).
+  const msFor = (id: string) => monotonyStrainFor(recentSessions[id] ?? []);
+
   const priority = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id]);
+    const { monotonyVal, strainVal } = msFor(a.id);
+    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal);
   });
   const stable = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id]);
+    const { monotonyVal, strainVal } = msFor(a.id);
+    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal);
   });
-  const sortedPriority = [...priority].sort((a, b) =>
-    riskScore(b, maxDiffToday(b.id, sessions), trends[b.id], baselines[b.id]) - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id])
-  );
+  const sortedPriority = [...priority].sort((a, b) => {
+    const msA = msFor(a.id), msB = msFor(b.id);
+    return riskScore(b, maxDiffToday(b.id, sessions), trends[b.id], baselines[b.id], msB.monotonyVal, msB.strainVal)
+      - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], msA.monotonyVal, msA.strainVal);
+  });
 
   const filledAthletes = athletes.filter(a => a.wellnessFilledToday !== false);
   const avgWellness = filledAthletes.length
@@ -639,7 +687,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     isReviewed={reviewedIds.has(a.id)}
                     tourId={idx === 0 ? "coach-card-alert" : undefined}
                     trend={trends[a.id]}
+                    trendInput={trendInputs[a.id]}
                     baseline={baselines[a.id]}
+                    recentSessions={recentSessions[a.id]}
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
                     onDecide={() => handleDecide(a)}
@@ -667,7 +717,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
+                    trendInput={trendInputs[a.id]}
                     baseline={baselines[a.id]}
+                    recentSessions={recentSessions[a.id]}
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
                     onDecide={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}

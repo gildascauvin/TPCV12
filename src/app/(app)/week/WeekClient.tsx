@@ -18,9 +18,11 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import type { LoadContext } from "@/lib/loadRule";
-import { athleteAlertFor } from "@/lib/alerts";
-import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { setAutoregDecision } from "@/lib/autoregulation";
+import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
+import { personalizedBehaviorTip } from "@/lib/conseilsData";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
@@ -56,13 +58,19 @@ function getWeekDates(base: Date): Date[] {
 
 /* ─── Main ─── */
 interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
-  /* Historique wellness (~21j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
+  /* Historique wellness (~42j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
      la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — carte "Aujourd'hui" uniquement.
      Absent par défaut (sandbox, données synthétiques) = repli cold-start automatique. */
   wellnessBaselineHistory?: WellnessDaily[];
+  /* Historique de séances (~42j glissants avant aujourd'hui, indépendant de la semaine affichée) —
+     pour la tendance/monotonie de la carte décision unifiée (decisionCard.ts, 2026-09) sur la carte
+     "Aujourd'hui". Jamais refetché à la navigation (semaine/mois) : cette carte n'apparaît que dans
+     la semaine calendaire réelle, la fenêtre reste donc toujours valable. Absent par défaut = signal
+     tendance/monotonie simplement indisponible (repli gracieux). */
+  sessionsHistory?: Session[];
 }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [] }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [] }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -105,7 +113,10 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
+  // `advice` capturé au moment de l'ouverture (texte réel de la carte décision, decisionCard.ts) —
+  // jamais recalculé via autoregAdvice() dans la modale, qui suppose à tort que la raison est
+  // toujours le wellness du jour alors que la suggestion peut venir de la tendance/monotonie.
+  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null; advice: string } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
@@ -224,7 +235,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     if (sandboxMode) return;
     const mon = format(startOfWeek(base, { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(base, { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    const sinceBaseline = format(subDays(startOfWeek(base, { weekStartsOn: 1 }), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    const sinceBaseline = format(subDays(startOfWeek(base, { weekStartsOn: 1 }), 42), "yyyy-MM-dd");
     const [{ data: s }, { data: w }, { data: bh }] = await Promise.all([
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", mon).lte("date", sun).order("created_at"),
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", mon).lte("date", sun),
@@ -245,7 +256,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     const gridEnd = addDays(startOfWeek(endOfMonth(base), { weekStartsOn: 1 }), 6);
     const start = format(gridStart, "yyyy-MM-dd");
     const end = format(gridEnd, "yyyy-MM-dd");
-    const sinceBaseline = format(subDays(gridStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    const sinceBaseline = format(subDays(gridStart, 42), "yyyy-MM-dd");
     const [{ data: s }, { data: w }, { data: bh }] = await Promise.all([
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
@@ -597,14 +608,14 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
               nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
             };
-            // Alerte "jour prioritaire" — uniquement sur la carte "Aujourd'hui", avec le vrai wellness/
-            // la vraie difficulté du jour (jamais de valeur forcée, contrairement à l'aperçu onboarding).
+            // Carte décision unifiée (2026-09, decisionCard.ts) — uniquement sur la carte "Aujourd'hui",
+            // même moteur que /today et Coach Control (jour × tendance 7j/7j × monotonie/contrainte),
+            // jamais vide. `sessionsHistory` (≥14j avant aujourd'hui, indépendant de la semaine
+            // affichée) alimente la tendance/monotonie ; l'aperçu onboarding n'a jamais de valeur forcée.
             let alert;
             let alertActions;
             if (dstr === todayStr) {
               const todaySessions = sessions.filter(s => s.date === todayStr);
-              const pendingDiffs = todaySessions.filter(s => !s.done && s.target_difficulty).map(s => s.target_difficulty!);
-              const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
               const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
               const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
               const baseline = wellnessFilledToday
@@ -612,28 +623,33 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 : null;
               const autoregTarget = [...todaySessions].filter(s => !s.done)
                 .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-              const suggestion = wellnessFilledToday && autoregTarget
-                ? computeAutoregSuggestion(wellnessToday ? wellnessSignal(wellnessToday) : null, autoregTarget.target_difficulty, baseline)
-                : null;
-              if (suggestion && autoregTarget) {
-                const severityColor = suggestionSeverityColor(suggestion);
-                alert = {
-                  border: `${severityColor}66`,
-                  glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff, undefined, baseline)}`,
-                };
+              const trendAnchor = new Date(todayStr + "T12:00:00");
+              const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
+                sessionsHistory, wellnessBaselineHistory, trendAnchor, wellnessZByDate(wellnessBaselineHistory, 14, trendAnchor),
+              );
+              const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellnessToday?.behaviors, wellnessBaselineHistory, sessionsHistory) : null;
+              const decision = computeDecisionCard({
+                wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
+                plannedDifficulty: autoregTarget?.target_difficulty ?? null,
+                baseline, wellnessFilledToday, trendCode, trendInput,
+                sessions: sessionsHistory, anchor: trendAnchor, perspective: "athlete", behaviorTip,
+              });
+              const severityColor = decisionCardColor(decision.icon);
+              alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
+              if (decision.suggestion && autoregTarget) {
                 alertActions = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
-                    dir={suggestion.dir}
-                    reco={suggestion.reco}
+                    dir={decision.suggestion.dir}
+                    reco={decision.suggestion.reco}
                     advice=""
+                    ctaLabel={decision.ctaLabel}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco, baseline })}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: decision.suggestion!.dir, reco: decision.suggestion!.reco, baseline, advice: decision.text.split("\n")[1] ?? decision.text.split("\n")[0] })}
                     onUndo={async (original) => {
                       if (!original) return;
                       const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
@@ -642,8 +658,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     }}
                   />
                 );
-              } else {
-                alert = athleteAlertFor(wellnessToday ? wellnessSignal(wellnessToday) : null, maxDiff, wellnessFilledToday, baseline) ?? undefined;
               }
             }
             // Score + zone relatifs ("Équilibré"...) sur CHAQUE jour de la semaine affichée, pas
@@ -902,7 +916,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               : null;
           })()}
           behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
-          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, undefined, adjustCtx.baseline)}
+          advice={adjustCtx.advice}
           onClose={() => setAdjustCtx(null)}
           onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;

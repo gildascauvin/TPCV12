@@ -56,9 +56,14 @@ interface Props {
      générique du cas ⚠️ modéré. Absente = repli historique (orange fixe pour "low", vert fixe pour
      "high") — utilisé par les appelants pas concernés par ce raffinement. */
   severityColor?: string;
+  /* Verbe précis du CTA (ex. "⬇ Réduire →") — decisionCard.ts le fournit quand une tendance nommée
+     est plus précise qu'Alléger/Surcharger générique (2026-09, "titre = diagnostic, CTA = verbe").
+     Absent = repli sur autoregCtaLabel(dir), comportement inchangé pour tout appelant qui ne le
+     fournit pas (AdjustSessionModal, FrisePreviews). */
+  ctaLabel?: string;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal, isActive, variant = "dark", severityColor }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, onPreviewChange, onApply, onMaintenir, onUndo, onOpenModal, isActive, variant = "dark", severityColor, ctaLabel }: Props) {
   const light = variant === "light";
   const tint = dir === "low" ? "#8a2d00" : "#166534"; // même palette que AlertBox
   const [mode, setMode] = useState<"idle" | "open" | "decided">("idle");
@@ -165,7 +170,7 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
             onClick={openChips}
             style={{ flex: 1, border: "none", background: severityColor ?? (dir === "low" ? "#f28a00" : "#2a8045"), color: "#fff", borderRadius: 10, padding: "10px 8px", fontSize: 12, fontWeight: 900, cursor: "pointer" }}
           >
-            {autoregCtaLabel(dir)}
+            {ctaLabel ?? autoregCtaLabel(dir)}
           </button>
         </div>
       )}

@@ -25,15 +25,16 @@ import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
-import { coachAlertFor } from "@/lib/alerts";
+import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
-import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, setAutoregDecision, suggestionSeverityColor } from "@/lib/autoregulation";
+import { setAutoregDecision } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que WeekClient.tsx
    (2026-09-17) : leur JS (CoachSessionModal → ExerciseBlockEditor, ProgramLibraryPage →
@@ -128,7 +129,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
-  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null } | null>(null);
+  // `advice` capturé au moment de l'ouverture (texte réel de la carte décision, decisionCard.ts) —
+  // jamais recalculé via autoregAdvice() dans la modale, qui suppose à tort que la raison est
+  // toujours le wellness du jour alors que la suggestion peut venir de la tendance/monotonie.
+  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null; advice: string } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
@@ -276,7 +280,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     }
     const mon = format(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
     const sun = format(addDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 6), "yyyy-MM-dd");
-    const sinceBaseline = format(subDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    const sinceBaseline = format(subDays(startOfWeek(new Date(date + "T12:00:00"), { weekStartsOn: 1 }), 42), "yyyy-MM-dd");
 
     const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
     const allAthleteIds = athletes.map(a => a.id);
@@ -467,7 +471,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const end = format(gridEnd, "yyyy-MM-dd");
 
     if (athleteObj.user_id) {
-      const sinceBaseline = format(subDays(gridStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+      const sinceBaseline = format(subDays(gridStart, 42), "yyyy-MM-dd");
       const [realRes, demoRes, wellRes, baselineRes] = await Promise.all([
         supabase.from("sessions").select("*").eq("user_id", athleteObj.user_id).gte("date", start).lte("date", end),
         supabase.from("coach_sessions").select("*").eq("coach_id", userId).eq("athlete_id", athleteObj.id).gte("date", start).lte("date", end),
@@ -929,28 +933,37 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               const baseline = dayBaseline;
               const autoregTarget = [...daySessions].filter(s => !s.done)
                 .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-              const suggestion = wellnessFilledToday && autoregTarget
-                ? computeAutoregSuggestion(wellness, autoregTarget.target_difficulty, baseline)
-                : null;
-              if (suggestion && autoregTarget) {
-                const severityColor = suggestionSeverityColor(suggestion);
-                alert = {
-                  border: `${severityColor}66`,
-                  glow: severityColor,
-                  text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? 0, athlete.name.split(" ")[0], baseline)}`,
-                };
+              // Carte décision unifiée (2026-09, decisionCard.ts) — même moteur que /today et Coach
+              // Control (jour × tendance 7j/7j × monotonie/contrainte). `sessions` couvre déjà -42/+21j
+              // depuis aujourd'hui (fetch initial de la page, jamais rétréci à la navigation — voir
+              // handleDateChange), filtré par sportif pour la tendance/monotonie.
+              const athleteSessionHistory = sessions.filter(s => s.athlete_id === athlete.id);
+              const trendAnchor = new Date(todayStr + "T12:00:00");
+              const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
+                athleteSessionHistory, athleteHistory, trendAnchor, wellnessZByDate(athleteHistory, 14, trendAnchor),
+              );
+              const decision = computeDecisionCard({
+                wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
+                baseline, wellnessFilledToday, trendCode, trendInput,
+                sessions: athleteSessionHistory, anchor: trendAnchor, perspective: "coach",
+                subject: athlete.name.split(" ")[0],
+              });
+              const severityColor = decisionCardColor(decision.icon);
+              alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
+              if (decision.suggestion && autoregTarget) {
                 alertActions = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
-                    dir={suggestion.dir}
-                    reco={suggestion.reco}
+                    dir={decision.suggestion.dir}
+                    reco={decision.suggestion.reco}
                     advice=""
+                    ctaLabel={decision.ctaLabel}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: suggestion.dir, reco: suggestion.reco, baseline })}
+                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: decision.suggestion!.dir, reco: decision.suggestion!.reco, baseline, advice: decision.text.split("\n")[1] ?? decision.text.split("\n")[0] })}
                     onUndo={async (original) => {
                       if (!original) return;
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: original });
@@ -959,12 +972,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     }}
                   />
                 );
-              } else {
-                alert = coachAlertFor(
-                  { ...athlete, wellness_score: wellness ?? 0, wellnessFilledToday },
-                  maxDiffToday(athlete.id, sessions.filter(s => s.date === todayStr)),
-                  baseline
-                ) ?? undefined;
               }
             }
 
@@ -1081,7 +1088,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           wellnessScore={dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory)}
           baseline={todayBaseline}
           behaviors={athlete.behaviors ?? []}
-          advice={autoregAdvice(adjustCtx.dir, adjustCtx.session.target_difficulty ?? 6, athlete.name.split(" ")[0], adjustCtx.baseline)}
+          advice={adjustCtx.advice}
           onClose={() => setAdjustCtx(null)}
           onConfirm={pct => requireSubscription(async () => {
             const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;

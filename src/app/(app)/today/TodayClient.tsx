@@ -8,9 +8,10 @@ import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, getRecoveryAdvice, wellnessColor } from "@/lib/wellness";
-import { loadRule, type LoadContext } from "@/lib/loadRule";
-import { dailyLoad } from "@/lib/trainingLoad";
+import { computeWellnessScore, zoneLabel as formLabel, wellnessColor } from "@/lib/wellness";
+import { dailyLoad, computeWeekOverWeekTrend } from "@/lib/trainingLoad";
+import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
@@ -26,8 +27,7 @@ import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ShareButton from "@/components/sessions/ShareButton";
-import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, WELLNESS_BASELINE_WINDOW_DAYS, Z_MODERATE, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
@@ -358,7 +358,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     prevWeekRef.current = weekStart;
     const dates = Array.from({ length: 7 }, (_, i) => format(addDays(new Date(weekStart + "T12:00:00"), i), "yyyy-MM-dd"));
     const sun = dates[6];
-    const sinceBaseline = format(subDays(new Date(weekStart + "T12:00:00"), WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+    // 42j (pas WELLNESS_BASELINE_WINDOW_DAYS=21) — sinon ce refetch écrase la fenêtre 42j du 1er
+    // rendu serveur dès le 1er montage, avant que la tendance/Z-map (decisionCard.ts) n'ait assez
+    // d'historique. Même convention que /conseils/athletesData.ts.
+    const sinceBaseline = format(subDays(new Date(weekStart + "T12:00:00"), 42), "yyyy-MM-dd");
     Promise.all([
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", sun),
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", weekStart).lte("date", sun).order("created_at"),
@@ -451,10 +454,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Plus d'impact fatigue post-séance ici (retiré partout, pas seulement sur ce chart) : le garder
      sur une seule surface créait exactement le type de confusion inter-surfaces ("le score n'est pas
      le même sur /today qu'ailleurs pour le même jour") que toute cette refonte relative vise à
-     éliminer — la charge du jour est déjà couverte par l'encart "⚡ Entraînement" (loadRule), qui n'a
+     éliminer — la charge du jour est déjà couverte par la carte décision (decisionCard.ts), qui n'a
      jamais eu besoin de ce mécanisme. `displayScore` = le score du matin, pur, identique partout. */
   const displayScore = wellnessFilledToday ? score : null;
-  const displayWellness = wellnessFilledToday ? wellness : null;
   /* Baseline personnelle (Z-score) — comparée à `displayScore` (score brut du matin), la fenêtre de
      référence (mean/stdDev) restant bâtie sur les scores bruts stockés des jours précédents
      (`baselineHistory`, ancré sur la semaine affichée — voir l'effet de rechargement plus haut). */
@@ -476,14 +478,37 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      par l'encart lui-même. */
   const autoregTargetTop = [...todaySessions].filter(s => !s.done)
     .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-  const wellnessCardSuggestion = wellnessFilledToday && autoregTargetTop
-    ? computeAutoregSuggestion(displayScore, autoregTargetTop.target_difficulty, wellnessBaseline)
-    : null;
-  const wellnessCardBadgeColor = wellnessCardSuggestion ? suggestionSeverityColor(wellnessCardSuggestion) : "#d44000";
+  /* Carte décision unifiée (2026-09, decisionCard.ts) — remplace l'ancien row() ad hoc (wellness du
+     jour × diff du jour uniquement, pouvait ne rien afficher du tout) par 3 signaux combinés :
+     le jour (wellness vs séance prévue), la tendance 7j/7j (même moteur que /conseils), la
+     monotonie/contrainte (Foster 1998) — jamais vide, jamais une 4e dimension inventée. `baselineHistory`
+     inclut déjà la ligne du jour (fetch inclusif, voir l'effet de rechargement plus haut) : passé tel
+     quel, pas filtré, pour que la tendance compte bien le jour courant dans sa semaine "courante". */
+  const trendAnchor = new Date(selectedDate + "T12:00:00");
+  const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
+    allSessions, baselineHistory, trendAnchor, wellnessZByDate(baselineHistory, 14, trendAnchor),
+  );
+  // Conseil récup personnalisé (Impact comportements, conseilsData.ts) — comportement négatif loggué
+  // hier uniquement, sinon rien. Passé à computeDecisionCard() comme ligne secondaire PRIORITAIRE
+  // (2026-09) — sinon la carte pouvait citer une dimension wellness ("Motivation nettement au-dessus
+  // de ta norme") PENDANT que ce conseil parle d'une dimension/un ton différent juste en dessous,
+  // incohérent (retour explicite de Gildas). Plus jamais rendu séparément dans le JSX.
+  const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellness?.behaviors, baselineHistory, allSessions) : null;
+  const decision = computeDecisionCard({
+    wellnessScore: displayScore,
+    plannedDifficulty: autoregTargetTop?.target_difficulty ?? null,
+    baseline: wellnessBaseline,
+    wellnessFilledToday,
+    trendCode,
+    trendInput,
+    sessions: allSessions,
+    anchor: trendAnchor,
+    perspective: "athlete",
+    behaviorTip,
+  });
+  const decisionColor = decisionCardColor(decision.icon);
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
-  const yesterdaySessions = allSessions.filter(s => s.date === yesterdayDate);
-  const tomorrowSessions = allSessions.filter(s => s.date === tomorrowDate);
 
   // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
   // est ouverte, même garde que les autres pages pour ne jamais désynchroniser une modale du jour
@@ -493,15 +518,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     onNext: () => handleDateChange(tomorrowDate),
     enabled: !showWellness && !showAddSession && !completing && !pendingCompleteSession && !editing,
   });
-  const loadCtx: LoadContext = {
-    prevMax: yesterdaySessions.length ? Math.max(...yesterdaySessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
-    nextMax: tomorrowSessions.length ? Math.max(...tomorrowSessions.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
-  };
-  const rule = loadRule(todaySessions, loadCtx);
-  const advice = {
-    training: `${rule.title}. ${rule.text}`,
-    recovery: getRecoveryAdvice(displayWellness, rule.cls, wellnessBaseline),
-  };
   const dotMap = buildDotMap(allSessions, selectedDate);
 
   useEffect(() => {
@@ -703,46 +719,23 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         </div>
 
         {/* ── Wellness + séance du jour, carte unique ── */}
-        {/* Même mécanisme que CoachAthleteCard.tsx : halo pulsant sur le CONTOUR de la carte (pas
-            sur l'encart de suggestion interne) quand une décharge est suggérée (jamais pour une
-            surcharge — pas une alerte, par design), couleur dérivée de la vraie sévérité. */}
+        {/* Contour statique — le point clignotant vit désormais sur l'AlertBox elle-même
+            (AlertBox.tsx/PulseDot.tsx, 2026-09), pas sur le contour de cette grosse carte. */}
         <div
           data-tour="wellness-card"
           style={{
             position: "relative", overflow: "hidden",
             borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
             background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-            border: wellnessCardSuggestion?.dir === "low" ? `3px solid ${wellnessCardBadgeColor}8c` : "1px solid rgba(255,255,255,0.13)",
-            boxShadow: wellnessCardSuggestion?.dir === "low" ? `0 0 0 0 ${wellnessCardBadgeColor}00, 0 28px 72px rgba(0,0,0,0.28)` : "0 28px 72px rgba(0,0,0,0.28)",
-            animation: wellnessCardSuggestion?.dir === "low" ? "perf-border-pulse-wellness 1.8s ease-in-out infinite" : undefined,
+            border: "1px solid rgba(255,255,255,0.13)",
+            boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
             color: "#fff",
           }}
         >
-          {wellnessCardSuggestion?.dir === "low" && (
-            <>
-              <style>{`
-                @keyframes perf-pulse-wellness-dot {
-                  0%, 100% { opacity: 1; transform: scale(1); }
-                  50% { opacity: 0.55; transform: scale(1.35); }
-                }
-                @keyframes perf-border-pulse-wellness {
-                  0%, 100% { border-color: ${wellnessCardBadgeColor}66; box-shadow: 0 0 0 0 ${wellnessCardBadgeColor}00, 0 28px 72px rgba(0,0,0,0.28); }
-                  50% { border-color: ${wellnessCardBadgeColor}; box-shadow: 0 0 16px 3px ${wellnessCardBadgeColor}8c, 0 28px 72px rgba(0,0,0,0.28); }
-                }
-              `}</style>
-              {/* Même pastille pulsante que CoachAthleteCard.tsx (position/taille/rythme identiques) —
-                  "mêmes couleurs de halo" demandé par Gildas, un seul signal partagé entre les 2 cartes. */}
-              <div style={{
-                position: "absolute", top: isMd ? 24 : 18, right: isMd ? 24 : 18,
-                width: 9, height: 9, borderRadius: "50%", background: wellnessCardBadgeColor,
-                animation: "perf-pulse-wellness-dot 1.8s ease-in-out infinite", zIndex: 4,
-              }} />
-            </>
-          )}
           <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
           {wellnessFilledToday && (
-            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: wellnessCardSuggestion?.dir === "low" ? (isMd ? 44 : 34) : (isMd ? 24 : 18), zIndex: 3 }}>
+            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: decision.suggestion?.dir === "low" ? (isMd ? 44 : 34) : (isMd ? 24 : 18), zIndex: 3 }}>
               <ShareButton
                 resourceType="wellness"
                 variant="dark"
@@ -752,12 +745,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
                     ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
                     : { emoji: "", label: b, positive: true }),
-                  trainingAdvice: advice.training,
-                  recoveryAdvice: advice.recovery,
+                  trainingAdvice: decision.text.split("\n")[0],
+                  recoveryAdvice: behaviorTip ?? decision.text.split("\n")[1] ?? decision.text.split("\n")[0],
                   authorName: profile.name ?? "Toi",
                 })}
                 title={`${profile.name ?? "Mon"} — ${relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline)}`}
-                text={advice.recovery}
+                text={decision.text.split("\n")[1] ?? decision.text.split("\n")[0]}
               />
             </div>
           )}
@@ -798,146 +791,54 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 </div>
               </div>
 
-              {(() => {
-            const pendingDiffs = todaySessions
-              .filter(s => !s.done && s.target_difficulty)
-              .map(s => s.target_difficulty!);
-            const maxDiff = pendingDiffs.length ? Math.max(...pendingDiffs) : 0;
-            const autoregTarget = [...todaySessions].filter(s => !s.done)
-              .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-            const suggestion = wellnessFilledToday && autoregTarget
-              ? computeAutoregSuggestion(displayScore, autoregTarget.target_difficulty, wellnessBaseline)
-              : null;
-
-            const scrollToSessions = (e: React.MouseEvent) => {
-              e.stopPropagation();
-              document.getElementById("day-sessions-container")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-            };
-            const openWellness = (e: React.MouseEvent) => {
-              e.stopPropagation();
-              setShowWellness(true);
-            };
-
-            const row = (
-              bg: string, border: string, text: string,
-              cta?: string, onCta?: (e: React.MouseEvent) => void
-            ) => (
-              <div style={{ position: "relative", zIndex: 2, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "10px 14px", marginBottom: 12, fontSize: 11, color: "#ffd2bf" }}>
-                <span style={{ lineHeight: 1.4 }}>{text}</span>
-                {cta && onCta && (
-                  <button onClick={onCta} style={{ flexShrink: 0, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    {cta}
-                  </button>
-                )}
-              </div>
-            );
-
-            if (suggestion && autoregTarget) {
-              const severityColor = suggestionSeverityColor(suggestion);
-              return (
+              {/* Carte décision, toujours affichée (2026-09, decisionCard.ts) — jour × tendance ×
+                 monotonie/contrainte combinés, le signal le plus sévère gagne. Chips uniquement si
+                 une séance du jour existe encore à ajuster (leur seule cible concrète, quelle que
+                 soit la source du signal qui les a déclenchées). */}
               <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
                 <AlertBox
                   variant="darkColor"
-                  pulse={false}
-                  alert={{
-                    border: `${severityColor}66`,
-                    glow: severityColor,
-                    text: `${suggestion.icon} ${autoregHeadline(suggestion.dir)}\n${autoregAdvice(suggestion.dir, autoregTarget.target_difficulty ?? maxDiff, undefined, wellnessBaseline)}`,
-                  }}
-                  actions={
-                <AutoregButtons
-                  sessionId={autoregTarget.id}
-                  dir={suggestion.dir}
-                  reco={suggestion.reco}
-                  advice=""
-                  sessionLabel={autoregTarget.name}
-                  severityColor={severityColor}
-                  isActive={isActive}
-                  onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
-                  onApply={async (pct) => {
-                    /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
-                       est gatée (voir chantier gating save, 2026-08-19). isActive vient
-                       directement de usePaywall() : requireSubscription() ne peut pas envelopper
-                       ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
-                    if (!isActive) { setPaywallStep("priming"); return; }
-                    const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
-                    const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
-                    const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
-                    const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
-                    if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                    return original;
-                  }}
-                  onUndo={async (original) => {
-                    if (!original) return;
-                    const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
-                    if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                  }}
+                  alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
+                  actions={decision.suggestion && autoregTargetTop ? (
+                    <AutoregButtons
+                      sessionId={autoregTargetTop.id}
+                      dir={decision.suggestion.dir}
+                      reco={decision.suggestion.reco}
+                      advice=""
+                      ctaLabel={decision.ctaLabel}
+                      sessionLabel={autoregTargetTop.name}
+                      severityColor={decisionColor}
+                      isActive={isActive}
+                      onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
+                      onApply={async (pct) => {
+                        /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
+                           est gatée (voir chantier gating save, 2026-08-19). isActive vient
+                           directement de usePaywall() : requireSubscription() ne peut pas envelopper
+                           ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
+                        if (!isActive) { setPaywallStep("priming"); return; }
+                        const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
+                        const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
+                        const target_difficulty = adjustDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
+                        const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTargetTop.id).select().single();
+                        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                        return original;
+                      }}
+                      onUndo={async (original) => {
+                        if (!original) return;
+                        const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTargetTop.id).select().single();
+                        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      }}
+                    />
+                  ) : undefined}
                 />
-                  }
-                />
-              </div>
-              );
-            }
-
-            if (!wellnessFilledToday) return row(
-              "rgba(255,255,255,0.07)", "rgba(255,255,255,0.18)",
-              "Complète ta récupération pour des conseils personnalisés",
-              "Comment tu vas ? →", openWellness
-            );
-            /* `useZ`/`lowZ`/`highZ` : dès que l'historique est suffisant, ces 4 cas basculent sur le
-               Z-score personnel (src/lib/wellnessBaseline.ts) au lieu du seuil absolu 55/80 — le
-               garde-fou absolu (wellnessBaseline.guardRailTriggered) force toujours le cas bas même
-               si le Z lit "dans sa norme". Repli exact sur `displayScore` sinon (comportement
-               inchangé pour tout compte sans historique suffisant). */
-            const useZ = wellnessBaseline?.hasEnoughHistory && wellnessBaseline.composite.z !== null;
-            const z = useZ ? wellnessBaseline!.composite.z! : null;
-            const lowZ = useZ ? (z! < -Z_MODERATE || wellnessBaseline!.guardRailTriggered) : (displayScore !== null && displayScore < 55);
-            const highZ = useZ ? z! >= Z_MODERATE : (displayScore !== null && displayScore >= 80);
-            if (lowZ && maxDiff >= 8) return row(
-              "rgba(212,64,0,0.18)", "rgba(212,64,0,0.36)",
-              `🔥 ${useZ ? "Fatigué" : "Récupération basse"} · Séance à ${maxDiff}/10 prévue — allège à 6/10`,
-              "Baisse la charge →", scrollToSessions
-            );
-            if (lowZ && maxDiff >= 5) return row(
-              "rgba(212,64,0,0.12)", "rgba(212,64,0,0.28)",
-              `⚠️ ${useZ ? "Fatigué" : "Récupération basse"} · Séance à ${maxDiff}/10 — surveille ton effort`,
-              "Voir la séance →", scrollToSessions
-            );
-            if (lowZ) return row(
-              "rgba(242,138,0,0.15)", "rgba(242,138,0,0.30)",
-              `💛 ${useZ ? "Fatigué" : "Récupération basse"} — journée allégée recommandée`
-            );
-            if (highZ && maxDiff >= 8) return row(
-              "rgba(47,158,68,0.15)", "rgba(47,158,68,0.30)",
-              `✅ ${useZ ? "Frais" : `Score ${displayScore}`} · Séance à ${maxDiff}/10 — fenêtre idéale !`,
-              "C'est parti →", scrollToSessions
-            );
-            return null;
-          })()}
-
-              {/* ✦ Conseils — condensé en un seul bloc (2 lignes à icône) plutôt que 2 cartes
-                 empilées, pour libérer de la hauteur avant la séance sur mobile. */}
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-                  ✦ Conseils
-                </div>
-                <div style={{ background: "rgba(255,255,255,.052)", border: "1px solid rgba(255,255,255,.075)", borderRadius: 18, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 15, lineHeight: 1.55 }}>⚡</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 3 }}>Entraînement</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.5, color: "#fff" }}>{advice.training}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 10 }}>
-                    <span style={{ fontSize: 15, lineHeight: 1.55 }}>🌿</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 1000, color: "rgba(255,255,255,0.62)", letterSpacing: "0.11em", textTransform: "uppercase", marginBottom: 3 }}>Récupération</div>
-                      <div style={{ fontSize: 13, lineHeight: 1.5, color: "#fff" }}>{advice.recovery}</div>
-                    </div>
-                  </div>
-                </div>
+                {!wellnessFilledToday && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setShowWellness(true); }}
+                    style={{ marginTop: -6, marginBottom: 12, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer" }}
+                  >
+                    Comment tu vas ? →
+                  </button>
+                )}
               </div>
             </div>
 
