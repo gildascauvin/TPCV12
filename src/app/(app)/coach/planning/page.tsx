@@ -5,7 +5,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachPlanningClient from "./CoachPlanningClient";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
-import { WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
 import { buildSyntheticWellnessHistory } from "@/lib/sandboxFixtures";
 import { startOfWeek, addDays, subDays, format } from "date-fns";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
@@ -25,8 +24,11 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   ]);
   if (!profile || profile.mode !== "coach") redirect("/today");
 
+  // 42j de recul (pas 7) — la carte décision unifiée (decisionCard.ts, 2026-09) a besoin de 14j de
+  // tendance, chacun avec jusqu'à 21j d'historique perso derrière lui (wellnessZByDate), soit ~35j au
+  // maximum ; 42j aligne sur /coach et /coach/athletes plutôt qu'un nouveau chiffre.
   const since = new Date();
-  since.setDate(since.getDate() - 7);
+  since.setDate(since.getDate() - 42);
   const until = new Date();
   until.setDate(until.getDate() + 21);
   const sinceStr = since.toISOString().split("T")[0];
@@ -53,7 +55,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   const requestedBase = searchParams.date ? new Date(searchParams.date + "T12:00:00") : new Date();
   const requestedWeekStart = startOfWeek(requestedBase, { weekStartsOn: 1 });
   const requestedWeekEnd = format(addDays(requestedWeekStart, 6), "yyyy-MM-dd");
-  const sinceBaseline = format(subDays(requestedWeekStart, WELLNESS_BASELINE_WINDOW_DAYS), "yyyy-MM-dd");
+  const sinceBaseline = format(subDays(requestedWeekStart, 42), "yyyy-MM-dd");
 
   const [realSessionsRes, coachSessionsRes, wellnessRes, wellnessBaselineRes] = await Promise.all([
     realUserIds.length

@@ -179,6 +179,25 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const CHARGE_METRIC_NAME: Record<"load" | "monotony" | "strain", { coach: string; athlete: string }> = {
+  load: { coach: "sa charge (ACWR)", athlete: "ta charge (ACWR)" },
+  monotony: { coach: "sa monotonie", athlete: "ta monotonie" },
+  strain: { coach: "son strain", athlete: "ton strain" },
+};
+
+/* Exportée (2026-09, decisionCard.ts) — même format "{métrique nommée} est en zone de risque :
+   {action}" que la branche alerts.length===1 de chargeCrossInsight() ci-dessous, plutôt que le texte
+   observationnel de sigDimInfo() seul ("Diminution de la capacité de performance probable au-delà de
+   2 (Foster, 1998)."), qui ne nomme jamais la métrique concernée et ne dit jamais quoi faire —
+   retour explicite de Gildas : "on sait même pas que ça parle de monotonie, il faudrait plutôt
+   conseiller de varier que constater". */
+export function chargeMetricAttribution(dim: "load" | "monotony" | "strain", perspective: Perspective = "athlete"): string {
+  const coach = perspective === "coach";
+  const name = CHARGE_METRIC_NAME[dim][coach ? "coach" : "athlete"];
+  const action = CHARGE_METRIC_ACTION[dim][coach ? "coach" : "athlete"];
+  return `${cap(name)} est en zone de risque : ${action}`;
+}
+
 export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
   const items: { name: string; text: string; key: "load" | "monotony" | "strain" | "fitness" | "fatigue"; sev: Severity }[] = [

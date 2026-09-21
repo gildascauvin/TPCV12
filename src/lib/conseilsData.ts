@@ -1,9 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
 import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessZByDate, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -134,6 +135,33 @@ export function computeLoadBehaviorCorrelations(sessions: Session[], wellness: W
   return results;
 }
 
+/* Conseil récup personnalisé pour la carte décision /today+Coach Control (decisionCard.ts, 2026-09) —
+   remplace NEGATIVE_BEHAVIOR_TIPS (dictionnaire statique, même texte pour tout le monde) par
+   l'impact RÉELLEMENT mesuré chez CE sportif via computeBehaviorCorrelations() — "réutiliser les
+   règles d'Impact comportements", demande explicite de Gildas. Parmi les comportements négatifs
+   loggués aujourd'hui (= actions d'hier, voir wellness_daily.behaviors), celui à l'impact le plus
+   marqué ; repli sur le tip générique NEGATIVE_BEHAVIOR_TIPS si ce comportement précis n'a pas encore
+   ≥2 occurrences de chaque côté (compte neuf, ou comportement rare) — jamais aucun texte affiché
+   pour un comportement négatif connu. */
+export function personalizedBehaviorTip(
+  todayBehaviors: string[] | undefined, allWellness: WellnessDaily[], allSessions: Session[],
+): string | null {
+  if (!todayBehaviors?.length) return null;
+  const correlations = [...computeBehaviorCorrelations(allWellness), ...computeLoadBehaviorCorrelations(allSessions, allWellness)];
+  const negatives = todayBehaviors
+    .map(key => ({ key, meta: BEHAVIOR_META[key], corr: correlations.find(c => c.key === key) }))
+    .filter((x): x is { key: string; meta: NonNullable<typeof x.meta>; corr: BehaviorCorrelation | undefined } => !!x.meta && !x.meta.positive);
+  if (!negatives.length) return null;
+  const worst = negatives.reduce((a, b) => (b.corr && (!a.corr || b.corr.impact < a.corr.impact) ? b : a));
+  if (worst.corr?.dominantDimension) {
+    const { label: dimLabel, impact } = worst.corr.dominantDimension;
+    const sign = impact < 0 ? "−" : "+";
+    return `${worst.meta.emoji} ${worst.meta.label} — impacte ${dimLabel.toLowerCase()} de ${sign}${Math.abs(impact).toFixed(1)}pt en moyenne chez toi.`;
+  }
+  const fallback = NEGATIVE_BEHAVIOR_TIPS[worst.key];
+  return fallback ? `${fallback.label} — ${fallback.tip}.` : null;
+}
+
 export type ConseilsData = {
   referenceDate: string;
   profile: { name: string | null; sport: string | null; objective: string | null } | null;
@@ -242,7 +270,7 @@ export function computeConseilsData(
     ? Math.round((currLoad - prevLoad) / prevLoad * 100)
     : null;
 
-  const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(allSessions, allWellness, anchor);
+  const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(allSessions, allWellness, anchor, wellnessZByDate(allWellness, 14, anchor));
   const trendText = trendCode ? describeTrend(trendCode, trendInput) : null;
   const trendEmoji = trendCode
     ? (trendSeverity(trendCode) === "alert" ? "🔴" : trendSeverity(trendCode) === "watch" ? "🟡" : "🟢")

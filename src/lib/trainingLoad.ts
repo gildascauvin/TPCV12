@@ -226,18 +226,31 @@ export type TrendCode =
 
 export type TrendInput = {
   loadPct: number | null;      // variation % charge hebdo courante vs précédente, null si pas de base de comparaison
-  wellnessDelta: number | null; // wellness EWMA courant - EWMA précédent (points, sur 100) — voir ewmaWellness
+  wellnessDelta: number | null; // EWMA courant - EWMA précédent — Z-score personnel si wellnessDeltaIsZ, sinon score brut (repli)
   rpeDelta: number | null;      // RPE moyen courant - RPE moyen précédent
+  /* true si wellnessDelta est un delta de Z-score perso (échelle ~0.1-2, seuil WELLNESS_TREND_Z_THRESHOLD)
+     plutôt qu'un delta de score brut 0-100 (repli historique, seuil 5 points, ancien comportement
+     avant unification avec la baseline du jour — voir wellnessBaseline.ts). Posé par
+     computeWeekOverWeekTrend() lui-même ; un TrendInput construit à la main (ex. FrisePreviews.tsx,
+     données de démo) l'omet et retombe sur l'échelle Z par défaut — sans conséquence tant que le
+     delta fourni reste franchement au-dessus du plus petit des deux seuils. */
+  wellnessDeltaIsZ?: boolean;
 };
 
 type Direction = "up" | "stable" | "down";
+
+/* Même convention Z_SWC (0.2, Hopkins & Batterham) que wellnessBaseline.ts — dupliqué ici plutôt
+   qu'importé pour éviter une dépendance circulaire (wellnessBaseline.ts importe déjà daysAgoStr
+   depuis ce module). */
+const WELLNESS_TREND_Z_THRESHOLD = 0.2;
 
 function loadDirection(pct: number): Direction {
   if (Math.abs(pct) < 15) return "stable"; // même bande que loadTrend existant (conseils/page.tsx)
   return pct > 0 ? "up" : "down";
 }
-function wellnessDirection(delta: number): Direction {
-  if (Math.abs(delta) < 5) return "stable";
+function wellnessDirection(delta: number, isZ: boolean): Direction {
+  const threshold = isZ ? WELLNESS_TREND_Z_THRESHOLD : 5;
+  if (Math.abs(delta) < threshold) return "stable";
   return delta > 0 ? "up" : "down"; // "up" = amélioration (échelle app, plus haut = mieux)
 }
 function rpeDirection(delta: number): Direction {
@@ -255,11 +268,11 @@ function rpeDirection(delta: number): Direction {
  * signaux corporels tous les deux plats).
  */
 export function classifyTrend(input: TrendInput): TrendCode | null {
-  const { loadPct, wellnessDelta, rpeDelta } = input;
+  const { loadPct, wellnessDelta, rpeDelta, wellnessDeltaIsZ } = input;
   if (loadPct === null || wellnessDelta === null || rpeDelta === null) return null;
 
   const load = loadDirection(loadPct);
-  const wellness = wellnessDirection(wellnessDelta); // up = récup qui s'améliore
+  const wellness = wellnessDirection(wellnessDelta, wellnessDeltaIsZ ?? true); // up = récup qui s'améliore
   const rpe = rpeDirection(rpeDelta);
 
   const wellnessScore = wellness === "up" ? 1 : wellness === "down" ? -1 : 0;
@@ -301,8 +314,11 @@ type TrendWellness = { date: string; score: number | null; base_score: number | 
    (cf. cas réel : "Augmenter" affiché un jour de fatigue franche, RÉCUP FRAGILE juste en dessous). */
 const WELLNESS_EWMA_LAMBDA = 2 / (7 + 1);
 
-function ewmaWellness(rows: TrendWellness[], windowEndStr: string): number | null {
-  const byDate = new Map(rows.map(w => [w.date, w.score ?? w.base_score]));
+/* Généralisée (2026-09) pour consommer indifféremment une map de scores bruts (repli) ou de
+   Z-scores perso (voir computeWeekOverWeekTrend ci-dessous, unification avec la baseline du jour de
+   wellnessBaseline.ts) — même pondération EWMA dans les deux cas, seule la source de la valeur
+   change. */
+function ewmaOf(byDate: Map<string, number | null | undefined>, windowEndStr: string): number | null {
   const end = new Date(windowEndStr + "T12:00:00");
   let weightedSum = 0;
   let weightTotal = 0;
@@ -318,7 +334,18 @@ function ewmaWellness(rows: TrendWellness[], windowEndStr: string): number | nul
   return weightTotal > 0 ? weightedSum / weightTotal : null;
 }
 
-export function computeWeekOverWeekTrend(sessions: TrendSession[], wellness: TrendWellness[], anchor: Date = new Date()): { code: TrendCode | null; input: TrendInput } {
+/* `wellnessZByDate` (optionnel, 2026-09) : map date→Z-score composite perso — construite par
+   l'appelant via wellnessZByDate() (wellnessBaseline.ts), jamais calculée ici (ce module ne dépend
+   jamais de wellnessBaseline.ts, qui importe déjà daysAgoStr() depuis ici — dépendance circulaire).
+   Priorité au Z (les 2 EWMA — semaine courante ET précédente — doivent être résolues sur le Z pour
+   basculer, sinon repli intégral sur le score brut, jamais un mélange des deux échelles dans un même
+   calcul). Absent = comportement 100% inchangé (repli score brut, comme avant cette unification) —
+   tout appelant qui ne fournit pas encore cette map (ex. sandboxFixtures.ts, données synthétiques)
+   n'est pas concerné. */
+export function computeWeekOverWeekTrend(
+  sessions: TrendSession[], wellness: TrendWellness[], anchor: Date = new Date(),
+  wellnessZByDate?: Map<string, number | null>,
+): { code: TrendCode | null; input: TrendInput } {
   const refStr = daysAgoStr(0, anchor);
   const curStart = daysAgoStr(6, anchor);
   const prevEnd = daysAgoStr(7, anchor);
@@ -330,10 +357,14 @@ export function computeWeekOverWeekTrend(sessions: TrendSession[], wellness: Tre
   const prevLoad = dailyLoad(prevDone);
   const loadPct = prevLoad > 0 ? Math.round((currLoad - prevLoad) / prevLoad * 100) : null;
 
-  const currWellnessAvg = ewmaWellness(wellness.filter(w => w.date >= curStart && w.date <= refStr), refStr);
-  const prevWellnessAvg = ewmaWellness(wellness.filter(w => w.date >= prevStart && w.date < curStart), prevEnd);
+  const currZ = wellnessZByDate ? ewmaOf(wellnessZByDate, refStr) : null;
+  const prevZ = wellnessZByDate ? ewmaOf(wellnessZByDate, prevEnd) : null;
+  const useZ = currZ !== null && prevZ !== null;
+  const rawByDate = new Map(wellness.map(w => [w.date, w.score ?? w.base_score]));
+  const currWellnessAvg = useZ ? currZ : ewmaOf(rawByDate, refStr);
+  const prevWellnessAvg = useZ ? prevZ : ewmaOf(rawByDate, prevEnd);
   const wellnessDelta = currWellnessAvg !== null && prevWellnessAvg !== null
-    ? Math.round((currWellnessAvg - prevWellnessAvg) * 10) / 10
+    ? Math.round((currWellnessAvg - prevWellnessAvg) * (useZ ? 100 : 10)) / (useZ ? 100 : 10)
     : null;
 
   const avgRpeOf = (rows: TrendSession[]) => rows.length
@@ -343,7 +374,7 @@ export function computeWeekOverWeekTrend(sessions: TrendSession[], wellness: Tre
   const prevRpe = avgRpeOf(prevDone);
   const rpeDelta = currRpe !== null && prevRpe !== null ? Math.round((currRpe - prevRpe) * 10) / 10 : null;
 
-  const input: TrendInput = { loadPct, wellnessDelta, rpeDelta };
+  const input: TrendInput = { loadPct, wellnessDelta, rpeDelta, wellnessDeltaIsZ: useZ };
   return { code: classifyTrend(input), input };
 }
 
@@ -381,7 +412,7 @@ function bodySignalPhrase(input: TrendInput, perspective: TrendPerspective): str
   const recoveryWord = perspective === "coach" ? "sa récupération" : "ta récupération";
   const effortWord = perspective === "coach" ? "son effort perçu" : "ton effort perçu";
   const parts: string[] = [];
-  if (input.wellnessDelta !== null && wellnessDirection(input.wellnessDelta) !== "stable") {
+  if (input.wellnessDelta !== null && wellnessDirection(input.wellnessDelta, input.wellnessDeltaIsZ ?? true) !== "stable") {
     parts.push(input.wellnessDelta < 0 ? `${recoveryWord} se dégrade` : `${recoveryWord} s'améliore`);
   }
   if (input.rpeDelta !== null && rpeDirection(input.rpeDelta) !== "stable") {

@@ -3,7 +3,7 @@ import type { CoachAthlete, Session, WellnessDaily, CoachSession } from "@/types
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
 import { daysAgoStr, computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
 import { coachWellnessScoreFor } from "@/lib/sandboxFixtures";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessZByDate, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Signatures de fatigue + tendances par sportif pour /coach/athletes, paramétré par une date de
    référence — réutilisé par la page (SSR, date = aujourd'hui) et par
@@ -79,7 +79,7 @@ export async function getAthletesSignatures(
           base_score: score, score, behaviors: [], bedtime: "23:00", created_at: new Date().toISOString(),
         });
       }
-      const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor);
+      const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor, wellnessZByDate(myWellness, 14, anchor));
       trends[a.id] = code;
       const coachText = code ? describeTrend(code, input, "coach") : null;
       trendInsights[a.id] = coachText
@@ -97,7 +97,7 @@ export async function getAthletesSignatures(
     }
     const myWellness = allWellness.filter(w => w.user_id === a.user_id);
     const mySessions = allSessions.filter(s => s.user_id === a.user_id);
-    const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor);
+    const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor, wellnessZByDate(myWellness, 14, anchor));
     trends[a.id] = code;
     // Wording coach (3e personne) — même classification que /conseils, texte adapté au destinataire
     const coachText = code ? describeTrend(code, input, "coach") : null;

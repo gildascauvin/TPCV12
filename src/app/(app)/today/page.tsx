@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
-import { WELLNESS_BASELINE_WINDOW_DAYS } from "@/lib/wellnessBaseline";
 import { daysAgoStr } from "@/lib/trainingLoad";
 import TodayClient from "./TodayClient";
 import { format } from "date-fns";
@@ -14,9 +13,12 @@ export default async function TodayPage() {
   const { data: { user } } = await supabase.auth.getUser();
 
   const today = format(new Date(), "yyyy-MM-dd");
-  // Fenêtre glissante pour la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — jours
-  // strictement antérieurs à aujourd'hui, filtrés côté client (TodayClient) avant le calcul.
-  const sinceBaseline = daysAgoStr(WELLNESS_BASELINE_WINDOW_DAYS);
+  /* Fenêtre glissante pour la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) ET pour la
+     tendance 14j (computeWeekOverWeekTrend, carte décision — decisionCard.ts) — 42j, même convention
+     que /conseils/athletesData.ts : la tendance a besoin de 14 jours, chacun avec jusqu'à 21j
+     d'historique perso derrière lui (wellnessZByDate), soit ~35j au maximum ; 42j aligne sur le
+     reste de l'app plutôt qu'un nouveau chiffre. Filtré côté client (TodayClient) avant chaque calcul. */
+  const sinceBaseline = daysAgoStr(42);
 
   /* profiles fetché une seule fois ici (select("*")) — un 2e aller-retour "mode, subscription_status"
      en amont du Promise.all existait avant (2026-09-18) uniquement pour le check de redirection

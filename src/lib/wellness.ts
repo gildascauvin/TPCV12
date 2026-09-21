@@ -72,7 +72,10 @@ export function wellnessColor(score: number | null): string {
 }
 export { WELLNESS_RAMP };
 
-const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
+// Exporté (2026-09) — repli non-personnalisé de personalizedBehaviorTip() (conseilsData.ts, carte
+// décision /today+Coach Control) quand computeBehaviorCorrelations() n'a pas encore assez
+// d'occurrences pour ce comportement précis (≥2 des 2 côtés).
+export const NEGATIVE_BEHAVIOR_TIPS: Record<string, { label: string; tip: string }> = {
   alcohol:       { label: "Alcool hier soir",     tip: "hydrate-toi bien, évite d'en reprendre ce soir" },
   late_sleep:    { label: "Couché tard hier",     tip: "vise un coucher avant 23h ce soir" },
   tobacco:       { label: "Tabac hier",           tip: "espace les prochaines prises, ça pèse sur ta récup" },

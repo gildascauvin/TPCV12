@@ -35,7 +35,7 @@ export default function SandboxHomePage({ params }: { params: { role: string } }
     // Même calcul que /coach réel (baselines Z-score, src/lib/wellnessBaseline.ts) — buildAthleteSignatures()
     // réutilise l'historique fictif déjà construit par buildCoachFixture(), aucune formule séparée
     // pour la sandbox.
-    const { trends, baselines } = buildAthleteSignatures(fixture);
+    const { trends, trendInputs, baselines } = buildAthleteSignatures(fixture);
     return (
       <CoachClient
         coachName={coachName}
@@ -46,7 +46,9 @@ export default function SandboxHomePage({ params }: { params: { role: string } }
         subscriptionStatus="free"
         inviteCode={null}
         trends={trends}
+        trendInputs={trendInputs}
         baselines={baselines}
+        recentSessions={fixture.sessionsHistoryByAthlete}
         sandboxMode
         sandboxSessionsByDate={Object.fromEntries(Object.entries(sessionsByDate).map(([d, s]) => [d, s.map(demoToView)]))}
       />
