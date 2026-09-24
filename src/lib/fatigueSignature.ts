@@ -343,6 +343,14 @@ export function crossTrendInsight(
   const worstCharge = chargeCandidates[0];
   const chargeDetail = worstCharge && worstCharge.sev !== "good" ? worstCharge.z.text : (fitnessTrendInfo?.text ?? worstCharge?.z.text ?? "");
 
+  /* Chaque branche ci-dessous ne peut affirmer "récupération se dégrade/s'améliore" QUE si wellBad/
+     wellGood est réellement vrai (le même booléen que recoveryCrossInsight() utilise pour SA propre
+     phrase) — jamais dérivé du seul bodyScore agrégé. Bug réel trouvé par Gildas : récup "ÉQUILIBRÉ"/
+     "dans ta norme" (donc ni wellBad ni wellGood) + fatigueUp seul donnait bodyScore<=-1, et l'ancien
+     code écrivait quand même "Ta récupération se dégrade" — contredisait littéralement la carte
+     Récupération juste en dessous, qui disait "dans ta norme habituelle". Ces cas "un seul signal
+     bouge, l'autre est neutre" ont désormais leur propre phrase, qui n'attribue jamais au mauvais
+     signal ce que l'autre a produit. */
   let bodyClause: string;
   if (disagreement && wellBad) {
     bodyClause = coach
@@ -352,10 +360,26 @@ export function crossTrendInsight(
     bodyClause = coach
       ? "Il se sent bien mais sa charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard."
       : "Tu te sens bien mais ta charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard.";
-  } else if (bodyScore <= -1) {
+  } else if (wellBad && fatigueUp) {
     bodyClause = coach ? "Sa récupération se dégrade et sa charge d'entraînement récente le confirme." : "Ta récupération se dégrade et ta charge d'entraînement récente le confirme.";
-  } else if (bodyScore >= 1) {
+  } else if (wellGood && fatigueDown) {
     bodyClause = coach ? "Sa récupération s'améliore et sa charge d'entraînement récente le confirme." : "Ta récupération s'améliore et ta charge d'entraînement récente le confirme.";
+  } else if (wellBad) {
+    bodyClause = coach
+      ? "Sa récupération se dégrade, indépendamment de sa charge d'entraînement récente (stable)."
+      : "Ta récupération se dégrade, indépendamment de ta charge d'entraînement récente (stable).";
+  } else if (wellGood) {
+    bodyClause = coach
+      ? "Sa récupération s'améliore, indépendamment de sa charge d'entraînement récente (stable)."
+      : "Ta récupération s'améliore, indépendamment de ta charge d'entraînement récente (stable).";
+  } else if (fatigueUp) {
+    bodyClause = coach
+      ? "Sa récupération reste dans sa norme, mais sa charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : à surveiller."
+      : "Ta récupération reste dans ta norme, mais ta charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : à surveiller.";
+  } else if (fatigueDown) {
+    bodyClause = coach
+      ? "Sa récupération reste dans sa norme, et sa charge d'entraînement récente se relâche (fatigue accumulée en baisse)."
+      : "Ta récupération reste dans ta norme, et ta charge d'entraînement récente se relâche (fatigue accumulée en baisse).";
   } else {
     bodyClause = "Récupération et charge d'entraînement récente stables.";
   }
