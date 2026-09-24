@@ -3583,4 +3583,4 @@ Une fois la carte décision livrée, Gildas a signalé que `/conseils` affichait
 
 **Vérifié** : `tsc --noEmit` propre. Testé en isolation via 2 scripts `tsx` jetables — reproduction exacte de l'exemple de désaccord de Gildas (wellBad+fatigueDown → phrase dédiée confirmée) + 3 autres cas (accord négatif/positif, coach 3e personne) ; un script séparé pour `athletesData.ts` (perspective coach, "Sa récupération..."). 4 sandboxes smoke-testées (200, aucune chaîne d'erreur), y compris `/sandbox/athlete/conseils` qui passe par `computeConseilsData()` (donc par `crossTrendInsight()`).
 
-**Pas encore commité/poussé au moment de la rédaction de cette section** — voir Gildas pour confirmation avant `git push`.
+Déployé en prod le 2026-09-21, commit `1fa42c9`, push direct sur `main`.
