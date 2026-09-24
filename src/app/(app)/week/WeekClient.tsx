@@ -644,7 +644,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     dir={decision.suggestion.dir}
                     reco={decision.suggestion.reco}
                     advice=""
-                    ctaLabel={decision.ctaLabel}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}

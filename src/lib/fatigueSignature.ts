@@ -1,5 +1,5 @@
 import type { Session, WellnessDaily } from "@/types";
-import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection } from "@/lib/trainingLoad";
+import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection, type TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import { Z_SWC, wellnessSignal, describeDominantDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -277,6 +277,90 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
     ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie son sommeil et son stress des derniers jours."
     : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie ton sommeil et ton stress des derniers jours.") + suffix;
   return recoveryInfo.text + suffix;
+}
+
+/* Titre par code — mêmes 9 noms que l'ancien TREND_STATUS_LABEL de decisionCard.ts (retiré de là,
+   /conseils est désormais LA source de ce vocabulaire) — jamais un verbe, un diagnostic. */
+const CROSS_TREND_LABEL: Record<string, string> = {
+  accumulation: "Accumulation", fatigue_persistante: "Fatigue persistante",
+  recuperation_insuffisante: "Récupération insuffisante", supercompensation: "Supercompensation",
+  recuperation: "Récupération", tolerance_stable: "Tolérance stable",
+  adaptation: "Adaptation", recuperation_legere: "Récupération légère", stable: "Stable",
+};
+// Même mapping que l'ancien trendSeverity() de trainingLoad.ts pour ces 9 codes — pas remis en
+// question, seule la FIABILITÉ des entrées qui produisent le code a changé (voir plus bas).
+const CROSS_TREND_SEVERITY: Record<string, Severity> = {
+  accumulation: "alert", fatigue_persistante: "alert", recuperation_insuffisante: "watch",
+  supercompensation: "good", recuperation: "good", tolerance_stable: "good",
+  adaptation: "good", recuperation_legere: "good", stable: "good",
+};
+
+/**
+ * Insight global "croisé" (2026-09, retour de Gildas) — remplace classifyTrend()/describeTrend()
+ * comme source du titre + phrase affichés en tête de /conseils et de la signature de fatigue coach
+ * (/coach/athletes) : l'ANCIEN système comparait charge et wellness sur une fenêtre 7j/7j glissante
+ * INDÉPENDANTE des cartes ⚡ Charge / 🌿 Récupération juste en dessous (ACWR/monotonie/strain/
+ * Fitness-Fatigue EWMA 42j + wellness/Form) — les deux pouvaient légitimement se contredire (titre
+ * "Récupération insuffisante" avec des cartes disant "tout va bien" en dessous, ou l'inverse).
+ * Le titre est désormais dérivé des 2 MÊMES sources que les cartes charge/récup — jamais une 3e
+ * source vérifiée après coup :
+ *   - axe charge : direction de la charge chronique (fitnessTrend, déjà calculé pour la carte ⚡)
+ *   - axe corps : croise la récup RESSENTIE (recoveryInfo, carte 🌿) avec la fatigue OBJECTIVE
+ *     déduite de l'entraînement (fatigueTrend, carte ⚡) — accord = signal net, désaccord (ex.
+ *     récup basse mais fatigue d'entraînement en baisse) = phrase dédiée expliquant l'écart plutôt
+ *     qu'un texte plat "rien de notable" (retour explicite de Gildas, l'exemple qui a motivé ce
+ *     chantier : "la fatigue ne semble pas liée à l'entraînement").
+ * Reprend le même vocabulaire de 9 codes que l'ancien système (Accumulation/Supercompensation/...)
+ * mais garanti cohérent par construction avec ce qui est déjà affiché sous ce titre.
+ */
+export function crossTrendInsight(
+  loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo,
+  fitnessTrend: TrendDirection | null, fitnessTrendInfo: ZoneInfo | null, fatigueTrend: TrendDirection | null,
+  recoveryInfo: ZoneInfo, perspective: Perspective = "athlete",
+): { title: string; text: string; severity: Severity; code: TrendCode } {
+  const coach = perspective === "coach";
+  const loadDir = fitnessTrend ?? "stable";
+
+  const wellBad = recoveryInfo.label === "RÉCUP FRAGILE" || recoveryInfo.label === "FATIGUÉ";
+  const wellGood = recoveryInfo.label === "BONNE RÉCUP" || recoveryInfo.label === "FRAIS";
+  const fatigueUp = fatigueTrend === "up";     // fatigue d'entraînement accumulée en hausse — mauvais signe
+  const fatigueDown = fatigueTrend === "down"; // en baisse — bon signe
+  const bodyScore = (wellBad ? -1 : wellGood ? 1 : 0) + (fatigueUp ? -1 : fatigueDown ? 1 : 0);
+  const disagreement = (wellBad && fatigueDown) || (wellGood && fatigueUp);
+
+  const code = bodyScore <= -1
+    ? (loadDir === "up" ? "accumulation" : loadDir === "down" ? "fatigue_persistante" : "recuperation_insuffisante")
+    : bodyScore >= 1
+    ? (loadDir === "up" ? "supercompensation" : loadDir === "down" ? "recuperation" : "tolerance_stable")
+    : (loadDir === "up" ? "adaptation" : loadDir === "down" ? "recuperation_legere" : "stable");
+
+  // Détail charge cité dans la phrase — le métrique le plus sévère parmi ACWR/monotonie/strain,
+  // sinon la tendance Fitness — toujours le texte déjà écrit pour CETTE métrique, jamais inventé.
+  const chargeCandidates = [loadInfo, monotonyInfo, strainInfo]
+    .filter(z => z.text)
+    .map(z => ({ z, sev: severityOf(z.color) }))
+    .sort((a, b) => (b.sev === "alert" ? 2 : b.sev === "watch" ? 1 : 0) - (a.sev === "alert" ? 2 : a.sev === "watch" ? 1 : 0));
+  const worstCharge = chargeCandidates[0];
+  const chargeDetail = worstCharge && worstCharge.sev !== "good" ? worstCharge.z.text : (fitnessTrendInfo?.text ?? worstCharge?.z.text ?? "");
+
+  let bodyClause: string;
+  if (disagreement && wellBad) {
+    bodyClause = coach
+      ? "Sa récupération est basse mais sa charge d'entraînement récente ne le confirme pas (fatigue accumulée en baisse) : la cause n'est peut-être pas l'entraînement, vérifie son sommeil et son stress."
+      : "Ta récupération est basse mais ta charge d'entraînement récente ne le confirme pas (fatigue accumulée en baisse) : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress.";
+  } else if (disagreement) {
+    bodyClause = coach
+      ? "Il se sent bien mais sa charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard."
+      : "Tu te sens bien mais ta charge d'entraînement récente pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard.";
+  } else if (bodyScore <= -1) {
+    bodyClause = coach ? "Sa récupération se dégrade et sa charge d'entraînement récente le confirme." : "Ta récupération se dégrade et ta charge d'entraînement récente le confirme.";
+  } else if (bodyScore >= 1) {
+    bodyClause = coach ? "Sa récupération s'améliore et sa charge d'entraînement récente le confirme." : "Ta récupération s'améliore et ta charge d'entraînement récente le confirme.";
+  } else {
+    bodyClause = "Récupération et charge d'entraînement récente stables.";
+  }
+
+  return { title: CROSS_TREND_LABEL[code], text: chargeDetail ? `${bodyClause} ${chargeDetail}` : bodyClause, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
 }
 
 export type DayPoint = {

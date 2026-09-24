@@ -958,7 +958,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     dir={decision.suggestion.dir}
                     reco={decision.suggestion.reco}
                     advice=""
-                    ctaLabel={decision.ctaLabel}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}

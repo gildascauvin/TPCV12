@@ -805,7 +805,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                       dir={decision.suggestion.dir}
                       reco={decision.suggestion.reco}
                       advice=""
-                      ctaLabel={decision.ctaLabel}
                       sessionLabel={autoregTargetTop.name}
                       severityColor={decisionColor}
                       isActive={isActive}

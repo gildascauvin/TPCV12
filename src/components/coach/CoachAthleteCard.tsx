@@ -349,7 +349,6 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               dir={decision.suggestion.dir}
               reco={decision.suggestion.reco}
               advice=""
-              ctaLabel={decision.ctaLabel}
               sessionLabel={topSession.name}
               severityColor={badgeColor}
               onPreviewChange={setPreviewPct}

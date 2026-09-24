@@ -2,9 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
-import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
-import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessZByDate, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
+import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, crossTrendInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
+import { fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -270,13 +270,6 @@ export function computeConseilsData(
     ? Math.round((currLoad - prevLoad) / prevLoad * 100)
     : null;
 
-  const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(allSessions, allWellness, anchor, wellnessZByDate(allWellness, 14, anchor));
-  const trendText = trendCode ? describeTrend(trendCode, trendInput) : null;
-  const trendEmoji = trendCode
-    ? (trendSeverity(trendCode) === "alert" ? "🔴" : trendSeverity(trendCode) === "watch" ? "🟡" : "🟢")
-    : null;
-  const trendAction = trendText && trendCode ? trendActionWord(trendCode) : null;
-
   const hasTomorrowSession = allSessions.some(s => s.date === tomorrowStr && !s.done);
 
   const recentBehaviors = allWellness
@@ -326,6 +319,15 @@ export function computeConseilsData(
 
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo);
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "athlete", wellnessBaseline);
+
+  // Insight global "croisé" (remplace classifyTrend()/describeTrend() — voir fatigueSignature.ts) :
+  // dérivé des MÊMES entrées que les cartes ⚡ Charge / 🌿 Récupération ci-dessus, jamais d'une 3e
+  // source indépendante — garanti cohérent avec ce qui est déjà affiché sous ce titre.
+  const cross = crossTrendInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, "athlete");
+  const trendCode: TrendCode | null = refWellness ? cross.code : null;
+  const trendText = refWellness ? cross.text : null;
+  const trendEmoji = refWellness ? (cross.severity === "alert" ? "🔴" : cross.severity === "watch" ? "🟡" : "🟢") : null;
+  const trendAction = refWellness ? cross.title : null;
 
   const last7 = timeSeries.slice(-7);
   const zoneAcwr = last7.map(p => p.acwr);

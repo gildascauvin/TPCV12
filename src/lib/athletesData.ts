@@ -1,9 +1,36 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoachAthlete, Session, WellnessDaily, CoachSession } from "@/types";
-import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
-import { daysAgoStr, computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode } from "@/lib/trainingLoad";
+import { buildDailyTimeSeries, computeSignature, sigDimInfo, trendDimInfo, crossTrendInsight, fitnessFatigueTrend, type AthleteSignature } from "@/lib/fatigueSignature";
+import { daysAgoStr, type TrendCode } from "@/lib/trainingLoad";
 import { coachWellnessScoreFor } from "@/lib/sandboxFixtures";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessZByDate, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+
+const EMPTY_ZONE = { label: "", color: "#8a8f94", text: "" };
+function severityEmoji(sev: "good" | "watch" | "alert"): string {
+  return sev === "alert" ? "🔴" : sev === "watch" ? "🟡" : "🟢";
+}
+
+/* Même calcul que /conseils (voir conseilsData.ts) pour l'insight global "croisé" — factorisé ici
+   car appelé 2 fois (sportif démo + vrai sportif). `series` = buildDailyTimeSeries() déjà calculée
+   par l'appelant (42j), `sig` = computeSignature() déjà calculée aussi — aucune donnée recalculée. */
+function computeCrossInsight(
+  series: ReturnType<typeof buildDailyTimeSeries>,
+  sig: ReturnType<typeof computeSignature>,
+  baseline: WellnessBaselineResult | null,
+  perspective: "athlete" | "coach",
+) {
+  const todayPoint = series[series.length - 1];
+  const loadInfo = todayPoint?.acwr !== null && todayPoint?.acwr !== undefined
+    ? sigDimInfo("load", todayPoint.acwr, perspective)
+    : EMPTY_ZONE;
+  const monotonyInfo = sig.monotony !== null ? sigDimInfo("monotony", sig.monotony, perspective) : EMPTY_ZONE;
+  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, perspective) : EMPTY_ZONE;
+  const loadPoints = series.map(p => ({ date: p.date, load: p.load }));
+  const ffTrend = fitnessFatigueTrend(loadPoints);
+  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, perspective) : null;
+  const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, baseline);
+  return crossTrendInsight(loadInfo, monotonyInfo, strainInfo, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, perspective);
+}
 
 /* Signatures de fatigue + tendances par sportif pour /coach/athletes, paramétré par une date de
    référence — réutilisé par la page (SSR, date = aujourd'hui) et par
@@ -79,42 +106,54 @@ export async function getAthletesSignatures(
           base_score: score, score, behaviors: [], bedtime: "23:00", created_at: new Date().toISOString(),
         });
       }
-      const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor, wellnessZByDate(myWellness, 14, anchor));
-      trends[a.id] = code;
-      const coachText = code ? describeTrend(code, input, "coach") : null;
-      trendInsights[a.id] = coachText
-        ? { text: coachText, emoji: trendSeverity(code!) === "alert" ? "🔴" : trendSeverity(code!) === "watch" ? "🟡" : "🟢", action: trendActionWord(code!) }
-        : null;
       const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
       const sig = computeSignature(mySessions, a.wellness_score, 28, anchor);
       signatures[a.id] = { kind: "ok", series, sig };
       const demoTodayRow = myWellness.find(w => w.date === referenceDate) ?? null;
-      baselines[a.id] = demoTodayRow
+      const demoBaseline = demoTodayRow
         ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), demoTodayRow)
         : null;
+      baselines[a.id] = demoBaseline;
       baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
+      if (demoTodayRow) {
+        const cross = computeCrossInsight(series, sig, demoBaseline, "coach");
+        trends[a.id] = cross.code;
+        trendInsights[a.id] = { text: cross.text, emoji: severityEmoji(cross.severity), action: cross.title };
+      } else {
+        trends[a.id] = null;
+        trendInsights[a.id] = null;
+      }
       continue;
     }
     const myWellness = allWellness.filter(w => w.user_id === a.user_id);
     const mySessions = allSessions.filter(s => s.user_id === a.user_id);
-    const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, anchor, wellnessZByDate(myWellness, 14, anchor));
-    trends[a.id] = code;
-    // Wording coach (3e personne) — même classification que /conseils, texte adapté au destinataire
-    const coachText = code ? describeTrend(code, input, "coach") : null;
-    trendInsights[a.id] = coachText
-      ? { text: coachText, emoji: trendSeverity(code!) === "alert" ? "🔴" : trendSeverity(code!) === "watch" ? "🟡" : "🟢", action: trendActionWord(code!) }
-      : null;
-    if (myWellness.length === 0) { signatures[a.id] = { kind: "no_data" }; baselines[a.id] = null; baselineSeries[a.id] = []; continue; }
+    if (myWellness.length === 0) {
+      signatures[a.id] = { kind: "no_data" }; baselines[a.id] = null; baselineSeries[a.id] = [];
+      trends[a.id] = null; trendInsights[a.id] = null;
+      continue;
+    }
     const refWellness = myWellness.find(w => w.date === referenceDate);
     // base_score en priorité (jamais score, qui inclut le bonus/malus comportements).
     const wellnessScore = refWellness ? (wellnessSignal(refWellness) ?? 75) : 75;
     const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
     const sig = computeSignature(mySessions, wellnessScore, 28, anchor);
     signatures[a.id] = { kind: "ok", series, sig };
-    baselines[a.id] = refWellness
+    const baseline = refWellness
       ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), refWellness)
       : null;
+    baselines[a.id] = baseline;
     baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
+    // Insight global "croisé" (mêmes entrées que /conseils, voir fatigueSignature.ts) — wording coach
+    // (3e personne), seulement si un vrai wellness existe ce jour-là (sinon recoveryInfo reposerait
+    // sur le repli 75 ci-dessus, pas une vraie donnée).
+    if (refWellness) {
+      const cross = computeCrossInsight(series, sig, baseline, "coach");
+      trends[a.id] = cross.code;
+      trendInsights[a.id] = { text: cross.text, emoji: severityEmoji(cross.severity), action: cross.title };
+    } else {
+      trends[a.id] = null;
+      trendInsights[a.id] = null;
+    }
   }
 
   return { signatures, trends, trendInsights, baselines, baselineSeries };
