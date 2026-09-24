@@ -47,16 +47,28 @@ function nearestStep(magnitude: number): number {
    Le garde-fou absolu (score composite brut < 40) et le seuil critique (Z_SEVERE) n'inventent
    jamais un déclenchement à eux seuls — ils ESCALADENT la sévérité d'un Alléger déjà déclenché par
    le mismatch (🚨/-20% au lieu de ce que le calcul continu aurait donné), jamais côté Surcharger
-   (pas de notion de "critique" pour une séance trop facile). */
+   (pas de notion de "critique" pour une séance trop facile).
+
+   `chronicPenalty` (2026-09, retour de Gildas — "le chronique doit moduler le journalier, pas le
+   concurrencer") : points retranchés au score effectif AVANT de le comparer à la difficulté prévue —
+   ex. -10/-20 quand la charge chronique (ACWR/monotonie/contrainte/tendance Fitness, 42j) est en
+   zone watch/alert (voir decisionCard.ts). Remplace l'ancien mécanisme où le signal chronique
+   produisait SA PROPRE suggestion séparée, capable de gagner (via severer()) même sur un jour sans
+   rapport avec le plan réel du jour (séance déjà légère, voire aucune séance prévue) — ici, la
+   décision finale reste TOUJOURS calculée contre `plannedDifficulty`, le chronique ne fait qu'abaisser
+   le seuil de tolérance. Défaut 0 = comportement 100% inchangé pour tout appelant qui ne le fournit
+   pas encore (garde-fous absolus/`baseline` non affectés, ils continuent de lire `wellness`/`baseline`
+   tels quels, jamais le score pénalisé). */
 export function computeAutoregSuggestion(
   wellness: number | null,
   plannedDifficulty: number | null,
   baseline?: WellnessBaselineResult | null,
+  chronicPenalty = 0,
 ): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
 
   const useZ = baseline?.hasEnoughHistory && baseline.composite.z !== null;
-  const scoreForMismatch = useZ ? baseline!.relativeScore : wellness;
+  const scoreForMismatch = (useZ ? baseline!.relativeScore : wellness) + chronicPenalty;
   const mismatch = plannedDifficulty * 10 - scoreForMismatch;
   const absMismatch = Math.abs(mismatch);
   if (absMismatch < 35) return null;

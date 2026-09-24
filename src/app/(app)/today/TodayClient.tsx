@@ -126,7 +126,7 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
 }
 
 /* ─── Today session card (v59 POC exact layout) ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, decisionGauge }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
@@ -143,6 +143,11 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
      (DraggableExerciseLine, DraggablePlanning.tsx). DndContext scopé à cette carte (une seule
      séance ici, contrairement au Planning qui en gère plusieurs sur une grille de jours). */
   onReorderExercises: (sessionId: string, fromIdx: number, toIdx: number) => void;
+  /* Remplace la jauge de difficulté statique par la jauge de décision interactive (AutoregButtons,
+     2026-09 2e itération — "la jauge de décision EST la jauge de la séance, pas 2 jauges") — fourni
+     UNIQUEMENT par TodayClient.tsx pour la séance ciblée par la suggestion d'autorégulation du jour,
+     undefined partout ailleurs (comportement inchangé : DiffGauge statique reste affiché). */
+  decisionGauge?: React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
@@ -208,8 +213,13 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
         </div>
       </div>
 
-      {/* 2. Single difficulty gauge — no label */}
-      {gaugeValue && (
+      {/* 2. Single difficulty gauge — jauge de décision interactive si une suggestion cible cette
+         séance, DiffGauge statique sinon (no label) */}
+      {decisionGauge ? (
+        <div style={{ marginBottom: 12 }} onClick={e => e.stopPropagation()}>
+          {decisionGauge}
+        </div>
+      ) : gaugeValue && (
         <div style={{ marginBottom: 12 }}>
           <DiffGauge value={gaugeValue} height={12} />
         </div>
@@ -507,6 +517,41 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     behaviorTip,
   });
   const decisionColor = decisionCardColor(decision.icon);
+  /* Jauge de décision — montée directement dans la carte séance ciblée (TodaySessionCard, "la jauge
+     de décision EST la jauge de la séance, pas 2 jauges", 2e itération 2026-09) plutôt que dans
+     l'encart insight ci-dessus. */
+  const decisionGaugeSlot: React.ReactNode = decision.suggestion && autoregTargetTop ? (
+    <AutoregButtons
+      sessionId={autoregTargetTop.id}
+      dir={decision.suggestion.dir}
+      reco={decision.suggestion.reco}
+      advice=""
+      plannedDifficulty={autoregTargetTop.target_difficulty ?? 6}
+      sessionLabel={autoregTargetTop.name}
+      variant="light"
+      severityColor={decisionColor}
+      isActive={isActive}
+      onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
+      onApply={async (pct) => {
+        /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
+           est gatée (voir chantier gating save, 2026-08-19). isActive vient
+           directement de usePaywall() : requireSubscription() ne peut pas envelopper
+           ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
+        if (!isActive) { setPaywallStep("priming"); return; }
+        const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
+        const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
+        const target_difficulty = adjustDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
+        const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTargetTop.id).select().single();
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+        return original;
+      }}
+      onUndo={async (original) => {
+        if (!original) return;
+        const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTargetTop.id).select().single();
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+      }}
+    />
+  ) : undefined;
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
 
@@ -792,43 +837,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </div>
 
               {/* Carte décision, toujours affichée (2026-09, decisionCard.ts) — jour × tendance ×
-                 monotonie/contrainte combinés, le signal le plus sévère gagne. Chips uniquement si
-                 une séance du jour existe encore à ajuster (leur seule cible concrète, quelle que
-                 soit la source du signal qui les a déclenchées). */}
+                 monotonie/contrainte combinés, le signal le plus sévère gagne. Insight seul ici
+                 (2e itération — la jauge/CTA d'ajustement vivent désormais DANS la carte séance,
+                 "la jauge de décision EST la jauge de la séance, pas 2 jauges", retour de Gildas —
+                 voir decisionGaugeSlot, construit plus bas et redescendu à TodaySessionCard). */}
               <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
                 <AlertBox
                   variant="darkColor"
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
-                  actions={decision.suggestion && autoregTargetTop ? (
-                    <AutoregButtons
-                      sessionId={autoregTargetTop.id}
-                      dir={decision.suggestion.dir}
-                      reco={decision.suggestion.reco}
-                      advice=""
-                      sessionLabel={autoregTargetTop.name}
-                      severityColor={decisionColor}
-                      isActive={isActive}
-                      onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
-                      onApply={async (pct) => {
-                        /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
-                           est gatée (voir chantier gating save, 2026-08-19). isActive vient
-                           directement de usePaywall() : requireSubscription() ne peut pas envelopper
-                           ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
-                        if (!isActive) { setPaywallStep("priming"); return; }
-                        const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
-                        const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
-                        const target_difficulty = adjustDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
-                        const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTargetTop.id).select().single();
-                        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                        return original;
-                      }}
-                      onUndo={async (original) => {
-                        if (!original) return;
-                        const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTargetTop.id).select().single();
-                        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                      }}
-                    />
-                  ) : undefined}
                 />
                 {!wellnessFilledToday && (
                   <button
@@ -888,6 +904,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
+                    decisionGauge={s.id === autoregTargetTop?.id ? decisionGaugeSlot : undefined}
                   />
                 ))}
               </div>

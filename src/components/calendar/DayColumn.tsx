@@ -48,7 +48,7 @@ export interface SessionLike {
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
    à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions }: {
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge }: {
   session: T;
   onComplete: (s: T) => void;
   onEdit: (s: T) => void;
@@ -66,6 +66,12 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
      où onComplete/onEdit/onDuplicate ne sont que des no-ops requis par le type : ce n'est pas
      l'endroit où l'action se fait, les boutons n'ont donc pas leur place à l'écran. */
   hideActions?: boolean;
+  /* Remplace la jauge de difficulté statique (#2) par la jauge de décision interactive
+     (AutoregButtons, 2026-09 2e itération — "la jauge de décision EST la jauge de la séance, pas 2
+     jauges") — fourni UNIQUEMENT par WeekClient.tsx/CoachPlanningClient.tsx pour la séance ciblée
+     par une suggestion d'autorégulation du jour, `undefined` partout ailleurs (comportement
+     inchangé : DiffGauge statique reste affiché). */
+  decisionGauge?: React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   // Single gauge: rpe if done, target_difficulty if planned
@@ -104,8 +110,13 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
         </span>
       </div>
 
-      {/* 2. Single gauge — no label */}
-      {gaugeValue && (
+      {/* 2. Single gauge — jauge de décision interactive si une suggestion cible cette séance,
+         DiffGauge statique sinon (no label) */}
+      {decisionGauge ? (
+        <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
+          {decisionGauge}
+        </div>
+      ) : gaugeValue && (
         <div style={{ marginBottom: 8 }}>
           <DiffGauge value={gaugeValue} height={10} />
         </div>

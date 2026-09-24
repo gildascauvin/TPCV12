@@ -29,8 +29,6 @@ import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
-import { setAutoregDecision } from "@/lib/autoregulation";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
@@ -50,7 +48,6 @@ const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModa
 const ReconduireModal = dynamic(() => import("@/components/sessions/ReconduireModal"));
 const ProgramLibraryPage = dynamic(() => import("@/components/programs/ProgramLibraryPage"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
-const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 
 function dayWellness(
   athlete: CoachAthlete,
@@ -129,10 +126,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
-  // `advice` capturé au moment de l'ouverture (texte réel de la carte décision, decisionCard.ts) —
-  // jamais recalculé via autoregAdvice() dans la modale, qui suppose à tort que la raison est
-  // toujours le wellness du jour alors que la suggestion peut venir de la tendance/monotonie.
-  const [adjustCtx, setAdjustCtx] = useState<{ session: CoachViewSession; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null; advice: string } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
@@ -526,7 +519,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const handler = (e: WheelEvent) => {
       // Même garde que WeekClient.tsx : une modale ouverte ne doit jamais laisser un scroll rapide
       // sous-jacent changer de semaine et désynchroniser la modale de la séance qu'elle édite.
-      if (addingDate || editingSession || completing || duplicating || showReconduire || adjustCtx) return;
+      if (addingDate || editingSession || completing || duplicating || showReconduire) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (Math.abs(e.deltaY) < 60) return;
       const now = Date.now();
@@ -544,7 +537,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     onPrev: () => navigatePeriod("prev"),
     onNext: () => navigatePeriod("next"),
     mode: "boundary",
-    enabled: viewMode === "week" && !addingDate && !editingSession && !completing && !duplicating && !showReconduire && !adjustCtx,
+    enabled: viewMode === "week" && !addingDate && !editingSession && !completing && !duplicating && !showReconduire,
   });
 
   function handleViewModeChange(mode: ViewMode) {
@@ -570,18 +563,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       coachWellnessHeader[iso] = b?.hasEnoughHistory ? b.relativeScore : raw;
     });
   }
-  // Baseline du jour "aujourd'hui" pour AdjustSessionModal (déclenché depuis les chips Alléger/
-  // Surcharger de la carte "Aujourd'hui") — même calcul que coachWellnessHeader/dayBaseline
-  // ci-dessus, jamais l'ancien zoneLabel() absolu affiché à part dans cette modale.
-  const todayWellness = athlete ? dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory) : null;
-  const todayFilledForBaseline = athlete?.user_id ? wellnessMap[athlete.user_id]?.[todayStr] !== undefined : true;
-  const todayBaseline = athlete && todayFilledForBaseline && todayWellness !== null
-    ? computeWellnessBaselineAt(
-        (wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? []).filter(w => w.date < todayStr),
-        { score: todayWellness, base_score: todayWellness, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
-      )
-    : null;
-
   if (!athlete) {
     return (
       <>
@@ -928,7 +909,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             // calcul, jamais 3 valeurs différentes pour le même jour.
             const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : wellness;
             let alert;
-            let alertActions;
+            let decisionGaugeNode: React.ReactNode;
+            let autoregTargetId: string | null = null;
             if (isToday) {
               const baseline = dayBaseline;
               const autoregTarget = [...daySessions].filter(s => !s.done)
@@ -951,18 +933,33 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               const severityColor = decisionCardColor(decision.icon);
               alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
               if (decision.suggestion && autoregTarget) {
-                alertActions = (
+                autoregTargetId = autoregTarget.id;
+                // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
+                // itération — plus de modale AdjustSessionModal pour ce flux, "l'ajustement se fait
+                // directement sur la carte", retour de Gildas) — même écriture callSessionAPI que
+                // l'ancien onConfirm de la modale, gatée par isActive comme /today/Coach Control.
+                decisionGaugeNode = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
                     dir={decision.suggestion.dir}
                     reco={decision.suggestion.reco}
                     advice=""
+                    plannedDifficulty={autoregTarget.target_difficulty ?? 6}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}
+                    isActive={isActive}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: decision.suggestion!.dir, reco: decision.suggestion!.reco, baseline, advice: decision.text.split("\n")[1] ?? decision.text.split("\n")[0] })}
+                    onApply={async (pct) => {
+                      if (!isActive) { setPaywallStep("priming"); return; }
+                      const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
+                      const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
+                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                      const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: { notes, target_difficulty } });
+                      if (result.ok) setSessions(prev => prev.map(s => s.id === autoregTarget.id ? { ...s, notes, target_difficulty } : s));
+                      return original;
+                    }}
                     onUndo={async (original) => {
                       if (!original) return;
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: original });
@@ -984,7 +981,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
-                alertActions={alertActions}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -993,6 +989,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     onComplete={(sess) => setCompleting(sess)}
                     onEdit={(sess) => setEditingSession(sess)}
                     onDuplicate={(sess) => setDuplicating(sess)}
+                    decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
@@ -1075,30 +1072,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
             setSessions(prev => [...prev, ...created]);
             setShowReconduire(false);
-          })}
-        />
-      )}
-
-      {adjustCtx && athlete && (
-        <AdjustSessionModal
-          session={adjustCtx.session as AdjustSessionTarget}
-          dir={adjustCtx.dir}
-          reco={adjustCtx.reco}
-          wellnessScore={dayWellness(athlete, todayStr, wellnessMap, wellnessBaselineHistory)}
-          baseline={todayBaseline}
-          behaviors={athlete.behaviors ?? []}
-          advice={adjustCtx.advice}
-          onClose={() => setAdjustCtx(null)}
-          onConfirm={pct => requireSubscription(async () => {
-            const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
-            const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
-            const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: adjustCtx.session.id, data: { notes, target_difficulty } });
-            if (result.ok) {
-              setSessions(prev => prev.map(s => s.id === adjustCtx.session.id ? { ...s, notes, target_difficulty } : s));
-            }
-            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
-            setDecisionTick(t => t + 1);
-            setAdjustCtx(null);
           })}
         />
       )}

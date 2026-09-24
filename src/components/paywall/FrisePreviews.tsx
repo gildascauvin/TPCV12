@@ -195,6 +195,7 @@ export function WellnessCardPreview({ score = 45, behaviors = ["alcohol", "late_
             dir={suggestion.dir}
             reco={suggestion.reco}
             advice={`${suggestion.icon} ${autoregAdvice(suggestion.dir, plannedDiff)}`}
+            plannedDifficulty={plannedDiff}
             sessionLabel="Sprint — Vitesse max"
             onPreviewChange={noop}
             onApply={noopAsync}
@@ -267,6 +268,7 @@ export function CoachControlPreview({ name, score = 88, plannedDiff = 3, behavio
             dir={suggestion.dir}
             reco={suggestion.reco}
             advice={advice}
+            plannedDifficulty={plannedDiff}
             sessionLabel={sessionLabel}
             onPreviewChange={noop}
             onApply={noopAsync}

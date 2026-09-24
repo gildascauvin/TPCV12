@@ -291,7 +291,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
 
       {/* Ring + zone + prénom */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
-        <WellnessRing score={displayScore} size={72} />
+        <WellnessRing score={displayScore} size={88} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
             {selfView ? "Ta forme" : zoneText}
@@ -334,40 +334,16 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         </div>
       </div>
 
-      {/* Encart décision — toujours affiché (2026-09, decisionCard.ts), jamais vide : chips 1-clic
-         (AutoregButtons) quand une séance du jour est ajustable, sinon le bouton "Décider/Revoir/Voir"
-         existant (ouvre l'éditeur libre) — le même AlertBox (variant="darkColor", statique) dans les
-         2 cas, `badgeColor` déjà calculé plus haut, réutilisé tel quel ici. */}
+      {/* Encart décision — toujours affiché (2026-09, decisionCard.ts), jamais vide : insight seul
+         (2e itération — la jauge/CTA d'ajustement vivent désormais DANS la carte séance ci-dessous,
+         "la jauge de décision EST la jauge de la séance, pas 2 jauges", retour de Gildas) — le bouton
+         "Décider/Revoir/Voir" (ouvre l'éditeur libre) reste ici, seul cas où l'encart garde une
+         action, quand aucune séance du jour n'est ajustable. */}
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
         <AlertBox
           variant="darkColor"
           alert={{ border: `${badgeColor}66`, glow: badgeColor, text: decision.text }}
-          actions={decision.suggestion && topSession && !topSession.done ? (
-            <AutoregButtons
-              key={`${topSession.id}-${isReviewed}`}
-              sessionId={topSession.id}
-              dir={decision.suggestion.dir}
-              reco={decision.suggestion.reco}
-              advice=""
-              sessionLabel={topSession.name}
-              severityColor={badgeColor}
-              onPreviewChange={setPreviewPct}
-              onApply={async (pct) => {
-                const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
-                await onApplyAdjust(topSession, pct);
-                // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
-                // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
-                if (isActive !== false) onAutoregDecided();
-                return original;
-              }}
-              onMaintenir={onAutoregDecided}
-              onUndo={async (original) => {
-                if (original) await onUndoAdjust(topSession, original);
-                onAutoregUndone();
-              }}
-              isActive={isActive}
-            />
-          ) : (
+          actions={decision.suggestion && topSession && !topSession.done ? undefined : (
             <button
               data-tour={tourId ? "decider-btn" : undefined}
               onClick={onDecide}
@@ -401,8 +377,39 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               {topSession.done ? "Terminé" : "Prévu"}
             </span>
           </div>
-          {(topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
-            <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
+          {decision.suggestion && !topSession.done ? (
+            <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
+              <AutoregButtons
+                key={`${topSession.id}-${isReviewed}`}
+                sessionId={topSession.id}
+                dir={decision.suggestion.dir}
+                reco={decision.suggestion.reco}
+                advice=""
+                plannedDifficulty={topSession.target_difficulty ?? 6}
+                sessionLabel={topSession.name}
+                variant="light"
+                severityColor={badgeColor}
+                onPreviewChange={setPreviewPct}
+                onApply={async (pct) => {
+                  const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
+                  await onApplyAdjust(topSession, pct);
+                  // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
+                  // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
+                  if (isActive !== false) onAutoregDecided();
+                  return original;
+                }}
+                onMaintenir={onAutoregDecided}
+                onUndo={async (original) => {
+                  if (original) await onUndoAdjust(topSession, original);
+                  onAutoregUndone();
+                }}
+                isActive={isActive}
+              />
+            </div>
+          ) : (
+            (topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
+              <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
+            )
           )}
           {topSession.notes && (
             <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>

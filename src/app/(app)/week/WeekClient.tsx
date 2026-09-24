@@ -13,12 +13,10 @@ import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
-import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import type { LoadContext } from "@/lib/loadRule";
-import { setAutoregDecision } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
@@ -42,7 +40,6 @@ const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"
 const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
 const ReconduireModal = dynamic(() => import("@/components/sessions/ReconduireModal"));
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
-const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
@@ -113,10 +110,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  // `advice` capturé au moment de l'ouverture (texte réel de la carte décision, decisionCard.ts) —
-  // jamais recalculé via autoregAdvice() dans la modale, qui suppose à tort que la raison est
-  // toujours le wellness du jour alors que la suggestion peut venir de la tendance/monotonie.
-  const [adjustCtx, setAdjustCtx] = useState<{ session: Session; dir: "low" | "high"; reco: number; baseline: WellnessBaselineResult | null; advice: string } | null>(null);
   const [decisionTick, setDecisionTick] = useState(0);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
@@ -317,7 +310,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       // un scroll rapide sur la grille sous-jacente changer de semaine — le contenu affilié à la
       // modale (session référencée par id) devient alors incohérent avec la semaine affichée
       // dessous, provoquant un "saut" visuel de la modale.
-      if (addingDate || completing || pendingCompleteSession || editing || duplicating || showReconduire || adjustCtx) return;
+      if (addingDate || completing || pendingCompleteSession || editing || duplicating || showReconduire) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (Math.abs(e.deltaY) < 60) return;
       const now = Date.now();
@@ -336,7 +329,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     onPrev: () => navigatePeriod("prev"),
     onNext: () => navigatePeriod("next"),
     mode: "boundary",
-    enabled: viewMode === "week" && !addingDate && !completing && !pendingCompleteSession && !editing && !duplicating && !showReconduire && !adjustCtx,
+    enabled: viewMode === "week" && !addingDate && !completing && !pendingCompleteSession && !editing && !duplicating && !showReconduire,
   });
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
@@ -613,7 +606,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
             // jamais vide. `sessionsHistory` (≥14j avant aujourd'hui, indépendant de la semaine
             // affichée) alimente la tendance/monotonie ; l'aperçu onboarding n'a jamais de valeur forcée.
             let alert;
-            let alertActions;
+            let decisionGaugeNode: React.ReactNode;
+            let autoregTargetId: string | null = null;
             if (dstr === todayStr) {
               const todaySessions = sessions.filter(s => s.date === todayStr);
               const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
@@ -637,18 +631,33 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               const severityColor = decisionCardColor(decision.icon);
               alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
               if (decision.suggestion && autoregTarget) {
-                alertActions = (
+                autoregTargetId = autoregTarget.id;
+                // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
+                // itération — plus de modale AdjustSessionModal pour ce flux : "l'ajustement se fait
+                // directement sur la carte", retour de Gildas) — même écriture Supabase que l'ancien
+                // onConfirm de la modale, gatée par isActive comme /today/Coach Control.
+                decisionGaugeNode = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
                     dir={decision.suggestion.dir}
                     reco={decision.suggestion.reco}
                     advice=""
+                    plannedDifficulty={autoregTarget.target_difficulty ?? 6}
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={severityColor}
+                    isActive={isActive}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onOpenModal={() => setAdjustCtx({ session: autoregTarget, dir: decision.suggestion!.dir, reco: decision.suggestion!.reco, baseline, advice: decision.text.split("\n")[1] ?? decision.text.split("\n")[0] })}
+                    onApply={async (pct) => {
+                      if (!isActive) { setPaywallStep("priming"); return; }
+                      const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
+                      const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
+                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                      const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
+                      if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      return original;
+                    }}
                     onUndo={async (original) => {
                       if (!original) return;
                       const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
@@ -681,7 +690,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
-                alertActions={alertActions}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -690,6 +698,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     onComplete={(sess) => handleTerminer(sess)}
                     onEdit={(sess) => setEditing(sess)}
                     onDuplicate={(sess) => setDuplicating(sess)}
+                    decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
@@ -896,35 +905,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
             setShowReconduire(false);
             if (inserts.length) handleDateChange(inserts[0].date);
             router.refresh();
-          })}
-        />
-      )}
-      {adjustCtx && (
-        <AdjustSessionModal
-          session={adjustCtx.session as AdjustSessionTarget}
-          dir={adjustCtx.dir}
-          reco={adjustCtx.reco}
-          wellnessScore={(() => { const w = wellnessList.find(w => w.date === todayStr); return w ? wellnessSignal(w) : null; })()}
-          // Même calcul que l'alerte "jour prioritaire" ci-dessus (todayStr) — jamais l'ancien
-          // zoneLabel() absolu affiché à part dans cette modale.
-          baseline={(() => {
-            const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
-            const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
-            return wellnessFilledToday
-              ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < todayStr), wellnessToday)
-              : null;
-          })()}
-          behaviors={wellnessList.find(w => w.date === todayStr)?.behaviors ?? []}
-          advice={adjustCtx.advice}
-          onClose={() => setAdjustCtx(null)}
-          onConfirm={pct => requireSubscription(async () => {
-            const notes = adjustCtx.session.notes ? adjustCtx.session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : adjustCtx.session.notes;
-            const target_difficulty = adjustDifficulty(adjustCtx.session.target_difficulty ?? 6, pct);
-            const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", adjustCtx.session.id).select().single();
-            if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-            setAutoregDecision(adjustCtx.session.id, adjustCtx.dir, pct, { notes: adjustCtx.session.notes, target_difficulty: adjustCtx.session.target_difficulty });
-            setDecisionTick(t => t + 1);
-            setAdjustCtx(null);
           })}
         />
       )}

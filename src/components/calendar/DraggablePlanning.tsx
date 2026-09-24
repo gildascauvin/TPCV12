@@ -18,7 +18,7 @@ export function DroppableDay({ dstr, children }: { dstr: string; children: React
   );
 }
 
-export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole }: {
+export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole, decisionGauge }: {
   session: T;
   onComplete: (s: T) => void;
   onEdit: (s: T) => void;
@@ -27,6 +27,9 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
      UnseenDot.tsx) : visible quand la dernière modif d'une ligne vient de l'autre rôle et n'a pas
      encore été vue par celui-ci. */
   viewerRole: "coach" | "athlete";
+  /* Passthrough vers WeekSessionCard (voir DayColumn.tsx) — undefined partout sauf pour la séance
+     ciblée par une suggestion d'autorégulation du jour. */
+  decisionGauge?: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id, data: { type: "session" } });
   /* Droppable "séance" — reçoit un exercice glissé depuis une AUTRE séance (drag cross-séance,
@@ -55,6 +58,7 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
       dragHandleProps={{ ...attributes, ...listeners }}
       cardRef={cardRef}
       cardStyle={style}
+      decisionGauge={decisionGauge}
       renderExerciseLine={(line, index) => (
         <DraggableExerciseLine
           key={index} sessionId={session.id} index={index} text={line}

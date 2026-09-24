@@ -38,10 +38,13 @@ function darkColors(glow: string) {
   return DARK_COLOR_PALETTE[glow] ?? { bg: "linear-gradient(145deg,#1a1a1a,#282828)", border: "rgba(255,255,255,.2)" };
 }
 
-/* Titre = diagnostic/statut en gras ("Accumulation", "Récupération basse (sommeil)"...) sur sa
-   propre ligne — jamais un verbe, voir decisionCard.ts (2026-09, "titre = diagnostic, CTA = verbe",
-   retour de Gildas). Détail(s) en dessous, `alert.text` encode les lignes séparées par "\n" ; un
-   texte sans "\n" (repli loadRule, pas de suggestion) reste affiché tel quel, une seule ligne.
+/* Titre en gras sur sa propre ligne — verbe si une suggestion réellement actionnable existe
+   ("Alléger recommandé", voir decisionCard.ts/autoregHeadline(), 2026-09 2e itération), "Plan
+   cohérent" sinon (jamais un verbe pour un état non-actionnable — c'est ce cas précis, pas
+   "titre=verbe en général", qui posait problème à l'origine : "Récupérer" pour une tendance
+   positive sonnait comme une consigne). Détail(s) en dessous, `alert.text` encode les lignes
+   séparées par "\n" ; un texte sans "\n" (repli loadRule, pas de suggestion) reste affiché tel
+   quel, une seule ligne.
    Les lignes de détail partagent la MÊME couleur/opacité (2026-09) : plus de distinction i>0,
    comportement identique quel que soit le nombre de lignes.
    Taille de police PAR variante, jamais une seule taille pour les deux, titres agrandis (2026-09) :

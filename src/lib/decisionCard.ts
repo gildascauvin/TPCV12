@@ -1,27 +1,26 @@
 import type { Session } from "@/types";
 import { daysAgoStr, dailyLoad, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
-import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight } from "@/lib/fatigueSignature";
-import { Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import { computeAutoregSuggestion, autoregStatusLabel, autoregDetail, type AutoregSuggestion } from "@/lib/autoregulation";
+import { sigDimInfo, trendDimInfo } from "@/lib/fatigueSignature";
+import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, type AutoregSuggestion } from "@/lib/autoregulation";
 
-/* Carte décision unifiée /today + Coach Control + Planning (2026-09) — toujours non-null, combine
-   2 sources de signal :
-     1. le jour (computeAutoregSuggestion, wellness vs séance prévue)
-     2. charge + récup synthétisées — MÊMES fonctions et MÊMES textes que /conseils
-        (chargeCrossInsight/recoveryCrossInsight, fatigueSignature.ts), sur une fenêtre 42j
-        (ACWR/monotonie/strain/Fitness-Fatigue côté charge, wellness/Form côté récup).
-   Le titre (statut) est TOUJOURS dérivé de ces 2 mêmes insights — jamais d'une 3e source séparée
-   (2026-09, retour de Gildas : le titre venait auparavant de classifyTrend(), une tendance 7j/7j
-   lissée différente du calcul charge/récup — les deux pouvaient légitimement se contredire, ex.
-   titre "Récupération insuffisante" avec un corps disant "tout va bien", ou "Supercompensation"
-   /Augmenter affiché alors que le wellness du jour même est mauvais. Le titre ne peut plus jamais
-   contredire ce qui est écrit juste en dessous, et reflète l'état réel du jour puisque charge/récup
-   le sont déjà). Le signal le plus sévère gagne (le jour prime sur charge/récup à icône égale/pire) ;
-   les chips (±%) ciblent toujours la séance du jour, quelle que soit la source qui a déclenché. */
+/* Carte décision unifiée /today + Coach Control + Planning (2026-09, 2e itération — remplace la
+   compétition todaySug/chargeRecupSug de la 1re itération) : UN SEUL calcul, toujours contre la
+   difficulté RÉELLEMENT prévue aujourd'hui. Le signal chronique (ACWR/monotonie/contrainte/tendance
+   Fitness/Forme, 42j) ne produit plus JAMAIS sa propre suggestion séparée — il MODULE le seuil de
+   déclenchement du signal du jour (chronicPenalty, voir computeAutoregSuggestion dans
+   autoregulation.ts), il ne peut plus jamais gagner tout seul sur un jour sans rapport avec le plan
+   réel (séance déjà légère, voire aucune séance prévue). Retour de Gildas : "le chronique doit
+   moduler le journalier, pas le concurrencer sans jamais regarder le plan du jour".
+
+   Titre = verbe (2026-09, 2e itération — "Alléger recommandé"/"Surcharger recommandé", reprend
+   l'ancien principe "titre=diagnostic" en le nuançant) : le risque d'origine (un titre-verbe
+   sonnant comme une consigne pour un état en réalité POSITIF, ex. "Récupérer" pour une tendance qui
+   allait bien) ne peut plus se reproduire ici — un titre n'apparaît que pour une suggestion
+   RÉELLEMENT actionnable (dir low/high, donc un verbe est honnête) ou "Plan cohérent" (jamais un
+   verbe). Le CTA (AutoregButtons) porte le même verbe — titre et action ne peuvent plus diverger. */
 
 type Severity = "good" | "watch" | "alert";
-// Mêmes seuils que severityOf() dans fatigueSignature.ts (chargeCrossInsight s'appuie dessus en
-// interne) — copie locale à 3 lignes plutôt qu'un export cross-fichier pour ce seul besoin.
 function severityOf(color: string): Severity {
   if (color === "#d10000") return "alert";
   if (color === "#f28a00") return "watch";
@@ -33,19 +32,8 @@ function worstOf(...sevs: Severity[]): Severity {
   return "good";
 }
 
-// 🚨 > ⚠️ > 🚀, et à icône égale "low" (alléger) passe toujours devant "high" (surcharger) — jamais
-// l'inverse (une opportunité de surcharge ne doit jamais masquer un vrai signal de prudence).
-const ICON_RANK: Record<string, number> = { "🚨": 3, "⚠️": 2, "🚀": 1 };
-function severer(a: AutoregSuggestion | null, b: AutoregSuggestion | null): AutoregSuggestion | null {
-  if (!a) return b;
-  if (!b) return a;
-  const ra = ICON_RANK[a.icon] + (a.dir === "low" ? 10 : 0);
-  const rb = ICON_RANK[b.icon] + (b.dir === "low" ? 10 : 0);
-  return ra >= rb ? a : b;
-}
-
 // `n` derniers jours de charge quotidienne jusqu'à `anchor` inclus — 7j pour monotonie/contrainte
-// (Foster), 42j pour le calcul charge/récup ci-dessous (ACWR 28j + Fitness EWMA 42j).
+// (Foster), 42j pour le calcul chronique (ACWR 28j + Fitness EWMA 42j + Forme).
 function lastNLoadPoints(sessions: Pick<Session, "date" | "rpe" | "duration" | "done">[], anchor: Date, n: number): LoadPoint[] {
   const pts: LoadPoint[] = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -75,23 +63,30 @@ export function decisionCardColor(icon: string): string {
   return "#d44000";
 }
 
-/* Titre = diagnostic, dérivé des 2 mêmes sévérités qui pilotent chargeLine/recoveryLine (jamais une
-   3e source) — "les deux vont bien" > "un seul va mal, on le nomme" > "les deux vont mal en même
-   temps" (2026-09, règle validée par Gildas). */
-function crossStatusTitle(chargeSeverity: Severity, recoverySeverity: Severity): string {
-  const chargeBad = chargeSeverity !== "good";
-  const recoveryBad = recoverySeverity !== "good";
-  if (chargeBad && recoveryBad) return "Risque de surcharge";
-  if (chargeBad) return chargeSeverity === "alert" ? "Charge à risque" : "Charge à surveiller";
-  if (recoveryBad) return recoverySeverity === "alert" ? "Récupération critique" : "Récupération à surveiller";
-  return "Plan cohérent";
+/* Ligne de contexte chronique (2026-09) — n'apparaît QUE si `chronicPenalty` a réellement pesé sur
+   le calcul (jamais un doublon d'information déjà donnée par `reason`, qui couvre uniquement le
+   signal du JOUR).
+
+   Bug réel trouvé par Gildas en testant : la 1re version générait sa propre phrase générique
+   ("Ta charge chronique est élevée cette semaine... seuil resserré par prudence") quelle que soit la
+   métrique en cause et sa DIRECTION — fausse dès que la métrique la plus sévère est `fitness`/`form`
+   (une tendance qui peut être "en BAISSE", pas "élevée") : contredisait littéralement /conseils sur
+   le même chargement ("Ta charge chronique est en baisse : possible perte de forme si ça dure.").
+   Fix : réutilise TEL QUEL le texte déjà écrit et directionnellement correct pour cette métrique
+   précise (loadInfo/monotonyInfo/strainInfo/fitnessTrendInfo/formInfo — mêmes objets que la carte
+   ⚡ Charge de /conseils, jamais un 2e texte réinventé) — seul un suffixe neutre (n'affirme rien sur
+   la métrique elle-même, juste sa conséquence sur le seuil du jour) est ajouté ici. */
+function chronicContextLine(worst: { text: string } | null): string | null {
+  if (!worst || !worst.text) return null;
+  return `${worst.text} Seuil du jour resserré en conséquence.`;
 }
 
 export interface DecisionCard {
-  suggestion: AutoregSuggestion | null; // null = informatif seul, pas de chips
+  suggestion: AutoregSuggestion | null; // null = informatif seul, pas de jauge
   icon: string;
-  // "headline\ndetail[\nsecondaire]" — voir AlertText (AlertBox.tsx), qui rend chaque ligne séparément.
-  // headline = TOUJOURS un diagnostic/statut (jamais un verbe) — le CTA (bouton) porte l'action.
+  // "headline\ndetail[\ncontexte chronique]" — voir AlertText (AlertBox.tsx), qui rend chaque ligne
+  // séparément. headline = verbe si une suggestion existe ("Alléger recommandé"), "Plan cohérent"
+  // sinon — jamais un verbe pour un état non-actionnable.
   text: string;
 }
 
@@ -100,12 +95,11 @@ export function computeDecisionCard(params: {
   plannedDifficulty: number | null;
   baseline?: WellnessBaselineResult | null;
   wellnessFilledToday: boolean;
-  // Plus consommés en interne (2026-09) — le titre/corps viennent désormais de chargeCrossInsight/
-  // recoveryCrossInsight (voir plus bas), jamais de classifyTrend(). Gardés dans l'interface pour ne
-  // pas casser les 4 appelants qui les calculent/passent encore pour leurs propres besoins.
+  // Plus consommés en interne (2026-09) — gardés dans l'interface pour ne pas casser les 4 appelants
+  // qui les calculent/passent encore pour leurs propres besoins.
   trendCode?: TrendCode | null;
   trendInput?: TrendInput | null;
-  sessions: Pick<Session, "date" | "rpe" | "duration" | "done">[]; // historique — 42j idéalement (ACWR 28j + Fitness EWMA 42j), 7j minimum pour monotonie/contrainte seules
+  sessions: Pick<Session, "date" | "rpe" | "duration" | "done">[]; // historique — 42j idéalement (ACWR 28j + Fitness EWMA 42j + Forme), 7j minimum pour monotonie/contrainte seules
   anchor?: Date;
   perspective: TrendPerspective;
   subject?: string; // prénom — absent = 2e personne (Coach Control passe le prénom, /today rien)
@@ -114,13 +108,12 @@ export function computeDecisionCard(params: {
   behaviorTip?: string | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
+  const coach = params.perspective === "coach";
 
-  const todaySug = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline);
-
-  /* Insights ⚡ charge / 🌿 récup — MÊMES fonctions et MÊMES textes que /conseils
-     (chargeCrossInsight/recoveryCrossInsight, fatigueSignature.ts). Fenêtre 42j (couvre ACWR 28j +
-     Fitness EWMA 42j) — déjà la largeur réelle de `sessions` chez les 4 appelants actuels ; sinon
-     repli gracieux (zones vides, jamais de "⚡ null"). */
+  /* Signal chronique — ACWR/monotonie/contrainte (Foster, 7j) + tendance Fitness/Forme (EWMA 42j) —
+     100% dérivé de l'historique de séances, ZÉRO recouvrement avec le wellness du jour (déjà géré
+     directement par computeAutoregSuggestion via wellnessScore/baseline) : jamais un double comptage
+     du même signal. */
   const { monotonyVal, strainVal } = monotonyStrainFor(params.sessions, anchor);
   const load42 = lastNLoadPoints(params.sessions, anchor, 42);
   const emptyZone = { label: "", color: "#8a8f94", text: "" };
@@ -130,60 +123,45 @@ export function computeDecisionCard(params: {
   const strainInfo = strainVal !== null ? sigDimInfo("strain", strainVal, params.perspective) : emptyZone;
   const ffTrend = fitnessFatigueTrend(load42);
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, params.perspective) : null;
-  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, params.perspective) : null;
-  const chargeLine = `⚡ ${chargeCrossInsight(loadInfo, monotonyInfo, strainInfo, fitnessTrendInfo, fatigueTrendInfo, params.perspective)}`;
-  const chargeSeverity = worstOf(
-    severityOf(loadInfo.color), severityOf(monotonyInfo.color), severityOf(strainInfo.color),
-    fitnessTrendInfo ? severityOf(fitnessTrendInfo.color) : "good",
-    fatigueTrendInfo ? severityOf(fatigueTrendInfo.color) : "good",
-  );
-
   const formSeries = formPercentSeries(load42);
   const formValue = formSeries.length ? formSeries[formSeries.length - 1].value : null;
-  const recoveryZoneInfo = params.wellnessScore !== null ? sigDimInfo("recovery", params.wellnessScore, params.perspective, params.baseline) : null;
-  const recoveryLine = recoveryZoneInfo ? `🌿 ${recoveryCrossInsight(recoveryZoneInfo, formValue, params.perspective, params.baseline)}` : null;
-  /* Sévérité récup — reprend le garde-fou critique déjà en place ailleurs (score absolu <40,
-     guardRailTriggered, Z_SEVERE) : un état vraiment critique force "alert" même si le zonage
-     label-based (BONNE RÉCUP/RÉCUP FRAGILE...) lirait quelque chose de moins tranché. Sinon,
-     mêmes booléens que recoveryCrossInsight() utilise en interne (wellBad/formBad) — jamais un 2e
-     seuil séparé qui pourrait diverger du texte affiché. */
-  const useZ = params.baseline?.hasEnoughHistory && params.baseline.composite.z !== null;
-  const recoveryGuardCritical = params.wellnessScore !== null && (
-    (params.baseline?.guardRailTriggered ?? false)
-    || params.wellnessScore < WELLNESS_ABSOLUTE_GUARD_SCORE
-    || (useZ && params.baseline!.composite.z! <= Z_SEVERE)
-  );
-  const wellBad = recoveryZoneInfo ? (recoveryZoneInfo.label === "RÉCUP FRAGILE" || recoveryZoneInfo.label === "FATIGUÉ") : false;
-  const formBad = formValue !== null && formValue <= -8;
-  const recoverySeverity: Severity = recoveryGuardCritical ? "alert" : wellBad && formBad ? "alert" : wellBad || formBad ? "watch" : "good";
+  const formInfo = formValue !== null ? sigDimInfo("form", formValue, params.perspective) : emptyZone;
 
-  const combinedSeverity = worstOf(chargeSeverity, recoverySeverity);
-  const chargeRecupSug: AutoregSuggestion | null =
-    combinedSeverity === "alert" ? { dir: "low", reco: -15, icon: "🚨" } :
-    combinedSeverity === "watch" ? { dir: "low", reco: -10, icon: "⚠️" } :
-    null;
+  // Chaque candidat porte son propre objet `{text,...}` déjà écrit et directionnellement correct
+  // (mêmes objets que la carte ⚡ Charge de /conseils) — jamais juste un nom de métrique, pour que
+  // chronicContextLine() puisse réutiliser TEL QUEL le texte du candidat gagnant (voir plus bas).
+  const chronicCandidates: { info: { text: string }; sev: Severity }[] = [
+    { info: loadInfo, sev: severityOf(loadInfo.color) },
+    { info: monotonyInfo, sev: severityOf(monotonyInfo.color) },
+    { info: strainInfo, sev: severityOf(strainInfo.color) },
+    { info: fitnessTrendInfo ?? emptyZone, sev: fitnessTrendInfo ? severityOf(fitnessTrendInfo.color) : "good" },
+    { info: formInfo, sev: severityOf(formInfo.color) },
+  ];
+  const chargeSeverity = worstOf(...chronicCandidates.map(c => c.sev));
+  const worstChronic = chronicCandidates
+    .filter(c => c.sev !== "good")
+    .sort((a, b) => (b.sev === "alert" ? 2 : 1) - (a.sev === "alert" ? 2 : 1))[0]?.info ?? null;
 
-  const winner = [todaySug, chargeRecupSug].reduce(severer, null);
+  // -10/-20 points sur le score effectif AVANT le calcul du mismatch (voir autoregulation.ts) —
+  // même magnitude que le garde-fou watch/alert déjà en place ailleurs, pas une nouvelle échelle.
+  const chronicPenalty = chargeSeverity === "alert" ? -20 : chargeSeverity === "watch" ? -10 : 0;
 
-  if (winner === todaySug && todaySug) {
+  const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty);
+  const ctxLine = chronicContextLine(worstChronic);
+
+  if (suggestion) {
     return {
-      suggestion: todaySug, icon: todaySug.icon,
-      text: `${autoregStatusLabel(todaySug.dir, params.baseline)}\n🌿 ${autoregDetail(todaySug.dir, params.plannedDifficulty ?? 6, params.subject)}`,
-    };
-  }
-  if (winner === chargeRecupSug && chargeRecupSug) {
-    return {
-      suggestion: chargeRecupSug, icon: chargeRecupSug.icon,
-      text: `${crossStatusTitle(chargeSeverity, recoverySeverity)}\n${chargeLine}${recoveryLine ? `\n${recoveryLine}` : ""}`,
+      suggestion, icon: suggestion.icon,
+      text: [
+        autoregHeadline(suggestion.dir),
+        autoregAdvice(suggestion.dir, params.plannedDifficulty ?? 6, params.subject, params.baseline),
+        ctxLine,
+      ].filter((l): l is string => !!l).join("\n"),
     };
   }
 
-  // Rien ne se déclenche (charge et récup toutes deux saines) — la carte reste toujours visible.
   if (!params.wellnessFilledToday) {
-    return { suggestion: null, icon: "🟢", text: "Plan cohérent\n🌿 Pas encore assez d'historique pour dégager une tendance : renseigne ta récupération pour des conseils personnalisés." };
+    return { suggestion: null, icon: "🟢", text: "Plan cohérent\nRenseigne ta récupération pour des conseils personnalisés." };
   }
-  if (recoveryLine) {
-    return { suggestion: null, icon: "🟢", text: `Plan cohérent\n${chargeLine}\n${recoveryLine}` };
-  }
-  return { suggestion: null, icon: "🟢", text: "Plan cohérent\n🌿 Pas encore assez d'historique pour dégager une tendance, on se base sur ta forme de ce matin." };
+  return { suggestion: null, icon: "🟢", text: ctxLine ? `Plan cohérent\n${ctxLine}` : "Plan cohérent" };
 }
