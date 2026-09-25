@@ -3685,4 +3685,4 @@ Nouveau composant du chantier "point 1" (barre de filtre sportifs persistante `/
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque fix de logique (chronicPenalty, tolérance, merge de texte) vérifié par script `tsx` jetable reproduisant la fonction réelle contre des scénarios construits — pas seulement relu. Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas) — chaque bug signalé venait de son propre test en local.
 
-Déployé en prod le 2026-09-25, commit `PENDING_COMMIT`, push direct sur `main`.
+Déployé en prod le 2026-09-25, commit `183e22e`, push direct sur `main`.
