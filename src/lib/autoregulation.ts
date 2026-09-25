@@ -58,7 +58,18 @@ function nearestStep(magnitude: number): number {
    décision finale reste TOUJOURS calculée contre `plannedDifficulty`, le chronique ne fait qu'abaisser
    le seuil de tolérance. Défaut 0 = comportement 100% inchangé pour tout appelant qui ne le fournit
    pas encore (garde-fous absolus/`baseline` non affectés, ils continuent de lire `wellness`/`baseline`
-   tels quels, jamais le score pénalisé). */
+   tels quels, jamais le score pénalisé).
+
+   Garde-fou (2026-09-25, retour de Gildas — "pourquoi thomas est en super forme, [et pourtant] on
+   lui recommande un RPE très light ?") : "moduler, pas concurrencer" n'était vrai qu'à moitié —
+   `chronicPenalty` pouvait à lui seul FABRIQUER un "Alléger" sur un jour où le score du jour, SEUL,
+   ne le justifiait pas (mismatch déjà négatif, càd séance déjà dans les cordes voire en dessous de
+   ce que la forme du jour permettrait) — un sportif objectivement en forme pouvait donc se voir dire
+   "Alléger" au seul motif d'une charge chronique dégradée, sans que rien dans son état du jour ne
+   l'explique. Fix : le chronique n'est appliqué QUE si le jour, à lui seul, penche déjà vers "plus
+   dur que ce que la forme du jour permet" (`rawMismatch >= 0`) — il amplifie alors un écart déjà là,
+   il ne peut plus jamais en inventer un à partir d'un jour où le plan est déjà cohérent ou laisse de
+   la marge. */
 export function computeAutoregSuggestion(
   wellness: number | null,
   plannedDifficulty: number | null,
@@ -68,7 +79,9 @@ export function computeAutoregSuggestion(
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
 
   const useZ = baseline?.hasEnoughHistory && baseline.composite.z !== null;
-  const scoreForMismatch = (useZ ? baseline!.relativeScore : wellness) + chronicPenalty;
+  const baseScore = useZ ? baseline!.relativeScore : wellness;
+  const rawMismatch = plannedDifficulty * 10 - baseScore;
+  const scoreForMismatch = rawMismatch >= 0 ? baseScore + chronicPenalty : baseScore;
   const mismatch = plannedDifficulty * 10 - scoreForMismatch;
   const absMismatch = Math.abs(mismatch);
   if (absMismatch < 35) return null;

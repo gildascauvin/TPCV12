@@ -229,6 +229,12 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
   // signifie concrètement. Vaut pour les 5 indicateurs, pas seulement fitness (2026-08-31, retour de
   // Gildas — "il manque aussi la majuscule" sur le cas fatigue confirmait que le gabarit générique
   // n'était pas assez explicite non plus).
+  //
+  // Une "exception fitness/fatigue" avait été tentée ici le 2026-09-25 (repli générique pour éviter
+  // une redondance perçue avec CrossInsightBanner) puis EXPLICITEMENT retirée le jour même — retour
+  // de Gildas : cette carte perdait une info réelle ("plus bon car ça dit pas que la charge baisse
+  // alors que c'est une info"), la répétition qu'il visait était ailleurs (crossTrendInsight() ci-
+  // dessous, qui répétait le MÊME fait dans SA PROPRE phrase — corrigé à la source, pas ici).
   if (watches.length === 1) {
     const tail = coach ? "Le reste de ses indicateurs est bon." : "Le reste de tes indicateurs est bon.";
     return `${watches[0].text} ${tail}`;
@@ -341,7 +347,12 @@ export function crossTrendInsight(
     .map(z => ({ z, sev: severityOf(z.color) }))
     .sort((a, b) => (b.sev === "alert" ? 2 : b.sev === "watch" ? 1 : 0) - (a.sev === "alert" ? 2 : a.sev === "watch" ? 1 : 0));
   const worstCharge = chargeCandidates[0];
-  const chargeDetail = worstCharge && worstCharge.sev !== "good" ? worstCharge.z.text : (fitnessTrendInfo?.text ?? worstCharge?.z.text ?? "");
+  const noRealChargeAlert = !worstCharge || worstCharge.sev === "good";
+  const chargeDetail = !noRealChargeAlert ? worstCharge.z.text : (fitnessTrendInfo?.text ?? worstCharge?.z.text ?? "");
+  // `chargeDetail` vient de fitnessTrendInfo (pas d'un vrai signal ACWR/monotonie/strain) UNIQUEMENT
+  // quand `noRealChargeAlert` — sert à décider si `chargeDetail` répète un fait déjà couvert par
+  // `bodyClause` (voir mergeChargeIntoBody ci-dessous).
+  const chargeFromFitness = noRealChargeAlert && !!fitnessTrendInfo?.text;
 
   /* Chaque branche ci-dessous ne peut affirmer "récupération se dégrade/s'améliore" QUE si wellBad/
      wellGood est réellement vrai (le même booléen que recoveryCrossInsight() utilise pour SA propre
@@ -384,7 +395,34 @@ export function crossTrendInsight(
     bodyClause = "Récupération et charge d'entraînement récente stables.";
   }
 
-  return { title: CROSS_TREND_LABEL[code], text: chargeDetail ? `${bodyClause} ${chargeDetail}` : bodyClause, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
+  return { title: CROSS_TREND_LABEL[code], text: mergeChargeIntoBody(bodyClause, chargeDetail, chargeFromFitness), severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
+}
+
+/* Fusionne bodyClause + chargeDetail en UNE phrase quand chargeDetail répète un fait déjà couvert
+   par bodyClause (2026-09-25, retour de Gildas avec l'exemple exact : bodyClause dit déjà "fatigue
+   accumulée en baisse" ET chargeDetail — la tendance Fitness — redit À NOUVEAU "charge chronique en
+   baisse", 2 phrases pour la même idée). Ne s'applique QUE quand `chargeDetail` vient de la tendance
+   Fitness (`fromFitnessTrend`, jamais un vrai signal ACWR/monotonie/strain — cette info-là reste
+   toujours distincte, jamais fusionnée) ET que bodyClause mentionne DÉJÀ la même tendance fatigue
+   (les 4 branches avec "(fatigue accumulée en hausse/baisse)" : fatigueUp seul, fatigueDown seul, et
+   les 2 branches de désaccord) — généralisé à toutes (retour explicite de Gildas : "mon exemple
+   était à appliquer sur tous les cas où c'est possible"), pas seulement la branche fatigueDown seul
+   testée au départ. Seule la CONSÉQUENCE de chargeDetail (la partie après son " : ") est greffée,
+   jamais son constat déjà redondant — greffée directement sur la parenthèse si la phrase s'arrête
+   juste après (fatigueDown seul, ex. "...(fatigue accumulée en baisse) : possible perte de forme si
+   ça dure."), sinon ajoutée en fin de phrase (les branches qui ont déjà leur propre ":" — désaccord,
+   fatigueUp seul — ex. "...vérifie ton sommeil et ton stress ; possible perte de forme si ça dure."). */
+function mergeChargeIntoBody(bodyClause: string, chargeDetail: string, fromFitnessTrend: boolean): string {
+  if (fromFitnessTrend && bodyClause.includes("(fatigue accumulée en")) {
+    const colonIdx = chargeDetail.indexOf(" : ");
+    if (colonIdx !== -1) {
+      const consequence = chargeDetail.slice(colonIdx + 3).replace(/\.$/, "");
+      return /\)\.$/.test(bodyClause)
+        ? bodyClause.replace(/\.$/, ` : ${consequence}.`)
+        : bodyClause.replace(/\.$/, ` ; ${consequence}.`);
+    }
+  }
+  return chargeDetail ? `${bodyClause} ${chargeDetail}` : bodyClause;
 }
 
 export type DayPoint = {

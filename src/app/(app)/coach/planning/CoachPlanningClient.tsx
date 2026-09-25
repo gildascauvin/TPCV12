@@ -197,6 +197,24 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Score par sportif pour AthleteFilterBar, "aujourd'hui" (2026-09-25, fix "les scores... sont
+  // faux") — RELATIF dès que la baseline a assez d'historique, même calcul que dayRelativeScore
+  // plus bas dans la grille pour le jour réel du calendrier (dayWellness()/computeWellnessBaselineAt) :
+  // avant ce fix, la barre retombait sur athlete.wellness_score (absolu brut, potentiellement
+  // périmé de plusieurs jours pour un vrai sportif — voir dayWellness() ci-dessus), différent du
+  // chiffre affiché ailleurs pour ce même sportif.
+  const filterBarScores: Record<string, number | null> = {};
+  for (const a of athletes) {
+    const raw = dayWellness(a, todayStr, wellnessMap, wellnessBaselineHistory);
+    const history = wellnessBaselineHistory[a.user_id ?? a.id] ?? [];
+    // Même repli neutre que dayBaseline plus bas dans la grille (seul `composite` est exploité,
+    // wellnessMap ne porte pas les dimensions par jour).
+    const baseline = raw !== null
+      ? computeWellnessBaselineAt(history.filter(w => w.date < todayStr), { score: raw, base_score: raw, sleep: 7, stress: 5, recovery: 7, motivation: 7 })
+      : null;
+    filterBarScores[a.id] = baseline?.hasEnoughHistory ? baseline.relativeScore : raw;
+  }
+
   const athlete = selectedAthleteId === null ? null : (athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null);
 
   function freeLabelsFor(a: CoachAthlete): Record<string, string> {
@@ -583,7 +601,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       <>
         <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-        <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} />
+        <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} scores={filterBarScores} />
         {viewMode === "month" ? (
           <div className="page-shell" style={{ textAlign: "center", color: "#8a8f94", padding: "40px 16px" }}>
             Vue mensuelle équipe non disponible pour l&apos;instant — sélectionne un sportif.
@@ -731,6 +749,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           setSelectedAthleteId(id);
           athleteFilterStorage.write(id);
         }}
+        scores={filterBarScores}
       />
 
       {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
@@ -1039,23 +1058,25 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               });
               const severityColor = decisionCardColor(decision.icon);
               alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
-              if (decision.suggestion && autoregTarget) {
+              if (autoregTarget) {
                 autoregTargetId = autoregTarget.id;
                 // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
                 // itération — plus de modale AdjustSessionModal pour ce flux, "l'ajustement se fait
                 // directement sur la carte", retour de Gildas) — même écriture callSessionAPI que
                 // l'ancien onConfirm de la modale, gatée par isActive comme /today/Coach Control.
+                // Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
+                // pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre.
                 decisionGaugeNode = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
-                    dir={decision.suggestion.dir}
-                    reco={decision.suggestion.reco}
+                    dir={decision.suggestion?.dir}
+                    reco={decision.suggestion?.reco}
                     advice=""
                     plannedDifficulty={autoregTarget.target_difficulty ?? 6}
                     sessionLabel={autoregTarget.name}
                     variant="light"
-                    severityColor={severityColor}
+                    severityColor={decision.suggestion ? severityColor : undefined}
                     isActive={isActive}
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}

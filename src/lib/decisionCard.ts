@@ -74,11 +74,14 @@ export function decisionCardColor(icon: string): string {
    le même chargement ("Ta charge chronique est en baisse : possible perte de forme si ça dure.").
    Fix : réutilise TEL QUEL le texte déjà écrit et directionnellement correct pour cette métrique
    précise (loadInfo/monotonyInfo/strainInfo/fitnessTrendInfo/formInfo — mêmes objets que la carte
-   ⚡ Charge de /conseils, jamais un 2e texte réinventé) — seul un suffixe neutre (n'affirme rien sur
-   la métrique elle-même, juste sa conséquence sur le seuil du jour) est ajouté ici. */
+   ⚡ Charge de /conseils, jamais un 2e texte réinventé).
+
+   Suffixe "Seuil du jour resserré en conséquence." retiré (2026-09-25, retour explicite de Gildas :
+   "je veux pas de ce wording") — le texte source suffit déjà à expliquer la métrique, ce suffixe
+   n'apportait qu'un jargon interne ("seuil"/"resserré") jamais utile côté utilisateur. */
 function chronicContextLine(worst: { text: string } | null): string | null {
   if (!worst || !worst.text) return null;
-  return `${worst.text} Seuil du jour resserré en conséquence.`;
+  return worst.text;
 }
 
 export interface DecisionCard {

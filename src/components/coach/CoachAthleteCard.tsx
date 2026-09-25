@@ -355,7 +355,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         <AlertBox
           variant="darkColor"
           alert={{ border: `${badgeColor}66`, glow: badgeColor, text: decision.text }}
-          actions={decision.suggestion && topSession && !topSession.done ? undefined : (
+          actions={topSession && !topSession.done ? undefined : (
             <button
               data-tour={tourId ? "decider-btn" : undefined}
               onClick={onDecide}
@@ -389,18 +389,20 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               {topSession.done ? "Terminé" : "Prévu"}
             </span>
           </div>
-          {decision.suggestion && !topSession.done ? (
+          {!topSession.done ? (
             <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
+              {/* Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
+                 pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre. */}
               <AutoregButtons
                 key={`${topSession.id}-${isReviewed}`}
                 sessionId={topSession.id}
-                dir={decision.suggestion.dir}
-                reco={decision.suggestion.reco}
+                dir={decision.suggestion?.dir}
+                reco={decision.suggestion?.reco}
                 advice=""
                 plannedDifficulty={topSession.target_difficulty ?? 6}
                 sessionLabel={topSession.name}
                 variant="light"
-                severityColor={badgeColor}
+                severityColor={decision.suggestion ? badgeColor : undefined}
                 onPreviewChange={setPreviewPct}
                 onApply={async (pct) => {
                   const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };

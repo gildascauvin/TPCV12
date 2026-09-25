@@ -611,23 +611,25 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
               });
               const severityColor = decisionCardColor(decision.icon);
               alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
-              if (decision.suggestion && autoregTarget) {
+              if (autoregTarget) {
                 autoregTargetId = autoregTarget.id;
                 // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
                 // itération — plus de modale AdjustSessionModal pour ce flux : "l'ajustement se fait
                 // directement sur la carte", retour de Gildas) — même écriture Supabase que l'ancien
-                // onConfirm de la modale, gatée par isActive comme /today/Coach Control.
+                // onConfirm de la modale, gatée par isActive comme /today/Coach Control. Montée même
+                // sans suggestion (2026-09-25, "même quand ya pas de reco, je veux pouvoir bouger la
+                // jauge et avoir le range") — dir/reco undefined = mode libre, voir AutoregButtons.tsx.
                 decisionGaugeNode = (
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
-                    dir={decision.suggestion.dir}
-                    reco={decision.suggestion.reco}
+                    dir={decision.suggestion?.dir}
+                    reco={decision.suggestion?.reco}
                     advice=""
                     plannedDifficulty={autoregTarget.target_difficulty ?? 6}
                     sessionLabel={autoregTarget.name}
                     variant="light"
-                    severityColor={severityColor}
+                    severityColor={decision.suggestion ? severityColor : undefined}
                     isActive={isActive}
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}

@@ -259,9 +259,12 @@ export default function SparkLineClient({
   // Tooltip positioning: avoid overflow on edges
   const wrapWidth = wrapRef.current?.offsetWidth ?? 300;
   const hXPct = hover ? (hover.xPx / wrapWidth) * 100 : 0;
+  // Ancré près du POINT survolé (2026-09-25, même fix que ZoneSparkline.tsx — "il faudrait qu'il
+  // soit proche des points") au lieu du haut fixe du wrapper entier.
+  const hYPct = hVal !== null ? (toY(hVal) / H) * 100 : 40;
   const tooltipStyle: React.CSSProperties = {
     position: "absolute",
-    bottom: "calc(100% + 8px)",
+    top: `${hYPct}%`,
     pointerEvents: "none",
     zIndex: 20,
     background: "rgba(18,18,18,0.92)",
@@ -273,10 +276,10 @@ export default function SparkLineClient({
     whiteSpace: "nowrap",
     boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
     ...(hXPct < 25
-      ? { left: 0 }
+      ? { left: 0, transform: "translateY(calc(-100% - 8px))" }
       : hXPct > 75
-      ? { right: 0 }
-      : { left: `${hXPct}%`, transform: "translateX(-50%)" }),
+      ? { right: 0, transform: "translateY(calc(-100% - 8px))" }
+      : { left: `${hXPct}%`, transform: "translate(-50%, calc(-100% - 8px))" }),
   };
 
   return (

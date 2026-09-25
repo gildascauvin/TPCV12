@@ -30,13 +30,20 @@ function initials(name: string) {
   return name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export default function AthleteFilterBar({ athletes, selectedId, onSelect, contentMaxWidth }: {
+export default function AthleteFilterBar({ athletes, selectedId, onSelect, contentMaxWidth, scores }: {
   athletes: CoachAthlete[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /* Même largeur de colonne que CalendarHeader/le contenu de la page (2026-09-24) — voir le prop
      identique sur CalendarHeader.tsx pour le pourquoi. */
   contentMaxWidth?: number;
+  /* Score RELATIF par sportif (2026-09-25, retour de Gildas — "les scores... sont faux") : cette
+     barre retombait sur `a.wellness_score` (absolu brut) alors que le reste de l'app affiche le
+     score relatif (baseline.relativeScore) depuis le chantier "Wellness relatif" (2026-08-30/31) —
+     divergeait donc du chiffre affiché sur la carte du même sportif juste en dessous. Calculé par
+     l'appelant (qui a déjà `baselines`, la même donnée que CoachCard) — absent = repli sur
+     `a.wellness_score` (comportement historique, filet de sécurité uniquement). */
+  scores?: Record<string, number | null>;
 }) {
   if (athletes.length === 0) return null;
 
@@ -74,7 +81,7 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
           👥 Équipe
         </button>
         {athletes.map(a => {
-          const score = a.wellnessFilledToday === false ? null : a.wellness_score;
+          const score = scores ? (scores[a.id] ?? null) : (a.wellnessFilledToday === false ? null : a.wellness_score);
           const active = selectedId === a.id;
           return (
             <button

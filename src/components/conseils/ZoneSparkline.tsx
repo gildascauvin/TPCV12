@@ -103,9 +103,17 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
 
   const wrapWidth = wrapRef.current?.offsetWidth ?? 300;
   const hXPct = hover ? (hover.xPx / wrapWidth) * 100 : 0;
+  // Ancré près du POINT survolé (2026-09-25, retour de Gildas — "je le vois pas il est derrière en
+  // haut, il faudrait qu'il soit proche des points") : l'ancien `bottom: calc(100% + 8px)` plaçait
+  // le tooltip tout en haut du WRAPPER entier (hauteur H=168 pleine), donc loin du point réel et
+  // potentiellement chevauchant le contenu au-dessus de la carte (RangeToggle/badges) — jamais
+  // repositionné selon la valeur survolée. `top: {hYPct}%` (position Y réelle du point sur le
+  // chart) + `translateY(calc(-100% - 8px))` le fait flotter juste au-dessus du point lui-même,
+  // toujours dans les bornes verticales du chart pour l'immense majorité des valeurs.
+  const hYPct = hVal !== null ? toYPct(hVal) : 40;
   const tooltipStyle: React.CSSProperties = {
     position: "absolute",
-    bottom: "calc(100% + 8px)",
+    top: `${hYPct}%`,
     pointerEvents: "none",
     zIndex: 20,
     background: "rgba(18,18,18,0.92)",
@@ -117,10 +125,10 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
     whiteSpace: "nowrap",
     boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
     ...(hXPct < 25
-      ? { left: 0 }
+      ? { left: 0, transform: "translateY(calc(-100% - 8px))" }
       : hXPct > 75
-      ? { right: 0 }
-      : { left: `${hXPct}%`, transform: "translateX(-50%)" }),
+      ? { right: 0, transform: "translateY(calc(-100% - 8px))" }
+      : { left: `${hXPct}%`, transform: "translate(-50%, calc(-100% - 8px))" }),
   };
 
   // Décimation des labels de jour si beaucoup de points (évite le chevauchement) — toujours le

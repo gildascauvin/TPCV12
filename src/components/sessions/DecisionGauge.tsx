@@ -4,7 +4,23 @@ import { useRef, useState } from "react";
 import type { AutoregDir } from "@/lib/autoregulation";
 
 const MIN = 1, MAX = 10;
-export const TOLERANCE = 0.5; // demi-largeur de la zone cible, en points de difficulté — exportée pour qu'AutoregButtons.tsx puisse calculer "inZone" sans dupliquer ce seuil.
+export const TOLERANCE = 0.5; // demi-largeur MAX de la zone cible, en points de difficulté — exportée pour qu'AutoregButtons.tsx puisse calculer "inZone" sans dupliquer ce seuil.
+
+/* Tolérance PROPORTIONNELLE à la difficulté prévue, plafonnée à TOLERANCE (2026-09-25, retour de
+   Gildas avec capture d'écran : "Surcharger recommandé" affiché, mais la jauge montrait déjà "Dans
+   la zone recommandée" sans rien à cliquer, sur une séance à difficulté prévue 4/10). Root cause :
+   0,5 point était calibré pour des difficultés ~8-10, où c'est une fraction raisonnable du delta
+   produit par une reco. Sur une difficulté prévue basse (4/10), même une reco réelle à 10% ne
+   déplace la cible que de 0,4 point — AVALÉ par la tolérance fixe, qui devient alors plus large que
+   le changement recommandé lui-même. Un coefficient de 5% (moitié du plus petit palier de chip,
+   2,5%) garantit qu'AUCUNE reco réelle (≥10%, les seuls vraiment proposés par
+   computeAutoregSuggestion — voir autoregulation.ts) ne peut jamais tomber "déjà dans la zone" au
+   repos, quelle que soit la difficulté prévue, tout en préservant le comportement historique pour
+   les difficultés hautes (coefficient×10 = 0,5, identique à l'ancien plafond fixe) et le cas
+   volontaire "reco minuscule (2,5%) déjà satisfaite" pour les difficultés modérées/hautes. */
+export function toleranceFor(plannedDifficulty: number): number {
+  return Math.min(TOLERANCE, plannedDifficulty * 0.05);
+}
 
 function clampDiff(v: number) { return Math.max(MIN, Math.min(MAX, v)); }
 function diffToLeft(d: number) { return ((d - MIN) / (MAX - MIN)) * 100; }
@@ -18,22 +34,29 @@ function leftToDiff(l: number) { return clampDiff(MIN + (l / 100) * (MAX - MIN))
 const FILL_GRADIENT = "linear-gradient(to right,#4ade80 0%,#a3e635 22%,#eab308 45%,#f97316 70%,#ef4444 100%)";
 
 export default function DecisionGauge({
-  targetDifficulty, dir, value, onChange, light,
+  targetDifficulty, dir, value, onChange, light, tolerance = TOLERANCE,
 }: {
   targetDifficulty: number;
   dir: AutoregDir;
   value: number;
   onChange: (newDifficulty: number) => void;
   light?: boolean;
+  // Calculée par l'appelant via toleranceFor(plannedDifficulty) — défaut TOLERANCE (0.5) pour rester
+  // inoffensif si jamais appelé sans, mais AutoregButtons.tsx la passe toujours désormais.
+  tolerance?: number;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
-  const inZone = Math.abs(value - targetDifficulty) <= TOLERANCE;
+  const inZone = Math.abs(value - targetDifficulty) <= tolerance;
 
   function diffFromClientX(x: number): number {
     const rect = trackRef.current!.getBoundingClientRect();
     const left = Math.max(0, Math.min(100, ((x - rect.left) / rect.width) * 100));
-    return Math.round(leftToDiff(left) * 2) / 2;
+    // Pas de 1 point entier (2026-09-25, retour de Gildas — "faudrait pas 0.5 de finesse mais 1") :
+    // remplace l'ancien snap à 0,5 (Math.round(...*2)/2). N'affecte QUE la précision atteignable en
+    // draguant — le calcul de `tolerance` (toleranceFor(), plus haut) reste indépendant, toujours
+    // proportionnel à la difficulté prévue, donc une reco réelle continue de sortir de la zone.
+    return Math.round(leftToDiff(left));
   }
 
   function handlePointerDown(e: React.PointerEvent) {
@@ -48,8 +71,8 @@ export default function DecisionGauge({
   function endDrag() { setDragging(false); }
 
   const cursorLeft = diffToLeft(value);
-  const zoneLeft = diffToLeft(Math.max(MIN, targetDifficulty - TOLERANCE));
-  const zoneWidth = diffToLeft(Math.min(MAX, targetDifficulty + TOLERANCE)) - zoneLeft;
+  const zoneLeft = diffToLeft(Math.max(MIN, targetDifficulty - tolerance));
+  const zoneWidth = diffToLeft(Math.min(MAX, targetDifficulty + tolerance)) - zoneLeft;
   const dim = (o: number) => (light ? `rgba(0,0,0,${o})` : `rgba(255,255,255,${o})`);
 
   const hint = inZone

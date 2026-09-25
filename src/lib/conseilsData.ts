@@ -311,12 +311,12 @@ export function computeConseilsData(
   // du chart, voir acwrSeries() dans trainingLoad.ts
   const todayAcwr = timeSeries[timeSeries.length - 1]?.acwr ?? null;
   const loadInfo = todayAcwr !== null
-    ? sigDimInfo("load", todayAcwr)
+    ? sigDimInfo("load", todayAcwr, perspective)
     : { label: "HISTORIQUE INSUFFISANT", color: "#8a8f94", text: "Il faut au moins 14 jours d'historique pour calculer l'ACWR." };
   const monotonyInfo = sig.monotony !== null
-    ? sigDimInfo("monotony", sig.monotony)
+    ? sigDimInfo("monotony", sig.monotony, perspective)
     : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "Termine des séances sur au moins 7 jours pour calculer ta monotonie." };
-  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain) : null;
+  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, perspective) : null;
   // Baseline personnelle du jour de référence — history = jours strictement antérieurs, dans la
   // fenêtre déjà fetchée (allWellness, 42j). refWellness peut être absent (jour non renseigné) :
   // computeWellnessBaselineAt() renvoie alors null, repli automatique sur sig.recovery en absolu.
@@ -326,10 +326,16 @@ export function computeConseilsData(
   const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, 42, anchor);
   const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, wellnessBaseline);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
-  const formInfo = todayForm !== null ? sigDimInfo("form", todayForm) : null;
+  const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, perspective) : null;
   const ffTrend = fitnessFatigueTrend(timeSeries);
-  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness) : null;
-  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue) : null;
+  /* Bug réel trouvé par Gildas (2026-09-25, "Ta charge chronique..." affiché à côté de "Sa
+     récupération...") : ces 2 appels omettaient `perspective` — sigDimInfo()/trendDimInfo()
+     défaultent tous les deux à "athlete", donc `fitnessTrendInfo.text`/`fatigueTrendInfo.text`
+     disaient "Ta charge..." même sur /coach (perspective="coach" passé plus haut à ce fichier,
+     mais jamais redescendu ici) — mélange de "Sa"/"Ta" dès que `chargeInsight`/`trendText`
+     réutilisaient ce texte tel quel (voir chargeCrossInsight()/crossTrendInsight()). */
+  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, perspective) : null;
+  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, perspective) : null;
 
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, perspective);
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, perspective, wellnessBaseline);

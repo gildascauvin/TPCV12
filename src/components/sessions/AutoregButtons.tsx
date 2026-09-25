@@ -5,7 +5,7 @@ import {
   type AutoregDir, type AutoregOriginal, formatAutoregPct, autoregCtaLabel,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
-import DecisionGauge, { TOLERANCE } from "@/components/sessions/DecisionGauge";
+import DecisionGauge, { toleranceFor } from "@/components/sessions/DecisionGauge";
 
 // pct <-> difficulté (1-10) — vue/entrée de la jauge, jamais un nouvel axe de calcul : `selectedPct`
 // reste la seule source de vérité (voir plus bas), ces 2 fonctions ne font que le traduire pour
@@ -40,8 +40,16 @@ function pctFromDiff(plannedDifficulty: number, diff: number): number {
 
 interface Props {
   sessionId: string;
-  dir: AutoregDir;
-  reco: number;
+  /* `dir`/`reco` optionnels (2026-09-25, retour de Gildas — "même quand ya pas de reco, je veux
+     pouvoir bouger la jauge et avoir le range") : absents = pas de suggestion système ("Plan
+     cohérent"), la jauge reste montée en mode LIBRE — zone conseillée = la difficulté déjà prévue
+     elle-même (reco=0), le sportif/coach peut quand même la faire glisser pour un ajustement
+     volontaire, le CTA apparaissant dès qu'il sort de cette zone (verbe dérivé de la position réelle
+     du curseur, cursorDir — jamais de `dir` figé à appliquer). Un vrai `dir`/`reco` (suggestion
+     système) garde son comportement 100% inchangé : jauge pré-positionnée sur la reco, clic hors
+     zone qui y saute. */
+  dir?: AutoregDir;
+  reco?: number;
   advice: string;
   /* Difficulté prévue AVANT ajustement (1-10) — nécessaire pour positionner la jauge (2026-09,
      remplace les chips ±%). Défaut 6 (jamais réellement atteint : AutoregButtons n'est rendu que
@@ -82,9 +90,12 @@ interface Props {
   severityColor?: string;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor }: Props) {
   const light = variant === "light";
-  const tint = dir === "low" ? "#8a2d00" : "#166534"; // même palette que AlertBox
+  const hasSuggestion = dir !== undefined;
+  // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
+  // à teinter, seul le curseur (cursorDir, plus bas) dira une direction une fois dragué.
+  const tint = dir === "low" ? "#8a2d00" : dir === "high" ? "#166534" : (light ? "rgba(23,27,31,.5)" : "rgba(255,255,255,.5)"); // même palette que AlertBox
   const [mode, setMode] = useState<"active" | "decided">("active");
   // 3e itération (2026-09) — le curseur démarre à la difficulté PRÉVUE d'origine (pct=0), donc EN
   // DEHORS de la zone conseillée par construction (c'est justement ce décalage qui a déclenché la
@@ -111,7 +122,13 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
 
   const currentDiff = diffFromPct(plannedDifficulty, selectedPct);
   const targetDiff = diffFromPct(plannedDifficulty, reco);
-  const inZone = Math.abs(currentDiff - targetDiff) <= TOLERANCE;
+  // Tolérance PROPORTIONNELLE à la difficulté prévue (toleranceFor(), DecisionGauge.tsx), pas un
+  // point fixe — sinon une reco réelle (10%+) sur une difficulté prévue basse (ex. 4/10) déplace la
+  // cible de moins de 0,5 point et se retrouve "déjà dans la zone" au repos, malgré un vrai signal
+  // (2026-09-25, bug trouvé par Gildas : bandeau "Surcharger recommandé" + jauge "déjà dans la zone"
+  // sans rien à appliquer, sur une séance à difficulté 4/10).
+  const tolerance = toleranceFor(plannedDifficulty);
+  const inZone = Math.abs(currentDiff - targetDiff) <= tolerance;
   // Le verbe du CTA suit la position RÉELLE du curseur, pas le `dir` figé de la suggestion — si
   // l'utilisateur drague au-delà de la zone côté opposé à `dir` (ex. suggestion "Alléger" mais
   // curseur tiré plus bas que la zone), il faut alors remonter, donc "Surcharger", pas "Alléger".
@@ -121,7 +138,7 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
   const cursorDir: AutoregDir = currentDiff < targetDiff ? "high" : "low";
   // Cas réel (pas juste théorique) : `reco` est parfois assez faible (mismatch tout juste au-dessus
   // du seuil de 35) pour que la difficulté PRÉVUE d'origine (pct=0) tombe déjà dans la zone cible
-  // (targetDifficulty±TOLERANCE) sans qu'aucun drag n'ait eu lieu — rien à ajuster. Retour de
+  // (targetDifficulty±tolerance) sans qu'aucun drag n'ait eu lieu — rien à ajuster. Retour de
   // Gildas : "quand un RPE prévu est déjà dans le range conseillé, pas besoin de CTA" — seul
   // `Maintenir` reste alors pertinent (pas d'écriture, le plan est déjà bon). Dès que l'utilisateur
   // drague (selectedPct!==0), le CTA réapparaît normalement, in-zone ou non.
@@ -133,7 +150,10 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
   }
 
   async function maintenir() {
-    setAutoregDecision(sessionId, dir, null);
+    // `cursorDir` plutôt que `dir` (absent en mode libre, voir plus haut) — sans effet visible pour
+    // "Maintenir" (pct=null, aucun texte/couleur n'en dépend en mode "decided"), mais reste correct
+    // dans les deux cas plutôt que de forcer une valeur arbitraire.
+    setAutoregDecision(sessionId, cursorDir, null);
     setMode("decided");
     setDecidedPct(null);
     onMaintenir?.();
@@ -141,11 +161,13 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
 
   async function apply() {
     if (!onApply) return;
-    // Hors zone : un seul clic sur le CTA-verbe fait à la fois sauter le curseur dans la zone
-    // conseillée ET applique — fidèle au POC (voir commentaire sur `selectedPct` plus haut), pas
-    // une étape de confirmation séparée. Dans la zone : applique la valeur déjà réglée par l'user.
-    const pctToApply = inZone ? selectedPct : reco;
-    if (!inZone) {
+    // Hors zone, AVEC une vraie suggestion système : un clic sur le CTA-verbe fait à la fois sauter
+    // le curseur sur la reco ET applique — fidèle au POC, pas une étape de confirmation séparée.
+    // Hors zone, EN MODE LIBRE (pas de suggestion) : applique directement où l'utilisateur a dragué,
+    // ne JAMAIS sauter ailleurs (il n'y a pas de "reco" vers laquelle sauter, le geste EST la
+    // décision). Dans la zone (les deux cas) : applique la valeur déjà réglée.
+    const pctToApply = inZone || !hasSuggestion ? selectedPct : reco;
+    if (!inZone && hasSuggestion) {
       setSelectedPct(reco);
       onPreviewChange?.(reco);
     }
@@ -156,7 +178,7 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
     // paywall/signup (rien d'écrit) — ne jamais marquer "traité" dans ce cas (voir commentaire du
     // prop isActive plus haut). Les chips restent ouvertes, prêtes à réessayer après connexion.
     if (isActive === false) return;
-    setAutoregDecision(sessionId, dir, pctToApply, original ?? undefined);
+    setAutoregDecision(sessionId, cursorDir, pctToApply, original ?? undefined);
     setMode("decided");
     setDecidedPct(pctToApply);
     onPreviewChange?.(pctToApply);
@@ -199,10 +221,11 @@ export default function AutoregButtons({ sessionId, dir, reco, advice, sessionLa
         <div>
           <div style={{ marginBottom: 12 }}>
             <DecisionGauge
-              dir={dir}
+              dir={dir ?? cursorDir}
               light={light}
               targetDifficulty={diffFromPct(plannedDifficulty, reco)}
               value={diffFromPct(plannedDifficulty, selectedPct)}
+              tolerance={tolerance}
               onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
             />
           </div>

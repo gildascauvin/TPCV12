@@ -345,6 +345,17 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     dayRows[a.id] = dayRow;
   }
 
+  // Score par sportif pour AthleteFilterBar (2026-09-25, fix "les scores... sont faux") — RELATIF
+  // dès que la baseline a assez d'historique, exactement le même calcul que `displayScore` sur
+  // CoachCard (CoachAthleteCard.tsx) : sans ça, le chip du sélecteur affichait l'absolu brut,
+  // différent du chiffre affiché sur la carte du même sportif juste en dessous.
+  const filterBarScores: Record<string, number | null> = {};
+  for (const a of athletes) {
+    const absoluteScore = a.wellnessFilledToday === false ? null : a.wellness_score;
+    const baseline = baselines[a.id];
+    filterBarScores[a.id] = baseline?.hasEnoughHistory ? baseline.relativeScore : absoluteScore;
+  }
+
   // Monotonie/contrainte (Foster 1998) par sportif — même calcul que la carte décision elle-même
   // (decisionCard.ts), pour que le tri "À décider maintenant"/"Plan cohérent" ne contredise jamais
   // ce que la carte affiche (un sportif signalé seulement par sa monotonie doit être classé priorité).
@@ -537,7 +548,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} />
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} scores={filterBarScores} />
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
           <HomeTabs active={homeTab} onChange={setHomeTab} dark={false} />

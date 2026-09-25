@@ -116,7 +116,13 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: Co
       <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
         {chargeInsight}
       </div>
-      <div style={{ overflowX: "hidden", width: "100%" }}>
+      {/* overflowY:"visible" explicite (2026-09-25, régression trouvée par Gildas — "j'ai plus les
+         tooltips visibles au survol des charts") : `overflow-x: hidden` seul fait calculer
+         `overflow-y` à "auto" par la spec CSS (pas "visible"), donc le tooltip de ZoneSparkline
+         (positionné au-dessus du chart via `bottom: calc(100% + 8px)`, hors de la boîte de CE
+         wrapper) se retrouvait rogné — même piège déjà corrigé plus bas pour SparkLineClient/
+         RecuperationSection, manqué ici lors de l'extraction de ce fichier. */}
+      <div style={{ overflowX: "hidden", overflowY: "visible", width: "100%" }}>
         <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode !== "week"} />
       </div>
     </div>

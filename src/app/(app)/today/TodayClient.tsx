@@ -524,16 +524,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Jauge de décision — montée directement dans la carte séance ciblée (TodaySessionCard, "la jauge
      de décision EST la jauge de la séance, pas 2 jauges", 2e itération 2026-09) plutôt que dans
      l'encart insight ci-dessus. */
-  const decisionGaugeSlot: React.ReactNode = decision.suggestion && autoregTargetTop ? (
+  // Montée dès qu'il y a une séance à ajuster, suggestion système ou non (2026-09-25, retour de
+  // Gildas — "même quand ya pas de reco, je veux pouvoir bouger la jauge et avoir le range") :
+  // dir/reco absents = jauge en mode libre (voir AutoregButtons.tsx).
+  const decisionGaugeSlot: React.ReactNode = autoregTargetTop ? (
     <AutoregButtons
       sessionId={autoregTargetTop.id}
-      dir={decision.suggestion.dir}
-      reco={decision.suggestion.reco}
+      dir={decision.suggestion?.dir}
+      reco={decision.suggestion?.reco}
       advice=""
       plannedDifficulty={autoregTargetTop.target_difficulty ?? 6}
       sessionLabel={autoregTargetTop.name}
       variant="light"
-      severityColor={decisionColor}
+      severityColor={decision.suggestion ? decisionColor : undefined}
       isActive={isActive}
       onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
       onApply={async (pct) => {
