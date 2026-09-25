@@ -3696,7 +3696,7 @@ Gildas a signalé un 2e cas de répétition dans `crossTrendInsight()` que le fi
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre. Script `tsx` jetable sur les 4 branches concernées + non-régression.
 
-Déployé en prod le 2026-09-25, commit `d1af2c8`, push direct sur `main`.
+Déployé en prod le 2026-09-25, commit `a88ee90`, push direct sur `main`.
 
 ## Boucle d'autorégulation — modèle en points de RPE (pas %), range toujours 2 entiers, pas de titre sans action (2026-09-25, suite)
 
@@ -3725,4 +3725,4 @@ Vérifié par script sur l'exemple exact de Gildas : Thomas (planned=4, wellness
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque étape (balayage exhaustif du round 1, roundtrip d'arrondi du round 2, absence d'absorption à magnitude=1 du round 3) vérifiée par script `tsx` jetable AVANT de considérer le round terminé — pas seulement relue, notamment pour le chiffre "0% actionnable" qui a changé la direction de la conversation. Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas).
 
-Déployé en prod le 2026-09-25, commit `d1af2c8`, push direct sur `main`.
+Déployé en prod le 2026-09-25, commit `a88ee90`, push direct sur `main`.
