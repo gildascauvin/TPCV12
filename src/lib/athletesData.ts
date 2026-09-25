@@ -4,6 +4,7 @@ import { buildDailyTimeSeries, computeSignature, sigDimInfo, trendDimInfo, cross
 import { daysAgoStr, type TrendCode } from "@/lib/trainingLoad";
 import { coachWellnessScoreFor } from "@/lib/sandboxFixtures";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 
 const EMPTY_ZONE = { label: "", color: "#8a8f94", text: "" };
 function severityEmoji(sev: "good" | "watch" | "alert"): string {
@@ -38,11 +39,11 @@ function computeCrossInsight(
    attendu (bypass RLS nécessaire pour lire les sessions/wellness d'autres utilisateurs, même
    pattern que /api/coach/wellness).
 
-   Fenêtre à 42j (comme /conseils) : le chart de zone ACWR affiche 7 derniers jours (vue Sem.) ou
-   28 derniers jours (vue Mois, toggle RangeToggle), et acwrSeries/formPercentSeries n'ont une
-   valeur valide qu'à partir du 14e jour de la série fournie — il faut donc n-fenêtreAffichée+1 >= 14.
-   Pour 7j affichés : n >= 20. Pour 28j affichés (le cas le plus large) : n >= 41 ; 42 aligne avec
-   /conseils et garantit les 28 points de la vue Mois, pas seulement les 7 de la vue Sem. */
+   Fenêtre à CONSEILS_HISTORY_DAYS jours (comme /conseils, 2026-09-24 — cran 90j ajouté au toggle
+   RangeToggle) : le chart de zone ACWR affiche 7/28/90 derniers jours selon le toggle, et
+   acwrSeries/formPercentSeries n'ont une valeur valide qu'à partir du 14e jour de la série fournie —
+   il faut donc n-fenêtreAffichée+1 >= 14. Pour 90j affichés (le cas le plus large) : n >= 103 ; 104
+   aligne avec /conseils et garantit les 90 points de la vue la plus large. */
 export type AthleteTrendInsight = { text: string; emoji: string; action: string } | null;
 
 export async function getAthletesSignatures(
@@ -61,7 +62,7 @@ export async function getAthletesSignatures(
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const demoAthleteIds = athletes.filter(a => !a.user_id).map(a => a.id);
   const anchor = new Date(referenceDate + "T12:00:00");
-  const since42 = daysAgoStr(42, anchor);
+  const since42 = daysAgoStr(CONSEILS_HISTORY_DAYS, anchor);
 
   const [sessionsRes, wellnessRes, demoSessionsRes] = await Promise.all([
     realUserIds.length
@@ -98,7 +99,7 @@ export async function getAthletesSignatures(
           created_at: s.created_at,
         }));
       const myWellness: WellnessDaily[] = [];
-      for (let offset = -42; offset <= 0; offset++) {
+      for (let offset = -CONSEILS_HISTORY_DAYS; offset <= 0; offset++) {
         const score = coachWellnessScoreFor(offset, a.wellness_score);
         myWellness.push({
           id: `demo-wellness-${a.id}-${offset}`, user_id: a.id, date: daysAgoStr(-offset, anchor),
@@ -106,7 +107,7 @@ export async function getAthletesSignatures(
           base_score: score, score, behaviors: [], bedtime: "23:00", created_at: new Date().toISOString(),
         });
       }
-      const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
+      const series = buildDailyTimeSeries(mySessions, myWellness, CONSEILS_HISTORY_DAYS, anchor);
       const sig = computeSignature(mySessions, a.wellness_score, 28, anchor);
       signatures[a.id] = { kind: "ok", series, sig };
       const demoTodayRow = myWellness.find(w => w.date === referenceDate) ?? null;
@@ -114,7 +115,7 @@ export async function getAthletesSignatures(
         ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), demoTodayRow)
         : null;
       baselines[a.id] = demoBaseline;
-      baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
+      baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, anchor);
       if (demoTodayRow) {
         const cross = computeCrossInsight(series, sig, demoBaseline, "coach");
         trends[a.id] = cross.code;
@@ -135,14 +136,14 @@ export async function getAthletesSignatures(
     const refWellness = myWellness.find(w => w.date === referenceDate);
     // base_score en priorité (jamais score, qui inclut le bonus/malus comportements).
     const wellnessScore = refWellness ? (wellnessSignal(refWellness) ?? 75) : 75;
-    const series = buildDailyTimeSeries(mySessions, myWellness, 42, anchor);
+    const series = buildDailyTimeSeries(mySessions, myWellness, CONSEILS_HISTORY_DAYS, anchor);
     const sig = computeSignature(mySessions, wellnessScore, 28, anchor);
     signatures[a.id] = { kind: "ok", series, sig };
     const baseline = refWellness
       ? computeWellnessBaselineAt(myWellness.filter(w => w.date < referenceDate), refWellness)
       : null;
     baselines[a.id] = baseline;
-    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, anchor);
+    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, anchor);
     // Insight global "croisé" (mêmes entrées que /conseils, voir fatigueSignature.ts) — wording coach
     // (3e personne), seulement si un vrai wellness existe ce jour-là (sinon recoveryInfo reposerait
     // sur le repli 75 ci-dessus, pas une vraie donnée).

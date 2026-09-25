@@ -15,7 +15,7 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 
-import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
+import CalendarHeader, { type ViewMode, ViewModeSegmented } from "@/components/calendar/CalendarHeader";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import DayColumn from "@/components/calendar/DayColumn";
@@ -28,11 +28,12 @@ import { dailyLoad } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
+import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que WeekClient.tsx
    (2026-09-17) : leur JS (CoachSessionModal → ExerciseBlockEditor, ProgramLibraryPage →
@@ -101,9 +102,13 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
+  // "Tous" (2026-09-24, voir POC poc-coach-context_6.html, basePlanning() branche selectedAthleteId
+  // ==="all") — selectedAthleteId devient explicitement nullable : `null` = Tous, choisi seulement
+  // via un clic délibéré sur la puce "Équipe" (AthleteFilterBar, plus bas). Le défaut au montage
+  // reste le 1er sportif, comme avant — Tous n'est jamais le comportement initial implicite.
   const defaultAthleteId = searchParams.get("athlete") ?? athletes[0]?.id ?? "";
   const [viewMode, setViewMode] = useState<ViewMode>("week");
-  const [selectedAthleteId, setSelectedAthleteId] = useState(defaultAthleteId);
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(defaultAthleteId);
   const [selectedDate, setSelectedDate] = useState(initialDate ?? todayStr);
   const [navKey, setNavKey] = useState(0);
   const slideDirRef  = useRef<"left" | "right">("left");
@@ -127,6 +132,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
   const [decisionTick, setDecisionTick] = useState(0);
+  // Aperçu live de la décharge/surcharge en cours de sélection sur la jauge de décision (2026-09-24,
+  // fix — même mécanisme que TodayClient.tsx/CoachAthleteCard.tsx, manquait ici en Planning).
+  const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
   // création ("new"), jamais sur l'écran liste (voir ProgramLibraryPage.tsx : la liste n'est plus
@@ -154,6 +162,19 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // sinon un clic manuel sur un autre onglet sportif se fait silencieusement écraser.
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persistance partagée de la sélection sportif entre onglets coach (2026-09-24) — même clé
+  // localStorage que Coach Control (AthleteFilterBar.tsx) : sélectionner un sportif sur /coach puis
+  // naviguer ici y retrouve la même sélection, sans `?athlete=` explicite dans l'URL. Hydraté APRÈS
+  // le montage (pas dans `defaultAthleteId`, évite un mismatch SSR — localStorage n'existe pas côté
+  // serveur) et UNIQUEMENT si l'URL n'imposait déjà rien — `?athlete=` reste toujours prioritaire.
+  const athleteFilterStorage = useCoachAthleteFilterStorage();
+  useEffect(() => {
+    if (searchParams.get("athlete")) return;
+    const stored = athleteFilterStorage.read();
+    if (stored && athletes.find(a => a.id === stored)) setSelectedAthleteId(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const fromOnboarding = searchParams.get("welcome") === "1";
     const alreadySeen = localStorage.getItem(`welcome_shown_coach_${userId}`);
@@ -176,7 +197,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const athlete = athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null;
+  const athlete = selectedAthleteId === null ? null : (athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null);
 
   function freeLabelsFor(a: CoachAthlete): Record<string, string> {
     return freeLabelOverrides[a.id] ?? (a.free_training_label as Record<string, string> | undefined) ?? {};
@@ -320,21 +341,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     }
     setWellnessBaselineHistory(newBaselineHistory);
   }
-
-  const dotMap = (() => {
-    if (!athlete) return {};
-    const map: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
-    weekDates.forEach(d => {
-      const dstr = format(d, "yyyy-MM-dd");
-      const ds = sessions.filter(s => s.athlete_id === athlete.id && s.date === dstr);
-      const charge = dailyLoad(ds);
-      if (charge > 600) map[dstr] = "done-high";
-      else if (charge > 300) map[dstr] = "done-med";
-      else if (charge > 0) map[dstr] = "done-light";
-      else if (ds.some(s => !s.done)) map[dstr] = "planned";
-    });
-    return map;
-  })();
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
     const res = await fetch("/api/coach/session", {
@@ -545,28 +551,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (mode === "month" && athlete) loadMonth(selectedDate, athlete);
   }
 
-  // Même calcul que le ring de chaque DayColumn ci-dessous — un seul chiffre par (sportif, jour),
-  // jamais un écart entre le header et la carte du jour. Clé user_id pour un vrai sportif, athlete.id
-  // pour un sportif démo (voir dayWellness()/wellnessBaselineHistory plus haut).
-  const coachWellnessHeader: Record<string, number | null> = {};
-  if (athlete) {
-    const athleteHistoryForHeader = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
-    weekDates.forEach(d => {
-      const iso = format(d, "yyyy-MM-dd");
-      const raw = dayWellness(athlete, iso, wellnessMap, wellnessBaselineHistory);
-      const filledThisDay = athlete.user_id ? wellnessMap[athlete.user_id]?.[iso] !== undefined : true;
-      if (raw === null || !filledThisDay) { coachWellnessHeader[iso] = raw; return; }
-      const b = computeWellnessBaselineAt(
-        athleteHistoryForHeader.filter(w => w.date < iso),
-        { score: raw, base_score: raw, sleep: 7, stress: 5, recovery: 7, motivation: 7 },
-      );
-      coachWellnessHeader[iso] = b?.hasEnoughHistory ? b.relativeScore : raw;
-    });
-  }
-  if (!athlete) {
+  if (athletes.length === 0) {
     return (
       <>
-        <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
@@ -576,6 +564,99 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             Ajouter un sportif →
           </button>
         </div>
+      </>
+    );
+  }
+
+  /* "Tous" (2026-09-24, 2e itération) — même grille/chrome que le planning classique par sportif
+     (DayColumn.tsx : cartes blanches 26px de radius, header jour uppercase + quantième, colonnes
+     `--wk-col` en scroll horizontal), retour de Gildas sur la 1re version ("même design/grille que
+     le calendar planning classique") qui avait construit ses propres cartes 170px ad hoc. Contenu
+     reste volontairement réduit à nom de séance + tag sportif (pas de jauge/wellness — aucun score
+     unique n'a de sens pour plusieurs sportifs à la fois sur un même jour) : chaque colonne reprend
+     la coquille visuelle de DayColumn sans en réutiliser le composant lui-même, qui suppose un seul
+     athlète (ring wellness, loadRule). Cliquer une séance sélectionne ce sportif (comportement déjà
+     existant, inchangé). Vue Mois n'a pas d'équivalent "Tous" pour l'instant (loadMonth() est scopé
+     à un seul sportif) — message d'attente plutôt qu'un écran cassé. */
+  if (athlete === null) {
+    return (
+      <>
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} />
+        {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
+        <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} />
+        {viewMode === "month" ? (
+          <div className="page-shell" style={{ textAlign: "center", color: "#8a8f94", padding: "40px 16px" }}>
+            Vue mensuelle équipe non disponible pour l&apos;instant — sélectionne un sportif.
+          </div>
+        ) : (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+            gap: isMd ? 12 : 10,
+            overflowX: "auto",
+            padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
+            scrollSnapType: "x proximity",
+            scrollbarWidth: "thin",
+          }}>
+            {weekDates.map(d => {
+              const dstr = format(d, "yyyy-MM-dd");
+              const daySessions = sessions.filter(s => s.date === dstr);
+              const isToday = dstr === todayStr;
+              return (
+                <div key={dstr} className="week-col-width" style={{
+                  position: "relative", background: "#fff",
+                  border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
+                  borderRadius: 26, padding: 16,
+                  boxShadow: isToday ? "0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
+                  scrollSnapAlign: "start",
+                }}>
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+                      {format(d, "EEE", { locale: fr })}
+                    </div>
+                    <div style={{ fontSize: 26, fontWeight: 1000, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.04em" }}>
+                      {d.getDate()}
+                    </div>
+                    {isToday && (
+                      <span style={{ display: "inline-block", fontSize: 9, fontWeight: 800, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
+                        Aujourd'hui
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {daySessions.length === 0 ? (
+                      <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                        Repos / libre
+                      </div>
+                    ) : daySessions.map(s => {
+                      const a = athletes.find(x => x.id === s.athlete_id);
+                      const selectThisAthlete = () => {
+                        if (!a) return;
+                        setSelectedAthleteId(a.id);
+                        athleteFilterStorage.write(a.id);
+                      };
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={selectThisAthlete}
+                          style={{
+                            textAlign: "left", width: "100%",
+                            border: s.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
+                            background: "#fff", borderRadius: 10, padding: "8px 10px",
+                            cursor: a ? "pointer" : "default",
+                          }}
+                        >
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#d44000", marginBottom: 2 }}>{a?.name.split(" ")[0] ?? "?"}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#171b1f" }}>{s.name}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </>
     );
   }
@@ -595,6 +676,33 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // le planning complet au quotidien l'est.
   const weekLocked = !isActive && viewedWeek > 0;
 
+  // Rings + points de séance dans le calendrier popup (2026-09-24) — un sportif est toujours
+  // sélectionné dans cette branche (athlete !== null, "Tous" a son propre rendu plus haut) : le
+  // contexte "filtré sur un athlète précis" est donc toujours vrai ici. `sessions`/`wellnessMap`
+  // ne couvrent que la semaine déjà chargée (dégradation déjà documentée sur CalendarHeader.tsx —
+  // jours hors de cette fenêtre affichés nus) ; `wellnessMap` reste vide pour un sportif démo
+  // (pas d'entrée par date, même limite que `dayWellness()` ci-dessus).
+  const DOT_RANK: Record<"planned" | "done-light" | "done-med" | "done-high", number> = { planned: 0, "done-light": 1, "done-med": 2, "done-high": 3 };
+  const headerDotMap: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
+  for (const s of sessions) {
+    if (s.athlete_id !== athlete.id) continue;
+    let cls: "done-light" | "done-med" | "done-high" | "planned";
+    if (s.done) {
+      const diff = s.rpe ?? s.target_difficulty ?? 5;
+      cls = diff >= 8 ? "done-high" : diff >= 5 ? "done-med" : "done-light";
+    } else {
+      cls = "planned";
+    }
+    if (!headerDotMap[s.date] || DOT_RANK[cls] > DOT_RANK[headerDotMap[s.date]]) headerDotMap[s.date] = cls;
+  }
+  // Score RELATIF, pas absolu (2026-09-25, fix — "les wellness ring dans le calendar expanded sont
+  // fausses") : `wellnessMap` (buildWellnessMap) porte le score BRUT, jamais utilisé pour une ring
+  // ailleurs dans l'app depuis le chantier "Wellness relatif" — relativeWellnessByDate() recalcule
+  // depuis le même historique brut (wellnessBaselineHistory) la valeur réellement affichée partout.
+  const headerWellnessMap: Record<string, number | null> = athlete.user_id
+    ? relativeWellnessByDate(wellnessBaselineHistory[athlete.user_id] ?? [], 45)
+    : {};
+
   return (
     <>
       {!isActive && (
@@ -605,31 +713,25 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={coachWellnessHeader} viewMode={viewMode} onViewModeChange={handleViewModeChange} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+      <CalendarHeader
+        mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
+        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+      />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
-      {/* Athlete tabs bar */}
-      <div style={{
-        background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)",
-        display: "flex", alignItems: "stretch", overflowX: "auto",
-        gap: 0,
-      }}>
-        {athletes.map(a => (
-          <button
-            key={a.id}
-            onClick={() => setSelectedAthleteId(a.id)}
-            style={{
-              padding: "10px 16px", fontSize: 13, fontWeight: selectedAthleteId === a.id ? 700 : 600,
-              background: "none", border: "none", cursor: "pointer",
-              color: selectedAthleteId === a.id ? "#171b1f" : "#8a8f94",
-              borderBottom: selectedAthleteId === a.id ? "2.5px solid #d44000" : "2.5px solid transparent",
-              whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
-            }}
-          >
-            {a.name}
-          </button>
-        ))}
-      </div>
+      {/* Sélecteur de sportif commun à tous les onglets/tabs (2026-09-24, "point 1", partie coach —
+         voir POC `poc-coach-context_6.html`, whoHtml()). Remplace l'ancien strip de tabs local par
+         le même composant que /coach — persistance partagée via la même clé localStorage.
+         "Équipe" bascule désormais sur la vue équipe simplifiée EN PLACE (voir la branche
+         `athlete === null` plus haut) plutôt que de naviguer vers /coach. */}
+      <AthleteFilterBar
+        athletes={athletes}
+        selectedId={selectedAthleteId}
+        onSelect={id => {
+          setSelectedAthleteId(id);
+          athleteFilterStorage.write(id);
+        }}
+      />
 
       {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
           on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
@@ -695,6 +797,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         }
         return null;
       })()}
+
+      {/* Sem./Mois — au-dessus de la grille, pas dans le header (2026-09-25, retour de Gildas). */}
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: isMd ? "10px 24px 0" : "10px 16px 0" }}>
+        <ViewModeSegmented mode={viewMode} onChange={handleViewModeChange} />
+      </div>
 
       <div ref={calGridRef} data-tour="coach-planning">
       <div key={`cal-${navKey}`} style={{
@@ -905,8 +1012,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 )
               : null;
             const dayZoneLabel = dayBaseline?.hasEnoughHistory ? relativeZoneLabel(dayBaseline, "coach") : undefined;
-            // Même chiffre que le header (coachWellnessHeader) et que /today du sportif — un seul
-            // calcul, jamais 3 valeurs différentes pour le même jour.
+            // Même calcul que /today du sportif — un seul chiffre, jamais 2 valeurs différentes
+            // pour le même jour.
             const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : wellness;
             let alert;
             let decisionGaugeNode: React.ReactNode;
@@ -950,6 +1057,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     variant="light"
                     severityColor={severityColor}
                     isActive={isActive}
+                    onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
                       if (!isActive) { setPaywallStep("priming"); return; }
@@ -958,12 +1066,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: { notes, target_difficulty } });
                       if (result.ok) setSessions(prev => prev.map(s => s.id === autoregTarget.id ? { ...s, notes, target_difficulty } : s));
+                      setAutoregPreview(null);
                       return original;
                     }}
                     onUndo={async (original) => {
                       if (!original) return;
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: original });
                       if (result.ok) setSessions(prev => prev.map(s => s.id === autoregTarget.id ? { ...s, ...original } : s));
+                      setAutoregPreview(null);
                       setDecisionTick(t => t + 1);
                     }}
                   />
@@ -990,6 +1100,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     onEdit={(sess) => setEditingSession(sess)}
                     onDuplicate={(sess) => setDuplicating(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
+                    previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}

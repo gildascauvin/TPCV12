@@ -31,7 +31,10 @@ const athleteTabs = [
   },
   {
     href: "/conseils",
-    label: "Analyses",
+    label: "Performance",
+    // "Analyses" → "Performance" (2026-09-24, "point 1" — voir POC poc-coach-context_4.html, NAV) :
+    // Charge/Récupération/Comportements ont déménagé dans les onglets de l'accueil (HomeTabs.tsx),
+    // cette page ("Analyses" avant) ne porte plus que le suivi de tests physiques.
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill="none" stroke="currentColor" strokeWidth="2.15"
@@ -58,7 +61,10 @@ const athleteTabs = [
 const coachTabs = [
   {
     href: "/coach",
-    label: "Accueil",
+    // "Accueil" → "Aujourd'hui" (2026-09-24, "il faut appliquer la même [bottom nav] que côté
+    // sportif" — voir POC poc-coach-context_6.html, NAV partagée entre les 2 rôles) : même libellé
+    // que athleteTabs, la page reste /coach.
+    label: "Aujourd'hui",
     matchExact: true,
     tourId: undefined as string | undefined,
     icon: (active: boolean) => (
@@ -83,17 +89,21 @@ const coachTabs = [
     ),
   },
   {
+    // "Sportifs" → "Performance" (2026-09-24, même libellé/icône que athleteTabs) : href inchangé
+    // (/coach/athletes) — même principe que "Analyses"→"Performance" côté sportif, qui avait gardé
+    // /conseils. AthletesClient.tsx (contenu de cette page) affiche désormais directement les tests
+    // du sportif sélectionné via le sélecteur commun, plutôt que la liste complète, une fois qu'un
+    // sportif précis est choisi.
     href: "/coach/athletes",
-    label: "Sportifs",
+    label: "Performance",
     matchExact: false,
     tourId: "coach-athletes-tab" as string | undefined,
     icon: () => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill="none" stroke="currentColor" strokeWidth="2.15"
         strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+        <polyline points="3 17 9 11 13 15 21 7"/>
+        <polyline points="15 7 21 7 21 13"/>
       </svg>
     ),
   },

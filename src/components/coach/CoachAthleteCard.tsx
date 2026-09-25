@@ -25,7 +25,14 @@ import type { CoachAthlete, CoachViewSession, Session } from "@/types";
 // choix. null garde son propre gris translucide (ring vide, pas une valeur basse).
 export function scoreColor(s: number | null) { return s === null ? "rgba(255,255,255,0.18)" : wellnessColor(s); }
 
-export function WellnessRing({ score, size = 72 }: { score: number | null; size?: number }) {
+export function WellnessRing({ score, size = 72, label }: {
+  score: number | null; size?: number;
+  /* Texte sous le score, DANS le ring (2026-09-24, delta layout POC — `.ring .state`, coloré comme
+     le score, remplace le libellé générique "well."). `undefined` = comportement inchangé ("well.",
+     gris neutre) pour les appelants qui n'ont pas de zone à afficher ici (ex. ring "Récupération
+     équipe" de CoachClient.tsx, une moyenne d'équipe n'a pas de zone individuelle). */
+  label?: string;
+}) {
   const r = Math.round(size * 0.423);
   const circ = +(2 * Math.PI * r).toFixed(1);
   const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
@@ -40,9 +47,9 @@ export function WellnessRing({ score, size = 72 }: { score: number | null; size?
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
           style={{ transition: "stroke-dashoffset 0.5s ease" }} />
       </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
         <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score !== null ? score : "—"}</span>
-        <span style={{ fontSize: Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
+        <span style={{ fontSize: label ? Math.round(size * 0.1) : Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.06em", color: label ? color : "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>{label ?? "well."}</span>
       </div>
     </div>
   );
@@ -289,15 +296,20 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         />
       </div>
 
-      {/* Ring + zone + prénom */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
-        <WellnessRing score={displayScore} size={88} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
-            {selfView ? "Ta forme" : zoneText}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.03em" }}>{selfView ? zoneText : firstName}</div>
+      {/* Nom + ring + badges + comportements — empilé et CENTRÉ (2026-09-24, delta layout POC
+         `cardTop()` : `.dc-name` centré au-dessus du `.ring-wrap` centré, pas de colonne texte à
+         côté du ring). La zone ("Fatigué"/"Équilibré"/"Frais") vit désormais DANS le ring (prop
+         `label` de WellnessRing, coloré comme le score — POC `.ring .state`), remplace l'ancienne
+         eyebrow orange séparée. */}
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>
+          {selfView ? "Ta forme" : firstName}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+          <WellnessRing score={displayScore} size={88} label={zoneText} />
+        </div>
+        {(!!athlete.invite_email || showBadge || showReviewed) && (
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: behaviors.length > 0 ? 8 : 0 }}>
             {!!athlete.invite_email && (
               <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,.1)", color: "#c7ccd1", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "3px 8px" }}>
                 ⏳ En attente
@@ -314,24 +326,24 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               </div>
             )}
           </div>
-          {behaviors.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-              {behaviors.map(b => {
-                const meta = BEHAVIOR_META[b];
-                if (!meta) return null;
-                return (
-                  <span key={b} style={{
-                    fontSize: 9, padding: "2px 6px", borderRadius: 999,
-                    background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
-                    color: meta.positive ? "#bfeec8" : "#ffd2bf",
-                  }}>
-                    {meta.emoji} {meta.label}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        )}
+        {behaviors.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 4 }}>
+            {behaviors.map(b => {
+              const meta = BEHAVIOR_META[b];
+              if (!meta) return null;
+              return (
+                <span key={b} style={{
+                  fontSize: 9, padding: "2px 6px", borderRadius: 999,
+                  background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
+                  color: meta.positive ? "#bfeec8" : "#ffd2bf",
+                }}>
+                  {meta.emoji} {meta.label}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Encart décision — toujours affiché (2026-09, decisionCard.ts), jamais vide : insight seul

@@ -9,7 +9,7 @@ import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore, zoneLabel as formLabel, wellnessColor } from "@/lib/wellness";
-import { dailyLoad, computeWeekOverWeekTrend } from "@/lib/trainingLoad";
+import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -27,11 +27,15 @@ import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import ShareButton from "@/components/sessions/ShareButton";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
+import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard } from "@/components/conseils/HomeAnalyticsSections";
+import type { RangeMode } from "@/components/calendar/RangeToggle";
+import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
@@ -40,11 +44,6 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 
 /* ─── helpers ─── */
-function greeting() {
-  const h = new Date().getHours();
-  return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir";
-}
-
 // Dégradé séquentiel bleu (wellnessColor, src/lib/wellness.ts) — voir SparkLineClient.tsx pour la
 // doc complète du choix (magnitude continue, pas un état catégoriel).
 function scoreColor(score: number | null) {
@@ -60,22 +59,14 @@ function relativeOrAbsoluteZoneLabel(score: number | null, baseline: WellnessBas
   return formLabel(score);
 }
 
-function buildDotMap(sessions: Session[], anchor: string) {
-  const map: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
-  const weekStart = startOfWeek(new Date(anchor + "T12:00:00"), { weekStartsOn: 1 });
-  for (let i = 0; i < 7; i++) {
-    const d = format(addDays(weekStart, i), "yyyy-MM-dd");
-    const charge = dailyLoad(sessions.filter((s) => s.date === d));
-    if (charge > 600) map[d] = "done-high";
-    else if (charge > 300) map[d] = "done-med";
-    else if (charge > 0) map[d] = "done-light";
-    else if (sessions.some((s) => s.date === d && !s.done)) map[d] = "planned";
-  }
-  return map;
-}
-
 /* ─── WellnessRing inline (responsive size) ─── */
-function WellnessRingPOC({ score, size = 104 }: { score: number | null; size?: number }) {
+function WellnessRingPOC({ score, size = 104, label }: {
+  score: number | null; size?: number;
+  /* Texte sous le score, DANS le ring (2026-09-24, delta layout POC — même principe que WellnessRing
+     de CoachAthleteCard.tsx) : remplace le libellé générique "wellness" par la zone réelle
+     ("Fatigué"/"Équilibré"/"Frais"), colorée comme le score. `undefined` = repli "wellness" neutre. */
+  label?: string;
+}) {
   const [animated, setAnimated] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setAnimated(true), 80);
@@ -96,12 +87,12 @@ function WellnessRingPOC({ score, size = 104 }: { score: number | null; size?: n
           strokeDasharray={circ} strokeDashoffset={animated ? offset : circ} strokeLinecap="round"
           style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
       </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
         <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
           {score !== null ? score : "—"}
         </span>
-        <span style={{ fontSize: Math.round(size * 0.077), fontWeight: 1000, color: "rgba(255,255,255,0.58)", letterSpacing: "0.14em", marginTop: 2, textTransform: "uppercase" }}>
-          wellness
+        <span style={{ fontSize: label ? Math.round(size * 0.085) : Math.round(size * 0.077), fontWeight: 1000, color: label ? color : "rgba(255,255,255,0.58)", letterSpacing: "0.06em", marginTop: 2, textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>
+          {label ?? "wellness"}
         </span>
       </div>
     </div>
@@ -125,7 +116,13 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
   );
 }
 
-/* ─── Today session card (v59 POC exact layout) ─── */
+/* ─── Today session card — reste CLAIRE (2026-09-24, redesign "bg dark, plus de card" — voir POC
+   `poc-coach-context_4.html`) : le "plus de card" ne s'applique qu'à l'en-tête ring/décision (voir
+   plus bas, devenu flush sur le fond sombre de la page) — la carte séance, elle, reste un vrai bloc
+   blanc posé SUR ce fond sombre, exactement comme le `.session`/`.ath-session` du POC (jamais
+   retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
+   actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
+   background des séances doivent rester light (même dans le wellness card, partout)". ─── */
 function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, decisionGauge }: {
   session: Session;
   onComplete: (s: Session) => void;
@@ -319,9 +316,14 @@ interface Props {
      jours disponibles = hasEnoughHistory peut retomber à false plutôt qu'un chiffre faux). Absent
      en sandbox (données synthétiques, pas d'historique réel) — repli cold-start automatique. */
   initialWellnessHistory?: WellnessDaily[];
+  /* Sandbox uniquement (2026-09-24, "point 1") — équivalent ConseilsData déjà calculé côté serveur
+     (computeConseilsData(), même fixture que /sandbox/athlete/conseils) pour les onglets Charge/
+     Récupération/Comportements : évite un fetch réseau (le fixture n'a pas de vrai compte à
+     interroger). Absent en app réelle — ces onglets y fetchent /api/conseils à la demande. */
+  initialAnalyticsData?: ConseilsData;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [] }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [], initialAnalyticsData }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -332,18 +334,38 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
+
+  // Onglets Charge/Récupération/Comportements (2026-09-24, "point 1") — même ConseilsData que
+  // /conseils ("Performance"), fetchée à la demande (jamais pour un compte qui ne quitte jamais
+  // "Aujourd'hui") via le même endpoint GET /api/conseils déjà utilisé par la navigation de date
+  // de cette page. En sandbox, le fixture est déjà calculé côté serveur (initialAnalyticsData),
+  // aucun fetch réseau.
+  const [homeTab, setHomeTab] = useState<HomeTab>("today");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+  const [analyticsData, setAnalyticsData] = useState<ConseilsData | null>(sandboxMode ? initialAnalyticsData ?? null : null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  useEffect(() => {
+    if (!sandboxMode) setAnalyticsData(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, sandboxMode]);
+  useEffect(() => {
+    if (sandboxMode || homeTab === "today" || analyticsData || analyticsLoading) return;
+    setAnalyticsLoading(true);
+    fetch(`/api/conseils?date=${selectedDate}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(fresh => { if (fresh) setAnalyticsData(fresh); })
+      .finally(() => setAnalyticsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeTab, selectedDate, sandboxMode, analyticsData, analyticsLoading]);
+
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
-  const [weekWellnessMap, setWeekWellnessMap] = useState<Record<string, number | null>>({
-    [initialDate]: initialWellness ? wellnessSignal(initialWellness) : null,
-  });
   // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
   // sur "aujourd'hui" : sans ça, naviguer vers une semaine passée réduit progressivement l'historique
   // disponible (la fenêtre initiale ne couvrait que les 21j avant AUJOURD'HUI) jusqu'à retomber sous
   // le seuil minimal et afficher à tort l'ancien libellé absolu malgré des mois de données réelles
-  // (bug réel signalé par Gildas). Refetchée à chaque changement de semaine (même effet que
-  // weekWellnessMap ci-dessous), fenêtre = 21j avant le LUNDI de la semaine affichée → toujours
-  // assez de recul pour n'importe quel jour de cette semaine.
+  // (bug réel signalé par Gildas). Refetchée à chaque changement de semaine, fenêtre = 21j avant le
+  // LUNDI de la semaine affichée → toujours assez de recul pour n'importe quel jour de cette semaine.
   const [baselineHistory, setBaselineHistory] = useState<WellnessDaily[]>(initialWellnessHistory);
 
   const prevWeekRef = useRef("");
@@ -376,27 +398,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", sinceBaseline).lte("date", sun),
       supabase.from("sessions").select("*").eq("user_id", userId).gte("date", weekStart).lte("date", sun).order("created_at"),
     ]).then(([{ data: wellData }, { data: sessData }]) => {
-      const rows = (wellData ?? []) as WellnessDaily[];
-      setBaselineHistory(rows);
-      const map: Record<string, number | null> = {};
-      dates.forEach(d => {
-        const row = rows.find(w => w.date === d) ?? null;
-        if (!row || row.bedtime == null) { map[d] = null; return; }
-        const b = computeWellnessBaselineAt(rows.filter(w => w.date < d), row);
-        map[d] = b?.hasEnoughHistory ? b.relativeScore : wellnessSignal(row);
-      });
-      setWeekWellnessMap(prev => ({ ...prev, ...map }));
+      setBaselineHistory((wellData ?? []) as WellnessDaily[]);
       if (sessData) setAllSessions(prev => [...prev.filter(s => s.date < weekStart || s.date > sun), ...(sessData as Session[])]);
     });
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function navigatePeriod(dir: "next" | "prev") {
-    const newDate = format(
-      dir === "next" ? addDays(new Date(selectedDate + "T12:00:00"), 7) : subDays(new Date(selectedDate + "T12:00:00"), 7),
-      "yyyy-MM-dd"
-    );
-    handleDateChange(newDate);
-  }
 
   const [showWellness, setShowWellness] = useState(false);
   const [showAddSession, setShowAddSession] = useState(false);
@@ -440,7 +445,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           const w = payload.new as WellnessDaily;
           if (w.date === selectedDateRef.current) {
             setWellness(w);
-            setWeekWellnessMap(prev => ({ ...prev, [w.date]: wellnessSignal(w) }));
           }
         }
       })
@@ -563,8 +567,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     onNext: () => handleDateChange(tomorrowDate),
     enabled: !showWellness && !showAddSession && !completing && !pendingCompleteSession && !editing,
   });
-  const dotMap = buildDotMap(allSessions, selectedDate);
-
   useEffect(() => {
     const key = `wellness_prompted_${initialDate}`;
     if (
@@ -600,7 +602,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .select().single();
     if (saved) {
       setWellness(saved as WellnessDaily);
-      setWeekWellnessMap(prev => ({ ...prev, [selectedDate]: wellnessSignal(saved as WellnessDaily) }));
     }
     setShowWellness(false);
     if (pendingCompleteSession) {
@@ -690,8 +691,41 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [supabase, allSessions]);
 
 
-  const ringSize = isLg ? 120 : isMd ? 112 : 96;
+  // Agrandi (2026-09-24) — la zone ("Fatigué"...) vit désormais DANS le ring (plus de gros libellé
+  // séparé en dessous, plus d'eyebrow "Score & conseils" au-dessus) : le ring redevient le seul
+  // readout de ce bloc, il peut/doit prendre plus de place — même principe que CoachCard, à une
+  // échelle plus généreuse puisque c'est le SEUL ring de la page (pas une liste de cartes compactes).
+  const ringSize = isLg ? 156 : isMd ? 140 : 128;
   const pad = isLg ? 32 : isMd ? 24 : 16;
+  // Même largeur que le contenu ci-dessous (voir dayScrollRef plus bas) — alignement CalendarHeader/
+  // contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav... et les contenus").
+  const contentMaxWidth = isLg ? 1000 : isMd ? 720 : undefined;
+
+  // Rings + points de séance dans le calendrier popup (2026-09-24, POC datepicker) — /today est
+  // toujours un contexte "un seul sportif" (soi-même), showRings reste donc vrai en permanence ici
+  // (contrairement au coach, qui ne l'active que filtré sur un athlète précis). dotMap couvre tout
+  // l'historique réel (allSessions n'est jamais borné par date, cf. page.tsx) ; wellnessMap couvre
+  // les ~42 derniers jours (baselineHistory) + aujourd'hui — un mois plus ancien affichera des
+  // jours nus, dégradation déjà documentée comme acceptable.
+  const DOT_RANK: Record<"planned" | "done-light" | "done-med" | "done-high", number> = { planned: 0, "done-light": 1, "done-med": 2, "done-high": 3 };
+  const headerDotMap = allSessions.reduce<Record<string, "done-light" | "done-med" | "done-high" | "planned">>((map, s) => {
+    let cls: "done-light" | "done-med" | "done-high" | "planned";
+    if (s.done) {
+      const diff = s.rpe ?? s.target_difficulty ?? 5;
+      cls = diff >= 8 ? "done-high" : diff >= 5 ? "done-med" : "done-light";
+    } else {
+      cls = "planned";
+    }
+    if (!map[s.date] || DOT_RANK[cls] > DOT_RANK[map[s.date]]) map[s.date] = cls;
+    return map;
+  }, {});
+  // Score RELATIF, pas absolu (2026-09-25, fix — "les wellness ring dans le calendar expanded sont
+  // fausses") : toutes les autres rings de l'app affichent relativeScore (Z-score vs norme perso)
+  // depuis le chantier "Wellness relatif", relativeWellnessByDate() est le seul point qui le calcule.
+  const headerWellnessMap = relativeWellnessByDate(
+    wellness ? [...baselineHistory, wellness] : baselineHistory,
+    45,
+  );
 
   return (
     <>
@@ -703,11 +737,42 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} dotMap={dotMap} wellnessMap={weekWellnessMap} onSwipe={navigatePeriod} onProfileClick={() => setProfileOpen(true)} />
+      <CalendarHeader
+        mode="day" contentMaxWidth={contentMaxWidth}
+        selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
+        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+      />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
+      {/* Fond sombre plein-page (2026-09-24, redesign "bg dark, plus de card" — voir POC
+         `poc-coach-context_4.html`, body.ath-dark) : remplace le fond clair `bg-bg` hérité de
+         (app)/layout.tsx sur cette page précise, continu avec le bas déjà sombre de CalendarHeader —
+         seule cette page (et /conseils) devient dark, le reste de l'app garde son fond clair
+         habituel (voir CLAUDE.md, convention établie). `minHeight:"100vh"` pour ne jamais laisser
+         le fond clair de l'ancêtre transparaître sous un contenu court.
+         Dégradé repris tel quel des 2 endroits déjà existants (jamais une teinte inventée, retour
+         de Gildas "les BG peuvent prendre la couleur/radient des card d'avant") : le halo blanc de
+         CalendarHeader (`radial-gradient(circle at 18% 8%, rgba(255,255,255,.08)...)`) + le halo
+         orange de la carte wellness ci-dessous (`radial-gradient(circle at 87% 5%,
+         rgba(212,64,0,.32)...)`), étirés sur toute la page plutôt que confinés à une seule carte —
+         "plus de card" au sens où la page entière porte désormais ce qui vivait avant dans le
+         cadre d'une carte, pas un simple aplat noir derrière des cartes isolées. */}
+      <div style={{
+        background: "radial-gradient(circle at 18% 0%, rgba(255,255,255,.05), transparent 26%), radial-gradient(circle at 85% 8%, rgba(212,64,0,.12), transparent 34%), linear-gradient(180deg,#101010 0%,#0a0a0b 45%,#111 100%)",
+        minHeight: "100vh",
+        // (app)/layout.tsx réserve 132px de padding-bottom (clearance bottom nav) SUR L'ANCÊTRE, donc
+        // physiquement après ce div peu importe son minHeight — sans ce couple margin/padding négatif,
+        // ce padding laisse une bande de fond clair (bg-bg hérité) visible juste au-dessus de la
+        // bottom nav flottante. Étend ce fond sombre pour couvrir cette zone au lieu de la laisser
+        // apparaître nue.
+        marginBottom: -132, paddingBottom: 132,
+      }}>
       <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
+        <HomeTabs active={homeTab} onChange={setHomeTab} />
+
+        {homeTab === "today" && (
+        <>
         {/* ── Welcome handled by overlay modal below ── */}
 
         {/* ── Bandeau d'activation (J0) ── */}
@@ -756,24 +821,17 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           );
         })()}
 
-        {/* Greeting */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
-            {greeting()} {profile.name ? profile.name : ""} 👋
-          </div>
-        </div>
-
-        {/* ── Wellness + séance du jour, carte unique ── */}
-        {/* Contour statique — le point clignotant vit désormais sur l'AlertBox elle-même
-            (AlertBox.tsx/PulseDot.tsx, 2026-09), pas sur le contour de cette grosse carte. */}
+        {/* ── Wellness + séance du jour — "plus de card" (2026-09-24, voir POC `poc-coach-context_4.html`,
+            body.ath-dark .card{background:transparent;border:none;padding:0}) : cet en-tête ring/décision
+            flotte désormais directement sur le fond sombre de la page (plus de bloc encadré/ombré) — SEULE
+            la carte séance imbriquée plus bas (TodaySessionCard) reste un vrai bloc blanc (voir sa doc,
+            "les background des séances doivent rester light, même dans le wellness card, partout"). Le
+            halo orange décoratif reste, juste plus confiné à un cadre de carte. ── */}
         <div
           data-tour="wellness-card"
           style={{
-            position: "relative", overflow: "hidden",
-            borderRadius: 30, padding: isMd ? 28 : 22, marginBottom: 12,
-            background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-            border: "1px solid rgba(255,255,255,0.13)",
-            boxShadow: "0 28px 72px rgba(0,0,0,0.28)",
+            position: "relative",
+            padding: isMd ? "8px 0 22px" : "4px 0 18px", marginBottom: 4,
             color: "#fff",
           }}
         >
@@ -812,28 +870,30 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             alignItems: "start",
           }}>
             <div>
-              {/* Ring + status — seule zone cliquable pour ouvrir le formulaire wellness (le reste
-                 de la carte contient la séance, avec ses propres actions Terminer/éditer). */}
+              {/* Ring + status — empilé et CENTRÉ (2026-09-24, delta layout POC `cardTop()`/`.ring-wrap`,
+                 même principe que CoachAthleteCard.tsx CoachCard) : plus d'eyebrow "Score & conseils" ni
+                 de gros libellé de zone séparé — la zone vit désormais DANS le ring (comme CoachCard),
+                 qui peut donc s'agrandir puisqu'il redevient le seul readout de ce bloc. Seule zone
+                 cliquable pour ouvrir le formulaire wellness (le reste de la carte contient la séance,
+                 avec ses propres actions Terminer/éditer). */}
               <div
                 onClick={() => setShowWellness(true)}
-                style={{ display: "flex", alignItems: "center", gap: isMd ? 24 : 18, marginBottom: 18, cursor: "pointer" }}
+                style={{ textAlign: "center", marginBottom: 18, cursor: "pointer" }}
               >
-                <WellnessRingPOC score={relativeDisplayScore} size={ringSize} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 11, fontWeight: 1000, letterSpacing: "0.16em", textTransform: "uppercase", color: "#ff6b2b", marginBottom: 6 }}>
-                    Score &amp; conseils
-                  </div>
-                  <div style={{ fontSize: "clamp(22px, 7vw, 34px)", fontWeight: 1000, color: "#fff", marginBottom: 8, lineHeight: 1.08, letterSpacing: "-0.04em" }}>
-                    {wellnessFilledToday ? relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline) : "Non renseigné"}
-                  </div>
-                  {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-                      {wellness.behaviors.map((b) => (
-                        <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
-                      ))}
-                    </div>
-                  )}
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+                  <WellnessRingPOC
+                    score={relativeDisplayScore}
+                    size={ringSize}
+                    label={wellnessFilledToday ? relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline) : "Non renseigné"}
+                  />
                 </div>
+                {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 4 }}>
+                    {wellness.behaviors.map((b) => (
+                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Carte décision, toujours affichée (2026-09, decisionCard.ts) — jour × tendance ×
@@ -859,10 +919,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
             {/* ── Séance(s) du jour — imbriquée dans la même carte, colonne de droite sur md+ ── */}
             <div style={{ marginTop: isMd ? 0 : 16, borderTop: isMd ? "none" : "1px solid rgba(255,255,255,0.12)", paddingTop: isMd ? 0 : 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-                ✦ Séance{todaySessions.length > 1 ? "s" : ""} · {format(new Date(selectedDate + "T12:00:00"), "EEEE d MMMM", { locale: fr })}
-              </div>
-
               <div id="day-sessions-container">
                 {/* Empty state semaine entière */}
                 {weekSessions.length === 0 ? (
@@ -907,24 +963,44 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     decisionGauge={s.id === autoregTargetTop?.id ? decisionGaugeSlot : undefined}
                   />
                 ))}
+                {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx
+                   (Planning) — "'ajouter une séance' doit être dans la carte de séance en bas,
+                   comme le planning" (2026-09-24) : plus une boîte flottante séparée sous toute
+                   la carte wellness, un continuateur de la même liste. */}
+                {weekSessions.length > 0 && (
+                  <div
+                    data-tour="add-session-btn"
+                    onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
+                    style={{
+                      border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
+                      borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11,
+                      cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
+                      transition: "all .15s",
+                    }}
+                  >
+                    + Ajouter une séance
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
+        </>
+        )}
 
-        <div
-          data-tour="add-session-btn"
-          onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
-          style={{
-            border: "0.5px dashed rgba(212,64,0,0.34)",
-            color: "var(--accent)", background: "#fff",
-            borderRadius: "var(--radius)", padding: "18px 14px",
-            textAlign: "center", fontSize: 13, fontWeight: 600,
-            cursor: "pointer", marginTop: 10, transition: "all 0.15s",
-          }}
-        >
-          + Ajouter une séance
-        </div>
+        {homeTab !== "today" && (
+          analyticsData ? (
+            <>
+              {homeTab !== "comportements" && <CrossInsightBanner data={analyticsData} isDemoData={sandboxMode} />}
+              {homeTab === "charge" && <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "recuperation" && <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "comportements" && <BehaviorImpactCard correlations={analyticsData.correlations} filledDays={analyticsData.filledDays} />}
+            </>
+          ) : (
+            <div style={{ color: "rgba(255,255,255,.5)", fontSize: 13, padding: "24px 0" }}>Chargement…</div>
+          )
+        )}
+      </div>
       </div>
 
       {/* Modals — ouverture toujours libre (voir les onClick plus haut), seule la persistance

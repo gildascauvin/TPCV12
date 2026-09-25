@@ -5,6 +5,7 @@ import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@
 import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
+import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 
 /* Données fictives pour la sandbox non authentifiée (2026-08-19) — brief : "les programmes doivent
    utiliser des dates relatives à Today, toujours avoir une séance pertinente pour Today". Tout est
@@ -105,9 +106,10 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
   const sessions: Session[] = [];
   const wellnessByDate: Record<string, WellnessDaily> = {};
 
-  // Programme 4 semaines "varié" (-21 à +21), séances Lun/Mer/Ven/Sam — 4 archétypes en rotation
-  // (Force/Conditioning/Haltéro/Gym), sauf aujourd'hui, forcé sur CROSSFIT_TODAY (voir plus haut).
-  for (let offset = -41; offset <= 21; offset++) {
+  // Programme "varié" (-CONSEILS_HISTORY_DAYS à +21, 2026-09-24 — cran 90j ajouté au toggle),
+  // séances Lun/Mer/Ven/Sam — 4 archétypes en rotation (Force/Conditioning/Haltéro/Gym), sauf
+  // aujourd'hui, forcé sur CROSSFIT_TODAY (voir plus haut).
+  for (let offset = -CONSEILS_HISTORY_DAYS; offset <= 21; offset++) {
     const date = addDays(now, offset);
     const dow = date.getDay(); // 0=dim..6=sam
     const isToday = offset === 0;
@@ -144,7 +146,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
   // Jours de repos sans séance : wellness quand même renseigné pour garder un historique continu
   // (nécessaire à computeConseilsData/computeSignature, qui attendent des lignes wellness_daily
   // même sans séance ce jour-là).
-  for (let offset = -41; offset <= 0; offset++) {
+  for (let offset = -CONSEILS_HISTORY_DAYS; offset <= 0; offset++) {
     const dateStr = dstr(now, offset);
     if (wellnessByDate[dateStr]) continue;
     const score = wellnessScoreFor(offset);
@@ -262,7 +264,7 @@ export function coachWellnessScoreFor(offset: number, todayScore: number): numbe
    onboarding). Factorisée ici pour être la SEULE source de "quel historique construire pour un
    score démo donné" — élimine le risque qu'une surface calcule sa propre variante et diverge des
    autres pour le même score affiché. */
-export function buildSyntheticWellnessHistory(todayScore: number, ownerId: string, days = 42, anchor: Date = new Date()): WellnessDaily[] {
+export function buildSyntheticWellnessHistory(todayScore: number, ownerId: string, days = CONSEILS_HISTORY_DAYS, anchor: Date = new Date()): WellnessDaily[] {
   const history: WellnessDaily[] = [];
   for (let offset = -days; offset <= 0; offset++) {
     const score = coachWellnessScoreFor(offset, todayScore);
@@ -281,7 +283,7 @@ export function buildSyntheticWellnessHistory(todayScore: number, ownerId: strin
    un score/une zone doit passer par cette fonction plutôt que d'afficher `todayScore` en absolu — un
    seul calcul, jamais un texte "Fatigué/Équilibré/Frais" ou un chiffre inventé indépendamment. */
 export function syntheticBaselineFor(todayScore: number, ownerId = "demo", anchor: Date = new Date()) {
-  const history = buildSyntheticWellnessHistory(todayScore, ownerId, 42, anchor);
+  const history = buildSyntheticWellnessHistory(todayScore, ownerId, CONSEILS_HISTORY_DAYS, anchor);
   const todayStr = dstr(anchor, 0);
   const todayRow = history.find(w => w.date === todayStr);
   if (!todayRow) return null;
@@ -304,10 +306,11 @@ export function buildCoachFixture(now: Date = new Date()): CoachFixture {
   const wellnessHistoryByAthlete: Record<string, WellnessDaily[]> = {};
   athletes.forEach(a => { sessionsHistoryByAthlete[a.id] = []; wellnessHistoryByAthlete[a.id] = []; });
 
-  // -42 (au lieu de -14) : computeSignature/buildDailyTimeSeries exigent au moins ~41 jours de
-  // recul pour que l'ACWR/Form aient une valeur sur toute la fenêtre affichée (même contrainte que
-  // /conseils, voir athletesData.ts). +14 inchangé (fenêtre de navigation future du planning).
-  for (let offset = -42; offset <= 14; offset++) {
+  // -CONSEILS_HISTORY_DAYS (au lieu de -42, 2026-09-24 — cran 90j ajouté au toggle) :
+  // computeSignature/buildDailyTimeSeries exigent au moins ~103 jours de recul pour que l'ACWR/Form
+  // aient une valeur sur toute la fenêtre affichée la plus large (même contrainte que /conseils, voir
+  // athletesData.ts). +14 inchangé (fenêtre de navigation future du planning).
+  for (let offset = -CONSEILS_HISTORY_DAYS; offset <= 14; offset++) {
     const date = addDays(now, offset);
     const dow = date.getDay();
     const isToday = offset === 0;
@@ -339,7 +342,7 @@ export function buildCoachFixture(now: Date = new Date()): CoachFixture {
 
   athletes.forEach((a, i) => {
     const seed = COACH_ATHLETE_SEEDS[i];
-    for (let offset = -42; offset <= 0; offset++) {
+    for (let offset = -CONSEILS_HISTORY_DAYS; offset <= 0; offset++) {
       const dateStr = dstr(now, offset);
       const score = coachWellnessScoreFor(offset, seed.wellness);
       wellnessHistoryByAthlete[a.id].push({
@@ -389,13 +392,13 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
       : null;
     const refWellness = myWellness.find(w => w.date === fixture.todayStr);
     const wellnessScore = refWellness?.score ?? refWellness?.base_score ?? 75;
-    const series = buildDailyTimeSeries(mySessions, myWellness, 42, now);
+    const series = buildDailyTimeSeries(mySessions, myWellness, CONSEILS_HISTORY_DAYS, now);
     const sig = computeSignature(mySessions, wellnessScore, 28, now);
     signatures[a.id] = { kind: "ok", series, sig };
     baselines[a.id] = refWellness
       ? computeWellnessBaselineAt(myWellness.filter(w => w.date < fixture.todayStr), refWellness)
       : null;
-    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, 42, now);
+    baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, now);
   }
 
   return { signatures, trends, trendInputs, trendInsights, baselines, baselineSeries };

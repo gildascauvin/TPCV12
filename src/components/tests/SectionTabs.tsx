@@ -7,9 +7,9 @@ export type TestsSection = "load" | "tests";
    de page sur /conseils (sportif, un seul "sujet"), et à l'intérieur de chaque carte dépliée sur
    /coach/athletes (une paire par athlète, pas un mode global — deux athlètes peuvent être chacun
    sur un onglet différent). Remplace l'ancien DataModeToggle (toggle de page unique). */
-export default function SectionTabs({ active, onChange }: { active: TestsSection; onChange: (s: TestsSection) => void }) {
+export default function SectionTabs({ active, onChange, dark = false }: { active: TestsSection; onChange: (s: TestsSection) => void; dark?: boolean }) {
   return (
-    <div style={{ display: "flex", gap: 4, borderBottom: "1px solid rgba(0,0,0,.08)", marginBottom: 16 }}>
+    <div style={{ display: "flex", gap: 4, borderBottom: dark ? "1px solid rgba(255,255,255,.12)" : "1px solid rgba(0,0,0,.08)", marginBottom: 16 }}>
       {([
         { key: "load" as const, label: "⚡ Charge & Récupération" },
         { key: "tests" as const, label: "🧪 Tests de performance" },
@@ -21,7 +21,7 @@ export default function SectionTabs({ active, onChange }: { active: TestsSection
             border: "none", background: "transparent", cursor: "pointer",
             padding: "11px 14px", marginBottom: -1,
             borderBottom: active === t.key ? "2px solid #d44000" : "2px solid transparent",
-            color: active === t.key ? "#d44000" : "#62686e",
+            color: active === t.key ? "#ff8a55" : dark ? "rgba(255,255,255,.5)" : "#62686e",
             fontSize: 13, fontWeight: 800, whiteSpace: "nowrap",
           }}
         >

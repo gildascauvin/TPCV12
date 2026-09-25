@@ -8,6 +8,7 @@ import { realToView, demoToView } from "@/lib/coachSessions";
 import { computeWeekOverWeekTrend, daysAgoStr, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
 import { wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
+import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
 
 export default async function CoachPage() {
@@ -43,11 +44,12 @@ export default async function CoachPage() {
   const realUserIds = athletes.filter(a => a.user_id).map(a => a.user_id!);
   const allAthleteIds = athletes.map(a => a.id);
   /* Tendance charge/récupération 14j (7j courants vs 7j précédents) par sportif réel — alimente la
-     carte décision du Coach Control (decisionCard.ts). 42j (pas 21) : la tendance a besoin de 14j,
-     chacun avec jusqu'à 21j d'historique perso derrière lui (wellnessZByDate) pour la baseline Z,
-     soit ~35j au maximum — 42j aligne sur /conseils et athletesData.ts plutôt qu'un nouveau chiffre.
-     Sert aussi de fenêtre pour la monotonie/contrainte (Foster, 7j seulement, largement couvert). */
-  const sinceHistory = daysAgoStr(42);
+     carte décision du Coach Control (decisionCard.ts). Sert aussi de fenêtre pour les onglets
+     Charge/Récupération/Comportements de l'Accueil coach (CoachClient.tsx, computeConseilsData) —
+     CONSEILS_HISTORY_DAYS (104, pas 42) aligne sur /conseils et athletesData.ts pour que le cran
+     "90 j" du toggle (2026-09-24) ait de vraies données, pas juste le cran le plus large affiché
+     à vide. */
+  const sinceHistory = daysAgoStr(CONSEILS_HISTORY_DAYS);
 
   /* Les données "aujourd'hui" et l'historique 14j n'ont jamais eu de dépendance entre elles —
      seulement envers realUserIds/allAthleteIds/sinceHistory, déjà connus ici. Étaient dans 2

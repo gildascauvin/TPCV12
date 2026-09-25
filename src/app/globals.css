@@ -83,6 +83,15 @@ body {
   font-family: var(--font-dm-sans), 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Garde-fou (2026-09-25, "en mobile j'ai toujours un espace blanc à droite comme si l'app était
+     pas centrée full width") — aucune règle n'empêchait jusqu'ici le document lui-même de dépasser
+     100% de large : le moindre élément 1px trop large ailleurs dans l'app (bordure/ombre arrondie
+     à la marge, grille --wk-col, popup calendrier...) rendait TOUT le document horizontalement
+     scrollable, avec du vide visible au repos une fois scrollé/rebondi — symptôme classique sur
+     mobile (rubber-band iOS notamment), jamais visible pareil sur desktop (barre de scroll
+     horizontale discrète plutôt qu'un vrai rebond). N'affecte aucun scroll horizontal interne
+     volontaire (grilles semaine/mois, `overflowX:"auto"` posé sur des <div> internes, pas ici). */
+  overflow-x: hidden;
 }
 
 /* Scrollbar styling */

@@ -7,17 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
-import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
-import SectionTabs, { type TestsSection } from "@/components/tests/SectionTabs";
-import ZoneSparkline from "@/components/conseils/ZoneSparkline";
-import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import ZoneBadge from "@/components/conseils/ZoneBadge";
-import ShareButton from "@/components/sessions/ShareButton";
+import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 
 /* Modales/drawers + TestsPanel (1800+ lignes, ne s'affiche que carte dépliée sur l'onglet
    Tests) ouverts sur demande — même traitement next/dynamic que les autres pages coach
@@ -29,11 +24,12 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
-import { sigDimInfo, trendDimInfo, chargeCrossInsight, recoveryCrossInsight, METRIC_DEFINITIONS, type AthleteSignature } from "@/lib/fatigueSignature";
-import { fitnessFatigueTrend, type TrendCode } from "@/lib/trainingLoad";
+import { sigDimInfo, type AthleteSignature } from "@/lib/fatigueSignature";
+import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
-import type { LastTestByAthlete } from "@/lib/testSummary";
+import type { LastTestByAthlete, AthleteTestVerdictByAthlete } from "@/lib/testSummary";
+import type { Verdict } from "@/lib/testNorms";
 
 // Reste en Status (rouge/orange/vert) — colore le badge d'état "Disponible"/"Stable"/"À
 // surveiller", pas un ring : job Status légitime (texte+couleur = état, pas magnitude).
@@ -63,131 +59,6 @@ function todayRecovery(athlete: CoachAthlete, signature: AthleteSignature): numb
   if (!athlete.user_id) return athlete.wellness_score;
   if (signature.kind !== "ok") return null;
   return signature.series[signature.series.length - 1]?.recovery ?? null;
-}
-
-// Mêmes charts que /conseils (ZoneSparkline + SparkLineClient) — un seul point de vérité, plus de
-// mini-graphe bricolé séparément ici. Nichés dans une carte sombre (même traitement que
-// "Ta signature de fatigue" sur /conseils et CoachCard) car ces 2 composants sont conçus pour un
-// fond sombre (labels blancs semi-transparents) — la carte sportif elle-même reste blanche.
-function AthleteSignatureBlock({ signature, athleteId, athleteName, rangeMode, trendInsight, baselineSeries }: { signature: AthleteSignature; athleteId: string; athleteName: string; rangeMode: RangeMode; trendInsight: AthleteTrendInsight; baselineSeries?: (WellnessBaselineResult | null)[] }) {
-  if (signature.kind === "manual") {
-    return (
-      <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13, fontStyle: "italic" }}>
-        Forme non renseignée — pas de signature de fatigue ni de récupération à afficher.
-      </div>
-    );
-  }
-  if (signature.kind === "no_data") {
-    return (
-      <div style={{ paddingTop: 14, marginTop: 14, borderTop: "1px solid rgba(0,0,0,.08)", color: "#8a8f94", fontSize: 13 }}>
-        🕳️ Pas de récupération renseignée ces 28 derniers jours — pas de signature de fatigue à afficher.
-      </div>
-    );
-  }
-
-  const { isLg } = useBreakpoint();
-  const { series, sig } = signature;
-  // Charge et Récupération sur la même fenêtre — 7 derniers jours ou 4 dernières semaines (toggle
-  // Sem./Mois) — `series` est 42j calculés (athletesData.ts, dont 14j de pur recul pour l'ACWR),
-  // jamais un nouveau fetch. On affiche toujours au plus 28j, jamais les 42 calculés. Nom `last7`
-  // conservé, plus toujours 7j.
-  const last7 = rangeMode === "month" ? series.slice(-28) : series.slice(-7);
-  const zoneAcwr = last7.map(p => p.acwr);
-  const zoneLoads = last7.map(p => p.load);
-  const zoneDates = last7.map(p => p.date);
-  const zoneMonotony = last7.map(p => p.monotony);
-  const zoneStrain = last7.map(p => p.strain);
-  const last7Baseline = baselineSeries ? (rangeMode === "month" ? baselineSeries.slice(-28) : baselineSeries.slice(-7)) : [];
-  const todayBaseline = baselineSeries?.[baselineSeries.length - 1] ?? null;
-  // Badges de dimension au survol — même principe que ConseilsClient.tsx (calculés sur toute la
-  // série pour garder du recul de tendance, puis découpés avec le même slicing que last7Baseline).
-  const dimensionBadgesFull = baselineSeries ? dimensionBadgesSeries(baselineSeries) : [];
-  const last7DimensionBadges = rangeMode === "month" ? dimensionBadgesFull.slice(-28) : dimensionBadgesFull.slice(-7);
-  const todayDimensionBadges = dimensionBadgesFull[dimensionBadgesFull.length - 1];
-
-  const todayAcwr = series[series.length - 1]?.acwr ?? null;
-  const loadInfo = todayAcwr !== null
-    ? sigDimInfo("load", todayAcwr, "coach")
-    : { label: "HISTORIQUE INSUFFISANT", color: "#8a8f94", text: "Pas assez d'historique pour l'ACWR." };
-  const monotonyInfo = sig.monotony !== null
-    ? sigDimInfo("monotony", sig.monotony, "coach")
-    : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "" };
-  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, "coach") : null;
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "coach", todayBaseline);
-  const todayForm = series[series.length - 1]?.form ?? null;
-  const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, "coach") : null;
-  const ffTrend = fitnessFatigueTrend(series);
-  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, "coach") : null;
-  const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, "coach") : null;
-  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, "coach");
-  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "coach", todayBaseline);
-
-  return (
-    <div style={{
-      marginTop: 14,
-      background: "linear-gradient(145deg,#1a1a1a,#282828)",
-      border: "1px solid rgba(255,255,255,.08)",
-      borderRadius: 20, padding: 16, color: "#fff",
-    }}>
-      {trendInsight && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-          <ShareButton
-            resourceType="signature"
-            variant="dark"
-            buildSnapshot={() => ({
-              emoji: trendInsight.emoji, action: trendInsight.action, insight: trendInsight.text,
-              chargePoints: zoneAcwr, recoveryPoints: last7.map(p => p.recovery),
-              recoveryPoints2: last7.map(p => p.form !== null ? formToChartPosition(p.form) : null),
-              dates: zoneDates, weekLabels: rangeMode === "month", authorName: athleteName,
-            })}
-            title={`Signature de fatigue — ${athleteName}`}
-            text={trendInsight.text}
-          />
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 20 }}>
-      {/* Charge — titre + badges sur la même ligne, insight dessous, chart ensuite */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>⚡ Charge</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-            <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} size="sm" />
-            {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} size="sm" />}
-            {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} size="sm" />}
-            {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} size="sm" />}
-          </div>
-        </div>
-        <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{chargeInsight}</div>
-        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode === "month"} />
-      </div>
-
-      {/* Récupération + Form — titre + badges sur la même ligne, insight dessous, chart ensuite */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, flexWrap: "wrap" as const, marginBottom: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.65)" }}>🌿 Récupération</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const }}>
-            {todayDimensionBadges?.map(b => (
-              <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} size="sm" />
-            ))}
-            {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} size="sm" />}
-          </div>
-        </div>
-        <div style={{ marginBottom: 8, fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4 }}>{recoveryInsight}</div>
-        <SparkLineClient
-          points={last7Baseline.map(b => b?.hasEnoughHistory ? b.relativeScore : null)}
-          pointsRaw={last7.map(p => p.recovery)} dates={zoneDates} color={recoveryInfo.color}
-          maxVal={100} height={168} animDelay={0}
-          metricType="recovery" uid={`athlete-recovery-${athleteId}`} chartType="line" sequentialFill
-          zones1={WELLNESS_ZONES}
-          dimensionBadgesAt={last7DimensionBadges}
-          points2={last7.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
-          points2Raw={last7.map(p => p.form)} zones2={FORM_ZONES}
-          weekLabels={rangeMode === "month"}
-        />
-      </div>
-      </div>
-    </div>
-  );
 }
 
 // Exportée pour la même raison qu'athleteStatus ci-dessus.
@@ -240,25 +111,19 @@ function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
   );
 }
 
-/* Panneau déplié — tabs "Charge & Récupération / Tests de performance" propres à CET athlète (état
-   local, se réinitialise naturellement à chaque ouverture puisque démonté à la fermeture — un seul
-   panneau ouvert à la fois, voir expandedId dans AthletesClient). */
-function ExpandedAthletePanel({ userId, athlete, signature, rangeMode, trendInsight, baselineSeries }: {
-  userId: string; athlete: CoachAthlete; signature: AthleteSignature; rangeMode: RangeMode; trendInsight: AthleteTrendInsight; baselineSeries?: (WellnessBaselineResult | null)[];
-}) {
-  const [section, setSection] = useState<TestsSection>("load");
+/* Insight forces/faiblesses TOUS TESTS confondus (2026-09-25, retour de Gildas — "/coach/athletes
+   pas adapté aux tests, faudrait afficher l'insight des forces/faiblesses pour tous les tests du
+   sportif") — remplace l'ancien panneau déplié Charge/Tests par un simple encadré, même format que
+   l'encadré `insight` (trendInsights) déjà juste au-dessus : `verdict` vient de buildVerdict()
+   (testNorms.ts), le MÊME calcul que le titre de TestsPanel.tsx pour ce sportif — un seul point de
+   vérité, jamais un résumé réinventé ici. `null` = aucun test loggué pour ce sportif, rien à
+   afficher (pas de placeholder — le badge "Dernier test" déjà présent au-dessus suffit à signaler
+   l'absence). */
+function TestVerdictBox({ verdict }: { verdict: Verdict | null | undefined }) {
+  if (!verdict) return null;
   return (
-    <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,.08)" }}>
-      <SectionTabs active={section} onChange={setSection} />
-      {section === "tests" ? (
-        <TestsPanel
-          ownerId={userId} subject={{ subjectCoachAthleteId: athlete.id }} linkedUserId={athlete.user_id}
-          emptyHint={`Aucun test enregistré pour ${athlete.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
-          sport={athlete.sport} sexe={athlete.sexe ?? null} poidsKg={athlete.poids_kg ?? null}
-        />
-      ) : (
-        <AthleteSignatureBlock signature={signature} athleteId={athlete.id} athleteName={athlete.name} rangeMode={rangeMode} trendInsight={trendInsight} baselineSeries={baselineSeries} />
-      )}
+    <div style={{ marginTop: 8, padding: "9px 13px", borderRadius: 12, background: "rgba(212,64,0,.045)", border: "1px solid rgba(212,64,0,.12)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
+      <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>🧪 {verdict.title} — </span>{verdict.sub}
     </div>
   );
 }
@@ -273,17 +138,22 @@ interface Props {
   /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) par sportif — série 42j alignée sur
      `initialSignatures[id].series`. Absent (sandbox) = repli absolu automatique. */
   initialBaselines?: Record<string, WellnessBaselineResult | null>;
-  initialBaselineSeries?: Record<string, (WellnessBaselineResult | null)[]>;
   initialLastTests: LastTestByAthlete;
+  /* Verdict forces/faiblesses tous tests confondus, par sportif (2026-09-25) — absent (sandbox) =
+     pas d'encadré affiché, comportement déjà géré par TestVerdictBox (verdict undefined/null). */
+  initialTestVerdicts?: AthleteTestVerdictByAthlete;
   subscriptionStatus: SubscriptionStatus;
   inviteCode: string | null;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
 }
 
-export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialBaselineSeries = {}, initialLastTests, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialLastTests, initialTestVerdicts = {}, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
-  const { isMd } = useBreakpoint();
+  const { isMd, isLg } = useBreakpoint();
+  // Même largeur que .page-shell ci-dessous (600/720/1000) — alignement CalendarHeader/sélecteur de
+  // sportif/contenu (2026-09-24).
+  const contentMaxWidth = isLg ? 1000 : isMd ? 720 : 600;
   const dayScrollRef = useRef<HTMLDivElement>(null);
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
@@ -293,32 +163,34 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [signatures, setSignatures] = useState(initialSignatures);
   const [trends, setTrends] = useState(initialTrends);
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
-  const [baselineSeriesByAthlete, setBaselineSeriesByAthlete] = useState(initialBaselineSeries);
   const [lastTests] = useState(initialLastTests);
-  // Une seule carte ouverte à la fois (évite le chaos — principe repris d'un POC UX fourni par
-  // Gildas) : remplace l'ancien Set multi-expand. Les tabs Charge/Tests vivent maintenant PAR carte
-  // (ExpandedAthletePanel, état local) — plus de mode de page unique à gérer ici.
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [testVerdicts] = useState(initialTestVerdicts);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+
+  // Sélecteur de sportif commun à tous les onglets/tabs (2026-09-24, "point 1", partie coach) —
+  // même clé localStorage que /coach et /coach/planning. Cette page ("Performance" dans la bottom
+  // nav, ex-"Sportifs") reste la liste complète quand rien n'est sélectionné ; un sportif choisi
+  // affiche directement SA page de tests — même principe que /conseils côté sportif.
+  const athleteFilterStorage = useCoachAthleteFilterStorage();
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  useEffect(() => { setSelectedAthleteId(athleteFilterStorage.read()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function selectAthleteFilter(id: string | null) {
+    setSelectedAthleteId(id);
+    athleteFilterStorage.write(id);
+  }
   const realPaywall = usePaywall(subscriptionStatus);
   const sandboxPaywall = useSandboxGate("coach");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
-
-  function toggleExpanded(id: string) {
-    setExpandedId(prev => (prev === id ? null : id));
-  }
 
   async function handleDateChange(date: string) {
     setSelectedDate(date);
     if (sandboxMode) return;
     const res = await fetch(`/api/coach/athletes?date=${date}`);
     if (res.ok) {
-      const { signatures: s, trends: t, trendInsights: ti, baselineSeries: bs } = await res.json();
+      const { signatures: s, trends: t, trendInsights: ti } = await res.json();
       setSignatures(s);
       setTrends(t);
       setTrendInsights(ti);
-      setBaselineSeriesByAthlete(bs ?? {});
     }
   }
 
@@ -392,15 +264,38 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
           roleToggle={sandboxMode ? { role: "coach", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
       )}
+      {/* Nav contextuelle (2026-09-24) : un sportif précis sélectionné → page Tests, non datée
+         (mode "title", pas de pager) ; "Tous" → jour de référence pour l'instantané récup/charge de
+         chaque sportif (mode "day"). Toggle 7j/28j/90j retiré du header (2026-09-25, retour de
+         Gildas — "pas besoin de 7j/28j/90j dans le header sur performance, tous les sportifs") : il
+         ne pilotait plus rien depuis le retrait du panneau Charge/Récupération déplié ci-dessous. */}
       <CalendarHeader
-        selectedDate={selectedDate} onDateChange={handleDateChange}
-        extraControls={<RangeToggle mode={rangeMode} onChange={setRangeMode} />}
+        mode={selectedAthleteId ? "title" : "day"} title="Performance" contentMaxWidth={contentMaxWidth}
+        selectedDate={selectedDate} onDateChange={selectedAthleteId ? undefined : handleDateChange}
         onProfileClick={() => setProfileOpen(true)}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={contentMaxWidth} />
 
       <div ref={dayScrollRef} className="page-shell">
 
+        {selectedAthleteId ? (() => {
+          const a = athletes.find(x => x.id === selectedAthleteId);
+          if (!a) return null;
+          return (
+            <>
+              {/* Pas de titre "Performance / {nom}" ici (2026-09-24, retour de Gildas) — le nom du
+                 sportif est déjà visible via la puce active dans AthleteFilterBar juste au-dessus,
+                 le répéter est redondant. */}
+              <TestsPanel
+                ownerId={userId} subject={{ subjectCoachAthleteId: a.id }} linkedUserId={a.user_id}
+                emptyHint={`Aucun test enregistré pour ${a.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
+                sport={a.sport} sexe={a.sexe ?? null} poidsKg={a.poids_kg ?? null}
+              />
+            </>
+          );
+        })() : (
+        <>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Coach</div>
@@ -446,7 +341,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 boxShadow: a.user_id ? "0 8px 24px rgba(47,158,68,.07)" : "0 12px 32px rgba(32,59,43,.08)",
               }}>
                 <div
-                  onClick={isPending ? undefined : () => toggleExpanded(a.id)}
+                  onClick={isPending ? undefined : () => selectAthleteFilter(a.id)}
                   style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap", cursor: isPending ? "default" : "pointer" }}
                 >
                   <AthleteRing score={recovery} />
@@ -494,7 +389,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                     );
                   })()}
                   {!isPending && (
-                    <span style={{ color: "#8a8f94", fontSize: 13, flexShrink: 0, transform: expandedId === a.id ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+                    <span style={{ color: "#8a8f94", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
                   )}
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     <button
@@ -524,7 +419,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
 
                 {!isPending && (() => {
                   const insight = trendInsights[a.id];
-                  const isExpanded = expandedId === a.id;
                   return (
                     <>
                       {insight && (
@@ -532,12 +426,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                           {insight.emoji} <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
                         </div>
                       )}
-                      {isExpanded && (
-                        <ExpandedAthletePanel
-                          userId={userId} athlete={a} signature={signatures[a.id] ?? { kind: "manual" }}
-                          rangeMode={rangeMode} trendInsight={insight} baselineSeries={baselineSeriesByAthlete[a.id]}
-                        />
-                      )}
+                      <TestVerdictBox verdict={testVerdicts[a.id]} />
                     </>
                   );
                 })()}
@@ -545,6 +434,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
               );
             })}
           </div>
+        )}
+        </>
         )}
       </div>
 

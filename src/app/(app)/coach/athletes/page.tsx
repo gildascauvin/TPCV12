@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import AthletesClient from "./AthletesClient";
 import type { CoachAthlete } from "@/types";
 import { getAthletesSignatures } from "@/lib/athletesData";
-import { getAthletesLastTests } from "@/lib/testSummary";
+import { getAthletesLastTests, getAthletesTestVerdicts } from "@/lib/testSummary";
 
 export default async function CoachAthletesPage() {
   const supabase = await createClient();
@@ -67,9 +67,10 @@ export default async function CoachAthletesPage() {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const [{ signatures, trends, trendInsights, baselines, baselineSeries }, lastTests] = await Promise.all([
+  const [{ signatures, trends, trendInsights, baselines }, lastTests, testVerdicts] = await Promise.all([
     getAthletesSignatures(admin, athletes, today),
     getAthletesLastTests(admin, user.id, athletes),
+    getAthletesTestVerdicts(admin, user.id, athletes),
   ]);
 
   return (
@@ -81,8 +82,8 @@ export default async function CoachAthletesPage() {
       initialTrends={trends}
       initialTrendInsights={trendInsights}
       initialBaselines={baselines}
-      initialBaselineSeries={baselineSeries}
       initialLastTests={lastTests}
+      initialTestVerdicts={testVerdicts}
       subscriptionStatus={profile.subscription_status ?? "free"}
       inviteCode={profile.invite_code as string | null ?? null}
     />

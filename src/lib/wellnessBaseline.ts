@@ -226,6 +226,26 @@ export function wellnessZByDate(
   return map;
 }
 
+/* Map date→score RELATIF (relativeScore, jamais le score absolu brut) — même principe que
+   wellnessZByDate() ci-dessus, mais pour un affichage direct (ring/badge) plutôt qu'un calcul de
+   tendance. Ajoutée le 2026-09-25 pour le calendrier popup de CalendarHeader.tsx (dot map/wellness
+   map par jour) : les 3 appelants (TodayClient/CoachClient/CoachPlanningClient) construisaient
+   jusque-là leur `wellnessMap` directement depuis `wellness_daily.score` (absolu) — faux dès que
+   l'historique est suffisant, puisque toutes les autres rings de l'app affichent le score RELATIF
+   depuis le chantier "Wellness relatif" (2026-08-30/31). Un seul point de calcul, jamais deux
+   conventions différentes pour le même ring. `null` pour un jour sans ligne réelle (comportement
+   de computeWellnessBaselineAt inchangé). */
+export function relativeWellnessByDate(
+  wellness: WellnessDaily[], days: number, anchor: Date = new Date(), windowDays: number = WELLNESS_BASELINE_WINDOW_DAYS,
+): Record<string, number | null> {
+  const series = computeWellnessBaselineSeries(wellness, days, anchor, windowDays);
+  const map: Record<string, number | null> = {};
+  for (let i = 0; i < days; i++) {
+    map[daysAgoStr(days - 1 - i, anchor)] = series[i]?.relativeScore ?? null;
+  }
+  return map;
+}
+
 /**
  * Zone relative ("Fatigué"/"Équilibré"/"Frais") — même vocabulaire que FORM_ZONES
  * (SparkLineClient.tsx, système de zones désormais partagé entre Wellness et Forme sur le chart

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
-import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, crossTrendInsight, daysAgoStr, type DayPoint } from "@/lib/fatigueSignature";
+import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, crossTrendInsight, daysAgoStr, type DayPoint, type Perspective } from "@/lib/fatigueSignature";
 import { fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
@@ -10,6 +10,13 @@ import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSigna
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
    voir ConseilsClient.tsx). Isolé de la génération/mise en page (JSX) qui reste dans ConseilsClient
    et BehaviorImpactCard. */
+
+/* Fenêtre de fetch partagée par tous les appelants qui alimentent les charts Charge/Récupération
+   (getConseilsData ici, /coach/page.tsx, src/lib/athletesData.ts, sandboxFixtures.ts) — 90j (le plus
+   grand cran du toggle 7j/28j/90j, voir RangeToggle.tsx) + 14j de pur recul pour l'ACWR (même marge
+   déjà en place avant l'ajout du cran 90j, voir le commentaire détaillé sur computeConseilsData plus
+   bas). Un seul nombre, jamais 4 constantes "42" divergentes. */
+export const CONSEILS_HISTORY_DAYS = 104;
 
 export function sessionStatusInfo(done: number, target: number): { label: string; color: string } {
   if (done >= target) return { label: "OBJECTIF ATTEINT", color: "#2f9e44" };
@@ -212,7 +219,7 @@ export async function getConseilsData(
   referenceDate: string
 ): Promise<ConseilsData> {
   const anchor = new Date(referenceDate + "T12:00:00");
-  const since42 = daysAgoStr(42, anchor);
+  const since42 = daysAgoStr(CONSEILS_HISTORY_DAYS, anchor);
 
   const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).single(),
@@ -232,17 +239,24 @@ export function computeConseilsData(
   referenceDate: string,
   profile: Profile | null,
   allSessions: Session[],
-  allWellness: WellnessDaily[]
+  allWellness: WellnessDaily[],
+  // "athlete" par défaut (comportement inchangé pour /conseils, qui n'a jamais eu besoin de passer
+  // ce paramètre) — CoachClient.tsx passe "coach" pour les sportifs de son roster (2026-09-25, fix
+  // wording — "Ta charge" affiché à tort à un coach au sujet d'un sportif qu'il consulte, doit être
+  // "Sa charge" : chargeCrossInsight()/recoveryCrossInsight()/crossTrendInsight()/sigDimInfo("recovery",...)
+  // acceptent déjà ce paramètre, seul computeConseilsData() ne le laissait jamais passer jusqu'ici).
+  perspective: Perspective = "athlete"
 ): ConseilsData {
   const anchor = new Date(referenceDate + "T12:00:00");
-  /* 42 jours attendus en entrée (pas 28) pour que la vue "Mois" du chart (28 derniers jours
-     affichés) ait un ACWR valide sur toute sa largeur — acuteChronicAt() (trainingLoad.ts) exige
-     au moins 14 jours d'historique AVANT un point donné pour lui donner une valeur non-nulle ; avec
-     seulement 28 jours, les 13 premiers jours affichés en vue Mois n'auraient jamais assez de recul
-     et resteraient nuls (ligne du chart tronquée aux ~15 derniers jours seulement — bug réel
-     constaté par Gildas). Les 14 jours de marge servent uniquement de recul de calcul, jamais
-     affichés tels quels (voir last28/last7 plus bas). getConseilsData() fetch bien 42 jours ; la
-     sandbox (fixtures locales) doit faire de même. */
+  /* CONSEILS_HISTORY_DAYS jours attendus en entrée (104, pas 90) pour que la vue "90 j" du chart
+     (2026-09-24, cran ajouté au toggle 7j/28j/90j) ait un ACWR valide sur toute sa largeur —
+     acuteChronicAt() (trainingLoad.ts) exige au moins 14 jours d'historique AVANT un point donné
+     pour lui donner une valeur non-nulle ; avec seulement 90 jours, les 13 premiers jours affichés
+     n'auraient jamais assez de recul et resteraient nuls (même bug déjà rencontré avec la vue "Mois"
+     à l'époque où la fenêtre ne couvrait que 28 jours — voir historique CLAUDE.md). Les 14 jours de
+     marge servent uniquement de recul de calcul, jamais affichés tels quels. getConseilsData() fetch
+     bien CONSEILS_HISTORY_DAYS jours ; la sandbox (fixtures locales) et /coach/page.tsx doivent faire
+     de même. */
   const since7  = daysAgoStr(7, anchor);
   const tomorrowStr = daysAgoStr(-1, anchor);
 
@@ -289,7 +303,7 @@ export function computeConseilsData(
   // 42 jours calculés, mais seuls les 28 derniers sont destinés à être affichés (vue "Mois") — les
   // 14 premiers ne servent qu'à donner à acuteChronicAt() assez de recul pour que l'ACWR des jours
   // réellement affichés soit toujours valide (voir commentaire sur since42 plus haut).
-  const timeSeries = buildDailyTimeSeries(allSessions, allWellness, 42, anchor);
+  const timeSeries = buildDailyTimeSeries(allSessions, allWellness, CONSEILS_HISTORY_DAYS, anchor);
   const maxLoad     = Math.max(...timeSeries.map(p => p.load), 400);
   const maxMonotony = Math.max(...timeSeries.map(p => p.monotony ?? 0), 3);
 
@@ -310,20 +324,20 @@ export function computeConseilsData(
     ? computeWellnessBaselineAt(allWellness.filter(w => w.date < referenceDate), refWellness)
     : null;
   const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, 42, anchor);
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery, "athlete", wellnessBaseline);
+  const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, wellnessBaseline);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm) : null;
   const ffTrend = fitnessFatigueTrend(timeSeries);
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness) : null;
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue) : null;
 
-  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo);
-  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, "athlete", wellnessBaseline);
+  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, perspective);
+  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, perspective, wellnessBaseline);
 
   // Insight global "croisé" (remplace classifyTrend()/describeTrend() — voir fatigueSignature.ts) :
   // dérivé des MÊMES entrées que les cartes ⚡ Charge / 🌿 Récupération ci-dessus, jamais d'une 3e
   // source indépendante — garanti cohérent avec ce qui est déjà affiché sous ce titre.
-  const cross = crossTrendInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, "athlete");
+  const cross = crossTrendInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, perspective);
   const trendCode: TrendCode | null = refWellness ? cross.code : null;
   const trendText = refWellness ? cross.text : null;
   const trendEmoji = refWellness ? (cross.severity === "alert" ? "🔴" : cross.severity === "watch" ? "🟡" : "🟢") : null;

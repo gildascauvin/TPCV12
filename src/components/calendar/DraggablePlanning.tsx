@@ -3,6 +3,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
+import { parseAndApply } from "@/lib/loadAdjust";
 
 /* Wrappers dnd-kit partagés par /week (WeekClient.tsx) ET /coach/planning (CoachPlanningClient.tsx) —
    "le même composant" des deux côtés, générique sur SessionLike (Session ou CoachViewSession).
@@ -18,7 +19,7 @@ export function DroppableDay({ dstr, children }: { dstr: string; children: React
   );
 }
 
-export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole, decisionGauge }: {
+export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole, decisionGauge, previewPct }: {
   session: T;
   onComplete: (s: T) => void;
   onEdit: (s: T) => void;
@@ -30,6 +31,13 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
   /* Passthrough vers WeekSessionCard (voir DayColumn.tsx) — undefined partout sauf pour la séance
      ciblée par une suggestion d'autorégulation du jour. */
   decisionGauge?: React.ReactNode;
+  /* Décharge/surcharge en cours de sélection sur la jauge de décision de CETTE séance (2026-09-24,
+     fix — "quand je bouge la jauge je veux voir le delta dans le planning aussi") : même mécanisme
+     que TodaySessionCard.tsx/CoachAthleteCard.tsx (previewPct → parseAndApply par ligne, ancienne
+     valeur barrée au-dessus de la nouvelle) — jusqu'ici seul /today et Coach Control le faisaient,
+     Planning affichait la jauge sans jamais répercuter l'aperçu sur les lignes en dessous.
+     `undefined`/`null` = comportement inchangé (texte brut, pas de ligne barrée). */
+  previewPct?: number | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: session.id, data: { type: "session" } });
   /* Droppable "séance" — reçoit un exercice glissé depuis une AUTRE séance (drag cross-séance,
@@ -61,7 +69,9 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
       decisionGauge={decisionGauge}
       renderExerciseLine={(line, index) => (
         <DraggableExerciseLine
-          key={index} sessionId={session.id} index={index} text={line}
+          key={index} sessionId={session.id} index={index}
+          text={previewPct != null ? parseAndApply(line, previewPct) : line}
+          originalText={previewPct != null ? line : undefined}
           unseen={hasUnseenAttachment(session.exercise_media?.[String(index)], viewerRole, viewedAt)}
         />
       )}

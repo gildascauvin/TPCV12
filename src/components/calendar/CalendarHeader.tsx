@@ -1,92 +1,205 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { format, addDays, startOfWeek, subDays, addMonths, subMonths } from "date-fns";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import {
+  format, addDays, startOfWeek, subDays, addMonths, subMonths,
+  startOfMonth, endOfMonth,
+} from "date-fns";
 import { fr } from "date-fns/locale";
-import { cn } from "@/lib/utils";
-import { wellnessColor } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import ViewToggleButton from "./ViewToggleButton";
+import { wellnessColor } from "@/lib/wellness";
 
 export type ViewMode = "week" | "month";
+export type HeaderMode = "day" | "period" | "title";
+
+/* Toggle Sem./Mois — sorti du header (2026-09-25, retour de Gildas : "dans le planning 'Sem./Mois'
+   irait mieux au dessus des jours du calendar avec le style adéquat") : vivait auparavant DANS
+   CalendarHeader (fond sombre, segments blancs) ; WeekClient.tsx/CoachPlanningClient.tsx le
+   rendent désormais eux-mêmes juste au-dessus de leur grille de jours, sur fond clair — d'où un
+   style light dédié plutôt que la palette dark du header. Seuls appelants du toggle Sem./Mois
+   (mode="period"), donc rien d'autre à migrer. */
+export function ViewModeSegmented({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
+  return (
+    <div style={{ display: "inline-flex", gap: 4, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.08)", borderRadius: 10, padding: 3 }}>
+      {(["week", "month"] as ViewMode[]).map(m => (
+        <button
+          key={m}
+          onClick={() => onChange(m)}
+          style={{
+            padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
+            background: mode === m ? "linear-gradient(180deg,#f04a08,#d44000)" : "transparent",
+            color: mode === m ? "#fff" : "#62686e",
+          }}
+        >
+          {m === "week" ? "Sem." : "Mois"}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface CalendarHeaderProps {
+  mode?: HeaderMode;
+  /* Titre statique, mode "title" uniquement (ex. "Performance"). */
+  title?: string;
   selectedDate: string;
   onDateChange?: (date: string) => void;
-  dotMap?: Record<string, "done-light" | "done-med" | "done-high" | "planned">;
-  wellnessMap?: Record<string, number | null>;
   viewMode?: ViewMode;
   onViewModeChange?: (mode: ViewMode) => void;
-  onSwipe?: (dir: "next" | "prev") => void;
   /* Slot alternatif dans le même emplacement (haut-droite) que le toggle Semaine/Mois — pour les
      pages qui veulent un contrôle différent à cet endroit sans activer le toggle de navigation
-     lui-même (ex. /conseils, /coach/athletes : bascule 7j/4 semaines des graphiques, indépendante
-     de la navigation par jour de ce header — voir RangeToggle.tsx). Ignoré si onViewModeChange est
-     fourni (jamais les deux en même temps). */
+     lui-même (ex. RangeToggle.tsx : 7j/28j/90j des graphiques Charge/Récupération). Ignoré si
+     onViewModeChange est fourni (jamais les deux en même temps). */
   extraControls?: React.ReactNode;
-  /* Icône profil en haut à droite du header (2026-08-31) — remplace l'onglet "Profil" retiré de
-     la bottom nav (remplacé par "Programmes"). Un seul endroit à câbler pour toutes les pages qui
-     utilisent ce header plutôt qu'un bouton par page. Depuis le 2026-09-15, ouvre ProfileDrawer
-     (callback) au lieu de naviguer vers /profil (page retirée) — absent = pas d'icône. */
   onProfileClick?: () => void;
+  /* Alignement — même largeur de colonne que le sélecteur de sportif (AthleteFilterBar) et le
+     contenu de la page en dessous. Chaque page passe sa propre valeur (déjà calculée pour son
+     contenu). Absent = pleine largeur. */
+  contentMaxWidth?: number;
+  /* Wellness rings + points de séance à l'intérieur du calendrier popup uniquement (2026-09-24,
+     POC datepicker) — jamais sur le trigger collapsed. Réservé au contexte "un seul sportif"
+     (sportif sur /today, ou coach filtré sur UN athlète précis) : Gildas — "quand on est un
+     sportif ou filtré sur un, on peut voir les wellness ring autour des jours, avec les points
+     des séances". dotMap/wellnessMap ne couvrent en pratique que la semaine déjà chargée par la
+     page ; les jours hors de cette fenêtre affichent un jour nu (pas de donnée à afficher). */
+  showRings?: boolean;
+  wellnessMap?: Record<string, number | null>;
+  dotMap?: Record<string, "done-light" | "done-med" | "done-high" | "planned">;
 }
 
-const CIRC = 81.68; // 2π × r=13
-
-// Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
-function ringColor(score: number | null) {
-  if (score === null) return "rgba(255,255,255,0.15)";
-  return wellnessColor(score);
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function dotColor(dot: string) {
-  if (dot === "done-high") return "#d10000";
-  if (dot === "done-med")  return "#f28a00";
-  if (dot === "done-light") return "#7ecb20";
-  return "#d44000"; // planned
+function weekRangeLabel(weekStart: Date): string {
+  const weekEnd = addDays(weekStart, 6);
+  if (format(weekStart, "MM") === format(weekEnd, "MM")) {
+    return `${format(weekStart, "d")}–${format(weekEnd, "d MMM", { locale: fr })}`;
+  }
+  return `${format(weekStart, "d MMM", { locale: fr })} – ${format(weekEnd, "d MMM", { locale: fr })}`;
+}
+
+const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
+
+function monthGridDays(viewDate: Date): Date[] {
+  const gridStart = startOfWeek(startOfMonth(viewDate), { weekStartsOn: 1 });
+  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+}
+
+const DOT_COLOR: Record<string, string> = {
+  "done-light": "#4caf50",
+  "done-med": "#f28a00",
+  "done-high": "#d44000",
+  planned: "rgba(255,255,255,.45)",
+};
+
+// viewBox fixe + width/height 100% (2026-09-25, fix — "les wellness ring... sont moches et pas
+// toujours droites/centrées") : un <svg width={px} height={px}> figé ne correspondait pas toujours
+// à la taille réelle de la cellule (calculée en `1fr` par la grille CSS, jamais exactement égale au
+// `cellSize` codé en dur) — la ring débordait ou restait décalée du centre selon l'arrondi. Un
+// viewBox à coordonnées fixes, étiré à 100% du conteneur (toujours carré, voir le cell wrapper),
+// reste toujours centré et proportionné quelle que soit la taille réelle rendue.
+const RING_VB = 36;
+function DayRing({ score }: { score: number }) {
+  const r = RING_VB / 2 - 3;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, score)) / 100;
+  const color = wellnessColor(score);
+  return (
+    <svg viewBox={`0 0 ${RING_VB} ${RING_VB}`} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+      <circle cx={RING_VB / 2} cy={RING_VB / 2} r={r} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth={2.5} />
+      <circle
+        cx={RING_VB / 2} cy={RING_VB / 2} r={r} fill="none" stroke={color} strokeWidth={2.5}
+        strokeDasharray={`${c * pct} ${c}`} strokeLinecap="round"
+        transform={`rotate(-90 ${RING_VB / 2} ${RING_VB / 2})`}
+      />
+    </svg>
+  );
 }
 
 export default function CalendarHeader({
+  mode = "period",
+  title,
   selectedDate,
   onDateChange,
-  dotMap = {},
-  wellnessMap = {},
   viewMode = "week",
   onViewModeChange,
-  onSwipe,
   extraControls,
   onProfileClick,
+  contentMaxWidth,
+  showRings,
+  wellnessMap,
+  dotMap,
 }: CalendarHeaderProps) {
   const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
   const [currentDate, setCurrentDate] = useState(new Date(selectedDate + "T12:00:00"));
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [calendarViewDate, setCalendarViewDate] = useState(currentDate);
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
   const touchStartX = useRef(0);
+  const triggerWrapRef = useRef<HTMLDivElement>(null);
+  const triggerBtnRef = useRef<HTMLButtonElement>(null);
+  const popupNodeRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync interne quand le parent navigue (swipe, prev/next week)
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     setCurrentDate(new Date(selectedDate + "T12:00:00"));
   }, [selectedDate]);
 
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Portalé dans document.body (2026-09-24, fix) — un simple z-index élevé sur un élément resté
+  // dans l'arbre du header ne suffisait pas en pratique : un widget ailleurs sur la page (ring
+  // wellness de Coach Control) se peignait par-dessus le popup malgré un z-index pourtant plus bas,
+  // vraisemblablement une couche de composition GPU indépendante créée par un ancêtre transformé.
+  // Le portail échappe à tout contexte d'empilement ambigu — position calculée depuis le rect réel
+  // du trigger plutôt qu'un simple `position:absolute` relatif (le portail sort du flux du header).
+  useLayoutEffect(() => {
+    if (!calendarOpen || !triggerBtnRef.current) return;
+    const r = triggerBtnRef.current.getBoundingClientRect();
+    setPopupPos({ top: r.bottom + 10, left: r.left + r.width / 2 });
+  }, [calendarOpen]);
 
-  const showControls = !!onViewModeChange;
-  const showTodayBtn = !!onDateChange;
+  useEffect(() => {
+    if (!calendarOpen) return;
+    function onDocClick(e: MouseEvent) {
+      const t = e.target as Node;
+      if (triggerWrapRef.current?.contains(t)) return;
+      if (popupNodeRef.current?.contains(t)) return;
+      setCalendarOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setCalendarOpen(false);
+    }
+    function onScroll() { setCalendarOpen(false); }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [calendarOpen]);
 
-  function selectDay(d: Date) {
-    const iso = format(d, "yyyy-MM-dd");
-    setCurrentDate(d);
-    onDateChange?.(iso);
-  }
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+
+  // Popup calendrier — day mode et period+week uniquement (POC 2026-09-24). En period+month, une
+  // grille mensuelle complète est déjà affichée sur la page elle-même : un 2e calendrier dans le
+  // header serait redondant, le label reste un simple pas-à-pas comme avant.
+  const hasPopup = mode !== "title" && !!onDateChange && !(mode === "period" && viewMode === "month");
 
   function prevPeriod() {
-    const newDate = viewMode === "month" ? subMonths(currentDate, 1) : subDays(currentDate, 7);
+    const newDate = mode === "day" ? subDays(currentDate, 1) : viewMode === "month" ? subMonths(currentDate, 1) : subDays(currentDate, 7);
     setCurrentDate(newDate);
     onDateChange?.(format(newDate, "yyyy-MM-dd"));
   }
 
   function nextPeriod() {
-    const newDate = viewMode === "month" ? addMonths(currentDate, 1) : addDays(currentDate, 7);
+    const newDate = mode === "day" ? addDays(currentDate, 1) : viewMode === "month" ? addMonths(currentDate, 1) : addDays(currentDate, 7);
     setCurrentDate(newDate);
     onDateChange?.(format(newDate, "yyyy-MM-dd"));
   }
@@ -95,20 +208,60 @@ export default function CalendarHeader({
     const now = new Date();
     setCurrentDate(now);
     onDateChange?.(today);
+    setCalendarOpen(false);
   }
 
-  const isOnCurrentPeriod = viewMode === "week"
+  function toggleCalendar() {
+    if (!hasPopup) return;
+    // Bascule (2026-09-25, "quand je clique à nouveau dessus je veux que ça le referme") — avant,
+    // un 2e clic sur le trigger rouvrait silencieusement le même popup déjà ouvert (no-op visuel).
+    if (calendarOpen) { setCalendarOpen(false); return; }
+    setCalendarViewDate(currentDate);
+    setCalendarOpen(true);
+  }
+
+  function selectDay(date: Date) {
+    const iso = format(date, "yyyy-MM-dd");
+    setCurrentDate(date);
+    onDateChange?.(iso);
+    const delay = mode === "day" ? 120 : 220;
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => setCalendarOpen(false), delay);
+  }
+
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  const isOnCurrentPeriod = mode === "day"
+    ? format(currentDate, "yyyy-MM-dd") === today
+    : mode === "period" && viewMode === "week"
     ? days.some(d => format(d, "yyyy-MM-dd") === today)
     : format(currentDate, "yyyy-MM") === format(new Date(), "yyyy-MM");
+
+  // Masqué quand le calendrier popup existe pour ce mode — son propre bouton "Aujourd'hui" en
+  // footer le remplace (POC 2026-09-24, "plus besoin du 'Aujourd'hui' dans le header si le
+  // calendar view le contient"). Reste affiché tel quel sur period+month, seul cas sans popup.
+  const showTodayBtn = mode !== "title" && !!onDateChange && !isOnCurrentPeriod && !hasPopup;
+
+  const label = mode === "title"
+    ? title ?? ""
+    : mode === "day"
+    ? cap(format(currentDate, "EEE d MMM", { locale: fr }))
+    : viewMode === "month"
+    ? cap(format(currentDate, "MMM", { locale: fr }))
+    : weekRangeLabel(weekStart);
 
   function handleHeaderTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX;
   }
   function handleHeaderTouchEnd(e: React.TouchEvent) {
+    if (mode === "title" || calendarOpen) return;
     const dx = e.changedTouches[0].clientX - touchStartX.current;
-    if (dx < -55) onSwipe?.("next");
-    else if (dx > 55) onSwipe?.("prev");
+    if (dx < -55) nextPeriod();
+    else if (dx > 55) prevPeriod();
   }
+
+  const gridDays = monthGridDays(calendarViewDate);
 
   return (
     <header
@@ -120,28 +273,114 @@ export default function CalendarHeader({
         color: "#fff",
         paddingTop: 8,
       }}>
-      {/* Top row (2026-09-01) : flèches remises (ça tient maintenant que le reste a été
-          compacté), Aujourd'hui déplacé à gauche à côté du mois affiché — le swipe (attaché à
-          tout le header, pas juste le day strip) reste un moyen de naviguer en plus des flèches. */}
-      <div className="flex items-center justify-between px-4 pb-3 pt-[14px] gap-2">
-        <div className="flex gap-2 items-center">
-          <button onClick={prevPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>‹</button>
-          <button onClick={nextPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>›</button>
-          <span className="text-[16px] font-black uppercase tracking-[0.02em] text-white px-1">
-            {format(currentDate, "MMMM", { locale: fr })}
-          </span>
+      <div
+        className="relative flex items-center px-4 pb-3 pt-[14px] gap-2"
+        style={{ maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined }}
+      >
+        {/* Centré indépendamment de la largeur du bloc de droite (POC 2026-09-24, "ce sélecteur
+            doit être centré dans le header"). */}
+        <div
+          ref={triggerWrapRef}
+          style={{
+            position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+            display: "flex", alignItems: "center", gap: 8,
+          }}
+        >
+          {mode !== "title" && (
+            <button onClick={prevPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>‹</button>
+          )}
+          <button
+            ref={triggerBtnRef}
+            onClick={toggleCalendar}
+            disabled={!hasPopup}
+            className="text-[16px] font-black tracking-[0.02em] text-white px-2 h-[32px] rounded-[8px]"
+            style={{ background: hasPopup ? "#1a1a1a" : "transparent", cursor: hasPopup ? "pointer" : "default", whiteSpace: "nowrap" }}
+          >
+            {label}
+          </button>
+
+          {mounted && calendarOpen && hasPopup && popupPos && createPortal(
+            <div
+              ref={popupNodeRef}
+              style={{
+                position: "fixed", top: popupPos.top, left: popupPos.left, transform: "translateX(-50%)",
+                zIndex: 2147483100, width: 300, background: "#1c1c1e", border: "1px solid #3a3a3c",
+                borderRadius: 16, padding: 14, boxShadow: "0 16px 48px rgba(0,0,0,.55)",
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <button onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>‹</button>
+                <span style={{ fontSize: 14, fontWeight: 800 }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
+                <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>›</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>
+                {WEEKDAY_LABELS.map((d, i) => (
+                  <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)", padding: "4px 0" }}>{d}</div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
+                {gridDays.map((d, i) => {
+                  const iso = format(d, "yyyy-MM-dd");
+                  const inMonth = format(d, "M") === format(calendarViewDate, "M");
+                  const isToday = iso === today;
+                  const isSelected = mode === "day"
+                    ? iso === format(currentDate, "yyyy-MM-dd")
+                    : days.some(wd => format(wd, "yyyy-MM-dd") === iso);
+                  const ring = showRings && wellnessMap?.[iso] != null ? wellnessMap[iso] : null;
+                  const dotKind = showRings ? dotMap?.[iso] : undefined;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => selectDay(d)}
+                      style={{
+                        cursor: "pointer", borderRadius: 10, background: "transparent",
+                        display: "flex", flexDirection: "column", alignItems: "center",
+                        padding: "3px 0 4px", gap: 3,
+                      }}
+                    >
+                      {/* Boîte ring carrée — le point de séance vit désormais SOUS elle, jamais en
+                         incrustation top-right (2026-09-25, "je veux que les petits points soient
+                         sous les ring"). Aujourd'hui = liseré orange sur la boîte plutôt qu'un 2e
+                         point, pour ne jamais concurrencer visuellement le point de séance. */}
+                      <div style={{
+                        position: "relative", width: 30, height: 30, borderRadius: "50%",
+                        background: isSelected ? "#f04a08" : "transparent",
+                        boxShadow: isToday && !isSelected ? "0 0 0 1.5px #f04a08" : "none",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {ring !== null && <DayRing score={ring} />}
+                        <span style={{
+                          position: "relative", zIndex: 1, fontSize: 13,
+                          fontWeight: isSelected ? 800 : 500,
+                          color: isSelected ? "#fff" : inMonth ? "#f5f5f7" : "rgba(255,255,255,.28)",
+                        }}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                      <span style={{
+                        width: 5, height: 5, borderRadius: "50%",
+                        background: dotKind ? DOT_COLOR[dotKind] : "transparent",
+                      }} />
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+                <button onClick={goToday} style={{ fontSize: 13, fontWeight: 800, color: "#ff8a55", cursor: "pointer" }}>Aujourd'hui</button>
+              </div>
+            </div>,
+            document.body
+          )}
+          {mode !== "title" && (
+            <button onClick={nextPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>›</button>
+          )}
           {showTodayBtn && (
             <button
-              onClick={isOnCurrentPeriod ? undefined : goToday}
+              onClick={goToday}
               style={{
                 height: 32, paddingLeft: 12, paddingRight: 12, borderRadius: 10,
-                background: isOnCurrentPeriod ? "rgba(255,255,255,.08)" : "rgba(212,64,0,.22)",
-                border: `1px solid ${isOnCurrentPeriod ? "rgba(255,255,255,.14)" : "rgba(212,64,0,.4)"}`,
-                color: isOnCurrentPeriod ? "rgba(255,255,255,.7)" : "#ff8a55",
-                fontSize: 11, fontWeight: 800,
-                cursor: isOnCurrentPeriod ? "default" : "pointer",
-                whiteSpace: "nowrap",
-                transition: "all .2s",
+                background: "rgba(212,64,0,.22)", border: "1px solid rgba(212,64,0,.4)",
+                color: "#ff8a55", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap",
               }}
             >
               {isMd ? "Aujourd'hui" : "Auj."}
@@ -149,10 +388,8 @@ export default function CalendarHeader({
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
-          {showControls ? (
-            <ViewToggleButton mode={viewMode} onChange={m => onViewModeChange?.(m)} />
-          ) : extraControls}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, width: "100%" }}>
+          {extraControls}
           {onProfileClick && (
             <button
               onClick={onProfileClick}
@@ -173,78 +410,6 @@ export default function CalendarHeader({
           )}
         </div>
       </div>
-
-      {/* Day strip avec wellness rings — semaine uniquement */}
-      {viewMode === "week" && (
-        <div className="flex justify-between px-[18px] pb-4">
-          {days.map((d) => {
-            const iso = format(d, "yyyy-MM-dd");
-            const isToday    = iso === today;
-            const isSelected = iso === format(currentDate, "yyyy-MM-dd");
-            const dot        = dotMap[iso];
-            const score      = wellnessMap[iso] ?? null;
-            const rc         = ringColor(score);
-            const dashOffset = score !== null ? CIRC * (1 - score / 100) : CIRC;
-
-            return (
-              <button
-                key={iso}
-                onClick={() => selectDay(d)}
-                className={cn("flex-1 flex flex-col items-center gap-[3px] py-1 rounded-[10px] transition-all duration-150 border-0 bg-transparent cursor-pointer hover:bg-white/8")}
-              >
-                {/* Jour abrégé */}
-                <span className="text-[9px] font-black tracking-[0.05em] uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
-                  {format(d, "EEE", { locale: fr }).slice(0, 3)}
-                </span>
-
-                {/* Ring wellness + numéro */}
-                <div style={{ position: "relative", width: 36, height: 36 }}>
-                  {/* SVG wellness ring */}
-                  <svg width="36" height="36" viewBox="0 0 36 36"
-                    style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }}>
-                    <circle cx="18" cy="18" r="13" fill="none"
-                      stroke="rgba(255,255,255,0.12)" strokeWidth="2.8" />
-                    <circle cx="18" cy="18" r="13" fill="none"
-                      stroke={score !== null ? rc : "transparent"}
-                      strokeWidth="2.8"
-                      strokeDasharray={CIRC}
-                      strokeDashoffset={dashOffset}
-                      strokeLinecap="round"
-                      style={{ transition: "stroke-dashoffset .3s ease" }}
-                    />
-                  </svg>
-
-                  {/* Fond blanc pour le jour sélectionné */}
-                  {isSelected && (
-                    <div style={{
-                      position: "absolute", inset: 6, borderRadius: "50%",
-                      background: "#fff",
-                    }} />
-                  )}
-
-                  {/* Numéro du jour */}
-                  <span style={{
-                    position: "absolute", inset: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12, fontWeight: 900, lineHeight: 1,
-                    color: isSelected ? "#111" : isToday ? "#ff8a55" : "rgba(255,255,255,.9)",
-                    zIndex: 1,
-                  }}>
-                    {format(d, "d")}
-                  </span>
-                </div>
-
-                {/* Dot session */}
-                <span style={{
-                  width: 4, height: 4, borderRadius: "50%",
-                  background: dot ? dotColor(dot) : "transparent",
-                  transition: "background .2s",
-                }} />
-              </button>
-            );
-          })}
-        </div>
-      )}
     </header>
   );
 }

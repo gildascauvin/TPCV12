@@ -3,6 +3,7 @@ import TodayClient from "@/app/(app)/today/TodayClient";
 import CoachClient from "@/app/(app)/coach/CoachClient";
 import { buildAthleteFixture, buildCoachFixture, buildAthleteSignatures } from "@/lib/sandboxFixtures";
 import { demoToView } from "@/lib/coachSessions";
+import { computeConseilsData } from "@/lib/conseilsData";
 
 /* Page d'accueil de la sandbox (2026-08-19) — /sandbox/athlete = Today, /sandbox/coach = Coach
    Control, les 2 URL copiables-collables demandées par Gildas. Zéro fetch Supabase : tout vient
@@ -10,6 +11,7 @@ import { demoToView } from "@/lib/coachSessions";
 export default function SandboxHomePage({ params }: { params: { role: string } }) {
   if (params.role === "athlete") {
     const { profile, todayStr, sessions, wellnessByDate } = buildAthleteFixture();
+    const analyticsData = computeConseilsData(todayStr, profile, sessions, Object.values(wellnessByDate));
     return (
       <TodayClient
         userId={profile.user_id}
@@ -24,6 +26,7 @@ export default function SandboxHomePage({ params }: { params: { role: string } }
         sandboxMode
         sandboxWellnessByDate={wellnessByDate}
         initialWellnessHistory={Object.values(wellnessByDate)}
+        initialAnalyticsData={analyticsData}
       />
     );
   }

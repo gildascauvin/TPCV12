@@ -14,11 +14,15 @@ import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
-import DiffGauge from "@/components/calendar/DiffGauge";
-import { CoachCard, WellnessRing, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
+import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
+import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
+import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
+import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
+import type { RangeMode } from "@/components/calendar/RangeToggle";
+import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que /week et
    /coach/planning (2026-09-17) : leur JS part dans des chunks séparés, chargés au clic
@@ -33,7 +37,7 @@ const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer")
 const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments, WellnessDaily } from "@/types";
 
 interface Props {
@@ -73,42 +77,14 @@ interface Props {
 
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
-function getCoachAdvice(athletes: CoachAthlete[], sessions: CoachViewSession[], avgWellness: number, avgDifficulty: number | null): string {
-  function names(list: CoachAthlete[]) {
-    const ns = list.map(a => a.name);
-    if (ns.length === 1) return ns[0];
-    if (ns.length === 2) return `${ns[0]} et ${ns[1]}`;
-    return `${ns[0]}, ${ns[1]} et ${ns.length - 2} autre${ns.length - 2 > 1 ? "s" : ""}`;
-  }
-  function verb(list: CoachAthlete[], sing: string, plur: string) { return list.length > 1 ? plur : sing; }
-
-  const inRed = athletes.filter(a => a.wellnessFilledToday !== false && a.wellness_score < 55);
-  const withHard = athletes.filter(a => sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
-  const critical = athletes.filter(a => a.wellnessFilledToday !== false && a.wellness_score < 55 && sessions.some(s => s.athlete_id === a.id && (s.target_difficulty ?? 0) >= 8));
-
-  if (critical.length > 0)
-    return `${names(critical)} ${verb(critical, "est dans le rouge", "sont dans le rouge")} avec une séance difficile prévue. Allège ou reporte avant ${verb(critical, "qu'il", "qu'ils")} s'entraîne${verb(critical, "", "nt")}.`;
-  if (inRed.length > 0 && withHard.length > 0)
-    return `${names(inRed)} ${verb(inRed, "est dans le rouge", "sont dans le rouge")}. ${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue. Vérifie les charges avant de valider.`;
-  if (inRed.length > 0)
-    return `${names(inRed)} ${verb(inRed, "est dans le rouge", "sont dans le rouge")} (score < 55). Réduis l'intensité ou propose une récupération active.`;
-  if (withHard.length > 0 && avgWellness < 65)
-    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue avec un niveau de forme bas. Surveille et adapte si nécessaire.`;
-  if (withHard.length > 0 && avgWellness >= 80)
-    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile prévue — équipe en forme (${avgWellness}/100). Fenêtre idéale, valide les charges.`;
-  if (withHard.length > 0)
-    return `${names(withHard)} ${verb(withHard, "a", "ont")} une séance difficile (≥8/10) prévue. Récupération équipe à ${avgWellness}/100 — surveille les réponses après séance.`;
-  if (avgWellness < 55)
-    return `Récupération équipe basse (${avgWellness}/100). Réduis les intensités et favorise la récupération aujourd'hui.`;
-  if (avgWellness < 70)
-    return `Forme correcte (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Les charges planifiées sont adaptées, pas besoin d'intervenir.`;
-  return `Équipe en forme (${avgWellness}/100)${avgDifficulty ? ` · RPE prévu ${avgDifficulty}/10` : ""}. Conditions optimales — tes sportifs peuvent s'entraîner à pleine intensité.`;
-}
-
 export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, sandboxMode = false, sandboxSessionsByDate }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
+  // Même largeur que le contenu de la page (voir plus bas) — alignement CalendarHeader/sélecteur de
+  // sportif/contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav, le sélecteur... et
+  // les contenus").
+  const coachContentMaxWidth = isLg ? 1180 : isMd ? 720 : 600;
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus);
   const sandboxPaywall = useSandboxGate("coach");
@@ -139,6 +115,43 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showActivation, setShowActivation] = useState(false);
+
+  // Barre de filtre sportifs persistante (2026-09-24, redesign) — hydratée après montage (localStorage,
+  // même précaution SSR que reviewedIds ci-dessus) plutôt qu'au useState initial. Écrite/lue via la
+  // même clé partagée que /coach/planning (useCoachAthleteFilterStorage) : sélectionner un sportif ici
+  // puis naviguer vers Planning y retrouve la même sélection, sans état React partagé (les 2 pages ne
+  // sont jamais montées en même temps).
+  const athleteFilterStorage = useCoachAthleteFilterStorage();
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  // Filtre "métrique basse" (2026-09-24, POC poc-coach-context_4.html, recapHtml()/filterBar()) —
+  // réservé au mode "Tous" (selectedAthleteId===null), comme dans le POC (mOK/filterBar n'y ont de
+  // sens que pour la vue équipe). Reset dès qu'un sportif précis est sélectionné, pour ne jamais
+  // laisser un filtre invisible restreindre silencieusement une vue à un seul sportif.
+  const [metricFilter, setMetricFilter] = useState<DimensionKey | null>(null);
+  useEffect(() => { if (selectedAthleteId !== null) setMetricFilter(null); }, [selectedAthleteId]);
+  useEffect(() => { setSelectedAthleteId(athleteFilterStorage.read()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  function selectAthleteFilter(id: string | null) {
+    setSelectedAthleteId(id);
+    athleteFilterStorage.write(id);
+  }
+
+  // Onglets Charge/Récupération/Comportements (2026-09-24, "point 1", partie coach) — même principe
+  // que TodayClient.tsx, mais calculé CLIENT-SIDE sans nouveau fetch : recentSessions/
+  // wellnessBaselineHistory couvrent déjà 42j par sportif réel (voir /coach/page.tsx, sinceHistory),
+  // exactement la fenêtre attendue par computeConseilsData() (pure). Les sportifs démo (recentSessions
+  // vide, pas d'entrée wellnessBaselineHistory) retombent gracieusement sur l'état "pas assez de
+  // données" déjà géré par CrossInsightBanner/sections — limite acceptée, pas de séance/wellness
+  // synthétique 42j construite pour eux ici (voir CLAUDE.md, même posture ailleurs dans le repo).
+  const [homeTab, setHomeTab] = useState<HomeTab>("today");
+  const [rangeMode, setRangeMode] = useState<RangeMode>("week");
+  const athleteConseilsData: Record<string, ConseilsData> = {};
+  if (homeTab !== "today") {
+    for (const a of athletes) {
+      // "coach" (2026-09-25, fix wording) — "Ta charge"/"Ta récupération" n'a pas de sens affiché
+      // à un coach au sujet d'un sportif qu'il consulte, doit être "Sa charge"/"Sa récupération".
+      athleteConseilsData[a.id] = computeConseilsData(selectedDate, null, recentSessions[a.id] ?? [], a.user_id ? wellnessBaselineHistory[a.user_id] ?? [] : [], "coach");
+    }
+  }
 
   useEffect(() => {
     if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
@@ -319,11 +332,17 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
      calcul que /coach/planning (dayBaseline). Pour un sportif démo : baseline statique du serveur
      (demoBaselines), pas de notion de jour pour lui sur cette page — limite préexistante, inchangée. */
   const baselines: Record<string, WellnessBaselineResult | null> = {};
+  // Ligne wellness_daily brute du jour affiché, par sportif — même résolution que `baselines`
+  // ci-dessus (recalculée à chaque render, jamais figée sur "aujourd'hui"), gardée à part pour la
+  // barre de filtre par métrique (dimensionRaw a besoin du sommeil/stress/récup/motivation bruts,
+  // pas seulement du score composite). `null` pour un sportif démo (pas de vraie ligne par jour).
+  const dayRows: Record<string, WellnessDaily | null> = {};
   for (const a of athletes) {
-    if (!a.user_id) { baselines[a.id] = demoBaselines[a.id] ?? null; continue; }
+    if (!a.user_id) { baselines[a.id] = demoBaselines[a.id] ?? null; dayRows[a.id] = null; continue; }
     const history = wellnessBaselineHistory[a.user_id] ?? [];
     const dayRow = history.find(w => w.date === selectedDate) ?? null;
     baselines[a.id] = dayRow ? computeWellnessBaselineAt(history.filter(w => w.date < selectedDate), dayRow) : null;
+    dayRows[a.id] = dayRow;
   }
 
   // Monotonie/contrainte (Foster 1998) par sportif — même calcul que la carte décision elle-même
@@ -347,14 +366,20 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       - riskScore(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], msA.monotonyVal, msA.strainVal);
   });
 
-  const filledAthletes = athletes.filter(a => a.wellnessFilledToday !== false);
-  const avgWellness = filledAthletes.length
-    ? Math.round(filledAthletes.reduce((s, a) => s + a.wellness_score, 0) / filledAthletes.length)
-    : 0;
-  const sessionsWithDiff = sessions.filter(s => s.target_difficulty != null);
-  const avgDifficulty = sessionsWithDiff.length
-    ? Math.round(sessionsWithDiff.reduce((acc, s) => acc + (s.target_difficulty ?? 0), 0) / sessionsWithDiff.length * 10) / 10
-    : null;
+  // Filtre "métrique basse" (POC recapHtml()/mOK) — un sportif sans ligne du jour (démo, ou pas
+  // encore rempli) ne peut être évalué sur aucune dimension, donc exclu dès qu'un filtre est actif
+  // (même convention que le POC : `a.m` doit exister pour matcher `<5`).
+  const metricOk = (a: CoachAthlete) => {
+    if (!metricFilter) return true;
+    const row = dayRows[a.id];
+    return row !== null && dimensionRaw(row, metricFilter) < 5;
+  };
+
+  // Filtre par sportif (2026-09-24, barre persistante) — restreint les 2 sections à ce seul sportif
+  // quand une sélection est active, sans changer où il apparaît (priorité vs plan cohérent reste
+  // déterminé par attention(), pas par le filtre). Combiné au filtre métrique ci-dessus.
+  const displayedPriority = (selectedAthleteId ? sortedPriority.filter(a => a.id === selectedAthleteId) : sortedPriority).filter(metricOk);
+  const displayedStable = (selectedAthleteId ? stable.filter(a => a.id === selectedAthleteId) : stable).filter(metricOk);
 
   function getTopSession(athleteId: string): CoachViewSession | null {
     return sessions
@@ -470,6 +495,32 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const reviewedPriorityCount = sortedPriority.filter(a => reviewedIds.has(a.id)).length;
 
+  // Rings + points de séance dans le calendrier popup (2026-09-24) — réservés au contexte "un seul
+  // sportif" (Gildas : "quand on est... filtré sur un [athlète]"), jamais sur "Tous" (pas de score
+  // unique à montrer pour une équipe entière). recentSessions/wellnessBaselineHistory couvrent déjà
+  // ~42j par sportif réel (voir /coach/page.tsx, sinceHistory) — un sportif démo (recentSessions
+  // vide, aucune entrée wellnessBaselineHistory) retombe gracieusement sur un calendrier nu.
+  const selectedAthleteForRings = selectedAthleteId ? athletes.find(a => a.id === selectedAthleteId) ?? null : null;
+  const DOT_RANK: Record<"planned" | "done-light" | "done-med" | "done-high", number> = { planned: 0, "done-light": 1, "done-med": 2, "done-high": 3 };
+  const headerDotMap: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
+  // Score RELATIF (2026-09-25, fix — "les wellness ring dans le calendar expanded sont fausses") :
+  // relativeWellnessByDate() est le seul point qui calcule ce score, jamais wellness_daily.score brut.
+  let headerWellnessMap: Record<string, number | null> = {};
+  if (selectedAthleteForRings) {
+    for (const s of recentSessions[selectedAthleteForRings.id] ?? []) {
+      let cls: "done-light" | "done-med" | "done-high" | "planned";
+      if (s.done) {
+        const diff = s.rpe ?? s.target_difficulty ?? 5;
+        cls = diff >= 8 ? "done-high" : diff >= 5 ? "done-med" : "done-light";
+      } else {
+        cls = "planned";
+      }
+      if (!headerDotMap[s.date] || DOT_RANK[cls] > DOT_RANK[headerDotMap[s.date]]) headerDotMap[s.date] = cls;
+    }
+    const wHistory = selectedAthleteForRings.user_id ? wellnessBaselineHistory[selectedAthleteForRings.user_id] ?? [] : [];
+    headerWellnessMap = relativeWellnessByDate(wHistory, 45);
+  }
+
   return (
     <>
       {!isActive && (
@@ -480,11 +531,29 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
-      <CalendarHeader selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)} />
+      <CalendarHeader
+        mode="day" contentMaxWidth={coachContentMaxWidth}
+        selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
+        showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+      />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} />
+      {athletes.length > 0 && (
+        <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
+          <HomeTabs active={homeTab} onChange={setHomeTab} dark={false} />
+        </div>
+      )}
 
-      <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1000 : isMd ? 720 : 600, margin: "0 auto" }}>
+      {/* Coach = fond de page CLAIR (bg-bg hérité, inchangé) + cartes sombres — jamais l'inverse
+         (2026-09-24, clarification explicite de Gildas : "côté coach... ça affiche les cartes des
+         sportifs avec bg light, cards dark comme le poc" — corrige ma tentative précédente d'assombrir
+         toute la page, revenue en arrière ici). Seul /today et /conseils (sportif) passent en page
+         sombre — voir leur doc respective. Layout élargi à 1180px (au lieu de 1000) reste, en revanche
+         — même largeur que `.shell` du POC, pour que le carrousel 3 colonnes ait la place de respirer. */}
+      <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
 
+        {homeTab === "today" && (
+        <>
         {/* ── Welcome overlay handled below ── */}
 
         {/* ── Bandeau d'activation coach (J0) ── */}
@@ -538,68 +607,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             {greeting()} {coachName ?? ""} 👋
           </div>
         </div>
-
-        {athletes.length > 0 && (() => {
-          const decisionCount = sortedPriority.filter(a => !reviewedIds.has(a.id)).length;
-          const advice = getCoachAdvice(athletes, sessions, avgWellness, avgDifficulty);
-          const label: React.CSSProperties = { fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.38)", marginTop: 5 };
-          const divider = <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,.10)", margin: "0 4px" }} />;
-          return (
-            <div style={{ margin: "12px 0", background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "14px 10px", boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  <div style={{ fontSize: 34, fontWeight: 1000, color: decisionCount > 0 ? "#f04a08" : "#2f9e44", letterSpacing: "-0.05em", lineHeight: 1 }}>{decisionCount}</div>
-                  <div style={label}>Décisions restantes</div>
-                </div>
-                {divider}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  {typeof avgWellness === "number" && avgWellness > 0
-                    ? <WellnessRing score={avgWellness} size={52} />
-                    : <div style={{ fontSize: 34, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
-                  }
-                  <div style={label}>Récupération équipe</div>
-                </div>
-                {divider}
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  {avgDifficulty !== null ? (
-                    <>
-                      <div style={{ fontSize: 30, fontWeight: 1000, letterSpacing: "-0.05em", lineHeight: 1, color: avgDifficulty >= 8 ? "#d44000" : avgDifficulty >= 5 ? "#f28a00" : "#2f9e44", marginBottom: 5 }}>
-                        {avgDifficulty}
-                      </div>
-                      <div style={{ width: "70%" }}>
-                        <DiffGauge value={avgDifficulty} height={5} />
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 30, fontWeight: 1000, color: "rgba(255,255,255,.3)", letterSpacing: "-0.05em", lineHeight: 1 }}>—</div>
-                  )}
-                  <div style={label}>RPE prévu</div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", marginTop: 14, paddingTop: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 1000, color: "#ff6b2b", letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: 10 }}>
-                  ✦ Lecture d&apos;équipe
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.6, color: "rgba(255,255,255,.88)" }}>
-                  {advice}
-                </div>
-                {decisionCount > 0 && (() => {
-                  const first = sortedPriority.find(a => !reviewedIds.has(a.id));
-                  return first ? (
-                    <button
-                      data-tour="decider-btn"
-                      onClick={() => handleDecide(first)}
-                      style={{ marginTop: 12, width: "100%", height: 44, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 20px rgba(212,64,0,.35)", letterSpacing: "-0.01em" }}
-                    >
-                      Traiter les décisions ({decisionCount}) →<span className="tour-lock">🔒</span>
-                    </button>
-                  ) : null;
-                })()}
-              </div>
-            </div>
-          );
-        })()}
 
         {athletes.length === 0 ? (
           <>
@@ -669,6 +676,80 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           </>
         ) : (
           <>
+            {/* Filtre par métrique (2026-09-24, POC poc-coach-context_4.html, recapHtml()/filterBar()) —
+               réservé au mode "Tous" (selectedAthleteId===null, comme dans le POC : mOK/filterBar n'ont
+               de sens que pour une vue équipe). Moyenne + "N sportifs bas" par dimension, calculées sur
+               les seuls sportifs avec une vraie ligne du jour (dayRows) — un sportif démo/sans check-in
+               n'entre dans aucune moyenne, plutôt que de fausser silencieusement le chiffre affiché. */}
+            {/* Light comme le POC (2026-09-25, retour de Gildas — `.mcard{background:#fff;
+               border:1.5px solid #e4e4e7;color:#18181b}`, actif `.on{border-color:orange;
+               background:#fff7ed}`, jamais une pastille filled). Remplace le 1er jet en gradient
+               dark, qui reprenait à tort la convention des cartes CoachCard plutôt que celle du
+               POC pour CE composant précis. */}
+            {selectedAthleteId === null && (() => {
+              const withData = athletes.filter(a => dayRows[a.id] !== null);
+              return (
+                <div style={{ margin: "13px 0 4px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${DIMENSION_KEYS.length + 1}, 1fr)`, gap: 8, overflowX: "auto" }}>
+                    {DIMENSION_KEYS.map(dim => {
+                      const withDim = withData;
+                      const avg = withDim.length ? withDim.reduce((t, a) => t + dimensionRaw(dayRows[a.id]!, dim), 0) / withDim.length : null;
+                      const low = withDim.filter(a => dimensionRaw(dayRows[a.id]!, dim) < 5).length;
+                      const active = metricFilter === dim;
+                      return (
+                        <button
+                          key={dim}
+                          onClick={() => setMetricFilter(active ? null : dim)}
+                          style={{
+                            textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
+                            background: active ? "#fff7ed" : "#fff",
+                            border: active ? "1.5px solid #d44000" : "1.5px solid #e4e4e7",
+                          }}
+                        >
+                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#71717a" }}>
+                            {DIMENSION_LABELS[dim]}
+                          </div>
+                          <div style={{ fontSize: 20, fontWeight: 1000, color: "#18181b", letterSpacing: "-0.03em", marginTop: 2 }}>
+                            {avg !== null ? avg.toFixed(1).replace(".", ",") : "—"}
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "#71717a" }}>/10</span>
+                          </div>
+                          <div style={{ fontSize: 10, fontWeight: 800, marginTop: 3, color: low > 0 ? "#dc2626" : "#16a34a" }}>
+                            {low > 0 ? `${low} sportif${low > 1 ? "s" : ""} bas` : "Tous OK"}
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => setShowInviteModal(true)}
+                      style={{
+                        textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
+                        background: "linear-gradient(120deg,#fff7ed,#fff)", border: "1.5px solid #fed7aa",
+                        display: "flex", flexDirection: "column", justifyContent: "center",
+                      }}
+                    >
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#71717a" }}>
+                        {athletes.length} sportif{athletes.length > 1 ? "s" : ""}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#d44000", marginTop: 6 }}>
+                        + Inviter →
+                      </div>
+                    </button>
+                  </div>
+                  {metricFilter && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "#52525b" }}>
+                      Filtre : <b style={{ color: "#171b1f" }}>{DIMENSION_LABELS[metricFilter]} bas</b>
+                      <button
+                        onClick={() => setMetricFilter(null)}
+                        style={{ background: "#e4e4e7", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#18181b", cursor: "pointer" }}
+                      >
+                        Effacer ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
@@ -681,28 +762,37 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   </div>
                 )}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
-                {sortedPriority.length > 0 ? sortedPriority.map((a, idx) => (
-                  <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={true}
-                    isReviewed={reviewedIds.has(a.id)}
-                    tourId={idx === 0 ? "coach-card-alert" : undefined}
-                    trend={trends[a.id]}
-                    trendInput={trendInputs[a.id]}
-                    baseline={baselines[a.id]}
-                    recentSessions={recentSessions[a.id]}
-                    coachName={coachName ?? "Coach"}
-                    isActive={isActive}
-                    onDecide={() => handleDecide(a)}
-                    onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
-                    onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
-                    onAutoregDecided={() => markAutoregDecided(a.id)}
-                    onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
-                )) : (
-                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
-                    Aucune décision urgente. L'équipe peut suivre le plan.
-                  </div>
-                )}
-              </div>
+              {/* Carrousel horizontal — TOUJOURS, y compris sur desktop (2026-09-24, retour explicite
+                 de Gildas, "le carrousel coach control doit aussi être présent en desktop", fidèle au
+                 POC `.queue-carousel` : `@media(min-width:900px){.card{flex:0 0 calc((100% - 32px)/3)}}`
+                 — 3 cartes visibles à la fois sur desktop plutôt qu'une grille figée à 2, le scroll
+                 horizontal reste disponible au-delà). */}
+              {displayedPriority.length > 0 ? (
+                <div style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x mandatory", margin: "0 -16px", padding: "0 16px 4px", scrollbarWidth: "none" as const }}>
+                  {displayedPriority.map((a, idx) => (
+                    <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
+                      <CoachCard athlete={a} sessions={sessions} isPriority={true}
+                        isReviewed={reviewedIds.has(a.id)}
+                        tourId={idx === 0 ? "coach-card-alert" : undefined}
+                        trend={trends[a.id]}
+                        trendInput={trendInputs[a.id]}
+                        baseline={baselines[a.id]}
+                        recentSessions={recentSessions[a.id]}
+                        coachName={coachName ?? "Coach"}
+                        isActive={isActive}
+                        onDecide={() => handleDecide(a)}
+                        onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
+                        onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
+                        onAutoregDecided={() => markAutoregDecided(a.id)}
+                        onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)" }}>
+                  {selectedAthleteId ? "Rien à décider pour ce sportif." : "Aucune décision urgente. L'équipe peut suivre le plan."}
+                </div>
+              )}
             </div>
 
             <div style={{ margin: "13px 0" }}>
@@ -713,7 +803,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
-                {stable.length > 0 ? stable.map(a => (
+                {displayedStable.length > 0 ? displayedStable.map(a => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
@@ -728,13 +818,44 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     onAutoregDecided={() => markAutoregDecided(a.id)}
                     onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
-                  <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "#687075", boxShadow: "0 4px 12px rgba(0,0,0,.04)", gridColumn: isLg ? "1 / -1" : undefined }}>
-                    Tous les sportifs nécessitent une attention aujourd'hui.
+                  <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)", gridColumn: isLg ? "1 / -1" : undefined }}>
+                    {selectedAthleteId ? "Ce sportif est dans la file « À décider »." : "Tous les sportifs nécessitent une attention aujourd'hui."}
                   </div>
                 )}
               </div>
             </div>
           </>
+        )}
+        </>
+        )}
+
+        {/* ── Onglets Charge/Récupération/Comportements (2026-09-24, "point 1", partie coach) —
+           voir POC `poc-coach-context_6.html`, tabBody()/teamBody() : sportif sélectionné → mêmes
+           sections que la propre Accueil du sportif (HomeAnalyticsSections.tsx, identique
+           TodayClient.tsx), dans une carte sombre dédiée (Coach = page claire + carte sombre). "Tous"
+           → liste classée par sévérité (TeamAnalyticsList), désormais SANS carte enveloppante
+           (2026-09-25, retour de Gildas — "je veux pas le background qui entoure la liste des
+           cards" : chaque ligne est déjà sa propre carte claire, un 2e cadre autour de la liste
+           entière était redondant). ── */}
+        {homeTab !== "today" && selectedAthleteId && (() => {
+          const a = athletes.find(x => x.id === selectedAthleteId);
+          const data = a ? athleteConseilsData[a.id] : undefined;
+          if (!a || !data) return null;
+          return (
+            <div style={{ background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 16, boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
+              {homeTab !== "comportements" && <CrossInsightBanner data={data} isDemoData={!a.user_id} />}
+              {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}
+            </div>
+          );
+        })()}
+        {homeTab !== "today" && !selectedAthleteId && (
+          <TeamAnalyticsList
+            rows={athletes.map(a => ({ athlete: a, data: athleteConseilsData[a.id] })).filter((r): r is { athlete: CoachAthlete; data: ConseilsData } => !!r.data)}
+            metric={homeTab as "charge" | "recuperation" | "comportements"}
+            onSelect={selectAthleteFilter}
+          />
         )}
 
         <div data-tour="invite-section" style={{ marginTop: 16 }}>

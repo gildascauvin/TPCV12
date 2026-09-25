@@ -7,7 +7,7 @@ import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMon
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
-import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
+import CalendarHeader, { type ViewMode, ViewModeSegmented } from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -111,6 +111,10 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [showReconduire, setShowReconduire] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [decisionTick, setDecisionTick] = useState(0);
+  // Aperçu live de la décharge/surcharge en cours de sélection sur la jauge de décision (2026-09-24,
+  // fix — même mécanisme que TodayClient.tsx, manquait ici : la jauge existait déjà en Planning mais
+  // ne répercutait jamais son drag sur les lignes d'exercice en dessous).
+  const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -207,20 +211,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dates = getWeekDates(weekBase);
-
-  const dotMap = (() => {
-    const map: Record<string, "done-light" | "done-med" | "done-high" | "planned"> = {};
-    dates.forEach(d => {
-      const dstr = format(d, "yyyy-MM-dd");
-      const ds = sessions.filter(s => s.date === dstr);
-      const charge = ds.filter(s => s.done && s.rpe && s.duration).reduce((a, s) => a + s.rpe! * s.duration!, 0);
-      if (charge > 600) map[dstr] = "done-high";
-      else if (charge > 300) map[dstr] = "done-med";
-      else if (charge > 0) map[dstr] = "done-light";
-      else if (ds.some(s => !s.done)) map[dstr] = "planned";
-    });
-    return map;
-  })();
 
   async function loadWeek(base: Date) {
     // Sandbox : le fixture initial couvre déjà -41/+21 jours (voir sandboxFixtures.ts) — un
@@ -463,18 +453,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     }
   }
 
-  // Même calcul que le ring de chaque DayColumn ci-dessous (score relatif dès que l'historique est
-  // suffisant) — un seul et même chiffre entre le header, le ring du jour et /today pour une même
-  // date, jamais 3 valeurs différentes pour le même sportif.
-  const wellnessMapForHeader: Record<string, number | null> = {};
-  dates.forEach(d => {
-    const iso = format(d, "yyyy-MM-dd");
-    const row = wellnessList.find(w => w.date === iso) ?? null;
-    if (!row || row.bedtime == null) { wellnessMapForHeader[iso] = null; return; }
-    const b = computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < iso), row);
-    wellnessMapForHeader[iso] = b?.hasEnoughHistory ? b.relativeScore : wellnessSignal(row);
-  });
-
   // Programme + semaine correspondant à la semaine actuellement affichée (navigation) —
   // un sportif pouvant enchaîner plusieurs programmes actifs, celui pertinent pour la
   // semaine affichée n'est pas forcément `activeProgram` (qui reste "pertinent aujourd'hui").
@@ -499,13 +477,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       )}
 
       <CalendarHeader
+        mode="period"
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
-        dotMap={dotMap}
-        wellnessMap={wellnessMapForHeader}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
-        onSwipe={navigatePeriod}
         onProfileClick={() => setProfileOpen(true)}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
@@ -567,6 +543,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           </div>
         </div>
       )}
+
+      {/* Sem./Mois — au-dessus de la grille, pas dans le header (2026-09-25, retour de Gildas). */}
+      <div style={{ display: "flex", justifyContent: "flex-end", padding: isMd ? "10px 20px 0" : "10px 14px 0" }}>
+        <ViewModeSegmented mode={viewMode} onChange={handleViewModeChange} />
+      </div>
 
       <div ref={weekGridRef} data-tour="week-sessions">
         <div key={`cal-${navKey}`} style={{
@@ -648,6 +629,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     variant="light"
                     severityColor={severityColor}
                     isActive={isActive}
+                    onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
                       if (!isActive) { setPaywallStep("priming"); return; }
@@ -656,12 +638,14 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                       const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
                       const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
                       if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      setAutoregPreview(null);
                       return original;
                     }}
                     onUndo={async (original) => {
                       if (!original) return;
                       const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
                       if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+                      setAutoregPreview(null);
                       setDecisionTick(t => t + 1);
                     }}
                   />
@@ -699,6 +683,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     onEdit={(sess) => setEditing(sess)}
                     onDuplicate={(sess) => setDuplicating(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
+                    previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
