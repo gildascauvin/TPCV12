@@ -3771,4 +3771,4 @@ Remplace les différents dégradés/aplats neutres ad hoc utilisés jusqu'ici (`
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque étape (badges, rebrand typo, fond dark ×2 rounds). Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas) — chaque décision de scope (badges pédagogiques sans retirer l'insight global, périmètre du rebrand typo, inclusion différée puis confirmée de l'onboarding/wizard pour le fond dark) tranchée par échange explicite avec Gildas avant exécution, pas devinée.
 
-Déployé en prod le 2026-09-25, commit `PENDING_COMMIT`, push direct sur `main`.
+Déployé en prod le 2026-09-25, commit `ad33c52`, push direct sur `main`.
