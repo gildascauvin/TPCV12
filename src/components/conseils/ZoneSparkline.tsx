@@ -147,7 +147,7 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", marginBottom: 3 }}>
             {formatDateFr(hDate)}
           </div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: hZone?.color ?? "#8a8f94" }}>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: hZone?.color ?? "#8a8f94" }}>
             {hVal !== null && hZone ? `⚡ ACWR ${hVal.toFixed(2)} · ${hZone.label}` : "— Historique insuffisant"}
           </div>
           {hLoad !== null && (
@@ -199,7 +199,7 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
           <div key={z.label} style={{
             position: "absolute", left: 8, top: `${toYPct(Math.min(z.max, DISPLAY_MAX))}%`,
             transform: "translateY(2px)",
-            fontSize: 9, fontWeight: 900, letterSpacing: "0.06em", color: z.color,
+            fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", color: z.color,
           }}>
             {z.label}
           </div>

@@ -47,13 +47,13 @@ export default function AuthBackground({ children }: { children: React.ReactNode
                   strokeLinecap="round" transform="rotate(-90 40 40)" />
               </svg>
               <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ fontSize: 22, fontWeight: 1000, color: "#fff", letterSpacing: "-0.04em", lineHeight: 1 }}>78</div>
+                <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>78</div>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,.6)", fontWeight: 700, marginTop: 2 }}>RÉCUP.</div>
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Zone stable</div>
-              <div style={{ fontSize: 17, fontWeight: 950, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.2 }}>Bonne forme,<br />prêt à performer</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", fontWeight: 700, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>Zone stable</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1.2 }}>Bonne forme,<br />prêt à performer</div>
               <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                 {[["😴","7h30"],["💆","Récup"],["⚡","Motiv"]].map(([icon, label]) => (
                   <div key={label} style={{ background: "rgba(255,255,255,.10)", borderRadius: 8, padding: "4px 8px", fontSize: 10, color: "rgba(255,255,255,.75)", fontWeight: 700 }}>
@@ -82,7 +82,7 @@ export default function AuthBackground({ children }: { children: React.ReactNode
                   <div style={{ width: 56, height: 5, borderRadius: 3, background: "rgba(0,0,0,.08)", overflow: "hidden" }}>
                     <div style={{ width: `${Math.max(22, Math.min(100, s.diff * 10))}%`, height: "100%", background: s.tagColor, borderRadius: 3 }} />
                   </div>
-                  <span style={{ fontSize: 10, background: s.tagBg, color: s.tagColor, borderRadius: 999, padding: "2px 7px", fontWeight: 900 }}>{s.tag}</span>
+                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, background: s.tagBg, color: s.tagColor, borderRadius: 999, padding: "2px 7px", fontWeight: 700 }}>{s.tag}</span>
                 </div>
               </div>
               <div style={{ width: 34, height: 34, borderRadius: 10, background: s.done ? "#eef8f1" : "linear-gradient(180deg,#f04a08,#d44000)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>

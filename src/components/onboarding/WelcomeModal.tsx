@@ -24,7 +24,7 @@ export default function WelcomeModal({ mode, onClose }: Props) {
         {mode === "athlete" ? (
           <>
             <div style={{ fontSize: 36, textAlign: "center", marginBottom: 10 }}>🎯</div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.2, textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2, textAlign: "center", marginBottom: 14 }}>
               Ton espace est prêt
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.65, marginBottom: 24, textAlign: "center" }}>
@@ -36,7 +36,7 @@ export default function WelcomeModal({ mode, onClose }: Props) {
         ) : (
           <>
             <div style={{ fontSize: 36, textAlign: "center", marginBottom: 10 }}>🏆</div>
-            <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.04em", color: "#171b1f", lineHeight: 1.2, textAlign: "center", marginBottom: 14 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2, textAlign: "center", marginBottom: 14 }}>
               Bienvenue dans ton coach control
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.65, marginBottom: 24, textAlign: "center" }}>

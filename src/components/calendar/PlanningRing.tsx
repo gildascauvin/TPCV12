@@ -27,10 +27,10 @@ export default function PlanningRing({ score, size = 58 }: { score: number | nul
           style={{ transition: "stroke-dashoffset 0.28s ease, stroke 0.28s ease" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-        <span style={{ fontSize: fSize, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.04em", color: "#fff" }}>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: fSize, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color: "#fff" }}>
           {score !== null ? score : "—"}
         </span>
-        <span style={{ fontSize: labelSize, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>
+        <span style={{ fontSize: labelSize, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
           well
         </span>
       </div>

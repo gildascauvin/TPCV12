@@ -102,13 +102,13 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>{title ?? "Reconduire la semaine"}</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>{title ?? "Reconduire la semaine"}</div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 0" }}>
           {/* Mode */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Mode de progression
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 16 }}>
@@ -130,7 +130,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
 
           {mode !== "maintien" && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
                 De combien {mode === "deload" ? "alléger" : "surcharger"} ?
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
@@ -161,7 +161,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
               (WeekSessionCard, DayColumn.tsx) plutôt qu'une liste de cartes diff maison. Sessions
               en lecture seule (onComplete/onEdit/onDuplicate no-op) : ce n'est qu'un aperçu avant
               confirmation, pas un éditeur. */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Aperçu des modifications
           </div>
           {totalSessions === 0 ? (
@@ -176,7 +176,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
             }}>
               {daySlots.map((slot, dayIndex) => (
                 <div key={dayIndex} style={{ scrollSnapAlign: "start", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+                  <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
                     {DAY_LABELS[dayIndex]}
                   </div>
                   {slot.sessions.length === 0 && (
@@ -230,7 +230,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
           {/* Sportifs destinataires — coach uniquement, sous l'aperçu (demandé explicitement). */}
           {showRecipients && (
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
                 Reconduire vers
                 {recipients.length > 0 && (
                   <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
@@ -264,9 +264,9 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
                       </div>
                       <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>
                         {a.name}
-                        {a.id === sourceAthleteId && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", textTransform: "uppercase" }}>actuel</span>}
+                        {a.id === sourceAthleteId && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>actuel</span>}
                       </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
                     </button>
                   );
                 })}

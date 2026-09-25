@@ -9,7 +9,7 @@
 
 import ShareButton from "@/components/sessions/ShareButton";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey } from "@/lib/wellnessBaseline";
+import { dimensionBadgesSeries, dimensionInsightText, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey, type Perspective } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
@@ -44,7 +44,7 @@ export function CrossInsightBanner({ data, isDemoData = false }: { data: Conseil
       {(isDemoData || (sig.signals !== 0 && trendText)) && (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, position: "relative" as const, zIndex: 2, marginBottom: sig.signals === 0 ? 0 : 8 }}>
           {isDemoData && (
-            <div style={{ background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" as const }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const }}>
               🔎 Exemple
             </div>
           )}
@@ -73,7 +73,7 @@ export function CrossInsightBanner({ data, isDemoData = false }: { data: Conseil
         <div style={{ position: "relative" as const, zIndex: 2 }}>
           {trendText && (
             <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "13px 15px", fontSize: 14, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
-              {trendEmoji} {trendAction && <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{trendAction} — </span>}{trendText}
+              {trendEmoji} {trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{trendAction} — </span>}{trendText}
             </div>
           )}
           {recoveryAlert && (
@@ -91,7 +91,7 @@ export function CrossInsightBanner({ data, isDemoData = false }: { data: Conseil
 }
 
 export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void }) {
-  const { monotonyInfo, strainInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight } = data;
+  const { loadInfo, monotonyInfo, strainInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight } = data;
   const { series } = windowFor(data, rangeMode);
   const zoneAcwr = series.map(p => p.acwr);
   const zoneLoads = series.map(p => p.load);
@@ -107,10 +107,16 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: Co
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const, marginBottom: 10 }}>
         <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-          <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={METRIC_DEFINITIONS.monotony} />
-          {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={METRIC_DEFINITIONS.strain} />}
-          {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={METRIC_DEFINITIONS.fitness} />}
-          {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={METRIC_DEFINITIONS.fatigue} />}
+          {/* Tooltip = insight PERSONNALISÉ (xxxInfo.text, déjà "ta charge chronique est en
+             baisse..."), plus la définition générique/neutre METRIC_DEFINITIONS (2026-09, retour de
+             Gildas — "ce qu'on a dans le tooltip mais en insight personnalisé synthétique"). ACWR
+             (loadInfo) ajouté — jusqu'ici seulement visible via les bandes de couleur du chart,
+             jamais comme badge à part entière. */}
+          <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={loadInfo.text} />
+          <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={monotonyInfo.text} />
+          {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={strainInfo.text} />}
+          {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={fitnessTrendInfo.text} />}
+          {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={fatigueTrendInfo.text} />}
         </div>
       </div>
       <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
@@ -129,7 +135,7 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: Co
   );
 }
 
-export function RecuperationSection({ data, rangeMode, onRangeModeChange }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void }) {
+export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
   const { formInfo, recoveryInsight, recoveryInfo } = data;
   const { series, baseline } = windowFor(data, rangeMode);
   const zoneDates = series.map(p => p.date);
@@ -149,10 +155,15 @@ export function RecuperationSection({ data, rangeMode, onRangeModeChange }: { da
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const, marginBottom: 10 }}>
         <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+          {/* Badge composite "Récupération" (2026-09, ajouté — jusqu'ici absent de cette page,
+             seulement visible via les 4 dimensions et le chart) + tooltip pédagogique personnalisé
+             sur chaque badge, y compris les 4 dimensions qui n'en avaient aucun (juste la flèche) —
+             même principe que ChargeSection ci-dessus. */}
+          <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={recoveryInfo.text} />
           {todayDimensionBadges?.map((b: { key: DimensionKey; label: string; arrow: "up" | "down" | "stable" }) => (
-            <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} />
+            <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} definition={dimensionInsightText(b.key, data.wellnessBaseline, perspective)} />
           ))}
-          {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={METRIC_DEFINITIONS.form} />}
+          {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={formInfo.text} />}
         </div>
       </div>
       <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
@@ -308,7 +319,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
             </div>
             {metric !== "comportements" && data.trendText && (
               <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.06)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "#171b1f", lineHeight: 1.5, fontWeight: 600 }}>
-                {data.trendEmoji} {data.trendAction && <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000" }}>{data.trendAction} — </span>}{data.trendText}
+                {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000" }}>{data.trendAction} — </span>}{data.trendText}
               </div>
             )}
           </button>
@@ -327,8 +338,8 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
       <div data-tour="conseils-chart" style={{ padding: "18px 0", color: "#fff", position: "relative" as const }}>
         <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
         <div style={{ position: "relative", zIndex: 2 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
-          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", marginBottom: 8 }}>Données en cours de collecte</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Données en cours de collecte</div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", lineHeight: 1.5, marginBottom: 18 }}>
             {remaining > 0
               ? `Renseigne ta récupération ${remaining} jour${remaining > 1 ? "s" : ""} de plus pour voir l'impact réel de tes comportements.`
@@ -357,10 +368,10 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
       <div style={{ position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
-            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em" }}>Ce qui t&apos;aide ou te pénalise</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Ce qui t&apos;aide ou te pénalise</div>
           </div>
-          <div style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 900, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
         </div>
 
         <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 6 }}>
@@ -369,7 +380,7 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
               <span style={{ fontWeight: 900, color: "#2f9e44" }}>✓ Continue : </span>
               <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span>
               {" "}améliore ta récupération de{" "}
-              <span style={{ fontWeight: 900, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "#2f9e44" }}>+{bestHelper.impact.toFixed(1)} pts</span> en moyenne.
             </div>
           )}
           {worstHurt && (
@@ -377,7 +388,7 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
               <span style={{ fontWeight: 900, color: "#d10000" }}>✗ Évite : </span>
               <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span>
               {" "}pénalise ta récupération de{" "}
-              <span style={{ fontWeight: 900, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "#d10000" }}>{worstHurt.impact.toFixed(1)} pts</span> en moyenne.
             </div>
           )}
           {!bestHelper && !worstHurt && (
@@ -396,7 +407,7 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{c.label}</div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap" as const, color, background: `${color}26` }}>
+                    <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap" as const, color, background: `${color}26` }}>
                       {statusLabel} {impactStr}
                     </span>
                   </div>

@@ -33,7 +33,7 @@ export default function NotificationToggle() {
     <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 22 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#171b1f" }}>🔔 Notifications</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, color: "#171b1f" }}>🔔 Notifications</div>
           <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>
             {status === "unsupported" && "Non disponible sur ce navigateur"}
             {status === "install-needed" && "Ajoute ThePerfClub à ton écran d'accueil pour les activer"}

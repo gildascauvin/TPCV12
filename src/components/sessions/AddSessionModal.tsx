@@ -174,7 +174,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             <input
               type="text" value={name} onChange={e => setName(e.target.value)}
               placeholder="Nom de la séance"
-              style={{ flex: 1, minWidth: 0, fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit" }}
+              style={{ flex: 1, minWidth: 0, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "var(--font-display)" }}
             />
             {isEdit && session && (
               <div style={{ flexShrink: 0, marginTop: 2 }}>
@@ -212,10 +212,10 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           {/* Difficulté cible */}
           <div style={{ background: diffBg, border: `1px solid ${diffBorder}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#202428" }}>Difficulté prévue</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#202428" }}>Difficulté prévue</div>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
-                <span style={{ fontSize: 22, fontWeight: 1000, color: diffColor, lineHeight: 1, letterSpacing: "-0.04em" }}>{targetDiff}</span>
+                <span style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: diffColor, lineHeight: 1, letterSpacing: "-0.02em" }}>{targetDiff}</span>
               </div>
             </div>
             <input

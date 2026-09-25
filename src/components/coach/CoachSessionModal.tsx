@@ -277,7 +277,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Nom de la séance"
-            style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit" }}
+            style={{ flex: 1, minWidth: 0, fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "var(--font-display)" }}
           />
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
             {isEdit && session && (
@@ -308,7 +308,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
           {reviewContext ? (
             <>
               <span>Réviser · {athleteName}</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#d44000", background: "#fff0e9", border: "1px solid rgba(212,64,0,.20)", borderRadius: 999, padding: "2px 8px" }}>
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#d44000", background: "#fff0e9", border: "1px solid rgba(212,64,0,.20)", borderRadius: 999, padding: "2px 8px" }}>
                 Revue {reviewContext.queueCurrent}/{reviewContext.queueTotal}
               </span>
             </>
@@ -345,16 +345,16 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                       strokeDashoffset={String(+(2 * Math.PI * 27 * (1 - (dispW ?? 0) / 100)).toFixed(1))} />
                   </svg>
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 18, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.05em", color: wColor }}>{dispW !== null ? dispW : "—"}</span>
-                    <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase" }}>récup.</span>
+                    <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 18, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color: wColor }}>{dispW !== null ? dispW : "—"}</span>
+                    <span style={{ fontSize: 7, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,0.56)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>récup.</span>
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: wColor, letterSpacing: "-0.01em" }}>{wLabel}</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: wColor, letterSpacing: "-0.01em" }}>{wLabel}</div>
                   <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>
-                    {w !== null ? <>Récupération <span style={{ fontWeight: 800 }}>{w}/100</span></> : "Récupération non renseignée aujourd'hui"}
+                    {w !== null ? <>Récupération <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700 }}>{w}/100</span></> : "Récupération non renseignée aujourd'hui"}
                     {reviewContext.maxDiff > 0 && (
-                      <> · Difficulté prévue <span style={{ fontWeight: 800, color: dColor }}>{reviewContext.maxDiff}/10</span></>
+                      <> · Difficulté prévue <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: dColor }}>{reviewContext.maxDiff}/10</span></>
                     )}
                   </div>
                 </div>
@@ -380,10 +380,10 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         {/* Difficulty */}
         <div style={{ background: diffBg, border: `1px solid ${diffBorder}`, borderRadius: 16, padding: 14, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#202428" }}>Difficulté cible</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#202428" }}>Difficulté cible</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
-              <span style={{ fontSize: 22, fontWeight: 1000, color: diffColor, lineHeight: 1, letterSpacing: "-0.04em" }}>{difficulty}</span>
+              <span style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", background: diffBg, border: `1px solid ${diffBorder}`, color: diffColor, borderRadius: 999, padding: "3px 8px" }}>{diffLabel}</span>
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: diffColor, lineHeight: 1, letterSpacing: "-0.02em" }}>{difficulty}</span>
             </div>
           </div>
           <input type="range" min={1} max={10} value={difficulty} step={1} onChange={e => setDifficulty(Number(e.target.value))}
@@ -410,7 +410,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
         {/* Recipients */}
         {showRecipients && (
           <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
               {isEdit ? "Dupliquer aussi vers" : "Sportifs destinataires"}
               {recipients.length > 0 && (
                 <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
@@ -445,9 +445,9 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                     </div>
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>
                       {a.name}
-                      {locked && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", textTransform: "uppercase" }}>original</span>}
+                      {locked && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>original</span>}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
+                    <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
                   </button>
                 );
               })}

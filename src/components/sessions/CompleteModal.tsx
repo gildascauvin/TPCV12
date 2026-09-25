@@ -44,7 +44,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         {/* Title */}
-        <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", marginBottom: 4 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
           Terminer la séance
         </div>
         <div style={{ fontSize: 14, color: "#62686e", marginBottom: 22, lineHeight: 1.4 }}>
@@ -54,8 +54,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         {/* Duration */}
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Durée</div>
-            <div style={{ fontSize: 20, fontWeight: 1000, color: "#171b1f", letterSpacing: "-0.04em" }}>{duration} <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>min</span></div>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Durée</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>{duration} <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>min</span></div>
           </div>
           <input
             type="range" min={5} max={240} step={5} value={duration}
@@ -70,8 +70,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         {/* RPE */}
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
-            <div style={{ fontSize: 20, fontWeight: 1000, color: rpeColor, letterSpacing: "-0.04em" }}>{rpe}<span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>/10</span></div>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpe}<span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>/10</span></div>
           </div>
           <input
             type="range" min={1} max={10} step={1} value={rpe}
@@ -86,12 +86,12 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         {/* Stats mini grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
           <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, color: "#171b1f", letterSpacing: "-0.04em", lineHeight: 1 }}>{duration}</div>
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MINUTES</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1 }}>{duration}</div>
+            <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MINUTES</div>
           </div>
           <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, color: rpeColor, letterSpacing: "-0.04em", lineHeight: 1 }}>{rpe}</div>
-            <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFFICULTÉ</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em", lineHeight: 1 }}>{rpe}</div>
+            <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFFICULTÉ</div>
           </div>
         </div>
 

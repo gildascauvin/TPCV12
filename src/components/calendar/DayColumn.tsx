@@ -102,7 +102,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           {session.name}
         </div>
         <span style={{
-          fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0,
+          fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0,
           background: session.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)",
           color: session.done ? "#2f9e44" : "#d44000",
         }}>
@@ -215,16 +215,16 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       {/* Header: day + ring */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+          <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
             {DAYS[date.getDay() === 0 ? 6 : date.getDay() - 1]}
           </div>
           {!hideDayNumber && (
-            <div style={{ fontSize: 26, fontWeight: 1000, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.04em" }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
               {date.getDate()}
             </div>
           )}
           {isToday && (
-            <span style={{ display: "inline-block", fontSize: 9, fontWeight: 800, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
+            <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", fontSize: 9, fontWeight: 700, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
               Aujourd'hui
             </span>
           )}
@@ -235,7 +235,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       </div>
 
       {/* Zone label */}
-      <div style={{ fontSize: 10, fontWeight: 800, color: score !== null ? scoreColor(score) : "#8a8f94", marginBottom: 8, letterSpacing: "0.01em" }}>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: score !== null ? scoreColor(score) : "#8a8f94", marginBottom: 8, letterSpacing: "0.01em" }}>
         {wellness?.zoneLabel ?? formLabel(score)}
       </div>
 
@@ -248,14 +248,14 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
         <AlertBox alert={alert} actions={alertActions} />
       ) : recoveryAdvice ? (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
-          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "#171b1f", marginBottom: 5 }}>🌿 Récupération</div>
+          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#171b1f", marginBottom: 5 }}>🌿 Récupération</div>
           <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{recoveryAdvice}</div>
         </div>
       ) : (
         <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
             <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-            <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
+            <div style={{ fontSize: 9, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>
               {rule.tag}
             </div>
           </div>
@@ -264,7 +264,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       )}
 
       {/* Sessions label */}
-      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
+      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 7 }}>
         Séances · {sessions.length}
       </div>
 

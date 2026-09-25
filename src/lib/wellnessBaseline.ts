@@ -357,6 +357,25 @@ export function dominantDimensionAction(b: WellnessBaselineResult, perspective: 
   return DIMENSION_ACTION[dim][perspective === "coach" ? "coach" : "athlete"];
 }
 
+/* Insight pédagogique PAR dimension (2026-09, retour de Gildas sur les badges Charge/Récup —
+   "wording pédagogique, ce qu'on a dans le tooltip mais en insight personnalisé synthétique") :
+   généralise describeDominantDimension()/dominantDimensionAction() ci-dessus (qui ne retournent
+   qu'UNE seule dimension, la plus marquée des 4) à N'IMPORTE QUELLE dimension prise isolément — sert
+   de contenu de tooltip pour CHAQUE badge Sommeil/Stress/Récup. musculaire/Motivation (voir
+   HomeAnalyticsSections.tsx), pas seulement la dominante. Mêmes briques que ci-dessus
+   (directionalZ/deviationIntensity/Z_SWC), même seuil "notable". */
+export function dimensionInsightText(dim: DimensionKey, b: WellnessBaselineResult | null, perspective: Perspective = "athlete"): string {
+  const label = DIMENSION_LABELS[dim];
+  const poss = perspective === "coach" ? "sa" : "ta";
+  if (!b?.hasEnoughHistory) return `${label} — historique insuffisant pour comparer à ${poss} norme.`;
+  const z = b.dimensions[dim].z;
+  if (z === null) return `${label} — pas encore assez de données sur cette dimension.`;
+  const dz = directionalZ(dim, z);
+  if (Math.abs(dz) < Z_SWC) return `${label} dans ${poss} norme habituelle.`;
+  const intensity = deviationIntensity(Math.abs(dz), dz >= 0 ? "above" : "below");
+  return `${label} ${intensity} de ${poss} norme.`;
+}
+
 /* Libellé court (minuscule, ex. "sommeil") d'une dimension à citer entre parenthèses dans une reco
    D'AUTORÉGULATION (Alléger/Surcharger, autoregAdvice() dans autoregulation.ts) — plus stricte que
    describeDrivingDimension()/describeDominantDimension() ci-dessus (seuil Z_MODERATE, pas Z_SWC) :

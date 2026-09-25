@@ -75,8 +75,8 @@ export function AthleteRing({ score }: { score: number | null }) {
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 14, fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score !== null ? score : "—"}</span>
-        <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, textTransform: "uppercase" }}>well.</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color }}>{score !== null ? score : "—"}</span>
+        <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>well.</span>
       </div>
     </div>
   );
@@ -102,10 +102,10 @@ function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
   const color = summary.improved === true ? "#2f9e44" : summary.improved === false ? "#d10000" : "#8a8f94";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
-      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Dernier test</span>
+      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Dernier test</span>
       <span style={{ fontSize: 12, fontWeight: 700, color: "#1f2428" }}>
         {summary.name}{" "}
-        <span style={{ color, fontWeight: 800 }}>{arrow}{summary.deltaPct !== null ? ` ${summary.deltaPct > 0 ? "+" : ""}${summary.deltaPct}%` : ""}</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", color, fontWeight: 700 }}>{arrow}{summary.deltaPct !== null ? ` ${summary.deltaPct > 0 ? "+" : ""}${summary.deltaPct}%` : ""}</span>
       </span>
     </div>
   );
@@ -123,7 +123,7 @@ function TestVerdictBox({ verdict }: { verdict: Verdict | null | undefined }) {
   if (!verdict) return null;
   return (
     <div style={{ marginTop: 8, padding: "9px 13px", borderRadius: 12, background: "rgba(212,64,0,.045)", border: "1px solid rgba(212,64,0,.12)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
-      <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>🧪 {verdict.title} — </span>{verdict.sub}
+      <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>🧪 {verdict.title} — </span>{verdict.sub}
     </div>
   );
 }
@@ -298,8 +298,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         <>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Coach</div>
-            <div style={{ fontSize: 28, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f", lineHeight: 1.1 }}>Mes sportifs</div>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Coach</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.1 }}>Mes sportifs</div>
             <div style={{ fontSize: 13, color: "#62686e", marginTop: 4 }}>
               {athletes.length} sportif{athletes.length !== 1 ? "s" : ""} suivi{athletes.length !== 1 ? "s" : ""}
             </div>
@@ -316,7 +316,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         {athletes.length === 0 ? (
           <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, textAlign: "center", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🏅</div>
-            <div style={{ fontSize: 18, fontWeight: 1000, color: "#171b1f", marginBottom: 8 }}>Aucun sportif encore</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", marginBottom: 8 }}>Aucun sportif encore</div>
             <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5, marginBottom: 20 }}>
               Invite un sportif pour commencer à suivre sa récupération et ses séances.
             </div>
@@ -358,10 +358,10 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                         </button>
                       )}
                       {a.user_id && (
-                        <div style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(47,158,68,.12)", color: "#2f9e44", fontSize: 9, fontWeight: 900, letterSpacing: "0.08em" }}>RÉEL</div>
+                        <div style={{ fontFamily: "var(--font-mono), monospace", padding: "2px 7px", borderRadius: 999, background: "rgba(47,158,68,.12)", color: "#2f9e44", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em" }}>RÉEL</div>
                       )}
                       {isPending && (
-                        <div style={{ padding: "2px 7px", borderRadius: 999, background: "rgba(242,138,0,.12)", color: "#f28a00", fontSize: 9, fontWeight: 900, letterSpacing: "0.08em" }}>EN ATTENTE</div>
+                        <div style={{ fontFamily: "var(--font-mono), monospace", padding: "2px 7px", borderRadius: 999, background: "rgba(242,138,0,.12)", color: "#f28a00", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em" }}>EN ATTENTE</div>
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>
@@ -376,13 +376,13 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                       <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
                         {badge && (
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
-                            <span style={{ fontSize: 11.5, fontWeight: 800, color: badge.color, whiteSpace: "nowrap" }}>{badge.label}</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
+                            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: badge.color, whiteSpace: "nowrap" }}>{badge.label}</span>
                           </div>
                         )}
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
-                          <span style={{ fontSize: 11.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
+                          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
+                          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
                         </div>
                         <TestBadge summary={test} />
                       </div>
@@ -423,7 +423,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                     <>
                       {insight && (
                         <div style={{ marginTop: 4, padding: "9px 13px", borderRadius: 12, background: "rgba(0,0,0,.035)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
-                          {insight.emoji} <span style={{ textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
+                          {insight.emoji} <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
                         </div>
                       )}
                       <TestVerdictBox verdict={testVerdicts[a.id]} />

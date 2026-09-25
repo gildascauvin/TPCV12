@@ -40,7 +40,7 @@ export function ShareRing({ score, size = 84 }: { score: number | null; size?: n
       </svg>
       <div style={{ position: "absolute", top: 0, left: 0, width: size, height: size, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         <div style={{ display: "flex", fontSize: Math.round(size * 0.3), fontWeight: 900, letterSpacing: "-0.04em", color }}>{score ?? "—"}</div>
-        <div style={{ display: "flex", fontSize: Math.round(size * 0.1), fontWeight: 900, letterSpacing: "0.12em", color: "rgba(255,255,255,.55)", marginTop: 2, textTransform: "uppercase" }}>récup.</div>
+        <div style={{ display: "flex", fontSize: Math.round(size * 0.1), fontWeight: 900, letterSpacing: "0.12em", color: "rgba(255,255,255,.55)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>récup.</div>
       </div>
     </div>
   );

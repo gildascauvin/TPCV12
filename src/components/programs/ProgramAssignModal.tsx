@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { WellnessCardPreview, CoachSelectedAthletesPreview } from "@/components/paywall/FrisePreviews";
 
 interface Props {
@@ -145,7 +146,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* 2026-09-14, retour explicite de Gildas — remplace la 1re tentative (ligne dépliée
@@ -184,7 +185,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
-              <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Assigner le programme</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Assigner le programme</div>
             </div>
             {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
           </div>
@@ -208,7 +209,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                 </div>
               ) : (
                 <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
                     Sportif{selectedAthleteIds.length > 1 ? "s" : ""} {selectedAthleteIds.length > 0 && `(${selectedAthleteIds.length})`}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -247,7 +248,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
 
               {/* Date */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
                   Début du programme
                 </div>
                 {/* "Aujourd'hui" ajouté (2026-09-02, retour de Gildas : "c'est pas évident que le

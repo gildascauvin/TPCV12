@@ -162,7 +162,7 @@ function trendInfo(prevRaw: number, lastRaw: number, unit: string): { deltaPct: 
 function ComparisonBlock({ insight, first }: { insight: CardInsight; first: boolean }) {
   return (
     <div style={{ marginTop: first ? 0 : 10, paddingTop: first ? 0 : 10, borderTop: first ? undefined : "1px solid rgba(255,255,255,.08)" }}>
-      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>vs {insight.compareLabel}</div>
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>vs {insight.compareLabel}</div>
       <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 }}>
         {insight.locked?.kind === "weight" ? "Renseigne ton poids dans ton profil pour voir ce repère."
           : insight.locked?.kind === "reference" ? `Ajoute un résultat pour « ${insight.locked.refLabel} » pour voir ce repère.`
@@ -224,7 +224,7 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
           jauge reste visuellement aligné avec le tick. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         {rawValueLabel != null ? (
-          <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
         ) : <span />}
         <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26` }}>
           {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
@@ -280,11 +280,11 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
           au titre du chantier "aucun doublon d'informations"). Toujours affiché dans la liste
           "Recommandations", où plusieurs jauges de distances différentes s'enchaînent sans autre
           repère. */}
-      {!hideLabel && <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", marginBottom: 6 }}>{comp.axis}</div>}
+      {!hideLabel && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700, color: "#fff", marginBottom: 6 }}>{comp.axis}</div>}
       {/* Attendu déplacé SOUS la jauge (2026-09, suite — même fix que PrimaryGauge, "en mobile c'est
           mieux") : même raisonnement, plus de position:absolute superposée à la ligne résultat/badge. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
         <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26` }}>
           {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
         </span>
@@ -358,7 +358,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
   }
   return (
     <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 14, padding: 14, marginBottom: 12 }}>
-      <div style={{ fontSize: 12.5, fontWeight: 800, color: "#fff", marginBottom: 10 }}>🆕 Nouveau test</div>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700, color: "#fff", marginBottom: 10 }}>🆕 Nouveau test</div>
       <input
         value={name} onChange={e => setName(e.target.value)} placeholder="Nom du test (ex. Test T, Beep test...)" autoFocus
         style={{ ...fieldStyle, width: "100%", padding: "9px 11px", marginBottom: suggestions.length ? 6 : 8 }}
@@ -392,7 +392,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
       </div>
       {showQualityPicker && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>
             Qualité(s) physique(s) (optionnel)
           </div>
           <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
@@ -454,7 +454,7 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
           <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#232323", border: "1px solid rgba(255,255,255,.12)", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,.45)", padding: 10, minWidth: 220, zIndex: 10 }}>
             {onMerge && (
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>🔗 Relier à un test connu</div>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>🔗 Relier à un test connu</div>
                 {mergeSuggestions?.length ? (
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {mergeSuggestions.map(s => (
@@ -645,7 +645,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
       {batteryInfo && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10, padding: "8px 10px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10 }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 2 }}>🎯 {batteryInfo.quality}</div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 2 }}>🎯 {batteryInfo.quality}</div>
             <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", lineHeight: 1.4 }}>{batteryInfo.desc}</div>
           </div>
           {batteryInfo.url && (
@@ -686,7 +686,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           montré par la ligne, uniquement le reste. */}
       {secondaryComparisons.length > 0 && (
         <div style={{ marginTop: lockedComparisons.length ? 10 : 0, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Aussi comparé à</div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Aussi comparé à</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {secondaryComparisons.map(ins => (
               <div key={ins.id} style={{ fontSize: 12, color: "rgba(255,255,255,.72)", display: "flex", alignItems: "center", gap: 6 }}>
@@ -711,7 +711,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
               Ratio temps de vol/contact (style MyJump) : {ftctInfo.toFixed(2)} · non normé, indicatif (pas de seuil scientifique publié pour cette variante).
             </div>
           )}
-          <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", marginBottom: 2 }}>{sscProfile.label}</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#fff", marginBottom: 2 }}>{sscProfile.label}</div>
           <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", lineHeight: 1.45 }}>{sscProfile.detail}</div>
         </div>
       )}
@@ -736,7 +736,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           repli, la carte entière n'étant déjà montée qu'au dépli de la ligne (voir TestsPanel), un
           toggle supplémentaire ici était redondant. */}
       {results.length > 0 && (
-        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.05em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.5)", margin: "12px 0 6px" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.05em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.5)", margin: "12px 0 6px" }}>
           Historique complet ({results.length})
         </div>
       )}
@@ -745,7 +745,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           {[...results].reverse().map(r => (
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px", borderBottom: "1px solid rgba(255,255,255,.07)", fontSize: 13 }}>
               <span style={{ color: "rgba(255,255,255,.5)", width: 90, flexShrink: 0 }}>{formatLong(r.date)}</span>
-              <span style={{ fontWeight: 800, flex: 1, color: "#fff" }}>{formatRawValue(metric, r.value, r.unit, r.date, secondaryByDate)}</span>
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, flex: 1, color: "#fff" }}>{formatRawValue(metric, r.value, r.unit, r.date, secondaryByDate)}</span>
               {r.video_url && <span style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(212,64,0,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>🎥</span>}
               {!readOnly && onDeleteResult && (
                 <button
@@ -892,7 +892,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
         if (!repEntries.length && !cmp) return null;
         return (
           <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 10 }}>
-            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>💪 Séries à charge sous-maximale</div>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>💪 Séries à charge sous-maximale</div>
             {repEntries.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: cmp?.focus ? 8 : 0 }}>
                 {repEntries.map(r => {
@@ -1042,7 +1042,7 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
   };
 }
 
-export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture }: {
+export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false }: {
   ownerId: string;
   subject: TestSubject;
   linkedUserId?: string | null;
@@ -1065,6 +1065,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
      fetch réseau (qui échouerait ou retournerait vide silencieusement) et passe le panneau en lecture
      seule (pas de "+ Ajouter", rien à persister). Absente = comportement inchangé (fetch réel). */
   fixture?: { merged: MergedTest[]; results: TestResultRow[] };
+  /* La page hôte porte déjà son propre fond DARK_CARD_BG plein-page (2026-09-25, /conseils sportif
+     uniquement — jamais /coach/athletes, page claire) : la carte "Recommandations" ci-dessous perd
+     alors son propre fond (transparent) pour ne pas empiler 2 surfaces dark distinctes ("pas censé
+     avec la card qui entoure le chart", retour de Gildas). Défaut false = comportement inchangé
+     (carte dark sur page claire, /coach/athletes). */
+  onDarkPage?: boolean;
 }) {
   const isCoachView = "subjectCoachAthleteId" in subject;
   const [merged, setMerged] = useState<MergedTest[] | null>(fixture ? fixture.merged : null);
@@ -1661,10 +1667,10 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
           verdict (ex. aucun sport de profil et aucun signal sprint/force), même si ce sont les 2
           raisons pour lesquelles cette carte existe à l'origine. */}
       {(showReco || unifiedRows.length > 0) && (
-        <div style={{ background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 20, padding: "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
+        <div style={{ background: onDarkPage ? "transparent" : "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 20, padding: onDarkPage ? "0 0 16px" : "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
           {showReco && (
             <>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 6, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
 
               {/* Profil (2026-09, suite — retour de Gildas) : déplacé sous le titre "Recommandations
                   d'entraînement" (était au-dessus de toute la carte, sur fond clair) — restylé dark
@@ -1683,7 +1689,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                   `activeQuality` à `null`, seul moyen de sortir du filtre une fois un chip cliqué
                   (avant, il fallait recliquer le MÊME chip actif — pas évident). */}
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 8 }}>Filtrer par qualité physique</div>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 8 }}>Filtrer par qualité physique</div>
                 <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
                   <button
                     onClick={() => setActiveQuality(null)}
@@ -1719,7 +1725,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                 </div>
               </div>
 
-              <div style={{ fontSize: 18, fontWeight: 800, lineHeight: 1.3, marginBottom: 10 }}>{verdict.title}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{verdict.title}</div>
               <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
                 <b style={{ color: "#fff" }}>{verdict.emoji} {verdict.action} :</b> {verdict.sub}
               </div>
@@ -1819,7 +1825,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                           <PrimaryGauge insight={row.primaryComparison} deltaRealUnit={row.deltaRealUnit} rawValueLabel={row.rawValueLabel} />
                         ) : row.rawValueLabel != null ? (
                           <>
-                            <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: "-0.01em", color: "#fff", marginTop: 4, lineHeight: 1.1 }}>{row.rawValueLabel}</div>
+                            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", marginTop: 4, lineHeight: 1.1 }}>{row.rawValueLabel}</div>
                             <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>
                           </>
                         ) : null}

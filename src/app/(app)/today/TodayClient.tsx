@@ -7,6 +7,7 @@ import posthog from "posthog-js";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore, zoneLabel as formLabel, wellnessColor } from "@/lib/wellness";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
@@ -88,10 +89,10 @@ function WellnessRingPOC({ score, size = 104, label }: {
           style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
-        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, color, lineHeight: 1, letterSpacing: "-0.055em" }}>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: Math.round(size * 0.307), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.02em" }}>
           {score !== null ? score : "—"}
         </span>
-        <span style={{ fontSize: label ? Math.round(size * 0.085) : Math.round(size * 0.077), fontWeight: 1000, color: label ? color : "rgba(255,255,255,0.58)", letterSpacing: "0.06em", marginTop: 2, textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>
+        <span style={{ fontSize: label ? Math.round(size * 0.085) : Math.round(size * 0.077), fontWeight: 1000, color: label ? color : "rgba(255,255,255,0.58)", letterSpacing: "0.06em", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>
           {label ?? "wellness"}
         </span>
       </div>
@@ -184,12 +185,13 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
     >
       {/* 1. Name + badge */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 17, fontWeight: 1000, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.04em" }}>
+        <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
           {session.name}
         </span>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
           <span style={{
-            fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
             background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
             color: session.done ? "#2f9e44" : "#d44000",
           }}>
@@ -242,14 +244,14 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           {session.duration && (
             <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "9px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.04em", lineHeight: 1 }}>{session.duration}</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MIN</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>
+              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MIN</div>
             </div>
           )}
           {session.rpe && (
             <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "9px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: 22, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.04em", lineHeight: 1 }}>{session.rpe}</div>
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.rpe}</div>
+              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
             </div>
           )}
         </div>
@@ -740,28 +742,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         />
       )}
 
-      <CalendarHeader
-        mode="day" contentMaxWidth={contentMaxWidth}
-        selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
-        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
-      />
-      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
-
-      {/* Fond sombre plein-page (2026-09-24, redesign "bg dark, plus de card" — voir POC
-         `poc-coach-context_4.html`, body.ath-dark) : remplace le fond clair `bg-bg` hérité de
-         (app)/layout.tsx sur cette page précise, continu avec le bas déjà sombre de CalendarHeader —
-         seule cette page (et /conseils) devient dark, le reste de l'app garde son fond clair
-         habituel (voir CLAUDE.md, convention établie). `minHeight:"100vh"` pour ne jamais laisser
-         le fond clair de l'ancêtre transparaître sous un contenu court.
-         Dégradé repris tel quel des 2 endroits déjà existants (jamais une teinte inventée, retour
-         de Gildas "les BG peuvent prendre la couleur/radient des card d'avant") : le halo blanc de
-         CalendarHeader (`radial-gradient(circle at 18% 8%, rgba(255,255,255,.08)...)`) + le halo
-         orange de la carte wellness ci-dessous (`radial-gradient(circle at 87% 5%,
-         rgba(212,64,0,.32)...)`), étirés sur toute la page plutôt que confinés à une seule carte —
-         "plus de card" au sens où la page entière porte désormais ce qui vivait avant dans le
-         cadre d'une carte, pas un simple aplat noir derrière des cartes isolées. */}
+      {/* Fond sombre plein-page (2026-09-24, redesign "bg dark, plus de card" ; glow cyan repris du
+         POC `~/Downloads/app-screen-bg-proposals-v2.html` le 2026-09-25, DARK_CARD_BG) : remplace le
+         fond clair `bg-bg` hérité de (app)/layout.tsx sur cette page précise — seule cette page (et
+         /conseils) devient dark, le reste de l'app garde son fond clair habituel (voir CLAUDE.md,
+         convention établie). `minHeight:"100vh"` pour ne jamais laisser le fond clair de l'ancêtre
+         transparaître sous un contenu court.
+         CalendarHeader déplacé À L'INTÉRIEUR de ce wrapper (2026-09-25, `seamless`) — il avait avant
+         son propre dégradé dark distinct, visible comme une bande séparée au-dessus de ce fond ; en
+         `seamless`, il n'a plus de fond propre et ce SEUL dégradé peint continûment le header ET le
+         reste de la page, "toute la page qui a le bg" plutôt que 2 fonds dark empilés. */}
       <div style={{
-        background: "radial-gradient(circle at 18% 0%, rgba(255,255,255,.05), transparent 26%), radial-gradient(circle at 85% 8%, rgba(212,64,0,.12), transparent 34%), linear-gradient(180deg,#101010 0%,#0a0a0b 45%,#111 100%)",
+        background: DARK_CARD_BG,
         minHeight: "100vh",
         // (app)/layout.tsx réserve 132px de padding-bottom (clearance bottom nav) SUR L'ANCÊTRE, donc
         // physiquement après ce div peu importe son minHeight — sans ce couple margin/padding négatif,
@@ -770,6 +762,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         // apparaître nue.
         marginBottom: -132, paddingBottom: 132,
       }}>
+      <CalendarHeader
+        mode="day" contentMaxWidth={contentMaxWidth} seamless
+        selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
+        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+      />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         <HomeTabs active={homeTab} onChange={setHomeTab} />
@@ -792,7 +790,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             : null;
           return (
             <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
-              <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
                 Ton espace est prêt, à toi de jouer 💪
               </div>
               <div style={{ fontSize: 12, color: "#62686e", marginBottom: 14, lineHeight: 1.5 }}>
@@ -927,7 +925,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 {weekSessions.length === 0 ? (
                   activeProgram && activeProgram.start_date > initialDate ? (
                     <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#2f9e44", marginBottom: 4 }}>
+                      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#2f9e44", marginBottom: 4 }}>
                         Programme en attente
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>

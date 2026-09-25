@@ -9,6 +9,7 @@ import { SPORT_CATEGORIES, guessSportChip } from "@/lib/sportCategories";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { computeWellnessBaselineAt, wellnessSignal } from "@/lib/wellnessBaseline";
+import { DARK_CARD_BG } from "@/lib/theme";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate, CoachAthlete } from "@/types";
 import Link from "next/link";
 import Image from "next/image";
@@ -162,13 +163,21 @@ const DARK_STEPS: StepId[] = ["value_intro"];
    de Gildas : les vrais composants (ProgramCreatePicker/ProgramCriteriaModal/ProgramBuilderModal/
    InviteModal/WellnessModal/ProgramAssignModal) restent inchangés dans leur logique, mais chacun
    gagne un prop optionnel `wizardHero` (React.ReactNode) rendu au-dessus de leur propre en-tête —
-   c'est ce bloc-ci. 2 variantes, fidèles au POC : `dark` (plein-bleed #141414, POC's
+   c'est ce bloc-ci. 2 variantes, fidèles au POC : `dark` (plein-bleed DARK_CARD_BG, POC's
    `constructeur-hero`, utilisé sur Picker/Critères/Constructeur — "Étape 1/3, Programme") vs
    `light` (simple eyebrow+titre+sous-titre, POC's `.hdr`, utilisé sur Activer/Assigner). */
 function WizardHero({ step, dark, title, sub }: { step: 1 | 2 | 3; dark: boolean; title: string; sub: string }) {
   const dotInactive = dark ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.10)";
+  // Fond propre UNIQUEMENT en mobile (2026-09-25, DARK_CARD_BG) — sur desktop, WizardHero est
+  // TOUJOURS niché dans le panneau `heroOnLeft` de son appelant, qui porte déjà ce même dégradé sur
+  // toute sa hauteur (ProgramCreatePicker.tsx etc.) ; le répéter ici (une boîte bien plus petite,
+  // haute comme son seul contenu) recalculerait le gradient relatif à CETTE boîte et créerait une
+  // coupure visible contre le fond du panneau derrière. En mobile, `wizardHero` est rendu inline
+  // dans le corps par ailleurs clair de la modale (ex. ProgramCreatePicker.tsx:82) SANS aucun autre
+  // fond dark autour — son propre fond reste donc nécessaire là, seule source du dégradé.
+  const { isMd } = useBreakpoint();
   return (
-    <div style={{ padding: dark ? "22px 28px 24px" : "26px 28px 6px", background: dark ? "#141414" : "transparent" }}>
+    <div style={{ padding: dark ? "22px 28px 24px" : "26px 28px 6px", background: dark && !isMd ? DARK_CARD_BG : "transparent" }}>
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         {[1, 2, 3].map(i => (
           <div key={i} style={{ flex: 1, height: 4, borderRadius: 999, background: i <= step ? "#d44000" : dotInactive }} />
@@ -177,7 +186,7 @@ function WizardHero({ step, dark, title, sub }: { step: 1 | 2 | 3; dark: boolean
       {/* Eyebrow "Étape N/3 — ..." retiré (2026-09-14, retour explicite de Gildas) : redondant
           avec les 3 barres de progression ci-dessus (déjà l'étape) et le titre ci-dessous (déjà le
           nom de l'étape en grand). */}
-      <div style={{ fontSize: dark ? 26 : 18, fontWeight: 950, letterSpacing: "-0.03em", lineHeight: 1.2, marginBottom: 8, color: dark ? "#fff" : "#171b1f" }}>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: dark ? 26 : 18, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: 8, color: dark ? "#fff" : "#171b1f" }}>
         {title}
       </div>
       <div style={{ fontSize: 15, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94", lineHeight: 1.5 }}>
@@ -224,7 +233,7 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
       border: "1.5px solid rgba(255,255,255,.28)", borderRadius: isMd ? 18 : 14, padding: isMd ? "14px 16px" : "10px 12px",
       maxWidth: isMd ? 270 : 208, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
     }}>
-      <div style={{ fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a70", marginBottom: isMd ? 10 : 7 }}>
+      <div style={{ fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a70", marginBottom: isMd ? 10 : 7 }}>
         Signal du jour
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: isMd ? 12 : 9, marginBottom: isMd ? 12 : 9 }}>
@@ -234,11 +243,11 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
             <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke={ringColor} strokeWidth={sw} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
           </svg>
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: isMd ? 15 : 12, fontWeight: 1000, color: "#fff" }}>{score}</span>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: isMd ? 15 : 12, fontWeight: 700, color: "#fff" }}>{score}</span>
           </div>
         </div>
         <div>
-          <div style={{ fontSize: isMd ? 15 : 13, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", marginBottom: 3 }}>Fatigué</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: isMd ? 15 : 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", marginBottom: 3 }}>Fatigué</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {behaviorKeys.map(b => {
               const meta = BEHAVIOR_META[b];
@@ -256,7 +265,7 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
         </div>
       </div>
       <div style={{ height: 1, background: "rgba(255,255,255,.12)", marginBottom: isMd ? 10 : 7 }} />
-      <div style={{ fontSize: isMd ? 9.5 : 8.5, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 5 }}>
+      <div style={{ fontSize: isMd ? 9.5 : 8.5, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 5 }}>
         ⚠ Conseil séance
       </div>
       <div style={{ fontSize: isMd ? 12 : 11, color: "rgba(255,255,255,.8)", lineHeight: 1.45 }}>
@@ -488,7 +497,7 @@ function EmailSentScreen({ email }: { email: string }) {
   return (
     <div style={{ textAlign: "center" }}>
       <div style={{ fontSize: 36, marginBottom: 10 }}>📬</div>
-      <div style={{ fontSize: 20, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 8 }}>Vérifie tes emails</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 8 }}>Vérifie tes emails</div>
       <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.6, marginBottom: 18 }}>
         On a envoyé un lien à <strong>{email}</strong>.<br />
         Clique dessus pour activer ton compte et accéder à ton espace.
@@ -1554,7 +1563,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
     const content = (
       <>
-        <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 28, lineHeight: "normal", textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center" }}>
           {role === "coach" ? "Connecte les séances de tes sportifs à ThePerfClub" : "Connecte tes séances à ThePerfClub"}
         </div>
 
@@ -1690,7 +1699,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <OnboardingBackground variant="dark">
         <div style={{ textAlign: "center", color: "#fff" }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Création de ton espace…</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Création de ton espace…</div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
         </div>
       </OnboardingBackground>
@@ -1702,7 +1711,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       <OnboardingBackground variant="dark">
         <div style={{ textAlign: "center", color: "#fff" }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Reprise de ton inscription…</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Reprise de ton inscription…</div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
         </div>
       </OnboardingBackground>
@@ -1914,7 +1923,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           {claimedProgramSaveError ? (
             <div style={{ textAlign: "center", color: "#fff" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}>{claimedProgramSaveError}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{claimedProgramSaveError}</div>
               <button
                 onClick={() => runClaimedProgramAutoSave()}
                 style={{ padding: "11px 22px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}
@@ -1923,7 +1932,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           ) : (
             <div style={{ textAlign: "center", color: "#fff" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>Préparation de {wizardProgramName}…</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Préparation de {wizardProgramName}…</div>
               <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
             </div>
           )}
@@ -2106,8 +2115,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                 zIndex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "70vh", paddingBottom: roleKnownUpfront ? 110 : 100, paddingLeft: 20, paddingRight: 20,
               }}>
                 <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 10 }}>ThePerfClub</div>
-                  <div style={{ fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 950, letterSpacing: "-0.04em", lineHeight: 1.08, marginBottom: 14, color: "#fff" }}>{headline}</div>
+                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 10 }}>ThePerfClub</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 5vw, 40px)", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.08, marginBottom: 14, color: "#fff" }}>{headline}</div>
                   <div style={{ fontSize: 15.5, color: "rgba(255,255,255,.62)", lineHeight: 1.55, maxWidth: 440, marginBottom: 8 }}>{subhead}</div>
                 </div>
               </div>
@@ -2144,7 +2153,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                             }}>
                             <div style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 14, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{icon}</div>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: "-0.01em", color: picked ? "#ff8a55" : "#fff", marginBottom: 2 }}>{label}</div>
+                              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em", color: picked ? "#ff8a55" : "#fff", marginBottom: 2 }}>{label}</div>
                               <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.35 }}>{sub}</div>
                             </div>
                             <div style={{ flexShrink: 0, color: "rgba(255,255,255,.35)", fontSize: 18 }}>→</div>

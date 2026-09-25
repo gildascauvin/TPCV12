@@ -6,6 +6,7 @@ import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBase
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { DARK_CARD_BG } from "@/lib/theme";
 import WellnessRing from "@/components/wellness/WellnessRing";
 
 const BEDTIME_OPTIONS = [
@@ -145,7 +146,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* Aha réactif (2026-09-14) : le point forme se construit en direct pendant la saisie —
@@ -162,7 +163,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                   {/* Statut en blanc, taille alignée sur FullWellnessAdvicePreview (2026-09-14,
                       retours explicites de Gildas) — plus coloré selon le score, la couleur reste
                       réservée au ring lui-même. */}
-                  <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff" }}>{liveZone}</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{liveZone}</div>
                   {liveChips.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                       {liveChips.map(c => (
@@ -210,7 +211,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             autres pages") + padding-bottom 14 (dark, dans l'encadré) pour ne pas coller l'encadré
             à la frontière dark/form (retour explicite — "je veux un espace"). */}
         {wizardHero && !isMd && (
-          <div style={{ margin: "0 -34px 20px", padding: "0 28px 14px", background: "#141414" }}>
+          <div style={{ margin: "0 -34px 20px", padding: "0 28px 14px", background: DARK_CARD_BG }}>
             {/* Même encadré que le hero desktop (2026-09-14, retour explicite de Gildas —
                 "encapsule ... dans l'encadré de couleur comme en desktop") : le fond dark reste
                 flush avec wizardHero (pas de seam), l'encadré translucide flotte dedans. Padding
@@ -225,7 +226,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                 {/* Chips ajoutés en mobile (2026-09-14, retour explicite de Gildas) — même disposition
                     que le hero desktop : à droite du ring, sous le statut (blanc, plus coloré). */}
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#fff" }}>{liveZone}</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>{liveZone}</div>
                   {liveChips.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                       {liveChips.map(c => (
@@ -261,7 +262,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 0: Sleep + Bedtime */}
         {step === 0 && (
           <div>
-            <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               😴 Comment as-tu dormi ?
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -271,7 +272,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               <input type="range" min={1} max={10} value={sleep} step={1}
                 onChange={(e) => setSleep(Number(e.target.value))}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontSize: 38, fontWeight: 1000, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {sleep}
               </div>
             </div>
@@ -280,7 +281,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
             {/* Bedtime select */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#7b7f82", marginBottom: 6 }}>
+              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 6 }}>
                 Heure de coucher
               </div>
               <select
@@ -299,7 +300,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 1: Stress */}
         {step === 1 && (
           <div>
-            <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               🧠 Niveau de stress mental
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -309,7 +310,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               <input type="range" min={1} max={10} value={stress} step={1}
                 onChange={(e) => setStress(Number(e.target.value))}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontSize: 38, fontWeight: 1000, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {stress}
               </div>
             </div>
@@ -322,7 +323,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 2: Physical recovery */}
         {step === 2 && (
           <div>
-            <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               💪 État physique aujourd'hui
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -332,7 +333,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               <input type="range" min={1} max={10} value={recovery} step={1}
                 onChange={(e) => setRecovery(Number(e.target.value))}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontSize: 38, fontWeight: 1000, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {recovery}
               </div>
             </div>
@@ -345,7 +346,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 3: Behaviors */}
         {step === 3 && (
           <div>
-            <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               🔍 Comportements d'hier
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
@@ -353,7 +354,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
 
             {/* Negative section */}
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
               Ce qui m'a pénalisé
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
@@ -378,7 +379,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
 
             {/* Positive section */}
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
               Ce que j'ai fait de bien
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
@@ -407,7 +408,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 4: Motivation */}
         {step === 4 && (
           <div>
-            <div style={{ fontSize: 34, fontWeight: 1000, lineHeight: 1.02, letterSpacing: "-0.06em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               ⚡ As-tu envie de t'entraîner ?
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -417,7 +418,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               <input type="range" min={1} max={10} value={motivation} step={1}
                 onChange={(e) => setMotivation(Number(e.target.value))}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontSize: 38, fontWeight: 1000, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {motivation}
               </div>
             </div>

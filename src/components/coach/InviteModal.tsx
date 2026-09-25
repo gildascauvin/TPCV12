@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { DARK_CARD_BG } from "@/lib/theme";
 /* Mêmes composants que la liste /coach/athletes, réutilisés tels quels (2026-09-14) — exportés
    depuis AthletesClient.tsx pour cet usage précis, déjà le même principe que l'illustration
    pré-signup CoachAthleteRowsPreview (FrisePreviews.tsx) : jamais de ring/statut réinventés à la
@@ -105,7 +106,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* Aha réactif (2026-09-14) : chaque prénom tapé à droite fait directement apparaître sa
@@ -120,14 +121,14 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                     {/* Badge "Aperçu" (2026-09-14, retour explicite de Gildas) — le prénom est réel,
                         le score/statut restent factices tant que le sportif n'a pas rempli sa
                         propre forme. */}
-                    <span style={{ position: "absolute", top: 8, right: 10, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", background: "rgba(23,27,31,.08)", color: "#7b7f82", padding: "2px 7px", borderRadius: 999 }}>
+                    <span style={{ position: "absolute", top: 8, right: 10, fontSize: 8.5, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "rgba(23,27,31,.08)", color: "#7b7f82", padding: "2px 7px", borderRadius: 999 }}>
                       Aperçu
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <AthleteRing score={previewScore} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 15, fontWeight: 950, color: "#1f2428" }}>{name}</div>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: status.color, marginTop: 2 }}>{status.label}</div>
+                        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: status.color, marginTop: 2 }}>{status.label}</div>
                       </div>
                     </div>
                   </div>
@@ -162,7 +163,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
               padding-bottom 14 (dark) pour ne pas coller la bande à la frontière dark/form. Masqué
               tant qu'aucun prénom n'est tapé (rien à montrer, pas de bande vide). */}
           {wizardHero && !isMd && previewNames.length > 0 && (
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "0 28px 14px", background: "#141414" }}>
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "0 -28px 20px", padding: "0 28px 14px", background: DARK_CARD_BG }}>
               {previewNames.map((name, i) => {
                 const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
                 const status = athleteStatus(previewScore);
@@ -171,7 +172,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                     <AthleteRing score={previewScore} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428", whiteSpace: "nowrap" }}>{name}</div>
-                      <div style={{ fontSize: 9.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</div>
+                      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, color: status.color, whiteSpace: "nowrap" }}>{status.label}</div>
                     </div>
                   </div>
                 );
@@ -182,7 +183,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
         {result ? (
           <div style={{ textAlign: "center", padding: "8px 0" }}>
             <div style={{ fontSize: 44, marginBottom: 14 }}>{result === "linked" ? "🔗" : "✅"}</div>
-            <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 8 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 8 }}>
               {sentCount > 1 ? "Invitations enregistrées !" : result === "linked" ? "Sportif lié !" : "Invitation enregistrée !"}
             </div>
             <div style={{ fontSize: 14, color: "#62686e", lineHeight: 1.6, marginBottom: 24 }}>
@@ -208,7 +209,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
-              <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>
                 Inviter un sportif
               </div>
             </div>
@@ -216,7 +217,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
             {/* Lien d'invitation */}
             {inviteCode && (
               <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, marginBottom: 8 }}>
                   Lien d'invitation
                 </div>
                 <div style={{ fontSize: 12, color: "#d44000", fontWeight: 700, wordBreak: "break-all" as const, marginBottom: 10 }}>
@@ -258,7 +259,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
               </div>
             )}
 
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
               Sportif à inviter
             </div>
 

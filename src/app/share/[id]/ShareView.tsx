@@ -50,7 +50,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
     <div style={{ minHeight: "100vh", background: "#f1f0ee", padding: "40px 16px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 22 }}>
         <div style={{ width: 22, height: 22, borderRadius: 7, background: "linear-gradient(180deg,#f04a08,#d44000)" }} />
-        <span style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f" }}>ThePerfClub</span>
+        <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>ThePerfClub</span>
       </div>
 
       {resourceType === "wellness" && (
@@ -58,8 +58,8 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
             <ShareRing score={s.score ?? null} />
             <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", textTransform: "uppercase", marginBottom: 4 }}>Score &amp; conseils</div>
-              <div style={{ fontSize: 26, fontWeight: 1000, letterSpacing: "-0.035em" }}>{s.zoneLabel}</div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>Score &amp; conseils</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>{s.zoneLabel}</div>
               {Array.isArray(s.behaviors) && s.behaviors.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
                   {s.behaviors.map((b: ShareBehavior, i: number) => <ShareChip key={i} b={b} />)}
@@ -68,13 +68,13 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             </div>
           </div>
           <div style={{ height: 1, background: "rgba(255,255,255,.08)", margin: "14px 0" }} />
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", color: "#ff8a55", textTransform: "uppercase", marginBottom: 10 }}>✦ Conseils</div>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", color: "#ff8a55", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 10 }}>✦ Conseils</div>
           <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 14, padding: "12px 14px", marginBottom: 8 }}>
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", textTransform: "uppercase", marginBottom: 4 }}>⚡ Entraînement</div>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>⚡ Entraînement</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>{s.trainingAdvice}</div>
           </div>
           <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 14, padding: "12px 14px" }}>
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", textTransform: "uppercase", marginBottom: 4 }}>🌿 Récupération</div>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>🌿 Récupération</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>{s.recoveryAdvice}</div>
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>
@@ -84,8 +84,8 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
       {resourceType === "session" && (
         <Card>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 19, fontWeight: 1000, letterSpacing: "-0.03em" }}>{s.name}</span>
-            <span style={{ fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 999, background: s.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,.1)", color: s.done ? "#2f9e44" : "#d44000" }}>
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em" }}>{s.name}</span>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: s.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,.1)", color: s.done ? "#2f9e44" : "#d44000" }}>
               {s.done ? "Terminé" : "Prévu"}
             </span>
           </div>
@@ -97,7 +97,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
 
       {resourceType === "charge" && (
         <Card dark>
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
           <BadgeRow badges={s.badges ?? []} />
           <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5, marginBottom: 14 }}>{s.insight}</div>
           <ZoneSparkline points={s.points ?? []} dates={s.dates ?? []} loads={s.loads} monotony={s.monotony} strain={s.strain} height={168} weekLabels={s.weekLabels} />
@@ -107,7 +107,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
 
       {resourceType === "recuperation" && (
         <Card dark>
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", marginBottom: 8 }}>🌿 Récupération</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 8 }}>🌿 Récupération</div>
           <BadgeRow badges={s.badges ?? []} />
           <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5, marginBottom: 14 }}>{s.insight}</div>
           <SparkLineClient
@@ -127,12 +127,12 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
         <Card dark maxWidth={620}>
           {s.insight && (
             <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "13px 15px", fontSize: 14, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600, marginBottom: 20 }}>
-              {s.emoji} {s.action && <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", color: "#ff8a55" }}>{s.action} — </span>}{s.insight}
+              {s.emoji} {s.action && <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.04em", color: "#ff8a55" }}>{s.action} — </span>}{s.insight}
             </div>
           )}
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 8 }}>⚡ Charge</div>
           <ZoneSparkline points={s.chargePoints ?? []} dates={s.dates ?? []} loads={s.chargeLoads} monotony={s.chargeMonotony} strain={s.chargeStrain} height={150} weekLabels={s.weekLabels} />
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: "-0.01em", margin: "20px 0 8px" }}>🌿 Récupération</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.01em", margin: "20px 0 8px" }}>🌿 Récupération</div>
           <SparkLineClient
             points={s.recoveryPoints ?? []} dates={s.dates ?? []} color={s.recoveryColor ?? "#7fa8ea"}
             maxVal={100} height={150} metricType="recovery" uid="share-signature" chartType="line" sequentialFill
@@ -148,8 +148,8 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 14 }}>
             <ShareRing score={s.score ?? null} />
             <div>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", textTransform: "uppercase", marginBottom: 4 }}>Coach control</div>
-              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.03em" }}>{s.athleteName}</div>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.14em", color: "#ff8a55", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>Coach control</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em" }}>{s.athleteName}</div>
               {Array.isArray(s.behaviors) && s.behaviors.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
                   {s.behaviors.map((b: ShareBehavior, i: number) => <ShareChip key={i} b={b} />)}
@@ -168,8 +168,8 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           {s.topSession && (
             <div style={{ background: "#fff", borderRadius: 14, padding: "10px 12px", color: "#171b1f" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 12, fontWeight: 800 }}>{s.topSession.name}</span>
-                <span style={{ fontSize: 9, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: s.topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.1)", color: s.topSession.done ? "#2f9e44" : "#d44000" }}>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700 }}>{s.topSession.name}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: s.topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.1)", color: s.topSession.done ? "#2f9e44" : "#d44000" }}>
                   {s.topSession.done ? "Terminé" : "Prévu"}
                 </span>
               </div>

@@ -114,7 +114,7 @@ export interface PricingPrimingProps {
    encore câblées, en attente de validation du wording par Gildas). */
 export function PricingPrimingValue({ role, headline, sub, dark = true }: {
   role: "athlete" | "coach"; headline: string; sub?: string | null;
-  /** Défaut true = panneau gauche desktop (fond #141414). PrimingJourneyModal.tsx passe false pour
+  /** Défaut true = panneau gauche desktop (fond DARK_CARD_BG). PrimingJourneyModal.tsx passe false pour
       l'usage mobile (fond clair du drawer, #f1f0ee) — sans ça le titre/sous-titre blancs
       deviennent invisibles (bug réel signalé par Gildas, 2026-09-16). */
   dark?: boolean;
@@ -126,7 +126,7 @@ export function PricingPrimingValue({ role, headline, sub, dark = true }: {
   const subText = sub === null ? null : (sub ?? UNLOCK_LINE[role]);
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ fontSize: 27, fontWeight: 950, letterSpacing: "-0.04em", marginBottom: 10, lineHeight: 1.2, color: dark ? "#fff" : "#171b1f" }}>{headline}</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10, lineHeight: 1.2, color: dark ? "#fff" : "#171b1f" }}>{headline}</div>
       {subText && <div style={{ fontSize: 14, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94" }}>{subText}</div>}
     </div>
   );
@@ -150,10 +150,10 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
         border: "1px solid rgba(255,255,255,.13)", borderRadius: 16, padding: "18px 18px 16px",
         marginBottom: 22, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
       }}>
-        <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
+        <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
           ✓ {TRIAL_DAYS} jours offerts
         </div>
-        <div style={{ fontSize: 42, fontWeight: 1000, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
           0€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>aujourd&apos;hui</span>
         </div>
         <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
@@ -163,7 +163,7 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
         </div>
         <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
           <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
-            Annuel<span style={{ marginLeft: 5, fontSize: 8, fontWeight: 900, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
+            Annuel<span style={{ fontFamily: "var(--font-mono), monospace", marginLeft: 5, fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
           </button>
           <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
         </div>
@@ -179,13 +179,13 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
               <div style={{
                 width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 800,
+                fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700,
                 background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)",
               }}>
                 {i + 1}
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 1 }}>{s.title}</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 1 }}>{s.title}</div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,.65)", lineHeight: 1.4 }}>{s.text}</div>
               </div>
             </div>
@@ -225,7 +225,7 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
       </div>
 
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
           Les experts en parlent
         </div>
         <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
@@ -233,10 +233,10 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
             <div key={v.slug} style={{ flex: "0 0 240px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
               <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
                 <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <div style={{ position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 800, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 5, letterSpacing: "0.02em" }}>▶ YouTube</div>
+                <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 5, letterSpacing: "0.02em" }}>▶ YouTube</div>
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
-                <div style={{ fontSize: 13, fontWeight: 900, color: "#1f2428" }}>{v.name}</div>
+                <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#1f2428" }}>{v.name}</div>
                 <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2, lineHeight: 1.35 }}>{v.role}</div>
               </div>
             </div>
@@ -250,7 +250,7 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
           experts en parlent", ci-dessus) et la FAQ (ci-dessous). */}
 
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
           Questions fréquentes
         </div>
         {/* Accordéon natif <details>/<summary> (2026-09-16, "comme le POC" — retour explicite de
@@ -258,7 +258,7 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {faqItems(role).map((item, i) => (
             <details key={i} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 12 }}>
-              <summary style={{ padding: "13px 16px", fontSize: 13.5, fontWeight: 800, color: "#1f2428", cursor: "pointer", listStyle: "revert" }}>
+              <summary style={{ fontFamily: "var(--font-display)", padding: "13px 16px", fontSize: 13.5, fontWeight: 700, color: "#1f2428", cursor: "pointer", listStyle: "revert" }}>
                 {item.q}
               </summary>
               <div style={{ padding: "0 16px 13px", fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>

@@ -39,7 +39,7 @@ export default function SandboxGateModal({ role, page, onClose, onSignup }: Prop
     >
       <div style={{ background: "#fff", borderRadius: 24, padding: "28px 24px", maxWidth: 340, width: "100%", textAlign: "center", boxShadow: "0 24px 64px rgba(0,0,0,.22)" }}>
         <div style={{ fontSize: 34, marginBottom: 10 }}>🔓</div>
-        <div style={{ fontWeight: 1000, fontSize: 18, letterSpacing: "-0.03em", marginBottom: 8, color: "#171b1f" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "-0.02em", marginBottom: 8, color: "#171b1f" }}>
           Sauvegarde ce que tu viens de faire
         </div>
         <div style={{ fontSize: 13.5, color: "#62686e", lineHeight: 1.5, marginBottom: 20 }}>

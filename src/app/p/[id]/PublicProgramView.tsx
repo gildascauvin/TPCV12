@@ -212,7 +212,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
         <div style={{ flex: isMd ? "1 1 50%" : undefined }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 7 }}>
             <span style={{ fontSize: 20 }}>⚡</span>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: "-0.01em" }}>Programme autorégulé</h3>
+            <h3 style={{ fontFamily: "var(--font-display)", margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: "-0.01em" }}>Programme autorégulé</h3>
           </div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,.65)", lineHeight: 1.55 }}>
             Chaque jour, ThePerfClub compare ta forme à la séance prévue et te propose de l&apos;ajuster pour progresser mieux, plus longtemps et loin des blessures.
@@ -223,11 +223,11 @@ export default function PublicProgramView({ program, coachName }: Props) {
             Équilibré/Frais), titre à gauche / score à droite (hiérarchie du POC Grok). */}
         <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "13px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Simule ta forme
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 900, color: "#fff" }}>{simZoneLabel}</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#fff" }}>{simZoneLabel}</div>
               <WellnessRing score={simDisplayScore} size={50} strokeWidth={5} dark />
             </div>
           </div>
@@ -242,7 +242,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             .tpc-autoreg-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
             .tpc-autoreg-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
           `}</style>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9.5, fontWeight: 800, color: "rgba(255,255,255,.4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9.5, fontWeight: 800, color: "rgba(255,255,255,.4)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             <span>Fatigué</span>
             <span>Frais</span>
           </div>
@@ -273,7 +273,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {!isEmbedded && <a href="/" style={{ color: "#8a8f94", fontSize: 20, textDecoration: "none", padding: "4px 6px" }}>←</a>}
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.1 }}>
               {program.name}
             </div>
             {coachName && (
@@ -368,7 +368,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
           return (
             <div key={day} style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
               <div style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>{day}</div>
+                <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>{day}</div>
               </div>
 
               {suggestion && targetSession ? (
@@ -383,13 +383,13 @@ export default function PublicProgramView({ program, coachName }: Props) {
                 <div style={{ margin: "0 0 12px", padding: "11px 13px", borderRadius: 16, background: "#f5f5f5", border: "1px solid rgba(0,0,0,.06)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
                     <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.2 }}>{rule.title}</div>
-                    <div style={{ fontSize: 9, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
+                    <div style={{ fontSize: 9, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.09em", borderRadius: 999, padding: "4px 7px", whiteSpace: "nowrap", background: tagColor.bg, color: tagColor.color, flexShrink: 0 }}>{rule.tag}</div>
                   </div>
                   <div style={{ fontSize: 11, lineHeight: 1.45, color: "#555b60" }}>{rule.text}</div>
                 </div>
               )}
 
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", textTransform: "uppercase", marginBottom: 7 }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.13em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 7 }}>
                 Séances · {daySessions.length}
               </div>
 
@@ -436,7 +436,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
       {isLocked && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(241,240,238,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: "#fff", borderRadius: 22, padding: "22px 26px", maxWidth: 300, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.14)", border: "1px solid rgba(0,0,0,.06)" }}>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
               Obtenir le programme complet et le personnaliser
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -455,7 +455,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
       {/* Bottom CTA */}
       <div style={{ background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)", padding: "12px 18px 20px", display: "flex", justifyContent: "center", gap: 10, flexShrink: 0 }}>
         {claimed ? (
-          <div style={{ flex: 1, textAlign: "center", padding: "14px 0", fontSize: 15, fontWeight: 800, color: "#2f9e44" }}>
+          <div style={{ fontFamily: "var(--font-display)", flex: 1, textAlign: "center", padding: "14px 0", fontSize: 15, fontWeight: 700, color: "#2f9e44" }}>
             ✓ Programme ajouté à ta bibliothèque !
           </div>
         ) : userMode !== null ? (

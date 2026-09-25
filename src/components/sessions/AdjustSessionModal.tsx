@@ -82,10 +82,10 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>{autoregTitle(dir)}</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>{autoregTitle(dir)}</div>
             {chainTotal != null && chainTotal > 1 && (
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#8a8f94" }}>Décision {(chainCurrent ?? 0) + 1}/{chainTotal}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#8a8f94" }}>Décision {(chainCurrent ?? 0) + 1}/{chainTotal}</span>
                 <div style={{ display: "flex", gap: 3 }}>
                   {Array.from({ length: chainTotal }).map((_, i) => (
                     <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i === chainCurrent ? "#d44000" : "rgba(0,0,0,.14)" }} />
@@ -102,7 +102,7 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
           <div style={{ background: "#faf9f7", border: "1px solid rgba(0,0,0,.06)", borderRadius: 16, padding: 14, marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: behaviors.length ? 8 : 0 }}>
               <WellnessRing score={baseline?.hasEnoughHistory ? baseline.relativeScore : wellnessScore} size={48} />
-              <div style={{ fontSize: 13, fontWeight: 900, color: "#171b1f" }}>{baseline?.hasEnoughHistory ? relativeZoneLabel(baseline) : zoneLabel(wellnessScore)}</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{baseline?.hasEnoughHistory ? relativeZoneLabel(baseline) : zoneLabel(wellnessScore)}</div>
             </div>
             {behaviors.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -124,10 +124,10 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
           {/* Jauge de difficulté effective */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
-              <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté effective</span>
+              <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté effective</span>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: effColor }}>{effZone}</span>
-                <span style={{ fontSize: 12, fontWeight: 900, color: "#fff", background: effColor, borderRadius: 999, padding: "2px 8px" }}>{effDiff}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: effColor }}>{effZone}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#fff", background: effColor, borderRadius: 999, padding: "2px 8px" }}>{effDiff}</span>
               </div>
             </div>
             <div style={{ width: "100%", height: 8, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
@@ -138,10 +138,10 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
             </div>
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>Séance</div>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>Séance</div>
           <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", marginBottom: 16 }}>{session.name}</div>
 
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>{chipsLabel}</div>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>{chipsLabel}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
             {chips.map(v => {
               const active = v === pct;
@@ -165,8 +165,8 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
 
           {/* Aperçu */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Aperçu</div>
-            <span style={{ fontSize: 10, fontWeight: 800, color: changedCount > 0 ? "#d44000" : "#8a8f94", background: changedCount > 0 ? "rgba(212,64,0,.10)" : "#f0efed", borderRadius: 999, padding: "2px 8px" }}>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Aperçu</div>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: changedCount > 0 ? "#d44000" : "#8a8f94", background: changedCount > 0 ? "rgba(212,64,0,.10)" : "#f0efed", borderRadius: 999, padding: "2px 8px" }}>
               {changedCount} modifié{changedCount > 1 ? "s" : ""}
             </span>
           </div>

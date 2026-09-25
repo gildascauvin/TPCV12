@@ -147,8 +147,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
           <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Mon compte</div>
-                <div style={{ fontSize: 24, fontWeight: 1000, letterSpacing: "-0.045em", color: "#171b1f" }}>Profil</div>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Mon compte</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>Profil</div>
               </div>
               <button
                 onClick={onClose}
@@ -165,11 +165,11 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
               <>
                 {/* Avatar + prénom */}
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#fff0e9", border: "1px solid rgba(212,64,0,.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 1000, color: "#d44000", flexShrink: 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", width: 52, height: 52, borderRadius: "50%", background: "#fff0e9", border: "1px solid rgba(212,64,0,.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#d44000", flexShrink: 0 }}>
                     {initials}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Prénom</div>
+                    <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Prénom</div>
                     <input
                       type="text" value={name} onChange={e => setName(e.target.value)}
                       placeholder="Ex: Alex"
@@ -186,7 +186,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
 
                 {/* Sport principal — pré-remplit les futurs programmes générés, jamais requis */}
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Sport principal</div>
+                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Sport principal</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {SPORTS.map(s => (
                       <button
@@ -205,7 +205,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 {/* Sexe & poids — optionnels, servent uniquement à situer les tests de performance
                     sur les repères de la littérature (force relative, W/kg...). */}
                 <div style={{ marginBottom: 22 }}>
-                  <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Sexe &amp; poids</div>
+                  <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Sexe &amp; poids</div>
                   <div style={{ fontSize: 12.5, color: "#8a8f94", lineHeight: 1.5, marginBottom: 10 }}>
                     Optionnel. Débloque des repères comme la force relative au poids de corps sur tes tests de performance.
                   </div>
@@ -243,7 +243,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 {/* Coach — lecture seule, pas de retrait/quitter depuis ce drawer */}
                 {coachName && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Coach</div>
+                    <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Coach</div>
                     <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 24, fontSize: 14, color: "#171b1f" }}>
                       Coaché par <strong>{coachName}</strong>
                     </div>
@@ -251,11 +251,11 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 )}
 
                 {/* Abonnement */}
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Abonnement</div>
+                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Abonnement</div>
                 <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 800, color: subColor, background: subBg }}>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, color: subColor, background: subBg }}>
                         {subText}
                       </span>
                       {subActive && <span style={{ fontSize: 12, color: "#62686e" }}>Plan actif</span>}

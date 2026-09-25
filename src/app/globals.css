@@ -15,6 +15,14 @@
   --warn: #f28a00;
   --radius: 12px;
   --wk-col: 240px;
+  /* Police d'affichage (2026-09-25, glow-up typo — POC `theperfclub_poc_landing_main_sportif_v1.html`,
+     `--fd`) : pas de webfont Google Fonts fidèle à Avenir Next/Century Gothic/Futura, donc reprise
+     telle quelle de la même pile système que le POC (déjà vue/validée par Gildas dessus) plutôt
+     qu'une approximation jamais montrée. Rendra Avenir Next sur Mac, sinon Segoe UI/sans-serif —
+     dégradation gracieuse, pas de FOUT (aucun fichier chargé). Réservée aux gros titres "headline"
+     des cartes d'insight (voir HomeAnalyticsSections.tsx) — pas appliquée globalement à l'app (le
+     reste du produit reste DM Sans, sujet de rebrand séparé si un jour étendu). */
+  --font-display: "Avenir Next", "Century Gothic", Futura, "Segoe UI", sans-serif;
 }
 @media (min-width: 640px) {
   :root { --wk-col: 265px; }

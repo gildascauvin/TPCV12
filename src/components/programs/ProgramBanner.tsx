@@ -76,12 +76,12 @@ export default function ProgramBanner({
               onChange={e => setDraftLabel(e.target.value)}
               onBlur={commitLabel}
               onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingLabel(false); }}
-              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: 10, fontWeight: 800, background: "transparent", color: "#171b1f" }}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: 10, fontWeight: 700, background: "transparent", color: "#171b1f", fontFamily: "var(--font-mono), monospace" }}
             />
           ) : (
             <span
               onClick={startEditing}
-              style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 800, color: "#171b1f", cursor: onEditFreeLabel ? "text" : "default" }}
+              style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, color: "#171b1f", cursor: onEditFreeLabel ? "text" : "default", fontFamily: "var(--font-mono), monospace" }}
             >
               {onEditFreeLabel && <span style={{ opacity: 0.45, marginRight: 3 }}>✏️</span>}
               {displayLabel}
@@ -115,12 +115,12 @@ export default function ProgramBanner({
               onChange={e => setDraftLabel(e.target.value)}
               onBlur={commitLabel}
               onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingLabel(false); }}
-              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", border: "1px solid rgba(0,0,0,.15)", borderRadius: 8, padding: "3px 8px", outline: "none", width: "100%", maxWidth: 260, marginBottom: 2 }}
+              style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", border: "1px solid rgba(0,0,0,.15)", borderRadius: 8, padding: "3px 8px", outline: "none", width: "100%", maxWidth: 260, marginBottom: 2, fontFamily: "var(--font-mono), monospace" }}
             />
           ) : (
             <div
               onClick={startEditing}
-              style={{ fontSize: 13, fontWeight: 800, letterSpacing: "-0.02em", marginBottom: 2, display: "flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default", minWidth: 0 }}
+              style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2, display: "flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default", minWidth: 0, fontFamily: "var(--font-mono), monospace" }}
             >
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
               {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45, flexShrink: 0 }}>✏️</span>}
@@ -157,7 +157,7 @@ export default function ProgramBanner({
         padding: "5px 8px",
       }}>
         <span style={{ flexShrink: 0, fontSize: 12 }}>{programSportEmoji(program!.sport)}</span>
-        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 800, color: "#171b1f" }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10, fontWeight: 700, color: "#171b1f", fontFamily: "var(--font-mono), monospace" }}>
           {program!.name}
         </span>
         <span style={{ flexShrink: 0, fontSize: 10, color: "#8a8f94", fontWeight: 700 }}>{focusLabel}</span>
@@ -174,7 +174,7 @@ export default function ProgramBanner({
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em", fontFamily: "var(--font-mono), monospace" }}>
           {program!.name}
         </div>
         <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>

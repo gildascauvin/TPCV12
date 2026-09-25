@@ -32,7 +32,7 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
-        <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 4 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
           Résultat de la séance
         </div>
         <div style={{ fontSize: 13, color: "#8a8f94", marginBottom: 20 }}>{session.name} · {athleteName}</div>
@@ -40,8 +40,8 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle (RPE)</div>
-              <div style={{ fontSize: 28, fontWeight: 1000, color: rpeColor, letterSpacing: "-0.04em" }}>{rpe}/10</div>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle (RPE)</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 28, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpe}/10</div>
             </div>
             <input type="range" min={1} max={10} value={rpe} onChange={e => setRpe(Number(e.target.value))}
               style={{ width: "100%", accentColor: rpeColor }} />
@@ -52,8 +52,8 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
 
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Durée</div>
-              <div style={{ fontSize: 28, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.04em" }}>{duration} min</div>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Durée</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 28, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em" }}>{duration} min</div>
             </div>
             <input type="range" min={10} max={180} step={5} value={duration} onChange={e => setDuration(Number(e.target.value))}
               style={{ width: "100%", accentColor: "#d44000" }} />

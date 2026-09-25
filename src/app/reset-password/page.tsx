@@ -88,12 +88,12 @@ export default function ResetPasswordPage() {
           {done ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 8 }}>Mot de passe mis à jour !</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 8 }}>Mot de passe mis à jour !</div>
               <div style={{ fontSize: 14, color: "#62686e" }}>Redirection en cours…</div>
             </div>
           ) : (
             <form onSubmit={handleReset} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ fontSize: 20, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 4 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
                 {isFirstTime ? "Crée ton mot de passe" : "Nouveau mot de passe"}
               </div>
               <div style={{ fontSize: 14, color: "#62686e", marginBottom: 4 }}>
@@ -109,12 +109,12 @@ export default function ResetPasswordPage() {
               )}
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nouveau mot de passe</div>
+                <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nouveau mot de passe</div>
                 {inputWrap(password, setPassword, showPassword, setShowPassword, "8 caractères minimum")}
               </div>
 
               <div>
-                <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Confirmer</div>
+                <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Confirmer</div>
                 {inputWrap(confirm, setConfirm, showConfirm, setShowConfirm, "Répète le mot de passe")}
               </div>
 

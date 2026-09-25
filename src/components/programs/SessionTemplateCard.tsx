@@ -53,7 +53,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
         <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word", flex: 1 }}>
           {session.name}
         </div>
-        <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: badgeOverride?.bg ?? "rgba(212,64,0,0.10)", color: badgeOverride?.color ?? "#d44000" }}>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: badgeOverride?.bg ?? "rgba(212,64,0,0.10)", color: badgeOverride?.color ?? "#d44000" }}>
           {badgeOverride?.label ?? "Prévu"}
         </span>
       </div>

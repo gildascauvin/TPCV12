@@ -217,7 +217,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
         const detail = nl === -1 ? null : advice.slice(nl + 1);
         return (
           <div style={{ marginBottom: 9 }}>
-            <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.2, color: light ? tint : "#fff", marginBottom: detail ? 5 : 0 }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, color: light ? tint : "#fff", marginBottom: detail ? 5 : 0 }}>
               {headline}
             </div>
             {detail && (

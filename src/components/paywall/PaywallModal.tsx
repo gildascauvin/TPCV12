@@ -7,6 +7,7 @@ import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useEl
 import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 let _stripePromise: ReturnType<typeof loadStripe> | null = null;
 export function getStripePromise() {
@@ -293,9 +294,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
       onClick={e => { if (allowDismiss && onClose && e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 380, width: "100%" }}>
-            <div style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.4)", marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.4)", marginBottom: 10 }}>
               Ce que disent des {mode === "coach" ? "coachs" : "sportifs"} comme vous
             </div>
             <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
@@ -307,7 +308,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
                   <img src={testimonial.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: "#fff" }}>{testimonial.name}</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#fff" }}>{testimonial.name}</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)" }}>{testimonial.role}</div>
                 </div>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
@@ -319,7 +320,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ display: "flex" }}>
                 {PAYWALL_AVATARS.map((src, i) => (
-                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #141414", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
+                  <div key={i} style={{ width: 30, height: 30, borderRadius: "50%", border: "2px solid #070a0d", marginLeft: i > 0 ? -9 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i }}>
                     <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                 ))}
@@ -360,10 +361,10 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
 
           {/* Contenu identique à l'étape paywall_form de l'onboarding (OnboardingFlow.tsx) —
               badge + titre + rappel prix compact + preuve sociale, avant le formulaire Stripe. */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#2f9e44", background: "rgba(47,158,68,.10)", display: "inline-block", padding: "5px 12px", borderRadius: 999, marginBottom: 16 }}>
             🔓 {TRIAL_DAYS} jours offerts
           </div>
-          <div style={{ fontSize: 24, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 6 }}>{headline || "Passe au niveau supérieur."}</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 6 }}>{headline || "Passe au niveau supérieur."}</div>
           {/* Sous-titre condensé (2026-09-16, retour explicite de Gildas) — remplace les 3 blocs
               de réassurance séparés, visible sur desktop ET mobile (avant, mobile only). */}
           <div style={{ fontSize: 14, color: "#8a8f94", marginBottom: 24 }}>{reassuranceLine}</div>
@@ -403,7 +404,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
               panneau de gauche (heroOnLeft, voir plus haut) — jamais dupliqué. */}
           {!heroOnLeft && (
             <div style={{ marginTop: 28 }}>
-              <div style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 10 }}>
                 Ce que disent des {mode === "coach" ? "coachs" : "sportifs"} comme vous
               </div>
               <div style={{ padding: "14px 16px 12px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, marginBottom: 14 }}>
@@ -415,7 +416,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
                     <img src={testimonial.photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: "#1f2428" }}>{testimonial.name}</div>
+                    <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#1f2428" }}>{testimonial.name}</div>
                     <div style={{ fontSize: 11, color: "#8a8f94" }}>{testimonial.role}</div>
                   </div>
                   <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>

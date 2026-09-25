@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { guessSportChip } from "@/lib/sportCategories";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 
@@ -342,7 +343,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* Illustration "Enregistre" de la frise (2026-09-14) — même composant réel que
@@ -372,7 +373,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>{importMode ? "Importer un programme" : "Créer un programme"}</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>{importMode ? "Importer un programme" : "Créer un programme"}</div>
               <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>{importMode ? "Colle ton texte ou prends une photo — une semaine suffit, tu pourras la reconduire ensuite." : "Remplis les critères — généré en un clic"}</div>
             </div>
           </div>
@@ -441,7 +442,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
               statique si l'appelant connaît déjà le sport (lockedSport). */}
           <Section label="🏋️ Sport">
             {lockedSport ? (
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f1f0ee", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 800, color: "#171b1f" }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", display: "inline-flex", alignItems: "center", gap: 6, background: "#f1f0ee", border: "1.5px solid rgba(0,0,0,.10)", borderRadius: 999, padding: "8px 14px", fontSize: 13, fontWeight: 700, color: "#171b1f" }}>
                 🏋️ {lockedSport}
               </div>
             ) : (
@@ -600,7 +601,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ background: "#fff", borderRadius: 18, padding: 20, marginBottom: 10, border: "1px solid rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 6, textTransform: "uppercase", letterSpacing: ".05em" }}>
+      <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".05em" }}>
         {label}
       </div>
       {children}
@@ -638,7 +639,7 @@ function FocusCard({ active, icon, label, onClick }: { active: boolean; icon: st
       }}
     >
       <span style={{ fontSize: 18 }}>{icon}</span>
-      <span style={{ fontSize: 13.5, fontWeight: 800, color: active ? "#d44000" : "#1f2428" }}>{label}</span>
+      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13.5, fontWeight: 700, color: active ? "#d44000" : "#1f2428" }}>{label}</span>
     </button>
   );
 }

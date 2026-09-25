@@ -18,7 +18,7 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
       marginBottom: 10,
     }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
-      <div style={{ fontSize: 15, fontWeight: 900, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
         Aucune séance cette semaine
       </div>
       <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
@@ -51,7 +51,7 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20 }}>📚</span>
           <div style={{ textAlign: "left" }}>
-            <div style={{ fontSize: 12, fontWeight: 900, color: "#171b1f", lineHeight: 1.2 }}>Bibliothèque — 36 programmes testés</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#171b1f", lineHeight: 1.2 }}>Bibliothèque — 36 programmes testés</div>
             <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2 }}>Explorer les programmes →</div>
           </div>
         </div>

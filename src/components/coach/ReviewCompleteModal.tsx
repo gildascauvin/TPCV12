@@ -21,7 +21,7 @@ export default function ReviewCompleteModal({ onClose }: Props) {
         }}>
           ✓
         </div>
-        <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.04em", color: "#171b1f", marginBottom: 12, lineHeight: 1.2 }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 12, lineHeight: 1.2 }}>
           Revue terminée
         </div>
         <div style={{ fontSize: 15, color: "#687075", lineHeight: 1.6, marginBottom: 28 }}>

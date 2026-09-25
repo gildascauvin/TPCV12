@@ -3726,3 +3726,49 @@ Vérifié par script sur l'exemple exact de Gildas : Thomas (planned=4, wellness
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque étape (balayage exhaustif du round 1, roundtrip d'arrondi du round 2, absence d'absorption à magnitude=1 du round 3) vérifiée par script `tsx` jetable AVANT de considérer le round terminé — pas seulement relue, notamment pour le chiffre "0% actionnable" qui a changé la direction de la conversation. Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas).
 
 Déployé en prod le 2026-09-25, commit `a88ee90`, push direct sur `main`.
+
+## Badges pédagogiques Charge/Récup, rebrand typographique complet, fond dark unifié (2026-09-25, suite)
+
+Trois chantiers enchaînés dans la même session, sur retours successifs de Gildas.
+
+### Badges pédagogiques Charge/Récup (`HomeAnalyticsSections.tsx`)
+Demande : les badges de couleur/tendance deviennent "plus parlants" avec un wording pédagogique — "ce qu'on a dans le tooltip mais en insight personnalisé synthétique" — **sans retirer `CrossInsightBanner`** (gardé, contrairement à une 1re proposition de Claude qui l'aurait retiré des pages Charge/Récup). Bonne nouvelle trouvée en creusant : chaque `xxxInfo` (`loadInfo`/`monotonyInfo`/`strainInfo`/`fitnessTrendInfo`/`fatigueTrendInfo`/`formInfo`/`recoveryInfo`, `fatigueSignature.ts`) a déjà un champ `.text` personnalisé (2e personne, ex. *"Ta charge chronique est en baisse : possible perte de forme si ça dure."*) — jamais affiché ailleurs que comme brique interne des paragraphes composites. Le tooltip de `ZoneBadge` (`definition` prop) passe de `METRIC_DEFINITIONS` (générique/scientifique) à ce texte personnalisé, sur `ChargeSection` et `RecuperationSection`.
+- **Badge ACWR ajouté** à `ChargeSection` — `loadInfo` n'avait jusqu'ici aucun badge (seulement visible via les bandes de couleur du chart).
+- **Badge "Récupération" composite ajouté** à `RecuperationSection` — n'existait pas non plus, seuls les 4 badges de dimension (flèche seule, aucun tooltip) et le badge Forme existaient.
+- **Nouvelle fonction `dimensionInsightText(dim, baseline, perspective)`** (`wellnessBaseline.ts`) — généralise `describeDominantDimension()` (qui ne retourne que LA dimension dominante) à n'importe quelle dimension prise isolément, pour donner un tooltip à chacun des 4 badges Sommeil/Stress/Récup. musculaire/Motivation (ex. *"Sommeil nettement en dessous de ta norme."*). `ChargeSection`/`RecuperationSection` gagnent un prop `perspective` (défaut `"athlete"`, `CoachClient.tsx` passe `"coach"`) pour l'accord "ta"/"sa" — même classe de bug "Ta"/"Sa" déjà rencontrée et corrigée plusieurs fois dans ce fichier, évitée ici en filant explicitement le paramètre plutôt que de le déduire.
+
+### Rebrand typographique — police mono + police d'affichage partout (POC `theperfclub_poc_landing_main_sportif_v1.html`)
+D'abord scopé aux cartes Charge/Récup/Aujourd'hui (badges, eyebrows), puis étendu explicitement à **toute l'app** sur demande de Gildas ("je veux que t'appliques absolument partout... fait ce rebrand").
+- **`--font-mono`** (`layout.tsx`, `IBM_Plex_Mono` via `next/font/google`, poids 500/600/700 — 900 non disponible, les `fontWeight:900` existants sont plafonnés à 700 partout où cette police s'applique) : badges/pills, eyebrows en majuscules, chiffres bruts (scores de ring, RPE/durée, jauges, dates de calendrier, statuts).
+- **`--font-display`** (`globals.css` `:root`, pile système `"Avenir Next","Century Gothic",Futura,"Segoe UI",sans-serif` — reprise TELLE QUELLE du POC, pas d'approximation webfont : aucun équivalent fidèle sur Google Fonts, et c'est la version que Gildas a déjà vue/validée sur le POC) : titres autonomes (écrans, modales, cartes).
+- **Laissé sur DM Sans, volontairement** : boutons/CTA (même règle que le POC, `button{font-family:var(--fb)}`), texte courant, noms répétés dans les listes denses (séances/exercices/sportifs — trop de bruit visuel à l'échelle d'une liste), `src/app/share/[id]/opengraph-image.tsx` (moteur satori séparé, ne supporte pas les variables CSS — vérifié intact, zéro diff).
+- **Exécuté via un fork** (sweep mécanique sur ~100 fichiers) : 56 fichiers touchés au 1er passage (~340 insertions de `fontFamily`), classification cohérente vérifiée par relecture + `tsc` par le thread principal (pas seulement le rapport auto du fork pris pour argent comptant).
+
+### Fond "dark theme" unifié — glow cyan scientifique (`DARK_CARD_BG`, `src/lib/theme.ts`)
+Nouvelle constante partagée, valeur exacte fournie par Gildas (POC `~/Downloads/app-screen-bg-proposals-v2.html`, variante "2 · Glow scientifique cyan fort") :
+```ts
+export const DARK_CARD_BG =
+  "radial-gradient(ellipse 105% 65% at 50% -10%, rgba(56,189,248,0.32) 0%, rgba(125,211,252,0.12) 40%, transparent 65%), " +
+  "radial-gradient(ellipse 55% 35% at 15% 25%, rgba(14,165,233,0.1) 0%, transparent 55%), " +
+  "#070a0d";
+```
+Remplace les différents dégradés/aplats neutres ad hoc utilisés jusqu'ici (`#141414`, `linear-gradient(145deg,#1a1a1a,#282828)`, `#050505→#171717→#101010`...) — **seules les surfaces neutres** sont concernées, les variantes teintées par sévérité (`AlertBox.tsx` `DARK_COLOR_PALETTE`, rouge/orange/vert de l'alerte Alléger/Surcharger) et la carte prix orange (`PricingPriming.tsx`, glow orange intentionnel) sont restées inchangées — code couleur sémantique distinct, pas un "thème dark" neutre.
+
+**`CalendarHeader.tsx`** (top nav, 6 pages) : fond par défaut → `DARK_CARD_BG` (couvre `/week`, `/coach`, `/coach/planning`, `/coach/athletes` automatiquement). Nouveau prop `seamless?: boolean` (défaut `false`) — fond transparent, pour les pages qui veulent que le header se fonde dans LEUR propre fond de page plutôt que 2 dégradés dark empilés (visible comme une bande séparée avant ce fix).
+
+**`/today` et `/conseils` (sportif)** — "je veux que la top nav en sportif n'ait pas de BG spécifique mais que ce soit toute la page qui ait le BG" : `CalendarHeader` déplacé à l'intérieur du wrapper de page dark (au lieu d'être un sibling avant), passé en `seamless` — un seul `DARK_CARD_BG` peint désormais le header ET tout le reste de la page en continu.
+
+**`/conseils` — carte "Recommandations" retirée** ("pas censé avec la card qui entoure le chart") : `TestsPanel.tsx` gagne un prop `onDarkPage?: boolean` (défaut `false`) — sa carte "Recommandations d'entraînement" perd son propre fond (transparent) quand la page hôte est déjà dark, passé uniquement par `ConseilsClient.tsx`. `/coach/athletes` (page claire, même `TestsPanel`) garde sa carte dark inchangée.
+
+**Coach** : `CoachAthleteCard.tsx` (Coach Control) et la carte Charge/Récup/Comportements côté coach (`CoachClient.tsx`) → `DARK_CARD_BG`. `FrisePreviews.tsx` (mockups du paywall qui imitent Coach Control) mis à jour en miroir pour rester fidèle.
+
+**Onboarding/wizard** — d'abord volontairement exclus ("des hero plein écran dans un funnel de conversion, pas des cards"), puis inclus sur confirmation explicite de Gildas ("oui fais aussi") : les 6 panneaux gauche desktop du wizard (`ProgramCreatePicker`/`ProgramLibraryBrowser`/`ProgramCriteriaModal`/`ProgramAssignModal`/`WellnessModal`/`InviteModal`), `PaywallModal`/`PrimingJourneyModal` (panneau gauche paywall), `DecisionStep.tsx` (hero desktop 42% + fond mobile plein écran).
+- **`WizardHero`** (`OnboardingFlow.tsx`, composant titre+frise partagé par les 7 étapes) — son fond propre (`#141414` avant) n'est peint qu'en **mobile** désormais (`dark && !isMd`) : sur desktop il est TOUJOURS niché dans un des 6 panneaux ci-dessus qui porte déjà `DARK_CARD_BG` sur toute sa hauteur — le garder aurait empilé 2 dégradés radiaux de tailles différentes (le composant fait la hauteur de son contenu, pas celle du panneau), créant un contour visible. En mobile, `wizardHero` est rendu inline dans une modale par ailleurs claire, sans aucun autre fond dark autour — son propre fond y reste nécessaire.
+- **`DecisionStep.tsx` mobile, footer** — même piège : le footer dupliquait bêtement le fond du parent (inoffensif en aplat, mais un dégradé radial recalculé sur une petite boîte crée une coupure) — repassé en `transparent`, le fond du parent (100dvh) transparaît sans couture.
+- **`PaywallModal.tsx`** : bordure des avatars empilés (`"+600"`) recalée sur `#070a0d` (base solide du dégradé — une bordure ne peut pas être un gradient).
+- **Nuance non résolue, signalée à Gildas** : sur `InviteModal`/`WellnessModal` mobile, une petite bande (aperçu sportifs/wellness) juste sous `WizardHero` est une boîte SÉPARÉE (pas nichée dans la même) — son dégradé se recalcule indépendamment, légère coupure possible au lieu d'un flux parfaitement continu. Mineur, pas creusé plus loin faute de retour visuel réel.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque étape (badges, rebrand typo, fond dark ×2 rounds). Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas) — chaque décision de scope (badges pédagogiques sans retirer l'insight global, périmètre du rebrand typo, inclusion différée puis confirmée de l'onboarding/wizard pour le fond dark) tranchée par échange explicite avec Gildas avant exécution, pas devinée.
+
+Déployé en prod le 2026-09-25, commit `PENDING_COMMIT`, push direct sur `main`.

@@ -19,6 +19,7 @@ import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coa
 import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
+import { DARK_CARD_BG } from "@/lib/theme";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
@@ -570,7 +571,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         {/* ── Bandeau d'activation coach (J0) ── */}
         {showActivation && inviteCode && (
           <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
-            <div style={{ fontSize: 16, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 4 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
               Invite ton premier sportif 🎯
             </div>
             <div style={{ fontSize: 12, color: "#62686e", marginBottom: 10, lineHeight: 1.5 }}>
@@ -632,7 +633,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               <div style={{ position: "absolute", right: -52, top: -52, width: 180, height: 180, borderRadius: "50%", background: "rgba(212,64,0,.24)", filter: "blur(18px)", pointerEvents: "none" }} />
               <div style={{ position: "relative", zIndex: 2 }}>
                 <div style={{ fontSize: 36, marginBottom: 10 }}>🏋️</div>
-                <div style={{ fontSize: 26, fontWeight: 1000, letterSpacing: "-0.04em", color: "#fff", marginBottom: 8, lineHeight: 1.1 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", marginBottom: 8, lineHeight: 1.1 }}>
                   Invite ton premier sportif
                 </div>
                 <div style={{ fontSize: 14, color: "rgba(255,255,255,.72)", lineHeight: 1.5 }}>
@@ -642,7 +643,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             </div>
 
             <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 22, padding: 24, boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", marginBottom: 12 }}>Email du sportif</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 12 }}>Email du sportif</div>
               <input
                 type="email"
                 value={inviteEmail}
@@ -717,14 +718,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                             border: active ? "1.5px solid #d44000" : "1.5px solid #e4e4e7",
                           }}
                         >
-                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#71717a" }}>
+                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#71717a" }}>
                             {DIMENSION_LABELS[dim]}
                           </div>
-                          <div style={{ fontSize: 20, fontWeight: 1000, color: "#18181b", letterSpacing: "-0.03em", marginTop: 2 }}>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#18181b", letterSpacing: "-0.02em", marginTop: 2 }}>
                             {avg !== null ? avg.toFixed(1).replace(".", ",") : "—"}
                             <span style={{ fontSize: 11, fontWeight: 700, color: "#71717a" }}>/10</span>
                           </div>
-                          <div style={{ fontSize: 10, fontWeight: 800, marginTop: 3, color: low > 0 ? "#dc2626" : "#16a34a" }}>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, marginTop: 3, color: low > 0 ? "#dc2626" : "#16a34a" }}>
                             {low > 0 ? `${low} sportif${low > 1 ? "s" : ""} bas` : "Tous OK"}
                           </div>
                         </button>
@@ -738,7 +739,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         display: "flex", flexDirection: "column", justifyContent: "center",
                       }}
                     >
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", textTransform: "uppercase", color: "#71717a" }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#71717a" }}>
                         {athletes.length} sportif{athletes.length > 1 ? "s" : ""}
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 800, color: "#d44000", marginTop: 6 }}>
@@ -764,11 +765,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428" }}>À décider maintenant</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>À décider maintenant</div>
                   <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Le coach voit d'abord ce qui mérite une action.</div>
                 </div>
                 {sortedPriority.length > 0 && reviewedPriorityCount > 0 && reviewedPriorityCount < sortedPriority.length && (
-                  <div style={{ fontSize: 11, fontWeight: 800, color: "#d44000", flexShrink: 0 }}>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0 }}>
                     {reviewedPriorityCount}/{sortedPriority.length} traités
                   </div>
                 )}
@@ -809,7 +810,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: "-0.03em", color: "#1f2428" }}>Plan cohérent</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>Plan cohérent</div>
                   <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Pas d'intervention immédiate.</div>
                 </div>
               </div>
@@ -853,10 +854,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           const data = a ? athleteConseilsData[a.id] : undefined;
           if (!a || !data) return null;
           return (
-            <div style={{ background: "linear-gradient(145deg,#1a1a1a,#282828)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 16, boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
+            <div style={{ background: DARK_CARD_BG, border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 16, boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
               {homeTab !== "comportements" && <CrossInsightBanner data={data} isDemoData={!a.user_id} />}
               {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
-              {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}
             </div>
           );

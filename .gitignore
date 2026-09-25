@@ -9,6 +9,7 @@ out/
 dist/
 build/
 tsconfig.tsbuildinfo
+tsconfig.notnext.tsbuildinfo
 
 # env
 .env

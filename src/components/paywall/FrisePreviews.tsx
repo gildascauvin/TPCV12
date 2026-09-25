@@ -17,6 +17,7 @@ import { classifyTrend, describeTrend, trendSeverity, trendActionWord, type Tren
 import { sigDimInfo } from "@/lib/fatigueSignature";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 /* Illustrations sous chaque point de la frise paywall_priming (Enregistre/Cible/Progresse) —
@@ -137,7 +138,7 @@ export function ProgramWithRingsPreview({ sport }: { sport?: string }) {
     <div style={{ width: "100%", display: "flex", gap: 10 }}>
       {previews.map((p, i) => (
         <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: "#8a8f94" }}>{PROGRAM_RING_DAYS[i]}</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: "#8a8f94" }}>{PROGRAM_RING_DAYS[i]}</div>
           <PlanningRing score={PROGRAM_RING_SCORES[i]} size={44} />
           <SessionMiniCard preview={p} />
         </div>
@@ -166,13 +167,13 @@ export function WellnessCardPreview({ score = 45, behaviors = ["alcohol", "late_
 
   return (
     <div style={{
-      width: "100%", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 16,
+      width: "100%", background: DARK_CARD_BG, borderRadius: 20, padding: 16,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <WellnessRing score={score} size={52} strokeWidth={5} dark />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 3 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a55", marginBottom: 3 }}>
             {zoneLabel(score)}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
@@ -233,18 +234,18 @@ export function CoachControlPreview({ name, score = 88, plannedDiff = 3, behavio
 
   return (
     <div style={{
-      width: "100%", position: "relative", background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 16,
+      width: "100%", position: "relative", background: DARK_CARD_BG, borderRadius: 20, padding: 16,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       {showPreviewBadge && (
-        <span style={{ position: "absolute", top: 10, right: 10, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase", background: "rgba(255,255,255,.14)", color: "rgba(255,255,255,.85)", padding: "3px 8px", borderRadius: 999 }}>
+        <span style={{ position: "absolute", top: 10, right: 10, fontSize: 9, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "rgba(255,255,255,.14)", color: "rgba(255,255,255,.85)", padding: "3px 8px", borderRadius: 999 }}>
           Aperçu
         </span>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
         <WellnessRing score={score} size={52} strokeWidth={5} dark />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 3 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a55", marginBottom: 3 }}>
             {zoneLabel(score)}
           </div>
           <div style={{ fontSize: 12, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em", marginBottom: 4 }}>{firstName}</div>
@@ -336,16 +337,16 @@ export function FullWellnessAdvicePreview() {
   return (
     <div style={{
       width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
-      background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: 18,
+      background: DARK_CARD_BG, borderRadius: 20, padding: 18,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)", pointerEvents: "none",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
         <WellnessRing score={baseline?.relativeScore ?? wellnessScore} size={72} strokeWidth={6} dark />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a55", marginBottom: 4 }}>
             Score & conseils
           </div>
-          <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.03em", marginBottom: 7 }}>{zone}</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 7 }}>{zone}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
             {behaviors.map(b => {
               const meta = BEHAVIOR_META[b];
@@ -360,21 +361,21 @@ export function FullWellnessAdvicePreview() {
         </div>
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,.10)", paddingTop: 14 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 9 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a55", marginBottom: 9 }}>
           ✦ Conseils
         </div>
         <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ fontSize: 13 }}>⚡</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Entraînement</div>
+              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 3 }}>Entraînement</div>
               <div style={{ fontSize: 12, lineHeight: 1.45, color: "#fff" }}>{rule.title}. {rule.text}</div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start", borderTop: "1px solid rgba(255,255,255,.07)", paddingTop: 10 }}>
             <span style={{ fontSize: 13 }}>🌿</span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>Récupération</div>
+              <div style={{ fontSize: 9, fontWeight: 900, color: "rgba(255,255,255,.6)", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 3 }}>Récupération</div>
               <div style={{ fontSize: 12, lineHeight: 1.45, color: "#fff" }}>{advice}</div>
             </div>
           </div>
@@ -414,17 +415,17 @@ export function CoachAthleteRowsPreview() {
               </div>
               <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: chargeInfo.color, whiteSpace: "nowrap" }}>{chargeInfo.label}</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
+                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: chargeInfo.color, whiteSpace: "nowrap" }}>{chargeInfo.label}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
+                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
                 </div>
               </div>
             </div>
             <div style={{ marginTop: 12, padding: "9px 13px", borderRadius: 12, background: "rgba(0,0,0,.035)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
-              {row.emoji} <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{row.action} — </span>{row.text}
+              {row.emoji} <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{row.action} — </span>{row.text}
             </div>
           </div>
         );
@@ -633,7 +634,7 @@ function TrendInsight({ perspective }: { perspective: "athlete" | "coach" }) {
   const text = describeTrend(TREND_CODE, TREND_INPUT, perspective);
   return (
     <div style={{ marginBottom: 10, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "12px 14px", fontSize: 12, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
-      {TREND_EMOJI} <span style={{ textTransform: "uppercase", letterSpacing: "0.04em", color: "#ff8a55" }}>{TREND_ACTION} — </span>{text}
+      {TREND_EMOJI} <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.04em", color: "#ff8a55" }}>{TREND_ACTION} — </span>{text}
     </div>
   );
 }
@@ -667,11 +668,11 @@ export function CombinedInsightPreview({ perspective }: { perspective: "athlete"
   return (
     <div style={{
       width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
-      background: "linear-gradient(145deg,#1a1a1a,#282828)", borderRadius: 20, padding: "14px 16px 16px",
+      background: DARK_CARD_BG, borderRadius: 20, padding: "14px 16px 16px",
       boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       <TrendInsight perspective={perspective} />
-      <div style={{ display: "flex", gap: 14, marginBottom: 8, fontSize: 10.5, fontWeight: 800 }}>
+      <div style={{ fontFamily: "var(--font-mono), monospace", display: "flex", gap: 14, marginBottom: 8, fontSize: 10.5, fontWeight: 700 }}>
         <span style={{ color: "#5aa9e6" }}>● Récupération</span>
         <span style={{ color: "#d44000" }}>● Charge</span>
       </div>

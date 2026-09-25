@@ -76,10 +76,10 @@ export default function DecisionGauge({
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
-        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", textTransform: "uppercase", color: dim(0.45) }}>
+        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: dim(0.45) }}>
           Difficulté
         </span>
-        <span style={{ fontSize: 16, fontWeight: 900, color: inZone ? "#2a8045" : (light ? "#171b1f" : "#fff") }}>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 16, fontWeight: 700, color: inZone ? "#2a8045" : (light ? "#171b1f" : "#fff") }}>
           {value % 1 === 0 ? value : value.toFixed(1)}
           <span style={{ fontSize: 11, fontWeight: 600, color: dim(0.45) }}> / 10</span>
         </span>

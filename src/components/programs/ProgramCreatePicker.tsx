@@ -2,6 +2,7 @@
 
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 
 /* Écran racine du flux de création — remplace le menu ancré (dropdown) d'une itération
@@ -55,7 +56,7 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* Illustration "Enregistre" de la frise (2026-09-14) — même composant réel que
@@ -82,7 +83,7 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
           {/* Header — pas de "←" ici, c'est l'écran racine du flux de création */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 22 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Créer un programme</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Créer un programme</div>
               <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Choisis comment démarrer</div>
             </div>
             {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
@@ -114,7 +115,7 @@ function CreateOptionCard({ icon, label, sub, onClick }: { icon: string; label: 
         {icon}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", lineHeight: 1.25 }}>{label}</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", lineHeight: 1.25 }}>{label}</div>
         <div style={{ fontSize: 12.5, color: "#8a8f94", marginTop: 2 }}>{sub}</div>
       </div>
       <span style={{ color: "#c7ccd1", fontSize: 16, flexShrink: 0 }}>›</span>

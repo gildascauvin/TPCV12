@@ -9,6 +9,7 @@ import {
 import { fr } from "date-fns/locale";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 export type ViewMode = "week" | "month";
 export type HeaderMode = "day" | "period" | "title";
@@ -66,6 +67,14 @@ interface CalendarHeaderProps {
   showRings?: boolean;
   wellnessMap?: Record<string, number | null>;
   dotMap?: Record<string, "done-light" | "done-med" | "done-high" | "planned">;
+  /* Sans fond propre (2026-09-25) — pour les pages qui portent DÉJÀ leur propre fond dark
+     "DARK_CARD_BG" pleine page (/today, /conseils sportif) et veulent que le header s'y fonde,
+     plutôt que 2 fonds dark distincts empilés (l'ancien header avait son propre dégradé, visible
+     comme une bande séparée au-dessus du fond de page). Le fond de page continue alors SOUS le
+     header (voir TodayClient.tsx/ConseilsClient.tsx, header déplacé à l'intérieur du wrapper dark).
+     Défaut false = comportement inchangé partout ailleurs (le header garde son propre DARK_CARD_BG,
+     îlot sombre sur une page par ailleurs claire — /week, /coach*). */
+  seamless?: boolean;
 }
 
 function cap(s: string) {
@@ -131,6 +140,7 @@ export default function CalendarHeader({
   showRings,
   wellnessMap,
   dotMap,
+  seamless = false,
 }: CalendarHeaderProps) {
   const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -268,8 +278,8 @@ export default function CalendarHeader({
       onTouchStart={handleHeaderTouchStart}
       onTouchEnd={handleHeaderTouchEnd}
       style={{
-        background: "radial-gradient(circle at 18% 8%, rgba(255,255,255,.08), transparent 24%), linear-gradient(180deg,#050505 0%,#171717 58%,#101010 100%)",
-        boxShadow: "0 16px 38px rgba(0,0,0,.18)",
+        background: seamless ? "transparent" : DARK_CARD_BG,
+        boxShadow: seamless ? "none" : "0 16px 38px rgba(0,0,0,.18)",
         color: "#fff",
         paddingTop: 8,
       }}>
@@ -310,7 +320,7 @@ export default function CalendarHeader({
             >
               <div className="flex items-center justify-between mb-2">
                 <button onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>‹</button>
-                <span style={{ fontSize: 14, fontWeight: 800 }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700 }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
                 <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>›</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>

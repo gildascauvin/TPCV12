@@ -310,7 +310,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           {!standalone && (
             <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>←</button>
           )}
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
         </div>
         {/* Générer/visualiser/modifier un programme reste libre (voir spec gating save,
             2026-08-19) — seuls "Enregistrer en librairie"/"Assigner" dans ProgramBuilderModal
@@ -402,7 +402,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                   {/* Athletes following */}
                   {programAssignments.length > 0 && (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 10, fontWeight: 900, color: "#8a8f94", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 8 }}>
                         Suit ce programme ({programAssignments.length})
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -414,7 +414,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                           return (
                             <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <span style={{ fontSize: 10, fontWeight: 800, color }}>{initials(displayName)}</span>
+                                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color }}>{initials(displayName)}</span>
                               </div>
                               <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{displayName}</span>
                               <span style={{ fontSize: 11, color: "#8a8f94" }}>Démarre {fmtDate(a.start_date)}</span>

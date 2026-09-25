@@ -289,7 +289,7 @@ export default function SparkLineClient({
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.45)", marginBottom: 3 }}>
             {formatDateFr(hDate)}
           </div>
-          <div style={{ fontSize: 13, fontWeight: 800, color: sequentialFill && hVal !== null ? wellnessColor(hVal) : color }}>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: sequentialFill && hVal !== null ? wellnessColor(hVal) : color }}>
             {formatTooltipValue(metricType, hVal, hValRaw)}
           </div>
           {points2 && formatFormValue(hVal2Raw, hVal2 !== null && zones2 ? zone2For(zones2, hVal2).label : null) && (
@@ -491,10 +491,10 @@ export default function SparkLineClient({
               position: "absolute", left: 0, top: `${(PAD_TOP / H) * 100}%`, bottom: `${(PAD_BOT / H) * 100}%`,
               width: 3, background: `linear-gradient(to top, ${WELLNESS_RAMP.map(s => s.hex).join(",")})`,
             }} />
-            <div style={{ position: "absolute", left: 6, top: `${(PAD_TOP / H) * 100}%`, fontSize: 7.5, fontWeight: 900, letterSpacing: "0.04em", color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, whiteSpace: "nowrap" as const }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", left: 6, top: `${(PAD_TOP / H) * 100}%`, fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em", color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, whiteSpace: "nowrap" as const }}>
               EN FORME
             </div>
-            <div style={{ position: "absolute", left: 6, bottom: `${(PAD_BOT / H) * 100}%`, fontSize: 7.5, fontWeight: 900, letterSpacing: "0.04em", color: WELLNESS_RAMP[0].hex, whiteSpace: "nowrap" as const }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", left: 6, bottom: `${(PAD_BOT / H) * 100}%`, fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em", color: WELLNESS_RAMP[0].hex, whiteSpace: "nowrap" as const }}>
               FATIGUÉ
             </div>
           </>
@@ -508,7 +508,7 @@ export default function SparkLineClient({
             <div key={`z1-${z.label}`} style={{
               position: "absolute", left: 6, top: `${(yTopPct + yBotPct) / 2}%`,
               transform: "translateY(-50%)",
-              fontSize: 7.5, fontWeight: 900, letterSpacing: "0.04em", color: z.color,
+              fontFamily: "var(--font-mono), monospace", fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em", color: z.color,
               whiteSpace: "nowrap" as const,
             }}>
               {z.label}
@@ -537,7 +537,7 @@ export default function SparkLineClient({
             <div key={z.label} style={{
               position: "absolute", right: 6, top: `${(yTopPct + yBotPct) / 2}%`,
               transform: "translateY(-50%)",
-              fontSize: 7.5, fontWeight: 900, letterSpacing: "0.04em", color: z.color,
+              fontFamily: "var(--font-mono), monospace", fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em", color: z.color,
               textAlign: "right" as const, whiteSpace: "nowrap" as const,
             }}>
               {z.label}

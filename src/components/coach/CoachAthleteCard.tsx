@@ -11,6 +11,7 @@ import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
 import type { AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { DARK_CARD_BG } from "@/lib/theme";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
   type WellnessBaselineResult, type Perspective as BaselinePerspective,
@@ -48,8 +49,8 @@ export function WellnessRing({ score, size = 72, label }: {
           style={{ transition: "stroke-dashoffset 0.5s ease" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 4px" }}>
-        <span style={{ fontSize: Math.round(size * 0.307), fontWeight: 1000, lineHeight: 1, letterSpacing: "-0.055em", color }}>{score !== null ? score : "—"}</span>
-        <span style={{ fontSize: label ? Math.round(size * 0.1) : Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.06em", color: label ? color : "rgba(255,255,255,0.56)", marginTop: 2, textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>{label ?? "well."}</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: Math.round(size * 0.307), fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color }}>{score !== null ? score : "—"}</span>
+        <span style={{ fontSize: label ? Math.round(size * 0.1) : Math.round(size * 0.11), fontWeight: 1000, letterSpacing: "0.06em", color: label ? color : "rgba(255,255,255,0.56)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>{label ?? "well."}</span>
       </div>
     </div>
   );
@@ -264,7 +265,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   return (
     <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
-      background: "linear-gradient(145deg,#1a1a1a,#282828)",
+      background: DARK_CARD_BG,
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
       borderRadius: 26, padding: 18,
       boxShadow: "0 14px 36px rgba(0,0,0,.28)",
@@ -311,17 +312,17 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         {(!!athlete.invite_email || showBadge || showReviewed) && (
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: behaviors.length > 0 ? 8 : 0 }}>
             {!!athlete.invite_email && (
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(255,255,255,.1)", color: "#c7ccd1", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "3px 8px" }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "rgba(255,255,255,.1)", color: "#c7ccd1", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "3px 8px" }}>
                 ⏳ En attente
               </div>
             )}
             {showBadge && (
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "#d44000", color: "#fff", borderRadius: 999, padding: "3px 8px" }}>
                 Attention requise
               </div>
             )}
             {showReviewed && (
-              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", background: "rgba(47,158,68,.18)", color: "#bfeec8", border: "1px solid rgba(47,158,68,.35)", borderRadius: 999, padding: "3px 8px" }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "rgba(47,158,68,.18)", color: "#bfeec8", border: "1px solid rgba(47,158,68,.35)", borderRadius: 999, padding: "3px 8px" }}>
                 Traité ✓
               </div>
             )}
@@ -385,7 +386,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
               {topSession.name}
             </div>
-            <span style={{ fontSize: 9, fontWeight: 800, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)", color: topSession.done ? "#2f9e44" : "#d44000" }}>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)", color: topSession.done ? "#2f9e44" : "#d44000" }}>
               {topSession.done ? "Terminé" : "Prévu"}
             </span>
           </div>
@@ -453,14 +454,14 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 7 }}>
               {topSession.duration != null && (
                 <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.03em", lineHeight: 1 }}>{topSession.duration}</div>
-                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>MIN</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{topSession.duration}</div>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>MIN</div>
                 </div>
               )}
               {topSession.rpe != null && (
                 <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
-                  <div style={{ fontSize: 15, fontWeight: 1000, color: "#d44000", letterSpacing: "-0.03em", lineHeight: 1 }}>{topSession.rpe}</div>
-                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>DIFF.</div>
+                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{topSession.rpe}</div>
+                  <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>DIFF.</div>
                 </div>
               )}
             </div>

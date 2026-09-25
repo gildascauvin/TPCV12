@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import { DARK_CARD_BG } from "@/lib/theme";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
@@ -37,30 +38,33 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
           roleToggle={sandboxMode ? { role: "athlete", onToggle: r => router.push(`/sandbox/${r}`) } : undefined}
         />
       )}
+      {/* Fond sombre plein-page + header sans fond propre — même traitement que TodayClient.tsx
+         (voir sa doc pour le détail), "seule cette page (et /today) devient dark". */}
+      <div style={{
+        background: DARK_CARD_BG,
+        minHeight: "100vh",
+        marginBottom: -132, paddingBottom: 132,
+      }}>
       <CalendarHeader
-        mode="title" title="Performance"
+        mode="title" title="Performance" seamless
         selectedDate={new Date().toISOString().slice(0, 10)}
         onProfileClick={() => setProfileOpen(true)}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
-
-      <div style={{
-        background: "radial-gradient(circle at 18% 0%, rgba(255,255,255,.05), transparent 26%), radial-gradient(circle at 85% 8%, rgba(212,64,0,.12), transparent 34%), linear-gradient(180deg,#101010 0%,#0a0a0b 45%,#111 100%)",
-        minHeight: "100vh",
-        marginBottom: -132, paddingBottom: 132,
-      }}>
       <div className="page-shell">
         {userId ? (
           <TestsPanel
             ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
             sport={sport} sexe={sexe} poidsKg={poidsKg}
             onEditProfile={() => setProfileOpen(true)}
+            onDarkPage
           />
         ) : testsFixture ? (
           <TestsPanel
             ownerId="sandbox-athlete" subject={{ subjectUserId: "sandbox-athlete" }}
             sport={sport} sexe={sexe} poidsKg={poidsKg}
             fixture={testsFixture}
+            onDarkPage
           />
         ) : (
           <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, padding: "8px 2px" }}>Le suivi de tests n&apos;est pas disponible en mode démo.</div>

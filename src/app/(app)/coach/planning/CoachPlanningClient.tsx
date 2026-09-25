@@ -576,7 +576,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
           <button onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes")}
             style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
             Ajouter un sportif →
@@ -629,14 +629,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   scrollSnapAlign: "start",
                 }}>
                   <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", textTransform: "uppercase" }}>
+                    <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>
                       {format(d, "EEE", { locale: fr })}
                     </div>
-                    <div style={{ fontSize: 26, fontWeight: 1000, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.04em" }}>
+                    <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, color: "#171b1f", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
                       {d.getDate()}
                     </div>
                     {isToday && (
-                      <span style={{ display: "inline-block", fontSize: 9, fontWeight: 800, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", fontSize: 9, fontWeight: 700, color: "#fff", background: "#d44000", padding: "2px 7px", borderRadius: 999, marginTop: 3, letterSpacing: "0.04em" }}>
                         Aujourd'hui
                       </span>
                     )}
@@ -664,7 +664,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                             cursor: a ? "pointer" : "default",
                           }}
                         >
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "#d44000", marginBottom: 2 }}>{a?.name.split(" ")[0] ?? "?"}</div>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: "#d44000", marginBottom: 2 }}>{a?.name.split(" ")[0] ?? "?"}</div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: "#171b1f" }}>{s.name}</div>
                         </button>
                       );
@@ -782,7 +782,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 borderRadius: 20, background: "#fff",
               }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
-                <div style={{ fontSize: 15, fontWeight: 900, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
                   La semaine 1 de {athlete.name.split(" ")[0]} démarre lundi
                 </div>
                 <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
@@ -841,7 +841,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           <div style={{ padding: isMd ? "14px 24px 100px" : "8px 8px 100px" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: isMd ? 4 : 2, marginBottom: 4 }}>
               {dayLabels.map(d => (
-                <div key={d} style={{ textAlign: "center", fontSize: 9, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.06em", textTransform: "uppercase", paddingBottom: 2 }}>
+                <div key={d} style={{ textAlign: "center", fontSize: 9, fontWeight: 900, color: "#8a8f94", letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", paddingBottom: 2 }}>
                   {isMd ? d : d[0]}
                 </div>
               ))}
@@ -900,10 +900,10 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       {isMd && (
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                           <div>
-                            <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
+                            <div style={{ fontSize: 8, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", letterSpacing: "0.08em", lineHeight: 1.2 }}>
                               {format(date, "EEE", { locale: fr }).slice(0, 3)}
                             </div>
-                            <div style={{ fontSize: 18, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
+                            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1 }}>
                               {date.getDate()}
                             </div>
                           </div>
@@ -914,7 +914,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       {/* Mobile : numéro + ring empilés, dots dessous */}
                       {!isMd && (
                         <>
-                          <div style={{ fontSize: 13, fontWeight: 1000, letterSpacing: "-0.04em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1, textAlign: "center", marginBottom: 4 }}>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", color: isToday ? "#d44000" : "#171b1f", lineHeight: 1, textAlign: "center", marginBottom: 4 }}>
                             {date.getDate()}
                           </div>
                           <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
@@ -945,7 +945,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                               >
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
                                   <div style={{ fontSize: 10, fontWeight: 800, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{s.name}</div>
-                                  <span style={{ fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
+                                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 999, whiteSpace: "nowrap", flexShrink: 0, background: s.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.10)", color: s.done ? "#2f9e44" : "#d44000" }}>
                                     {s.done ? "Terminé" : "Prévu"}
                                   </span>
                                 </div>
@@ -1139,7 +1139,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         {weekLocked && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
             <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
-              <div style={{ fontWeight: 900, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
+              <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
               <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Ce programme est bien assigné — l&apos;abonnement débloque le reste du planning.</div>
               <button onClick={() => requireSubscription(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
                 Débloquer →

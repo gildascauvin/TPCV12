@@ -2,6 +2,7 @@
 
 import type { DayAlert } from "@/lib/alerts";
 import PulseDot from "@/components/calendar/PulseDot";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Encart alerte "jour prioritaire" — extrait de DayColumn.tsx pour être réutilisé à l'identique
    dans les vues qui n'utilisent pas DayColumn (CoachPlanningClient.tsx).
@@ -35,7 +36,7 @@ const DARK_COLOR_PALETTE: Record<string, { bg: string; border: string }> = {
   "#2f9e44": { bg: "linear-gradient(145deg,#0f2417,#163a22)", border: "rgba(47,158,68,.5)" }, // 🚀 surcharge
 };
 function darkColors(glow: string) {
-  return DARK_COLOR_PALETTE[glow] ?? { bg: "linear-gradient(145deg,#1a1a1a,#282828)", border: "rgba(255,255,255,.2)" };
+  return DARK_COLOR_PALETTE[glow] ?? { bg: DARK_CARD_BG, border: "rgba(255,255,255,.2)" };
 }
 
 /* Titre en gras sur sa propre ligne — verbe si une suggestion réellement actionnable existe
@@ -59,7 +60,7 @@ function AlertText({ text, size }: { text: string; size?: number }) {
   const detailSize = size ?? 11;
   return (
     <>
-      <div style={{ fontSize: headlineSize, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: rest.length ? 5 : 0 }}>{headline}</div>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: headlineSize, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.2, marginBottom: rest.length ? 5 : 0 }}>{headline}</div>
       {rest.map((line, i) => (
         <div key={i} style={{ fontSize: detailSize, fontWeight: size ? 600 : 500, lineHeight: 1.45, marginTop: i > 0 ? 3 : 0 }}>{line}</div>
       ))}
@@ -102,7 +103,7 @@ export default function AlertBox({ alert, actions, variant = "light" }: { alert:
   return (
     <div style={{
       position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
-      background: "linear-gradient(145deg,#1a1a1a,#282828)", border: `1.5px solid ${alert.border}`,
+      background: DARK_CARD_BG, border: `1.5px solid ${alert.border}`,
       fontSize: 13, lineHeight: 1.4, color: "#fff", fontWeight: 600,
       boxShadow: "0 10px 24px rgba(0,0,0,.18)",
     }}>

@@ -162,14 +162,14 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
 
   const list = suggestions.length > 0 ? (
     <div style={{ padding: "6px 0" }}>
-      {valueRow && <div style={{ padding: "6px 14px 2px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", color: "#b0b4b7" }}>Suggestions</div>}
+      {valueRow && <div style={{ padding: "6px 14px 2px", fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#b0b4b7" }}>Suggestions</div>}
       {suggestions.map((s, i) => (
         <div key={i} onMouseDown={e => { e.preventDefault(); onCancelBlur(); onAccept(s.value); }}
           style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", background: i === selectedIdx ? "#fff5f2" : "#fff" }}>
           <span style={{ fontSize: 15, width: 20, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>
           <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: "#171b1f", minWidth: 0 }}>{s.label}</span>
           <span style={{ fontSize: 11, color: "#bbb", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{s.meta}</span>
-          <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", padding: "2px 7px", borderRadius: 4, flexShrink: 0, ...AC_BADGE_STYLE[s.type] }}>{AC_BADGE_LABEL[s.type]}</span>
+          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", padding: "2px 7px", borderRadius: 4, flexShrink: 0, ...AC_BADGE_STYLE[s.type] }}>{AC_BADGE_LABEL[s.type]}</span>
         </div>
       ))}
     </div>
@@ -498,7 +498,7 @@ function Tokenized({ text, onTokenClick, activeSpan }: {
             onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start, part.end, e.currentTarget.getBoundingClientRect()); } : undefined}
             style={{
               background: isActive ? baseColor : baseBg, color: isActive ? "#fff" : baseColor,
-              fontWeight: 800, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5,
+              fontFamily: "var(--font-mono), monospace", fontWeight: 700, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5,
               cursor: onTokenClick ? "pointer" : undefined,
             }}
           >
@@ -1207,7 +1207,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
           ) : (
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#171b1f" }}>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#171b1f" }}>
                   {attachments.result?.value || "—"} {isDropJumpHeight ? "cm" : attachments.result?.unit}
                   {isDropJumpHeight && rsiContactSec != null && ` · ${Math.round(rsiContactSec * 1000)} ms`}
                 </span>
@@ -1291,7 +1291,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                   padding: "6px 9px",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".03em", color: mine ? "#d44000" : "#9a9ea1" }}>
+                    <span style={{ fontSize: 9, fontWeight: 800, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".03em", color: mine ? "#d44000" : "#9a9ea1" }}>
                       {c.authorName}
                     </span>
                     {mine && (

@@ -100,13 +100,13 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
                 width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
                 background: "linear-gradient(135deg,#f04a08,#fb923c)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, fontWeight: 900, color: "#fff",
+                fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, color: "#fff",
               }}>
                 {initials(a.name)}
               </span>
               {a.name.split(" ")[0]}
               {score !== null && (
-                <span style={{ fontSize: 10, fontWeight: 800, padding: "1px 5px", borderRadius: 5, background: active ? "rgba(255,255,255,.20)" : "rgba(0,0,0,.05)", color: active ? "#fff" : scoreColor(score) }}>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 5, background: active ? "rgba(255,255,255,.20)" : "rgba(0,0,0,.05)", color: active ? "#fff" : scoreColor(score) }}>
                   {score}
                 </span>
               )}

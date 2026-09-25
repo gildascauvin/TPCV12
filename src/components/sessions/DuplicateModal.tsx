@@ -85,7 +85,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 22, fontWeight: 1000, letterSpacing: "-0.045em" }}>Dupliquer</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Dupliquer</div>
           <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
@@ -96,7 +96,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
 
           {/* New date */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nouvelle date</div>
+            <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>Nouvelle date</div>
             <input
               type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
               style={{ width: "100%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, color: "#171b1f", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const }}
@@ -104,7 +104,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
           </div>
 
           {/* Mode de charge */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Charge de la copie
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: mode !== "maintien" ? 14 : 20 }}>
@@ -152,7 +152,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
           {/* Sportifs destinataires — coach uniquement */}
           {showRecipients && (
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 7 }}>
                 Dupliquer vers
                 {recipients.length > 0 && (
                   <span style={{ marginLeft: 8, background: "#d44000", color: "#fff", borderRadius: 999, padding: "2px 7px", fontSize: 10 }}>
@@ -186,9 +186,9 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
                       </div>
                       <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#1f2428", lineHeight: 1.2 }}>
                         {a.name}
-                        {a.id === sourceAthleteId && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", textTransform: "uppercase" }}>actuel</span>}
+                        {a.id === sourceAthleteId && <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", color: "#a0a0a0", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>actuel</span>}
                       </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: scoreColor(a.wellness_score), flexShrink: 0 }}>{a.wellness_score}</span>
                     </button>
                   );
                 })}
@@ -201,7 +201,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
 
           {/* Aperçu — même carte que le planning (WeekSessionCard), diff avant/après si la charge
               a été ajustée. Lecture seule (onComplete/onEdit/onDuplicate no-op). */}
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>
             Aperçu de la copie
           </div>
           <WeekSessionCard

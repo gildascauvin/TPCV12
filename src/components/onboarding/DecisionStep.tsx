@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { FullWellnessAdvicePreview, CoachAthleteRowsPreview, ProgramPreview3Days, SingleSessionAdjustPreview, CombinedInsightPreview } from "@/components/paywall/FrisePreviews";
 import type { SessionTemplate } from "@/types";
 
@@ -221,7 +222,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
         marginLeft: "-50vw", marginRight: "-50vw", marginTop: -36, marginBottom: -120,
         display: "flex", height: "100dvh",
       }}>
-        <div style={{ flex: "0 0 42%", background: "#141414", display: "flex", alignItems: "center", padding: "0 48px", overflowY: "auto" }}>
+        <div style={{ flex: "0 0 42%", background: DARK_CARD_BG, display: "flex", alignItems: "center", padding: "0 48px", overflowY: "auto" }}>
           <div style={{ maxWidth: 440 }}>{heroContent}</div>
         </div>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#f1f0ee" }}>
@@ -250,7 +251,7 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
     <div style={{
       width: "100vw", position: "relative", left: "50%", marginLeft: "-50vw", marginRight: "-50vw",
       marginTop: -36, marginBottom: -120, display: "flex", flexDirection: "column", height: "100dvh",
-      background: "#141414",
+      background: DARK_CARD_BG,
     }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px 8px" }}>
         {timerBars}
@@ -263,7 +264,11 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
           {active.illustration}
         </div>
       </div>
-      <div style={{ flexShrink: 0, background: "#141414", padding: "14px 20px 24px", display: "flex", gap: 10 }}>
+      {/* Fond transparent (2026-09-25, DARK_CARD_BG) — le dégradé radial du parent (100dvh) est déjà
+         peint derrière ce footer ; le répéter ici recalculerait le gradient relatif à la petite boîte
+         du footer (position % différente) au lieu du même dégradé continu, créant une coupure visible
+         à la frontière. Transparent laisse le fond du parent transparaître sans couture. */}
+      <div style={{ flexShrink: 0, background: "transparent", padding: "14px 20px 24px", display: "flex", gap: 10 }}>
         {backBtn}{nextBtn}
       </div>
     </div>

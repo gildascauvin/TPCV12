@@ -7,6 +7,7 @@ import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 import { SPORT_CATEGORIES, EXTRA_CATEGORIES, OTHER_CATEGORY, guessSportChip, programSportEmoji } from "@/lib/sportCategories";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Bibliothèque publique, native (2026-09-04) — remplace le lien externe vers la page WordPress
    ("Utiliser un modèle" du picker de création, ProgramCreatePicker.tsx) : demande explicite de
@@ -137,7 +138,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
             {wizardHero}
             {/* Illustration "Enregistre" de la frise (2026-09-14) — même composant réel que
@@ -162,7 +163,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0 }}>←</button>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em" }}>Bibliothèque de programmes</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Bibliothèque de programmes</div>
                 <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Choisis un programme existant comme point de départ</div>
               </div>
             </div>

@@ -34,7 +34,8 @@ export default function ZoneBadge({ label, color, definition, size = "md" }: {
       onClick={() => { if (definition) { updateAlign(); setShow(s => !s); } }}
     >
       <span style={{
-        fontSize, fontWeight: 900, color, background: `${color}22`, border: `1px solid ${color}44`,
+        fontFamily: "var(--font-mono), monospace",
+        fontSize, fontWeight: 700, color, background: `${color}22`, border: `1px solid ${color}44`,
         borderRadius: 999, padding, letterSpacing: "0.05em", textTransform: "uppercase" as const,
         whiteSpace: "nowrap" as const, display: "inline-block", cursor: definition ? "help" : undefined,
       }}>

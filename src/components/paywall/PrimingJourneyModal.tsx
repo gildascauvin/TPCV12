@@ -5,6 +5,7 @@ import posthog from "posthog-js";
 import { PricingPrimingContent, PricingPrimingValue, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 interface Props {
   mode: "athlete" | "coach";
@@ -70,7 +71,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       onClick={e => { if (allowDismiss && e.target === e.currentTarget) onDismiss(); }}
     >
       {heroOnLeft && (
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: "#141414" }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 460, width: "100%" }}>
             <PricingPrimingValue role={mode} headline={headline} sub={sub} />
           </div>
