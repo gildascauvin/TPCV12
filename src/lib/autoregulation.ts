@@ -12,33 +12,53 @@ export type AutoregDir = "low" | "high";
 
 export interface AutoregSuggestion {
   dir: AutoregDir;
-  reco: number; // % signé, gradué en continu (voir plus bas), snappé au chip le plus proche
+  reco: number; // % signé équivalent au delta en points réellement calculé (voir plus bas) — API inchangée pour les consommateurs (chips manuels, formatAutoregPct, "decided" state…)
   icon: string; // ⚠️/🚨 (alléger, gradué sur le garde-fou/seuil critique) ou 🚀 (surcharger)
 }
 
-// Les 5 paliers réellement proposables (AUTOREG_CHIPS plus bas) — le % continu calculé par
-// computeAutoregSuggestion() est toujours arrondi à l'un de ceux-ci, jamais un chiffre "en dehors
-// de la grille" que l'utilisateur ne pourrait pas retrouver en cliquant les chips lui-même.
-const AUTOREG_STEPS = [2.5, 5, 10, 15, 20];
-function nearestStep(magnitude: number): number {
-  const capped = Math.min(20, magnitude);
-  return AUTOREG_STEPS.reduce((best, s) => Math.abs(capped - s) < Math.abs(capped - best) ? s : best, AUTOREG_STEPS[0]);
+// Les 5 paliers proposables MANUELLEMENT (AUTOREG_CHIPS plus bas, toujours utilisés tels quels par
+// AdjustSessionModal.tsx — flux séparé, pas touché par ce chantier) — computeAutoregSuggestion()
+// ci-dessous ne s'en sert plus pour sa propre reco AUTOMATIQUE depuis le 2026-09-25 (voir plus bas).
+
+/* Range conseillée = TOUJOURS 2 ENTIERS de RPE (2026-09-25, 2e itération) — `target` (la cible déjà
+   plafonnée/calculée, arrondie ici au cas où `plannedDifficulty` lui-même serait fractionnaire) est
+   TOUJOURS l'extrémité CONSERVATRICE (la plus proche du plan initial), l'autre extrémité s'étend
+   d'1 point supplémentaire dans le sens de l'ajustement — jamais vers `plannedDifficulty` (sinon,
+   à magnitude 1, une extrémité retombe exactement sur le plan et absorbe silencieusement TOUTE
+   suggestion à magnitude 1, un vrai bug trouvé en vérifiant). Retour de Gildas, exemple donné deux
+   fois : reco "6-7" (surcharge, cible=6=conservateur) ou "5-6" (allège, cible=6=conservateur) —
+   jamais un point unique ("Thomas a cible 6 au lieu de 5-6 ou 6-7", le modèle en points, toujours
+   entier, faisait dégénérer le range en un point isolé avec l'ancien Math.floor/Math.ceil, qui ne
+   sert à élargir que sur une cible FRACTIONNAIRE). Vit ici (pas dans DecisionGauge.tsx, qui ne fait
+   plus que l'AFFICHER) car computeAutoregSuggestion() en a lui-même besoin pour décider si une
+   suggestion est RÉELLEMENT actionnable — un seul point de calcul, jamais deux logiques de zone qui
+   pourraient diverger entre déclenchement et affichage. */
+export function zoneRange(target: number, dir: AutoregDir): { zoneLow: number; zoneHigh: number } {
+  const t = Math.round(target);
+  return dir === "high" ? { zoneLow: t, zoneHigh: t + 1 } : { zoneLow: t - 1, zoneHigh: t };
 }
 
-/* Écart continu score/difficulté (2026-08-31, retour explicite de Gildas — remplace la grille à
-   seuils fixes de la veille : diff=7 vs diff=8 pouvait faire toute la différence entre "rien" et
-   "Alléger" pour un score quasi identique, un pur effet de falaise. Exemple qui a motivé le
-   changement : score=5/100 + séance à 7/10 ne déclenchait rien malgré un état clairement critique).
+/* Écart score/difficulté en POINTS DE RPE, plafonné à 2 (2026-09-25, 2e itération — remplace le
+   modèle en %, retour explicite de Gildas : "faut avoir une règle simple selon le score, faut pas
+   sur-conceptualiser... plutôt qu'un plafond de 20%, on prend un plafond de 2 points de RPE. et la
+   reco est proportionnelle à l'écart du score et de la cible"). Root cause du modèle précédent
+   (%, plafond 20% de plannedDifficulty) : structurellement incapable de produire un vrai geste pour
+   le Surcharger — vérifié par balayage exhaustif (1-10 × 0-100) : 0% des cas restaient actionnables
+   une fois la règle "pas de CTA si le RPE prévu est déjà dans le range" appliquée à la source (voir
+   plus bas), le plafond de 20% ne déplaçant jamais la cible d'un point RPE entier pour une
+   difficulté prévue ≤9 (20%×9 < 2). En points fixes, le même balayage donne 186/324/414 cas
+   actionnables pour Surcharger/Alléger-critique/Alléger-modéré respectivement — le mécanisme
+   redevient réellement utilisable dans les 3 registres, pas seulement le cas critique.
 
    Difficulté (1-10) et score (0-100, relatif si la baseline est disponible, sinon absolu) ramenés
-   sur la MÊME échelle (diffPos = difficulté×10) — l'écart entre les deux pilote à la fois le
-   déclenchement et l'ampleur de la reco :
+   sur la MÊME échelle (diffPos = difficulté×10) — l'écart entre les deux, ramené en points de RPE
+   (÷10), pilote à la fois le déclenchement ET l'ampleur de la reco :
      mismatch = diffPos − score
      mismatch > 0 → séance plus dure que ce que l'état du jour permet → Alléger
      mismatch < 0 → séance plus facile que ce que l'état du jour permet → Surcharger
-     |mismatch| < 35 → pas de reco chiffrée (peut rester une alerte informative sans chips, voir
-       decisionText()/computeDecisionCard() — logique Z_SWC séparée, inchangée)
-     |mismatch| ≥ 35 → reco actionnable, % = clamp(20, |mismatch|/5) arrondi au chip le plus proche
+     magnitude = clamp(2, |mismatch|/10), arrondie à l'entier le plus proche
+     magnitude arrondie à 0 → pas de reco (remplace l'ancien seuil fixe "|mismatch|<35" — un écart
+       qui arrondit à 0 point n'a simplement rien à proposer, plus besoin d'un seuil séparé)
    `baseline` (optionnel) : dès que l'historique du sportif est suffisant, le score utilisé dans le
    calcul devient le score RELATIF personnel (baseline.relativeScore) plutôt que `wellness` en
    absolu — repli exact sur `wellness` tant que l'historique est insuffisant, comportement 100%
@@ -46,8 +66,8 @@ function nearestStep(magnitude: number): number {
 
    Le garde-fou absolu (score composite brut < 40) et le seuil critique (Z_SEVERE) n'inventent
    jamais un déclenchement à eux seuls — ils ESCALADENT la sévérité d'un Alléger déjà déclenché par
-   le mismatch (🚨/-20% au lieu de ce que le calcul continu aurait donné), jamais côté Surcharger
-   (pas de notion de "critique" pour une séance trop facile).
+   le mismatch (🚨/-2 points, le plafond, au lieu de ce que le calcul continu aurait donné), jamais
+   côté Surcharger (pas de notion de "critique" pour une séance trop facile).
 
    `chronicPenalty` (2026-09, retour de Gildas — "le chronique doit moduler le journalier, pas le
    concurrencer") : points retranchés au score effectif AVANT de le comparer à la difficulté prévue —
@@ -69,7 +89,12 @@ function nearestStep(magnitude: number): number {
    l'explique. Fix : le chronique n'est appliqué QUE si le jour, à lui seul, penche déjà vers "plus
    dur que ce que la forme du jour permet" (`rawMismatch >= 0`) — il amplifie alors un écart déjà là,
    il ne peut plus jamais en inventer un à partir d'un jour où le plan est déjà cohérent ou laisse de
-   la marge. */
+   la marge.
+
+   Garde-fou (2026-09-25, retour de Gildas — "faut pas 'Surcharger recommandé' si le prévu est dans
+   le range. c'est la règle de base") : une fois le delta en points calculé, si le RPE déjà prévu
+   (arrondi) tombe dans le range conservateur (2 entiers) de la cible, ce n'est pas une vraie
+   suggestion — `null`, la carte affiche "Plan cohérent" comme n'importe quel autre jour cohérent. */
 export function computeAutoregSuggestion(
   wellness: number | null,
   plannedDifficulty: number | null,
@@ -83,16 +108,27 @@ export function computeAutoregSuggestion(
   const rawMismatch = plannedDifficulty * 10 - baseScore;
   const scoreForMismatch = rawMismatch >= 0 ? baseScore + chronicPenalty : baseScore;
   const mismatch = plannedDifficulty * 10 - scoreForMismatch;
-  const absMismatch = Math.abs(mismatch);
-  if (absMismatch < 35) return null;
 
-  if (mismatch > 0) {
-    const guardRail = (baseline?.guardRailTriggered ?? false) || wellness < WELLNESS_ABSOLUTE_GUARD_SCORE;
-    const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
-    const critical = guardRail || severe;
-    return { dir: "low", reco: critical ? -20 : -nearestStep(absMismatch / 5), icon: critical ? "🚨" : "⚠️" };
-  }
-  return { dir: "high", reco: nearestStep(absMismatch / 5), icon: "🚀" };
+  const magnitude = Math.min(2, Math.abs(mismatch) / 10);
+  const roundedMagnitude = Math.round(magnitude);
+  if (roundedMagnitude === 0) return null;
+
+  const dir: AutoregDir = mismatch > 0 ? "low" : "high";
+  const guardRail = (baseline?.guardRailTriggered ?? false) || wellness < WELLNESS_ABSOLUTE_GUARD_SCORE;
+  const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
+  const critical = dir === "low" && (guardRail || severe);
+  const finalMagnitude = critical ? 2 : roundedMagnitude;
+  const signedPoints = dir === "low" ? -finalMagnitude : finalMagnitude;
+  const icon = dir === "low" ? (critical ? "🚨" : "⚠️") : "🚀";
+  // % équivalent au delta en points réellement calculé — reco garde son unité historique (API
+  // inchangée pour tous les consommateurs : chips manuels, formatAutoregPct, "decided" state…).
+  const reco = Math.round((signedPoints / plannedDifficulty) * 1000) / 10;
+
+  const { zoneLow, zoneHigh } = zoneRange(plannedDifficulty + signedPoints, dir);
+  const roundedPlanned = Math.round(plannedDifficulty);
+  if (roundedPlanned >= zoneLow && roundedPlanned <= zoneHigh) return null;
+
+  return { dir, reco, icon };
 }
 
 /* Couleur de sévérité par palier réel de l'heuristique (🚨 critique / ⚠️ modéré / 🚀 surcharge),
@@ -124,6 +160,21 @@ export function formatAutoregPct(v: number): string {
   const abs = Math.abs(v);
   const sign = v < 0 ? "−" : "+";
   return sign + (abs % 1 === 0 ? String(abs) : abs.toFixed(1).replace(".", ",")) + "%";
+}
+
+/* Affichage en POINTS DE RPE, jamais en % (2026-09-25, retour de Gildas — "faut pas afficher '−33%
+   appliqué'") : la reco AUTOMATIQUE (computeAutoregSuggestion) est désormais calculée en points puis
+   convertie en % équivalent uniquement pour rester compatible avec `AutoregDecision.pct` (partagé
+   avec le flux manuel d'AdjustSessionModal.tsx, resté en %, voir plus haut) — ce % peut valoir des
+   chiffres qui semblent énormes (25 à 65%) une fois dérivés d'un delta fixe en points plutôt qu'un %
+   plafonné, illisibles tels quels pour l'utilisateur. Reconvertit ICI, à l'affichage seulement,
+   jamais dans le stockage — `pct` reconstruit exactement le delta en points d'origine (même calcul
+   que `adjustDifficulty()`, vérifié par script sans dérive d'arrondi sur toute la grille 1-10). */
+export function formatAutoregPoints(pct: number, plannedDifficulty: number): string {
+  const points = Math.round((pct / 100) * plannedDifficulty);
+  const sign = points < 0 ? "−" : "+";
+  const abs = Math.abs(points);
+  return `${sign}${abs} point${abs > 1 ? "s" : ""}`;
 }
 
 /* `baseline` (optionnel, 2026-08-31) : cite la dimension dominante entre parenthèses ("Récupération

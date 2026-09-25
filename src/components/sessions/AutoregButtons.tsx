@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import {
-  type AutoregDir, type AutoregOriginal, formatAutoregPct, autoregCtaLabel,
+  type AutoregDir, type AutoregOriginal, formatAutoregPoints, autoregCtaLabel, zoneRange,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
-import DecisionGauge, { toleranceFor } from "@/components/sessions/DecisionGauge";
+import DecisionGauge from "@/components/sessions/DecisionGauge";
 
 // pct <-> difficulté (1-10) — vue/entrée de la jauge, jamais un nouvel axe de calcul : `selectedPct`
 // reste la seule source de vérité (voir plus bas), ces 2 fonctions ne font que le traduire pour
@@ -121,28 +121,36 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   }, [sessionId]);
 
   const currentDiff = diffFromPct(plannedDifficulty, selectedPct);
-  const targetDiff = diffFromPct(plannedDifficulty, reco);
-  // Tolérance PROPORTIONNELLE à la difficulté prévue (toleranceFor(), DecisionGauge.tsx), pas un
-  // point fixe — sinon une reco réelle (10%+) sur une difficulté prévue basse (ex. 4/10) déplace la
-  // cible de moins de 0,5 point et se retrouve "déjà dans la zone" au repos, malgré un vrai signal
-  // (2026-09-25, bug trouvé par Gildas : bandeau "Surcharger recommandé" + jauge "déjà dans la zone"
-  // sans rien à appliquer, sur une séance à difficulté 4/10).
-  const tolerance = toleranceFor(plannedDifficulty);
-  const inZone = Math.abs(currentDiff - targetDiff) <= tolerance;
+  // Cible CONSERVATRICE — toujours un entier, arrondi ici au cas où `plannedDifficulty` lui-même
+  // serait fractionnaire (ex. 4.4, une séance déjà ajustée par le passé). C'est TOUJOURS la valeur
+  // à appliquer (voir apply() plus bas), quelle que soit la direction — voir zoneRange()/
+  // autoregulation.ts pour le pourquoi ("6-7" surcharge / "5-6" allège, jamais un point isolé).
+  const targetInt = Math.round(diffFromPct(plannedDifficulty, reco));
+  // Zone = 2 ENTIERS (2026-09-25, retour de Gildas avec capture : "des fois le range conseillé se
+  // retrouve entre 2 entier de RPE, ce qui fait que c'est impossible de déplacer le curseur dedans"
+  // — le curseur ne se pose QUE sur des entiers, voir DecisionGauge.tsx). En mode libre (pas de
+  // suggestion, `dir` absent), la zone reste réduite au plan lui-même (rien à élargir sans
+  // direction réelle).
+  const { zoneLow, zoneHigh } = hasSuggestion
+    ? zoneRange(targetInt, dir!)
+    : { zoneLow: Math.round(plannedDifficulty), zoneHigh: Math.round(plannedDifficulty) };
+  const roundedCurrent = Math.round(currentDiff);
+  const inZone = roundedCurrent >= zoneLow && roundedCurrent <= zoneHigh;
   // Le verbe du CTA suit la position RÉELLE du curseur, pas le `dir` figé de la suggestion — si
   // l'utilisateur drague au-delà de la zone côté opposé à `dir` (ex. suggestion "Alléger" mais
   // curseur tiré plus bas que la zone), il faut alors remonter, donc "Surcharger", pas "Alléger".
   // Retour de Gildas : "selon si le curseur est à gauche ou à droite du range, le CTA doit
   // s'ajuster". À l'état par défaut (curseur non dragué), ça coïncide toujours avec `dir` (c'est ce
   // décalage qui a déclenché la suggestion), donc aucun changement visible tant qu'on ne drague pas.
-  const cursorDir: AutoregDir = currentDiff < targetDiff ? "high" : "low";
+  const cursorDir: AutoregDir = currentDiff < targetInt ? "high" : "low";
   // Cas réel (pas juste théorique) : `reco` est parfois assez faible (mismatch tout juste au-dessus
   // du seuil de 35) pour que la difficulté PRÉVUE d'origine (pct=0) tombe déjà dans la zone cible
-  // (targetDifficulty±tolerance) sans qu'aucun drag n'ait eu lieu — rien à ajuster. Retour de
-  // Gildas : "quand un RPE prévu est déjà dans le range conseillé, pas besoin de CTA" — seul
-  // `Maintenir` reste alors pertinent (pas d'écriture, le plan est déjà bon). Dès que l'utilisateur
-  // drague (selectedPct!==0), le CTA réapparaît normalement, in-zone ou non.
-  const hideAdjustCta = selectedPct === 0 && inZone;
+  // sans qu'aucun drag n'ait eu lieu — rien à ajuster. Retour de Gildas (2026-09-25, généralisé) :
+  // "quand le RPE prévu est déjà dans le range recommandé, pas besoin du CTA 'Maintenir'" — ni lui
+  // ni "Alléger/Surcharger" ne s'affichent dans ce cas (avant : seul Maintenir restait) : s'il n'y a
+  // rien à ajuster, il n'y a rien à décider non plus, la jauge seule (déjà en zone) suffit. Dès que
+  // l'utilisateur drague (selectedPct!==0), les CTA réapparaissent normalement, in-zone ou non.
+  const nothingToDecide = selectedPct === 0 && inZone;
 
   function selectChip(v: number) {
     setSelectedPct(v);
@@ -162,14 +170,18 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   async function apply() {
     if (!onApply) return;
     // Hors zone, AVEC une vraie suggestion système : un clic sur le CTA-verbe fait à la fois sauter
-    // le curseur sur la reco ET applique — fidèle au POC, pas une étape de confirmation séparée.
-    // Hors zone, EN MODE LIBRE (pas de suggestion) : applique directement où l'utilisateur a dragué,
-    // ne JAMAIS sauter ailleurs (il n'y a pas de "reco" vers laquelle sauter, le geste EST la
-    // décision). Dans la zone (les deux cas) : applique la valeur déjà réglée.
-    const pctToApply = inZone || !hasSuggestion ? selectedPct : reco;
+    // le curseur ET applique — fidèle au POC, pas une étape de confirmation séparée. Cible le RPE le
+    // plus CONSERVATEUR (targetInt, jamais l'autre extrémité de la zone) — 2026-09-25, retour de
+    // Gildas : "appliquer l'ajustement vise le RPE le plus conservateur (dans l'exemple 6-7 : 6)" —
+    // jamais la reco% brute (qui pouvait tomber sur une valeur fractionnaire inatteignable en
+    // draguant). Hors zone, EN MODE LIBRE (pas de suggestion) : applique directement où l'utilisateur
+    // a dragué, ne JAMAIS sauter ailleurs (le geste EST la décision). Dans la zone (les deux cas) :
+    // applique la valeur déjà réglée.
+    const conservativePct = pctFromDiff(plannedDifficulty, targetInt);
+    const pctToApply = inZone || !hasSuggestion ? selectedPct : conservativePct;
     if (!inZone && hasSuggestion) {
-      setSelectedPct(reco);
-      onPreviewChange?.(reco);
+      setSelectedPct(conservativePct);
+      onPreviewChange?.(conservativePct);
     }
     setApplying(true);
     const original = await onApply(pctToApply);
@@ -219,31 +231,33 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
 
       {mode === "active" && (
         <div>
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: nothingToDecide ? 0 : 12 }}>
             <DecisionGauge
               dir={dir ?? cursorDir}
               light={light}
-              targetDifficulty={diffFromPct(plannedDifficulty, reco)}
+              zoneLow={zoneLow}
+              zoneHigh={zoneHigh}
               value={diffFromPct(plannedDifficulty, selectedPct)}
-              tolerance={tolerance}
               onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
             />
           </div>
-          <div style={{ display: "flex", gap: 7 }}>
-            <button
-              onClick={maintenir}
-              style={light
-                ? { flex: hideAdjustCta ? undefined : 1, width: hideAdjustCta ? "100%" : undefined, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
-                : { flex: hideAdjustCta ? undefined : 1, width: hideAdjustCta ? "100%" : undefined, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
-            >
-              → Maintenir
-            </button>
-            {!hideAdjustCta && (
+          {/* Aucun bouton si rien à décider (2026-09-25, voir nothingToDecide plus haut) — la jauge
+             seule, déjà en zone, suffit ; pas de "Maintenir" pour confirmer un non-événement. */}
+          {!nothingToDecide && (
+            <div style={{ display: "flex", gap: 7 }}>
+              <button
+                onClick={maintenir}
+                style={light
+                  ? { flex: 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
+                  : { flex: 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
+              >
+                → Maintenir
+              </button>
               <button onClick={apply} disabled={applying} style={{ flex: 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
                 {applying ? "..." : inZone ? "Appliquer →" : autoregCtaLabel(cursorDir)}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -251,7 +265,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
           <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
-            {decidedPct !== null ? `${formatAutoregPct(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
+            {decidedPct !== null ? `${formatAutoregPoints(decidedPct, plannedDifficulty)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
           </div>
           <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
             {undoing ? "..." : "Annuler"}

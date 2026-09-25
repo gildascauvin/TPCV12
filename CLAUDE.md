@@ -3686,3 +3686,43 @@ Nouveau composant du chantier "point 1" (barre de filtre sportifs persistante `/
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque fix de logique (chronicPenalty, tolérance, merge de texte) vérifié par script `tsx` jetable reproduisant la fonction réelle contre des scénarios construits — pas seulement relu. Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas) — chaque bug signalé venait de son propre test en local.
 
 Déployé en prod le 2026-09-25, commit `183e22e`, push direct sur `main`.
+
+## Insight global — fusion généralisée à toutes les branches, pas juste celle testée (2026-09-25, suite)
+
+Gildas a signalé un 2e cas de répétition dans `crossTrendInsight()` que le fix du round précédent ne couvrait pas : *"Ta récupération est basse mais ta charge des 7 derniers jours ne le confirme pas (fatigue accumulée en baisse) : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress. Ta charge chronique est en baisse : possible perte de forme si ça dure."* — même défaut que la veille (2 phrases qui redisent "charge... baisse"), mais dans la branche `disagreement && wellBad`, qui ne se termine pas par ")." comme l'unique branche couverte jusque-là. Consigne explicite : "mon exemple était à appliquer sur tous les cas où c'est possible."
+
+`mergeChargeIntoBody()` généralisé aux 4 branches qui mentionnent "(fatigue accumulée en hausse/baisse)" (fatigueUp seul, fatigueDown seul, et les 2 branches de désaccord) — pas seulement celle qui se termine pile sur la parenthèse : si la phrase a déjà son propre ":" (désaccord, fatigueUp seul), la conséquence de `chargeDetail` est ajoutée en fin de phrase via " ; " plutôt que greffée sur la parenthèse. Vérifié par script sur les 4 branches + 2 cas de non-régression (déjà faits la veille, revérifiés).
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre. Script `tsx` jetable sur les 4 branches concernées + non-régression.
+
+Déployé en prod le 2026-09-25, commit `d1af2c8`, push direct sur `main`.
+
+## Boucle d'autorégulation — modèle en points de RPE (pas %), range toujours 2 entiers, pas de titre sans action (2026-09-25, suite)
+
+3 rounds successifs de retours de Gildas sur `computeAutoregSuggestion()`/la jauge de décision, chacun avec un fix vérifié par script AVANT d'exécuter le suivant — plusieurs fausses pistes trouvées et corrigées en cours de route, documentées ici pour ne pas les reproduire.
+
+### Round 1 — "pas de 'Surcharger recommandé' si le prévu est déjà dans le range"
+Repéré par Gildas : range [4,5] (Thomas), plan déjà à 4 → aucun bouton ne s'affichait (correct, fix du round précédent) mais le TITRE de la carte disait toujours "Surcharger recommandé" — contradiction titre/jauge. Fix à la SOURCE (`computeAutoregSuggestion()`, pas seulement `decisionCard.ts`) : si le RPE prévu (arrondi) tombe dans le range conservateur de la cible, retourne `null` — la carte affiche "Plan cohérent" comme n'importe quel autre jour cohérent, un seul point de vérité pour tous les consommateurs (titre, jauge, `/p/[id]`, `ProgramBuilderModal`...).
+
+**Conséquence trouvée en vérifiant par balayage exhaustif AVANT de considérer le fix terminé** (pas juste relu) : appliqué au modèle % de l'époque (plafond 20% de `plannedDifficulty`), cette règle rend le Surcharger **structurellement incapable de sortir du range dans 100% des cas** (balayage 1-10 × 0-100 : 0/186 cas actionnables) — le plafond de 20% ne déplace jamais la cible d'un point RPE entier pour une difficulté prévue ≤9 (20%×9 < 2). Signalé explicitement à Gildas avant d'aller plus loin (chiffres à l'appui) plutôt que de livrer un Surcharger silencieusement mort.
+
+### Round 2 — modèle en points de RPE, pas en %
+Réponse de Gildas au signalement ci-dessus : *"faut pas sur-conceptualiser. Par exemple plutôt qu'un plafond de 20%, on prend un plafond de 2 points de RPE. et la reco est proportionnelle à l'écart du score et de la cible."* Refonte de `computeAutoregSuggestion()` (`autoregulation.ts`) — `AUTOREG_STEPS`/`nearestStep()` (l'ancienne grille de paliers %) supprimés de son calcul automatique (restent utilisés tels quels par `AUTOREG_CHIPS`/`AdjustSessionModal.tsx`, flux manuel séparé, non touché) :
+```
+magnitude = clamp(2, |mismatch|/10), arrondie à l'entier le plus proche
+magnitude arrondie à 0 → pas de reco (remplace l'ancien seuil fixe "|mismatch|<35")
+```
+`reco` (%) reste calculé en sortie pour préserver l'API (chips manuelles, `formatAutoregPct`, `AutoregDecision.pct` partagé avec le flux chaîné de Coach Control) — mais dérivé du delta en points réel, pas l'inverse. Balayage revérifié : 186 cas Surcharger actionnables (contre 0), 324 Alléger-critique, 186 Alléger-modéré — le mécanisme redevient utilisable dans les 3 registres.
+
+### Round 3 — range toujours 2 entiers + affichage en points, pas en %
+Deux problèmes trouvés par Gildas en testant le round 2 :
+1. **"des fois le range conseillé se retrouve entre 2 entier de RPE, ce qui fait que c'est impossible de déplacer le curseur dedans"** puis, plus précisément : *"j'ai un cas ou Thomas a cible 6 au lieu de 5-6 ou 6-7"*. Root cause : le modèle en points produit une cible TOUJOURS entière (`plannedDifficulty + signedPoints`, signedPoints étant maintenant un entier) — l'ancien `zoneRange()` (`Math.floor`/`Math.ceil` d'une cible fractionnaire) dégénérait donc systématiquement en un point isolé (floor=ceil pour un entier), alors qu'il n'avait été pensé que pour la cible fractionnaire du modèle %. **Fix** : `zoneRange(target, dir)` prend désormais explicitement la direction — la cible (toujours l'extrémité CONSERVATRICE, la plus proche du plan) + 1 point supplémentaire dans le sens de l'ajustement (jamais vers le plan initial). Bug trouvé EN CONCEVANT ce fix, pas signalé par Gildas : étendre naïvement vers le plan (`[target,target+1]` pour les deux directions) fait qu'à magnitude=1, une extrémité de la zone retombe EXACTEMENT sur le plan et absorbe silencieusement toute suggestion modérée — corrigé en étendant toujours à l'opposé du plan.
+2. **"faut pas afficher '−33% appliqué'"** — nouveau `formatAutoregPoints(pct, plannedDifficulty)` (reconstruit le delta en points à partir du % stocké, même précision vérifiée sans dérive d'arrondi que `adjustDifficulty()`) remplace `formatAutoregPct()` partout où la reco AUTOMATIQUE s'affiche : carte "decided" d'`AutoregButtons.tsx`, badges de `PublicProgramView.tsx` (simulateur `/p/[id]`) et `ProgramBuilderModal.tsx` (simulateur wizard). Les chips manuelles d'`AdjustSessionModal.tsx` restent en % (flux séparé, jamais concerné).
+
+Vérifié par script sur l'exemple exact de Gildas : Thomas (planned=4, wellness=92) → range **[6-7]**, applique **+2 points** — plus jamais un point isolé.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque étape (balayage exhaustif du round 1, roundtrip d'arrondi du round 2, absence d'absorption à magnitude=1 du round 3) vérifiée par script `tsx` jetable AVANT de considérer le round terminé — pas seulement relue, notamment pour le chiffre "0% actionnable" qui a changé la direction de la conversation. Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas).
+
+Déployé en prod le 2026-09-25, commit `d1af2c8`, push direct sur `main`.
