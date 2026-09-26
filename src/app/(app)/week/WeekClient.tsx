@@ -25,6 +25,7 @@ import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignm
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
+import { DARK_CARD_BG } from "@/lib/theme";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
@@ -523,6 +524,12 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         />
       )}
 
+      {/* Fond sombre plein-page (2026-09-26, "je veux que toute la page ait la même couleur avec le
+         même bg" — même traitement que /today) : CalendarHeader déplacé À L'INTÉRIEUR de ce wrapper
+         (`seamless`), qui peint ainsi le header ET tout le reste de la page en continu. Même trick
+         marginBottom/paddingBottom que /today (CoachPageBg.tsx) pour étendre ce fond sous la
+         clearance bottom nav de 132px réservée par (app)/layout.tsx. */}
+      <div style={{ background: DARK_CARD_BG, minHeight: "100vh", marginBottom: -132, paddingBottom: 132 }}>
       <CalendarHeader
         mode="period"
         selectedDate={selectedDate}
@@ -532,10 +539,12 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         weekTitleFor={weekTitleForPopup}
+        seamless
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       <ProgramBanner
+        dark
         program={viewedProgram}
         currentWeek={viewedProgramWeek}
         onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/athlete/programmes" : "/programmes") : undefined}
@@ -911,6 +920,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
         </div>{/* animation wrapper */}
       </div>{/* weekGridRef */}
+      </div>{/* fond sombre plein-page */}
 
       {/* Modals — ouverture toujours libre (voir onClick plus haut), seule la persistance réelle
           (onSave/onConfirm/onDuplicate/onDelete) est gatée derrière requireSubscription()

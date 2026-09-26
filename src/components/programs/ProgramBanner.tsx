@@ -34,6 +34,13 @@ interface Props {
   onEditFreeLabel?: (label: string) => void;
   /** Variante compacte une ligne — utilisée par-dessus chaque semaine en vue Mois. */
   compact?: boolean;
+  /** Fond de page sombre derrière la bannière (2026-09-26, "je veux que les banner... soient sans
+      bg et sans border bottom (comme ça ça prend le bg global)") — la bannière (non-compact
+      uniquement, la variante compact reste inchangée) n'a plus jamais son propre fond/bordure,
+      seuls les textes sans couleur explicite (nom de programme/label libre, "Séances libres
+      disponibles"/focusLabel) ont besoin de savoir sur quel fond ils tombent pour rester lisibles.
+      Défaut `false` = comportement inchangé (page claire, ex. /coach/planning). */
+  dark?: boolean;
   /** Sportif uniquement (WeekClient.tsx) — absent côté coach (CoachPlanningClient.tsx). Un
       ReactNode (pas un simple callback) : c'est directement <ShareButton/>, qui gère son propre
       menu positionné sur son bouton — pas séparable en trigger+composant. Rendu seulement sur la
@@ -43,7 +50,7 @@ interface Props {
 
 export default function ProgramBanner({
   program, currentWeek, onEdit, onStop, onReconduire,
-  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction,
+  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction, dark = false,
 }: Props) {
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
@@ -101,7 +108,7 @@ export default function ProgramBanner({
 
     return (
       <div style={{
-        background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "11px 18px",
+        padding: "11px 18px",
         // Toujours en ligne, même mobile (2026-09-01) — le CTA Reconduire doit rester à droite,
         // pas passer en dessous ; "Les séances libres restent disponibles" raccourci en
         // "Séances libres disponibles" pour laisser assez de place au titre à gauche.
@@ -115,18 +122,23 @@ export default function ProgramBanner({
               onChange={e => setDraftLabel(e.target.value)}
               onBlur={commitLabel}
               onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingLabel(false); }}
-              style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", border: "1px solid rgba(0,0,0,.15)", borderRadius: 8, padding: "3px 8px", outline: "none", width: "100%", maxWidth: 260, marginBottom: 2, fontFamily: "var(--font-mono), monospace" }}
+              style={{
+                fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em",
+                border: dark ? "1px solid rgba(255,255,255,.25)" : "1px solid rgba(0,0,0,.15)",
+                borderRadius: 8, padding: "3px 8px", outline: "none", width: "100%", maxWidth: 260, marginBottom: 2,
+                fontFamily: "var(--font-mono), monospace", background: "transparent", color: dark ? "#fff" : "#171b1f",
+              }}
             />
           ) : (
             <div
               onClick={startEditing}
-              style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2, display: "flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default", minWidth: 0, fontFamily: "var(--font-mono), monospace" }}
+              style={{ fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2, display: "flex", alignItems: "center", gap: 5, cursor: onEditFreeLabel ? "text" : "default", minWidth: 0, fontFamily: "var(--font-mono), monospace", color: dark ? "#fff" : "#171b1f" }}
             >
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
               {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45, flexShrink: 0 }}>✏️</span>}
             </div>
           )}
-          <div style={{ fontSize: 11, color: "#8a8f94", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Séances libres disponibles</div>
+          <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,.55)" : "#8a8f94", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Séances libres disponibles</div>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
@@ -166,18 +178,18 @@ export default function ProgramBanner({
   }
 
   return (
-    <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.08)", padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       {/* Sport icon */}
-      <div style={{ width: 38, height: 38, borderRadius: 11, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+      <div style={{ width: 38, height: 38, borderRadius: 11, background: dark ? "rgba(255,255,255,.08)" : "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
         {programSportEmoji(program!.sport)}
       </div>
 
       {/* Info */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em", fontFamily: "var(--font-mono), monospace" }}>
+        <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em", fontFamily: "var(--font-mono), monospace", color: dark ? "#fff" : "#171b1f" }}>
           {program!.name}
         </div>
-        <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 1 }}>
+        <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,.55)" : "#8a8f94", marginTop: 1 }}>
           {[focusLabel, levelLabel].filter(Boolean).join(" · ")}
         </div>
       </div>
