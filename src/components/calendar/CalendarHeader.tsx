@@ -14,31 +14,11 @@ import { DARK_CARD_BG } from "@/lib/theme";
 export type ViewMode = "week" | "month";
 export type HeaderMode = "day" | "period" | "title";
 
-/* Toggle Sem./Mois — sorti du header (2026-09-25, retour de Gildas : "dans le planning 'Sem./Mois'
-   irait mieux au dessus des jours du calendar avec le style adéquat") : vivait auparavant DANS
-   CalendarHeader (fond sombre, segments blancs) ; WeekClient.tsx/CoachPlanningClient.tsx le
-   rendent désormais eux-mêmes juste au-dessus de leur grille de jours, sur fond clair — d'où un
-   style light dédié plutôt que la palette dark du header. Seuls appelants du toggle Sem./Mois
-   (mode="period"), donc rien d'autre à migrer. */
-export function ViewModeSegmented({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode) => void }) {
-  return (
-    <div style={{ display: "inline-flex", gap: 4, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.08)", borderRadius: 10, padding: 3 }}>
-      {(["week", "month"] as ViewMode[]).map(m => (
-        <button
-          key={m}
-          onClick={() => onChange(m)}
-          style={{
-            padding: "6px 14px", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer",
-            background: mode === m ? "linear-gradient(180deg,#f04a08,#d44000)" : "transparent",
-            color: mode === m ? "#fff" : "#62686e",
-          }}
-        >
-          {m === "week" ? "Sem." : "Mois"}
-        </button>
-      ))}
-    </div>
-  );
-}
+// ViewModeSegmented (toggle Sem./Mois) supprimé (2026-09-26) — le calendrier popup ci-dessous
+// (rings + points de séance + titre semaine/programme, façon "vue mois") remplace désormais ce
+// que la vue Mois de /week et /coach/planning apportait ; leur bloc `viewMode === "month"` reste
+// en place (dead code assumé, `viewMode` figé sur "week" faute d'un toggle pour le changer — même
+// principe déjà appliqué ailleurs dans ce repo pour un step/mode devenu inatteignable).
 
 interface CalendarHeaderProps {
   mode?: HeaderMode;
@@ -67,6 +47,14 @@ interface CalendarHeaderProps {
   showRings?: boolean;
   wellnessMap?: Record<string, number | null>;
   dotMap?: Record<string, "done-light" | "done-med" | "done-high" | "planned">;
+  /* Titre programme/label libre par semaine, affiché en bandeau au-dessus de chaque ligne de 7
+     jours du calendrier popup — façon "vue mois" (ProgramBanner compact au-dessus de chaque
+     semaine sur /week, /coach/planning). Reçoit le lundi (ISO) de la semaine de la grille popup en
+     cours de rendu, retourne le texte à afficher ou `null` (rien affiché — semaine hors de tout
+     programme connu de l'appelant, ex. mois pas encore chargé). CalendarHeader reste agnostique de
+     la notion de "programme" : chaque page construit elle-même ce texte (nom+emoji+semaine, ou
+     libellé libre) à partir de ses propres données déjà chargées. */
+  weekTitleFor?: (mondayIso: string) => string | null;
   /* Sans fond propre (2026-09-25) — pour les pages qui portent DÉJÀ leur propre fond dark
      "DARK_CARD_BG" pleine page (/today, /conseils sportif) et veulent que le header s'y fonde,
      plutôt que 2 fonds dark distincts empilés (l'ancien header avait son propre dégradé, visible
@@ -146,6 +134,7 @@ export default function CalendarHeader({
   showRings,
   wellnessMap,
   dotMap,
+  weekTitleFor,
   seamless = false,
   theme = "dark",
 }: CalendarHeaderProps) {
@@ -279,6 +268,56 @@ export default function CalendarHeader({
   }
 
   const gridDays = monthGridDays(calendarViewDate);
+  // Regroupé par semaine (6×7, au lieu d'une grille plate) pour porter un bandeau titre optionnel
+  // (weekTitleFor) au-dessus de chaque ligne, façon "vue mois" (2026-09-26).
+  const gridWeeks = Array.from({ length: 6 }, (_, i) => gridDays.slice(i * 7, i * 7 + 7));
+
+  // Agrandi (2026-09-26, "tu peux agrandir ce datepicker") — cellule 30→38px, popup 300→340px.
+  function renderDayCell(d: Date) {
+    const iso = format(d, "yyyy-MM-dd");
+    const inMonth = format(d, "M") === format(calendarViewDate, "M");
+    const isToday = iso === today;
+    const isSelected = mode === "day"
+      ? iso === format(currentDate, "yyyy-MM-dd")
+      : days.some(wd => format(wd, "yyyy-MM-dd") === iso);
+    const ring = showRings && wellnessMap?.[iso] != null ? wellnessMap[iso] : null;
+    const dotKind = showRings ? dotMap?.[iso] : undefined;
+    return (
+      <button
+        key={iso}
+        onClick={() => selectDay(d)}
+        style={{
+          cursor: "pointer", borderRadius: 12, background: "transparent",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "3px 0 4px", gap: 3,
+        }}
+      >
+        {/* Boîte ring carrée — le point de séance vit désormais SOUS elle, jamais en
+           incrustation top-right (2026-09-25, "je veux que les petits points soient
+           sous les ring"). Aujourd'hui = liseré orange sur la boîte plutôt qu'un 2e
+           point, pour ne jamais concurrencer visuellement le point de séance. */}
+        <div style={{
+          position: "relative", width: 38, height: 38, borderRadius: "50%",
+          background: isSelected ? "#f04a08" : "transparent",
+          boxShadow: isToday && !isSelected ? "0 0 0 1.5px #f04a08" : "none",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          {ring !== null && <DayRing score={ring} />}
+          <span style={{
+            position: "relative", zIndex: 1, fontSize: 14,
+            fontWeight: isSelected ? 800 : 500,
+            color: isSelected ? "#fff" : inMonth ? "#f5f5f7" : "rgba(255,255,255,.28)",
+          }}>
+            {d.getDate()}
+          </span>
+        </div>
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: dotKind ? DOT_COLOR[dotKind] : "transparent",
+        }} />
+      </button>
+    );
+  }
 
   return (
     <header
@@ -321,69 +360,49 @@ export default function CalendarHeader({
               ref={popupNodeRef}
               style={{
                 position: "fixed", top: popupPos.top, left: popupPos.left, transform: "translateX(-50%)",
-                zIndex: 2147483100, width: 300, background: "#1c1c1e", border: "1px solid #3a3a3c",
-                borderRadius: 16, padding: 14, boxShadow: "0 16px 48px rgba(0,0,0,.55)",
+                zIndex: 2147483100, width: 340, background: "#1c1c1e", border: "1px solid #3a3a3c",
+                borderRadius: 18, padding: 18, boxShadow: "0 16px 48px rgba(0,0,0,.55)",
               }}
             >
               <div className="flex items-center justify-between mb-2">
-                <button onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>‹</button>
-                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700 }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
-                <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="w-[28px] h-[28px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>›</button>
+                <button onClick={() => setCalendarViewDate(subMonths(calendarViewDate, 1))} className="w-[30px] h-[30px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>‹</button>
+                {/* color:"#fff" explicite (2026-09-26, fix contraste) — ce span est portalé dans
+                   document.body, hors de l'ancêtre <header> qui pose color:#fff : sans lui il
+                   retombait sur le noir par défaut du document, quasi invisible sur ce fond dark. */}
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#fff" }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
+                <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="w-[30px] h-[30px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>›</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>
                 {WEEKDAY_LABELS.map((d, i) => (
-                  <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.4)", padding: "4px 0" }}>{d}</div>
+                  <div key={i} style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.4)", padding: "4px 0" }}>{d}</div>
                 ))}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
-                {gridDays.map((d, i) => {
-                  const iso = format(d, "yyyy-MM-dd");
-                  const inMonth = format(d, "M") === format(calendarViewDate, "M");
-                  const isToday = iso === today;
-                  const isSelected = mode === "day"
-                    ? iso === format(currentDate, "yyyy-MM-dd")
-                    : days.some(wd => format(wd, "yyyy-MM-dd") === iso);
-                  const ring = showRings && wellnessMap?.[iso] != null ? wellnessMap[iso] : null;
-                  const dotKind = showRings ? dotMap?.[iso] : undefined;
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => selectDay(d)}
-                      style={{
-                        cursor: "pointer", borderRadius: 10, background: "transparent",
-                        display: "flex", flexDirection: "column", alignItems: "center",
-                        padding: "3px 0 4px", gap: 3,
-                      }}
-                    >
-                      {/* Boîte ring carrée — le point de séance vit désormais SOUS elle, jamais en
-                         incrustation top-right (2026-09-25, "je veux que les petits points soient
-                         sous les ring"). Aujourd'hui = liseré orange sur la boîte plutôt qu'un 2e
-                         point, pour ne jamais concurrencer visuellement le point de séance. */}
+              {/* Une ligne par semaine, façon "vue mois" (2026-09-26) — bandeau titre optionnel
+                 (programme/label libre, fourni par la page via weekTitleFor) au-dessus de chaque
+                 rangée de 7 jours, comme ProgramBanner compact au-dessus de chaque semaine sur
+                 /week et /coach/planning. */}
+              {gridWeeks.map((week, gi) => {
+                const mondayIso = format(week[0], "yyyy-MM-dd");
+                const weekLabel = weekTitleFor?.(mondayIso) ?? null;
+                return (
+                  <div key={gi} style={{ marginBottom: gi < gridWeeks.length - 1 ? 6 : 0 }}>
+                    {weekLabel && (
                       <div style={{
-                        position: "relative", width: 30, height: 30, borderRadius: "50%",
-                        background: isSelected ? "#f04a08" : "transparent",
-                        boxShadow: isToday && !isSelected ? "0 0 0 1.5px #f04a08" : "none",
-                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 800, fontFamily: "var(--font-mono), monospace",
+                        color: "rgba(255,255,255,.55)", padding: "2px 4px 3px",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                       }}>
-                        {ring !== null && <DayRing score={ring} />}
-                        <span style={{
-                          position: "relative", zIndex: 1, fontSize: 13,
-                          fontWeight: isSelected ? 800 : 500,
-                          color: isSelected ? "#fff" : inMonth ? "#f5f5f7" : "rgba(255,255,255,.28)",
-                        }}>
-                          {d.getDate()}
-                        </span>
+                        {weekLabel}
                       </div>
-                      <span style={{
-                        width: 5, height: 5, borderRadius: "50%",
-                        background: dotKind ? DOT_COLOR[dotKind] : "transparent",
-                      }} />
-                    </button>
-                  );
-                })}
-              </div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+                      {week.map(d => renderDayCell(d))}
+                    </div>
+                  </div>
+                );
+              })}
               <div style={{ display: "flex", justifyContent: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.08)" }}>
-                <button onClick={goToday} style={{ fontSize: 13, fontWeight: 800, color: "#ff8a55", cursor: "pointer" }}>Aujourd'hui</button>
+                <button onClick={goToday} style={{ fontSize: 14, fontWeight: 800, color: "#ff8a55", cursor: "pointer" }}>Aujourd'hui</button>
               </div>
             </div>,
             document.body

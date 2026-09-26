@@ -7,7 +7,7 @@ import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMon
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
-import CalendarHeader, { type ViewMode, ViewModeSegmented } from "@/components/calendar/CalendarHeader";
+import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -20,8 +20,9 @@ import type { LoadContext } from "@/lib/loadRule";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
+import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -96,6 +97,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // chaque semaine (pas de merge/dédup — contrairement à wellnessList, qui reste borné à la semaine
   // affichée pour le rendu des cartes).
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<WellnessDaily[]>(initialWellnessBaselineHistory);
+  // Historique COMPLET (pas de filtre de date), dédié au calendrier popup uniquement — jamais
+  // refetché à la navigation semaine/mois (2026-09-26, fix : "je n'ai pas toujours tous les
+  // wellness rings quand je vais dans le passé"). `wellnessBaselineHistory` ci-dessus est ANCRÉ
+  // SUR LA SEMAINE AFFICHÉE (voir loadWeek/loadMonth, `.lte("date", sun)`) — naviguer vers une
+  // semaine passée en réduisait donc la fenêtre à "sinceBaseline..sun", laissant tout jour entre
+  // cette semaine et aujourd'hui sans aucune donnée pour la ring. Ce 2e état, séparé, ne sert QUE
+  // le popup — n'affecte jamais la baseline/tendance calculée ailleurs dans ce fichier.
+  // Initialisé sur le même fixture que wellnessBaselineHistory (sandbox : -41/+21j, jamais
+  // refetché) — pour un vrai compte, écrasé par le fetch complet ci-dessous dès le montage.
+  const [popupWellnessHistory, setPopupWellnessHistory] = useState<WellnessDaily[]>(initialWellnessBaselineHistory);
   const [monthSessions, setMonthSessions] = useState<Session[]>([]);
   const [monthWellness, setMonthWellness] = useState<WellnessDaily[]>([]);
   const [addingDate, setAddingDate] = useState<string | null>(null);
@@ -200,6 +211,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
           const w = payload.new as WellnessDaily;
           setWellnessList(prev => { const out = prev.filter(x => x.date !== w.date); return [...out, w]; });
+          setPopupWellnessHistory(prev => { const out = prev.filter(x => x.date !== w.date); return [...out, w]; });
         }
       })
       .subscribe();
@@ -209,6 +221,15 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       supabase.removeChannel(wellnessCh);
     };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch unique, indépendant de la navigation — voir le commentaire sur l'état plus haut.
+  useEffect(() => {
+    if (sandboxMode) return;
+    supabase.from("wellness_daily").select("*").eq("user_id", userId).then(({ data }) => {
+      if (data) setPopupWellnessHistory(data);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const dates = getWeekDates(weekBase);
 
@@ -466,6 +487,32 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // le gate est désormais "voir/utiliser le planning complet au quotidien".
   const weekLocked = !isActive && viewedProgramWeek > 0;
 
+  // Rings + points de séance + titre semaine/programme dans le calendrier popup (2026-09-26,
+  // "revoir le design du datepicker pour que ça fasse comme la vue mois quand on est dans le
+  // planning") — même principe déjà en place sur /today/CoachClient.tsx/CoachPlanningClient.tsx,
+  // manquait ici. `sessions` (semaine affichée) ∪ `sessionsHistory` (~42j glissants avant
+  // aujourd'hui, jamais refetché à la navigation) pour une couverture de dots plus large qu'une
+  // seule semaine ; les jours hors de ces deux fenêtres restent nus (dégradation déjà acceptée
+  // ailleurs).
+  const DOT_RANK: Record<"planned" | "done-light" | "done-med" | "done-high", number> = { planned: 0, "done-light": 1, "done-med": 2, "done-high": 3 };
+  const headerDotMap = [...sessions, ...sessionsHistory].reduce<Record<string, "done-light" | "done-med" | "done-high" | "planned">>((map, s) => {
+    let cls: "done-light" | "done-med" | "done-high" | "planned";
+    if (s.done) {
+      const diff = s.rpe ?? s.target_difficulty ?? 5;
+      cls = diff >= 8 ? "done-high" : diff >= 5 ? "done-med" : "done-light";
+    } else {
+      cls = "planned";
+    }
+    if (!map[s.date] || DOT_RANK[cls] > DOT_RANK[map[s.date]]) map[s.date] = cls;
+    return map;
+  }, {});
+  const headerWellnessMap = relativeWellnessByDate(popupWellnessHistory, 400);
+  function weekTitleForPopup(mondayIso: string): string | null {
+    const match = findProgramForWeek(activeAssignments, mondayIso);
+    if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+    return freeLabels[mondayIso] || null;
+  }
+
   return (
     <>
       {!isActive && (
@@ -483,6 +530,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
         onProfileClick={() => setProfileOpen(true)}
+        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        weekTitleFor={weekTitleForPopup}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
@@ -543,11 +592,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           </div>
         </div>
       )}
-
-      {/* Sem./Mois — au-dessus de la grille, pas dans le header (2026-09-25, retour de Gildas). */}
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: isMd ? "10px 20px 0" : "10px 14px 0" }}>
-        <ViewModeSegmented mode={viewMode} onChange={handleViewModeChange} />
-      </div>
 
       <div ref={weekGridRef} data-tour="week-sessions">
         <div key={`cal-${navKey}`} style={{

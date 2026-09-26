@@ -15,7 +15,7 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 
-import CalendarHeader, { type ViewMode, ViewModeSegmented } from "@/components/calendar/CalendarHeader";
+import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
@@ -32,6 +32,7 @@ import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
+import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -125,6 +126,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // retomber à tort sur l'ancien libellé absolu malgré des mois de données réelles). Refetché dans
   // handleDateChange()/loadMonth(), remplacé entièrement à chaque navigation.
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
+  // Historique COMPLET par sportif (pas de filtre de date), dédié au calendrier popup uniquement —
+  // jamais refetché à la navigation semaine/mois (2026-09-26, fix, même cause que WeekClient.tsx :
+  // "je n'ai pas toujours tous les wellness rings quand je vais dans le passé"). `wellnessBaseline-
+  // History` ci-dessus est ANCRÉ SUR LA SEMAINE/LE MOIS AFFICHÉS (`.lte("date", sun)`) — naviguer
+  // vers une période passée en réduisait la fenêtre, laissant tout jour entre cette période et
+  // aujourd'hui sans donnée pour la ring. Séparé, ne sert QUE le popup, keyed par user_id (RLS
+  // `coach_read_athlete_wellness` autorise déjà ce fetch direct pour un sportif réel lié, même
+  // pattern que handleDateChange ci-dessous).
+  const [popupWellnessHistory, setPopupWellnessHistory] = useState<Record<string, WellnessDaily[]>>({});
   const [monthSessions, setMonthSessions] = useState<CoachViewSession[]>([]);
   const [monthWellnessMap, setMonthWellnessMap] = useState<Record<string, Record<string, number>>>({});
   const [addingDate, setAddingDate] = useState<string | null>(null);
@@ -262,6 +272,17 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     fetchAthleteProgram();
   }, [athlete?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch unique par sportif réel sélectionné, indépendant de la navigation — voir le commentaire
+  // sur l'état popupWellnessHistory plus haut.
+  useEffect(() => {
+    if (sandboxMode || !athlete?.user_id) return;
+    const uid = athlete.user_id;
+    supabase.from("wellness_daily").select("*").eq("user_id", uid).then(({ data }) => {
+      if (data) setPopupWellnessHistory(prev => ({ ...prev, [uid]: data }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athlete?.user_id]);
+
   // Realtime: sync athlete's sessions and wellness as they change
   useEffect(() => {
     if (!athlete?.user_id) return;
@@ -283,12 +304,18 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         })
       .on("postgres_changes", { event: "*", schema: "public", table: "wellness_daily", filter: `user_id=eq.${uid}` },
         (payload) => {
-          const row = payload.new as any;
+          const row = payload.new as WellnessDaily & { score: number | null };
           if (row?.score != null) {
             setWellnessMap(prev => ({
               ...prev,
-              [uid]: { ...(prev[uid] ?? {}), [row.date]: row.score },
+              [uid]: { ...(prev[uid] ?? {}), [row.date]: row.score! },
             }));
+          }
+          if (row) {
+            setPopupWellnessHistory(prev => {
+              const existing = prev[uid] ?? [];
+              return { ...prev, [uid]: [...existing.filter(w => w.date !== row.date), row] };
+            });
           }
         })
       .subscribe();
@@ -716,10 +743,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   }
   // Score RELATIF, pas absolu (2026-09-25, fix — "les wellness ring dans le calendar expanded sont
   // fausses") : `wellnessMap` (buildWellnessMap) porte le score BRUT, jamais utilisé pour une ring
-  // ailleurs dans l'app depuis le chantier "Wellness relatif" — relativeWellnessByDate() recalcule
-  // depuis le même historique brut (wellnessBaselineHistory) la valeur réellement affichée partout.
+  // ailleurs dans l'app depuis le chantier "Wellness relatif". `popupWellnessHistory` (pas
+  // `wellnessBaselineHistory`, ancré sur la période affichée — voir sa déclaration plus haut) : la
+  // ring reste disponible sur toute la fenêtre récente, indépendamment de la semaine/mois consultés.
   const headerWellnessMap: Record<string, number | null> = athlete.user_id
-    ? relativeWellnessByDate(wellnessBaselineHistory[athlete.user_id] ?? [], 45)
+    ? relativeWellnessByDate(popupWellnessHistory[athlete.user_id] ?? [], 400)
     : {};
 
   return (
@@ -736,6 +764,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       <CalendarHeader
         mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        weekTitleFor={mondayIso => {
+          const match = findProgramForWeek(activeAssignments, mondayIso);
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          return freeLabelsFor(athlete)[mondayIso] || null;
+        }}
         seamless theme="light"
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
@@ -819,11 +852,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         }
         return null;
       })()}
-
-      {/* Sem./Mois — au-dessus de la grille, pas dans le header (2026-09-25, retour de Gildas). */}
-      <div style={{ display: "flex", justifyContent: "flex-end", padding: isMd ? "10px 24px 0" : "10px 16px 0" }}>
-        <ViewModeSegmented mode={viewMode} onChange={handleViewModeChange} />
-      </div>
 
       <div ref={calGridRef} data-tour="coach-planning">
       <div key={`cal-${navKey}`} style={{
