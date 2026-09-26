@@ -208,24 +208,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Score par sportif pour AthleteFilterBar, "aujourd'hui" (2026-09-25, fix "les scores... sont
-  // faux") — RELATIF dès que la baseline a assez d'historique, même calcul que dayRelativeScore
-  // plus bas dans la grille pour le jour réel du calendrier (dayWellness()/computeWellnessBaselineAt) :
-  // avant ce fix, la barre retombait sur athlete.wellness_score (absolu brut, potentiellement
-  // périmé de plusieurs jours pour un vrai sportif — voir dayWellness() ci-dessus), différent du
-  // chiffre affiché ailleurs pour ce même sportif.
-  const filterBarScores: Record<string, number | null> = {};
-  for (const a of athletes) {
-    const raw = dayWellness(a, todayStr, wellnessMap, wellnessBaselineHistory);
-    const history = wellnessBaselineHistory[a.user_id ?? a.id] ?? [];
-    // Même repli neutre que dayBaseline plus bas dans la grille (seul `composite` est exploité,
-    // wellnessMap ne porte pas les dimensions par jour).
-    const baseline = raw !== null
-      ? computeWellnessBaselineAt(history.filter(w => w.date < todayStr), { score: raw, base_score: raw, sleep: 7, stress: 5, recovery: 7, motivation: 7 })
-      : null;
-    filterBarScores[a.id] = baseline?.hasEnoughHistory ? baseline.relativeScore : raw;
-  }
-
   const athlete = selectedAthleteId === null ? null : (athletes.find(a => a.id === selectedAthleteId) ?? athletes[0] ?? null);
 
   function freeLabelsFor(a: CoachAthlete): Record<string, string> {
@@ -628,7 +610,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return (
       <CoachPageBg>
         {/* Sélecteur de sportif au-dessus du header de date — voir CoachClient.tsx pour le pourquoi. */}
-        <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} scores={filterBarScores} />
+        <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} />
         <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         {viewMode === "month" ? (
@@ -775,7 +757,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           setSelectedAthleteId(id);
           athleteFilterStorage.write(id);
         }}
-        scores={filterBarScores}
       />
       <CalendarHeader
         mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
@@ -140,6 +140,7 @@ interface Props {
 
 export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialLastTests, initialTestVerdicts = {}, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();
   // Même largeur que .page-shell ci-dessous (600/720/1000) — alignement CalendarHeader/sélecteur de
   // sportif/contenu (2026-09-24).
@@ -164,6 +165,22 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const athleteFilterStorage = useCoachAthleteFilterStorage();
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   useEffect(() => { setSelectedAthleteId(athleteFilterStorage.read()); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* "+" central de la bottom nav, option "Inviter un sportif" (2026-09-26) : ?quickadd=invite ouvre
+     directement InviteModal, puis nettoie l'URL — sinon revenir en arrière la rouvrirait. Même
+     mécanisme (et même raison de dépendre de `searchParams` plutôt que de `[]` : cliquer le "+"
+     depuis cette page, déjà montée, ne remonte pas le composant) que ?quickadd=session|program sur
+     WeekClient.tsx/CoachPlanningClient.tsx. */
+  useEffect(() => {
+    if (searchParams.get("quickadd") !== "invite") return;
+    setShowInvite(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("quickadd");
+    const base = sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes";
+    router.replace(params.toString() ? `${base}?${params.toString()}` : base);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   function selectAthleteFilter(id: string | null) {
     setSelectedAthleteId(id);
     athleteFilterStorage.write(id);
@@ -404,17 +421,10 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
           </div>
         )}
 
-        {athletes.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <button
-              data-tour="invite-btn"
-              onClick={() => setShowInvite(true)}
-              style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
-            >
-              + Inviter des sportifs
-            </button>
-          </div>
-        )}
+        {/* CTA "+ Inviter des sportifs" retiré (2026-09-26) — l'invitation passe désormais par le
+           "+" de la bottom nav, qui route ici avec ?quickadd=invite (voir l'effet plus haut). Le CTA
+           de l'état vide (athletes.length === 0) reste : c'est la seule action possible sur cet
+           écran tant qu'aucun sportif n'existe. */}
         </>
         )}
       </div>

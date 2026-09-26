@@ -9,7 +9,10 @@ import QuickAddSheet from "./QuickAddSheet";
 const athleteTabs = [
   {
     href: "/today",
-    label: "Aujourd'hui",
+    // "Aujourd'hui" → "Accueil" (2026-09-26, retour de Gildas) : cet onglet ne porte plus que la
+    // journée depuis que Charge/Récupération/Comportements y ont été ajoutés en onglets
+    // (chantier "point 1", 2026-09-24) — "Accueil" décrit mieux ce qu'il est devenu.
+    label: "Accueil",
     icon: (active: boolean) => (
       <svg width="25" height="25" viewBox="0 0 24 24" aria-hidden="true"
         fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2.15"
@@ -61,10 +64,10 @@ const athleteTabs = [
 const coachTabs = [
   {
     href: "/coach",
-    // "Accueil" → "Aujourd'hui" (2026-09-24, "il faut appliquer la même [bottom nav] que côté
-    // sportif" — voir POC poc-coach-context_6.html, NAV partagée entre les 2 rôles) : même libellé
-    // que athleteTabs, la page reste /coach.
-    label: "Aujourd'hui",
+    // Même libellé que athleteTabs (la nav est partagée entre les 2 rôles depuis le 2026-09-24,
+    // POC poc-coach-context_6.html) — repassé "Aujourd'hui" → "Accueil" le 2026-09-26, voir le
+    // commentaire côté athleteTabs. La page reste /coach.
+    label: "Accueil",
     matchExact: true,
     tourId: undefined as string | undefined,
     icon: (active: boolean) => (
@@ -139,18 +142,25 @@ function sandboxHref(href: string, basePath: string) {
 }
 
 /* Bouton "+" central (2026-08-31) : ouvre un petit bottom sheet de routage rapide (Séance /
-   Programme) — jamais "Ajouter un sportif" ici, volontairement : action rare/administrative,
-   déjà chez elle sur l'onglet Sportifs (InviteModal). Chaque option navigue vers la page réelle
-   avec ?quickadd=session|program, lue au montage par WeekClient.tsx/CoachPlanningClient.tsx
-   pour ouvrir directement AddSessionModal/CoachSessionModal ou ProgramLibraryPage — pas de state
-   partagé entre BottomNav (layout) et ces pages, uniquement du routage. */
+   Programme, + Inviter un sportif côté coach). Chaque option navigue vers la page réelle avec
+   ?quickadd=session|program|invite, lue au montage par WeekClient.tsx/CoachPlanningClient.tsx
+   (séance/programme) et AthletesClient.tsx (invitation) pour ouvrir directement la bonne
+   modale — pas de state partagé entre BottomNav (layout) et ces pages, uniquement du routage.
+   "Inviter un sportif" a rejoint ce menu le 2026-09-26 (demande de Gildas), en remplacement des
+   CTA "+ Inviter des sportifs" qui vivaient en bas de /coach et /coach/athletes — ce commentaire
+   disait jusque-là l'inverse ("jamais 'Ajouter un sportif' ici, volontairement"). */
 function quickAddOptions(role: "athlete" | "coach", basePath?: string) {
-  const targetHref = role === "coach" ? "/coach/planning" : "/week";
-  const base = basePath ? sandboxHref(targetHref, basePath) : targetHref;
-  return [
-    { label: "Ajouter une séance", icon: "📝", href: `${base}?quickadd=session` },
-    { label: "Nouveau programme", icon: "📚", href: `${base}?quickadd=program` },
+  const hrefFor = (target: string, quickAdd: string) =>
+    `${basePath ? sandboxHref(target, basePath) : target}?quickadd=${quickAdd}`;
+  const planningHref = role === "coach" ? "/coach/planning" : "/week";
+  const options = [
+    { label: "Ajouter une séance", icon: "📝", href: hrefFor(planningHref, "session") },
+    { label: "Nouveau programme", icon: "📚", href: hrefFor(planningHref, "program") },
   ];
+  if (role === "coach") {
+    options.push({ label: "Inviter un sportif", icon: "👥", href: hrefFor("/coach/athletes", "invite") });
+  }
+  return options;
 }
 
 export default function BottomNav({ role = "athlete", basePath }: Props) {

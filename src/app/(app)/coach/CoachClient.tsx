@@ -31,7 +31,6 @@ const CoachSessionModal = dynamic(() => import("@/components/coach/CoachSessionM
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
-const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
@@ -105,7 +104,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [inviteError, setInviteError] = useState("");
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
@@ -284,7 +282,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   useHorizontalScrollNav(dayScrollRef, {
     onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
     onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    enabled: !reviewAthlete && !showInviteModal,
+    enabled: !reviewAthlete,
   });
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
@@ -339,17 +337,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const dayRow = history.find(w => w.date === selectedDate) ?? null;
     baselines[a.id] = dayRow ? computeWellnessBaselineAt(history.filter(w => w.date < selectedDate), dayRow) : null;
     dayRows[a.id] = dayRow;
-  }
-
-  // Score par sportif pour AthleteFilterBar (2026-09-25, fix "les scores... sont faux") — RELATIF
-  // dès que la baseline a assez d'historique, exactement le même calcul que `displayScore` sur
-  // CoachCard (CoachAthleteCard.tsx) : sans ça, le chip du sélecteur affichait l'absolu brut,
-  // différent du chiffre affiché sur la carte du même sportif juste en dessous.
-  const filterBarScores: Record<string, number | null> = {};
-  for (const a of athletes) {
-    const absoluteScore = a.wellnessFilledToday === false ? null : a.wellness_score;
-    const baseline = baselines[a.id];
-    filterBarScores[a.id] = baseline?.hasEnoughHistory ? baseline.relativeScore : absoluteScore;
   }
 
   // Monotonie/contrainte (Foster 1998) par sportif — même calcul que la carte décision elle-même
@@ -521,7 +508,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       {/* Sélecteur de sportif TOUT EN HAUT, au-dessus du header de date (2026-09-26, demande de
          Gildas) — "qui" est la première décision d'un coach, "quand" ne vient qu'après ; c'est aussi
          la seule barre sticky de la page, donc celle qui doit rester accrochée au bord haut. */}
-      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} scores={filterBarScores} />
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} />
       <CalendarHeader
         mode="day" contentMaxWidth={coachContentMaxWidth} seamless
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
@@ -676,7 +663,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               const withData = athletes.filter(a => dayRows[a.id] !== null);
               return (
                 <div style={{ margin: "13px 0 4px" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${DIMENSION_KEYS.length + 1}, 1fr)`, gap: 8, overflowX: "auto" }}>
+                  {/* Une colonne par dimension, plus rien d'autre : la carte "+ Inviter →" qui
+                     occupait la dernière colonne a été retirée le 2026-09-26 — l'invitation vit
+                     désormais dans le "+" de la bottom nav (voir BottomNav.tsx). */}
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${DIMENSION_KEYS.length}, 1fr)`, gap: 8, overflowX: "auto" }}>
                     {DIMENSION_KEYS.map(dim => {
                       const withDim = withData;
                       const avg = withDim.length ? withDim.reduce((t, a) => t + dimensionRaw(dayRows[a.id]!, dim), 0) / withDim.length : null;
@@ -705,21 +695,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         </button>
                       );
                     })}
-                    <button
-                      onClick={() => setShowInviteModal(true)}
-                      style={{
-                        textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
-                        background: "linear-gradient(120deg,rgba(212,64,0,.20),rgba(255,255,255,.05))", border: "1.5px solid rgba(212,64,0,.38)",
-                        display: "flex", flexDirection: "column", justifyContent: "center",
-                      }}
-                    >
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
-                        {athletes.length} sportif{athletes.length > 1 ? "s" : ""}
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#ff8a55", marginTop: 6 }}>
-                        + Inviter →
-                      </div>
-                    </button>
                   </div>
                   {metricFilter && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "rgba(255,255,255,.55)" }}>
@@ -844,15 +819,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           />
         )}
 
-        <div data-tour="invite-section" style={{ marginTop: 16 }}>
-          <button
-            data-tour="invite-btn"
-            onClick={() => setShowInviteModal(true)}
-            style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
-          >
-            + Inviter des sportifs
-          </button>
-        </div>
+        {/* CTA "+ Inviter des sportifs" retiré (2026-09-26) — l'invitation passe par le "+" de la
+           bottom nav, qui route vers /coach/athletes?quickadd=invite. Le formulaire d'invitation de
+           l'état vide (athletes.length === 0, plus haut) et le bandeau d'activation J0 restent :
+           ce sont les seuls endroits où l'invitation EST l'action principale de l'écran. */}
       </div>
       </CoachPageBg>
 
@@ -887,14 +857,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       )}
 
 
-      {showInviteModal && (
-        <InviteModal
-          onClose={() => setShowInviteModal(false)}
-          onLinked={() => router.refresh()}
-          inviteCode={inviteCode}
-          sandboxMode={sandboxMode}
-        />
-      )}
       {paywallStep === "priming" && (
         sandboxMode ? (
           <SandboxGateModal role="coach" page="coach" onClose={handleDismiss} onSignup={sandboxPaywall.goToSignup} />

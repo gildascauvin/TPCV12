@@ -1,6 +1,5 @@
 "use client";
 
-import { scoreColor } from "@/components/coach/CoachAthleteCard";
 import type { CoachAthlete } from "@/types";
 
 /* Barre de filtre sportifs — persistante entre les onglets coach (2026-09-24, redesign inspiré du
@@ -30,20 +29,13 @@ function initials(name: string) {
   return name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-export default function AthleteFilterBar({ athletes, selectedId, onSelect, contentMaxWidth, scores }: {
+export default function AthleteFilterBar({ athletes, selectedId, onSelect, contentMaxWidth }: {
   athletes: CoachAthlete[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /* Même largeur de colonne que CalendarHeader/le contenu de la page (2026-09-24) — voir le prop
      identique sur CalendarHeader.tsx pour le pourquoi. */
   contentMaxWidth?: number;
-  /* Score RELATIF par sportif (2026-09-25, retour de Gildas — "les scores... sont faux") : cette
-     barre retombait sur `a.wellness_score` (absolu brut) alors que le reste de l'app affiche le
-     score relatif (baseline.relativeScore) depuis le chantier "Wellness relatif" (2026-08-30/31) —
-     divergeait donc du chiffre affiché sur la carte du même sportif juste en dessous. Calculé par
-     l'appelant (qui a déjà `baselines`, la même donnée que CoachCard) — absent = repli sur
-     `a.wellness_score` (comportement historique, filet de sécurité uniquement). */
-  scores?: Record<string, number | null>;
 }) {
   if (athletes.length === 0) return null;
 
@@ -53,6 +45,10 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
      la liste dès qu'un sportif était sélectionné, un "← Équipe" fallait recliquer pour en changer).
      Un seul mode de rendu désormais : la puce active (Équipe ou un sportif) est stylée en dégradé
      orange plein, les autres restent en contour translucide.
+     Score de forme retiré des puces (2026-09-26, demande de Gildas) : c'est un sélecteur de
+     profil, pas un tableau de bord — le score du sportif sélectionné est de toute façon affiché
+     juste en dessous (ring de sa carte). Le prop `scores` (score RELATIF calculé par l'appelant,
+     ajouté le 2026-09-25 pour corriger un chiffre faux) disparaît donc avec l'affichage.
      Fond SOMBRE translucide (2026-09-26) : les 3 pages coach sont passées sur DARK_CARD_BG (même
      fond cyan que le sportif, voir CoachPageBg.tsx) — un fond blanc y coupait la page en deux. Le
      translucide laisse le dégradé de la page transparaître sous la barre sticky plutôt que d'en
@@ -80,10 +76,9 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
             boxShadow: selectedId === null ? "0 4px 12px rgba(212,64,0,.22)" : "none",
           }}
         >
-          👥 Équipe
+          👥 Groupe
         </button>
         {athletes.map(a => {
-          const score = scores ? (scores[a.id] ?? null) : (a.wellnessFilledToday === false ? null : a.wellness_score);
           const active = selectedId === a.id;
           return (
             <button
@@ -107,11 +102,6 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
                 {initials(a.name)}
               </span>
               {a.name.split(" ")[0]}
-              {score !== null && (
-                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 5, background: active ? "rgba(255,255,255,.20)" : "rgba(255,255,255,.10)", color: active ? "#fff" : scoreColor(score) }}>
-                  {score}
-                </span>
-              )}
             </button>
           );
         })}
