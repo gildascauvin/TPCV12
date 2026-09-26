@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useId } from "react";
 
-/* Chart "Charge" façon WHOOP/TrainingPeaks (bandes de zone + points reliés) — inspiré d'une
-   capture partagée par Gildas. Pensé pour les 7 derniers jours glissants : c'est la fenêtre où le
-   concept de "zone" (Récup/Optimal/Surcharge) reste lisible jour par jour.
+/* Chart "Charge" façon WHOOP/TrainingPeaks (bandes de zone + ligne colorée par zone) — inspiré
+   d'une capture partagée par Gildas. Pensé pour les 7 derniers jours glissants : c'est la fenêtre
+   où le concept de "zone" (Récup/Optimal/Surcharge) reste lisible jour par jour.
+
+   Trace l'ACWR (ratio 0–2), pas la charge en UA : les bandes Récup/Optimal/Surcharge n'ont de sens
+   que sur un ratio (une journée à 842 UA n'est ni l'une ni l'autre dans l'absolu — c'est tout le
+   sens de l'ACWR). Les UA du jour survolé sont dans le tooltip.
 
    Labels et points sont rendus en overlay HTML (position absolue en %, taille de police/rayon en
    px fixe) plutôt qu'en <text>/<circle> SVG à l'intérieur du viewBox : un <text> SVG scale avec
@@ -84,7 +88,32 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
   const known = points
     .map((v, i) => (v !== null ? { i, v } : null))
     .filter((p): p is { i: number; v: number } => p !== null);
-  const linePts = known.map(p => `${toX(p.i).toFixed(1)},${toY(p.v).toFixed(1)}`).join(" ");
+
+  /* Segments CONTIGUS (2026-09-26) — avant, `known` était joint en UNE seule polyline, donc un jour
+     sans ACWR (historique insuffisant) était silencieusement relié en ligne droite par-dessus le
+     vide. Tant qu'il y avait une pastille par jour, l'absence de point se voyait quand même ; en
+     passant à une ligne colorée sans pastille par jour (voir plus bas), le trou serait devenu
+     invisible et aurait ressemblé à de la donnée continue. Même découpage que SparkLineClient. */
+  const segments: { i: number; v: number }[][] = [];
+  for (const p of known) {
+    const last = segments[segments.length - 1];
+    if (last && p.i === last[last.length - 1].i + 1) last.push(p);
+    else segments.push([p]);
+  }
+  const segPoints = (seg: { i: number; v: number }[]) =>
+    seg.map(p => `${toX(p.i).toFixed(1)},${toY(p.v).toFixed(1)}`).join(" ");
+
+  /* Dégradé vertical de zone (2026-09-26, retour de Gildas — "une simple ligne avec la couleur qui
+     change selon la zone" plutôt qu'une ligne blanche + une pastille colorée par jour). Un dégradé
+     en `userSpaceOnUse` le long de l'axe Y, avec des stops NETS aux frontières de zone, plutôt que
+     de découper le tracé segment par segment : colorer chaque segment selon son point de départ
+     donnerait une couleur fausse sur un segment qui traverse 0.8 ou 1.3, alors qu'ici la couleur
+     change exactement là où la ligne franchit la frontière. `useId` : plusieurs charts peuvent
+     cohabiter sur une même page, un id fixe les ferait partager le même dégradé. */
+  // `useId()` renvoie un id contenant des `:` (ex. `:r1:`) — retirés ici : une référence
+  // `url(#...)` dans un attribut SVG les tolère mal selon les navigateurs.
+  const gradId = `acwr-zone-grad-${useId().replace(/:/g, "")}`;
+  const offsetFor = (v: number) => 1 - Math.max(0, Math.min(DISPLAY_MAX, v)) / DISPLAY_MAX;
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -100,6 +129,12 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
   const hStrain = hIdx !== null && strain ? strain[hIdx] : null;
   const hDate = hIdx !== null ? dates[hIdx] : null;
   const hZone = hVal !== null ? zoneFor(hVal) : null;
+
+  // Les seuls points qui gardent une pastille — voir le commentaire au rendu de l'overlay.
+  const markerIdx = new Set<number>();
+  if (known.length) markerIdx.add(known[known.length - 1].i);
+  if (hIdx !== null && points[hIdx] !== null) markerIdx.add(hIdx);
+  for (const seg of segments) if (seg.length === 1) markerIdx.add(seg[0].i);
 
   const wrapWidth = wrapRef.current?.offsetWidth ?? 300;
   const hXPct = hover ? (hover.xPx / wrapWidth) * 100 : 0;
@@ -183,8 +218,30 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
           );
         })}
 
-        {/* Ligne reliant les points */}
-        {linePts && <polyline points={linePts} fill="none" stroke="rgba(255,255,255,.5)" strokeWidth={1.5} />}
+        <defs>
+          <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1={0} y1={toY(DISPLAY_MAX)} x2={0} y2={toY(0)}>
+            {/* Du haut (surcharge) vers le bas (récup.) : 2 stops par zone à la même couleur, donc
+                une transition franche à chaque frontière au lieu d'un fondu. */}
+            {[...ZONES].reverse().flatMap(z => [
+              <stop key={`${z.label}-from`} offset={offsetFor(Math.min(z.max, DISPLAY_MAX))} stopColor={z.color} />,
+              <stop key={`${z.label}-to`} offset={offsetFor(z.min)} stopColor={z.color} />,
+            ])}
+          </linearGradient>
+        </defs>
+
+        {/* Ligne reliant les points — colorée par zone (dégradé ci-dessus), angles arrondis
+            (strokeLinejoin/Linecap) plutôt qu'anguleux : ça n'arrondit QUE les sommets, ça ne
+            déplace aucune valeur. Volontairement pas un lissage en courbe : une spline classique
+            dépasse les points réels, elle pourrait dessiner la ligne dans la bande SURCHARGE un
+            jour où l'ACWR n'y est jamais monté — une lecture fausse créée par du cosmétique. */}
+        {segments.map((seg, si) => seg.length > 1 && (
+          <polyline
+            key={`seg-${si}`}
+            points={segPoints(seg)}
+            fill="none" stroke={`url(#${gradId})`} strokeWidth={2.5}
+            strokeLinecap="round" strokeLinejoin="round"
+          />
+        ))}
 
         {/* Curseur vertical au survol */}
         {hIdx !== null && (
@@ -205,7 +262,13 @@ export default function ZoneSparkline({ points, dates, loads, monotony, strain, 
           </div>
         ))}
 
-        {known.map(({ i, v }) => {
+        {/* Plus une pastille par jour (2026-09-26) : la couleur de zone vit désormais dans la ligne
+            elle-même, 7 à 90 pastilles par-dessus la rendaient illisible. Il reste 3 marqueurs, les
+            mêmes que SparkLineClient : le DERNIER point connu (où s'arrête la série), le point
+            SURVOLÉ (savoir quelle valeur on lit — le survol ne dépend pas des pastilles, c'est un
+            onMouseMove sur le wrapper, donc les retirer ne coûte aucune interaction), et tout point
+            ISOLÉ entre deux trous (une polyline à un seul point ne dessine rien, il disparaîtrait). */}
+        {known.filter(({ i }) => markerIdx.has(i)).map(({ i, v }) => {
           const z = zoneFor(v);
           const isHovered = hIdx === i;
           const size = isHovered ? 14 : 11;

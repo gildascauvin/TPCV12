@@ -94,6 +94,7 @@ export function CrossInsightBanner({ data, isDemoData = false }: { data: Conseil
 
 export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void }) {
   const { loadInfo, monotonyInfo, strainInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight } = data;
+  const { isMd } = useBreakpoint();
   const { series } = windowFor(data, rangeMode);
   const zoneAcwr = series.map(p => p.acwr);
   const zoneLoads = series.map(p => p.load);
@@ -131,7 +132,15 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: Co
          wrapper) se retrouvait rogné — même piège déjà corrigé plus bas pour SparkLineClient/
          RecuperationSection, manqué ici lors de l'extraction de ce fichier. */}
       <div style={{ overflowX: "hidden", overflowY: "visible", width: "100%" }}>
-        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode !== "week"} />
+        {/* Hauteur plus grande en mobile (2026-09-26, retour de Gildas — "sur mobile les charts sont
+           trop petits en hauteur") : ce n'était pas un oubli de hauteur, c'est que le SVG est en
+           `width:100%` + `aspectRatio: 400/H`, donc sa hauteur RENDUE est proportionnelle à la
+           largeur — mobile étroit = chart court (~147px à 390px de viewport, contre ~286px en
+           desktop, l'inverse de ce qu'on veut). Passer un H plus grand rend le ratio moins large,
+           donc le chart plus haut, sans jamais déformer les traits (le viewBox ET l'aspect-ratio CSS
+           utilisent tous les deux ce H, donc l'échelle reste uniforme malgré
+           preserveAspectRatio="none"). Précédent identique : FrisePreviews.tsx. */}
+        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode !== "week"} height={isMd ? 168 : 240} />
       </div>
     </div>
   );
@@ -139,6 +148,7 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: Co
 
 export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
   const { formInfo, recoveryInsight, recoveryInfo } = data;
+  const { isMd } = useBreakpoint();
   const { series, baseline } = windowFor(data, rangeMode);
   const zoneDates = series.map(p => p.date);
   const recoveryRelativePoints = baseline.map(b => b?.hasEnoughHistory ? b.relativeScore : null);
@@ -176,9 +186,11 @@ export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspe
          page plus large que l'écran. overflowY reste visible : la tooltip (position:absolute,
          au-dessus du chart) ne doit jamais être rognée verticalement. */}
       <div style={{ borderRadius: 10, overflowX: "hidden", overflowY: "visible", marginBottom: 6 }}>
+        {/* `height` mobile : même raison exactement que ChargeSection ci-dessus (aspect-ratio =
+           hauteur RENDUE proportionnelle à la largeur), même viewBox W=400. */}
         <SparkLineClient
           points={recoveryRelativePoints} pointsRaw={recoveryRawPoints} dates={zoneDates} color={recoveryInfo.color}
-          maxVal={100} height={168} animDelay={300}
+          maxVal={100} height={isMd ? 168 : 240} animDelay={300}
           metricType="recovery" uid="recovery-home" chartType="line" sequentialFill
           zones1={WELLNESS_ZONES}
           dimensionBadgesAt={windowDimensionBadges}
