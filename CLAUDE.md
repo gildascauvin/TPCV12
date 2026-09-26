@@ -3794,4 +3794,4 @@ Repéré en testant en vrai : le bouton profil de `CalendarHeader` (`background:
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre. Serveur local redémarré à froid (`.next` vidé) à la demande de Gildas pour tester — pas de clic réel par Claude.
 
-Déployé en prod le 2026-09-26, commit `PENDING_COMMIT`, push direct sur `main`.
+Déployé en prod le 2026-09-26, commit `c1d2e6f`, push direct sur `main`.
