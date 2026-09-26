@@ -3,19 +3,22 @@
 import { useEffect, useState } from "react";
 import {
   type AutoregDir, type AutoregOriginal, formatAutoregPoints, autoregCtaLabel, zoneRange,
+  pointsToPct, pctToPoints,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
 
 // pct <-> difficulté (1-10) — vue/entrée de la jauge, jamais un nouvel axe de calcul : `selectedPct`
 // reste la seule source de vérité (voir plus bas), ces 2 fonctions ne font que le traduire pour
-// l'affichage/l'interaction (2026-09, remplace les chips ±% par une jauge draggable).
+// l'affichage/l'interaction (2026-09, remplace les chips ±% par une jauge draggable). Delta en
+// points de RPE <-> % via la table FIXE pointsToPct()/pctToPoints() (2026-09-26, remplace l'ancien
+// calcul proportionnel à `plannedDifficulty` — voir leur doc dans autoregulation.ts, "trop brutal"
+// sur une séance déjà légère).
 function diffFromPct(plannedDifficulty: number, pct: number): number {
-  return plannedDifficulty * (1 + pct / 100);
+  return plannedDifficulty + pctToPoints(pct);
 }
 function pctFromDiff(plannedDifficulty: number, diff: number): number {
-  if (plannedDifficulty <= 0) return 0;
-  return Math.round((diff / plannedDifficulty - 1) * 1000) / 10; // 1 décimale
+  return pointsToPct(Math.round(diff - plannedDifficulty));
 }
 
 /* Bloc décision partagé — Coach Control (CoachAthleteCard.tsx), Aujourd'hui (TodayClient.tsx) et
@@ -265,7 +268,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
           <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
           <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
-            {decidedPct !== null ? `${formatAutoregPoints(decidedPct, plannedDifficulty)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
+            {decidedPct !== null ? `${formatAutoregPoints(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
           </div>
           <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
             {undoing ? "..." : "Annuler"}

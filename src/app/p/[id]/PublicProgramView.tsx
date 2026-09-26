@@ -406,7 +406,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
                       key={sIdx}
                       session={s}
                       gaugeOverride={isTarget ? adjustDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
-                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco, s.target_difficulty ?? 6), bg: `${severityColor}22`, color: severityColor! } : undefined}
+                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco), bg: `${severityColor}22`, color: severityColor! } : undefined}
                       renderExerciseLine={isTarget ? (line, li) => {
                         const modified = parseAndApply(line, suggestion.reco);
                         const changed = modified !== line;

@@ -38,6 +38,40 @@ export function zoneRange(target: number, dir: AutoregDir): { zoneLow: number; z
   return dir === "high" ? { zoneLow: t, zoneHigh: t + 1 } : { zoneLow: t - 1, zoneHigh: t };
 }
 
+/* Conversion POINTS DE RPE (signés) <-> % à appliquer aux exercices — table FIXE, indépendante de la
+   difficulté planifiée (2026-09-26, retour de Gildas : "après le changement des tokens quand on
+   ajuste les RPE est trop brutal" — l'ancienne formule (AutoregButtons.tsx, `diffFromPct`/
+   `pctFromDiff`) calculait le % comme un ratio RELATIF À `plannedDifficulty` (`(diff/planned-1)*100`)
+   — sur une séance prévue à 3/10, bouger la jauge d'1 seul point donnait déjà +33% sur les charges ;
+   sur une séance à 8/10, le même 1 point ne donnait que +12,5%. Incohérent et trop agressif sur les
+   séances légères. Remplacé par un doublement fixe par point (2,5/5/10/20%, même esprit qu'un
+   tableau RPE→%1RM classique en force), plafonné à 20% au-delà de 4 points : le système automatique
+   (computeAutoregSuggestion, plafond 2 points) n'a jamais besoin de plus, seul le drag manuel de la
+   jauge (toute l'échelle 1-10 accessible) peut atteindre un delta plus grand — continuer à doubler
+   indéfiniment (40/80%...) n'aurait aucun sens, capé au palier 4 points.
+   Source UNIQUE — réutilisée par computeAutoregSuggestion() (reco automatique) ET AutoregButtons.tsx
+   (drag manuel de la jauge, diffFromPct/pctFromDiff) : jamais 2 formules qui pourraient diverger,
+   même classe de bug déjà rencontrée plusieurs fois sur ce module. */
+export function pointsToPct(points: number): number {
+  const abs = Math.abs(points);
+  if (abs === 0) return 0;
+  const sign = points < 0 ? -1 : 1;
+  return sign * Math.min(20, 2.5 * Math.pow(2, abs - 1));
+}
+
+/* Inverse de pointsToPct() — les seules valeurs de `pct` réellement rencontrées sont 0/2,5/5/10/20
+   (tout passe par pointsToPct en amont), donc un simple seuillage par palier suffit, jamais un calcul
+   proportionnel à une difficulté externe. */
+export function pctToPoints(pct: number): number {
+  const abs = Math.abs(pct);
+  if (abs <= 0) return 0;
+  const sign = pct < 0 ? -1 : 1;
+  if (abs <= 2.5) return sign * 1;
+  if (abs <= 5) return sign * 2;
+  if (abs <= 10) return sign * 3;
+  return sign * 4;
+}
+
 /* Écart score/difficulté en POINTS DE RPE, plafonné à 2 (2026-09-25, 2e itération — remplace le
    modèle en %, retour explicite de Gildas : "faut avoir une règle simple selon le score, faut pas
    sur-conceptualiser... plutôt qu'un plafond de 20%, on prend un plafond de 2 points de RPE. et la
@@ -120,9 +154,11 @@ export function computeAutoregSuggestion(
   const finalMagnitude = critical ? 2 : roundedMagnitude;
   const signedPoints = dir === "low" ? -finalMagnitude : finalMagnitude;
   const icon = dir === "low" ? (critical ? "🚨" : "⚠️") : "🚀";
-  // % équivalent au delta en points réellement calculé — reco garde son unité historique (API
-  // inchangée pour tous les consommateurs : chips manuels, formatAutoregPct, "decided" state…).
-  const reco = Math.round((signedPoints / plannedDifficulty) * 1000) / 10;
+  // % équivalent au delta en points réellement calculé, via la table FIXE pointsToPct() (2026-09-26,
+  // remplace l'ancien calcul proportionnel à plannedDifficulty — voir sa doc) — reco garde son unité
+  // historique (API inchangée pour tous les consommateurs : chips manuels, formatAutoregPct,
+  // "decided" state…).
+  const reco = pointsToPct(signedPoints);
 
   const { zoneLow, zoneHigh } = zoneRange(plannedDifficulty + signedPoints, dir);
   const roundedPlanned = Math.round(plannedDifficulty);
@@ -163,15 +199,14 @@ export function formatAutoregPct(v: number): string {
 }
 
 /* Affichage en POINTS DE RPE, jamais en % (2026-09-25, retour de Gildas — "faut pas afficher '−33%
-   appliqué'") : la reco AUTOMATIQUE (computeAutoregSuggestion) est désormais calculée en points puis
-   convertie en % équivalent uniquement pour rester compatible avec `AutoregDecision.pct` (partagé
-   avec le flux manuel d'AdjustSessionModal.tsx, resté en %, voir plus haut) — ce % peut valoir des
-   chiffres qui semblent énormes (25 à 65%) une fois dérivés d'un delta fixe en points plutôt qu'un %
-   plafonné, illisibles tels quels pour l'utilisateur. Reconvertit ICI, à l'affichage seulement,
-   jamais dans le stockage — `pct` reconstruit exactement le delta en points d'origine (même calcul
-   que `adjustDifficulty()`, vérifié par script sans dérive d'arrondi sur toute la grille 1-10). */
-export function formatAutoregPoints(pct: number, plannedDifficulty: number): string {
-  const points = Math.round((pct / 100) * plannedDifficulty);
+   appliqué'") : la reco AUTOMATIQUE (computeAutoregSuggestion) est calculée en points puis convertie
+   en % équivalent uniquement pour rester compatible avec `AutoregDecision.pct` (partagé avec le flux
+   manuel d'AdjustSessionModal.tsx, resté en %, voir plus haut). Reconvertit ICI, à l'affichage
+   seulement, jamais dans le stockage — via pctToPoints() (2026-09-26, table fixe, ne dépend plus de
+   `plannedDifficulty` — remplace l'ancienne reconstruction proportionnelle `round(pct/100*planned)`,
+   devenue fausse depuis que `pct` lui-même n'est plus proportionnel à la difficulté planifiée). */
+export function formatAutoregPoints(pct: number): string {
+  const points = pctToPoints(pct);
   const sign = points < 0 ? "−" : "+";
   const abs = Math.abs(points);
   return `${sign}${abs} point${abs > 1 ? "s" : ""}`;

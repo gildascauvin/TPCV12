@@ -825,7 +825,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                     <DraggableProgramSession
                       key={sIdx} day={day} sIdx={sIdx} session={s}
                       onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
-                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion!.reco, s.target_difficulty ?? 5), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
+                      badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion!.reco), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
                       gaugeOverride={isTarget ? adjustDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
                       autoregReco={isTarget ? suggestion!.reco : undefined}
                     />
