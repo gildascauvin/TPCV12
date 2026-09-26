@@ -3772,3 +3772,26 @@ Remplace les différents dégradés/aplats neutres ad hoc utilisés jusqu'ici (`
 `tsc --noEmit -p tsconfig.notnext.json` propre après chaque étape (badges, rebrand typo, fond dark ×2 rounds). Pas de clic réel par Claude (jamais de manipulation du compte réel de Gildas) — chaque décision de scope (badges pédagogiques sans retirer l'insight global, périmètre du rebrand typo, inclusion différée puis confirmée de l'onboarding/wizard pour le fond dark) tranchée par échange explicite avec Gildas avant exécution, pas devinée.
 
 Déployé en prod le 2026-09-25, commit `ad33c52`, push direct sur `main`.
+
+## Fond COACH_PAGE_BG étendu à /coach/planning et /coach/athletes + fix icône profil (2026-09-26)
+
+Suite directe du round précédent — Gildas a demandé d'étendre le traitement (jusque-là seulement `/coach`) aux 2 autres pages coach, plus un bug de contraste trouvé en le regardant en vrai.
+
+### `CoachPageBg.tsx` (nouveau, `src/components/calendar/`)
+Le wrapper `background: COACH_PAGE_BG` + trick `minHeight`/`marginBottom`/`paddingBottom` (clearance bottom nav) — d'abord écrit en inline dans `CoachClient.tsx` — est extrait en composant partagé : `/coach/planning` a **3 branches de retour distinctes** (empty state, vue "Tous", vue sportif sélectionné) qui doivent chacune l'appliquer, dupliquer le style inline aurait été fragile. `CoachClient.tsx` lui-même refactorisé pour l'utiliser aussi (plus de div inline). `/coach/athletes` n'a qu'un seul retour, plus simple.
+
+Pour chacune des 3 pages : `<CalendarHeader>` déplacé à l'intérieur de `<CoachPageBg>`, avec `seamless` (pas de fond propre) — le fond de page peint désormais aussi le top nav, en continu.
+
+### Fix contraste — icône profil illisible sur fond clair
+Repéré en testant en vrai : le bouton profil de `CalendarHeader` (`background: rgba(255,255,255,.10)`, icône blanche translucide) est conçu pour un fond DARK — sur `COACH_PAGE_BG` (clair), quasi invisible. Les autres boutons du header (flèches ‹›, sélecteur de date) restent lisibles tels quels (pills sombres opaques, `#202020`/`#1a1a1a`, pas de problème de contraste avec un fond derrière puisqu'ils sont déjà opaques) — seul le bouton profil dépend du fond.
+
+**Nouveau prop `theme?: "dark" | "light"`** sur `CalendarHeaderProps` (défaut `"dark"`, comportement inchangé partout ailleurs) — `"light"` bascule le bouton profil en pill sombre translucide (`rgba(0,0,0,.05)`/`rgba(0,0,0,.62)`) au lieu de blanche. Câblé sur les 3 pages coach (aux 4 emplacements `<CalendarHeader>` au total, 3 branches sur `/coach/planning`).
+
+### Discussion ouverte, non tranchée (questions de Gildas, réponses données sans exécuter)
+- **Sélecteur de sportif au-dessus de la top nav ?** Avis donné : garder l'ordre actuel (nav date/profil = nav primaire, sélecteur de sportif = filtre contextuel en dessous) — pas un avis tranché, à revoir si Gildas préfère "qui" avant "quand" en testant.
+- **Même thème dark cyan que le sportif, pour la cohérence ?** Avis donné : garder le clair orange plutôt que par pure cohérence visuelle — différenciation volontaire déjà cohérente avec un choix antérieur explicite de Gildas (page coach volontairement restée claire, voir section "point 1" plus haut) et avec l'usage réel (coach consulte en journée/en salle, sportif plutôt matin/soir). Pas encore tranché, à décider après avoir vu les 2 côte à côte.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre. Serveur local redémarré à froid (`.next` vidé) à la demande de Gildas pour tester — pas de clic réel par Claude.
+
+Déployé en prod le 2026-09-26, commit `PENDING_COMMIT`, push direct sur `main`.

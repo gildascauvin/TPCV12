@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
+import CoachPageBg from "@/components/calendar/CoachPageBg";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -269,10 +270,12 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
          chaque sportif (mode "day"). Toggle 7j/28j/90j retiré du header (2026-09-25, retour de
          Gildas — "pas besoin de 7j/28j/90j dans le header sur performance, tous les sportifs") : il
          ne pilotait plus rien depuis le retrait du panneau Charge/Récupération déplié ci-dessous. */}
+      <CoachPageBg>
       <CalendarHeader
         mode={selectedAthleteId ? "title" : "day"} title="Performance" contentMaxWidth={contentMaxWidth}
         selectedDate={selectedDate} onDateChange={selectedAthleteId ? undefined : handleDateChange}
         onProfileClick={() => setProfileOpen(true)}
+        seamless theme="light"
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
       <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={contentMaxWidth} />
@@ -438,6 +441,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         </>
         )}
       </div>
+      </CoachPageBg>
 
       {showInvite && (
         <InviteModal

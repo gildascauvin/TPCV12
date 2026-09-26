@@ -20,6 +20,7 @@ import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionMod
 import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
 import { DARK_CARD_BG } from "@/lib/theme";
+import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
@@ -543,8 +544,16 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
+      {/* Fond de page COACH_PAGE_BG (2026-09-25, CoachPageBg.tsx — partagé avec /coach/planning et
+         /coach/athletes) : remplace le `bg-bg` clair hérité de (app)/layout.tsx, même technique que
+         /today — CalendarHeader n'a plus de fond propre (`seamless` + `theme="light"` pour l'icône
+         profil, illisible en blanc sur ce fond clair sinon), déplacé À L'INTÉRIEUR de ce wrapper pour
+         que ce seul dégradé peigne le top nav ET le reste de la page en continu. Coach garde son
+         principe "page claire + cartes sombres" (CoachCard/DARK_CARD_BG inchangées, voir plus bas) —
+         seule la page elle-même s'enrichit d'un glow orange marque au lieu d'un aplat #f1f0ee. */}
+      <CoachPageBg>
       <CalendarHeader
-        mode="day" contentMaxWidth={coachContentMaxWidth}
+        mode="day" contentMaxWidth={coachContentMaxWidth} seamless theme="light"
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
       />
@@ -556,12 +565,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         </div>
       )}
 
-      {/* Coach = fond de page CLAIR (bg-bg hérité, inchangé) + cartes sombres — jamais l'inverse
-         (2026-09-24, clarification explicite de Gildas : "côté coach... ça affiche les cartes des
-         sportifs avec bg light, cards dark comme le poc" — corrige ma tentative précédente d'assombrir
-         toute la page, revenue en arrière ici). Seul /today et /conseils (sportif) passent en page
-         sombre — voir leur doc respective. Layout élargi à 1180px (au lieu de 1000) reste, en revanche
-         — même largeur que `.shell` du POC, pour que le carrousel 3 colonnes ait la place de respirer. */}
+      {/* Cartes sombres inchangées (CoachCard/DARK_CARD_BG plus bas) — 2026-09-24, clarification
+         explicite de Gildas : "côté coach... ça affiche les cartes des sportifs avec bg light, cards
+         dark comme le poc". Layout élargi à 1180px (au lieu de 1000) — même largeur que `.shell` du
+         POC, pour que le carrousel 3 colonnes ait la place de respirer. */}
       <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         {homeTab === "today" && (
@@ -880,6 +887,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           </button>
         </div>
       </div>
+      </CoachPageBg>
 
       {reviewAthlete && (
         <CoachSessionModal

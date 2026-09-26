@@ -16,6 +16,7 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 
 import CalendarHeader, { type ViewMode, ViewModeSegmented } from "@/components/calendar/CalendarHeader";
+import CoachPageBg from "@/components/calendar/CoachPageBg";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import DayColumn from "@/components/calendar/DayColumn";
@@ -571,8 +572,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   if (athletes.length === 0) {
     return (
-      <>
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} />
+      <CoachPageBg>
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless theme="light" />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
@@ -582,7 +583,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             Ajouter un sportif →
           </button>
         </div>
-      </>
+      </CoachPageBg>
     );
   }
 
@@ -598,8 +599,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
      à un seul sportif) — message d'attente plutôt qu'un écran cassé. */
   if (athlete === null) {
     return (
-      <>
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} />
+      <CoachPageBg>
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless theme="light" />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} scores={filterBarScores} />
         {viewMode === "month" ? (
@@ -675,7 +676,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             })}
           </div>
         )}
-      </>
+      </CoachPageBg>
     );
   }
 
@@ -731,9 +732,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         />
       )}
 
+      <CoachPageBg>
       <CalendarHeader
         mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        seamless theme="light"
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
@@ -1210,6 +1213,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
       </div>{/* animation wrapper */}
       </div>{/* calGridRef */}
+      </CoachPageBg>
 
       {showWelcome && (
         <WelcomeModal mode="coach" onClose={() => { localStorage.setItem(`welcome_shown_coach_${userId}`, "1"); setShowWelcome(false); }} />

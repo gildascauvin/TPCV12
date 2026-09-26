@@ -75,6 +75,12 @@ interface CalendarHeaderProps {
      Défaut false = comportement inchangé partout ailleurs (le header garde son propre DARK_CARD_BG,
      îlot sombre sur une page par ailleurs claire — /week, /coach*). */
   seamless?: boolean;
+  /* Thème des éléments qui supposent un fond DERRIÈRE eux (pour l'instant : seul le bouton profil,
+     `theme="dark"` — icône/pill blanche translucide, illisible sur un fond clair) — pas le fond du
+     header lui-même (`seamless`, indépendant). "light" (2026-09-25, CoachClient.tsx COACH_PAGE_BG) :
+     icône/pill sombre translucide, pour un header `seamless` posé sur un fond clair. Défaut "dark" =
+     comportement inchangé partout ailleurs (headers dark, `/today`/`/week`/`/coach*` avant ce prop). */
+  theme?: "dark" | "light";
 }
 
 function cap(s: string) {
@@ -141,6 +147,7 @@ export default function CalendarHeader({
   wellnessMap,
   dotMap,
   seamless = false,
+  theme = "dark",
 }: CalendarHeaderProps) {
   const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -407,8 +414,9 @@ export default function CalendarHeader({
               style={{
                 width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.12)",
-                color: "rgba(255,255,255,.85)", cursor: "pointer",
+                background: theme === "light" ? "rgba(0,0,0,.05)" : "rgba(255,255,255,.10)",
+                border: theme === "light" ? "1px solid rgba(0,0,0,.08)" : "1px solid rgba(255,255,255,.12)",
+                color: theme === "light" ? "rgba(0,0,0,.62)" : "rgba(255,255,255,.85)", cursor: "pointer",
               }}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"
