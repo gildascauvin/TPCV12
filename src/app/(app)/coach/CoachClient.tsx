@@ -16,8 +16,7 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
-import type { AdjustSessionTarget } from "@/components/sessions/AdjustSessionModal";
-import { computeAutoregSuggestion, autoregAdvice, setAutoregDecision, type AutoregDir } from "@/lib/autoregulation";
+import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
 import { DARK_CARD_BG } from "@/lib/theme";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
@@ -30,13 +29,11 @@ import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
    /coach/planning (2026-09-17) : leur JS part dans des chunks séparés, chargés au clic
    plutôt que dans le bundle initial de /coach. */
 const CoachSessionModal = dynamic(() => import("@/components/coach/CoachSessionModal"));
-const ReviewCompleteModal = dynamic(() => import("@/components/coach/ReviewCompleteModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
-const AdjustSessionModal = dynamic(() => import("@/components/sessions/AdjustSessionModal"));
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
@@ -99,14 +96,12 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  // Athlète/séance ouverts dans le drawer d'édition libre (CoachSessionModal) — voir openEditor()
+  // plus bas. Le mode chaîné "Traiter les décisions" (modale décharge/surcharge AdjustSessionModal,
+  // avance auto au sportif suivant) a été retiré (2026-09-26) : devenu redondant depuis que la jauge
+  // de décision vit directement dans la carte séance (2026-09-24).
   const [reviewAthlete, setReviewAthlete] = useState<CoachAthlete | null>(null);
   const [reviewSession, setReviewSession] = useState<CoachViewSession | null>(null);
-  const [showReviewComplete, setShowReviewComplete] = useState(false);
-  /* Mode chaîné "Traiter les décisions" — utilise le modal décharge/surcharge (AdjustSessionModal)
-     quand l'heuristique d'autorégulation propose une décision claire pour l'athlète courant de la
-     file, sinon retombe sur l'éditeur libre existant (CoachSessionModal, reviewAthlete/reviewSession
-     ci-dessus) — voir decisionFor()/openDecision() plus bas. */
-  const [adjustChainCtx, setAdjustChainCtx] = useState<{ athlete: CoachAthlete; session: CoachViewSession; dir: AutoregDir; reco: number } | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -290,7 +285,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   useHorizontalScrollNav(dayScrollRef, {
     onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
     onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    enabled: !reviewAthlete && !showReviewComplete && !adjustChainCtx && !showInviteModal,
+    enabled: !reviewAthlete && !showInviteModal,
   });
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
@@ -363,15 +358,28 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // ce que la carte affiche (un sportif signalé seulement par sa monotonie doit être classé priorité).
   const msFor = (id: string) => monotonyStrainFor(recentSessions[id] ?? []);
 
+  // Suggestion Surcharger (2026-09-26, retour de Gildas — "mets aussi bien ceux à alléger qu'à
+  // surcharger dans 'À décider maintenant'") : attention() ne renvoie jamais true pour ce cas
+  // (conçu uniquement pour détecter un signal négatif — récup basse/charge en accumulation/monotonie
+  // élevée) alors qu'un Surcharger a bien un CTA actionnable dans la carte (AutoregButtons inline).
+  // Même calcul que la carte décision elle-même (computeAutoregSuggestion), pour ne jamais classer
+  // un sportif en "Plan cohérent" alors que sa carte affiche une vraie suggestion.
+  function hasSurchargeSuggestion(a: CoachAthlete): boolean {
+    const topSession = getTopSession(a.id);
+    if (!topSession || topSession.done) return false;
+    const wellness = a.wellnessFilledToday === false ? null : a.wellness_score;
+    return computeAutoregSuggestion(wellness, topSession.target_difficulty, baselines[a.id])?.dir === "high";
+  }
+
   const priority = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
     const { monotonyVal, strainVal } = msFor(a.id);
-    return hasSessions && attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal);
+    return hasSessions && (attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasSurchargeSuggestion(a));
   });
   const stable = athletes.filter(a => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
     const { monotonyVal, strainVal } = msFor(a.id);
-    return !hasSessions || !attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal);
+    return !hasSessions || !(attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasSurchargeSuggestion(a));
   });
   const sortedPriority = [...priority].sort((a, b) => {
     const msA = msFor(a.id), msB = msFor(b.id);
@@ -424,86 +432,45 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.delete(athleteId); return s; });
   }
 
-  /* Décide quel outil ouvrir pour un athlète de la file : le modal décharge/surcharge (1-clic, même
-     heuristique que les cartes) quand elle propose une décision claire pour sa séance du jour,
-     l'éditeur libre existant sinon (alerte sans signal wellness/difficulté net, ex. tendance ou
-     séance déjà terminée). */
-  function openDecision(athlete: CoachAthlete) {
-    const topSession = getTopSession(athlete.id);
-    const wellness = athlete.wellnessFilledToday === false ? null : athlete.wellness_score;
-    const suggestion = topSession && !topSession.done ? computeAutoregSuggestion(wellness, topSession.target_difficulty, baselines[athlete.id]) : null;
-    if (suggestion && topSession) {
-      setAdjustChainCtx({ athlete, session: topSession, dir: suggestion.dir, reco: suggestion.reco });
-      setReviewAthlete(null);
-      setReviewSession(null);
-    } else {
-      setAdjustChainCtx(null);
-      setReviewAthlete(athlete);
-      setReviewSession(topSession);
-    }
+  /* Ouvre le drawer d'édition libre (CoachSessionModal) pour cet athlète — remplace l'ancien
+     openDecision()/handleDecide() (2026-09-26, retour de Gildas : "quand je clic sur la séance ça
+     doit ouvrir le drawer d'édition et non plus la modale de décision qui n'est plus utile") : depuis
+     que la jauge de décision (AutoregButtons) est directement montée DANS la carte séance (2026-09-24,
+     "la jauge de décision EST la jauge de la séance"), il n'y a plus besoin d'ouvrir une modale
+     décharge/surcharge séparée au clic — Alléger/Surcharger se fait déjà en 1 clic sur la carte
+     elle-même. Ce clic reste une simple consultation/édition, PAS une "décision traitée" (ne marque
+     plus `reviewedIds` — seule la jauge inline le fait désormais, via onAutoregDecided). */
+  function openEditor(athlete: CoachAthlete) {
+    setReviewAthlete(athlete);
+    setReviewSession(getTopSession(athlete.id));
   }
 
-  function handleDecide(athlete: CoachAthlete) {
-    setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.add(athlete.id); return s; });
-    openDecision(athlete);
-  }
-
-  function advanceQueue(newReviewed: Set<string>) {
-    const next = sortedPriority.find(a => !newReviewed.has(a.id));
-    if (next) {
-      const nr = new Set(Array.from(newReviewed)); nr.add(next.id);
-      setReviewedIds(nr);
-      openDecision(next);
-    } else {
-      setReviewAthlete(null);
-      setReviewSession(null);
-      setAdjustChainCtx(null);
-      if (sortedPriority.length > 0) setShowReviewComplete(true);
-    }
-  }
-
-  async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, _athleteIds: string[]) {
+  /* Contrat autosave (2026-09-26, remplace l'ancien "save = ferme le drawer" — plus de reviewContext
+     passé à CoachSessionModal, donc autosave s'active désormais aussi ici, voir openEditor() plus
+     haut) : jamais de fermeture ici, persiste silencieusement et retourne l'id pour que les autosaves
+     suivants mettent à jour la MÊME ligne au lieu d'en recréer une — même pattern exact que
+     saveSession() dans CoachPlanningClient.tsx. */
+  async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, _athleteIds: string[], id?: string) {
     if (!reviewAthlete) return;
 
-    if (reviewSession) {
-      const result = await callSessionAPI({ action: "update", athleteId: reviewAthlete.id, sessionId: reviewSession.id, data });
-      if (result.ok) {
-        setSessions(prev => prev.map(s => s.id === reviewSession.id ? { ...s, ...data } : s));
-      }
-    } else {
-      const result = await callSessionAPI({ action: "add", athleteId: reviewAthlete.id, data });
-      if (result.ok && result.session) {
-        const newS: CoachViewSession = result._real
-          ? realToView(result.session as Session, athletes)
-          : demoToView(result.session as CoachSession);
-        setSessions(prev => [...prev, newS]);
-      }
+    if (id) {
+      const result = await callSessionAPI({ action: "update", athleteId: reviewAthlete.id, sessionId: id, data });
+      if (!result.ok) throw new Error("update failed");
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+      return { id };
     }
-
-    const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(reviewAthlete.id);
-    advanceQueue(newReviewed);
-  }
-
-  async function handleAdjustChainConfirm(pct: number) {
-    if (!adjustChainCtx) return;
-    const original = { notes: adjustChainCtx.session.notes, target_difficulty: adjustChainCtx.session.target_difficulty };
-    await applyAutoregAdjust(adjustChainCtx.athlete.id, adjustChainCtx.session, pct);
-    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, pct, original);
-    const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(adjustChainCtx.athlete.id);
-    advanceQueue(newReviewed);
-  }
-
-  function handleAdjustChainSkip() {
-    if (!adjustChainCtx) return;
-    setAutoregDecision(adjustChainCtx.session.id, adjustChainCtx.dir, null);
-    const newReviewed = new Set(Array.from(reviewedIds)); newReviewed.add(adjustChainCtx.athlete.id);
-    advanceQueue(newReviewed);
+    const result = await callSessionAPI({ action: "add", athleteId: reviewAthlete.id, data });
+    if (!result.ok || !result.session) throw new Error("create failed");
+    const newS: CoachViewSession = result._real
+      ? realToView(result.session as Session, athletes)
+      : demoToView(result.session as CoachSession);
+    setSessions(prev => [...prev, newS]);
+    return { id: newS.id };
   }
 
   function handleCloseReview() {
     setReviewAthlete(null);
     setReviewSession(null);
-    setAdjustChainCtx(null);
   }
 
   const reviewedPriorityCount = sortedPriority.filter(a => reviewedIds.has(a.id)).length;
@@ -773,7 +740,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>À décider maintenant</div>
-                  <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Le coach voit d'abord ce qui mérite une action.</div>
                 </div>
                 {sortedPriority.length > 0 && reviewedPriorityCount > 0 && reviewedPriorityCount < sortedPriority.length && (
                   <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0 }}>
@@ -799,7 +765,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         recentSessions={recentSessions[a.id]}
                         coachName={coachName ?? "Coach"}
                         isActive={isActive}
-                        onDecide={() => handleDecide(a)}
+                        onDecide={() => openEditor(a)}
                         onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                         onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                         onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -818,10 +784,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>Plan cohérent</div>
-                  <div style={{ fontSize: 12, color: "#687075", lineHeight: 1.4, marginTop: 2 }}>Pas d'intervention immédiate.</div>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr" : "1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr 1fr" : isMd ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {displayedStable.length > 0 ? displayedStable.map(a => (
                   <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
@@ -831,7 +796,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     recentSessions={recentSessions[a.id]}
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
-                    onDecide={() => router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`)}
+                    onDecide={() => openEditor(a)}
                     onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                     onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -910,18 +875,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           } : null}
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
-          reviewContext={{
-            wellness: reviewAthlete.wellnessFilledToday === false ? null : reviewAthlete.wellness_score,
-            maxDiff: maxDiffToday(reviewAthlete.id, sessions),
-            queueCurrent: reviewedPriorityCount,
-            queueTotal: sortedPriority.length,
-            trend: trends[reviewAthlete.id],
-            // Oublié lors du branchement initial de `baselines` sur cette page (2026-08-30) — le
-            // drawer retombait sur l'ancien libellé absolu ("Zone stable"...) alors que le reste de
-            // la carte affiche déjà "Fatigué/Équilibré/Frais" pour le même sportif/jour.
-            baseline: baselines[reviewAthlete.id],
-          }}
-          onSave={(data, athleteIds) => requireSubscription(() => handleSaveReview(data, athleteIds))}
+          onSave={(data, athleteIds, id) => requireSubscription(() => handleSaveReview(data, athleteIds, id))}
           onClose={handleCloseReview}
           onMarkViewed={() => {
             if (!reviewSession) return;
@@ -930,26 +884,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
-      {adjustChainCtx && (
-        <AdjustSessionModal
-          session={adjustChainCtx.session as AdjustSessionTarget}
-          dir={adjustChainCtx.dir}
-          reco={adjustChainCtx.reco}
-          wellnessScore={adjustChainCtx.athlete.wellnessFilledToday === false ? null : adjustChainCtx.athlete.wellness_score}
-          baseline={baselines[adjustChainCtx.athlete.id]}
-          behaviors={adjustChainCtx.athlete.behaviors ?? []}
-          advice={autoregAdvice(adjustChainCtx.dir, adjustChainCtx.session.target_difficulty ?? 6, adjustChainCtx.athlete.name.split(" ")[0], baselines[adjustChainCtx.athlete.id])}
-          chainCurrent={reviewedPriorityCount - 1}
-          chainTotal={sortedPriority.length}
-          onSkip={handleAdjustChainSkip}
-          onClose={handleCloseReview}
-          onConfirm={pct => requireSubscription(() => handleAdjustChainConfirm(pct))}
-        />
-      )}
-
-      {showReviewComplete && (
-        <ReviewCompleteModal onClose={() => setShowReviewComplete(false)} />
-      )}
 
       {showInviteModal && (
         <InviteModal
