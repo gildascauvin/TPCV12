@@ -3906,4 +3906,4 @@ n'ont pas d'historique wellness dans `ConseilsData` — la sparkline Récupérat
 existant (`RecuperationSection`) sont vides pour eux, tous les deux. Une limite de la fixture, pas du
 rendu.
 
-Déployé en prod le 2026-09-26, commit `PENDING_COMMIT`, push direct sur `main`.
+Déployé en prod le 2026-09-26, commit `915b8c5`, push direct sur `main`.
