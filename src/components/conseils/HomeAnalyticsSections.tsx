@@ -9,11 +9,13 @@
 
 import ShareButton from "@/components/sessions/ShareButton";
 import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, dimensionInsightText, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey, type Perspective } from "@/lib/wellnessBaseline";
+import { dimensionBadgesSeries, dimensionInsightText, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import ZoneBadge from "@/components/conseils/ZoneBadge";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
-import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
+import { sigDimInfo } from "@/lib/fatigueSignature";
+import { wellnessColor } from "@/lib/wellness";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import type { CoachAthlete } from "@/types";
 import { AthleteRing } from "@/app/(app)/coach/athletes/AthletesClient";
@@ -233,15 +235,79 @@ function topBehaviors(correlations: BehaviorCorrelation[]) {
   return { bestHelper, worstHurt };
 }
 
-/* ── Vue "Tous" côté coach (2026-09-24) — équivalent de teamBody() dans le POC : une liste
-   d'athlètes classée par sévérité pour l'onglet actif, plutôt que le grand chart individuel des 2
-   autres modes. `rows` porte déjà le ConseilsData de chaque athlète (calculé une fois côté
-   CoachClient.tsx, jamais recalculé ici) — ce composant ne fait que trier/afficher. */
+type Metric = "charge" | "recuperation" | "comportements";
+
+/* Mini-sparkline non-interactive (2026-09-26, POC coach-charge-poc.html) — jamais ZoneSparkline/
+   SparkLineClient ici (tooltip/zones/animation, trop lourd pour une ligne de liste) : juste un
+   repère de forme sur 7j. Échelle relative au max de la série affichée (comme le POC), pas un
+   domaine fixe — l'objectif est la silhouette, pas une valeur lue précisément (déjà disponible via
+   le badge/tooltip juste au-dessus). `points` porte value ET color séparément (pas un simple
+   colorFor(value)) — nécessaire pour la charge (2026-09-26, retour de Gildas : "les barres en UA")
+   où la hauteur vient de la charge journalière brute (UA, Foster session-RPE) mais la couleur reste
+   pilotée par la zone ACWR du même jour, deux valeurs différentes. */
+function MiniBars({ points, height = 26 }: { points: { value: number | null; color: string }[]; height?: number }) {
+  const known = points.filter((p): p is { value: number; color: string } => p.value !== null);
+  if (!known.length) return null;
+  const max = Math.max(...known.map(p => p.value), 0.0001);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height }}>
+      {points.map((p, i) => (
+        <div key={i} style={{
+          width: 5, borderRadius: 2,
+          height: p.value === null ? 3 : Math.max(3, Math.round((p.value / max) * height)),
+          background: p.value === null ? "rgba(255,255,255,.12)" : p.color,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+/* Couleur de sévérité par sportif pour un onglet donné — pilote à la fois le liseré gauche de la
+   carte ET le classement en section (jamais deux échelles de couleur différentes pour la même
+   info). Toujours dérivée d'un objet déjà calculé côté ConseilsData (loadInfo/recoveryInfo/
+   topBehaviors), jamais une nouvelle couleur inventée. */
+function metricStatusColor(metric: Metric, data: ConseilsData): string {
+  if (metric === "charge") return data.loadInfo.color;
+  if (metric === "recuperation") return data.recoveryInfo.color;
+  const { bestHelper, worstHurt } = topBehaviors(data.correlations);
+  return worstHurt ? "#d10000" : bestHelper ? "#2f9e44" : "#8a8f94";
+}
+
+/* Regroupement en sections façon POC ("À surveiller"/"Optimal"/"Sous-charge") — dérivé des mêmes
+   libellés de zone déjà affichés en badge sur chaque carte, jamais un nouveau seuil recalculé ici.
+   `order` fixe l'ordre d'affichage (le plus préoccupant en premier). */
+function sectionFor(metric: Metric, data: ConseilsData): { title: string; order: number } {
+  if (metric === "charge") {
+    const l = data.loadInfo.label;
+    if (l === "RISQUE ÉLEVÉ" || l === "RISQUE MODÉRÉ") return { title: "À surveiller", order: 0 };
+    if (l === "SOUS-CHARGE") return { title: "Sous-charge", order: 2 };
+    return { title: "Optimal", order: 1 };
+  }
+  if (metric === "recuperation") {
+    const l = data.recoveryInfo.label;
+    if (l === "FATIGUÉ" || l === "RÉCUP FRAGILE") return { title: "À surveiller", order: 0 };
+    if (l === "FRAIS" || l === "BONNE RÉCUP") return { title: "En forme", order: 2 };
+    return { title: "Stable", order: 1 };
+  }
+  const { worstHurt } = topBehaviors(data.correlations);
+  return worstHurt ? { title: "Points d'attention", order: 0 } : { title: "Stable", order: 1 };
+}
+
+/* ── Vue "Tous" côté coach (2026-09-24, redesign 2026-09-26 inspiré de coach-charge-poc.html) —
+   équivalent de teamBody() dans le POC : une liste d'athlètes classée par sévérité ET regroupée par
+   section pour l'onglet actif, avec liseré de couleur, badges de signaux (Fitness/Fatigue/
+   Monotonie/Contrainte pour la charge, 4 dimensions pour la récupération) et mini-sparkline 7j —
+   plutôt que le grand chart individuel des 2 autres modes. `rows` porte déjà le ConseilsData de
+   chaque athlète (calculé une fois côté CoachClient.tsx, jamais recalculé ici) — ce composant ne
+   fait que trier/regrouper/afficher, aucune nouvelle donnée fabriquée (contrairement au POC, dont
+   les scores/insights sont des exemples fictifs). */
 export function TeamAnalyticsList({ rows, metric, onSelect }: {
   rows: { athlete: CoachAthlete; data: ConseilsData }[];
-  metric: "charge" | "recuperation" | "comportements";
+  metric: Metric;
   onSelect: (athleteId: string) => void;
 }) {
+  const { isMd } = useBreakpoint();
+
   if (rows.length === 0) {
     return <div style={{ color: "#8a8f94", fontSize: 13, padding: "24px 0" }}>Aucun sportif à afficher.</div>;
   }
@@ -259,72 +325,156 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
     return sev(r2) - sev(r1);
   });
 
+  // Groupé en préservant l'ordre de sévérité déjà calculé ci-dessus — jamais retrié à l'intérieur
+  // d'une section.
+  const buckets = new Map<string, { order: number; rows: typeof sorted }>();
+  for (const row of sorted) {
+    const { title, order } = sectionFor(metric, row.data);
+    if (!buckets.has(title)) buckets.set(title, { order, rows: [] });
+    buckets.get(title)!.rows.push(row);
+  }
+  const orderedBuckets = Array.from(buckets.entries()).sort((a, b) => a[1].order - b[1].order);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-      {sorted.map(({ athlete: a, data }) => {
-        // Score de récupération — même résolution que la branche "recuperation" ci-dessous, hissé
-        // pour aussi alimenter l'AthleteRing (2026-09-24, unification avec le style de carte de
-        // /coach/athletes — voir athleteStatus()/AthleteRing importés en haut de fichier) : un seul
-        // score par athlète, jamais deux calculs qui pourraient diverger entre le ring et le badge.
-        const recoveryScore = data.wellnessBaseline?.hasEnoughHistory ? data.wellnessBaseline.relativeScore : (data.timeSeries[data.timeSeries.length - 1]?.recovery ?? null);
-        let right: React.ReactNode;
-        // Encadré = le MÊME composant que sur les pages dédiées (2026-09-25, retour de Gildas —
-        // "ces conseils... doivent être le même composant que ceux dans les pages dédiées avec
-        // '🟢 Récupération légère — Ta récupération est basse...' dans l'encadré") : c'est
-        // exactement l'encadré de CrossInsightBanner (trendEmoji/trendAction/trendText, la même
-        // donnée déjà affichée en tête de ChargeSection/RecuperationSection pour un seul sportif),
-        // pas chargeInsight/recoveryInsight (des phrases différentes, jamais montrées dans un
-        // encadré ailleurs dans l'app) — remplace le 1er jet qui inventait un nouveau texte ici.
-        // Version light (fond clair) car ces cartes ne sont plus sur fond sombre, voir plus haut.
-        if (metric === "charge") {
-          right = <ZoneBadge label={data.loadInfo.label} color={data.loadInfo.color} definition={METRIC_DEFINITIONS.acwr} />;
-        } else if (metric === "recuperation") {
-          right = recoveryScore !== null
-            ? <ZoneBadge label={`${data.recoveryInfo.label} ${recoveryScore}`} color={data.recoveryInfo.color} definition={METRIC_DEFINITIONS.recovery} />
-            : <span style={{ fontSize: 11, color: "#8a8f94" }}>—</span>;
-        } else {
-          const { bestHelper, worstHurt } = topBehaviors(data.correlations);
-          right = (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, justifyContent: "flex-end" }}>
-              {bestHelper && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: "#2f9e44", background: "#2f9e4426" }}>{bestHelper.emoji} {bestHelper.label}</span>}
-              {worstHurt && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: "#d10000", background: "#d1000026" }}>{worstHurt.emoji} {worstHurt.label}</span>}
-              {!bestHelper && !worstHurt && <span style={{ fontSize: 11, color: "#8a8f94" }}>Pas assez de données</span>}
-            </div>
-          );
-        }
-        return (
-          <button
-            key={a.id}
-            onClick={() => onSelect(a.id)}
-            style={{
-              display: "block", padding: "12px 14px",
-              background: "#fff", border: "1px solid rgba(0,0,0,.08)",
-              borderRadius: 16, cursor: "pointer", textAlign: "left" as const, width: "100%",
-              boxShadow: "0 4px 14px rgba(0,0,0,.04)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <AthleteRing score={recoveryScore} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                  {a.name}
-                </div>
-                {a.sport && (
-                  <div style={{ fontSize: 10.5, color: "#8a8f94", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                    {a.sport}
+    <div style={{ display: "flex", flexDirection: "column" as const, gap: 18 }}>
+      {orderedBuckets.map(([title, { rows: bucketRows }]) => (
+        <div key={title}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
+            fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 800,
+            letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.5)",
+          }}>
+            {title}
+            <span style={{ background: "rgba(255,255,255,.10)", color: "rgba(255,255,255,.7)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5 }}>{bucketRows.length}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
+            {bucketRows.map(({ athlete: a, data }) => {
+              // Score de récupération — même résolution que RecuperationSection, hissé pour aussi
+              // alimenter l'AthleteRing (un seul score par athlète, jamais deux calculs qui
+              // pourraient diverger entre le ring et les badges).
+              const recoveryScore = data.wellnessBaseline?.hasEnoughHistory ? data.wellnessBaseline.relativeScore : (data.timeSeries[data.timeSeries.length - 1]?.recovery ?? null);
+              const statusColor = metricStatusColor(metric, data);
+
+              let statusBadge: React.ReactNode = null;
+              let signalBadges: React.ReactNode = null;
+              let sparklinePoints: { value: number | null; color: string }[] | null = null;
+              let insightBox: React.ReactNode = null;
+
+              if (metric === "charge") {
+                statusBadge = <ZoneBadge label={data.loadInfo.label} color={data.loadInfo.color} definition={data.loadInfo.text} />;
+                const signals = [data.fitnessTrendInfo, data.fatigueTrendInfo, data.monotonyInfo, data.strainInfo]
+                  .filter((x): x is { label: string; color: string; text: string } => !!x);
+                signalBadges = signals.length > 0 && (
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" as const, marginTop: 8 }}>
+                    {signals.map((s, i) => <ZoneBadge key={i} size="sm" label={s.label} color={s.color} definition={s.text} />)}
                   </div>
-                )}
-              </div>
-              <span style={{ flexShrink: 0 }}>{right}</span>
-            </div>
-            {metric !== "comportements" && data.trendText && (
-              <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.06)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "#171b1f", lineHeight: 1.5, fontWeight: 600 }}>
-                {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000" }}>{data.trendAction} — </span>}{data.trendText}
-              </div>
-            )}
-          </button>
-        );
-      })}
+                );
+                // Hauteur = charge journalière brute en UA (Foster session-RPE), pas l'ACWR
+                // (2026-09-26, retour de Gildas : "les barres en UA") — l'ACWR (ratio, borné ~0-2)
+                // écrasait la vraie amplitude jour à jour. La couleur reste pilotée par la ZONE ACWR
+                // du même jour (sigDimInfo) : deux valeurs différentes par barre, jamais confondues.
+                const loadsSlice = data.zoneLoads.slice(-7);
+                const acwrSlice = data.zoneAcwr.slice(-7);
+                sparklinePoints = loadsSlice.map((load, i) => ({
+                  value: load,
+                  color: acwrSlice[i] !== null ? sigDimInfo("load", acwrSlice[i]!, "coach").color : "rgba(255,255,255,.25)",
+                }));
+                if (data.trendText) {
+                  insightBox = (
+                    <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
+                      {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{data.trendAction} — </span>}{data.trendText}
+                    </div>
+                  );
+                }
+              } else if (metric === "recuperation") {
+                statusBadge = <ZoneBadge label={data.recoveryInfo.label} color={data.recoveryInfo.color} definition={data.recoveryInfo.text} />;
+                const todayDims = dimensionBadgesSeries(data.wellnessBaselineSeries).slice(-1)[0];
+                const dimBadges = (todayDims ?? []).map((b: { key: DimensionKey; label: string; arrow: "up" | "down" | "stable" }, i: number) => (
+                  <ZoneBadge key={`d${i}`} size="sm" label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} definition={dimensionInsightText(b.key, data.wellnessBaseline, "coach")} />
+                ));
+                signalBadges = (dimBadges.length > 0 || data.formInfo) && (
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" as const, marginTop: 8 }}>
+                    {dimBadges}
+                    {data.formInfo && <ZoneBadge size="sm" label={`FORME ${data.formInfo.label}`} color={data.formInfo.color} definition={data.formInfo.text} />}
+                  </div>
+                );
+                const recentSeries = data.timeSeries.slice(-7);
+                const recentBaseline: (WellnessBaselineResult | null)[] = data.wellnessBaselineSeries.slice(-7);
+                sparklinePoints = recentSeries.map((p, i) => {
+                  const b = recentBaseline[i];
+                  const v = b?.hasEnoughHistory ? b.relativeScore : p.recovery;
+                  return { value: v, color: v !== null ? wellnessColor(v) : "rgba(255,255,255,.25)" };
+                });
+                if (data.trendText) {
+                  insightBox = (
+                    <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
+                      {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{data.trendAction} — </span>}{data.trendText}
+                    </div>
+                  );
+                }
+              } else {
+                const { bestHelper, worstHurt } = topBehaviors(data.correlations);
+                insightBox = bestHelper || worstHurt ? (
+                  <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5 }}>
+                    {worstHurt && (
+                      <div>
+                        <span style={{ fontWeight: 900, color: "#ff6b6b" }}>✗ </span>
+                        <span style={{ fontWeight: 700 }}>{worstHurt.emoji} {worstHurt.label}</span> pénalise sa récupération de{" "}
+                        <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "#ff6b6b" }}>{worstHurt.impact.toFixed(1)} pts</span>.
+                      </div>
+                    )}
+                    {bestHelper && (
+                      <div style={worstHurt ? { marginTop: 4 } : undefined}>
+                        <span style={{ fontWeight: 900, color: "#4ade80" }}>✓ </span>
+                        <span style={{ fontWeight: 700 }}>{bestHelper.emoji} {bestHelper.label}</span> améliore sa récupération de{" "}
+                        <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "#4ade80" }}>+{bestHelper.impact.toFixed(1)} pts</span>.
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 10 }}>Pas assez de données pour identifier un effet marqué.</div>
+                );
+              }
+
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => onSelect(a.id)}
+                  style={{
+                    display: "block", padding: "13px 15px",
+                    // Même surface que CoachCard (2026-09-26, "les listes de cards... la même
+                    // couleur que les coachcontrol cards, pas blanche") — voile blanc translucide
+                    // sur le fond sombre de la page, jamais une carte blanche.
+                    background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderLeft: `3px solid ${statusColor}`,
+                    borderRadius: 16, cursor: "pointer", textAlign: "left" as const, width: "100%",
+                    boxShadow: "0 10px 26px rgba(0,0,0,.22)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <AthleteRing score={recoveryScore} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                          {a.name}
+                        </span>
+                        {statusBadge}
+                      </div>
+                    </div>
+                    {isMd && sparklinePoints && (
+                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
+                        <MiniBars points={sparklinePoints} />
+                        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>7j</span>
+                      </div>
+                    )}
+                  </div>
+                  {signalBadges}
+                  {insightBox}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

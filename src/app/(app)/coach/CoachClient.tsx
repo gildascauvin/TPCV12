@@ -18,7 +18,6 @@ import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coac
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import { computeAutoregSuggestion } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
-import { DARK_CARD_BG } from "@/lib/theme";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
@@ -511,31 +510,32 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
 
-      {/* Fond de page COACH_PAGE_BG (2026-09-25, CoachPageBg.tsx — partagé avec /coach/planning et
-         /coach/athletes) : remplace le `bg-bg` clair hérité de (app)/layout.tsx, même technique que
-         /today — CalendarHeader n'a plus de fond propre (`seamless` + `theme="light"` pour l'icône
-         profil, illisible en blanc sur ce fond clair sinon), déplacé À L'INTÉRIEUR de ce wrapper pour
-         que ce seul dégradé peigne le top nav ET le reste de la page en continu. Coach garde son
-         principe "page claire + cartes sombres" (CoachCard/DARK_CARD_BG inchangées, voir plus bas) —
-         seule la page elle-même s'enrichit d'un glow orange marque au lieu d'un aplat #f1f0ee. */}
+      {/* Fond de page sombre (2026-09-26, CoachPageBg.tsx — partagé avec /coach/planning et
+         /coach/athletes) : DARK_CARD_BG, le MÊME glow cyan que le sportif (/today, /week), sur
+         demande de Gildas. L'app coach abandonne donc sa convention "page claire + cartes sombres"
+         pour celle du sportif — page sombre, cartes claires (séances, listes) et surfaces
+         translucides pour les panneaux (CoachCard). CalendarHeader n'a pas de fond propre
+         (`seamless`), déplacé À L'INTÉRIEUR de ce wrapper pour que ce seul dégradé peigne le top nav
+         ET le reste de la page en continu. */}
       <CoachPageBg>
+      {/* Sélecteur de sportif TOUT EN HAUT, au-dessus du header de date (2026-09-26, demande de
+         Gildas) — "qui" est la première décision d'un coach, "quand" ne vient qu'après ; c'est aussi
+         la seule barre sticky de la page, donc celle qui doit rester accrochée au bord haut. */}
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} scores={filterBarScores} />
       <CalendarHeader
-        mode="day" contentMaxWidth={coachContentMaxWidth} seamless theme="light"
+        mode="day" contentMaxWidth={coachContentMaxWidth} seamless
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} scores={filterBarScores} />
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
-          <HomeTabs active={homeTab} onChange={setHomeTab} dark={false} />
+          <HomeTabs active={homeTab} onChange={setHomeTab} />
         </div>
       )}
 
-      {/* Cartes sombres inchangées (CoachCard/DARK_CARD_BG plus bas) — 2026-09-24, clarification
-         explicite de Gildas : "côté coach... ça affiche les cartes des sportifs avec bg light, cards
-         dark comme le poc". Layout élargi à 1180px (au lieu de 1000) — même largeur que `.shell` du
-         POC, pour que le carrousel 3 colonnes ait la place de respirer. */}
+      {/* Layout élargi à 1180px (au lieu de 1000) — même largeur que `.shell` du POC, pour que le
+         carrousel 3 colonnes ait la place de respirer. */}
       <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         {homeTab === "today" && (
@@ -589,7 +589,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         )}
 
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600 }}>
+          <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600, color: "#fff" }}>
             {greeting()} {coachName ?? ""} 👋
           </div>
         </div>
@@ -688,18 +688,18 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                           onClick={() => setMetricFilter(active ? null : dim)}
                           style={{
                             textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
-                            background: active ? "#fff7ed" : "#fff",
-                            border: active ? "1.5px solid #d44000" : "1.5px solid #e4e4e7",
+                            background: active ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.055)",
+                            border: active ? "1.5px solid #d44000" : "1.5px solid rgba(255,255,255,.10)",
                           }}
                         >
-                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#71717a" }}>
+                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
                             {DIMENSION_LABELS[dim]}
                           </div>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#18181b", letterSpacing: "-0.02em", marginTop: 2 }}>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginTop: 2 }}>
                             {avg !== null ? avg.toFixed(1).replace(".", ",") : "—"}
-                            <span style={{ fontSize: 11, fontWeight: 700, color: "#71717a" }}>/10</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.45)" }}>/10</span>
                           </div>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, marginTop: 3, color: low > 0 ? "#dc2626" : "#16a34a" }}>
+                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, marginTop: 3, color: low > 0 ? "#ff6b6b" : "#4ade80" }}>
                             {low > 0 ? `${low} sportif${low > 1 ? "s" : ""} bas` : "Tous OK"}
                           </div>
                         </button>
@@ -709,24 +709,24 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                       onClick={() => setShowInviteModal(true)}
                       style={{
                         textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
-                        background: "linear-gradient(120deg,#fff7ed,#fff)", border: "1.5px solid #fed7aa",
+                        background: "linear-gradient(120deg,rgba(212,64,0,.20),rgba(255,255,255,.05))", border: "1.5px solid rgba(212,64,0,.38)",
                         display: "flex", flexDirection: "column", justifyContent: "center",
                       }}
                     >
-                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#71717a" }}>
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
                         {athletes.length} sportif{athletes.length > 1 ? "s" : ""}
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#d44000", marginTop: 6 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#ff8a55", marginTop: 6 }}>
                         + Inviter →
                       </div>
                     </button>
                   </div>
                   {metricFilter && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "#52525b" }}>
-                      Filtre : <b style={{ color: "#171b1f" }}>{DIMENSION_LABELS[metricFilter]} bas</b>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "rgba(255,255,255,.55)" }}>
+                      Filtre : <b style={{ color: "#fff" }}>{DIMENSION_LABELS[metricFilter]} bas</b>
                       <button
                         onClick={() => setMetricFilter(null)}
-                        style={{ background: "#e4e4e7", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#18181b", cursor: "pointer" }}
+                        style={{ background: "rgba(255,255,255,.12)", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}
                       >
                         Effacer ×
                       </button>
@@ -739,7 +739,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>À décider maintenant</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>À décider maintenant</div>
                 </div>
                 {sortedPriority.length > 0 && reviewedPriorityCount > 0 && reviewedPriorityCount < sortedPriority.length && (
                   <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0 }}>
@@ -783,7 +783,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             <div style={{ margin: "13px 0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
                 <div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#1f2428" }}>Plan cohérent</div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>Plan cohérent</div>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr 1fr" : isMd ? "1fr 1fr" : "1fr", gap: 10 }}>
@@ -816,22 +816,24 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         {/* ── Onglets Charge/Récupération/Comportements (2026-09-24, "point 1", partie coach) —
            voir POC `poc-coach-context_6.html`, tabBody()/teamBody() : sportif sélectionné → mêmes
            sections que la propre Accueil du sportif (HomeAnalyticsSections.tsx, identique
-           TodayClient.tsx), dans une carte sombre dédiée (Coach = page claire + carte sombre). "Tous"
-           → liste classée par sévérité (TeamAnalyticsList), désormais SANS carte enveloppante
-           (2026-09-25, retour de Gildas — "je veux pas le background qui entoure la liste des
-           cards" : chaque ligne est déjà sa propre carte claire, un 2e cadre autour de la liste
-           entière était redondant). ── */}
+           TodayClient.tsx), SANS carte enveloppante — strictement le même rendu que /today (2026-09-26,
+           retour de Gildas : "je veux plus les encadrés autour des charts, iso à l'app sportif").
+           L'encadré n'avait de sens que tant que la page coach était claire (carte sombre sur page
+           claire) ; depuis que la page porte elle-même le fond sombre du sportif (CoachPageBg), il ne
+           faisait plus que dupliquer un cadre autour d'un contenu déjà sur le bon fond. "Tous" →
+           liste classée par sévérité (TeamAnalyticsList), sans carte enveloppante non plus
+           (2026-09-25, même retour : chaque ligne est déjà sa propre carte). ── */}
         {homeTab !== "today" && selectedAthleteId && (() => {
           const a = athletes.find(x => x.id === selectedAthleteId);
           const data = a ? athleteConseilsData[a.id] : undefined;
           if (!a || !data) return null;
           return (
-            <div style={{ background: DARK_CARD_BG, border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: 16, boxShadow: "0 12px 34px rgba(0,0,0,.28)" }}>
+            <>
               {homeTab !== "comportements" && <CrossInsightBanner data={data} isDemoData={!a.user_id} />}
               {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
               {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}
-            </div>
+            </>
           );
         })()}
         {homeTab !== "today" && !selectedAthleteId && (

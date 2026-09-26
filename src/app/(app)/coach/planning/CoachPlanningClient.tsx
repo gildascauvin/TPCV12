@@ -600,11 +600,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   if (athletes.length === 0) {
     return (
       <CoachPageBg>
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless theme="light" />
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless />
         {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         <div className="page-shell" style={{ textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "#171b1f", marginBottom: 16 }}>Aucun sportif encore</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 16 }}>Aucun sportif encore</div>
           <button onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes")}
             style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
             Ajouter un sportif →
@@ -627,11 +627,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   if (athlete === null) {
     return (
       <CoachPageBg>
-        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless theme="light" />
-        {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
+        {/* Sélecteur de sportif au-dessus du header de date — voir CoachClient.tsx pour le pourquoi. */}
         <AthleteFilterBar athletes={athletes} selectedId={null} onSelect={id => { setSelectedAthleteId(id); athleteFilterStorage.write(id); }} scores={filterBarScores} />
+        <CalendarHeader mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)} seamless />
+        {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
         {viewMode === "month" ? (
-          <div className="page-shell" style={{ textAlign: "center", color: "#8a8f94", padding: "40px 16px" }}>
+          <div className="page-shell" style={{ textAlign: "center", color: "rgba(255,255,255,.55)", padding: "40px 16px" }}>
             Vue mensuelle équipe non disponible pour l&apos;instant — sélectionne un sportif.
           </div>
         ) : (
@@ -761,23 +762,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       <CoachPageBg>
-      <CalendarHeader
-        mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
-        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
-        weekTitleFor={mondayIso => {
-          const match = findProgramForWeek(activeAssignments, mondayIso);
-          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
-          return freeLabelsFor(athlete)[mondayIso] || null;
-        }}
-        seamless theme="light"
-      />
-      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-
       {/* Sélecteur de sportif commun à tous les onglets/tabs (2026-09-24, "point 1", partie coach —
          voir POC `poc-coach-context_6.html`, whoHtml()). Remplace l'ancien strip de tabs local par
          le même composant que /coach — persistance partagée via la même clé localStorage.
          "Équipe" bascule désormais sur la vue équipe simplifiée EN PLACE (voir la branche
-         `athlete === null` plus haut) plutôt que de naviguer vers /coach. */}
+         `athlete === null` plus haut) plutôt que de naviguer vers /coach.
+         Placé AU-DESSUS du header de date (2026-09-26) — voir CoachClient.tsx pour le pourquoi. */}
       <AthleteFilterBar
         athletes={athletes}
         selectedId={selectedAthleteId}
@@ -787,6 +777,17 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         }}
         scores={filterBarScores}
       />
+      <CalendarHeader
+        mode="period" selectedDate={selectedDate} onDateChange={handleDateChange} viewMode={viewMode} onViewModeChange={handleViewModeChange} onProfileClick={() => setProfileOpen(true)}
+        showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        weekTitleFor={mondayIso => {
+          const match = findProgramForWeek(activeAssignments, mondayIso);
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          return freeLabelsFor(athlete)[mondayIso] || null;
+        }}
+        seamless
+      />
+      {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
       {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
           on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
@@ -794,6 +795,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {athlete && (() => {
         return (
           <ProgramBanner
+            dark
             program={viewedProgram}
             currentWeek={viewedWeek}
             onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/coach/programmes" : "/coach/programmes") : undefined}

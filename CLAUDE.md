@@ -3795,3 +3795,115 @@ Repéré en testant en vrai : le bouton profil de `CalendarHeader` (`background:
 `tsc --noEmit -p tsconfig.notnext.json` propre. Serveur local redémarré à froid (`.next` vidé) à la demande de Gildas pour tester — pas de clic réel par Claude.
 
 Déployé en prod le 2026-09-26, commit `c1d2e6f`, push direct sur `main`.
+
+## Refonte des listes coach + app coach sur le fond sombre du sportif (2026-09-26)
+
+Suite de la même journée (datepicker "vue mois", fond sombre /week). Point de départ : un POC grossier
+fourni par Gildas (`~/Downloads/coach-charge-poc.html`) — une liste de cartes sportifs par onglet
+(Charge), avec badge de statut, pastilles de signaux, mini-sparkline et sections par sévérité. Consigne
+explicite : *"Ce POC est juste un POC, c'est toi qui a la connaissance métier de l'app, donc propose
+mieux si tu peux"* — les couleurs/scores du POC (palette GitHub générique, scores "72/91/58" fictifs)
+ont donc été écartés au profit des vraies fonctions/seuils de l'app.
+
+### Cartographie faite avant d'exécuter (le CLAUDE.md était en retard sur le code)
+La demande portait sur "les cartes en vue liste côté coach sur onglet charge, récupération et
+comportement **et performance (/conseils)**". Vérification du code réel plutôt que de la mémoire :
+- La "vue liste coach" est `TeamAnalyticsList` (`HomeAnalyticsSections.tsx`), affichée sur `/coach`
+  en mode "Équipe" quand l'onglet actif n'est pas "Aujourd'hui".
+- **`/conseils` ne contient plus Charge/Récupération/Comportements** (déménagés dans les onglets de
+  `/today` au chantier "point 1" du 2026-09-24) : cette page ne porte plus que `TestsPanel`. La
+  cible réelle de "performance" était donc `/coach/athletes`, qui porte le même libellé "Performance"
+  dans la bottom nav côté coach — signalé explicitement à Gildas plutôt que deviné.
+
+### `TeamAnalyticsList` redessiné
+Chaque ligne passe d'un bandeau plat (ring + nom + 1 badge) à une carte dense, entièrement alimentée
+par des valeurs déjà calculées dans `ConseilsData` (aucune donnée fabriquée) :
+- **Sections par sévérité** ("À surveiller"/"Optimal"/"Sous-charge" pour Charge, "À surveiller"/
+  "Stable"/"En forme" pour Récupération, "Points d'attention"/"Stable" pour Comportements) — `sectionFor()`
+  dérive le bucket des mêmes libellés de zone (`loadInfo.label`/`recoveryInfo.label`/`topBehaviors`)
+  déjà affichés en badge, jamais un nouveau seuil. L'ordre interne de sévérité (tri préexistant) est
+  préservé à l'intérieur de chaque section.
+- **Liseré gauche** coloré par `metricStatusColor()` — même source de couleur que la section.
+- **Badges de signaux** : Fitness/Fatigue/Monotonie/Contrainte pour Charge, les 4 dimensions
+  (`dimensionBadgesSeries`) + Forme pour Récupération — tous en `ZoneBadge size="sm"` avec leur
+  tooltip pédagogique existant.
+- **Mini-sparkline 7j** (`MiniBars`, nouveau) : volontairement PAS `ZoneSparkline`/`SparkLineClient`
+  (tooltip/zones/animation, trop lourd pour une ligne de liste). **Hauteur en UA** (charge journalière
+  brute Foster session-RPE, `zoneLoads`) et **couleur par zone ACWR du même jour** — 2 valeurs
+  différentes par barre, d'où l'API `points: {value, color}[]` plutôt qu'un `colorFor(value)`
+  (2026-09-26, retour de Gildas : "les barres en UA" — l'ACWR, ratio borné ~0-2, écrasait l'amplitude
+  réelle jour à jour). Récupération garde le score 0-100 coloré par `wellnessColor`.
+- **Comportements** : phrase "✗ … pénalise / ✓ … améliore sa récupération de X pts" à la 3e personne,
+  reprenant exactement les chiffres de `topBehaviors()` — remplace les 2 pastilles sans contexte.
+- Sport retiré des lignes (retour de Gildas, "pas besoin d'afficher le sport dans les listes").
+
+### `/coach/athletes` ("Performance") recentré sur les tests
+- En-tête "Coach / Mes sportifs / N sportifs suivis / + Inviter" **supprimé** (redondant avec le titre
+  "Performance" du `CalendarHeader`) ; le bouton d'invitation survit, déplacé en bas de liste pleine
+  largeur — même convention que `CoachClient.tsx`.
+- Badges Charge et Récupération retirés : **seul le dernier test** reste (`TestBadge`), et le liseré
+  gauche est piloté par lui (vert/rouge selon `improved`, gris si aucun test).
+- **Seul l'insight des tests** (`TestVerdictBox`, verdict forces/faiblesses) est affiché — l'insight
+  croisé charge/récup (`trendInsights`) est retiré de cette page : elle ne parle plus que de tests.
+  L'état `trends`/`trendInsights` reste fetché mais n'est plus rendu (dead code assumé, le retirer
+  toucherait `page.tsx` + la route API pour zéro gain visuel).
+- `loadBadge()` supprimée (devenue morte, locale, aucun autre appelant) ; `athleteStatus` conservée,
+  toujours importée par `InviteModal.tsx` et `FrisePreviews.tsx`.
+
+### L'app coach passe sur le fond sombre cyan du sportif
+Demande explicite de Gildas : *"update l'app coach avec le même couleur de BG que le sportif avec le
+cyan. Fais les adaptations nécessaires de couleurs de typo etc"* — tranche la question restée ouverte
+le 2026-09-26 matin (où l'avis donné était de garder l'orange clair pour différencier les usages).
+`CoachPageBg` passe donc de `COACH_PAGE_BG` à `DARK_CARD_BG` : **l'app coach abandonne sa convention
+"page claire + cartes sombres" pour celle du sportif** (page sombre + cartes claires/translucides).
+`COACH_PAGE_BG` reste exporté dans `theme.ts` mais n'a plus d'appelant.
+
+Adaptations nécessaires, page par page :
+- `theme="light"` retiré des 5 appels `CalendarHeader` coach (l'icône profil redevient blanche).
+- **`AthleteFilterBar`** : barre sticky blanche → sombre translucide + `backdrop-filter` (laisse le
+  dégradé de la page transparaître au lieu d'empiler un 2e fond), puces en contour blanc translucide.
+- **`CoachCard`** : ne peut plus porter `DARK_CARD_BG` — la page le porte déjà, la carte disparaîtrait
+  dans le fond, avec en prime un décalage de dégradé visible (chaque boîte recalcule son propre radial
+  à sa taille). Remplacé par un voile blanc translucide (`rgba(255,255,255,.055)`) qui la fait lire
+  comme un panneau posé au-dessus — vrai aussi bien sur le dashboard que dans les aperçus onboarding.
+  Même traitement pour toute surface sombre posée sur la page sombre.
+- **`/coach`** : salutation, titres de section, ligne "Filtre : X bas" en blanc ; les 5 cartes de
+  filtre métrique (Sommeil/Stress/…) passent de blanches à surfaces translucides ; `HomeTabs` repasse
+  en mode `dark`.
+- **`/coach/planning`** : textes d'état vide en clair, `ProgramBanner` reçoit `dark` (il est
+  transparent depuis la veille, sa typo doit suivre le fond).
+- **`/coach/athletes`** : `TestsPanel` reçoit `onDarkPage` (sinon sa carte sombre interne se superpose
+  au fond sombre) — exactement le même prop que `/conseils`.
+
+### 3 retours de suivi le même jour
+1. **Plus d'encadré autour des charts** quand un sportif est sélectionné (onglets Charge/Récup/
+   Comportements) : la carte enveloppante est supprimée, les sections se rendent dans un simple
+   fragment — **strictement le même rendu que `/today`** ("je veux iso à l'app sportif en fait").
+   Cet encadré n'avait de sens que tant que la page coach était claire.
+2. **`AthleteFilterBar` remonté tout en haut**, au-dessus du header de date, sur les 4 emplacements
+   (`/coach`, `/coach/planning` ×2 branches, `/coach/athletes`) — "qui" avant "quand", et c'est la
+   seule barre sticky de ces pages. Limite connue signalée : sur un compte non abonné, `UnsavedBanner`
+   est lui aussi `sticky top:0` (comportement pré-existant, les deux peuvent se superposer au scroll).
+3. **Les listes de cartes prennent la surface des CoachCard** ("pas blanche") : `TeamAnalyticsList` et
+   la liste `/coach/athletes` passent en `rgba(255,255,255,.055)` + bordure `rgba(255,255,255,.10)`,
+   avec toute la typo recalibrée (noms en blanc, encadrés d'insight translucides, accent d'action en
+   `#ff8a55` au lieu de `#d44000` illisible sur sombre, accents ✓/✗ en vert/rouge clairs, menu `⋯` et
+   son dropdown en sombre).
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. **Piège JSX rencontré 3 fois** :
+un `{/* commentaire */}` inséré entre `return (` et l'élément racine casse le composant (2 enfants
+racines sans fragment) — écrire le commentaire AVANT le `return`, jamais entre les deux.
+
+Vérifications navigateur arrêtées en cours de chantier à la demande explicite de Gildas ("pas la peine
+de vérifier à chaque fois, c'est moi qui fait la QA") — règle désormais élargie à la sandbox non
+authentifiée, pas seulement au compte réel (voir la mémoire `feedback_prefers_self_testing`). Les
+rounds antérieurs du chantier avaient été vérifiés en clic réel sur `/sandbox/coach` (sections, badges
+de signaux, sparkline, dégradation propre quand la fixture sandbox n'a ni wellness ni test).
+
+**Limite pré-existante constatée au passage, pas corrigée** : les sportifs démo de la sandbox coach
+n'ont pas d'historique wellness dans `ConseilsData` — la sparkline Récupération ET le chart individuel
+existant (`RecuperationSection`) sont vides pour eux, tous les deux. Une limite de la fixture, pas du
+rendu.
+
+Déployé en prod le 2026-09-26, commit `PENDING_COMMIT`, push direct sur `main`.

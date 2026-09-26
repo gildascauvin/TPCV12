@@ -25,7 +25,7 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
-import { sigDimInfo, type AthleteSignature } from "@/lib/fatigueSignature";
+import type { AthleteSignature } from "@/lib/fatigueSignature";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import type { AthleteTrendInsight } from "@/lib/athletesData";
@@ -83,17 +83,6 @@ export function AthleteRing({ score }: { score: number | null }) {
   );
 }
 
-/* Badge "Charge" compact pour la ligne repliée — reprend sigDimInfo("load",...) déjà calculé pour
-   le chart détaillé (AthleteSignatureBlock), juste le libellé de zone ACWR du jour, pas de chiffre
-   0-100 inventé (contrairement au POC dont les scores "Charge 72/91/58" sont des exemples fictifs
-   sans équivalent direct dans notre modèle réel). */
-function loadBadge(signature: AthleteSignature): { label: string; color: string } | null {
-  if (signature.kind !== "ok") return null;
-  const todayAcwr = signature.series[signature.series.length - 1]?.acwr ?? null;
-  if (todayAcwr === null) return null;
-  return sigDimInfo("load", todayAcwr, "coach");
-}
-
 /* Badge "Dernier test" visible même carte repliée (principe POC : scan rapide sans ouvrir la
    carte) — nom du test + tendance ↑/↓/→, couleur dérivée de "amélioration" (tient déjà compte du
    sens de l'unité côté testSummary.ts), pas du sens brut de la valeur. */
@@ -103,8 +92,8 @@ function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
   const color = summary.improved === true ? "#2f9e44" : summary.improved === false ? "#d10000" : "#8a8f94";
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 78 }}>
-      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Dernier test</span>
-      <span style={{ fontSize: 12, fontWeight: 700, color: "#1f2428" }}>
+      <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.45)", marginBottom: 2 }}>Dernier test</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>
         {summary.name}{" "}
         <span style={{ fontFamily: "var(--font-mono), monospace", color, fontWeight: 700 }}>{arrow}{summary.deltaPct !== null ? ` ${summary.deltaPct > 0 ? "+" : ""}${summary.deltaPct}%` : ""}</span>
       </span>
@@ -123,8 +112,8 @@ function TestBadge({ summary }: { summary: LastTestByAthlete[string] }) {
 function TestVerdictBox({ verdict }: { verdict: Verdict | null | undefined }) {
   if (!verdict) return null;
   return (
-    <div style={{ marginTop: 8, padding: "9px 13px", borderRadius: 12, background: "rgba(212,64,0,.045)", border: "1px solid rgba(212,64,0,.12)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
-      <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>🧪 {verdict.title} — </span>{verdict.sub}
+    <div style={{ marginTop: 8, padding: "9px 13px", borderRadius: 12, background: "rgba(212,64,0,.14)", border: "1px solid rgba(212,64,0,.30)", fontSize: 12.5, color: "rgba(255,255,255,.85)", lineHeight: 1.45 }}>
+      <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55", fontWeight: 800 }}>🧪 {verdict.title} — </span>{verdict.sub}
     </div>
   );
 }
@@ -271,14 +260,15 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
          Gildas — "pas besoin de 7j/28j/90j dans le header sur performance, tous les sportifs") : il
          ne pilotait plus rien depuis le retrait du panneau Charge/Récupération déplié ci-dessous. */}
       <CoachPageBg>
+      {/* Sélecteur de sportif au-dessus du header de date — voir CoachClient.tsx pour le pourquoi. */}
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={contentMaxWidth} />
       <CalendarHeader
         mode={selectedAthleteId ? "title" : "day"} title="Performance" contentMaxWidth={contentMaxWidth}
         selectedDate={selectedDate} onDateChange={selectedAthleteId ? undefined : handleDateChange}
         onProfileClick={() => setProfileOpen(true)}
-        seamless theme="light"
+        seamless
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
-      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={contentMaxWidth} />
 
       <div ref={dayScrollRef} className="page-shell">
 
@@ -294,33 +284,21 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 ownerId={userId} subject={{ subjectCoachAthleteId: a.id }} linkedUserId={a.user_id}
                 emptyHint={`Aucun test enregistré pour ${a.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
                 sport={a.sport} sexe={a.sexe ?? null} poidsKg={a.poids_kg ?? null}
+                onDarkPage
               />
             </>
           );
         })() : (
         <>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Coach</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", lineHeight: 1.1 }}>Mes sportifs</div>
-            <div style={{ fontSize: 13, color: "#62686e", marginTop: 4 }}>
-              {athletes.length} sportif{athletes.length !== 1 ? "s" : ""} suivi{athletes.length !== 1 ? "s" : ""}
-            </div>
-          </div>
-          <button
-            data-tour="invite-btn"
-            onClick={() => setShowInvite(true)}
-            style={{ height: 40, paddingLeft: 18, paddingRight: 18, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", flexShrink: 0, marginTop: 4 }}
-          >
-            + Inviter
-          </button>
-        </div>
-
+        {/* En-tête "Coach / Mes sportifs / N sportifs suivis / + Inviter" retiré (2026-09-26,
+           retour de Gildas) — redondant avec le titre "Performance" déjà posé par CalendarHeader
+           et avec le compte déjà lisible en un coup d'œil sur la liste elle-même. Le bouton
+           "+ Inviter" survit, déplacé en bas de liste (même convention que CoachClient.tsx). */}
         {athletes.length === 0 ? (
-          <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, textAlign: "center", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
+          <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: 28, textAlign: "center", boxShadow: "0 10px 26px rgba(0,0,0,.22)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🏅</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", marginBottom: 8 }}>Aucun sportif encore</div>
-            <div style={{ fontSize: 14, color: "#8a8f94", lineHeight: 1.5, marginBottom: 20 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 8 }}>Aucun sportif encore</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", lineHeight: 1.5, marginBottom: 20 }}>
               Invite un sportif pour commencer à suivre sa récupération et ses séances.
             </div>
             <button
@@ -336,12 +314,23 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
             {athletes.map(a => {
               const isPending = !a.user_id && !!a.invite_email;
               const recovery = todayRecovery(a, signatures[a.id] ?? { kind: "manual" });
+              // Liseré gauche — même grille que TeamAnalyticsList (HomeAnalyticsSections.tsx), mais
+              // piloté par le dernier TEST (pas charge/récupération, 2026-09-26, retour de Gildas) :
+              // vert/rouge si le dernier test s'est amélioré/dégradé, gris neutre sinon (y compris
+              // aucun test loggué).
+              const test = lastTests[a.id];
+              const testColor = test?.improved === true ? "#2f9e44" : test?.improved === false ? "#d10000" : "#8a8f94";
+              // Même surface que CoachCard (2026-09-26, "la même couleur que les coachcontrol
+              // cards, pas blanche") — voile blanc translucide sur le fond sombre de la page. Seul
+              // le liseré gauche (test / en attente) et la teinte de bordure distinguent encore les
+              // états.
               return (
               <div key={a.id} style={{
-                background: a.user_id ? "#fff" : isPending ? "rgba(255,245,230,.85)" : "rgba(255,255,255,.72)",
-                border: a.user_id ? "1px solid rgba(47,158,68,.20)" : isPending ? "1px solid rgba(242,138,0,.25)" : "1px solid rgba(34,54,38,.12)",
-                borderRadius: 26, padding: 18,
-                boxShadow: a.user_id ? "0 8px 24px rgba(47,158,68,.07)" : "0 12px 32px rgba(32,59,43,.08)",
+                background: isPending ? "rgba(242,138,0,.10)" : "rgba(255,255,255,.055)",
+                border: isPending ? "1px solid rgba(242,138,0,.28)" : "1px solid rgba(255,255,255,.10)",
+                borderLeft: `3px solid ${isPending ? "#f28a00" : testColor}`,
+                borderRadius: 16, padding: 18,
+                boxShadow: "0 10px 26px rgba(0,0,0,.22)",
               }}>
                 <div
                   onClick={isPending ? undefined : () => selectAthleteFilter(a.id)}
@@ -351,11 +340,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   <div style={{ flex: 1, minWidth: 140 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       {isPending ? (
-                        <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428" }}>{a.name}</div>
+                        <div style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#fff" }}>{a.name}</div>
                       ) : (
                         <button
                           onClick={e => { e.stopPropagation(); router.push(sandboxMode ? "/sandbox/coach/planning" : `/coach/planning?athlete=${a.id}`); }}
-                          style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#1f2428", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(31,36,40,.18)", textUnderlineOffset: 3 }}
+                          style={{ fontSize: 16, fontWeight: 950, lineHeight: 1.1, color: "#fff", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(255,255,255,.28)", textUnderlineOffset: 3 }}
                         >
                           {a.name}<span className="tour-lock">🔒</span>
                         </button>
@@ -367,50 +356,33 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                         <div style={{ fontFamily: "var(--font-mono), monospace", padding: "2px 7px", borderRadius: 999, background: "rgba(242,138,0,.12)", color: "#f28a00", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em" }}>EN ATTENTE</div>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: "#6f7478", marginTop: 3 }}>
-                      {isPending ? <span style={{ color: "#f28a00" }}>{a.invite_email}</span> : a.sport}
-                    </div>
+                    {isPending && (
+                      <div style={{ fontSize: 11, color: "#f28a00", marginTop: 3 }}>{a.invite_email}</div>
+                    )}
                   </div>
-                  {isMd && !isPending && (() => {
-                    const badge = loadBadge(signatures[a.id] ?? { kind: "manual" });
-                    const test = lastTests[a.id];
-                    const status = athleteStatus(recovery, trends[a.id]);
-                    return (
-                      <div style={{ display: "flex", gap: 40, flexShrink: 0 }}>
-                        {badge && (
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Charge</span>
-                            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: badge.color, whiteSpace: "nowrap" }}>{badge.label}</span>
-                          </div>
-                        )}
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 72 }}>
-                          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 2 }}>Récupération</span>
-                          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: status.color, whiteSpace: "nowrap" }}>{status.label}</span>
-                        </div>
-                        <TestBadge summary={test} />
-                      </div>
-                    );
-                  })()}
+                  {isMd && !isPending && (
+                    <TestBadge summary={test} />
+                  )}
                   {!isPending && (
-                    <span style={{ color: "#8a8f94", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
+                    <span style={{ color: "rgba(255,255,255,.45)", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
                   )}
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     <button
                       onClick={e => { e.stopPropagation(); setMenuOpenId(prev => (prev === a.id ? null : a.id)); }}
                       aria-label="Options"
-                      style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid rgba(0,0,0,.08)", background: "#fff", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "#8a8f94", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}
                     >
                       ⋯
                     </button>
                     {menuOpenId === a.id && (
                       <>
                         <div onClick={e => { e.stopPropagation(); setMenuOpenId(null); }} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
-                        <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 40, right: 0, background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12, boxShadow: "0 10px 28px rgba(0,0,0,.16)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
+                        <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 40, right: 0, background: "#1c1c1e", border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.5)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
                           <button
                             data-tour="supprimer-btn"
                             onClick={() => { setMenuOpenId(null); handleDelete(a); }}
                             disabled={deleting === a.id}
-                            style={{ width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#c81e1e", opacity: deleting === a.id ? 0.5 : 1 }}
+                            style={{ width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#ff6b6b", opacity: deleting === a.id ? 0.5 : 1 }}
                           >
                             {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
                           </button>
@@ -420,22 +392,27 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   </div>
                 </div>
 
-                {!isPending && (() => {
-                  const insight = trendInsights[a.id];
-                  return (
-                    <>
-                      {insight && (
-                        <div style={{ marginTop: 4, padding: "9px 13px", borderRadius: 12, background: "rgba(0,0,0,.035)", fontSize: 12.5, color: "#3a3f43", lineHeight: 1.45 }}>
-                          {insight.emoji} <span style={{ fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#d44000", fontWeight: 800 }}>{insight.action} — </span>{insight.text}
-                        </div>
-                      )}
-                      <TestVerdictBox verdict={testVerdicts[a.id]} />
-                    </>
-                  );
-                })()}
+                {/* Insight = uniquement celui des TESTS (verdict forces/faiblesses), jamais l'insight
+                   croisé charge/récupération (2026-09-26, retour de Gildas — "ne mettre que
+                   l'insight qui vient des tests... pas l'autre sur l'insight croisé charge/recup") :
+                   cette page ("Performance") ne montre plus que le suivi de tests, l'insight doit
+                   parler de ça, pas de charge/récup qui vivent désormais sur /today. */}
+                {!isPending && <TestVerdictBox verdict={testVerdicts[a.id]} />}
               </div>
               );
             })}
+          </div>
+        )}
+
+        {athletes.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <button
+              data-tour="invite-btn"
+              onClick={() => setShowInvite(true)}
+              style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
+            >
+              + Inviter des sportifs
+            </button>
           </div>
         )}
         </>

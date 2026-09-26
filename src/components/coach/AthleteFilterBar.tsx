@@ -52,15 +52,17 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
      plus facile de passer de l'un à l'autre") — remplace l'ancien mode "breadcrumb" (qui masquait
      la liste dès qu'un sportif était sélectionné, un "← Équipe" fallait recliquer pour en changer).
      Un seul mode de rendu désormais : la puce active (Équipe ou un sportif) est stylée en dégradé
-     orange plein, les autres restent en contour clair.
-     Fond BLANC (2026-09-24, suite — retour de Gildas) : remplace le fond quasi-noir d'origine,
-     pensé avant que cette barre ne devienne la référence "sélecteur commun à tous les onglets" —
-     les couleurs de puce ci-dessous sont recalibrées en conséquence (contour clair au lieu de
-     translucide-blanc, qui disparaissait sur un fond clair). */
+     orange plein, les autres restent en contour translucide.
+     Fond SOMBRE translucide (2026-09-26) : les 3 pages coach sont passées sur DARK_CARD_BG (même
+     fond cyan que le sportif, voir CoachPageBg.tsx) — un fond blanc y coupait la page en deux. Le
+     translucide laisse le dégradé de la page transparaître sous la barre sticky plutôt que d'en
+     empiler un second. Puces recalibrées en conséquence (contour blanc translucide au lieu du
+     contour noir, invisible sur fond sombre). */
   return (
     <div style={{
       position: "sticky", top: 0, zIndex: 40,
-      background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)",
+      background: "rgba(10,14,18,.72)", backdropFilter: "blur(12px)",
+      borderBottom: "1px solid rgba(255,255,255,.08)",
       padding: "12px 16px",
     }}>
       <div style={{
@@ -72,9 +74,9 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
           style={{
             flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap",
             padding: "8px 15px", borderRadius: 999, fontSize: 13, fontWeight: 700,
-            background: selectedId === null ? "linear-gradient(180deg,#f04a08,#d44000)" : "#f7f8f9",
-            color: selectedId === null ? "#fff" : "#171b1f",
-            border: selectedId === null ? "1.5px solid transparent" : "1.5px solid rgba(0,0,0,.08)",
+            background: selectedId === null ? "linear-gradient(180deg,#f04a08,#d44000)" : "rgba(255,255,255,.07)",
+            color: selectedId === null ? "#fff" : "rgba(255,255,255,.88)",
+            border: selectedId === null ? "1.5px solid transparent" : "1.5px solid rgba(255,255,255,.12)",
             boxShadow: selectedId === null ? "0 4px 12px rgba(212,64,0,.22)" : "none",
           }}
         >
@@ -90,9 +92,9 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", gap: 7, cursor: "pointer", whiteSpace: "nowrap",
                 padding: "7px 14px 7px 7px", borderRadius: 999, fontSize: 13, fontWeight: active ? 800 : 600,
-                border: active ? "1.5px solid transparent" : "1.5px solid rgba(0,0,0,.08)",
-                background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "#f7f8f9",
-                color: active ? "#fff" : "#171b1f",
+                border: active ? "1.5px solid transparent" : "1.5px solid rgba(255,255,255,.12)",
+                background: active ? "linear-gradient(180deg,#f04a08,#d44000)" : "rgba(255,255,255,.07)",
+                color: active ? "#fff" : "rgba(255,255,255,.88)",
                 boxShadow: active ? "0 4px 12px rgba(212,64,0,.22)" : "none",
               }}
             >
@@ -106,7 +108,7 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
               </span>
               {a.name.split(" ")[0]}
               {score !== null && (
-                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 5, background: active ? "rgba(255,255,255,.20)" : "rgba(0,0,0,.05)", color: active ? "#fff" : scoreColor(score) }}>
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 5, background: active ? "rgba(255,255,255,.20)" : "rgba(255,255,255,.10)", color: active ? "#fff" : scoreColor(score) }}>
                   {score}
                 </span>
               )}

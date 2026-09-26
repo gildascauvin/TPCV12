@@ -11,7 +11,6 @@ import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
 import type { AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
-import { DARK_CARD_BG } from "@/lib/theme";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
   type WellnessBaselineResult, type Perspective as BaselinePerspective,
@@ -262,11 +261,17 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      maintenant" suffisent déjà à signaler l'attention requise, pas besoin d'un 2e repère visuel). */
   const badgeColor = decisionCardColor(decision.icon);
 
+  /* Surface translucide "élevée" plutôt que DARK_CARD_BG (2026-09-26) : la page coach porte
+     désormais elle-même DARK_CARD_BG (CoachPageBg.tsx, demande de Gildas "le même BG que le
+     sportif avec le cyan") — répéter le même dégradé sur la carte la ferait disparaître dans le
+     fond, avec en prime un décalage de dégradé visible (chaque boîte recalcule son propre radial à
+     sa taille). Un voile blanc translucide la fait au contraire lire comme un panneau posé
+     au-dessus, quel que soit le fond sombre derrière (dashboard coach ET aperçus onboarding). */
   return (
     <div data-tour={tourId} style={{
       position: "relative", overflow: "hidden",
-      background: DARK_CARD_BG,
-      border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.08)",
+      background: "rgba(255,255,255,.055)",
+      border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
       borderRadius: 26, padding: 18,
       boxShadow: "0 14px 36px rgba(0,0,0,.28)",
       transition: "border 0.3s ease, box-shadow 0.3s ease",
