@@ -90,10 +90,18 @@ export function attention(a: CoachAthlete, maxDiff: number, trend?: TrendCode | 
   if (trend && TREND_ALERT.has(trend)) return true; // charge en accumulation ou fatigue persistante : alerte même si le snapshot du jour semble OK
   if ((monotonyVal ?? 0) >= 2 || (strainVal ?? 0) >= 6000) return true;
   if (a.wellnessFilledToday === false) return maxDiff >= 8; // pas de wellness du jour : seule une séance dure prévue justifie une alerte
-  if (baseline?.hasEnoughHistory) return isLowZ(baseline) || (isMildLowZ(baseline) && maxDiff >= 5) || maxDiff >= 8;
-  return a.wellness_score < 55 ||
-    (a.wellness_score < 65 && maxDiff >= 5) ||
-    maxDiff >= 8;
+  /* Une séance dure ne suffit PLUS à elle seule (2026-09-27, retour de Gildas — "pourquoi un sportif
+     57 Équilibré, RPE prévu 9 est dans 'à décider' sans action à faire ?"). L'ancien `|| maxDiff >= 8`
+     inconditionnel était cohérent avec l'ancien modèle de reco (qui comparait la forme à la difficulté
+     prévue, donc une séance dure produisait presque toujours un Alléger) ; depuis que la reco se
+     calcule sur l'écart à la norme personnelle, un sportif à sa norme n'a AUCUNE action à faire sur
+     une séance dure — la séance est dure parce que le bloc le veut. Le classer "à décider" laissait
+     donc une carte sans geste possible. Les seuils retenus ici sont exactement ceux qui produisent une
+     suggestion dans computeAutoregSuggestion (Z_SWC côté relatif, bande neutre 60-80 côté absolu),
+     pour que les deux ne puissent plus diverger. Le côté SURCHARGE est couvert séparément par
+     hasSurchargeSuggestion() dans CoachClient.tsx. */
+  if (baseline?.hasEnoughHistory) return isMildLowZ(baseline);
+  return a.wellness_score < 60;
 }
 
 export function riskScore(a: CoachAthlete, maxDiff: number, trend?: TrendCode | null, baseline?: WellnessBaselineResult | null, monotonyVal?: number | null, strainVal?: number | null): number {
