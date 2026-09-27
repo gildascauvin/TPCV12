@@ -250,12 +250,22 @@ export interface CoachFixture {
 
 // Même principe que wellnessScoreFor (profil sportif) mais paramétré par le score "aujourd'hui" de
 // chaque sportif — oscillation déterministe convergeant vers ce score, jamais de Math.random.
+/* Amplitude/centre recalibrés le 2026-09-27 (9 -> 24 d'amplitude, centre 75 -> 72) : depuis que la
+   reco d'autorégulation se calcule sur l'écart à la norme personnelle (Z-score, voir
+   computeAutoregSuggestion), la VARIANCE de cet historique synthétique détermine directement la
+   largeur des paliers sur toutes les surfaces démo. Avec l'ancienne amplitude de 9 (écart-type ~6,5
+   points de score), le z explosait : le slider 0-100 du simulateur /p/[id] ne laissait qu'environ 3
+   points de "rien à ajuster" entre "alléger -2" et "surcharger +2", et un sportif démo à 55 affichait
+   un score relatif de 5/100. Centre aligné sur la valeur par défaut du slider (72) pour que le
+   simulateur démarre en "Équilibré" — c'est-à-dire sur "le plan tient", avant que l'utilisateur ne
+   drague pour voir l'effet. Ne touche QUE de la donnée synthétique (sandbox, simulateurs, aperçus
+   paywall, sportifs démo d'un coach) — aucun vrai sportif ne passe par ici. */
 export function coachWellnessScoreFor(offset: number, todayScore: number): number {
   if (offset === 0) return todayScore;
-  if (offset === -1) return Math.round((todayScore + 70) / 2);
+  if (offset === -1) return Math.round((todayScore + 72) / 2);
   if (offset === -2) return Math.round((todayScore + 75) / 2);
-  const wave = Math.round(75 + 9 * Math.sin(offset / 2.3));
-  return Math.min(92, Math.max(30, wave));
+  const wave = Math.round(72 + 24 * Math.sin(offset / 2.3));
+  return Math.min(96, Math.max(24, wave));
 }
 
 /* Construit un historique wellness synthétique convergeant vers `todayScore` — même fonction

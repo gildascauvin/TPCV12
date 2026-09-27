@@ -1189,7 +1189,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      déclenchement quel que soit le score entré. Repli neutre (7) si le wellness du jour est inconnu
      (WellnessModal skippée via "Annuler") — la séance existe quand même, juste sans garantie de
      mismatch ; ce gap-là (aha qui dépend aussi du wellness, pas seulement de la séance) reste
-     assumé, distinct de ce que ce chantier corrige. */
+     assumé, distinct de ce que ce chantier corrige.
+     MAJ 2026-09-27 : depuis que la reco se calcule sur l'écart à la norme personnelle et non plus
+     sur la difficulté prévue (voir computeAutoregSuggestion), cette boucle ne peut plus "trouver"
+     une difficulté qui déclenche quand le sportif est pile à sa norme ("Équilibré") — aucune ne
+     déclenche, par construction, et c'est voulu. Elle reste utile pour le seul cas où la difficulté
+     compte encore : une séance ≤3/10 ne se surcharge jamais (garde-fou périodisation), donc 9 est
+     le bon candidat pour un sportif frais. Conséquence assumée : un tout nouveau compte qui répond
+     neutralement au check-in n'aura pas de geste d'autorégulation à faire ce jour-là. */
   async function ensureTodayDemoSession(uid: string) {
     const todayIso = new Date().toISOString().split("T")[0];
     const { data: existing } = await supabase.from("sessions").select("id").eq("user_id", uid).eq("date", todayIso).limit(1);

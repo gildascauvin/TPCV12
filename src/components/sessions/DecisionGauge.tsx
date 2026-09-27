@@ -17,7 +17,7 @@ function leftToDiff(l: number) { return clampDiff(MIN + (l / 100) * (MAX - MIN))
 const FILL_GRADIENT = "linear-gradient(to right,#4ade80 0%,#a3e635 22%,#eab308 45%,#f97316 70%,#ef4444 100%)";
 
 export default function DecisionGauge({
-  zoneLow, zoneHigh, dir, value, onChange, light,
+  zoneLow, zoneHigh, dir, value, onChange, light, readOnly, plannedMarker, hint: hintOverride,
 }: {
   // Les 2 entiers (ou 1 si identiques) qui bornent la zone conseillée — voir zoneRange() ci-dessus,
   // calculée par l'appelant (AutoregButtons.tsx) à partir de la cible brute.
@@ -27,6 +27,17 @@ export default function DecisionGauge({
   value: number;
   onChange: (newDifficulty: number) => void;
   light?: boolean;
+  /* Mode "décidé" (2026-09-27) : la jauge reste AFFICHÉE après validation, pour qu'on voie la
+     nouvelle difficulté (avant, elle disparaissait au profit d'un simple bandeau ✓ — la carte
+     séance se retrouvait donc sans aucune jauge de difficulté, puisque celle-ci a remplacé
+     DiffGauge le 2026-09-24). Non draguable dans ce cas : la décision est prise, on la relit. */
+  readOnly?: boolean;
+  /* Repère "prévu" — la difficulté d'ORIGINE du plan, quand elle diffère de la valeur affichée
+     (donc uniquement en mode décidé après une application réelle). Vient de
+     `AutoregDecision.original.target_difficulty`, déjà stockée pour le mécanisme de retour arrière :
+     aucune nouvelle donnée à faire circuler. */
+  plannedMarker?: number | null;
+  hint?: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -47,12 +58,13 @@ export default function DecisionGauge({
   }
 
   function handlePointerDown(e: React.PointerEvent) {
+    if (readOnly) return;
     trackRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
     onChange(diffFromClientX(e.clientX));
   }
   function handlePointerMove(e: React.PointerEvent) {
-    if (!dragging) return;
+    if (readOnly || !dragging) return;
     onChange(diffFromClientX(e.clientX));
   }
   function endDrag() { setDragging(false); }
@@ -67,11 +79,13 @@ export default function DecisionGauge({
   const zoneWidth = diffToLeft(Math.min(MAX, bandHigh)) - zoneLeft;
   const dim = (o: number) => (light ? `rgba(0,0,0,${o})` : `rgba(255,255,255,${o})`);
 
-  const hint = inZone
+  const hint = hintOverride ?? (inZone
     ? "Dans la zone recommandée"
     : roundedValue < zoneLow
       ? "Sous la difficulté cible"
-      : "Au dessus de la difficulté cible";
+      : "Au dessus de la difficulté cible");
+  const markerLeft = plannedMarker != null && Math.round(plannedMarker) !== roundedValue
+    ? diffToLeft(clampDiff(plannedMarker)) : null;
 
   return (
     <div>
@@ -94,10 +108,20 @@ export default function DecisionGauge({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         style={{
-          position: "relative", height: 10, borderRadius: 5, cursor: "pointer", touchAction: "none",
+          position: "relative", height: 10, borderRadius: 5, cursor: readOnly ? "default" : "pointer", touchAction: "none",
           background: "#e7e4df",
         }}
       >
+        {/* Repère de la difficulté PRÉVUE (mode décidé) — un simple trait, jamais un 2e curseur :
+            il n'y a rien à y ramener directement, le retour arrière se fait par le bouton dédié. */}
+        {markerLeft !== null && (
+          <div style={{ position: "absolute", top: "50%", left: `${markerLeft}%`, transform: "translate(-50%,-50%)", zIndex: 2, pointerEvents: "none" }}>
+            <div style={{ width: 2, height: 16, borderRadius: 1, background: dim(0.32) }} />
+            <div style={{ position: "absolute", top: 11, left: "50%", transform: "translateX(-50%)", fontFamily: "var(--font-mono), monospace", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.04em", color: dim(0.4), whiteSpace: "nowrap" }}>
+              prévu
+            </div>
+          </div>
+        )}
         <div style={{
           position: "absolute", top: 0, left: 0, height: "100%",
           width: `${cursorLeft}%`, overflow: "hidden", borderRadius: 5, zIndex: 1,

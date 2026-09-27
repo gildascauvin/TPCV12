@@ -357,16 +357,21 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     return computeAutoregSuggestion(wellness, topSession.target_difficulty, baselines[a.id])?.dir === "high";
   }
 
-  const priority = athletes.filter(a => {
+  /* Une décision PRISE sort de "À décider maintenant" (2026-09-27, demande de Gildas — "que les
+     décisions une fois faites partent dans 'plan cohérent'"). `reviewedIds` est indispensable ici :
+     appliquer un ajustement résout souvent le signal de SURCHARGE tout seul (hasSurchargeSuggestion
+     recalcule depuis la nouvelle target_difficulty), mais jamais celui d'attention() — piloté par la
+     récupération/la tendance/la monotonie, que l'ajustement de la séance ne change pas. Et
+     "Maintenir" n'écrit rien du tout, donc ne change aucun signal. Sans cette règle, une carte
+     traitée resterait indéfiniment dans la section des décisions à prendre. Annuler la décision
+     (unmarkAutoregDecided) la fait donc revenir automatiquement. */
+  const needsDecision = (a: CoachAthlete) => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
     const { monotonyVal, strainVal } = msFor(a.id);
     return hasSessions && (attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasSurchargeSuggestion(a));
-  });
-  const stable = athletes.filter(a => {
-    const hasSessions = sessions.some(s => s.athlete_id === a.id);
-    const { monotonyVal, strainVal } = msFor(a.id);
-    return !hasSessions || !(attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasSurchargeSuggestion(a));
-  });
+  };
+  const priority = athletes.filter(a => needsDecision(a) && !reviewedIds.has(a.id));
+  const stable = athletes.filter(a => !needsDecision(a) || reviewedIds.has(a.id));
   const sortedPriority = [...priority].sort((a, b) => {
     const msA = msFor(a.id), msB = msFor(b.id);
     return riskScore(b, maxDiffToday(b.id, sessions), trends[b.id], baselines[b.id], msB.monotonyVal, msB.strainVal)
@@ -386,7 +391,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // quand une sélection est active, sans changer où il apparaît (priorité vs plan cohérent reste
   // déterminé par attention(), pas par le filtre). Combiné au filtre métrique ci-dessus.
   const displayedPriority = (selectedAthleteId ? sortedPriority.filter(a => a.id === selectedAthleteId) : sortedPriority).filter(metricOk);
-  const displayedStable = (selectedAthleteId ? stable.filter(a => a.id === selectedAthleteId) : stable).filter(metricOk);
+  /* Les sportifs qu'on vient de traiter en TÊTE de "Plan cohérent" — sans ça, la carte quitte un
+     carrousel horizontal pour atterrir en bas d'une grille, et donne l'impression d'avoir disparu. */
+  const sortedStable = [...stable].sort((a, b) => Number(reviewedIds.has(b.id)) - Number(reviewedIds.has(a.id)));
+  const displayedStable = (selectedAthleteId ? sortedStable.filter(a => a.id === selectedAthleteId) : sortedStable).filter(metricOk);
 
   function getTopSession(athleteId: string): CoachViewSession | null {
     return sessions
@@ -459,7 +467,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     setReviewSession(null);
   }
 
-  const reviewedPriorityCount = sortedPriority.filter(a => reviewedIds.has(a.id)).length;
+  // Nombre de décisions réellement prises aujourd'hui — sert au wording de l'état vide ci-dessous
+  // (distinguer "rien à décider" de "tu as tout traité").
+  const decidedTodayCount = athletes.filter(a => reviewedIds.has(a.id)).length;
 
   // Rings + points de séance dans le calendrier popup (2026-09-24) — réservés au contexte "un seul
   // sportif" (Gildas : "quand on est... filtré sur un [athlète]"), jamais sur "Tous" (pas de score
@@ -716,11 +726,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 <div>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>À décider maintenant</div>
                 </div>
-                {sortedPriority.length > 0 && reviewedPriorityCount > 0 && reviewedPriorityCount < sortedPriority.length && (
-                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0 }}>
-                    {reviewedPriorityCount}/{sortedPriority.length} traités
-                  </div>
-                )}
+                {/* Compteur "N/M traités" retiré (2026-09-27) : structurellement toujours nul
+                   maintenant qu'un sportif traité quitte cette section. */}
               </div>
               {/* Carrousel horizontal — TOUJOURS, y compris sur desktop (2026-09-24, retour explicite
                  de Gildas, "le carrousel coach control doit aussi être présent en desktop", fidèle au
@@ -731,8 +738,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 <div style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x mandatory", margin: "0 -16px", padding: "0 16px 4px", scrollbarWidth: "none" as const }}>
                   {displayedPriority.map((a, idx) => (
                     <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
+                      {/* isReviewed toujours false ici : un sportif traité a quitté cette section. */}
                       <CoachCard athlete={a} sessions={sessions} isPriority={true}
-                        isReviewed={reviewedIds.has(a.id)}
+                        isReviewed={false}
                         tourId={idx === 0 ? "coach-card-alert" : undefined}
                         trend={trends[a.id]}
                         trendInput={trendInputs[a.id]}
@@ -750,7 +758,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 </div>
               ) : (
                 <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)" }}>
-                  {selectedAthleteId ? "Rien à décider pour ce sportif." : "Aucune décision urgente. L'équipe peut suivre le plan."}
+                  {selectedAthleteId
+                    ? "Rien à décider pour ce sportif."
+                    : decidedTodayCount > 0
+                      ? "✓ Toutes les décisions du jour sont prises."
+                      : "Aucune décision urgente. L'équipe peut suivre le plan."}
                 </div>
               )}
             </div>

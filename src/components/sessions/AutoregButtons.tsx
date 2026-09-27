@@ -106,6 +106,11 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   // dehors de la plage conseillée... le clic sur le CTA mets le curseur dans le range conseillé".
   const [selectedPct, setSelectedPct] = useState(0);
   const [decidedPct, setDecidedPct] = useState<number | null>(null);
+  /* Difficulté PRÉVUE d'origine, relue de la décision stockée — sert de repère "prévu" sur la jauge
+     en mode décidé. Nécessaire parce que `plannedDifficulty` (prop) vaut alors la NOUVELLE difficulté
+     (le parent a déjà rafraîchi la séance depuis la base), donc le plan d'origine n'est plus lisible
+     nulle part ailleurs. */
+  const [decidedPlannedDiff, setDecidedPlannedDiff] = useState<number | null>(null);
   const [applying, setApplying] = useState(false);
   const [undoing, setUndoing] = useState(false);
 
@@ -114,7 +119,14 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     if (decision) {
       setMode("decided");
       setDecidedPct(decision.pct);
-      if (decision.pct !== null) onPreviewChange?.(decision.pct);
+      setDecidedPlannedDiff(decision.original?.target_difficulty ?? null);
+      /* JAMAIS de preview en mode décidé (2026-09-27, retour de Gildas — "le barré c'est avant de
+         valider") : l'écriture a déjà eu lieu, le parent affiche donc les valeurs persistées. Avant,
+         `onPreviewChange(decision.pct)` réappliquait l'ajustement PAR-DESSUS des notes déjà
+         ajustées — l'ajustement était donc appliqué deux fois à l'affichage (@150kg -> DB @120kg ->
+         affiché "@120kg barré -> @96kg"), et ça survivait au rechargement puisque cet effet relit la
+         décision au montage. */
+      onPreviewChange?.(null);
       return;
     }
     // Rien à prévisualiser au montage — le curseur est sur la difficulté d'origine (0%), donc
@@ -167,6 +179,10 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     setAutoregDecision(sessionId, cursorDir, null);
     setMode("decided");
     setDecidedPct(null);
+    setDecidedPlannedDiff(null);
+    // Rien n'a été écrit, mais l'utilisateur a peut-être dragué avant de cliquer : le barré doit
+    // disparaître quand même (il n'a plus rien à représenter).
+    onPreviewChange?.(null);
     onMaintenir?.();
   }
 
@@ -187,16 +203,34 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
       onPreviewChange?.(conservativePct);
     }
     setApplying(true);
-    const original = await onApply(pctToApply);
+    /* Décision écrite en localStorage AVANT l'await (2026-09-27) — prérequis du passage en "Plan
+       cohérent" côté coach : `onApply` déclenche, en son sein, un state du parent qui peut faire
+       CHANGER LA CARTE DE SECTION (carrousel "À décider" -> grille "Plan cohérent"), donc remonter
+       ce composant. La nouvelle instance lit la décision au montage ; si elle n'était écrite qu'au
+       retour de l'await (ancien code), elle lisait un localStorage encore vide et repartait en mode
+       actif, comme si rien n'avait été fait. `original` est patché juste après : `undo()` relit
+       toujours la décision au moment du clic, il n'en a pas besoin plus tôt. */
+    setAutoregDecision(sessionId, cursorDir, pctToApply);
+    let original: AutoregOriginal | void;
+    try {
+      original = await onApply(pctToApply);
+    } catch {
+      // Écriture réellement échouée : ne jamais laisser une décision "traitée" derrière soi.
+      clearAutoregDecision(sessionId);
+      setApplying(false);
+      return;
+    }
     setApplying(false);
     // isActive === false : le compte n'est pas actif, onApply n'a fait que déclencher le
     // paywall/signup (rien d'écrit) — ne jamais marquer "traité" dans ce cas (voir commentaire du
-    // prop isActive plus haut). Les chips restent ouvertes, prêtes à réessayer après connexion.
-    if (isActive === false) return;
+    // prop isActive plus haut). La jauge reste ouverte, prête à réessayer après connexion.
+    if (isActive === false) { clearAutoregDecision(sessionId); return; }
     setAutoregDecision(sessionId, cursorDir, pctToApply, original ?? undefined);
     setMode("decided");
     setDecidedPct(pctToApply);
-    onPreviewChange?.(pctToApply);
+    setDecidedPlannedDiff(original?.target_difficulty ?? null);
+    // Plus de barré une fois validé — voir le commentaire de l'effet de montage ci-dessus.
+    onPreviewChange?.(null);
   }
 
   async function undo() {
@@ -207,8 +241,25 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     clearAutoregDecision(sessionId);
     setMode("active");
     setSelectedPct(0);
+    setDecidedPlannedDiff(null);
     onPreviewChange?.(null);
   }
+
+  /* Bandeau de confirmation + retour arrière — rendu SOUS la jauge en mode décidé. Libellé
+     "↩ Séance prévue" plutôt que "Annuler" (2026-09-27) : "annuler" était ambigu maintenant que la
+     jauge reste affichée (annuler quoi — la décision, la saisie ?), alors que l'action est très
+     précisément un retour à la séance telle qu'elle était planifiée. */
+  const decidedStrip = (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
+      <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
+      <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
+        {decidedPct !== null ? `${formatAutoregPoints(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
+      </div>
+      <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0, whiteSpace: "nowrap" }}>
+        {undoing ? "..." : "↩ Séance prévue"}
+      </button>
+    </div>
+  );
 
   return (
     <div>
@@ -264,17 +315,33 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
         </div>
       )}
 
-      {mode === "decided" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
-          <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
-          <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
-            {decidedPct !== null ? `${formatAutoregPoints(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
+      {mode === "decided" && (() => {
+        /* La jauge reste affichée (2026-09-27, retour de Gildas — "quand on a appliqué une reco, je
+           dois voir la jauge du nouveau RPE et les nouvelles charges") : `plannedDifficulty` vaut ici
+           la NOUVELLE difficulté (le parent a rafraîchi la séance depuis la base), donc le curseur
+           est déjà au bon endroit. Zone réduite à cette valeur pour qu'elle se lise comme atteinte
+           (curseur vert), repère "prévu" sur le plan d'origine, et non draguable — la décision est
+           prise, on la relit ; pour la refaire il y a le retour arrière juste en dessous. */
+        const appliedDiff = Math.round(plannedDifficulty);
+        return (
+          <div>
+            <div style={{ marginBottom: 10 }}>
+              <DecisionGauge
+                dir={dir ?? "low"}
+                light={light}
+                zoneLow={appliedDiff}
+                zoneHigh={appliedDiff}
+                value={plannedDifficulty}
+                plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
+                readOnly
+                hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
+                onChange={() => {}}
+              />
+            </div>
+            {decidedStrip}
           </div>
-          <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0 }}>
-            {undoing ? "..." : "Annuler"}
-          </button>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

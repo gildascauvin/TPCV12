@@ -399,8 +399,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
               {/* Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
                  pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre. */}
+              {/* Plus de remount forcé sur `isReviewed` (2026-09-27) : ce `key` existait pour
+                 réinitialiser la jauge quand le coach cliquait "Revoir", un cas qui disparaît
+                 maintenant qu'une carte décidée quitte la section "À décider maintenant". Il
+                 provoquait surtout un bug documenté (l'encart revenait à l'état idle au lieu
+                 d'afficher "✓ appliqué") : le remount intervenait AVANT l'écriture en localStorage.
+                 Cette écriture est désormais faite avant l'await (voir AutoregButtons.apply), donc
+                 un remount — inévitable de toute façon quand la carte change de section — est
+                 maintenant sans conséquence. */}
               <AutoregButtons
-                key={`${topSession.id}-${isReviewed}`}
                 sessionId={topSession.id}
                 dir={decision.suggestion?.dir}
                 reco={decision.suggestion?.reco}
