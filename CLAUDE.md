@@ -3907,3 +3907,224 @@ existant (`RecuperationSection`) sont vides pour eux, tous les deux. Une limite 
 rendu.
 
 Déployé en prod le 2026-09-26, commit `915b8c5`, push direct sur `main`.
+
+## Invitation déplacée dans le "+" de la nav, onglet "Accueil", sélecteur "Groupe" sans scores (2026-09-26, suite)
+
+4 demandes groupées de Gildas, dans la foulée du chantier fond sombre coach.
+
+- **`BottomNav.tsx`** : le bottom sheet du "+" central gagne une 3e option **côté coach uniquement**,
+  "👥 Inviter un sportif" → `/coach/athletes?quickadd=invite`. `AthletesClient.tsx` gagne l'effet qui
+  lit ce param au montage, ouvre `InviteModal` et nettoie l'URL — même mécanisme (et mêmes deps
+  `[searchParams]`, pas `[]`, pour la raison déjà documentée : cliquer le "+" depuis la page déjà
+  montée ne la remonte pas) que `?quickadd=session|program` sur `/week`/`/coach/planning`. Le
+  commentaire de `quickAddOptions()` disait exactement l'inverse depuis 2026-08-31 ("jamais 'Ajouter
+  un sportif' ici, volontairement") — réécrit.
+- **CTA d'invitation retirés** : le bouton pleine largeur en bas de `/coach` et de `/coach/athletes`,
+  plus la carte "+ Inviter →" qui occupait la 6e colonne de la grille de filtres métriques de
+  `/coach` (grille repassée à `repeat(DIMENSION_KEYS.length, 1fr)`). L'`InviteModal` de
+  `CoachClient.tsx` devenait injoignable → supprimé avec son state, son import et la référence dans
+  le garde-fou de `useHorizontalScrollNav`. **Gardés volontairement** : le formulaire d'invitation de
+  l'état vide (0 sportif — c'est la seule action possible de l'écran, pas un CTA redondant) et le
+  bandeau d'activation J0.
+- **"Aujourd'hui" → "Accueil"** dans les 2 bottom navs (sportif + coach) : cet onglet ne porte plus
+  que la journée depuis que Charge/Récupération/Comportements y ont été ajoutés en onglets
+  (chantier "point 1", 2026-09-24).
+- **"👥 Équipe" → "👥 Groupe"** dans `AthleteFilterBar`.
+- **Scores de forme retirés des puces du sélecteur** : c'est un sélecteur de profil, pas un tableau de
+  bord — le score du sportif sélectionné est de toute façon sur le ring juste en dessous. Le prop
+  `scores` (score RELATIF calculé par l'appelant, ajouté la veille pour corriger un chiffre faux) et
+  les calculs `filterBarScores` de `CoachClient.tsx`/`CoachPlanningClient.tsx` disparaissent avec
+  l'affichage, plus l'import `scoreColor` devenu inutile.
+
+`tsc --noEmit` propre. Pas de clic réel par Claude (Gildas fait la QA, voir la mémoire
+`feedback_prefers_self_testing`). Déployé le 2026-09-26, commit `3da9f54`.
+
+## Chart Charge : ligne colorée par zone, angles arrondis, hauteur mobile (2026-09-26, suite)
+
+Point de départ : Gildas a soumis un POC (`~/Downloads/charge-poc (3).html`) proposant une refonte
+complète de la vue Charge (insight héros + bandeau de 6 métriques cliquables + chart qui suit la
+métrique sélectionnée), avec un brief demandant une évaluation d'opportunité. **Évaluation rendue,
+puis Gildas a explicitement réduit le périmètre** ("pas convaincu par la valeur ajoutée... pour faire
+simple, je commencerais juste par utiliser les badges qu'on a et au clic/déclic ça affiche le chart de
+l'indicateur sélectionné") — seule l'étape 1 (les 3 points visuels ci-dessous) a été exécutée.
+
+### Conclusions de l'évaluation, à garder si le sujet revient
+- **Le POC se trompait sur ce qu'affiche le chart actuel.** `ZoneSparkline` trace l'**ACWR** (ratio
+  0–2, bandes Gabbett), pas la charge en UA — les UA ne sont que dans le tooltip. Le POC écrivait
+  "Charge d'entraînement · UA (RPE × durée)" avec des axes Surcharge/Optimal/Récup : ces zones n'ont
+  aucun sens sur une échelle UA (842 UA n'est ni l'un ni l'autre dans l'absolu — c'est précisément le
+  job de l'ACWR). Porté littéralement, ça aurait mis une affirmation fausse dans l'UI. Corollaire :
+  **l'ACWR doit rester le chart par défaut**, un chart "Charge UA" serait une vue sélectionnable en
+  plus, jamais à sa place.
+- 2 autres unités fausses dans le POC : Contrainte annoncée en "index 0–100" (c'est du strain Foster
+  **en UA**, seuils 6000/10000) et Monotonie en "score variété" (c'est un ratio ~0.5–3, seuils
+  Foster 2/2.5 — l'axe du POC était dans le bon sens, seul le libellé d'unité était faux).
+- **Fitness/Fatigue sont illisibles sur 7 jours** (EWMA 42j) — le POC les montrait chutant de 25 % en
+  une semaine, ce qui est mathématiquement impossible. À gater sur 28j/90j si un jour on les trace.
+- **Faisabilité data ≈ nulle en coût, contrairement au brief** : `DayPoint` porte déjà
+  `load`/`monotony`/`strain`/`acwr` jour par jour sur 104 jours, et `formPercentSeries()` retourne
+  déjà `{fitness, fatigue}` par jour (juste pas recopiés dans `DayPoint` — 2 lignes). Aucune métrique
+  n'a besoin de rester "statut only".
+- **Le POC perdait la hiérarchie qu'il prétendait améliorer** : il remplaçait l'insight global par
+  celui de la métrique sélectionnée (`isGlobal: true` uniquement sur `charge`), alors que
+  `chargeCrossInsight()` EST le "scan en 2 secondes". Les deux doivent être empilés, jamais
+  substitués.
+- Le vrai gain identifié est plus étroit qu'annoncé : le texte pédagogique par métrique existe déjà
+  (`loadInfo.text` etc.) mais est caché derrière un survol/tap de `ZoneBadge` — fonctionnel, mais non
+  découvrable. C'est ça que la piste "badge cliquable qui change le chart" adresse, sans nouveau
+  composant ni nouvelle donnée.
+
+### Ce qui a été livré (étape 1)
+- **Hauteur mobile** (`HomeAnalyticsSections.tsx`, les 2 charts) : `height={isMd ? 168 : 240}`. Ce
+  n'était pas un oubli de hauteur — les 2 charts sont en `width:100%` + `aspectRatio: 400/H`, donc
+  leur hauteur **rendue est proportionnelle à la largeur** : ~147px sur un viewport de 390px contre
+  ~286px en desktop, l'inverse de ce qu'on veut. Passer un H plus grand rend le ratio moins large
+  donc le chart plus haut (~210px en mobile), **sans jamais déformer les traits** : le viewBox ET
+  l'aspect-ratio CSS utilisent tous les deux ce H, l'échelle reste uniforme malgré
+  `preserveAspectRatio="none"`. Précédent identique dans `FrisePreviews.tsx`. **Ne pas** mettre une
+  hauteur fixe en px sur le wrapper en laissant le SVG s'étirer : l'étirement devient non uniforme et
+  les traits s'épaississent verticalement.
+- **Ligne colorée par zone** (`ZoneSparkline.tsx`) : un seul `<linearGradient>` vertical en
+  `gradientUnits="userSpaceOnUse"` avec 2 stops par zone (donc des transitions franches aux
+  frontières 0.8/1.3), plutôt qu'un découpage du tracé segment par segment — colorer chaque segment
+  selon son point de départ donnerait une couleur fausse sur un segment qui traverse une frontière,
+  alors qu'ici la couleur change exactement là où la ligne franchit. `useId()` pour l'id du dégradé
+  (plusieurs charts cohabitent sur une page), **avec les `:` retirés** (`url(#...)` dans un attribut
+  SVG les tolère mal selon les navigateurs). Stroke 1.5 (blanc 50 %) → 2.5 (couleur pleine), la ligne
+  portant désormais l'information.
+- **Angles arrondis** : `strokeLinecap`/`strokeLinejoin="round"`. `SparkLineClient` (Récupération) les
+  avait déjà, découpait déjà ses segments aux trous et gardait déjà un marqueur sur le dernier point
+  + le survol — le problème "pointu" était donc propre au chart Charge, et l'implémentation s'est
+  alignée sur ce qui existait plutôt que d'inventer. **Volontairement pas de lissage en courbe** :
+  une spline classique dépasse les points réels, elle pourrait dessiner la ligne dans la bande
+  SURCHARGE un jour où l'ACWR n'y est jamais monté — une lecture fausse créée par du cosmétique.
+- **2 pièges traités** : (1) le tracé est découpé en **segments contigus** — avant, les `null`
+  (historique insuffisant) étaient joints en une seule polyline qui reliait le vide en ligne droite,
+  invisible une fois les pastilles retirées ; (2) **plus une pastille par jour** (7 à 90 par-dessus la
+  ligne), il en reste 3, les mêmes que `SparkLineClient` : dernier point connu, point survolé, et
+  tout point isolé entre deux trous (une polyline à un seul point ne dessine rien). Le survol ne
+  dépendait pas des pastilles (`onMouseMove` sur le wrapper + curseur vertical), les retirer ne coûte
+  aucune interaction.
+- Écart connu, assumé : le chart de `/share/[id]` utilise le même composant et change donc d'aspect
+  (voulu, fidélité à l'app), ce qui crée un petit écart avec l'image OpenGraph, portage à la main
+  sous satori qui garde les points.
+
+`tsc --noEmit` propre. Déployé le 2026-09-26, commit `a5895f2`.
+
+## Autorégulation : reco = écart à la norme personnelle, décision visible après validation, passage en "Plan cohérent" (2026-09-27)
+
+### Le modèle de reco combattait la périodisation — refonte (3e itération)
+Signalé par Gildas sur son propre compte : *"ma récup était à l'équilibre et ça m'a recommandé
+d'alléger, je trouve ça bizarre, j'ai toujours répété que je voulais un algo simple : en gros
+équilibre → touche rien ou peu, au plus on est fatigué au plus ça reco d'alléger, au plus on est en
+forme au plus ça reco de surcharger, tout en respectant la périodisation"*.
+
+**Root cause** : `computeAutoregSuggestion` comparait la forme à la **difficulté prévue**
+(`mismatch = plannedDifficulty × 10 − score`), ce qui exigeait implicitement un score de 80/100 pour
+tolérer une séance à 8/10. Un sportif pile à SA norme (relativeScore = 50, zone "Équilibré")
+déclenchait donc un Alléger sur n'importe quelle séance au-dessus de 5/10 — l'algo **combattait** la
+périodisation au lieu de la respecter (une séance dure est planifiée parce que le bloc l'appelle, pas
+parce que le sportif est euphorique).
+
+**Nouveau modèle, 3 règles** :
+1. **La zone morte EST la bande "Équilibré" déjà affichée** (`|z| < Z_SWC`) — si le libellé de zone
+   dit "Équilibré", il n'y a pas de reco. Plus aucune contradiction possible entre ce que la zone
+   annonce et ce que la carte propose. (Corollaire : si cette bande paraît un jour trop étroite, c'est
+   `Z_SWC` qu'on élargit, et ça bougera aussi les libellés Fatigué/Équilibré/Frais partout.)
+2. **Ampleur graduée sur l'échelle d'ampleur d'effet de Hopkins**, déjà utilisée partout ailleurs :
+   `Z_SWC ≤ |z| < Z_MODERATE` → 1 point de RPE, `|z| ≥ Z_MODERATE` → 2 points (le plafond, inchangé).
+   Aucun nouveau seuil inventé.
+3. **La difficulté prévue n'entre plus que dans les garde-fous** — c'est le plan qui fixe le niveau, la
+   forme ne le décale que de ±1 ou ±2. La périodisation est respectée par construction.
+
+Repli sans baseline personnelle (historique < 12j) : bande neutre absolue **60-80**, qui reproduit
+exactement l'heuristique d'origine de cette boucle (2026-08-13 : "Alléger si wellness < 60",
+"Surcharger si wellness ≥ 80").
+
+**Garde-fous de périodisation** : résultat clampé dans `[1,10]` (surcharger un 10/10 ne propose rien) ;
+une séance **≤3/10 ne se surcharge jamais** (jour de récupération/deload réellement programmé — le
+générateur sort toujours `recuperation` dans 1-3), l'inverse restant vrai (un 10/10 peut toujours
+s'alléger). Escalade critique inchangée (garde-fou absolu < 40 ou `Z_SEVERE` → plafond + 🚨, côté
+Alléger seulement). `chronicPenalty` conservé, converti en décalage de z (`÷50`, soit 1 à 2 SWC) et
+toujours **jamais appliqué à un sportif réellement frais** (`z > Z_SWC`) — garde-fou du 2026-09-25
+préservé.
+
+### Effet de bord : variance de l'historique synthétique recalibrée
+Conséquence directe : la **variance** de l'historique wellness synthétique détermine désormais la
+largeur des paliers sur toutes les surfaces démo. Avec l'ancienne amplitude de `coachWellnessScoreFor`
+(9, centre 75 → écart-type ~6,5 points de score), le z explosait : le slider 0-100 du simulateur
+`/p/[id]` ne laissait ~3 points de "rien à ajuster" entre −2 et +2, un sportif démo à 55 affichait un
+score relatif de 5/100, et le cas "Plan cohérent" de la démo onboarding coach (Emma, 70) était devenu
+un Alléger. Amplitude 9 → **24**, centre 75 → **72** (aligné sur la valeur par défaut du slider, pour
+que le simulateur démarre en "Équilibré", càd sur "le plan tient"). **Ne touche que de la donnée
+synthétique** (sandbox, simulateurs, aperçus paywall, sportifs démo d'un coach), aucun vrai sportif.
+
+### La jauge reste affichée après validation + 1 bug réel
+Retour de Gildas : *"quand on a appliqué une reco, je dois voir la jauge du nouveau RPE et les
+nouvelles charges (le barré c'est avant de valider). Néanmoins je dois toujours pouvoir revenir à la
+séance prévue"*.
+- Avant, le mode `decided` d'`AutoregButtons` **remplaçait la jauge** par un bandeau ✓ — la carte
+  séance se retrouvait donc sans aucune jauge de difficulté, puisque celle-ci a remplacé `DiffGauge`
+  le 2026-09-24. Elle est désormais rendue **en lecture seule** sur la nouvelle difficulté, avec un
+  **repère "prévu"** sur le plan d'origine (`DecisionGauge` : nouveaux props `readOnly`/
+  `plannedMarker`/`hint`). Le repère vient de `AutoregDecision.original.target_difficulty`, déjà
+  stockée pour le retour arrière — aucune donnée nouvelle à faire circuler, et c'est nécessaire parce
+  que le prop `plannedDifficulty` vaut alors la NOUVELLE difficulté (le parent a déjà rafraîchi la
+  séance depuis la base). Retour arrière renommé **"↩ Séance prévue"** ("Annuler" devenait ambigu une
+  fois la jauge toujours visible).
+- **Bug réel corrigé** : en mode décidé, `onPreviewChange` recevait encore `decision.pct`, donc le
+  parent réappliquait l'ajustement **par-dessus des notes déjà ajustées en base** — l'ajustement était
+  affiché deux fois (`@150kg` → base `@120kg` → affiché "`@120kg` barré → `@96kg`"), et ça **survivait
+  au rechargement** puisque l'effet de montage relit la décision en localStorage. Désormais
+  `onPreviewChange(null)` dès qu'une décision existe (montage, `apply`, `maintenir`). Vérifié que les
+  4 surfaces mettent bien à jour leur state local après écriture, donc l'affichage sans preview montre
+  les vraies valeurs persistées.
+- **Ordre d'écriture de la décision** (prérequis du point suivant) : `setAutoregDecision` est appelé
+  **AVANT** l'`await` de `onApply`, avec `try/catch` qui nettoie si l'écriture échoue (et dans la
+  branche paywall `isActive === false`). Sans ça, `onApply` déclenche en son sein un state du parent
+  qui fait **changer la carte de section** (carrousel → grille), donc remonte le composant : la
+  nouvelle instance lisait un localStorage encore vide et repartait en mode actif, comme si rien
+  n'avait été fait. `original` est patché juste après (`undo()` relit toujours la décision au moment du
+  clic). Permet de retirer le `key={topSession.id}-${isReviewed}` de `CoachAthleteCard`, qui causait le
+  bug déjà documenté (encart revenant à idle au lieu d'afficher "✓ appliqué").
+
+### Coach : une décision prise part en "Plan cohérent"
+`reviewedIds` entre dans le partage `priority`/`stable` (extrait dans un `needsDecision(a)` partagé).
+**Indispensable, pas redondant avec le recalcul** : appliquer un ajustement résout souvent le signal de
+SURCHARGE tout seul (`hasSurchargeSuggestion` recalcule depuis la nouvelle `target_difficulty`), mais
+jamais celui d'`attention()` — piloté par la récupération/la tendance/la monotonie, que l'ajustement de
+la séance ne change pas — et "Maintenir" n'écrit rien du tout donc ne change aucun signal. Annuler la
+décision fait revenir la carte automatiquement. Les sportifs traités sont **triés en tête** de "Plan
+cohérent" (la carte quitte un carrousel horizontal pour atterrir dans une grille, sinon elle semble
+avoir disparu) ; le compteur "N/M traités" est retiré (structurellement nul désormais) et l'état vide
+distingue "✓ Toutes les décisions du jour sont prises" de "Aucune décision urgente".
+
+### Fix de suivi : une séance dure ne suffit plus à mettre un sportif "à décider"
+Signalé juste après par Gildas : *"pourquoi un sportif 57 Équilibré, RPE prévu 9 est dans 'à décider'
+sans action à faire ?"*. `attention()` (`CoachAthleteCard.tsx`) avait un `|| maxDiff >= 8`
+**inconditionnel**, plus un `(isMildLowZ && maxDiff >= 5)` — cohérent avec l'ancien modèle (où une
+séance dure produisait presque toujours un Alléger), orphelin depuis la refonte ci-dessus. Les seuils
+d'`attention()` sont désormais exactement ceux qui produisent une suggestion (`Z_SWC` côté relatif,
+bande neutre 60-80 côté absolu), pour que les deux ne puissent plus diverger. Le côté surcharge reste
+couvert par `hasSurchargeSuggestion()` dans `CoachClient.tsx` ; la branche "pas de wellness du jour +
+séance dure" reste inchangée (là, une récupération inconnue justifie bien une vérification).
+
+### Vérifié
+`tsc --noEmit` propre à chaque étape. Nouveau modèle rejoué en scripts `tsx` sur une grille z ×
+difficulté ("Équilibré" → aucune reco quelle que soit la difficulté, gradation −2/−1/+1/+2, garde-fous
+récup 3/10 et 10/10 confirmés), sur les 3 sportifs de la démo onboarding (Alléger/cohérent/Surcharger
+tous retrouvés après recalibration de la variance), sur le slider onboarding, et sur les 5 seeds de la
+sandbox coach (les 3 registres toujours couverts — le cas surcharge est porté par Nora, Sofia tombant
+correctement sous le garde-fou deload avec sa séance à 3/10). Alignement `attention()`/suggestion
+vérifié par **balayage exhaustif** (score 20-100 × RPE 1-10) de la combinaison réellement utilisée par
+`/coach` : **45 divergences sur 810, toutes à RPE 1** — un sportif épuisé dont la séance est déjà au
+plancher, donc rien à retirer mais qu'il reste légitime de signaler ; zéro divergence ailleurs.
+
+**Non traité, signalé** : en "Maintenir", rien n'est écrit donc le signal reste, et l'`AlertBox`
+continue d'afficher la raison de l'alerte au-dessus d'un bandeau "Maintenu" — défendable (le signal EST
+toujours là, le coach a juste décidé de garder le plan) mais à revoir si ça gêne. Autre conséquence
+assumée : un tout nouveau compte qui répond neutralement au check-in n'aura pas de geste
+d'autorégulation à faire ce jour-là (`ensureTodayDemoSession` ne peut plus "trouver" une difficulté qui
+déclenche quand le sportif est à sa norme — par construction, et c'est voulu).
+
+Déployé le 2026-09-27, commits `24b8a43` (refonte) et `a82de12` (fix de suivi).
