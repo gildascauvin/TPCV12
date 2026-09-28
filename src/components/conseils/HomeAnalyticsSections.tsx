@@ -7,13 +7,14 @@
    plutôt que de dupliquer la logique de rendu. Comportement/formules 100% inchangés, seul
    l'emplacement dans l'UI change. */
 
+import { useState } from "react";
 import ShareButton from "@/components/sessions/ShareButton";
-import SparkLineClient, { FORM_ZONES, formToChartPosition, WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
-import { dimensionBadgesSeries, dimensionInsightText, DIMENSION_ARROW, dimensionBadgeColor, type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import ZoneSparkline from "@/components/conseils/ZoneSparkline";
-import ZoneBadge from "@/components/conseils/ZoneBadge";
+import { formToChartPosition } from "@/components/conseils/SparkLineClient";
+import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import IndexCards from "@/components/conseils/IndexCards";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
+import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, type MetricKey } from "@/lib/metricCards";
 import { wellnessColor } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
@@ -92,116 +93,18 @@ export function CrossInsightBanner({ data, isDemoData = false }: { data: Conseil
   );
 }
 
-export function ChargeSection({ data, rangeMode, onRangeModeChange }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void }) {
-  const { loadInfo, monotonyInfo, strainInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight } = data;
-  const { isMd } = useBreakpoint();
-  const { series } = windowFor(data, rangeMode);
-  const zoneAcwr = series.map(p => p.acwr);
-  const zoneLoads = series.map(p => p.load);
-  const zoneDates = series.map(p => p.date);
-  const zoneMonotony = series.map(p => p.monotony);
-  const zoneStrain = series.map(p => p.strain);
-
-  return (
-    <div>
-      {/* Titre retiré (2026-09-24, retour de Gildas : "pas besoin de répéter ⚡ Charge... vu que
-         c'est le titre de l'onglet") — le toggle 7j/28j/90j prend sa place, "à côté du chart"
-         plutôt que dans le header tout en haut de la page (retiré de CalendarHeader). */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const, marginBottom: 10 }}>
-        <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-          {/* Tooltip = insight PERSONNALISÉ (xxxInfo.text, déjà "ta charge chronique est en
-             baisse..."), plus la définition générique/neutre METRIC_DEFINITIONS (2026-09, retour de
-             Gildas — "ce qu'on a dans le tooltip mais en insight personnalisé synthétique"). ACWR
-             (loadInfo) ajouté — jusqu'ici seulement visible via les bandes de couleur du chart,
-             jamais comme badge à part entière. */}
-          <ZoneBadge label={loadInfo.label} color={loadInfo.color} definition={loadInfo.text} />
-          <ZoneBadge label={monotonyInfo.label} color={monotonyInfo.color} definition={monotonyInfo.text} />
-          {strainInfo && <ZoneBadge label={strainInfo.label} color={strainInfo.color} definition={strainInfo.text} />}
-          {fitnessTrendInfo && <ZoneBadge label={fitnessTrendInfo.label} color={fitnessTrendInfo.color} definition={fitnessTrendInfo.text} />}
-          {fatigueTrendInfo && <ZoneBadge label={fatigueTrendInfo.label} color={fatigueTrendInfo.color} definition={fatigueTrendInfo.text} />}
-        </div>
-      </div>
-      <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
-        {chargeInsight}
-      </div>
-      {/* overflowY:"visible" explicite (2026-09-25, régression trouvée par Gildas — "j'ai plus les
-         tooltips visibles au survol des charts") : `overflow-x: hidden` seul fait calculer
-         `overflow-y` à "auto" par la spec CSS (pas "visible"), donc le tooltip de ZoneSparkline
-         (positionné au-dessus du chart via `bottom: calc(100% + 8px)`, hors de la boîte de CE
-         wrapper) se retrouvait rogné — même piège déjà corrigé plus bas pour SparkLineClient/
-         RecuperationSection, manqué ici lors de l'extraction de ce fichier. */}
-      <div style={{ overflowX: "hidden", overflowY: "visible", width: "100%" }}>
-        {/* Hauteur plus grande en mobile (2026-09-26, retour de Gildas — "sur mobile les charts sont
-           trop petits en hauteur") : ce n'était pas un oubli de hauteur, c'est que le SVG est en
-           `width:100%` + `aspectRatio: 400/H`, donc sa hauteur RENDUE est proportionnelle à la
-           largeur — mobile étroit = chart court (~147px à 390px de viewport, contre ~286px en
-           desktop, l'inverse de ce qu'on veut). Passer un H plus grand rend le ratio moins large,
-           donc le chart plus haut, sans jamais déformer les traits (le viewBox ET l'aspect-ratio CSS
-           utilisent tous les deux ce H, donc l'échelle reste uniforme malgré
-           preserveAspectRatio="none"). Précédent identique : FrisePreviews.tsx. */}
-        <ZoneSparkline points={zoneAcwr} dates={zoneDates} loads={zoneLoads} monotony={zoneMonotony} strain={zoneStrain} weekLabels={rangeMode !== "week"} height={isMd ? 168 : 240} />
-      </div>
-    </div>
-  );
+/* Cartes d'indice (2026-09-28, POC `charge-variantes.html` variante E1, retenue par Gildas) —
+   remplacent les sous-onglets Charge/Adaptation et la rangée de badges : les badges disaient la même
+   chose que le chart juste en dessous, et il fallait cliquer pour savoir où on en était sur chaque
+   indice. Une carte par indice, statut visible en permanence, chart au clic. */
+export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} />;
 }
 
+/* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
+   à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
 export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
-  const { formInfo, recoveryInsight, recoveryInfo } = data;
-  const { isMd } = useBreakpoint();
-  const { series, baseline } = windowFor(data, rangeMode);
-  const zoneDates = series.map(p => p.date);
-  const recoveryRelativePoints = baseline.map(b => b?.hasEnoughHistory ? b.relativeScore : null);
-  const recoveryRawPoints = series.map(p => p.recovery);
-  const dimensionBadgesFull = dimensionBadgesSeries(data.wellnessBaselineSeries);
-  // Fix (2026-09-24) : le slicing ne connaissait que "month"/"week" — le cran "quarter" (90j)
-  // retombait à tort sur la fenêtre 7j pour les badges de dimension au survol (même bug déjà
-  // corrigé pour windowFor() ci-dessus, manqué ici — 2 calculs séparés au lieu d'un seul).
-  const rangeN = rangeMode === "quarter" ? 90 : rangeMode === "month" ? 28 : 7;
-  const windowDimensionBadges = dimensionBadgesFull.slice(-rangeN);
-  const todayDimensionBadges = dimensionBadgesFull[dimensionBadgesFull.length - 1];
-
-  return (
-    <div>
-      {/* Titre retiré, toggle 7j/28j/90j à sa place — même principe que ChargeSection ci-dessus. */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const, marginBottom: 10 }}>
-        <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-          {/* Badge composite "Récupération" (2026-09, ajouté — jusqu'ici absent de cette page,
-             seulement visible via les 4 dimensions et le chart) + tooltip pédagogique personnalisé
-             sur chaque badge, y compris les 4 dimensions qui n'en avaient aucun (juste la flèche) —
-             même principe que ChargeSection ci-dessus. */}
-          <ZoneBadge label={recoveryInfo.label} color={recoveryInfo.color} definition={recoveryInfo.text} />
-          {todayDimensionBadges?.map((b: { key: DimensionKey; label: string; arrow: "up" | "down" | "stable" }) => (
-            <ZoneBadge key={b.key} label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} definition={dimensionInsightText(b.key, data.wellnessBaseline, perspective)} />
-          ))}
-          {formInfo && <ZoneBadge label={`FORME ${formInfo.label}`} color={formInfo.color} definition={formInfo.text} />}
-        </div>
-      </div>
-      <div style={{ marginBottom: 10, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
-        {recoveryInsight}
-      </div>
-      {/* overflowX:hidden (2026-09-24, "les charts dépassent à droite") en garde-fou — le chart
-         lui-même est déjà en width:100%, mais une tooltip/label imprévu ne doit jamais pousser la
-         page plus large que l'écran. overflowY reste visible : la tooltip (position:absolute,
-         au-dessus du chart) ne doit jamais être rognée verticalement. */}
-      <div style={{ borderRadius: 10, overflowX: "hidden", overflowY: "visible", marginBottom: 6 }}>
-        {/* `height` mobile : même raison exactement que ChargeSection ci-dessus (aspect-ratio =
-           hauteur RENDUE proportionnelle à la largeur), même viewBox W=400. */}
-        <SparkLineClient
-          points={recoveryRelativePoints} pointsRaw={recoveryRawPoints} dates={zoneDates} color={recoveryInfo.color}
-          maxVal={100} height={isMd ? 168 : 240} animDelay={300}
-          metricType="recovery" uid="recovery-home" chartType="line" sequentialFill
-          zones1={WELLNESS_ZONES}
-          dimensionBadgesAt={windowDimensionBadges}
-          points2={series.map(p => p.form !== null ? formToChartPosition(p.form) : null)}
-          points2Raw={series.map(p => p.form)} zones2={FORM_ZONES}
-          weekLabels={rangeMode !== "week"}
-        />
-      </div>
-      <div style={{ fontSize: 11, color: "rgba(255,255,255,.25)", fontStyle: "italic" as const, textAlign: "right" as const }}>Trait dégradé = récupération (clair = en forme) · Pointillé coloré = Forme · Bande = écart entre les deux</div>
-    </div>
-  );
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} />;
 }
 
 /* ── Comportements (2026-09) — badge de statut sur la ligne du nom, jauge centrée sur zéro. */
@@ -324,17 +227,22 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
     return <div style={{ color: "#8a8f94", fontSize: 13, padding: "24px 0" }}>Aucun sportif à afficher.</div>;
   }
 
+  /* Tri par sévérité, puis alphabétique à égalité (2026-09-28) : sans ce départage, deux sportifs
+     au même niveau pouvaient permuter d'un rendu à l'autre au gré de l'ordre du roster, et un coach
+     perdait la position qu'il venait de mémoriser. */
+  const byName = (r1: typeof rows[number], r2: typeof rows[number]) =>
+    (r1.athlete.name ?? "").localeCompare(r2.athlete.name ?? "", "fr");
   const sorted = [...rows].sort((r1, r2) => {
     if (metric === "charge") {
       const dev = (r: typeof r1) => { const last = r.data.zoneAcwr[r.data.zoneAcwr.length - 1]; return last === null ? 0 : Math.abs(last - 1); };
-      return dev(r2) - dev(r1);
+      return dev(r2) - dev(r1) || byName(r1, r2);
     }
     if (metric === "recuperation") {
       const score = (r: typeof r1) => r.data.wellnessBaseline?.hasEnoughHistory ? r.data.wellnessBaseline.relativeScore : (r.data.timeSeries[r.data.timeSeries.length - 1]?.recovery ?? 50);
-      return score(r1) - score(r2);
+      return score(r1) - score(r2) || byName(r1, r2);
     }
     const sev = (r: typeof r1) => { const { worstHurt } = topBehaviors(r.data.correlations); return Math.abs(worstHurt?.impact ?? 0); };
-    return sev(r2) - sev(r1);
+    return sev(r2) - sev(r1) || byName(r1, r2);
   });
 
   // Groupé en préservant l'ordre de sévérité déjà calculé ci-dessus — jamais retrié à l'intérieur
@@ -367,20 +275,40 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
               const recoveryScore = data.wellnessBaseline?.hasEnoughHistory ? data.wellnessBaseline.relativeScore : (data.timeSeries[data.timeSeries.length - 1]?.recovery ?? null);
               const statusColor = metricStatusColor(metric, data);
 
-              let statusBadge: React.ReactNode = null;
-              let signalBadges: React.ReactNode = null;
+              /* Philosophie des cartes d'indice appliquée au roster (2026-09-28, variante "C4" du POC) :
+                 nom, puis une LIGNE PRINCIPALE "statut · valeur", puis l'insight ; aperçu et tendance
+                 à droite. L'indice de tête est l'ACWR côté charge et le score de récupération côté
+                 récup — les deux seuls de leur onglet à être normalisés sur la norme propre de chaque
+                 sportif, donc les seuls comparables d'une ligne à l'autre. Un volume en UA ne l'est
+                 pas : 520 UA ne dit pas la même chose chez deux sportifs différents.
+                 Les rangées de badges secondaires ont disparu — l'insight nomme déjà l'indicateur qui
+                 décroche, et cette liste est une surface de SCAN : le détail s'ouvre en cliquant. */
+              const headKey: MetricKey | null = metric === "charge" ? "acwr" : metric === "recuperation" ? "recovery" : null;
+              const window7 = data.timeSeries.slice(-7);
+              let mainLine: React.ReactNode = null;
+              let trendLine: string | null = null;
               let sparklinePoints: { value: number | null; color: string }[] | null = null;
               let insightBox: React.ReactNode = null;
 
-              if (metric === "charge") {
-                statusBadge = <ZoneBadge label={data.loadInfo.label} color={data.loadInfo.color} definition={data.loadInfo.text} />;
-                const signals = [data.fitnessTrendInfo, data.fatigueTrendInfo, data.monotonyInfo, data.strainInfo]
-                  .filter((x): x is { label: string; color: string; text: string } => !!x);
-                signalBadges = signals.length > 0 && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" as const, marginTop: 8 }}>
-                    {signals.map((s, i) => <ZoneBadge key={i} size="sm" label={s.label} color={s.color} definition={s.text} />)}
-                  </div>
+              if (headKey) {
+                const info = metric === "charge" ? data.loadInfo : data.recoveryInfo;
+                const relWindow = data.wellnessBaselineSeries.slice(-7).map(b => (b?.hasEnoughHistory ? b.relativeScore : null));
+                const headValue = metric === "charge"
+                  ? (data.zoneAcwr[data.zoneAcwr.length - 1] ?? null)
+                  : recoveryScore;
+                const tr = trendFor(headKey, window7, 7, metric === "recuperation" ? relWindow : undefined);
+                trendLine = `${TREND_ARROW[tr.dir]} ${tr.text}`;
+                mainLine = (
+                  <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-.01em", lineHeight: 1.25, color: statusDisplayColor(headKey, info.color) }}>
+                    {prettyStatus(headKey, info.label) || "—"}
+                    {headValue !== null && (
+                      <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{` · ${METRICS[headKey].fmt(headValue)}`}</span>
+                    )}
+                  </span>
                 );
+              }
+
+              if (metric === "charge") {
                 // Hauteur = charge journalière brute en UA (Foster session-RPE), pas l'ACWR
                 // (2026-09-26, retour de Gildas : "les barres en UA") — l'ACWR (ratio, borné ~0-2)
                 // écrasait la vraie amplitude jour à jour. La couleur reste pilotée par la ZONE ACWR
@@ -391,40 +319,29 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
                   value: load,
                   color: acwrSlice[i] !== null ? sigDimInfo("load", acwrSlice[i]!, "coach").color : "rgba(255,255,255,.25)",
                 }));
-                if (data.trendText) {
-                  insightBox = (
-                    <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
-                      {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{data.trendAction} — </span>}{data.trendText}
-                    </div>
-                  );
-                }
               } else if (metric === "recuperation") {
-                statusBadge = <ZoneBadge label={data.recoveryInfo.label} color={data.recoveryInfo.color} definition={data.recoveryInfo.text} />;
-                const todayDims = dimensionBadgesSeries(data.wellnessBaselineSeries).slice(-1)[0];
-                const dimBadges = (todayDims ?? []).map((b: { key: DimensionKey; label: string; arrow: "up" | "down" | "stable" }, i: number) => (
-                  <ZoneBadge key={`d${i}`} size="sm" label={`${b.label} ${DIMENSION_ARROW[b.arrow]}`} color={dimensionBadgeColor(b.arrow)} definition={dimensionInsightText(b.key, data.wellnessBaseline, "coach")} />
-                ));
-                signalBadges = (dimBadges.length > 0 || data.formInfo) && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" as const, marginTop: 8 }}>
-                    {dimBadges}
-                    {data.formInfo && <ZoneBadge size="sm" label={`FORME ${data.formInfo.label}`} color={data.formInfo.color} definition={data.formInfo.text} />}
-                  </div>
-                );
-                const recentSeries = data.timeSeries.slice(-7);
                 const recentBaseline: (WellnessBaselineResult | null)[] = data.wellnessBaselineSeries.slice(-7);
-                sparklinePoints = recentSeries.map((p, i) => {
+                sparklinePoints = window7.map((p, i) => {
                   const b = recentBaseline[i];
                   const v = b?.hasEnoughHistory ? b.relativeScore : p.recovery;
                   return { value: v, color: v !== null ? wellnessColor(v) : "rgba(255,255,255,.25)" };
                 });
-                if (data.trendText) {
-                  insightBox = (
-                    <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
-                      {data.trendEmoji} {data.trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{data.trendAction} — </span>}{data.trendText}
-                    </div>
-                  );
-                }
-              } else {
+              }
+
+              /* L'insight de l'ONGLET, pas l'insight croisé (2026-09-28, Gildas) : `trendText` mêle
+                 charge et récupération, donc sur l'onglet Charge la ligne parlait pour moitié d'autre
+                 chose que ce que la carte affiche — et disait autre chose que le détail du sportif,
+                 qui montre déjà chargeInsight/recoveryInsight. Les deux sont calculés en perspective
+                 coach côté CoachClient, donc ils parlent bien du sportif. */
+              const tabInsight = metric === "charge" ? data.chargeInsight
+                : metric === "recuperation" ? data.recoveryInsight : null;
+              if (headKey && tabInsight) {
+                insightBox = (
+                  <div style={{ marginTop: 6, fontSize: 12.5, color: "rgba(255,255,255,.72)", lineHeight: 1.45 }}>
+                    {tabInsight}
+                  </div>
+                );
+              } else if (metric === "comportements") {
                 const { bestHelper, worstHurt } = topBehaviors(data.correlations);
                 insightBox = bestHelper || worstHurt ? (
                   <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", marginTop: 10, fontSize: 12.5, color: "rgba(255,255,255,.88)", lineHeight: 1.5 }}>
@@ -462,25 +379,33 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
                     boxShadow: "0 10px 26px rgba(0,0,0,.22)",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                     <AthleteRing score={recoveryScore} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" as const }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
-                          {a.name}
-                        </span>
-                        {statusBadge}
-                      </div>
+                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" as const, gap: 2 }}>
+                      {/* Le nom porte l'identité de la ligne : en petit, gris et en capitales
+                          mono (le gabarit d'eyebrow des cartes d'indice, où il ne portait qu'un nom
+                          de métrique), les sportifs ne se distinguaient plus les uns des autres.
+                          En blanc et en casse normale, c'est lui qu'on balaye ; le statut reste
+                          au-dessus en taille, mais il est coloré, donc les deux ne se concurrencent
+                          pas. */}
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+                        {a.name}
+                      </span>
+                      {mainLine}
+                      {isMd && insightBox}
                     </div>
-                    {isMd && sparklinePoints && (
-                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    {sparklinePoints && (
+                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                         <MiniBars points={sparklinePoints} />
-                        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.35)" }}>7j</span>
+                        {trendLine && (
+                          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" as const }}>{trendLine}</span>
+                        )}
                       </div>
                     )}
                   </div>
-                  {signalBadges}
-                  {insightBox}
+                  {/* Même règle qu'en mobile côté sportif : sous une centaine de pixels de large,
+                      l'insight coincé à côté de l'aperçu tombe sur cinq lignes. */}
+                  {!isMd && insightBox}
                 </button>
               );
             })}

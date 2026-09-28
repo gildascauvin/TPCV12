@@ -273,7 +273,12 @@ export function relativeZoneLabel(b: WellnessBaselineResult | null, _perspective
 export const DIMENSION_LABELS: Record<DimensionKey, string> = {
   sleep: "Sommeil",
   stress: "Stress",
-  recovery: "Récup. musculaire", // distinct du titre de page "Récupération" (ex-"Wellness") — voir wellness.ts:211 pour le libellé déjà existant repris ici
+  /* "État physique" (2026-09-28) : c'est le mot du FORMULAIRE lui-même (WellnessModal — "💪 État
+     physique aujourd'hui", de "Courbatures sévères" à "Frais et dispo"), donc celui que le sportif a
+     sous les yeux quand il répond. "Récup. musculaire" créait un second nom pour la même question,
+     et un troisième était en train d'apparaître côté cartes d'indice. Reste distinct du titre de
+     page "Récupération" (ex-"Wellness"), qui désigne le score composite des 4 dimensions. */
+  recovery: "État physique",
   motivation: "Motivation",
 };
 
@@ -361,7 +366,7 @@ export function dominantDimensionAction(b: WellnessBaselineResult, perspective: 
    "wording pédagogique, ce qu'on a dans le tooltip mais en insight personnalisé synthétique") :
    généralise describeDominantDimension()/dominantDimensionAction() ci-dessus (qui ne retournent
    qu'UNE seule dimension, la plus marquée des 4) à N'IMPORTE QUELLE dimension prise isolément — sert
-   de contenu de tooltip pour CHAQUE badge Sommeil/Stress/Récup. musculaire/Motivation (voir
+   de contenu de tooltip pour CHAQUE badge Sommeil/Stress/État physique/Motivation (voir
    HomeAnalyticsSections.tsx), pas seulement la dominante. Mêmes briques que ci-dessus
    (directionalZ/deviationIntensity/Z_SWC), même seuil "notable". */
 export function dimensionInsightText(dim: DimensionKey, b: WellnessBaselineResult | null, perspective: Perspective = "athlete"): string {
@@ -403,7 +408,7 @@ export function autoregDimensionLabel(dir: "low" | "high", b: WellnessBaselineRe
 export type DimensionBadge = { key: DimensionKey; label: string; z: number; arrow: "up" | "down" | "stable" };
 
 /* Symbole + couleur d'un badge de dimension pour un affichage PERMANENT (ex. ligne de badges
-   Sommeil/Stress/Récup./Motivation sur le chart Récupération, 2026-08-31, retour explicite de
+   Sommeil/Stress/État physique/Motivation sur le chart Récupération, 2026-08-31, retour explicite de
    Gildas — remplace le badge composite "Fatigué/Équilibré/Frais" par ces 4-là) — même convention
    que trendDimInfo() (fatigueSignature.ts, badges Fitness/Fatigue de la carte Charge) : la couleur
    reflète la DIRECTION du delta 7j, jamais l'indice Z brut (volontairement omis, seule la flèche

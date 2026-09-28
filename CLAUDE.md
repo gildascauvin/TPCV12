@@ -4128,3 +4128,142 @@ d'autorégulation à faire ce jour-là (`ensureTodayDemoSession` ne peut plus "t
 déclenche quand le sportif est à sa norme — par construction, et c'est voulu).
 
 Déployé le 2026-09-27, commits `24b8a43` (refonte) et `a82de12` (fix de suivi).
+
+## Cartes d'indice sur l'Accueil — une carte par indicateur, chart au clic (2026-09-28)
+
+Point de départ : POC `charge-variantes.html` (artifact, ~30 itérations sur les données réelles de
+`cauvingildas@gmail.com` — 90 jours de charge + 119 jours de récupération, récupérés en SQL direct et
+recalculés avec les vraies formules de l'app). Inspirations assumées : **WHOOP** (une section, un
+insight, des sous-indicateurs), **Garmin** (jauge à seuil), **Withings** (une carte par indice,
+aperçu intégré, détail au clic). Décision explicite de Gildas : **pas de gros score agrégé** — c'est
+l'insight qui tient ce rôle, comme déjà en prod.
+
+Remplace, dans `ChargeSection`/`RecuperationSection` (`HomeAnalyticsSections.tsx`), les sous-onglets
+Charge/Adaptation et les rangées de badges par une liste de cartes. Les appelants (`/today`,
+`/coach`) n'ont pas changé de signature.
+
+### Contrat d'information, posé une fois
+- **Gauche** : nom de l'indice, la LIGNE PRINCIPALE `statut · valeur` (17,5 px), puis l'**impact de
+  la tendance**.
+- **Droite** : aperçu, puis la tendance chiffrée sous l'aperçu.
+- En **mobile**, l'insight sort de la colonne de gauche et passe sous tout le contenu — coincé à côté
+  de l'aperçu il tombait sur 4-5 lignes dans une centaine de pixels.
+
+L'insight ne décrit JAMAIS la zone (ce serait redire le statut). Trois registres : l'indice décroche
+→ le texte de `sigDimInfo()`, qui porte déjà l'action ; il va bien mais bouge → ce que le mouvement
+implique ; il va bien et ne bouge pas → ce que l'indicateur mesure et pourquoi sa stabilité est une
+bonne nouvelle. **Un insight sur chaque carte, y compris vert et stable** (demande explicite :
+« c'est la pédagogie ») — une première version se taisait alors, ce qui privait des explications les
+plus utiles à qui découvre ces indices.
+
+### 3 fichiers neufs
+- **`src/lib/metricCards.ts`** — toute la logique, pure et testable : les 8 indices, bornes, bandes,
+  formats, tendances, textes d'impact (variantes sportif ET coach), `chartSpecFor()`. Aucun seuil ni
+  couleur n'y est inventé : ils viennent de `sigDimInfo()` et de `WELLNESS_RAMP`.
+- **`src/components/conseils/MetricChart.tsx`** — chart d'UN indice, piloté par un `ChartSpec`. Il a
+  fallu le créer : `ZoneSparkline`, `SparkLineClient` et `ChargeReportChart` sont composites par
+  construction (chacun trace plusieurs métriques ensemble). Mêmes conventions que `ZoneSparkline` —
+  viewBox 400×H, `preserveAspectRatio="none"`, et **tout ce qui est texte ou marqueur en overlay HTML
+  à taille fixe** (un `<text>` dans le viewBox scale avec la largeur rendue).
+- **`src/components/conseils/IndexCards.tsx`** — les cartes et leurs trois types d'aperçu.
+
+### Décisions de rendu, chacune motivée
+- **L'aperçu suit la NATURE de l'indice**, pas un gabarit unique : anneau (Garmin) pour ceux qui ont
+  un seuil absolu — contrainte, monotonie ; jauge horizontale de zone pour ceux qui se lisent comme
+  une position — ACWR, forme ; courbe pour le reste. **Pas d'anneau pour la charge en UA** : elle n'a
+  pas de borne haute, l'échelle de l'arc serait inventée.
+- **Bandes de fond seulement là où elles informent** : la zone optimale pour l'ACWR (en neutre, comme
+  `ZoneSparkline`), les zones à ÉVITER pour monotonie et contrainte, les trois pour la forme, aucune
+  pour la récupération (2 pointillés aux frontières 42/58, la courbe portant déjà la couleur). Le
+  liseré vertical de gauche porte toujours les trois couleurs — c'est la légende, et **le seuil
+  d'entrée y est écrit** (« ÉLEVÉE ≥ 2,00 »).
+- **Échelle dynamique réservée à fitness et fatigue**, les deux seuls sans zones. Un premier jet
+  l'appliquait partout : zoomer sur la donnée faisait sortir du cadre les seuils qui donnent son sens
+  à la valeur (un ACWR à 0,85 ne veut rien dire si on ne voit plus 0,8 et 1,3).
+- **ACWR en points reliés** par un fil neutre : sur 7 jours le ratio bouge de quelques centièmes, la
+  courbe seule suggère un mouvement continu et on ne sait plus où tombent les jours. Points sur
+  chaque jour à toutes les densités, rétrécis au lieu d'être supprimés (11 → 5 px).
+- **Tout l'onglet Récupération est sur la rampe bleue** (`statusDisplayColor()`) : la couleur
+  d'origine reste la source de la SÉVÉRITÉ (`severityOf` teste des hex précis), on la traduit pour
+  l'affichage. Foncé = favorable, clair = défavorable, **médian = neutre** — sans ce 3e cas,
+  « Équilibré » ressortait de la même couleur que « Frais ».
+
+### 6 bugs trouvés en exécutant le code, pas en le relisant
+1. **La récupération était tracée en score BRUT** contre des bandes 42/58 définies sur l'échelle du
+   percentile du z-score. Intuition de Gildas (« t'as pas pris le z-score ici »), confirmée : chart,
+   aperçu, valeur et tendance lisent maintenant tous `baseline.relativeScore`, comme le chart de prod.
+2. **Fitness/Fatigue se contredisaient** — « ↘ −20 % sur 28 j » au-dessus de « en hausse ». Ce sont
+   les SEULS indices dont le texte de statut est lui-même dérivé d'une tendance (`trendDimInfo()`,
+   calculé par prod sur SA fenêtre de 7 jours). Ils lisent désormais toujours leur texte depuis la
+   direction que la carte affiche. Les autres n'ont pas ce risque : leur texte décrit la zone
+   courante, qui ne dépend d'aucune fenêtre.
+3. **La carte Charge mélangeait deux sujets** : son insight parlait de la SÉANCE alors que sa tendance
+   porte sur la moyenne 7 jours, d'où un changement de registre entre onglets de période et une
+   contradiction possible avec le statut (« Dure · 520 UA » au-dessus de « Séance plus légère… »).
+   Les trois textes parlent maintenant du volume ; la lecture de la séance reste sur la ligne
+   principale.
+4. **La tendance de Charge comparait deux jours isolés** (aujourd'hui vs il y a 7 j), dont l'un peut
+   être un repos — elle porte sur la moyenne 7 jours (`TREND_SERIES`).
+5. **Celle de Récupération lisait un percentile comme un ratio** (« −43 % ») : un percentile n'est pas
+   une échelle de rapport, on donne l'écart du jour à la moyenne de la période.
+6. **Les libellés de `sigDimInfo()` sont écrits pour des BADGES** — capitales et parfois préfixés du
+   nom de l'indicateur (« CONTRAINTE OK », « FITNESS ↗ »). Normalisés à l'affichage
+   (`prettyStatus()`), sans toucher `sigDimInfo` dont les badges servent ailleurs.
+
+### Sous-jacents de la récupération
+Les 4 dimensions ne sont plus des badges au-dessus du chart : elles **filtrent le chart à l'intérieur
+de la carte Récupération** (chips portant la flèche déjà calculée par `dimensionBadgesSeries()`). Ce
+sont les composantes du score, pas des indices frères — en faire des cartes de plus donnerait une
+liste plate sans hiérarchie.
+
+**Elles tracent le Z, pas le brut** (2026-09-28) : « comparer à la valeur d'il y a 7 jours est nul »
+(Gildas). Le Z est par construction l'écart à SA norme, donc la référence est la ligne 0, sans rien
+à reconstruire. Réserve connue : la flèche du chip vient toujours de `dimensionBadgesAt()`, qui
+compare le Z du jour au Z d'il y a 7 jours — le chart dit « où je suis », la flèche « dans quel sens
+ça bouge ». Deux lectures différentes, pas contradictoires.
+
+**`DIMENSION_LABELS.recovery` : « Récup. musculaire » → « État physique »** — le mot du FORMULAIRE
+lui-même (`WellnessModal` : « 💪 État physique aujourd'hui »), donc celui que le sportif a sous les
+yeux quand il répond. Deux noms coexistaient pour une seule question. Vérifié dans les 5 phrases où
+le libellé est enchâssé (« État physique nettement en dessous de ta norme »). Touche aussi les badges
+de `/coach` et le filtre « Filtre : État physique bas ».
+
+### Liste coach — même philosophie appliquée au roster
+`TeamAnalyticsList` : nom du sportif (blanc, 15 px), ligne `statut · valeur`, insight ; aperçu et
+tendance à droite. Le tri par sévérité et le groupement en sections existaient déjà ; **départage
+alphabétique ajouté** à sévérité égale, sinon deux sportifs au même niveau permutaient d'un rendu à
+l'autre au gré de l'ordre du roster.
+
+- **Indice de tête : ACWR côté charge, score de récupération côté récup** — les deux seuls de leur
+  onglet normalisés sur la norme propre de chaque sportif, donc les seuls comparables d'une ligne à
+  l'autre. Un volume en UA ne l'est pas : 520 UA ne dit pas la même chose chez deux sportifs.
+- **L'insight de l'ONGLET, pas l'insight croisé** (`chargeInsight`/`recoveryInsight`) : `trendText`
+  mêle charge et récupération, donc sur l'onglet Charge la ligne parlait pour moitié d'autre chose —
+  et disait autre chose que le détail du sportif, qui montre déjà ces insights-là. L'insight croisé
+  reste dans `CrossInsightBanner`, au-dessus des onglets, où il doit parler des deux axes.
+- **Rangées de badges secondaires retirées** (fitness/fatigue/monotonie/contrainte, les 4 dimensions
+  + forme) : l'insight nomme déjà l'indicateur qui décroche, et cette liste est une surface de scan.
+  Retire un niveau d'information qui était volontaire — à rétablir si ça manque.
+
+### Écarté explicitement
+- **Fenêtre saine mobile (0,8–1,3 × chronique) sur la carte Charge** — construite puis retirée le
+  jour même : « c'est illisible, et ça duplique l'ACWR ». Elle énonce littéralement la même chose que
+  l'ACWR, en UA au lieu d'un ratio ; l'ajouter coûtait toute la lisibilité pour zéro information. Le
+  raisonnement qui l'avait fait proposer était incohérent (on l'écartait sur l'ACWR au motif que « le
+  ratio est déjà la normalisation », sans voir que c'est le même énoncé). **Piège à connaître si le
+  sujet revient** : cette fenêtre borne la charge AIGUË, jamais celle du JOUR — vérifié sur données
+  réelles, une séance à 450 UA dépasse un haut de fenêtre à 410 alors que l'ACWR est à 0,85.
+- **Toggle 7/28/90 descendu DANS le chart déplié**, la fenêtre restant unique et partagée : la ligne
+  de tendance de chaque carte la lit aussi, des fenêtres séparées rendraient les cartes
+  incomparables. Argument décisif de Gildas : avec des cartes qui se déplient, un contrôle en haut de
+  section devient inatteignable sans remonter.
+- **`ChargeReportChart.tsx` devient orphelin** (aucun importeur) — jamais commité, laissé non suivi
+  en attendant une décision.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre après chaque round. Chaque correction rejouée en
+script `tsx` jetable contre les **vraies séries de Gildas** (90 jours, 3 périodes, 8 indices) plutôt
+que relue — les 6 bugs ci-dessus ont tous été trouvés ainsi, aucun par lecture de code. Pas de
+`npm run build` (dev server actif, risque de corruption `.next` déjà documenté). **Pas de clic réel
+par Claude** : Gildas fait la QA, et c'est lui qui a trouvé l'incohérence Charge et l'échelle fausse
+de la récupération.

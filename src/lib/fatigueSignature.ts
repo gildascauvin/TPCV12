@@ -1,5 +1,5 @@
 import type { Session, WellnessDaily } from "@/types";
-import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, daysAgoStr, type LoadPoint, type TrendDirection, type TrendCode } from "@/lib/trainingLoad";
+import { dailyLoad, monotony as monotonyOf, strain as strainOf, strainTrendPct, acwr as acwrOf, acwrSeries as acwrSeriesOf, formPercentSeries as formPercentSeriesOf, rollingStats as rollingStatsOf, daysAgoStr, type LoadPoint, type TrendDirection, type TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import { Z_SWC, wellnessSignal, describeDominantDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -89,7 +89,12 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
     return { label: "FATIGUE ACCUMULÉE", color: "#d10000", text: coach ? "Charge récente au-dessus de sa charge habituelle : fatigue qui s'accumule." : "Ta charge récente est au-dessus de ta charge habituelle : fatigue qui s'accumule." };
   }
   if (dim === "load") {
-    if (value < 0.8) return { label: "SOUS-CHARGE", color: "#8a8f94", text: coach ? "En dessous de sa zone d'entraînement optimale (ACWR < 0,8)." : "En dessous de ta zone d'entraînement optimale (ACWR < 0,8)." };
+    /* Jaune et non plus gris (2026-09-27, demande de Gildas pour la ligne du chart Charge — "jaune si
+       en bas") : le gris #8a8f94 sert partout ailleurs dans l'app à dire "pas de donnée", alors que la
+       sous-charge EST un signal (le texte de l'insight dit déjà "possible perte de forme si ça dure").
+       Changé ici, à la source, plutôt que dans le chart seul — sinon la ligne et le badge du même état
+       auraient deux couleurs différentes. Teinte reprise du POC de Gildas (`charge-poc (4).html`). */
+    if (value < 0.8) return { label: "SOUS-CHARGE", color: "#eab308", text: coach ? "En dessous de sa zone d'entraînement optimale (ACWR < 0,8)." : "En dessous de ta zone d'entraînement optimale (ACWR < 0,8)." };
     if (value <= 1.3) return { label: "ZONE OPTIMALE", color: "#2f9e44", text: "Dans la fourchette de charge recommandée (ACWR 0,8–1,3)." };
     if (value <= 1.5) return { label: "RISQUE MODÉRÉ", color: "#f28a00", text: coach ? "Charge récente nettement au-dessus de sa charge chronique : récupération à surveiller." : "Charge récente nettement au-dessus de ta charge chronique : surveille la récupération." };
     return { label: "RISQUE ÉLEVÉ", color: "#d10000", text: coach ? "Charge récente très au-dessus de sa charge chronique (ACWR > 1,5)." : "Charge récente très au-dessus de ta charge chronique (ACWR > 1,5)." };
@@ -139,7 +144,10 @@ export function trendDimInfo(dim: "fitness" | "fatigue", trend: TrendDirection, 
 
 type ZoneInfo = { label: string; color: string; text: string };
 type Severity = "good" | "watch" | "alert";
-function severityOf(color: string): Severity {
+/* Exporté (2026-09-28) — les cartes d'indice de l'Accueil ont besoin de la même lecture de
+   sévérité pour décider si l'insight doit porter l'action (l'indice décroche) ou expliquer
+   l'indicateur (tout va bien). Dupliquer ce test de couleur ailleurs le ferait diverger. */
+export function severityOf(color: string): Severity {
   if (color === "#d10000") return "alert";
   if (color === "#f28a00") return "watch";
   return "good";
@@ -466,6 +474,20 @@ export type DayPoint = {
   recovery: number | null;  // wellness score ce jour-là
   form: number | null;      // Forme (Fitness − Fatigue) en % de la charge chronique, voir formPercentSeries — null si <14j d'historique
   formRaw: number | null;   // Forme en UA brutes (fitness EWMA42j − fatigue EWMA7j), pour affichage tooltip
+  /* Les 3 champs suivants (2026-09-27) alimentent les lectures "Charge" et "Adaptation" du chart
+     (voir ChargeReportChart.tsx). Tous déjà calculés par acwrSeries()/formPercentSeries(), simplement
+     jamais recopiés ici jusque-là — aucun nouveau calcul. */
+  /* Charge AIGUË en UA : moyenne glissante 7j se terminant ce jour-là. C'est CETTE série que la
+     fenêtre saine 0.8-1.3 × chronique borne — pas `load` (2026-09-27, bug trouvé par Gildas : "j'ai
+     des barres qui dépassent donc soit disant trop de charge mais en prod j'ai pas ça"). L'ACWR est
+     par définition `aiguë / chronique`, donc une seule journée dure peut valoir 2-3× la chronique
+     alors que l'ACWR reste en zone optimale — comparer la charge du JOUR à cette bande produit des
+     dépassements qui n'existent pas. Jamais gated sur 14j, contrairement à `chronic` : une moyenne
+     sur ce qui existe est calculable dès le 1er jour. */
+  acute: number | null;
+  chronic: number | null;   // charge chronique en UA à ce jour-là (moyenne glissante 28j, convention ACWR) — la fenêtre saine est 0.8-1.3 × cette valeur, comparée à `acute` ci-dessus
+  fitness: number | null;   // Fitness = EWMA 42j de la charge, en UA (convention Banister/CTL)
+  fatigue: number | null;   // Fatigue = EWMA 7j de la charge, en UA (convention Banister/ATL)
 };
 
 export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDaily[], days = 28, anchor: Date = new Date()): DayPoint[] {
@@ -489,7 +511,12 @@ export function buildDailyTimeSeries(sessions: Session[], wellness: WellnessDail
     // wellnessSignal() dans wellnessBaseline.ts pour le pourquoi ; nécessaire pour que ce chiffre
     // reste comparable à la baseline personnelle calculée ailleurs sur la même donnée.
     const recovery = w ? wellnessSignal(w) : null;
-    return { date: p.date, load: p.load, monotony: monotonyVal, strain: strainVal, acwr: acwrPoints[idx].value, recovery, form, formRaw };
+    return {
+      date: p.date, load: p.load, monotony: monotonyVal, strain: strainVal, acwr: acwrPoints[idx].value,
+      recovery, form, formRaw,
+      acute: rollingStatsOf(loadPoints.slice(0, idx + 1), 7).mean,
+      chronic: acwrPoints[idx].chronic, fitness: fp.fitness, fatigue: fp.fatigue,
+    };
   });
 }
 

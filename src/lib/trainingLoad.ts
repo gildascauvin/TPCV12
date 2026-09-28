@@ -118,12 +118,17 @@ function acuteChronicAt(series: LoadPoint[], idx: number): { acute: number; chro
  * chronique s'élargit progressivement : dès qu'un point a 28j d'historique derrière lui, sa valeur
  * est identique à acwr() ; avant ça, c'est une approximation qui se resserre au fil des jours.
  */
-export function acwrSeries(series: LoadPoint[]): { value: number | null; hasEnoughHistory: boolean }[] {
+export function acwrSeries(series: LoadPoint[]): { value: number | null; hasEnoughHistory: boolean; acute: number | null; chronic: number | null }[] {
   return series.map((_, idx) => {
     const ac = acuteChronicAt(series, idx);
-    if (!ac) return { value: null, hasEnoughHistory: false };
-    if (ac.chronic === 0) return { value: null, hasEnoughHistory: true };
-    return { value: Math.round((ac.acute / ac.chronic) * 100) / 100, hasEnoughHistory: true };
+    if (!ac) return { value: null, hasEnoughHistory: false, acute: null, chronic: null };
+    /* `acute`/`chronic` exposés en UA (2026-09-27) — nécessaires pour tracer la fenêtre aiguë saine
+       directement sur l'axe des UA (`chronique × 0.8` à `× 1.3`) plutôt que de tracer le ratio sur un
+       axe 0-2 : c'est la même information, mais lisible pour un sportif sans historique suffisant
+       (les UA du jour existent dès J1, la bande n'apparaît qu'à 14j) et sans jamais poser de seuil
+       fixe sur une échelle d'UA, qui n'en a pas. Additif : les 2 champs déjà présents sont inchangés. */
+    if (ac.chronic === 0) return { value: null, hasEnoughHistory: true, acute: ac.acute, chronic: ac.chronic };
+    return { value: Math.round((ac.acute / ac.chronic) * 100) / 100, hasEnoughHistory: true, acute: ac.acute, chronic: ac.chronic };
   });
 }
 

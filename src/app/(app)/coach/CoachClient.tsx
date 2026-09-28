@@ -817,7 +817,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           return (
             <>
               {homeTab !== "comportements" && <CrossInsightBanner data={data} isDemoData={!a.user_id} />}
-              {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}
             </>
