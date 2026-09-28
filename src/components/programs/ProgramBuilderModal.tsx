@@ -11,7 +11,7 @@ import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import AlertBox from "@/components/calendar/AlertBox";
-import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import WellnessRing from "@/components/wellness/WellnessRing";
@@ -826,7 +826,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                       key={sIdx} day={day} sIdx={sIdx} session={s}
                       onClick={() => setEditingTarget({ weekIdx, day, sessionIdx: sIdx })}
                       badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion!.reco), bg: `${suggestionSeverityColor(suggestion!)}22`, color: suggestionSeverityColor(suggestion!) } : undefined}
-                      gaugeOverride={isTarget ? adjustDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
+                      gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 5, suggestion!.reco) : undefined}
                       autoregReco={isTarget ? suggestion!.reco : undefined}
                     />
                   );

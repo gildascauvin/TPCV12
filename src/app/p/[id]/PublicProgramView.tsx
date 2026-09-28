@@ -7,7 +7,7 @@ import type { Program, SessionTemplate, WeekTemplate } from "@/types";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
-import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
@@ -405,7 +405,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
                     <SessionTemplateCard
                       key={sIdx}
                       session={s}
-                      gaugeOverride={isTarget ? adjustDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
+                      gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
                       badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco), bg: `${severityColor}22`, color: severityColor! } : undefined}
                       renderExerciseLine={isTarget ? (line, li) => {
                         const modified = parseAndApply(line, suggestion.reco);

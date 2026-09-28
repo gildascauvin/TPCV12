@@ -44,7 +44,10 @@ export interface AutoregSuggestion {
    pourraient diverger entre déclenchement et affichage. */
 export function zoneRange(target: number, dir: AutoregDir): { zoneLow: number; zoneHigh: number } {
   const t = Math.round(target);
-  return dir === "high" ? { zoneLow: t, zoneHigh: t + 1 } : { zoneLow: t - 1, zoneHigh: t };
+  // Bornée à l'échelle 1-10 (2026-09-28) — sans ça une cible à 10 affichait "10-11", une cible à 1
+  // "0-1". La range retombe alors sur un point unique, que DecisionGauge sait déjà afficher.
+  const clamp = (v: number) => Math.min(10, Math.max(1, v));
+  return dir === "high" ? { zoneLow: clamp(t), zoneHigh: clamp(t + 1) } : { zoneLow: clamp(t - 1), zoneHigh: clamp(t) };
 }
 
 /* Conversion POINTS DE RPE (signés) <-> % à appliquer aux exercices — table FIXE, indépendante de la
@@ -79,6 +82,16 @@ export function pctToPoints(pct: number): number {
   if (abs <= 5) return sign * 2;
   if (abs <= 10) return sign * 3;
   return sign * 4;
+}
+
+/* Nouvelle difficulté après un ajustement d'autorégulation — PRÉVU + POINTS, jamais un % de la
+   difficulté (2026-09-28, bug : "quand je valide un ajustement, la barre de RPE prévu ne s'update
+   pas"). adjustDifficulty() (loadAdjust.ts) multiplie la difficulté par (1+pct) : depuis la table
+   fixe pointsToPct() (±1 point = ±2,5%), 7 × 0,95 = 6,65 arrondi à 7 — le RPE ne bougeait jamais,
+   seules les charges changeaient. adjustDifficulty() reste la bonne formule pour Reconduire/Dupliquer
+   (vraie progression en %), celle-ci sert à tout ce qui applique une décision d'autorégulation. */
+export function applyAutoregDifficulty(diff: number, pct: number): number {
+  return Math.max(1, Math.min(10, Math.round(diff + pctToPoints(pct))));
 }
 
 /* Reco = écart de la forme du jour à la PROPRE NORME du sportif, jamais à la difficulté prévue
@@ -117,8 +130,8 @@ export function pctToPoints(pct: number): number {
      en séance de travail casse l'intention du bloc, c'est le seul cas où elle est non ambiguë.
      L'inverse reste vrai (une séance à 10/10 peut toujours s'alléger — c'est tout l'objet).
 
-   Escalade critique (inchangée) : côté Alléger seulement, un garde-fou absolu (score composite brut
-   < 40) ou z ≤ Z_SEVERE force le plafond (2 points) et l'icône 🚨. Ils n'inventent jamais un
+   Escalade critique : côté Alléger seulement, un garde-fou absolu (score composite brut
+   < 40) ou z ≤ Z_SEVERE force 3 points (−10%, 2026-09-28) et l'icône 🚨. Ils n'inventent jamais un
    déclenchement à eux seuls, ils n'escaladent qu'un Alléger déjà déclenché par l'écart à la norme.
 
    `chronicPenalty` (points, 0/-10/-20 selon la zone chronique ACWR/monotonie/contrainte/Fitness —
@@ -165,8 +178,11 @@ export function computeAutoregSuggestion(
   const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
   const critical = dir === "low" && (guardRail || severe);
 
+  // Critique = 3 points (2026-09-28, retour de Gildas) : avant, forcé à 2 comme "très fatigué", le 🚨
+  // ne changeait que la couleur. Asymétrique volontairement : la surcharge reste plafonnée à 2 points
+  // (z ≥ 0,6 ≈ 1 jour sur 4, +3 transformerait trop souvent une séance à 7 en 10/10).
   // Clamp dans [1,10] : ce qui déborde réduit l'ampleur, jusqu'à annuler la reco s'il ne reste rien.
-  const magnitude = critical ? 2 : Math.abs(points);
+  const magnitude = critical ? 3 : Math.abs(points);
   const target = Math.min(10, Math.max(1, plannedDifficulty + (dir === "low" ? -magnitude : magnitude)));
   const signedPoints = Math.round(target - plannedDifficulty);
   if (signedPoints === 0) return null;

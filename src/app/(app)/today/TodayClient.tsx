@@ -31,6 +31,7 @@ import ShareButton from "@/components/sessions/ShareButton";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
@@ -549,7 +550,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         if (!isActive) { setPaywallStep("priming"); return; }
         const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
         const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
-        const target_difficulty = adjustDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
+        const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
         const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTargetTop.id).select().single();
         if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
         return original;

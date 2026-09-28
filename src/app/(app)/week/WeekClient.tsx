@@ -24,6 +24,7 @@ import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, w
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { usePaywall } from "@/hooks/usePaywall";
@@ -690,7 +691,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                       if (!isActive) { setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
-                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                      const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
                       const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
                       if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
                       setAutoregPreview(null);

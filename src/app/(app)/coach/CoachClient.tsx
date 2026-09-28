@@ -16,7 +16,7 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
-import { computeAutoregSuggestion } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, applyAutoregDifficulty } from "@/lib/autoregulation";
 import { monotonyStrainFor } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
@@ -404,7 +404,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   async function applyAutoregAdjust(athleteId: string, session: CoachViewSession, pct: number) {
     const notes = session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
-    const target_difficulty = adjustDifficulty(session.target_difficulty ?? 6, pct);
+    const target_difficulty = applyAutoregDifficulty(session.target_difficulty ?? 6, pct);
     const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: { notes, target_difficulty } });
     if (result.ok) {
       setSessions(prev => prev.map(s => s.id === session.id ? { ...s, notes, target_difficulty } : s));

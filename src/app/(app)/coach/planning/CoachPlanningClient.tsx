@@ -34,6 +34,7 @@ import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -1098,7 +1099,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       if (!isActive) { setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
-                      const target_difficulty = adjustDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+                      const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
                       const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: autoregTarget.id, data: { notes, target_difficulty } });
                       if (result.ok) setSessions(prev => prev.map(s => s.id === autoregTarget.id ? { ...s, notes, target_difficulty } : s));
                       setAutoregPreview(null);
