@@ -4,8 +4,8 @@ import { useState, useId } from "react";
 import type { ChartSpec } from "@/lib/metricCards";
 
 /* Chart générique d'UN indice (2026-09-28) — le détail qui se déplie sous une carte d'indice de
-   l'Accueil. Les charts existants (ZoneSparkline, SparkLineClient, ChargeReportChart) sont
-   composites par construction : chacun trace plusieurs métriques ensemble. Ici il en faut un par
+   l'Accueil. Les charts existants (ZoneSparkline, SparkLineClient) sont composites par
+   construction : chacun trace plusieurs métriques ensemble. Ici il en faut un par
    indice, donc un composant piloté par un descripteur (ChartSpec, construit dans metricCards.ts),
    qui reste la source unique des bornes, des bandes, des couleurs et des formats.
 

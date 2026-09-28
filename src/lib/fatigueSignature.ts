@@ -474,9 +474,9 @@ export type DayPoint = {
   recovery: number | null;  // wellness score ce jour-là
   form: number | null;      // Forme (Fitness − Fatigue) en % de la charge chronique, voir formPercentSeries — null si <14j d'historique
   formRaw: number | null;   // Forme en UA brutes (fitness EWMA42j − fatigue EWMA7j), pour affichage tooltip
-  /* Les 3 champs suivants (2026-09-27) alimentent les lectures "Charge" et "Adaptation" du chart
-     (voir ChargeReportChart.tsx). Tous déjà calculés par acwrSeries()/formPercentSeries(), simplement
-     jamais recopiés ici jusque-là — aucun nouveau calcul. */
+  /* Les 3 champs suivants (2026-09-27) alimentent les lectures "Charge" et "Adaptation" des charts
+     de l'Accueil. Tous déjà calculés par acwrSeries()/formPercentSeries(), simplement jamais
+     recopiés ici jusque-là — aucun nouveau calcul. */
   /* Charge AIGUË en UA : moyenne glissante 7j se terminant ce jour-là. C'est CETTE série que la
      fenêtre saine 0.8-1.3 × chronique borne — pas `load` (2026-09-27, bug trouvé par Gildas : "j'ai
      des barres qui dépassent donc soit disant trop de charge mais en prod j'ai pas ça"). L'ACWR est
