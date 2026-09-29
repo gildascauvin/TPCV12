@@ -4351,3 +4351,49 @@ comportement **négatif** et **du jour de référence**, axe manquant ignoré au
 vers le bas, bandes alignées sur les seuils Gabbett. Le POC lui-même est vérifié par un harnais qui
 exécute son script et relit le HTML produit (16 contrôles) — `node --check` ne suffit pas, déjà vu
 passer du code qui appelait des fonctions supprimées. Pas de clic réel par Claude : Gildas fait la QA.
+
+## Ligne "Phase" sur la carte décision + règles de reco par difficulté (2026-09-29)
+
+POC validé par Gildas : `https://claude.ai/artifact/11bpzLBxxQ3HHcRPmgUnFN`. Commit préalable `bcdd844` (même jour) : la baisse de la tendance Fitness ne resserre plus le seuil d'Alléger (sa seule alerte est une baisse = perte de forme, l'inverse d'une fatigue) ; texte "ta charge récente pèse" quand l'Alléger vient du seul chronique ; tri Coach Control aligné via `computeDecisionCard` (`hasCardSuggestion`).
+
+### La ligne Phase (`decisionCard.ts`, param `day`)
+La 3e ligne chronique de la carte (ctxLine) est remplacée, sur `/today` et Coach Control, par l'insight croisé `crossTrendInsight()` rendu par `PhaseLine.tsx` ("Phase" + pastille du code). Titre + ligne 2 dépendent de l'état de la journée (`DecisionDay`) :
+
+| Moment | Titre / ligne 2 | Phase |
+|---|---|---|
+| Avant wellness (séance prévue) | "Plan à confirmer" / "Séance X prévue." | Moitié charge en clair (charge récente + charge de fond), vraie phrase floutée + CTA "Renseigner mon ressenti" (flou plutôt que cadenas, pas de CTA côté coach) |
+| Wellness rempli | Reco inchangée ; "Plan cohérent" gagne une ligne 2 | `crossTrendInsight().text` |
+| Séance faite | "Séance faite" / RPE réel vs prévu | Phrase croisée + phrase sur demain (`afterText`) |
+| Jour de repos | "Jour de repos" / séance de demain | Phrases dédiées au repos (`restText`) |
+
+- Fenêtre `CONSEILS_HISTORY_DAYS` pour les tendances de la phase, pour ne pas diverger de l'onglet Charge.
+- Cold-start (pas de baseline) : la phase lit le ressenti avec la bande 60-80 de la reco (`absoluteFeel`), jamais les seuils 50/70 de `sigDimInfo` (un 55 donnait "Récupération basse" puis "récupération correcte"). Textes "correcte/basse/bonne" au lieu de "ta norme".
+- `CrossInsightBanner` retiré des onglets Charge/Récupération (/today et fiche sportif coach) : doublon. Perdus avec lui : le partage "Ma signature de fatigue" (les liens existants s'ouvrent toujours) et l'alerte "séance demain, récup fragile". Reste `DemoDataChip` en sandbox/démo.
+- Carte décision centrée et sans bordure quand elle porte une phase (`AlertBox` prop `centered`).
+
+### `crossTrendInsight()` réécrit
+Bug trouvé par Gildas : "Phase Accumulation" suivi de "...tu es en phase d'adaptation". Cause : titre et fin de phrase venaient de deux sources, et l'axe "état" comptait la fatigue EWMA 7j, qui monte mécaniquement dès que la charge monte, donc toute montée en charge avec un ressenti normal devenait "Accumulation" rouge.
+- Axe état = ressenti seul ; la fatigue récente ne fait que nuancer la phrase quand elle contredit le ressenti.
+- Une phrase par code (`crossPhaseText`), titre et texte ne peuvent plus diverger. `mergeChargeIntoBody` supprimé.
+- Vocabulaire : "charge récente" (7j) / "charge de fond" (42j), sans chiffres ni parenthèses. Longueur moyenne voulue par Gildas (ni "Charge et récupération stables." trop court, ni les anciennes phrases à rallonge).
+- Impact : aussi le titre de la signature sur `/coach/athletes` (`athletesData.ts`).
+
+### Règles de reco par difficulté (`computeAutoregSuggestion`)
+Déclencheur : un user à 79 avec une séance à 9 se voyait proposer 10.
+
+| Ressenti | Légère (1-3) | Modérée (4-7) | Dure (8-10) |
+|---|---|---|---|
+| Fatigué (−1 à −3) | idem | idem | idem |
+| Dans la norme | rien | rien | **−1** (`kind: "norm_hard"`, texte "garde un point de marge") |
+| Un peu frais | **+1** | +1 | **rien** |
+| Nettement frais | **+2** | +2 | **rien** |
+
+- Remplace le blocage total de la surcharge des séances ≤3 (3 → 5 au plus, la périodisation tient) et le "Fix de suivi" du 27/09 plus haut (une séance dure seule suffit de nouveau à mettre un sportif "à décider", cohérent avec sa carte).
+- Effet de seuil assumé : 57 + séance à 9 → −1, 58 → rien.
+- Effet de bord positif : la séance démo de l'onboarding (candidat 2 pour un profil frais) peut enfin déclencher un Surcharger.
+
+### Jauge : zone toujours 2 valeurs
+`zoneRange` glisse aux bords ("9-10", "1-2") au lieu de retomber sur un point ; mode libre = plan + le point en dessous ; mode décidé = 2 valeurs contenant la valeur appliquée. Le filet de sécurité de `computeAutoregSuggestion` garde la zone non glissée (sinon "1-2" absorbait l'allègement d'une séance à 2). Bande dessinée ±0,35 point autour des bornes (`DecisionGauge`) : le curseur sur une borne paraissait hors zone.
+
+### Vérifié
+Typecheck ; matrices de cas via `tsx` (5 moments × 4 ressentis, grille score × difficulté) ; rendu sandbox athlète (avant wellness, reco, jauge libre 7-8) et coach (phase 3e personne). Pas testé au clic réel sur un compte.
