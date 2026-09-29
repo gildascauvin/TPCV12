@@ -7,7 +7,8 @@ import type { Program, SessionTemplate, WeekTemplate } from "@/types";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
-import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
+import DecisionGauge from "@/components/sessions/DecisionGauge";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
@@ -406,6 +407,30 @@ export default function PublicProgramView({ program, coachName }: Props) {
                       key={sIdx}
                       session={s}
                       gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
+                      /* Jauge de décision en lecture seule (2026-09-29) — même composant qu'en app
+                         (/today, Coach Control) : la ZONE de RPE conseillée (2 entiers, zoneRange())
+                         et le repère "prévu" sur la difficulté d'origine. DiffGauge, jusqu'ici
+                         utilisée ici, ne sait afficher qu'une valeur unique : la recommandation
+                         elle-même (le range) restait donc invisible sur cette page, alors que c'est
+                         exactement ce que le simulateur du bandeau vend juste au-dessus. */
+                      gaugeSlot={isTarget ? (() => {
+                        const planned = s.target_difficulty ?? 6;
+                        const adjusted = applyAutoregDifficulty(planned, suggestion.reco);
+                        const { zoneLow, zoneHigh } = zoneRange(adjusted, suggestion.dir);
+                        return (
+                          <DecisionGauge
+                            light
+                            readOnly
+                            dir={suggestion.dir}
+                            zoneLow={zoneLow}
+                            zoneHigh={zoneHigh}
+                            value={adjusted}
+                            plannedMarker={planned}
+                            hint={`Zone conseillée ${zoneLow}–${zoneHigh} · prévu ${Math.round(planned)}`}
+                            onChange={() => {}}
+                          />
+                        );
+                      })() : undefined}
                       badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco), bg: `${severityColor}22`, color: severityColor! } : undefined}
                       renderExerciseLine={isTarget ? (line, li) => {
                         const modified = parseAndApply(line, suggestion.reco);

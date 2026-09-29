@@ -16,7 +16,7 @@ export function loadBarColor(avg: number): string {
   return "#d44000";
 }
 
-export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride }: {
+export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride, gaugeSlot }: {
   session: SessionTemplate;
   onClick?: () => void;
   dragHandleProps?: Record<string, unknown>;
@@ -30,6 +30,11 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
   /* Idem pour la jauge : affiche la difficulté ajustée (adjustDifficulty()) plutôt que
      session.target_difficulty brut, sans jamais muter la séance elle-même. */
   gaugeOverride?: number;
+  /* Remplace entièrement DiffGauge par une jauge fournie par l'appelant — sur /p/[id], la
+     DecisionGauge en lecture seule, qui montre la ZONE de RPE conseillée (2 entiers, zoneRange())
+     et le repère de la difficulté prévue, là où DiffGauge ne sait afficher qu'une valeur unique.
+     Additif : absent = DiffGauge, comportement 100% inchangé pour le program builder. */
+  gaugeSlot?: React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = gaugeOverride ?? session.target_difficulty ?? null;
@@ -57,7 +62,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
           {badgeOverride?.label ?? "Prévu"}
         </span>
       </div>
-      {gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null}
+      {gaugeSlot ?? (gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null)}
       {exercises.length > 0 && (
         <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
