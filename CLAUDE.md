@@ -4397,3 +4397,39 @@ Déclencheur : un user à 79 avec une séance à 9 se voyait proposer 10.
 
 ### Vérifié
 Typecheck ; matrices de cas via `tsx` (5 moments × 4 ressentis, grille score × difficulté) ; rendu sandbox athlète (avant wellness, reco, jauge libre 7-8) et coach (phase 3e personne). Pas testé au clic réel sur un compte.
+
+## Fitness/Fatigue passent dans l'insight de Récupération + 2 bugs d'insight corrigés (2026-09-29)
+
+Trois incohérences signalées par Gildas **en conditions réelles sur son compte**, dont deux avaient
+la même cause racine.
+
+**Racine — Fitness et Fatigue étaient AFFICHÉES dans l'onglet Récupération mais RACONTÉES dans
+l'insight de la Charge.** `METRIC_GROUPS.recup` contient `["recovery","form","fitness","fatigue"]`,
+alors que `chargeCrossInsight()` recevait `fitnessTrendInfo`/`fatigueTrendInfo` et
+`recoveryCrossInsight()` ne les recevait pas du tout. Conséquences observées : (1) l'insight de
+récupération ne pouvait **structurellement** pas mentionner la fatigue accumulée ; (2) la carte
+décision disait « ta charge de fond baisse » pendant que l'onglet Charge disait « ta charge récente
+est en hausse » — deux fenêtres différentes (Fitness EWMA 42j, Fatigue EWMA 7j), toutes les deux
+vraies, lues comme une contradiction. **Décision de Gildas : elles vont dans Récupération**, avec les
+cartes qui les affichent.
+
+**Bug corrigé — `recoveryCrossInsight()` avalait la Forme en silence.** La fonction croise
+wellness × Forme en 4 branches (bon/bon, bas/bas, bon/dégradé, bas/bon) et **tombait dans un repli
+`return recoveryInfo.text` dès que le wellness était « Équilibré »** : aucune des 4 ne matche, donc la
+Forme était ignorée quelle que soit sa valeur. C'est précisément le cas où elle porte toute
+l'information. Deux branches ajoutées (récup dans la norme + Forme dégradée / fraîche), et le repli
+final parle désormais des tendances Fitness/Fatigue.
+
+**Hiérarchie de parole, pour ne pas empiler** : la Forme EST Fitness − Fatigue, donc dès qu'elle sort
+de sa bande neutre elle porte déjà l'info. Fitness/Fatigue ne parlent **que** quand la Forme est
+plate — leur seul angle mort réel : les deux montent ensemble, ce qui laisse la Forme immobile alors
+qu'il se passe quelque chose. Et quand rien ne bouge, on n'ajoute rien (pas de meublage).
+
+**Vocabulaire unifié** — trois termes coexistaient pour la charge chronique : « charge de fond » (17
+occurrences), « charge habituelle » (10), « charge chronique » (27). Gildas a tranché : **« charge
+récente » et « charge chronique »**, jamais un nom de fenêtre (« sur 6 semaines ») qu'il ne voulait
+pas. Les deux premiers termes n'existent plus dans `src/`.
+
+**Vérifié** : `tsc` propre, et les 3 cas rejoués contre les vraies fonctions (script jetable) — la
+Forme est enfin dite quand le wellness est neutre, Fitness/Fatigue parlent quand la Forme est plate,
+rien n'est ajouté quand rien ne bouge, et `chargeCrossInsight()` ne mentionne plus fitness/fatigue.

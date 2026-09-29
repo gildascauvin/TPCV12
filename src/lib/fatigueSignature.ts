@@ -43,7 +43,7 @@ export function computeSignature(sessions: Session[], wellnessScore: number, day
 /** Définitions courtes pour les tooltips au survol des badges (ACWR/Monotonie/Contrainte/Récup/Forme) —
  * neutres (pas de "tu"/"ta"), réutilisables telles quelles côté sportif et côté coach. */
 export const METRIC_DEFINITIONS: Record<"acwr" | "monotony" | "strain" | "recovery" | "form" | "fitness" | "fatigue", string> = {
-  acwr: "Charge des 7 derniers jours comparée à la charge habituelle (28j). Une hausse trop rapide augmente le risque de blessure.",
+  acwr: "Charge des 7 derniers jours comparée à la charge chronique (28j). Une hausse trop rapide augmente le risque de blessure.",
   monotony: "Régularité de la charge d'entraînement. Trop répétitive = risque de fatigue et de blessure plus élevé (Foster, 1998).",
   strain: "Charge × Monotonie. Une charge élevée et répétitive à la fois est plus risquée que prise séparément (Foster, 1998).",
   recovery: "Récupération du jour : sommeil, stress, courbatures, motivation.",
@@ -84,9 +84,9 @@ export function sigDimInfo(dim: "load" | "monotony" | "recovery" | "strain" | "f
   if (dim === "form") {
     // 3 bandes (pas 5) — la version à 5 paliers testée d'abord ajoutait plus de bruit que de
     // lecture utile sur un aussi petit chart ; ±8% aligné sur recoveryCrossInsight juste au-dessus.
-    if (value >= 8) return { label: "FRAIS", color: "#2f9e44", text: coach ? "Charge récente sous sa charge habituelle : fraîcheur disponible." : "Ta charge récente est sous ta charge habituelle : fraîcheur disponible." };
-    if (value > -8) return { label: "ÉQUILIBRÉ", color: "#8a8f94", text: "Charge récente proche de la charge habituelle." };
-    return { label: "FATIGUE ACCUMULÉE", color: "#d10000", text: coach ? "Charge récente au-dessus de sa charge habituelle : fatigue qui s'accumule." : "Ta charge récente est au-dessus de ta charge habituelle : fatigue qui s'accumule." };
+    if (value >= 8) return { label: "FRAIS", color: "#2f9e44", text: coach ? "Charge récente sous sa charge chronique : fraîcheur disponible." : "Ta charge récente est sous ta charge chronique : fraîcheur disponible." };
+    if (value > -8) return { label: "ÉQUILIBRÉ", color: "#8a8f94", text: "Charge récente proche de la charge chronique." };
+    return { label: "FATIGUE ACCUMULÉE", color: "#d10000", text: coach ? "Charge récente au-dessus de sa charge chronique : fatigue qui s'accumule." : "Ta charge récente est au-dessus de ta charge chronique : fatigue qui s'accumule." };
   }
   if (dim === "load") {
     /* Jaune et non plus gris (2026-09-27, demande de Gildas pour la ligne du chart Charge — "jaune si
@@ -137,7 +137,7 @@ export function trendDimInfo(dim: "fitness" | "fatigue", trend: TrendDirection, 
     if (trend === "down") return { label: "FITNESS ↘", color: "#f28a00", text: coach ? "Charge chronique en baisse : possible perte de forme si ça dure." : "Ta charge chronique est en baisse : possible perte de forme si ça dure." };
     return { label: "FITNESS → STABLE", color: "#8a8f94", text: "Charge chronique stable ces derniers jours." };
   }
-  if (trend === "up") return { label: "FATIGUE ACCUMULÉE ↗", color: "#f28a00", text: coach ? "Charge récente en hausse par rapport à sa charge habituelle." : "Ta charge récente est en hausse par rapport à ta charge habituelle." };
+  if (trend === "up") return { label: "FATIGUE ACCUMULÉE ↗", color: "#f28a00", text: coach ? "Charge récente en hausse par rapport à sa charge chronique." : "Ta charge récente est en hausse par rapport à ta charge chronique." };
   if (trend === "down") return { label: "FATIGUE ACCUMULÉE ↘", color: "#2f9e44", text: coach ? "Charge récente en baisse : récupération en cours." : "Ta charge récente est en baisse : récupération en cours." };
   return { label: "FATIGUE ACCUMULÉE → STABLE", color: "#8a8f94", text: "Charge récente stable ces derniers jours." };
 }
@@ -208,26 +208,26 @@ export function chargeMetricAttribution(dim: "load" | "monotony" | "strain", per
   return `${cap(name)} est en zone de risque : ${action}`;
 }
 
-export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null, perspective: Perspective = "athlete"): string {
+/* Fitness et Fatigue ne sont PLUS ici (2026-09-29, décision de Gildas). Elles étaient AFFICHÉES
+   comme cartes dans l'onglet Récupération mais RACONTÉES dans l'insight de la charge — d'où les
+   deux incohérences qu'il a relevées en prod : l'insight de récup ne pouvait structurellement pas
+   mentionner sa fatigue accumulée, et l'insight de charge disait "ta charge récente est en hausse"
+   pendant que la carte décision disait "ta charge chronique baisse". Elles vivent désormais dans
+   recoveryCrossInsight(), avec les cartes qui les affichent. */
+export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
-  const items: { name: string; text: string; key: "load" | "monotony" | "strain" | "fitness" | "fatigue"; sev: Severity }[] = [
+  const items: { name: string; text: string; key: "load" | "monotony" | "strain"; sev: Severity }[] = [
     { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", text: loadInfo.text, key: "load", sev: severityOf(loadInfo.color) },
     { name: coach ? "sa monotonie" : "ta monotonie", text: monotonyInfo.text, key: "monotony", sev: severityOf(monotonyInfo.color) },
     { name: coach ? "son strain" : "ton strain", text: strainInfo.text, key: "strain", sev: severityOf(strainInfo.color) },
   ];
-  // "charge chronique (fitness)" plutôt que le seul mot "fitness" — traduit ce que l'indicateur
-  // mesure réellement (même vocabulaire que trendDimInfo()/METRIC_DEFINITIONS.fitness) tout en
-  // gardant le lien avec le libellé du badge ("FITNESS ↗") juste au-dessus dans la carte.
-  if (fitnessTrendInfo) items.push({ name: coach ? "sa charge chronique (fitness)" : "ta charge chronique (fitness)", text: fitnessTrendInfo.text, key: "fitness", sev: severityOf(fitnessTrendInfo.color) });
-  if (fatigueTrendInfo) items.push({ name: coach ? "sa fatigue accumulée" : "ta fatigue accumulée", text: fatigueTrendInfo.text, key: "fatigue", sev: severityOf(fatigueTrendInfo.color) });
   const alerts = items.filter(i => i.sev === "alert");
   const watches = items.filter(i => i.sev === "watch");
   if (alerts.length >= 2) return coach
     ? `Plusieurs signaux de charge convergent vers un risque accru (${alerts.map(a => a.name).join(", ")}) : allègement conseillé dans les prochains jours.`
     : `Plusieurs signaux de charge convergent vers un risque accru (${alerts.map(a => a.name).join(", ")}) : allège significativement dans les prochains jours.`;
   if (alerts.length === 1) {
-    const key = alerts[0].key as "load" | "monotony" | "strain"; // fitness/fatigue jamais "alert"
-    const action = CHARGE_METRIC_ACTION[key][coach ? "coach" : "athlete"];
+    const action = CHARGE_METRIC_ACTION[alerts[0].key][coach ? "coach" : "athlete"];
     return `${cap(alerts[0].name)} est en zone de risque : ${action}`;
   }
   if (watches.length >= 2) return coach
@@ -249,8 +249,7 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
     const tail = coach ? "Le reste de ses indicateurs est bon." : "Le reste de tes indicateurs est bon.";
     return `${watches[0].text} ${tail}`;
   }
-  const extra = (fitnessTrendInfo || fatigueTrendInfo) ? ", fitness et fatigue" : "";
-  return `Charge, monotonie, strain${extra} sont tous dans des zones saines : rien à ajuster.`;
+  return `Charge, monotonie et strain sont tous dans des zones saines : rien à ajuster.`;
 }
 
 /**
@@ -264,12 +263,30 @@ export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, s
  * fin de phrase ("Sommeil au-dessus de ta norme.") — répond au "pour savoir quelle dimension
  * impacte" plutôt que de laisser l'insight composite sans détail. Absent/insuffisant = comportement
  * 100% inchangé (phrase seule, comme avant ce paramètre). */
-export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number | null, perspective: Perspective = "athlete", baseline?: WellnessBaselineResult | null): string {
+/**
+ * `fitnessTrendInfo`/`fatigueTrendInfo` (2026-09-29) : ces deux cartes vivent dans l'onglet
+ * Récupération, leur tendance doit donc être racontée ici et plus dans chargeCrossInsight().
+ *
+ * Elles ne parlent QUE dans le cas où la Forme n'a rien à dire, et c'est volontaire : la Forme EST
+ * Fitness − Fatigue, donc dès qu'elle sort de sa bande neutre elle porte déjà l'information. Elles
+ * comblent le seul angle mort réel — Fitness et Fatigue qui montent ENSEMBLE, ce qui laisse la Forme
+ * plate alors qu'il se passe quelque chose.
+ */
+export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number | null, perspective: Perspective = "athlete", baseline?: WellnessBaselineResult | null, fitnessTrendInfo?: ZoneInfo | null, fatigueTrendInfo?: ZoneInfo | null): string {
   const dominant = baseline ? describeDominantDimension(baseline, perspective) : null;
   const suffix = dominant ? ` ${dominant.charAt(0).toUpperCase() + dominant.slice(1)}.` : "";
-
-  if (formValue === null) return recoveryInfo.text + suffix;
   const coach = perspective === "coach";
+
+  /* Repli commun, appelé partout où les branches croisées n'ont rien à dire. Avant (2026-09-29, bug
+     trouvé par Gildas en prod) ce repli renvoyait le seul texte de récupération : dès que le
+     wellness était "Équilibré", AUCUNE des quatre branches ne matchait et la Forme, la Fitness et la
+     Fatigue étaient avalées en silence — quelle que soit leur valeur. C'est justement le cas où
+     elles portent toute l'information. */
+  const trendTail = () => {
+    const notable = [fitnessTrendInfo, fatigueTrendInfo].filter((t): t is ZoneInfo => !!t && severityOf(t.color) !== "good");
+    return notable.length ? ` ${notable.map(t => t.text).join(" ")}` : "";
+  };
+  if (formValue === null) return recoveryInfo.text + trendTail() + suffix;
   // Bornes alignées sur la bande "Équilibré" de sigDimInfo (±8%, voir plus haut) — pas de nouveau
   // seuil inventé séparément.
   const formGood = formValue >= 8;
@@ -288,11 +305,23 @@ export function recoveryCrossInsight(recoveryInfo: ZoneInfo, formValue: number |
     : "Récupération basse et forme dégradée en même temps : signaux convergents de fatigue, priorise la récupération.") + suffix;
   if (wellGood && formBad) return (coach
     ? "Récupération bonne, mais charge récente au-dessus de l'habituelle : surveille les prochains jours, une fatigue avec décalage peut encore apparaître."
-    : "Tu te sens bien, mais ta charge récente dépasse ta charge habituelle : reste vigilant les prochains jours, une fatigue avec décalage peut encore apparaître.") + suffix;
+    : "Tu te sens bien, mais ta charge récente dépasse ta charge chronique : reste vigilant les prochains jours, une fatigue avec décalage peut encore apparaître.") + suffix;
   if (wellBad && formGood) return (coach
     ? "Charge récente sous l'habituelle mais récupération basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie son sommeil et son stress des derniers jours."
-    : "Ta charge récente est sous ta charge habituelle mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie ton sommeil et ton stress des derniers jours.") + suffix;
-  return recoveryInfo.text + suffix;
+    : "Ta charge récente est sous ta charge chronique mais ta récupération reste basse : la fatigue ne semble pas (encore) liée à l'entraînement, vérifie ton sommeil et ton stress des derniers jours.") + suffix;
+
+  /* Récupération dans la norme : c'est ici que la Forme doit parler, pas se taire. Elle n'a aucune
+     branche croisée à elle seule, donc sans ces deux cas elle n'était jamais dite. */
+  if (formBad) return (coach
+    ? "Sa récupération est dans sa norme, mais sa charge récente dépasse sa charge chronique : la fatigue s'accumule avant qu'il la ressente."
+    : "Ta récupération est dans ta norme, mais ta charge récente dépasse ta charge chronique : la fatigue s'accumule avant que tu la ressentes.") + suffix;
+  if (formGood) return (coach
+    ? "Sa récupération est dans sa norme et sa charge récente est sous sa charge chronique : de la fraîcheur disponible pour pousser."
+    : "Ta récupération est dans ta norme et ta charge récente est sous ta charge chronique : tu as de la fraîcheur disponible pour pousser.") + suffix;
+
+  /* Tout est neutre : seul cas où Fitness et Fatigue apportent quelque chose que la Forme ne dit
+     pas — elles peuvent monter ensemble et laisser la Forme plate. */
+  return recoveryInfo.text + trendTail() + suffix;
 }
 
 /* Titre par code — mêmes 9 noms que l'ancien TREND_STATUS_LABEL de decisionCard.ts (retiré de là,
@@ -323,7 +352,7 @@ const CROSS_TREND_SEVERITY: Record<string, Severity> = {
  *     ressenti dans la norme, c'est de l'adaptation.
  *   - la phrase est écrite PAR CODE (une seule source pour titre et texte, ils ne peuvent plus
  *     diverger), puis nuancée par la fatigue récente seulement quand elle contredit le ressenti.
- *   - vocabulaire sans chiffres : "charge récente" (EWMA 7j) et "charge de fond" (EWMA 42j).
+ *   - vocabulaire sans chiffres : "charge récente" (EWMA 7j) et "charge chronique" (EWMA 42j).
  * Libellés relatifs (FRAIS/ÉQUILIBRÉ/FATIGUÉ, baseline perso) → "ta norme" ; libellés absolus
  * (cold-start) → "correcte/basse/bonne", jamais une norme qui n'existe pas encore.
  * `loadInfo`/`monotonyInfo`/`strainInfo`/`fitnessTrendInfo` gardés dans la signature pour les
@@ -368,16 +397,16 @@ function crossPhaseText(code: string, coach: boolean, relative: boolean): string
   const recGood = relative ? `est au-dessus de ${ta} norme` : "est bonne";
   switch (code) {
     case "accumulation": return coach
-      ? `Sa récupération ${recBad} alors que sa charge de fond monte : les signaux de fatigue convergent, allège ses prochains jours.`
-      : `Ta récupération ${recBad} alors que ta charge de fond monte : les signaux de fatigue convergent, lève le pied quelques jours.`;
-    case "recuperation_insuffisante": return `${Ta} récupération ${recBad} alors que ${ta} charge de fond est stable : priorité au sommeil et au repos avant d'enchaîner.`;
-    case "fatigue_persistante": return `${Ta} charge de fond baisse mais ${ta} récupération ${recBad} : la fatigue n'est pas encore résorbée.`;
-    case "adaptation": return `${Ta} charge de fond monte et ${ta} récupération ${recMid} : ${coach ? "son corps encaisse bien" : "ton corps encaisse bien, continue sur cette lancée"}.`;
-    case "recuperation_legere": return `${Ta} charge de fond baisse et ${ta} récupération ${recMid} : bien pour souffler, mais possible perte de forme si ça dure.`;
-    case "supercompensation": return `${Ta} charge de fond monte et ${ta} récupération ${recGood} : ${coach ? "assimilation en cours, bon moment pour performer" : "tu assimiles bien, bon moment pour performer"}.`;
-    case "tolerance_stable": return `${Ta} charge de fond est stable et ${ta} récupération ${recGood} : ${coach ? "de la marge pour pousser" : "tu as de la marge pour pousser"}.`;
-    case "recuperation": return `${Ta} charge de fond baisse et ${ta} récupération ${recGood} : ${coach ? "réserves rechargées" : "tu refais le plein d'énergie"}.`;
-    default: return `${Ta} charge de fond et ${ta} récupération sont stables : ${coach ? "rythme habituel, rien à changer" : "tu es dans ton rythme habituel, rien à changer"}.`;
+      ? `Sa récupération ${recBad} alors que sa charge chronique monte : les signaux de fatigue convergent, allège ses prochains jours.`
+      : `Ta récupération ${recBad} alors que ta charge chronique monte : les signaux de fatigue convergent, lève le pied quelques jours.`;
+    case "recuperation_insuffisante": return `${Ta} récupération ${recBad} alors que ${ta} charge chronique est stable : priorité au sommeil et au repos avant d'enchaîner.`;
+    case "fatigue_persistante": return `${Ta} charge chronique baisse mais ${ta} récupération ${recBad} : la fatigue n'est pas encore résorbée.`;
+    case "adaptation": return `${Ta} charge chronique monte et ${ta} récupération ${recMid} : ${coach ? "son corps encaisse bien" : "ton corps encaisse bien, continue sur cette lancée"}.`;
+    case "recuperation_legere": return `${Ta} charge chronique baisse et ${ta} récupération ${recMid} : bien pour souffler, mais possible perte de forme si ça dure.`;
+    case "supercompensation": return `${Ta} charge chronique monte et ${ta} récupération ${recGood} : ${coach ? "assimilation en cours, bon moment pour performer" : "tu assimiles bien, bon moment pour performer"}.`;
+    case "tolerance_stable": return `${Ta} charge chronique est stable et ${ta} récupération ${recGood} : ${coach ? "de la marge pour pousser" : "tu as de la marge pour pousser"}.`;
+    case "recuperation": return `${Ta} charge chronique baisse et ${ta} récupération ${recGood} : ${coach ? "réserves rechargées" : "tu refais le plein d'énergie"}.`;
+    default: return `${Ta} charge chronique et ${ta} récupération sont stables : ${coach ? "rythme habituel, rien à changer" : "tu es dans ton rythme habituel, rien à changer"}.`;
   }
 }
 

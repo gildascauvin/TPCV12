@@ -152,11 +152,11 @@ function chargeHalfText(fatigue: TrendDirection | null, fitness: TrendDirection 
   const short = fatigue === "up" ? "pèse plus que d'habitude" : fatigue === "down" ? "se relâche" : "est stable";
   if (!fitness || fitness === "stable") {
     return fatigue === "stable"
-      ? `${Ta} charge récente et ${v(voice, "ta", "sa")} charge de fond sont stables : ${v(voice, "ton", "son")} ressenti dira si le rythme convient.`
-      : `${Ta} charge récente ${short}, ${v(voice, "ta", "sa")} charge de fond est stable.`;
+      ? `${Ta} charge récente et ${v(voice, "ta", "sa")} charge chronique sont stables : ${v(voice, "ton", "son")} ressenti dira si le rythme convient.`
+      : `${Ta} charge récente ${short}, ${v(voice, "ta", "sa")} charge chronique est stable.`;
   }
   const long = fitness === "up" ? "monte" : "baisse";
-  return `${Ta} charge récente ${short}, et ${v(voice, "ta", "sa")} charge de fond ${long}.`;
+  return `${Ta} charge récente ${short}, et ${v(voice, "ta", "sa")} charge chronique ${long}.`;
 }
 
 type Feel = "bad" | "mid" | "good";
@@ -178,15 +178,15 @@ function restText(feel: Feel, relative: boolean, fitness: TrendDirection | null,
   }
   if (feel === "good") {
     const head = fitness === "down"
-      ? `${Ta} récupération ${relative ? `est au-dessus de ${ta} norme` : "est bonne"} et ${ta} charge de fond baisse : ce repos n'était pas indispensable.`
+      ? `${Ta} récupération ${relative ? `est au-dessus de ${ta} norme` : "est bonne"} et ${ta} charge chronique baisse : ce repos n'était pas indispensable.`
       : `${Ta} récupération ${relative ? `est au-dessus de ${ta} norme` : "est bonne"} : ce repos a bien fait son travail.`;
     return head + (hasTomorrow ? " Demain, la séance prévue est le bon moment pour pousser." : "");
   }
   return `${Ta} récupération ${relative ? `est dans ${ta} norme` : "est correcte"} et ${ta} fatigue accumulée baisse avec ce repos.`
     + (fitness === "down"
       ? (hasTomorrow
-        ? ` ${Ta} charge de fond baisse aussi : la séance de demain tombe bien pour la relancer.`
-        : ` Attention, ${ta} charge de fond baisse aussi : possible perte de forme si ça dure.`)
+        ? ` ${Ta} charge chronique baisse aussi : la séance de demain tombe bien pour la relancer.`
+        : ` Attention, ${ta} charge chronique baisse aussi : possible perte de forme si ça dure.`)
       : "");
 }
 

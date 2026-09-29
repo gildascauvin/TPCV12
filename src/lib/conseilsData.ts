@@ -337,8 +337,10 @@ export function computeConseilsData(
   const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, perspective) : null;
   const fatigueTrendInfo = ffTrend.fatigue !== null ? trendDimInfo("fatigue", ffTrend.fatigue, perspective) : null;
 
-  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, fitnessTrendInfo, fatigueTrendInfo, perspective);
-  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, perspective, wellnessBaseline);
+  /* Fitness/Fatigue passent de l'insight de charge à celui de récupération (2026-09-29) : ce sont
+     des cartes de l'onglet Récupération, elles doivent être racontées là où elles sont affichées. */
+  const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, perspective);
+  const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, perspective, wellnessBaseline, fitnessTrendInfo, fatigueTrendInfo);
 
   // Insight global "croisé" (remplace classifyTrend()/describeTrend() — voir fatigueSignature.ts) :
   // dérivé des MÊMES entrées que les cartes ⚡ Charge / 🌿 Récupération ci-dessus, jamais d'une 3e
