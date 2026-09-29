@@ -407,12 +407,16 @@ export default function PublicProgramView({ program, coachName }: Props) {
                       key={sIdx}
                       session={s}
                       gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
-                      /* Jauge de décision en lecture seule (2026-09-29) — même composant qu'en app
-                         (/today, Coach Control) : la ZONE de RPE conseillée (2 entiers, zoneRange())
-                         et le repère "prévu" sur la difficulté d'origine. DiffGauge, jusqu'ici
-                         utilisée ici, ne sait afficher qu'une valeur unique : la recommandation
-                         elle-même (le range) restait donc invisible sur cette page, alors que c'est
-                         exactement ce que le simulateur du bandeau vend juste au-dessus. */
+                      /* Jauge de décision en lecture seule (2026-09-29) — même composant et même
+                         comportement qu'en app (/today, Coach Control) : le curseur reste sur la
+                         difficulté PRÉVUE, c'est la ZONE conseillée (2 entiers, zoneRange() autour
+                         de la cible) qui se déplace autour de lui, et le libellé sous la jauge est
+                         celui que DecisionGauge calcule lui-même (sous / dans / au dessus). On ne
+                         passe donc ni `value` ajustée ni `hint` : la recommandation se lit dans
+                         l'écart entre le curseur et la bande verte, comme en prod. DiffGauge,
+                         utilisée ici jusqu'à présent, ne sait afficher qu'une valeur unique — le
+                         range restait donc invisible, alors que c'est exactement ce que le
+                         simulateur du bandeau vend juste au-dessus. */
                       gaugeSlot={isTarget ? (() => {
                         const planned = s.target_difficulty ?? 6;
                         const adjusted = applyAutoregDifficulty(planned, suggestion.reco);
@@ -424,9 +428,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
                             dir={suggestion.dir}
                             zoneLow={zoneLow}
                             zoneHigh={zoneHigh}
-                            value={adjusted}
-                            plannedMarker={planned}
-                            hint={`Zone conseillée ${zoneLow}–${zoneHigh} · prévu ${Math.round(planned)}`}
+                            value={planned}
                             onChange={() => {}}
                           />
                         );
