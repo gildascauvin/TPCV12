@@ -5,7 +5,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import MetricChart from "@/components/conseils/MetricChart";
 import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, DIMENSION_KEYS, type DimensionKey, type Perspective } from "@/lib/wellnessBaseline";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
-import { severityOf, type DayPoint } from "@/lib/fatigueSignature";
+import { displaySeverityOf, type DayPoint } from "@/lib/fatigueSignature";
 import { wellnessColor } from "@/lib/wellness";
 import {
   METRICS, METRIC_GROUPS, TREND_ARROW, TREND_IS_STATUS, AGG_BANDS, aggregateFor,
@@ -114,7 +114,9 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           const relLast = recoveryRelative.filter((x): x is number => x !== null).slice(-1)[0] ?? null;
           const v = metric === "recovery" ? relLast : lastOf(metric, series);
           const trend = trendFor(metric, series, days, metric === "recovery" ? recoveryRelative : undefined);
-          const decroche = info ? severityOf(info.color) !== "good" : false;
+          /* displaySeverityOf : la sous-charge est hors zone, donc la carte doit porter son texte
+             d'action et pas la pédagogie "tout va bien" (même bug que l'insight, 2026-09-29). */
+          const decroche = info ? displaySeverityOf(info.color) !== "good" : false;
           const impact = impactFor(metric, info?.text ?? null, trend.dir, decroche, perspective);
           const isOpen = open === metric;
           const trendIsStatus = TREND_IS_STATUS.includes(metric);

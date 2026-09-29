@@ -4451,3 +4451,20 @@ opposés** — le stress est la seule dimension inversée (`dimensionRaw` : `10 
 Vérifié par script sur un cas construit (20 j autour de 3, aujourd'hui à 8) : l'insight dit « Stress
 nettement au-dessus de ta norme », le chart place le point dans « PLUS DE STRESS », le tooltip
 annonce « 8/10 déclaré ». Non-régression vérifiée sur une dimension non inversée (sommeil).
+
+### Sous-charge ACWR invisible pour les insights (2026-09-29, suite)
+Signalé par Gildas : le 21/09 l'insight de charge annonçait « Charge, monotonie et strain sont tous
+dans des zones saines » alors que l'ACWR était **en sous-charge**. Cause : la couleur jaune
+`#eab308`, introduite le 2026-09-27 pour distinguer la sous-charge du gris « pas de donnée »,
+n'était reconnue par aucune branche de `severityOf()` et retombait silencieusement sur `"good"` —
+donc invisible pour tout mécanisme piloté par la sévérité depuis cette date.
+
+**Le fix évident aurait été faux.** `severityOf()` est délibérément consommée par `chronicPenalty`
+(decisionCard.ts), qui resserre le seuil d'allègement : y compter la sous-charge aurait poussé vers
+« allège » quelqu'un qui s'entraîne déjà trop peu — un commentaire du fichier l'énonçait déjà
+explicitement. Les deux fonctions répondent à deux questions différentes, d'où **`displaySeverityOf()`**
+(nouvelle) : « cet indicateur est-il hors de sa zone saine ? » (sous-charge = `watch`), là où
+`severityOf()` reste « est-ce que ça pousse vers la fatigue ? ». Utilisée par `chargeCrossInsight()`
+et par le `decroche` des cartes d'indice (même bug : la carte ACWR affichait la pédagogie « tout va
+bien » au lieu de son texte d'action). Vérifié par script, y compris la non-régression de
+`chronicPenalty` et des autres couleurs.

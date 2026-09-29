@@ -156,6 +156,26 @@ export function severityOf(color: string): Severity {
 }
 
 /**
+ * Sévérité d'AFFICHAGE — la sous-charge y compte comme un signal, contrairement à `severityOf()`.
+ *
+ * Les deux répondent à des questions différentes, et c'est pour ça qu'on ne peut pas les fusionner :
+ *  - `severityOf()` dit « est-ce que ça pousse vers la fatigue ? ». Elle alimente `chronicPenalty`,
+ *    qui resserre le seuil d'allègement — y compter la sous-charge reviendrait à pousser vers
+ *    « allège » quelqu'un qui s'entraîne déjà trop peu (choix délibéré, voir decisionCard.ts).
+ *  - ici on demande « cet indicateur est-il hors de sa zone saine ? ». La sous-charge l'est.
+ *
+ * Bug trouvé par Gildas en prod le 2026-09-29 : l'insight de charge annonçait « Charge, monotonie et
+ * strain sont tous dans des zones saines » un jour où l'ACWR était en sous-charge. Cause : la
+ * couleur jaune `#eab308` (introduite le 2026-09-27 pour distinguer la sous-charge du gris
+ * "pas de donnée") n'était reconnue par aucune des deux branches de `severityOf()` et retombait
+ * silencieusement sur "good".
+ */
+export function displaySeverityOf(color: string): Severity {
+  if (color === "#eab308") return "watch";   // sous-charge ACWR : hors zone, sans pousser vers la fatigue
+  return severityOf(color);
+}
+
+/**
  * Insight croisé "Charge" — combine ACWR, monotonie, strain, et (depuis le déplacement des badges
  * Fitness/Fatigue vers la carte Charge) leur tendance, en une seule phrase plutôt que de laisser le
  * sportif recouper 5 badges tout seul. Priorité aux signaux "alerte" (rouge), puis "à surveiller"
@@ -217,9 +237,11 @@ export function chargeMetricAttribution(dim: "load" | "monotony" | "strain", per
 export function chargeCrossInsight(loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo, perspective: Perspective = "athlete"): string {
   const coach = perspective === "coach";
   const items: { name: string; text: string; key: "load" | "monotony" | "strain"; sev: Severity }[] = [
-    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", text: loadInfo.text, key: "load", sev: severityOf(loadInfo.color) },
-    { name: coach ? "sa monotonie" : "ta monotonie", text: monotonyInfo.text, key: "monotony", sev: severityOf(monotonyInfo.color) },
-    { name: coach ? "son strain" : "ton strain", text: strainInfo.text, key: "strain", sev: severityOf(strainInfo.color) },
+    /* displaySeverityOf et pas severityOf : ici on parle de ce qui est HORS ZONE, la sous-charge
+       comprise — sans quoi l'insight annonçait "tous dans des zones saines" avec un ACWR < 0,8. */
+    { name: coach ? "sa charge (ACWR)" : "ta charge (ACWR)", text: loadInfo.text, key: "load", sev: displaySeverityOf(loadInfo.color) },
+    { name: coach ? "sa monotonie" : "ta monotonie", text: monotonyInfo.text, key: "monotony", sev: displaySeverityOf(monotonyInfo.color) },
+    { name: coach ? "son strain" : "ton strain", text: strainInfo.text, key: "strain", sev: displaySeverityOf(strainInfo.color) },
   ];
   const alerts = items.filter(i => i.sev === "alert");
   const watches = items.filter(i => i.sev === "watch");
