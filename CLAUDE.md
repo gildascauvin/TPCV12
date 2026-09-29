@@ -4325,10 +4325,22 @@ dans le viewBox (convention du repo). Pas de légende d'axe sous la jauge (retir
   l'onglet consulté au lieu de répéter un score de récupération sur l'onglet Charge. 58px, libellé
   masqué (il tomberait sous 4px). L'onglet Comportements n'a pas d'agrégat défini : il garde la ring.
 
-### Pas fait, décision explicite
-Le **tri de la liste coach est inchangé** (ACWR côté charge, score de récupération côté récup) : sur
-l'onglet récup l'ordre peut donc ne pas suivre exactement les jauges, qui intègrent aussi la Forme.
-Signalé à Gildas, laissé en l'état plutôt que changé silencieusement.
+### Tri, sections et liseré de la liste coach alignés sur l'agrégat (2026-09-29, même jour)
+D'abord laissé inchangé et signalé, puis basculé à la demande de Gildas. Les trois dérivent
+désormais du **même** `aggregateFor`, calculé une fois par sportif en tête de `TeamAnalyticsList` :
+- **tri** — charge : le plus éloigné du **milieu de la bande Optimal** remonte, dans un sens comme
+  dans l'autre (pas le milieu de l'axe : les bandes n'ont pas la même largeur) ; récup : le plus
+  fatigué d'abord. Départage alphabétique à égalité, conservé.
+- **sections** — le titre EST le libellé de la bande (Surcharge / Optimal / Sous-charge, Fatigué /
+  Équilibré / Frais), donc une section ne peut plus dire autre chose que la jauge de ses lignes.
+  Remplace les titres dérivés de `loadInfo.label`/`recoveryInfo.label` ("À surveiller", "En forme").
+- **liseré** — la couleur de la bande, au lieu de `metricStatusColor`.
+
+**Pourquoi les trois ensemble et pas le tri seul** : trier par l'agrégat en laissant les sections sur
+l'ancienne source remontait en tête un sportif que la monotonie seule met en surcharge, tout en
+l'affichant sous « Optimal » — vérifié dans le harnais (ACWR 1,05 parfait + monotonie 2,2 → classé
+Surcharge, section la plus préoccupante). L'onglet Comportements, sans agrégat, garde l'ancien
+chemin en repli.
 
 ### Vérifié
 `tsc --noEmit -p tsconfig.notnext.json` propre. **21 assertions** rejouées contre les vraies valeurs

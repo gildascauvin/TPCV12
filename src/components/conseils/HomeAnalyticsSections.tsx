@@ -192,6 +192,18 @@ function metricStatusColor(metric: Metric, data: ConseilsData): string {
 /* Regroupement en sections façon POC ("À surveiller"/"Optimal"/"Sous-charge") — dérivé des mêmes
    libellés de zone déjà affichés en badge sur chaque carte, jamais un nouveau seuil recalculé ici.
    `order` fixe l'ordre d'affichage (le plus préoccupant en premier). */
+/* Sections dérivées du score agrégé (2026-09-29) : le titre EST le libellé de la bande, donc la
+   section ne peut pas dire autre chose que la jauge de la ligne. L'ordre met le côté préoccupant en
+   premier et la sous-charge en dernier — la même hiérarchie que les sections qu'elles remplacent. */
+const AGG_SECTION_ORDER: Record<string, number> = {
+  Surcharge: 0, Optimal: 1, "Sous-charge": 2,
+  Fatigué: 0, Équilibré: 1, Frais: 2,
+};
+function sectionForAgg(bandLabel: string): { title: string; order: number } {
+  return { title: bandLabel, order: AGG_SECTION_ORDER[bandLabel] ?? 1 };
+}
+
+/* Repli pour l'onglet Comportements, qui n'a pas d'agrégat. */
 function sectionFor(metric: Metric, data: ConseilsData): { title: string; order: number } {
   if (metric === "charge") {
     const l = data.loadInfo.label;
@@ -228,21 +240,37 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
     return <div style={{ color: "#8a8f94", fontSize: 13, padding: "24px 0" }}>Aucun sportif à afficher.</div>;
   }
 
+  /* Le score agrégé de l'onglet pilote le tri, les sections ET le liseré (2026-09-29, Gildas :
+     "le tri avec les scores qu'on vient de mettre en place"). Il est calculé UNE fois par sportif
+     ici, puis réutilisé partout plus bas — sinon la jauge d'une ligne et sa position dans la liste
+     pourraient se contredire, exactement le genre de divergence corrigé ailleurs dans ce fichier.
+     Conséquence assumée : trier par l'agrégat sans faire suivre les sections aurait remonté en tête
+     un sportif que la monotonie seule met en surcharge, tout en l'affichant sous "Optimal". */
+  const aggGroup: MetricGroup | null = metric === "charge" ? "charge" : metric === "recuperation" ? "recup" : null;
+  type EnrichedRow = typeof rows[number] & { agg: ReturnType<typeof aggregateFor> };
+  const enriched: EnrichedRow[] = rows.map(r => ({ ...r, agg: aggGroup ? aggregateFor(aggGroup, r.data) : null }));
+
+  /* Point idéal de la charge = le milieu de la bande Optimal, pas 0,5 : les bandes n'ont pas la même
+     largeur (0,40-0,65), donc le centre de l'axe n'est pas le centre de l'optimal. */
+  const CHARGE_IDEAL = (AGG_BANDS.charge[1].from + AGG_BANDS.charge[1].to) / 2;
+
   /* Tri par sévérité, puis alphabétique à égalité (2026-09-28) : sans ce départage, deux sportifs
      au même niveau pouvaient permuter d'un rendu à l'autre au gré de l'ordre du roster, et un coach
      perdait la position qu'il venait de mémoriser. */
-  const byName = (r1: typeof rows[number], r2: typeof rows[number]) =>
+  const byName = (r1: EnrichedRow, r2: EnrichedRow) =>
     (r1.athlete.name ?? "").localeCompare(r2.athlete.name ?? "", "fr");
-  const sorted = [...rows].sort((r1, r2) => {
+  const sorted = [...enriched].sort((r1, r2) => {
     if (metric === "charge") {
-      const dev = (r: typeof r1) => { const last = r.data.zoneAcwr[r.data.zoneAcwr.length - 1]; return last === null ? 0 : Math.abs(last - 1); };
-      return dev(r2) - dev(r1) || byName(r1, r2);
+      // Le plus ÉLOIGNÉ du milieu de l'optimal remonte, dans un sens comme dans l'autre.
+      const off = (r: EnrichedRow) => (r.agg === null ? 0 : Math.abs(r.agg.pos - CHARGE_IDEAL));
+      return off(r2) - off(r1) || byName(r1, r2);
     }
     if (metric === "recuperation") {
-      const score = (r: typeof r1) => r.data.wellnessBaseline?.hasEnoughHistory ? r.data.wellnessBaseline.relativeScore : (r.data.timeSeries[r.data.timeSeries.length - 1]?.recovery ?? 50);
-      return score(r1) - score(r2) || byName(r1, r2);
+      // Le plus fatigué d'abord : ici l'axe a un sens, le bas est le côté préoccupant.
+      const p = (r: EnrichedRow) => r.agg?.pos ?? 0.5;
+      return p(r1) - p(r2) || byName(r1, r2);
     }
-    const sev = (r: typeof r1) => { const { worstHurt } = topBehaviors(r.data.correlations); return Math.abs(worstHurt?.impact ?? 0); };
+    const sev = (r: EnrichedRow) => { const { worstHurt } = topBehaviors(r.data.correlations); return Math.abs(worstHurt?.impact ?? 0); };
     return sev(r2) - sev(r1) || byName(r1, r2);
   });
 
@@ -250,7 +278,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
   // d'une section.
   const buckets = new Map<string, { order: number; rows: typeof sorted }>();
   for (const row of sorted) {
-    const { title, order } = sectionFor(metric, row.data);
+    const { title, order } = row.agg ? sectionForAgg(row.agg.band.label) : sectionFor(metric, row.data);
     if (!buckets.has(title)) buckets.set(title, { order, rows: [] });
     buckets.get(title)!.rows.push(row);
   }
@@ -269,17 +297,16 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
             <span style={{ background: "rgba(255,255,255,.10)", color: "rgba(255,255,255,.7)", borderRadius: 999, padding: "1px 8px", fontSize: 10.5 }}>{bucketRows.length}</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
-            {bucketRows.map(({ athlete: a, data }) => {
+            {bucketRows.map(({ athlete: a, data, agg: rowAggPos }) => {
               // Score de récupération — même résolution que RecuperationSection, hissé pour aussi
               // alimenter l'AthleteRing (un seul score par athlète, jamais deux calculs qui
               // pourraient diverger entre le ring et les badges).
               const recoveryScore = data.wellnessBaseline?.hasEnoughHistory ? data.wellnessBaseline.relativeScore : (data.timeSeries[data.timeSeries.length - 1]?.recovery ?? null);
-              const statusColor = metricStatusColor(metric, data);
-              /* Même extraction que les cartes de l'Accueil (aggregateFor) — jamais un second calcul
-                 ici, sinon la jauge de la ligne et celle du détail du sportif pourraient diverger. */
-              const aggGroup: MetricGroup | null = metric === "charge" ? "charge" : metric === "recuperation" ? "recup" : null;
-              const rowAggPos = aggGroup ? aggregateFor(aggGroup, data) : null;
+              /* Le liseré prend la couleur de la bande de l'agrégat : tri, section, liseré et jauge
+                 sortent tous de la même valeur, plus aucune de ces quatre lectures ne peut en
+                 contredire une autre. Repli sur l'ancienne couleur pour les Comportements. */
               const rowAgg = aggGroup && rowAggPos ? { ...rowAggPos, group: aggGroup } : null;
+              const statusColor = rowAgg ? rowAgg.band.color : metricStatusColor(metric, data);
 
               /* Philosophie des cartes d'indice appliquée au roster (2026-09-28, variante "C4" du POC) :
                  nom, puis une LIGNE PRINCIPALE "statut · valeur", puis l'insight ; aperçu et tendance
