@@ -14,7 +14,8 @@ import { type DimensionKey, type Perspective, type WellnessBaselineResult } from
 import IndexCards from "@/components/conseils/IndexCards";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
-import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, type MetricKey } from "@/lib/metricCards";
+import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_BANDS, aggregateFor, type MetricKey, type MetricGroup } from "@/lib/metricCards";
+import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { wellnessColor } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
@@ -274,6 +275,11 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
               // pourraient diverger entre le ring et les badges).
               const recoveryScore = data.wellnessBaseline?.hasEnoughHistory ? data.wellnessBaseline.relativeScore : (data.timeSeries[data.timeSeries.length - 1]?.recovery ?? null);
               const statusColor = metricStatusColor(metric, data);
+              /* Même extraction que les cartes de l'Accueil (aggregateFor) — jamais un second calcul
+                 ici, sinon la jauge de la ligne et celle du détail du sportif pourraient diverger. */
+              const aggGroup: MetricGroup | null = metric === "charge" ? "charge" : metric === "recuperation" ? "recup" : null;
+              const rowAggPos = aggGroup ? aggregateFor(aggGroup, data) : null;
+              const rowAgg = aggGroup && rowAggPos ? { ...rowAggPos, group: aggGroup } : null;
 
               /* Philosophie des cartes d'indice appliquée au roster (2026-09-28, variante "C4" du POC) :
                  nom, puis une LIGNE PRINCIPALE "statut · valeur", puis l'insight ; aperçu et tendance
@@ -380,7 +386,15 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <AthleteRing score={recoveryScore} />
+                    {/* Le score agrégé de l'onglet remplace la wellness ring (2026-09-29, Gildas :
+                        "la wellnessring est le plus pertinent déjà sur l'accueil") — ici la colonne
+                        de gauche doit parler de l'onglet consulté, pas répéter un score de
+                        récupération sur l'onglet Charge. Libellé masqué : à cette taille il
+                        tomberait sous 4px, la couleur et le liseré de la ligne suffisent.
+                        Onglet Comportements : pas d'agrégat défini, on garde la ring. */}
+                    {rowAgg
+                      ? <AggregateGauge pos={rowAgg.pos} band={rowAgg.band} bands={AGG_BANDS[rowAgg.group]} size={58} showLabel={false} />
+                      : <AthleteRing score={recoveryScore} />}
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" as const, gap: 2 }}>
                       {/* Le nom porte l'identité de la ligne : en petit, gris et en capitales
                           mono (le gabarit d'eyebrow des cartes d'indice, où il ne portait qu'un nom

@@ -8,11 +8,12 @@ import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { severityOf, type DayPoint } from "@/lib/fatigueSignature";
 import { wellnessColor } from "@/lib/wellness";
 import {
-  METRICS, METRIC_GROUPS, TREND_ARROW, TREND_IS_STATUS,
+  METRICS, METRIC_GROUPS, TREND_ARROW, TREND_IS_STATUS, AGG_BANDS, aggregateFor,
   chartSpecFor, DIMENSION_CHART_LABELS, dimensionSpec, impactFor, lastOf, prettyStatus,
   sessionQualifier, sessionReference, seriesOf, statusDisplayColor, trendFor, TREND_STATUS_LABEL,
   type MetricGroup, type MetricKey,
 } from "@/lib/metricCards";
+import AggregateGauge from "@/components/conseils/AggregateGauge";
 import type { ConseilsData } from "@/lib/conseilsData";
 
 /* Cartes d'indice de l'Accueil (2026-09-28) — variante E1 du POC `charge-variantes.html`, retenue
@@ -80,9 +81,31 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const recoveryRelative = baselineWindow.map(b => (b?.hasEnoughHistory ? b.relativeScore : null));
   const dimBadges = dimensionBadgesSeries(data.wellnessBaselineSeries).slice(-1)[0] ?? null;
 
+  /* Score agrégé de l'onglet, centré au-dessus des cartes (2026-09-29, Gildas) — une POSITION sur un
+     axe à 3 niveaux, pas une note ; voir aggregateFor() pour ce que chacun agrège et pourquoi.
+     Pas de légende d'axe sous la jauge (demandée explicitement retirée) : le libellé de niveau est
+     dans l'arc, et les bandes colorées disent déjà de quel côté on est. */
+  const agg = aggregateFor(group, data);
+
   return (
     <div>
-      <div style={{ marginBottom: 12, fontSize: 13, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>{insight}</div>
+      {/* Jauge puis insight, centrés dans le même bloc (2026-09-29, Gildas) : c'est l'insight de la
+          SECTION, donc le texte le plus important de l'écran — il passe devant les impacts des
+          cartes en taille, et il est aligné sous la jauge plutôt que collé au bord à gauche.
+          `maxWidth` : au-delà d'une soixantaine de caractères par ligne un texte centré devient
+          pénible à lire, la colonne est donc bornée même sur grand écran. */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center",
+        textAlign: "center", marginBottom: 16, gap: 12,
+      }}>
+        {agg && <AggregateGauge pos={agg.pos} band={agg.band} bands={AGG_BANDS[group]} />}
+        {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
+            légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
+            plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}
+        <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", maxWidth: 460 }}>
+          {insight}
+        </div>
+      </div>
 
       <div style={{ display: "grid", gap: 9 }}>
         {METRIC_GROUPS[group].map(metric => {

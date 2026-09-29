@@ -4267,3 +4267,75 @@ que relue — les 6 bugs ci-dessus ont tous été trouvés ainsi, aucun par lect
 `npm run build` (dev server actif, risque de corruption `.next` déjà documenté). **Pas de clic réel
 par Claude** : Gildas fait la QA, et c'est lui qui a trouvé l'incohérence Charge et l'échelle fausse
 de la récupération.
+
+## Score agrégé par onglet — jauge ouverte à 3 niveaux, Accueil et liste coach (2026-09-29)
+
+Suite des cartes d'indice du 2026-09-28. Question de Gildas : les écrans Charge et Récupération étant
+denses, un score global type ring ou jauge ne vaudrait-il pas le coup ? POC `charge-variantes.html`
+(section « Explorations — synthèse en tête », 4 variantes S1-S4), variante **S2 retenue**.
+
+### Ce n'est pas une note, c'est une position sur un axe
+Deux versions ont été construites et comparées dans le POC avant de trancher :
+- **Écartée — moyenne pondérée de sous-scores de qualité** (0 = mauvais, 100 = bon). Trois inventions
+  empilées (les sous-scores attribués aux seuils, les poids égaux, les bandes du composite) et un
+  défaut rédhibitoire vu sur les vraies données de Gildas : **elle sature à 100** dès que les trois
+  indicateurs sont dans leur zone, sans voir qu'on glisse vers le bas de l'optimal (son ACWR était à
+  0,85, tout en bas de la zone, et le composite affichait « 100 · Sain »).
+- **Retenue — une POSITION sur un axe directionnel à 3 niveaux** (reformulation de Gildas) : 0 = un
+  bout, 50 = le milieu de la zone visée, 100 = l'autre bout. Sous-charge / optimal / surcharge côté
+  charge, fatigué / équilibré / frais côté récupération. Un même chiffre ne peut donc plus vouloir
+  dire deux choses contraires.
+
+### Ce qui évite l'invention (`aggregateFor` dans `metricCards.ts`)
+- **Charge** : l'axe EST celui de l'ACWR (0-2), donc les bandes tombent sur ses seuils réels (Gabbett
+  0,8 et 1,3 → 40 % et 65 % de l'arc) avec leurs vraies proportions. Monotonie et contrainte ne
+  peuvent pousser que **vers la droite** (elles ne disent jamais « pas assez ») : elles n'ajoutent
+  aucun delta arbitraire, elles posent un **plancher** sur une frontière qui existe déjà (entrée de
+  surcharge, ou milieu de surcharge en alerte). Assumé : deux secondaires en alerte ne pèsent pas
+  plus qu'un seul.
+- **Récupération** : « pas que le wellness » (Gildas). On croise les deux axes réellement
+  indépendants — le **ressenti** (le score relatif, déjà le composite sommeil/stress/état
+  physique/motivation) et l'**objectif** (la Forme, dérivée de l'entraînement). Fitness et fatigue
+  n'entrent pas séparément, ce sont ses composantes ; reprendre les 4 dimensions une par une les
+  compterait deux fois. Les deux se moyennent légitimement parce qu'ils partagent la **même échelle
+  normalisée et les mêmes frontières** : ±8 % de Forme sur un axe -50/+50 tombe sur 42 % et 58 %,
+  exactement les bornes du percentile de récupération (±Z_SWC) — vérifié dans le code, pas supposé.
+  Les comportements négatifs de la veille, absents des deux (le signal part du `base_score`), posent
+  un **plafond juste sous « Frais »** au lieu d'un malus chiffré.
+- **Les couleurs ne sont pas choisies à la main** : chaque bande demande sa couleur à `sigDimInfo()`
+  ou à la rampe wellness sur une valeur représentative de sa zone (assertion dédiée), sinon elle
+  aurait fini par diverger du chart juste en dessous.
+
+### Rendu — `AggregateGauge.tsx` (nouveau)
+Arc **ouvert** de 240°, pas un cercle fermé (Gildas, après avoir vu la version calquée sur la wellness
+ring de `/today`) : l'ouverture en bas dit qu'il y a un plancher et un plafond, un cercle suggérerait
+un cycle. C'est la forme des jauges contrainte/monotonie, reprise en grand. Le libellé de niveau vit
+**dans** l'arc — c'est ce qui permet à la jauge d'être le seul readout du bloc, donc d'être grosse,
+sans eyebrow ni libellé répété à côté. Tout le texte est dans un calque HTML à taille fixe, jamais
+dans le viewBox (convention du repo). Pas de légende d'axe sous la jauge (retirée sur demande).
+
+### Emplacements
+- **Accueil sportif et détail d'un sportif côté coach** (`IndexCards`) : jauge centrée en haut des
+  onglets Charge et Récupération, suivie de **l'insight de section centré à 17,5px** — la même taille
+  que la ligne « statut · valeur » des cartes mais en graisse 600, pour coiffer les cartes sans
+  entrer en concurrence avec chacune. Colonne bornée à 460px (un texte centré plus large devient
+  pénible à suivre).
+- **Liste coach** (`TeamAnalyticsList`) : remplace l'`AthleteRing` de gauche (Gildas : « la
+  wellnessring est le plus pertinent déjà sur l'accueil ») — la colonne de gauche parle désormais de
+  l'onglet consulté au lieu de répéter un score de récupération sur l'onglet Charge. 58px, libellé
+  masqué (il tomberait sous 4px). L'onglet Comportements n'a pas d'agrégat défini : il garde la ring.
+
+### Pas fait, décision explicite
+Le **tri de la liste coach est inchangé** (ACWR côté charge, score de récupération côté récup) : sur
+l'onglet récup l'ordre peut donc ne pas suivre exactement les jauges, qui intègrent aussi la Forme.
+Signalé à Gildas, laissé en l'état plutôt que changé silencieusement.
+
+### Vérifié
+`tsc --noEmit -p tsconfig.notnext.json` propre. **21 assertions** rejouées contre les vraies valeurs
+de Gildas (script jetable) : le portage donne exactement ce que le POC affichait (charge **43 ·
+Optimal**, récup **53 · Équilibré**), plus les cas limites — plancher de surcharge qui ne tire jamais
+un ACWR déjà plus à droite vers la gauche, plafond « pas Frais » qui ne se déclenche que sur un
+comportement **négatif** et **du jour de référence**, axe manquant ignoré au lieu de tirer la moyenne
+vers le bas, bandes alignées sur les seuils Gabbett. Le POC lui-même est vérifié par un harnais qui
+exécute son script et relit le HTML produit (16 contrôles) — `node --check` ne suffit pas, déjà vu
+passer du code qui appelait des fonctions supprimées. Pas de clic réel par Claude : Gildas fait la QA.

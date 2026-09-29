@@ -13,8 +13,12 @@
    ici : les couleurs et les libellés viennent de sigDimInfo() (fatigueSignature.ts) et de
    WELLNESS_RAMP (wellness.ts), qui restent les sources uniques. */
 
-import { sigDimInfo, type DayPoint } from "@/lib/fatigueSignature";
-import { WELLNESS_RAMP } from "@/lib/wellness";
+import { sigDimInfo, severityOf, type DayPoint, type Severity } from "@/lib/fatigueSignature";
+import { WELLNESS_RAMP, wellnessColor } from "@/lib/wellness";
+/* Import de TYPE seulement : effacé à la compilation, donc aucun cycle à l'exécution avec
+   conseilsData.ts (qui, lui, n'importe rien d'ici — vérifié). */
+import type { ConseilsData } from "@/lib/conseilsData";
+import { BEHAVIOR_META } from "@/lib/behaviors";
 import { DIMENSION_LABELS, Z_SWC } from "@/lib/wellnessBaseline";
 import type { DimensionKey, Perspective, WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -501,4 +505,117 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
     colorAt: v => rampAt(0.5 + v / 5),
     tooltipExtra: i => (raws[i] !== null && raws[i] !== undefined ? `${Math.round(raws[i] as number)}/10 déclaré` : null),
   };
+}
+
+/* ── Score agrégé par onglet (2026-09-29, POC charge-variantes.html variante S2, retenue par Gildas)
+   ──────────────────────────────────────────────────────────────────────────────────────────────────
+   Ce n'est PAS une note de qualité ("72/100, c'est bien ?") mais une POSITION sur un axe qui a deux
+   extrémités opposées et un milieu souhaitable : 0 = un bout, 50 = le milieu de la zone visée,
+   100 = l'autre bout. Un même chiffre ne peut donc pas vouloir dire deux choses contraires, ce qui
+   condamnait la première version essayée (moyenne pondérée de sous-scores de qualité) : elle
+   saturait à 100 dès que les trois indicateurs étaient dans leur zone, sans voir qu'on glissait
+   vers le bas de l'optimal.
+
+   CHARGE — sous-charge ↔ optimal ↔ surcharge. Trois points qui évitent l'invention :
+     • l'axe est celui de l'ACWR (0-2), donc les bandes tombent sur ses seuils réels (Gabbett 0,8 et
+       1,3 → 40 % et 65 % de l'axe) et gardent leurs vraies proportions ;
+     • monotonie et contrainte ne peuvent pousser que vers la DROITE : elles ne disent jamais
+       "pas assez", seulement "trop accumulé". Elles n'ajoutent donc aucun delta arbitraire, elles
+       posent un PLANCHER sur une frontière qui existe déjà (entrée de surcharge, ou milieu de
+       surcharge si elles sont en alerte) ;
+     • un indicateur absent est ignoré, il ne tire pas le résultat vers le bas.
+   Assumé : deux indicateurs secondaires en alerte ne pèsent pas plus qu'un seul.
+
+   RÉCUPÉRATION — fatigué ↔ équilibré ↔ frais, et pas seulement le score de récupération (Gildas :
+   "pas que le wellness"). On croise les deux axes réellement INDÉPENDANTS :
+     • le ressenti — le score relatif, qui est déjà le composite de sommeil / stress / état physique
+       / motivation. Les reprendre un par un les compterait deux fois ;
+     • l'objectif — la Forme (Fitness − Fatigue), dérivée de l'entraînement, que le ressenti ignore.
+       Fitness et fatigue n'entrent pas séparément : ce sont ses deux composantes.
+   Les deux se moyennent légitimement parce qu'ils partagent la MÊME échelle normalisée et les MÊMES
+   frontières : ±8 % de Forme sur un axe -50/+50 tombe sur 42 % et 58 %, exactement les bornes du
+   percentile de récupération (±Z_SWC). Vérifié dans le code, pas supposé.
+   Les comportements négatifs de la veille ne sont dans aucun des deux (le signal part du
+   `base_score`, voir wellnessSignal) : ils posent un PLAFOND juste sous "Frais" plutôt qu'un malus
+   chiffré — on ne déclare pas quelqu'un frais au lendemain d'un écart, mais on n'invente pas de
+   combien. */
+export type AggBand = { label: string; color: string; from: number; to: number };
+
+/* Les couleurs ne sont pas choisies ici : on demande à sigDimInfo() et à la rampe wellness la
+   couleur qu'elles donnent déjà à une valeur représentative de chaque bande. Une bande recolorée à
+   la main finirait par diverger du chart juste en dessous. */
+export const AGG_BANDS: Record<MetricGroup, AggBand[]> = {
+  charge: [
+    { label: "Sous-charge", color: sigDimInfo("load", 0.5, "athlete").color, from: 0,    to: 0.4 },
+    { label: "Optimal",     color: sigDimInfo("load", 1.0, "athlete").color, from: 0.4,  to: 0.65 },
+    { label: "Surcharge",   color: sigDimInfo("load", 1.6, "athlete").color, from: 0.65, to: 1 },
+  ],
+  recup: [
+    { label: "Fatigué",   color: wellnessColor(20), from: 0,    to: 0.42 },
+    { label: "Équilibré", color: wellnessColor(50), from: 0.42, to: 0.58 },
+    { label: "Frais",     color: wellnessColor(85), from: 0.58, to: 1 },
+  ],
+};
+
+const CHARGE_SURCHARGE_ENTRY = 0.66;  // juste dans la bande surcharge (elle commence à 0,65)
+const CHARGE_SURCHARGE_MID   = 0.82;  // milieu de la bande surcharge
+const RECUP_BELOW_FRESH      = 0.57;  // juste sous "Frais" (qui commence à 0,58)
+
+export function chargeAggregatePos(a: {
+  acwr: number | null; monotonySeverity: Severity; strainSeverity: Severity;
+}): number | null {
+  if (a.acwr === null) return null;
+  let pos = Math.max(0, Math.min(1, a.acwr / 2));           // l'axe 0-2 de l'ACWR
+  const secondaries = [a.monotonySeverity, a.strainSeverity];
+  if (secondaries.includes("alert")) pos = Math.max(pos, CHARGE_SURCHARGE_MID);
+  else if (secondaries.includes("watch")) pos = Math.max(pos, CHARGE_SURCHARGE_ENTRY);
+  return pos;
+}
+
+export function recupAggregatePos(a: {
+  relativeScore: number | null; form: number | null; negativeBehaviors: number;
+}): number | null {
+  const parts: number[] = [];
+  if (a.relativeScore !== null) parts.push(Math.max(0, Math.min(1, a.relativeScore / 100)));
+  if (a.form !== null) parts.push(Math.max(0, Math.min(1, (a.form + 50) / 100)));
+  if (!parts.length) return null;
+  const mean = parts.reduce((x, y) => x + y, 0) / parts.length;
+  return a.negativeBehaviors > 0 ? Math.min(mean, RECUP_BELOW_FRESH) : mean;
+}
+
+export function bandFor(group: MetricGroup, pos: number): AggBand {
+  const bands = AGG_BANDS[group];
+  return bands.find(b => pos >= b.from && pos < b.to) ?? bands[bands.length - 1];
+}
+
+/* Extraction unique depuis ConseilsData — appelée à l'identique par les cartes de l'Accueil et par
+   la liste coach. Deux extractions séparées finiraient par ne plus dire la même chose, exactement
+   le défaut qu'on a déjà corrigé entre un ring et les badges d'une même ligne. */
+export function aggregateFor(group: MetricGroup, data: ConseilsData):
+  { pos: number; band: AggBand } | null {
+  let pos: number | null;
+  if (group === "charge") {
+    pos = chargeAggregatePos({
+      acwr: lastNonNull(data.zoneAcwr),
+      monotonySeverity: severityOf(data.monotonyInfo.color),
+      strainSeverity: data.strainInfo ? severityOf(data.strainInfo.color) : "good",
+    });
+  } else {
+    const last = data.timeSeries[data.timeSeries.length - 1];
+    const b = data.wellnessBaseline;
+    /* Le jour de référence uniquement : les comportements de la ligne J sont ceux de la veille de J
+       (voir la sémantique de wellness_daily.behaviors), donc ceux qui pèsent sur CE score. */
+    const todayBehaviors = data.recentBehaviors.find(r => r.date === data.referenceDate)?.behaviors ?? [];
+    pos = recupAggregatePos({
+      relativeScore: b?.hasEnoughHistory ? b.relativeScore : (last?.recovery ?? null),
+      form: last?.form ?? null,
+      negativeBehaviors: todayBehaviors.filter(k => BEHAVIOR_META[k] && !BEHAVIOR_META[k].positive).length,
+    });
+  }
+  return pos === null ? null : { pos, band: bandFor(group, pos) };
+}
+
+function lastNonNull(a: (number | null)[]): number | null {
+  for (let i = a.length - 1; i >= 0; i--) if (a[i] !== null) return a[i];
+  return null;
 }

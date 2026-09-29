@@ -143,7 +143,9 @@ export function trendDimInfo(dim: "fitness" | "fatigue", trend: TrendDirection, 
 }
 
 type ZoneInfo = { label: string; color: string; text: string };
-type Severity = "good" | "watch" | "alert";
+/* Exporté avec severityOf (2026-09-29) : le score agrégé de l'Accueil prend ces sévérités en
+   entrée, et les réécrire en union locale ailleurs les ferait diverger de severityOf. */
+export type Severity = "good" | "watch" | "alert";
 /* Exporté (2026-09-28) — les cartes d'indice de l'Accueil ont besoin de la même lecture de
    sévérité pour décider si l'insight doit porter l'action (l'indice décroche) ou expliquer
    l'indicateur (tout va bien). Dupliquer ce test de couleur ailleurs le ferait diverger. */
