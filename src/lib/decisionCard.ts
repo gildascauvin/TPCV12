@@ -1,8 +1,8 @@
 import type { Session } from "@/types";
-import { daysAgoStr, dailyLoad, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
-import { sigDimInfo, trendDimInfo } from "@/lib/fatigueSignature";
+import { daysAgoStr, dailyLoad, monotony, strain, acwr, formPercentSeries, type LoadPoint, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
+import { sigDimInfo } from "@/lib/fatigueSignature";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, type AutoregSuggestion } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, qualitativeDifficulty, type AutoregSuggestion } from "@/lib/autoregulation";
 
 /* Carte décision unifiée /today + Coach Control + Planning (2026-09, 2e itération — remplace la
    compétition todaySug/chargeRecupSug de la 1re itération) : UN SEUL calcul, toujours contre la
@@ -84,6 +84,13 @@ function chronicContextLine(worst: { text: string } | null): string | null {
   return worst.text;
 }
 
+function chronicOnlyAdvice(plannedDifficulty: number, subject?: string): string {
+  const qualif = qualitativeDifficulty(plannedDifficulty);
+  return subject
+    ? `La récupération de ${subject} seule ne justifie pas d'alléger, mais sa charge récente pèse : la séance ${qualif} prévue est un peu trop élevée.`
+    : `Ta récupération seule ne justifie pas d'alléger, mais ta charge récente pèse : la séance ${qualif} prévue est un peu trop élevée.`;
+}
+
 export interface DecisionCard {
   suggestion: AutoregSuggestion | null; // null = informatif seul, pas de jauge
   icon: string;
@@ -124,12 +131,16 @@ export function computeDecisionCard(params: {
   const loadInfo = loadZone.value !== null ? sigDimInfo("load", loadZone.value, params.perspective) : emptyZone;
   const monotonyInfo = monotonyVal !== null ? sigDimInfo("monotony", monotonyVal, params.perspective) : emptyZone;
   const strainInfo = strainVal !== null ? sigDimInfo("strain", strainVal, params.perspective) : emptyZone;
-  const ffTrend = fitnessFatigueTrend(load42);
-  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, params.perspective) : null;
   const formSeries = formPercentSeries(load42);
   const formValue = formSeries.length ? formSeries[formSeries.length - 1].value : null;
   const formInfo = formValue !== null ? sigDimInfo("form", formValue, params.perspective) : emptyZone;
 
+  /* Tendance Fitness retirée des candidats (2026-09-29, bug trouvé par Gildas : "Alléger
+     recommandé" sur un wellness "Équilibré", déclenché par "Ta charge chronique est en baisse") :
+     son seul état non-vert est la BAISSE, un risque de perte de forme, donc l'inverse d'une fatigue.
+     La compter ici resserrait le seuil d'allègement précisément quand le sportif en fait moins.
+     Seuls restent les signaux orientés fatigue (ACWR haut, monotonie, contrainte, Forme négative) ;
+     la sous-charge ACWR (jaune) est déjà "good" pour severityOf, même logique. */
   // Chaque candidat porte son propre objet `{text,...}` déjà écrit et directionnellement correct
   // (mêmes objets que la carte ⚡ Charge de /conseils) — jamais juste un nom de métrique, pour que
   // chronicContextLine() puisse réutiliser TEL QUEL le texte du candidat gagnant (voir plus bas).
@@ -137,7 +148,6 @@ export function computeDecisionCard(params: {
     { info: loadInfo, sev: severityOf(loadInfo.color) },
     { info: monotonyInfo, sev: severityOf(monotonyInfo.color) },
     { info: strainInfo, sev: severityOf(strainInfo.color) },
-    { info: fitnessTrendInfo ?? emptyZone, sev: fitnessTrendInfo ? severityOf(fitnessTrendInfo.color) : "good" },
     { info: formInfo, sev: severityOf(formInfo.color) },
   ];
   const chargeSeverity = worstOf(...chronicCandidates.map(c => c.sev));
@@ -153,11 +163,18 @@ export function computeDecisionCard(params: {
   const ctxLine = chronicContextLine(worstChronic);
 
   if (suggestion) {
+    /* Allègement déclenché par le seul chronique (2026-09-29) : sans la pénalité, le wellness du jour
+       n'aurait rien déclenché. autoregAdvice() écrirait alors "Récupération basse", faux à côté d'un
+       cercle "Équilibré" : la cause réelle est la charge, nommée juste en dessous par ctxLine. */
+    const chronicOnly = suggestion.dir === "low" && chronicPenalty !== 0
+      && !computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0);
     return {
       suggestion, icon: suggestion.icon,
       text: [
         autoregHeadline(suggestion.dir),
-        autoregAdvice(suggestion.dir, params.plannedDifficulty ?? 6, params.subject, params.baseline),
+        chronicOnly
+          ? chronicOnlyAdvice(params.plannedDifficulty ?? 6, params.subject)
+          : autoregAdvice(suggestion.dir, params.plannedDifficulty ?? 6, params.subject, params.baseline),
         ctxLine,
       ].filter((l): l is string => !!l).join("\n"),
     };

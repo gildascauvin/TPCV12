@@ -99,7 +99,7 @@ export function attention(a: CoachAthlete, maxDiff: number, trend?: TrendCode | 
      donc une carte sans geste possible. Les seuils retenus ici sont exactement ceux qui produisent une
      suggestion dans computeAutoregSuggestion (Z_SWC côté relatif, bande neutre 60-80 côté absolu),
      pour que les deux ne puissent plus diverger. Le côté SURCHARGE est couvert séparément par
-     hasSurchargeSuggestion() dans CoachClient.tsx. */
+     hasCardSuggestion() dans CoachClient.tsx. */
   if (baseline?.hasEnoughHistory) return isMildLowZ(baseline);
   return a.wellness_score < 60;
 }

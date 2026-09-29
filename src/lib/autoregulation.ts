@@ -134,7 +134,7 @@ export function applyAutoregDifficulty(diff: number, pct: number): number {
    < 40) ou z ≤ Z_SEVERE force 3 points (−10%, 2026-09-28) et l'icône 🚨. Ils n'inventent jamais un
    déclenchement à eux seuls, ils n'escaladent qu'un Alléger déjà déclenché par l'écart à la norme.
 
-   `chronicPenalty` (points, 0/-10/-20 selon la zone chronique ACWR/monotonie/contrainte/Fitness —
+   `chronicPenalty` (points, 0/-10/-20 selon la zone chronique ACWR/monotonie/contrainte/Forme —
    voir decisionCard.ts) : converti en décalage de z (÷50, soit -0.2/-0.4 = 1 à 2 SWC) et appliqué
    AVANT le calcul, pour que le chronique MODULE le journalier sans le concurrencer. Garde-fou
    conservé du fix 2026-09-25 ("pourquoi Thomas est en super forme et on lui recommande un RPE très

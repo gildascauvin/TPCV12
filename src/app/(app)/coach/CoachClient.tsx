@@ -16,8 +16,8 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
-import { computeAutoregSuggestion, applyAutoregDifficulty } from "@/lib/autoregulation";
-import { monotonyStrainFor } from "@/lib/decisionCard";
+import { applyAutoregDifficulty } from "@/lib/autoregulation";
+import { monotonyStrainFor, computeDecisionCard } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
@@ -350,16 +350,27 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // élevée) alors qu'un Surcharger a bien un CTA actionnable dans la carte (AutoregButtons inline).
   // Même calcul que la carte décision elle-même (computeAutoregSuggestion), pour ne jamais classer
   // un sportif en "Plan cohérent" alors que sa carte affiche une vraie suggestion.
-  function hasSurchargeSuggestion(a: CoachAthlete): boolean {
+  /* Étendu à toute suggestion de la carte (2026-09-29) : un Alléger déclenché par le seul chronique
+     (ACWR haut, Forme négative, via chronicPenalty) n'était vu ni par attention() ni par l'ancien
+     test Surcharger seul, qui appelait computeAutoregSuggestion sans la pénalité. La carte disait
+     "Alléger recommandé" dans la section "Plan cohérent". computeDecisionCard avec les mêmes
+     entrées que CoachAthleteCard : les deux ne peuvent plus diverger. */
+  function hasCardSuggestion(a: CoachAthlete): boolean {
     const topSession = getTopSession(a.id);
     if (!topSession || topSession.done) return false;
-    const wellness = a.wellnessFilledToday === false ? null : a.wellness_score;
-    return computeAutoregSuggestion(wellness, topSession.target_difficulty, baselines[a.id])?.dir === "high";
+    return computeDecisionCard({
+      wellnessScore: a.wellnessFilledToday === false ? null : a.wellness_score,
+      plannedDifficulty: topSession.target_difficulty,
+      baseline: baselines[a.id],
+      wellnessFilledToday: a.wellnessFilledToday !== false,
+      sessions: recentSessions[a.id] ?? [],
+      perspective: "coach",
+    }).suggestion !== null;
   }
 
   /* Une décision PRISE sort de "À décider maintenant" (2026-09-27, demande de Gildas — "que les
      décisions une fois faites partent dans 'plan cohérent'"). `reviewedIds` est indispensable ici :
-     appliquer un ajustement résout souvent le signal de SURCHARGE tout seul (hasSurchargeSuggestion
+     appliquer un ajustement résout souvent le signal de SURCHARGE tout seul (hasCardSuggestion
      recalcule depuis la nouvelle target_difficulty), mais jamais celui d'attention() — piloté par la
      récupération/la tendance/la monotonie, que l'ajustement de la séance ne change pas. Et
      "Maintenir" n'écrit rien du tout, donc ne change aucun signal. Sans cette règle, une carte
@@ -368,7 +379,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const needsDecision = (a: CoachAthlete) => {
     const hasSessions = sessions.some(s => s.athlete_id === a.id);
     const { monotonyVal, strainVal } = msFor(a.id);
-    return hasSessions && (attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasSurchargeSuggestion(a));
+    return hasSessions && (attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasCardSuggestion(a));
   };
   const priority = athletes.filter(a => needsDecision(a) && !reviewedIds.has(a.id));
   const stable = athletes.filter(a => !needsDecision(a) || reviewedIds.has(a.id));
