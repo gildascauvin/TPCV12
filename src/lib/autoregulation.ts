@@ -14,15 +14,28 @@ export type AutoregDir = "low" | "high";
    "Surcharger si wellness >= 80"). Jamais utilisé dès qu'un z personnel est disponible. */
 const ABSOLUTE_NEUTRAL_SCORE = 70;
 const ABSOLUTE_DEAD_ZONE = 10;
+/* Lecture du ressenti en repli absolu (pas encore de baseline perso) — la MÊME bande 60-80 qui
+   déclenche Alléger/Surcharger ci-dessous. Exportée (2026-09-29) pour la ligne Phase de la carte
+   décision : avec les seuils 50/70 de sigDimInfo, un 55 donnait "Récupération basse" en ligne 2 et
+   "récupération correcte" dans la phase juste en dessous. */
+export function absoluteFeel(score: number): "bad" | "mid" | "good" {
+  if (score < ABSOLUTE_NEUTRAL_SCORE - ABSOLUTE_DEAD_ZONE) return "bad";
+  if (score >= ABSOLUTE_NEUTRAL_SCORE + ABSOLUTE_DEAD_ZONE) return "good";
+  return "mid";
+}
 /* Difficulté au-delà de laquelle une séance n'est plus un jour de récupération programmé — le
    générateur sort toujours `recuperation` dans 1-3 (generate/route.ts, sessionDifficulty()). */
-const DELOAD_MAX_DIFFICULTY = 3;
+// Même seuil que qualitativeDifficulty() "dure" (DiffGauge, loadRule.ts).
+const HARD_MIN_DIFFICULTY = 8;
 
 
 export interface AutoregSuggestion {
   dir: AutoregDir;
   reco: number; // % signé équivalent au delta en points réellement calculé (voir plus bas) — API inchangée pour les consommateurs (chips manuels, formatAutoregPct, "decided" state…)
   icon: string; // ⚠️/🚨 (alléger, gradué sur le garde-fou/seuil critique) ou 🚀 (surcharger)
+  // "norm_hard" : Alléger −1 déclenché par la seule difficulté de la séance (récup dans la norme +
+  // séance dure), jamais par une récup basse — le texte de la carte doit le dire (decisionCard.ts).
+  kind?: "norm_hard";
 }
 
 // Les 5 paliers proposables MANUELLEMENT (AUTOREG_CHIPS plus bas, toujours utilisés tels quels par
@@ -43,11 +56,12 @@ export interface AutoregSuggestion {
    suggestion est RÉELLEMENT actionnable — un seul point de calcul, jamais deux logiques de zone qui
    pourraient diverger entre déclenchement et affichage. */
 export function zoneRange(target: number, dir: AutoregDir): { zoneLow: number; zoneHigh: number } {
-  const t = Math.round(target);
-  // Bornée à l'échelle 1-10 (2026-09-28) — sans ça une cible à 10 affichait "10-11", une cible à 1
-  // "0-1". La range retombe alors sur un point unique, que DecisionGauge sait déjà afficher.
-  const clamp = (v: number) => Math.min(10, Math.max(1, v));
-  return dir === "high" ? { zoneLow: clamp(t), zoneHigh: clamp(t + 1) } : { zoneLow: clamp(t - 1), zoneHigh: clamp(t) };
+  const t = Math.min(10, Math.max(1, Math.round(target)));
+  /* Toujours 2 entiers, y compris aux bords (2026-09-29, Gildas : "je veux toujours que le range
+     recommandé fasse 2 points") : à 10 ou à 1, la range glisse vers l'intérieur de l'échelle
+     ("9-10", "1-2") au lieu de retomber sur un point unique comme depuis le 2026-09-28. */
+  if (dir === "high") return t >= 10 ? { zoneLow: 9, zoneHigh: 10 } : { zoneLow: t, zoneHigh: t + 1 };
+  return t <= 1 ? { zoneLow: 1, zoneHigh: 2 } : { zoneLow: t - 1, zoneHigh: t };
 }
 
 /* Conversion POINTS DE RPE (signés) <-> % à appliquer aux exercices — table FIXE, indépendante de la
@@ -167,12 +181,23 @@ export function computeAutoregSuggestion(
     const magnitude = absDev < ABSOLUTE_DEAD_ZONE ? 0 : absDev < ABSOLUTE_DEAD_ZONE * 2 ? 1 : 2;
     points = dev < 0 ? -magnitude : magnitude;
   }
-  if (points === 0) return null;
+  /* Règles par difficulté prévue (2026-09-29, Gildas — "un user à 79 de récup avec RPE cible à 9,
+     on lui recommande 10 : 9 suffit, 8 suffirait aussi") :
+     - séance dure (≥ HARD_MIN_DIFFICULTY) + récup dans la norme → −1 (garder un point de marge sur
+       une séance quasi maximale) ;
+     - séance dure + récup fraîche → rien : la séance est déjà dure, pas de surcharge ;
+     - séance légère (≤3) + récup fraîche → surcharge autorisée (+1 un peu frais,
+       +2 nettement frais) : 3 → 5 au plus, la séance reste sous le dur, la périodisation tient.
+       Remplace l'ancien blocage total des jours légers. */
+  let kind: AutoregSuggestion["kind"];
+  if (points === 0) {
+    if (plannedDifficulty < HARD_MIN_DIFFICULTY) return null;
+    points = -1;
+    kind = "norm_hard";
+  }
+  if (points > 0 && plannedDifficulty >= HARD_MIN_DIFFICULTY) return null;
 
   const dir: AutoregDir = points < 0 ? "low" : "high";
-
-  // Périodisation : un jour de récupération réellement programmé ne se surcharge pas.
-  if (dir === "high" && plannedDifficulty <= DELOAD_MAX_DIFFICULTY) return null;
 
   const guardRail = (baseline?.guardRailTriggered ?? false) || wellness < WELLNESS_ABSOLUTE_GUARD_SCORE;
   const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
@@ -196,11 +221,16 @@ export function computeAutoregSuggestion(
   // Filet de sécurité : si le RPE déjà prévu tombe dans la range conservatrice de la cible, il n'y a
   // rien à décider. Ne peut plus se produire avec une ampleur entière ≥1 (voir zoneRange), gardé
   // pour une `plannedDifficulty` fractionnaire (séance déjà ajustée par le passé).
-  const { zoneLow, zoneHigh } = zoneRange(target, dir);
+  // Zone NON glissée ici : aux bords, la zone affichée (zoneRange) s'étend vers le plan ("1-2" pour
+  // une séance à 2 allégée à 1) et absorberait à tort la suggestion.
+  const t = Math.round(target);
+  const zoneLow = dir === "high" ? t : t - 1;
+  const zoneHigh = dir === "high" ? t + 1 : t;
   const roundedPlanned = Math.round(plannedDifficulty);
   if (roundedPlanned >= zoneLow && roundedPlanned <= zoneHigh) return null;
 
-  return { dir, reco, icon };
+  // Un garde-fou critique (score absolu < 40) prime : ce n'est plus "juste la séance dure".
+  return { dir, reco, icon, ...(kind && !critical ? { kind } : {}) };
 }
 
 /* Couleur de sévérité par palier réel de l'heuristique (🚨 critique / ⚠️ modéré / 🚀 surcharge),

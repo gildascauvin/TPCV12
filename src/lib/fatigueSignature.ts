@@ -312,159 +312,73 @@ const CROSS_TREND_SEVERITY: Record<string, Severity> = {
 };
 
 /**
- * Insight global "croisé" (2026-09, retour de Gildas) — remplace classifyTrend()/describeTrend()
- * comme source du titre + phrase affichés en tête de /conseils et de la signature de fatigue coach
- * (/coach/athletes) : l'ANCIEN système comparait charge et wellness sur une fenêtre 7j/7j glissante
- * INDÉPENDANTE des cartes ⚡ Charge / 🌿 Récupération juste en dessous (ACWR/monotonie/strain/
- * Fitness-Fatigue EWMA 42j + wellness/Form) — les deux pouvaient légitimement se contredire (titre
- * "Récupération insuffisante" avec des cartes disant "tout va bien" en dessous, ou l'inverse).
- * Le titre est désormais dérivé des 2 MÊMES sources que les cartes charge/récup — jamais une 3e
- * source vérifiée après coup :
- *   - axe charge : direction de la charge chronique (fitnessTrend, déjà calculé pour la carte ⚡)
- *   - axe corps : croise la récup RESSENTIE (recoveryInfo, carte 🌿) avec la fatigue OBJECTIVE
- *     déduite de l'entraînement (fatigueTrend, carte ⚡) — accord = signal net, désaccord (ex.
- *     récup basse mais fatigue d'entraînement en baisse) = phrase dédiée expliquant l'écart plutôt
- *     qu'un texte plat "rien de notable" (retour explicite de Gildas, l'exemple qui a motivé ce
- *     chantier : "la fatigue ne semble pas liée à l'entraînement").
- * Reprend le même vocabulaire de 9 codes que l'ancien système (Accumulation/Supercompensation/...)
- * mais garanti cohérent par construction avec ce qui est déjà affiché sous ce titre.
+ * Insight global "croisé" — titre (9 codes) + phrase de la ligne Phase de la carte décision
+ * (/today, Coach Control) et de la signature de fatigue (/coach/athletes).
+ *
+ * Refonte du 2026-09-29 (bug trouvé par Gildas : "Phase Accumulation" suivi de "...tu es en phase
+ * d'adaptation" dans la même phrase) :
+ *   - l'axe "état" ne dépend plus que du RESSENTI (recoveryInfo). Avant, la fatigue EWMA 7j comptait
+ *     aussi : or elle monte mécaniquement dès que la charge monte (même charge, deux courbes), donc
+ *     toute montée en charge avec un ressenti dans la norme finissait en "Accumulation" rouge. Avec un
+ *     ressenti dans la norme, c'est de l'adaptation.
+ *   - la phrase est écrite PAR CODE (une seule source pour titre et texte, ils ne peuvent plus
+ *     diverger), puis nuancée par la fatigue récente seulement quand elle contredit le ressenti.
+ *   - vocabulaire sans chiffres : "charge récente" (EWMA 7j) et "charge de fond" (EWMA 42j).
+ * Libellés relatifs (FRAIS/ÉQUILIBRÉ/FATIGUÉ, baseline perso) → "ta norme" ; libellés absolus
+ * (cold-start) → "correcte/basse/bonne", jamais une norme qui n'existe pas encore.
+ * `loadInfo`/`monotonyInfo`/`strainInfo`/`fitnessTrendInfo` gardés dans la signature pour les
+ * appelants ; les alertes ACWR/monotonie/contrainte restent portées par la carte ⚡ Charge et par la
+ * ligne 2 de la carte décision quand elles déclenchent un Alléger.
  */
 export function crossTrendInsight(
-  loadInfo: ZoneInfo, monotonyInfo: ZoneInfo, strainInfo: ZoneInfo,
-  fitnessTrend: TrendDirection | null, fitnessTrendInfo: ZoneInfo | null, fatigueTrend: TrendDirection | null,
+  _loadInfo: ZoneInfo, _monotonyInfo: ZoneInfo, _strainInfo: ZoneInfo,
+  fitnessTrend: TrendDirection | null, _fitnessTrendInfo: ZoneInfo | null, fatigueTrend: TrendDirection | null,
   recoveryInfo: ZoneInfo, perspective: Perspective = "athlete",
 ): { title: string; text: string; severity: Severity; code: TrendCode } {
   const coach = perspective === "coach";
   const loadDir = fitnessTrend ?? "stable";
-
   const wellBad = recoveryInfo.label === "RÉCUP FRAGILE" || recoveryInfo.label === "FATIGUÉ";
   const wellGood = recoveryInfo.label === "BONNE RÉCUP" || recoveryInfo.label === "FRAIS";
-  const fatigueUp = fatigueTrend === "up";     // fatigue d'entraînement accumulée en hausse — mauvais signe
-  const fatigueDown = fatigueTrend === "down"; // en baisse — bon signe
-  const bodyScore = (wellBad ? -1 : wellGood ? 1 : 0) + (fatigueUp ? -1 : fatigueDown ? 1 : 0);
-  const disagreement = (wellBad && fatigueDown) || (wellGood && fatigueUp);
+  const relative = recoveryInfo.label === "FRAIS" || recoveryInfo.label === "ÉQUILIBRÉ" || recoveryInfo.label === "FATIGUÉ";
 
-  const code = bodyScore <= -1
+  const code = wellBad
     ? (loadDir === "up" ? "accumulation" : loadDir === "down" ? "fatigue_persistante" : "recuperation_insuffisante")
-    : bodyScore >= 1
+    : wellGood
     ? (loadDir === "up" ? "supercompensation" : loadDir === "down" ? "recuperation" : "tolerance_stable")
     : (loadDir === "up" ? "adaptation" : loadDir === "down" ? "recuperation_legere" : "stable");
 
-  // Détail charge cité dans la phrase — le métrique le plus sévère parmi ACWR/monotonie/strain,
-  // sinon la tendance Fitness — toujours le texte déjà écrit pour CETTE métrique, jamais inventé.
-  const chargeCandidates = [loadInfo, monotonyInfo, strainInfo]
-    .filter(z => z.text)
-    .map(z => ({ z, sev: severityOf(z.color) }))
-    .sort((a, b) => (b.sev === "alert" ? 2 : b.sev === "watch" ? 1 : 0) - (a.sev === "alert" ? 2 : a.sev === "watch" ? 1 : 0));
-  const worstCharge = chargeCandidates[0];
-  const noRealChargeAlert = !worstCharge || worstCharge.sev === "good";
-  const chargeDetail = !noRealChargeAlert ? worstCharge.z.text : (fitnessTrendInfo?.text ?? worstCharge?.z.text ?? "");
-  // `chargeDetail` vient de fitnessTrendInfo (pas d'un vrai signal ACWR/monotonie/strain) UNIQUEMENT
-  // quand `noRealChargeAlert` — sert à décider si `chargeDetail` répète un fait déjà couvert par
-  // `bodyClause` (voir mergeChargeIntoBody ci-dessous).
-  const chargeFromFitness = noRealChargeAlert && !!fitnessTrendInfo?.text;
-
-  /* Chaque branche ci-dessous ne peut affirmer "récupération se dégrade/s'améliore" QUE si wellBad/
-     wellGood est réellement vrai (le même booléen que recoveryCrossInsight() utilise pour SA propre
-     phrase) — jamais dérivé du seul bodyScore agrégé. Bug réel trouvé par Gildas : récup "ÉQUILIBRÉ"/
-     "dans ta norme" (donc ni wellBad ni wellGood) + fatigueUp seul donnait bodyScore<=-1, et l'ancien
-     code écrivait quand même "Ta récupération se dégrade" — contredisait littéralement la carte
-     Récupération juste en dessous, qui disait "dans ta norme habituelle". Ces cas "un seul signal
-     bouge, l'autre est neutre" ont désormais leur propre phrase, qui n'attribue jamais au mauvais
-     signal ce que l'autre a produit. */
-  let bodyClause: string;
-  if (disagreement && wellBad) {
-    bodyClause = coach
-      ? "Sa récupération est basse mais sa charge des 7 derniers jours ne le confirme pas (fatigue accumulée en baisse) : la cause n'est peut-être pas l'entraînement, vérifie son sommeil et son stress."
-      : "Ta récupération est basse mais ta charge des 7 derniers jours ne le confirme pas (fatigue accumulée en baisse) : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress.";
-  } else if (disagreement) {
-    bodyClause = coach
-      ? "Il se sent bien mais sa charge des 7 derniers jours pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard."
-      : "Tu te sens bien mais ta charge des 7 derniers jours pèse plus que d'habitude (fatigue accumulée en hausse) : la fatigue pourrait apparaître avec un peu de retard.";
-  } else if (wellBad && fatigueUp) {
-    bodyClause = coach ? "Sa récupération se dégrade et sa charge des 7 derniers jours le confirme." : "Ta récupération se dégrade et ta charge des 7 derniers jours le confirme.";
-  } else if (wellGood && fatigueDown) {
-    bodyClause = coach ? "Sa récupération s'améliore et sa charge des 7 derniers jours le confirme." : "Ta récupération s'améliore et ta charge des 7 derniers jours le confirme.";
-  } else if (wellBad) {
-    bodyClause = coach
-      ? "Sa récupération se dégrade, indépendamment de sa charge des 7 derniers jours (stable)."
-      : "Ta récupération se dégrade, indépendamment de ta charge des 7 derniers jours (stable).";
-  } else if (wellGood) {
-    bodyClause = coach
-      ? "Sa récupération s'améliore, indépendamment de sa charge des 7 derniers jours (stable)."
-      : "Ta récupération s'améliore, indépendamment de ta charge des 7 derniers jours (stable).";
-  } else if (fatigueUp) {
-    bodyClause = coach
-      ? "Sa récupération reste dans sa norme, mais sa charge des 7 derniers jours pèse plus que d'habitude (fatigue accumulée en hausse) : à surveiller."
-      : "Ta récupération reste dans ta norme, mais ta charge des 7 derniers jours pèse plus que d'habitude (fatigue accumulée en hausse) : à surveiller.";
-  } else if (fatigueDown) {
-    bodyClause = coach
-      ? "Sa récupération reste dans sa norme, et sa charge des 7 derniers jours se relâche (fatigue accumulée en baisse)."
-      : "Ta récupération reste dans ta norme, et ta charge des 7 derniers jours se relâche (fatigue accumulée en baisse).";
-  } else {
-    bodyClause = coach
-      ? "Sa récupération et sa charge des 7 derniers jours sont stables."
-      : "Ta récupération et ta charge des 7 derniers jours sont stables.";
+  const t = crossPhaseText(code, coach, relative);
+  let nuance = "";
+  if (wellBad && fatigueTrend === "down") {
+    nuance = coach
+      ? " Sa charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie son sommeil et son stress."
+      : " Ta charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress.";
+  } else if (!wellBad && fatigueTrend === "up") {
+    nuance = coach
+      ? " Sa charge récente pèse plus que d'habitude : la fatigue pourrait apparaître avec un peu de retard."
+      : " Ta charge récente pèse plus que d'habitude : la fatigue pourrait apparaître avec un peu de retard.";
   }
-
-  // Direction du corps (récup + fatigue récente) déjà résumée par bodyScore (-2..+2) — ramenée à
-  // -1/0/+1 pour la comparer à celle de chargeDetail (voir mergeChargeIntoBody).
-  const bodySign = Math.sign(bodyScore);
-  // Direction de chargeDetail : un vrai signal ACWR/monotonie/strain n'est jamais "good" par
-  // construction (worstCharge n'est retenu que s'il ne l'est pas) → toujours -1. Sinon (tendance
-  // Fitness), suit sa direction réelle — "stable" (0) ne produit rien d'utile à ajouter ici.
-  const chargeSign = !chargeFromFitness ? -1 : (fitnessTrend === "up" ? 1 : fitnessTrend === "down" ? -1 : 0);
-
-  return { title: CROSS_TREND_LABEL[code], text: mergeChargeIntoBody(bodyClause, chargeDetail, chargeFromFitness, bodySign, chargeSign), severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
+  return { title: CROSS_TREND_LABEL[code], text: t + nuance, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
 }
 
-/* Combine bodyClause (récup + fatigue des 7 derniers jours) et chargeDetail (charge chronique EWMA
-   42j, ou un vrai signal ACWR/monotonie/strain) — remplace, depuis le 2026-09-25 (retour de Gildas :
-   "un user qui dit ça comprend rien" sur "Récupération et charge stables. Ta charge chronique est en
-   baisse..."), une détection de redondance par correspondance de MOTS (fragile — ne couvrait que les
-   branches contenant littéralement "(fatigue accumulée en...)", laissait passer le cas "stable" où
-   aucun mot n'est répété mais où "stable" suivi de "en baisse" se lit quand même comme une
-   contradiction) par une comparaison de DIRECTION, générale par construction :
-
-   1. Fait déjà redit avec les mêmes mots ("(fatigue accumulée en...)" déjà dans bodyClause ET
-      chargeDetail vient de la tendance Fitness) → fusion en UNE phrase, seule la CONSÉQUENCE de
-      chargeDetail est greffée (comportement déjà en place, inchangé).
-   2. Sinon, chargeDetail "stable" (chargeSign=0, rien à signaler) → jamais ajouté, évite de répéter
-      "stable" une 3e fois inutilement.
-   3. Sinon, un connecteur choisi selon l'ACCORD/DÉSACCORD des deux directions, jamais un simple
-      point qui laisse deviner la relation entre les deux phrases :
-      - corps neutre (bodySign=0, ex. "stable") + charge notable → "Cependant, " (négatif) ou
-        "Par ailleurs, " (positif) — signale explicitement que "stable" à court terme n'empêche pas
-        un signal à surveiller/positif à plus long terme, jamais laissé à deviner.
-      - même sens (corps et charge vont dans la même direction) → "De plus, " — un seul message
-        cohérent, renforcé.
-      - sens opposés → "En revanche, " — la vraie divergence est NOMMÉE plutôt que de laisser 2
-        phrases juxtaposées se lire comme contradictoires. */
-function mergeChargeIntoBody(bodyClause: string, chargeDetail: string, fromFitnessTrend: boolean, bodySign: number, chargeSign: number): string {
-  if (fromFitnessTrend && bodyClause.includes("(fatigue accumulée en")) {
-    const colonIdx = chargeDetail.indexOf(" : ");
-    if (colonIdx !== -1) {
-      const consequence = chargeDetail.slice(colonIdx + 3).replace(/\.$/, "");
-      return /\)\.$/.test(bodyClause)
-        ? bodyClause.replace(/\.$/, ` : ${consequence}.`)
-        : bodyClause.replace(/\.$/, ` ; ${consequence}.`);
-    }
+function crossPhaseText(code: string, coach: boolean, relative: boolean): string {
+  const ta = coach ? "sa" : "ta", Ta = coach ? "Sa" : "Ta";
+  const recMid = relative ? `reste dans ${ta} norme` : "reste correcte";
+  const recBad = relative ? `passe sous ${ta} norme` : "est basse";
+  const recGood = relative ? `est au-dessus de ${ta} norme` : "est bonne";
+  switch (code) {
+    case "accumulation": return coach
+      ? `Sa récupération ${recBad} alors que sa charge de fond monte : les signaux de fatigue convergent, allège ses prochains jours.`
+      : `Ta récupération ${recBad} alors que ta charge de fond monte : les signaux de fatigue convergent, lève le pied quelques jours.`;
+    case "recuperation_insuffisante": return `${Ta} récupération ${recBad} alors que ${ta} charge de fond est stable : priorité au sommeil et au repos avant d'enchaîner.`;
+    case "fatigue_persistante": return `${Ta} charge de fond baisse mais ${ta} récupération ${recBad} : la fatigue n'est pas encore résorbée.`;
+    case "adaptation": return `${Ta} charge de fond monte et ${ta} récupération ${recMid} : ${coach ? "son corps encaisse bien" : "ton corps encaisse bien, continue sur cette lancée"}.`;
+    case "recuperation_legere": return `${Ta} charge de fond baisse et ${ta} récupération ${recMid} : bien pour souffler, mais possible perte de forme si ça dure.`;
+    case "supercompensation": return `${Ta} charge de fond monte et ${ta} récupération ${recGood} : ${coach ? "assimilation en cours, bon moment pour performer" : "tu assimiles bien, bon moment pour performer"}.`;
+    case "tolerance_stable": return `${Ta} charge de fond est stable et ${ta} récupération ${recGood} : ${coach ? "de la marge pour pousser" : "tu as de la marge pour pousser"}.`;
+    case "recuperation": return `${Ta} charge de fond baisse et ${ta} récupération ${recGood} : ${coach ? "réserves rechargées" : "tu refais le plein d'énergie"}.`;
+    default: return `${Ta} charge de fond et ${ta} récupération sont stables : ${coach ? "rythme habituel, rien à changer" : "tu es dans ton rythme habituel, rien à changer"}.`;
   }
-  if (!chargeDetail || chargeSign === 0) return bodyClause;
-
-  const connector = bodySign === 0
-    ? (chargeSign < 0 ? "Cependant, " : "Par ailleurs, ")
-    : (Math.sign(bodySign) === chargeSign ? "De plus, " : "En revanche, ");
-  // "charge chronique" qualifiée de sa fenêtre temporelle (2026-09-25) — jamais dans trendDimInfo()
-  // lui-même (source partagée par d'autres écrans, ex. les badges ⚡ Charge) pour ne pas faire
-  // dériver ce texte ailleurs : l'ajout reste local à CETTE phrase composée. Seul le cas
-  // `fromFitnessTrend` a un vrai risque de confusion avec "charge des 7 derniers jours" ci-dessus —
-  // un signal ACWR/monotonie/strain s'auto-identifie déjà sans ambiguïté.
-  const qualified = fromFitnessTrend
-    ? chargeDetail.replace(/charge chronique/i, m => `${m} (6 dernières semaines)`)
-    : chargeDetail;
-  const lowered = qualified.charAt(0).toLowerCase() + qualified.slice(1);
-  return `${bodyClause} ${connector}${lowered}`;
 }
 
 export type DayPoint = {

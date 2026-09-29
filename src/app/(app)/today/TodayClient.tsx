@@ -11,7 +11,8 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore, zoneLabel as formLabel, wellnessColor } from "@/lib/wellness";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
-import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
+import PhaseLine from "@/components/calendar/PhaseLine";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
@@ -35,7 +36,7 @@ import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard } from "@/components/conseils/HomeAnalyticsSections";
+import { DemoDataChip, ChargeSection, RecuperationSection, BehaviorImpactCard } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
@@ -511,7 +512,21 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // de ta norme") PENDANT que ce conseil parle d'une dimension/un ton différent juste en dessous,
   // incohérent (retour explicite de Gildas). Plus jamais rendu séparément dans le JSX.
   const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellness?.behaviors, baselineHistory, allSessions) : null;
+  /* État de la journée pour la ligne Phase (2026-09-29) : séance à faire, faite, ou repos. La séance
+     "faite" de référence est la plus dure du jour, comme autoregTargetTop pour la séance à faire. */
+  const doneTop = [...todaySessions].filter(s => s.done)
+    .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+  const phaseTomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
+  const tomorrowSessions = allSessions.filter(s => s.date === phaseTomorrowDate);
+  const tomorrowDifficulty = tomorrowSessions.length
+    ? Math.max(...tomorrowSessions.map(s => s.target_difficulty ?? 0)) : null;
+  const decisionDay: DecisionDay = todaySessions.length === 0
+    ? { kind: "rest", tomorrowDifficulty }
+    : autoregTargetTop
+    ? { kind: "planned", tomorrowDifficulty }
+    : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
   const decision = computeDecisionCard({
+    day: decisionDay,
     wellnessScore: displayScore,
     plannedDifficulty: autoregTargetTop?.target_difficulty ?? null,
     baseline: wellnessBaseline,
@@ -904,18 +919,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                  "la jauge de décision EST la jauge de la séance, pas 2 jauges", retour de Gildas —
                  voir decisionGaugeSlot, construit plus bas et redescendu à TodaySessionCard). */}
               <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
+                {/* Ligne Phase (2026-09-29) : son CTA flouté "Renseigner mon ressenti" remplace
+                   l'ancien bouton "Comment tu vas ? →" sous la carte. */}
                 <AlertBox
                   variant="darkColor"
+                  centered
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
+                  actions={decision.phase ? <PhaseLine phase={decision.phase} onUnlock={() => setShowWellness(true)} /> : undefined}
                 />
-                {!wellnessFilledToday && (
-                  <button
-                    onClick={e => { e.stopPropagation(); setShowWellness(true); }}
-                    style={{ marginTop: -6, marginBottom: 12, background: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.22)", color: "#fff", borderRadius: 999, padding: "5px 11px", fontSize: 11, fontWeight: 900, cursor: "pointer" }}
-                  >
-                    Comment tu vas ? →
-                  </button>
-                )}
               </div>
             </div>
 
@@ -993,7 +1004,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         {homeTab !== "today" && (
           analyticsData ? (
             <>
-              {homeTab !== "comportements" && <CrossInsightBanner data={analyticsData} isDemoData={sandboxMode} />}
+              {sandboxMode && homeTab !== "comportements" && <DemoDataChip />}
               {homeTab === "charge" && <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
               {homeTab === "recuperation" && <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
               {homeTab === "comportements" && <BehaviorImpactCard correlations={analyticsData.correlations} filledDays={analyticsData.filledDays} />}

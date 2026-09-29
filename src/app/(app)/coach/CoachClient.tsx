@@ -20,7 +20,7 @@ import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { monotonyStrainFor, computeDecisionCard } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { CrossInsightBanner, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
+import { DemoDataChip, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 
@@ -750,7 +750,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   {displayedPriority.map((a, idx) => (
                     <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
                       {/* isReviewed toujours false ici : un sportif traité a quitté cette section. */}
-                      <CoachCard athlete={a} sessions={sessions} isPriority={true}
+                      <CoachCard showPhase athlete={a} sessions={sessions} isPriority={true}
                         isReviewed={false}
                         tourId={idx === 0 ? "coach-card-alert" : undefined}
                         trend={trends[a.id]}
@@ -786,7 +786,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               </div>
               <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr 1fr" : isMd ? "1fr 1fr" : "1fr", gap: 10 }}>
                 {displayedStable.length > 0 ? displayedStable.map(a => (
-                  <CoachCard key={a.id} athlete={a} sessions={sessions} isPriority={false}
+                  <CoachCard showPhase key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
                     trend={trends[a.id]}
                     trendInput={trendInputs[a.id]}
@@ -827,7 +827,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           if (!a || !data) return null;
           return (
             <>
-              {homeTab !== "comportements" && <CrossInsightBanner data={data} isDemoData={!a.user_id} />}
+              {!a.user_id && homeTab !== "comportements" && <DemoDataChip />}
               {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
               {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}

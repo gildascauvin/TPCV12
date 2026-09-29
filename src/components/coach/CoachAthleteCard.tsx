@@ -10,7 +10,8 @@ import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { parseAndApply } from "@/lib/loadAdjust";
 import type { AutoregOriginal } from "@/lib/autoregulation";
-import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
+import PhaseLine from "@/components/calendar/PhaseLine";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
   type WellnessBaselineResult, type Perspective as BaselinePerspective,
@@ -164,7 +165,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -195,6 +196,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      carte décision. `undefined`/absent = signal monotonie/contrainte indisponible (repli gracieux),
      comportement 100% inchangé pour tout appelant qui ne le fournit pas encore. */
   recentSessions?: Session[];
+  /* Ligne Phase (2026-09-29, Coach Control uniquement) : insight croisé charge × récup à la
+     3e personne. Absent = carte inchangée (aperçu onboarding). */
+  showPhase?: boolean;
   coachName?: string;
   /* Carte représentant l'utilisateur lui-même (pas un vrai sportif suivi par un coach) — bascule
      decisionText()/autoregAdvice() en 2e personne. Voir décisionText() ci-dessus. `undefined` par
@@ -250,7 +254,22 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      restent disponibles — indépendant de isPriority, comme avant. `absoluteScore` (jamais
      `displayScore`) : le garde-fou interne a besoin du score ABSOLU, même quand une baseline pilote
      déjà le déclenchement via le Z. */
+  /* État de la journée pour la ligne Phase — même lecture que /today. `recentSessions` n'a pas de
+     borne haute (fetch gte sinceHistory), donc contient aussi la séance de demain si elle existe. */
+  let phaseDay: DecisionDay | undefined;
+  if (showPhase) {
+    const dayStr = todaySessions[0]?.date ?? new Date().toISOString().slice(0, 10);
+    const t = new Date(dayStr + "T12:00:00"); t.setDate(t.getDate() + 1);
+    const tomorrowStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+    const tomorrowList = recentSessions.filter(s => s.date === tomorrowStr);
+    const tomorrowDifficulty = tomorrowList.length ? Math.max(...tomorrowList.map(s => s.target_difficulty ?? 0)) : null;
+    const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+    phaseDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
+      : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
+      : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
+  }
   const decision = computeDecisionCard({
+    day: phaseDay,
     wellnessScore: absoluteScore,
     plannedDifficulty: topSession && !topSession.done ? topSession.target_difficulty : null,
     baseline,
@@ -369,7 +388,10 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         <AlertBox
           variant="darkColor"
           alert={{ border: `${badgeColor}66`, glow: badgeColor, text: decision.text }}
-          actions={topSession && !topSession.done ? undefined : (
+          centered={!!decision.phase}
+          actions={topSession && !topSession.done ? (decision.phase ? <PhaseLine phase={decision.phase} /> : undefined) : (
+            <div style={{ display: "grid", gap: 10, justifyItems: decision.phase ? "center" : undefined }}>
+            {decision.phase && <PhaseLine phase={decision.phase} />}
             <button
               data-tour={tourId ? "decider-btn" : undefined}
               onClick={onDecide}
@@ -386,6 +408,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             >
               {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
             </button>
+            </div>
           )}
         />
       </div>

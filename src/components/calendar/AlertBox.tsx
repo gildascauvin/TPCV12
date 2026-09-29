@@ -68,7 +68,7 @@ function AlertText({ text, size }: { text: string; size?: number }) {
   );
 }
 
-export default function AlertBox({ alert, actions, variant = "light" }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor" }) {
+export default function AlertBox({ alert, actions, variant = "light", centered = false }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor"; centered?: boolean }) {
   if (variant === "light") {
     const { bg, border, text } = lightColors(alert.glow);
     return (
@@ -89,12 +89,16 @@ export default function AlertBox({ alert, actions, variant = "light" }: { alert:
     return (
       <div style={{
         position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
-        background: bg, border: `1.5px solid ${border}`,
+        // Sans bordure en mode `centered` (carte avec ligne Phase, 2026-09-29, demande de Gildas).
+        background: bg, border: centered ? "none" : `1.5px solid ${border}`,
         fontSize: 13, lineHeight: 1.4, color: "#fff", fontWeight: 600,
         boxShadow: "0 10px 24px rgba(0,0,0,.28)",
+        // `centered` (2026-09-29, carte avec ligne Phase) : tout le contenu centré, padding symétrique
+        // pour que le point pulsant ne décentre pas le texte.
+        textAlign: centered ? "center" : undefined,
       }}>
         <PulseDot color={alert.glow} />
-        <div style={{ paddingRight: 16 }}><AlertText text={alert.text} size={13} /></div>
+        <div style={centered ? { paddingInline: 16 } : { paddingRight: 16 }}><AlertText text={alert.text} size={13} /></div>
         {actions && <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>{actions}</div>}
       </div>
     );

@@ -73,8 +73,11 @@ export default function DecisionGauge({
   // Largeur visuelle mini quand zoneLow===zoneHigh (cible calculée tombant pile sur un entier) —
   // purement cosmétique (la bande ne disparaît pas à l'œil), la logique `inZone` ci-dessus reste
   // une comparaison stricte à cet entier unique, pas affectée par ce padding visuel.
-  const bandLow = zoneLow === zoneHigh ? zoneLow - 0.12 : zoneLow;
-  const bandHigh = zoneLow === zoneHigh ? zoneHigh + 0.12 : zoneHigh;
+  // Marge visuelle de chaque côté (2026-09-29, Gildas : "on dirait que le curseur n'est pas dedans
+  // même quand il est dans la zone") : le curseur est centré sur l'entier, donc une bande qui
+  // s'arrêtait pile à l'entier coupait le curseur en deux sur les bornes.
+  const bandLow = zoneLow - 0.35;
+  const bandHigh = zoneHigh + 0.35;
   const zoneLeft = diffToLeft(Math.max(MIN, bandLow));
   const zoneWidth = diffToLeft(Math.min(MAX, bandHigh)) - zoneLeft;
   const dim = (o: number) => (light ? `rgba(0,0,0,${o})` : `rgba(255,255,255,${o})`);

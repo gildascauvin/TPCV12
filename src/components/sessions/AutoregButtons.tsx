@@ -146,9 +146,11 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   // — le curseur ne se pose QUE sur des entiers, voir DecisionGauge.tsx). En mode libre (pas de
   // suggestion, `dir` absent), la zone reste réduite au plan lui-même (rien à élargir sans
   // direction réelle).
+  // Mode libre : 2 entiers aussi (2026-09-29, "toujours 2 points"), le plan plus le point juste en
+  // dessous (Gildas) — "1-2" pour une séance à 1.
   const { zoneLow, zoneHigh } = hasSuggestion
     ? zoneRange(targetInt, dir!)
-    : { zoneLow: Math.round(plannedDifficulty), zoneHigh: Math.round(plannedDifficulty) };
+    : zoneRange(Math.round(plannedDifficulty), "low");
   const roundedCurrent = Math.round(currentDiff);
   const inZone = roundedCurrent >= zoneLow && roundedCurrent <= zoneHigh;
   // Le verbe du CTA suit la position RÉELLE du curseur, pas le `dir` figé de la suggestion — si
@@ -323,14 +325,16 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
            (curseur vert), repère "prévu" sur le plan d'origine, et non draguable — la décision est
            prise, on la relit ; pour la refaire il y a le retour arrière juste en dessous. */
         const appliedDiff = Math.round(plannedDifficulty);
+        // 2 entiers contenant la valeur appliquée (2026-09-29, "toujours 2 points").
+        const appliedZone = zoneRange(appliedDiff, dir ?? "low");
         return (
           <div>
             <div style={{ marginBottom: 10 }}>
               <DecisionGauge
                 dir={dir ?? "low"}
                 light={light}
-                zoneLow={appliedDiff}
-                zoneHigh={appliedDiff}
+                zoneLow={appliedZone.zoneLow}
+                zoneHigh={appliedZone.zoneHigh}
                 value={plannedDifficulty}
                 plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
                 readOnly

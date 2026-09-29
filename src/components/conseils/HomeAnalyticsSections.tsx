@@ -9,7 +9,6 @@
 
 import { useState } from "react";
 import ShareButton from "@/components/sessions/ShareButton";
-import { formToChartPosition } from "@/components/conseils/SparkLineClient";
 import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import IndexCards from "@/components/conseils/IndexCards";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
@@ -22,74 +21,15 @@ import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import type { CoachAthlete } from "@/types";
 import { AthleteRing } from "@/app/(app)/coach/athletes/AthletesClient";
 
-function windowFor(data: ConseilsData, rangeMode: RangeMode) {
-  const n = rangeMode === "quarter" ? 90 : rangeMode === "month" ? 28 : 7;
-  const series = data.timeSeries.slice(-n);
-  const baseline = data.wellnessBaselineSeries.slice(-n);
-  return { series, baseline };
-}
-
-/* ── En-tête partagé (2026-09-24, allégé en suite — retour de Gildas : "pas besoin de répéter
-   Charge et récupération... tu peux supprimer '[sous-titre]/[N séances]'") — insight croisé
-   charge/récup/RPE + alerte récup, affiché au-dessus du contenu des 3 onglets Charge/Récupération/
-   Comportements. Le sous-titre descriptif et le badge de comptage de séances ont été retirés :
-   redondants avec le titre de l'onglet actif (juste au-dessus) et avec le "Nj de données" déjà
-   affiché sur la carte Comportements. Ne reste que : le chip "Exemple" (démo), le partage, l'insight
-   croisé lui-même, et l'alerte récup. */
-export function CrossInsightBanner({ data, isDemoData = false }: { data: ConseilsData; isDemoData?: boolean }) {
-  const { sig, trendText, trendEmoji, trendAction, recoveryAlert } = data;
-  const { series: last7Series } = windowFor(data, "week");
-  const zoneDates = last7Series.map(p => p.date);
-  const zoneAcwr = last7Series.map(p => p.acwr);
-
+/* Pastille "Exemple" (sandbox, sportif démo) — seul reste de CrossInsightBanner, retiré le
+   2026-09-29 : l'insight croisé vit désormais dans la ligne Phase de la carte décision
+   (/today, Coach Control), le répéter en tête des onglets Charge/Récupération faisait doublon. */
+export function DemoDataChip() {
   return (
-    <div data-tour="fatigue-signature" style={{ padding: "0 0 14px", color: "#fff", position: "relative" as const }}>
-      <div style={{ position: "absolute", right: -80, bottom: -90, width: 240, height: 210, background: "rgba(212,64,0,.18)", borderRadius: "50%", filter: "blur(30px)", pointerEvents: "none" }} />
-      {(isDemoData || (sig.signals !== 0 && trendText)) && (
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, position: "relative" as const, zIndex: 2, marginBottom: sig.signals === 0 ? 0 : 8 }}>
-          {isDemoData && (
-            <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const }}>
-              🔎 Exemple
-            </div>
-          )}
-          {sig.signals !== 0 && trendText && (
-            <ShareButton
-              resourceType="signature"
-              variant="dark"
-              buildSnapshot={() => ({
-                emoji: trendEmoji, action: trendAction, insight: trendText,
-                chargePoints: zoneAcwr, recoveryPoints: last7Series.map(p => p.recovery),
-                recoveryPoints2: last7Series.map(p => p.form !== null ? formToChartPosition(p.form) : null),
-                dates: zoneDates, weekLabels: false,
-              })}
-              title="Ma signature de fatigue"
-              text={trendText}
-            />
-          )}
-        </div>
-      )}
-
-      {sig.signals === 0 ? (
-        <div style={{ position: "relative" as const, zIndex: 2, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "16px 18px", fontSize: 13, color: "rgba(255,255,255,.55)", lineHeight: 1.5 }}>
-          Termine des séances avec RPE + durée pour construire ta signature de fatigue.
-        </div>
-      ) : (
-        <div style={{ position: "relative" as const, zIndex: 2 }}>
-          {trendText && (
-            <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "13px 15px", fontSize: 14, color: "rgba(255,255,255,.88)", lineHeight: 1.5, fontWeight: 600 }}>
-              {trendEmoji} {trendAction && <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#ff8a55" }}>{trendAction} — </span>}{trendText}
-            </div>
-          )}
-          {recoveryAlert && (
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 10, background: "rgba(242,138,0,.12)", border: "1px solid rgba(242,138,0,.35)", borderRadius: 14, padding: "10px 14px", marginTop: 14 }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
-              <div style={{ fontSize: 14, color: "#f28a00", lineHeight: 1.45, fontWeight: 600 }}>
-                Séance planifiée demain — ta récupération est fragile. Considère de réduire l&apos;intensité.
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const }}>
+        🔎 Exemple
+      </div>
     </div>
   );
 }
