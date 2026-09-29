@@ -4433,3 +4433,21 @@ pas. Les deux premiers termes n'existent plus dans `src/`.
 **Vérifié** : `tsc` propre, et les 3 cas rejoués contre les vraies fonctions (script jetable) — la
 Forme est enfin dite quand le wellness est neutre, Fitness/Fatigue parlent quand la Forme est plate,
 rien n'est ajouté quand rien ne bouge, et `chargeCrossInsight()` ne mentionne plus fitness/fatigue.
+
+### Stress : chart et insight se contredisaient, et le tooltip mentait (2026-09-29, suite)
+Signalé par Gildas juste après : *« l'insight dit stress légèrement en dessous de ma norme alors que
+le chart le montre au-dessus »*. Les deux disaient en réalité **la même chose avec des mots
+opposés** — le stress est la seule dimension inversée (`dimensionRaw` : `10 - stress`, pour que
+« plus haut = mieux » vaille sur les 4).
+- **Libellés de zone du chart** : le Z tracé est l'inversé, donc le haut veut dire MOINS de stress,
+  mais la bande s'appelait « AU-DESSUS » — lu comme « mon stress est au-dessus », l'exact contraire,
+  et en contradiction avec `describeDominantDimension()` qui parle du stress RÉEL (via
+  `directionalZ`). Corrigé en nommant le sens réel pour cette dimension seulement : **« MOINS DE
+  STRESS » / « DANS MA NORME » / « PLUS DE STRESS »**. L'axe reste inchangé (haut = mieux pour les
+  4 dimensions, invariant utile) — seuls les mots changent.
+- **Tooltip** (bug plus grave, pas repéré par Gildas) : `dimensions.stress.raw` vaut `10 - stress`,
+  affiché tel quel derrière « déclaré » — il annonçait **7/10 à quelqu'un ayant déclaré 3**. Ré-inversé
+  pour retrouver la valeur réellement saisie dans le formulaire.
+Vérifié par script sur un cas construit (20 j autour de 3, aujourd'hui à 8) : l'insight dit « Stress
+nettement au-dessus de ta norme », le chart place le point dans « PLUS DE STRESS », le tooltip
+annonce « 8/10 déclaré ». Non-régression vérifiée sur une dimension non inversée (sommeil).

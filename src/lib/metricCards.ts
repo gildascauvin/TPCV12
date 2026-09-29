@@ -493,17 +493,38 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
      Le brut reste lisible au survol via `tooltipExtra`. */
   const values = baseline.map(b => b?.dimensions?.[dim]?.z ?? null);
   const raws = baseline.map(b => b?.dimensions?.[dim]?.raw ?? null);
+  /* Le stress est la SEULE dimension inversée (dimensionRaw : `10 - stress`), pour que "plus haut =
+     mieux" vaille partout. Deux conséquences, toutes deux corrigées ici (2026-09-29, bug trouvé par
+     Gildas en prod — "l'insight dit stress en dessous de ma norme alors que le chart le montre
+     au-dessus") :
+
+     1. LES LIBELLÉS DE ZONE. Le Z tracé est l'inversé, donc le haut du chart veut dire MOINS de
+        stress. "AU-DESSUS" s'y lisait comme "mon stress est au-dessus", l'exact contraire — et ça
+        contredisait describeDominantDimension(), qui parle lui du stress RÉEL (via directionalZ).
+        Les deux disaient la même chose avec des mots opposés. On garde l'axe tel quel (haut = mieux
+        pour les 4 dimensions, un invariant utile) et on nomme explicitement ce que ça veut dire.
+     2. LE TOOLTIP. `raw` vaut `10 - stress` : affiché tel quel derrière "déclaré", il annonçait
+        7/10 à quelqu'un qui avait déclaré 3. On ré-inverse pour retrouver la valeur réellement
+        saisie dans le formulaire. */
+  const inverted = dim === "stress";
+  const zoneLabels = inverted
+    ? { high: "MOINS DE STRESS", mid: "DANS MA NORME", low: "PLUS DE STRESS" }
+    : { high: "AU-DESSUS", mid: "DANS MA NORME", low: "EN DESSOUS" };
   return {
     values, dates, kind: "line", lo: -2.5, hi: 2.5, showTicks: false,
     zones: [
-      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: "AU-DESSUS" },
-      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
-      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "EN DESSOUS" },
+      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: zoneLabels.high },
+      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: zoneLabels.mid },
+      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: zoneLabels.low },
     ],
     boundaryLines: [0],
     fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
     colorAt: v => rampAt(0.5 + v / 5),
-    tooltipExtra: i => (raws[i] !== null && raws[i] !== undefined ? `${Math.round(raws[i] as number)}/10 déclaré` : null),
+    tooltipExtra: i => {
+      const r = raws[i];
+      if (r === null || r === undefined) return null;
+      return `${Math.round(inverted ? 10 - r : r)}/10 déclaré`;
+    },
   };
 }
 
