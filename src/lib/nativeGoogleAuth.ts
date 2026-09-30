@@ -11,8 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
    ce client (claim aud), que Supabase accepte sans configuration supplémentaire. Les client IDs ne
    sont pas des secrets. */
 
-const GOOGLE_WEB_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
-const GOOGLE_IOS_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
+const GOOGLE_WEB_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "874089773764-jqk4o3otggvrdgcoh5ipun5qiddbfnrk.apps.googleusercontent.com";
+const GOOGLE_IOS_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "874089773764-m2mn04jtvdjmta7orum5slp6ictojccl.apps.googleusercontent.com";
 
 export function isNativeApp() {
   return Capacitor.isNativePlatform();
