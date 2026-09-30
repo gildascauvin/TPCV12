@@ -67,22 +67,22 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
 }) {
   const { isMd } = useBreakpoint();
   return (
-    /* Onglets espacés (22px) sur écran large ; sur téléphone ils ne tiennent plus à cette taille de
-       jauge, on resserre et la barre défile plutôt que de rétrécir les jauges. */
+    /* Onglets espacés (22px) sur écran large. Sur téléphone (2026-09-30, Gildas : "ça scroll
+       vertical et horizontal") : plus de défilement — trois colonnes égales, jauge AU-DESSUS du
+       libellé, plus petite, et le statut peut passer sur 2 lignes. */
     <div style={{
-      display: "flex", gap: isMd ? 22 : 6, justifyContent: isMd ? "center" : "flex-start",
-      flexWrap: "nowrap" as const, overflowX: isMd ? undefined : "auto", scrollbarWidth: "none" as const,
-      marginBottom: 16,
+      display: "flex", gap: isMd ? 22 : 4, justifyContent: "center",
+      flexWrap: "nowrap" as const, marginBottom: 16,
     }}>
       {TABS.map(t => {
         /* Aujourd'hui = miniature FIDÈLE de la jauge de décision (2026-09-30) : même axe RPE, même
            dégradé, même zone, même curseur. Charge/Récup = miniature de leur jauge agrégée. */
         let mini: React.ReactNode = null;
         if (t.key === "today") {
-          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={MINI_W} />;
+          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={isMd ? MINI_W : 44} />;
         } else {
           const axis = previews?.[t.key] ?? null;
-          if (axis) mini = <AggregateGauge bare size={MINI_W} pos={axis.pos} band={axis.band} bands={AGG_BANDS[GROUP_OF[t.key]]} />;
+          if (axis) mini = <AggregateGauge bare size={isMd ? MINI_W : 44} pos={axis.pos} band={axis.band} bands={AGG_BANDS[GROUP_OF[t.key]]} />;
         }
         const status = statusOf(t.key, previews);
         return (
@@ -90,20 +90,22 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
             key={t.key}
             onClick={() => onChange(t.key)}
             style={{
-              display: "inline-flex", alignItems: "center", gap: isMd ? 10 : 8,
+              display: "inline-flex", alignItems: "center", gap: isMd ? 10 : 5,
+              flexDirection: isMd ? "row" : "column", textAlign: isMd ? "left" : "center",
+              flex: isMd ? "0 0 auto" : "1 1 0", minWidth: 0,
               border: "none", background: "transparent", cursor: "pointer",
-              padding: isMd ? "12px 10px 11px" : "12px 6px 11px", marginBottom: -1, flexShrink: 0,
+              padding: isMd ? "12px 10px 11px" : "8px 2px 9px", marginBottom: -1, flexShrink: isMd ? 0 : 1,
               borderBottom: active === t.key ? "2px solid #d44000" : "2px solid transparent",
               color: active === t.key ? "#ff8a55" : dark ? "rgba(255,255,255,.5)" : "#62686e",
-              fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" as const,
+              fontSize: isMd ? 12.5 : 12, fontWeight: 800, whiteSpace: isMd ? "nowrap" as const : "normal" as const,
             }}
           >
             {/* Miniature À GAUCHE du libellé (2026-09-30, Gildas). */}
             {mini}
-            <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-start", gap: 2 }}>
+            <span style={{ display: "flex", flexDirection: "column" as const, alignItems: isMd ? "flex-start" : "center", gap: 2, minWidth: 0 }}>
               {t.label}
               {status && (
-                <span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.1, color: status.color }}>{status.label}</span>
+                <span style={{ fontSize: isMd ? 11 : 10.5, fontWeight: 700, lineHeight: 1.15, color: status.color }}>{status.label}</span>
               )}
             </span>
           </button>
