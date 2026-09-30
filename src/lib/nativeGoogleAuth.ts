@@ -21,7 +21,9 @@ export function isNativeApp() {
 let initialized = false;
 
 /* Le SDK Google iOS met toujours un nonce dans l'idToken ; Supabase exige alors le nonce brut.
-   Convention Supabase : Google reçoit le SHA-256 (hex) du nonce, Supabase reçoit le nonce brut. */
+   Convention Supabase : Google reçoit le SHA-256 (hex) du nonce, Supabase reçoit le nonce brut.
+   forcePrompt est indispensable : sans lui le plugin restaure la session Google en cache et renvoie
+   l'ancien idToken, avec l'ancien nonce (erreur "nonces mismatch"). */
 async function makeNonce() {
   const raw = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
@@ -46,7 +48,7 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
   const nonce = await makeNonce();
   let idToken: string | null = null;
   try {
-    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"], nonce: nonce.hashed } });
+    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"], nonce: nonce.hashed, forcePrompt: true } });
     idToken = res.result && "idToken" in res.result ? res.result.idToken : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
