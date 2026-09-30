@@ -10,7 +10,6 @@ import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
@@ -72,7 +71,6 @@ function dayWellness(
   return row ? (row.base_score ?? row.score ?? athlete.wellness_score) : athlete.wellness_score;
 }
 
-
 /* DiffGauge — alias du composant partagé, encore utilisé par la vue mois. */
 const DiffGauge = DiffGaugeShared;
 
@@ -117,7 +115,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const slideDirRef  = useRef<"left" | "right">("left");
   const lastWheelNav = useRef(0);
   const calGridRef   = useRef<HTMLDivElement>(null);
-  const weekScrollRef = useRef<HTMLDivElement>(null);
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<CoachViewSession[]>(initialSessions);
   const [wellnessMap, setWellnessMap] = useState(initialWellnessMap);
@@ -569,15 +566,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return () => el.removeEventListener("wheel", handler);
   });
 
-  // Scroll horizontal de la grille 7 jours = change de semaine, uniquement une fois le scroll
-  // interne déjà à son extrémité dans le sens du geste — mêmes gardes que la navigation verticale.
-  useHorizontalScrollNav(weekScrollRef, {
-    onPrev: () => navigatePeriod("prev"),
-    onNext: () => navigatePeriod("next"),
-    mode: "boundary",
-    enabled: viewMode === "week" && !addingDate && !editingSession && !completing && !duplicating && !showReconduire,
-  });
-
   function handleViewModeChange(mode: ViewMode) {
     setViewMode(mode);
     if (mode === "month" && athlete) loadMonth(selectedDate, athlete);
@@ -999,7 +987,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {viewMode === "week" && (
         <div style={{ position: "relative" }}>
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
-        <div ref={weekScrollRef} style={{
+        <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
           gap: isMd ? 12 : 10,

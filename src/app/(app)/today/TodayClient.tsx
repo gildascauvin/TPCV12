@@ -18,7 +18,6 @@ import PhaseLine from "@/components/calendar/PhaseLine";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
@@ -281,7 +280,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
-  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
 
   // Onglets Charge/Récupération/Comportements (2026-09-24, "point 1") — même ConseilsData que
@@ -545,17 +543,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
     return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} /></div>;
   })();
-  const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
-  const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
 
-  // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
-  // est ouverte, même garde que les autres pages pour ne jamais désynchroniser une modale du jour
-  // affiché sous elle.
-  useHorizontalScrollNav(dayScrollRef, {
-    onPrev: () => handleDateChange(yesterdayDate),
-    onNext: () => handleDateChange(tomorrowDate),
-    enabled: !showWellness && !showAddSession && !completing && !pendingCompleteSession && !editing,
-  });
   useEffect(() => {
     const key = `wellness_prompted_${initialDate}`;
     if (
@@ -681,12 +669,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (error) setAllSessions(prev => prev.map(s => s.id === sessionId ? { ...s, notes: prevNotes } : s));
   }, [supabase, allSessions]);
 
-
   // Agrandi (2026-09-24) — la zone ("Fatigué"...) vit désormais DANS le ring (plus de gros libellé
   // séparé en dessous, plus d'eyebrow "Score & conseils" au-dessus) : le ring redevient le seul
   // readout de ce bloc, il peut/doit prendre plus de place — même principe que CoachCard, à une
   const pad = isLg ? 32 : isMd ? 24 : 16;
-  // Même largeur que le contenu ci-dessous (voir dayScrollRef plus bas) — alignement CalendarHeader/
+  // Même largeur que le contenu ci-dessous — alignement CalendarHeader/
   // contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav... et les contenus").
   const contentMaxWidth = isLg ? 1000 : isMd ? 720 : undefined;
 
@@ -752,7 +739,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
-      <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
+      <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         <HomeTabs
           active={homeTab}

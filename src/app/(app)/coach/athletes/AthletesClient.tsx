@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { format, addDays, subDays } from "date-fns";
-import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -145,7 +144,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   // Même largeur que .page-shell ci-dessous (600/720/1000) — alignement CalendarHeader/sélecteur de
   // sportif/contenu (2026-09-24).
   const contentMaxWidth = isLg ? 1000 : isMd ? 720 : 600;
-  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -239,14 +237,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll horizontal (trackpad) = change de jour avant/après — coupé pendant une invitation/
-  // suppression en cours.
-  useHorizontalScrollNav(dayScrollRef, {
-    onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    enabled: !showInvite && !deleting,
-  });
-
   async function handleDelete(athlete: CoachAthlete) {
     await requireSubscription(async () => {
       const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
@@ -287,7 +277,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
-      <div ref={dayScrollRef} className="page-shell">
+      <div className="page-shell">
 
         {selectedAthleteId ? (() => {
           const a = athletes.find(x => x.id === selectedAthleteId);

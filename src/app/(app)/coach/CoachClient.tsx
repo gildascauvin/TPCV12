@@ -10,7 +10,6 @@ import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
-import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
@@ -89,7 +88,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const sandboxPaywall = useSandboxGate("coach");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
-  const dayScrollRef = useRef<HTMLDivElement>(null);
   const [selectedDate, setSelectedDate] = useState(today);
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
@@ -291,14 +289,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
     return () => { channels.forEach(c => supabase.removeChannel(c)); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Scroll horizontal (trackpad) = change de jour avant/après — désactivé si une modale d'édition
-  // est ouverte, même garde que les autres pages.
-  useHorizontalScrollNav(dayScrollRef, {
-    onPrev: () => handleDateChange(format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    onNext: () => handleDateChange(format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd")),
-    enabled: !reviewAthlete,
-  });
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
     const res = await fetch("/api/coach/session", {
@@ -585,7 +575,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
       {/* Layout élargi à 1180px (au lieu de 1000) — même largeur que `.shell` du POC, pour que le
          carrousel 3 colonnes ait la place de respirer. */}
-      <div ref={dayScrollRef} style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
+      <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
 
         {homeTab === "today" && (
         <>
@@ -929,7 +919,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           }}
         />
       )}
-
 
       {paywallStep === "priming" && (
         sandboxMode ? (
