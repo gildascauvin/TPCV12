@@ -17,6 +17,7 @@
    parce que les agrégats charge/récup viennent d'un fetch différé (voir TodayClient.tsx) et ne sont
    donc pas là au premier rendu. */
 import AggregateGauge from "@/components/conseils/AggregateGauge";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DecisionRingMini, type DecisionRingState } from "@/components/sessions/DecisionRing";
 import { AGG_BANDS, type AggBand, type MetricGroup } from "@/lib/metricCards";
 
@@ -37,8 +38,26 @@ export type HomeTabPreviews = {
   recuperation?: { pos: number | null; band: AggBand | null } | null;
 };
 
-/* Taille des miniatures (2026-09-30, Gildas : "faut les mettre plus grandes"). */
-const MINI_W = 40;
+/* Taille des miniatures (2026-09-30, Gildas : "faut les mettre plus grandes", puis +35 % validé sur
+   le POC). */
+const MINI_W = 54;
+
+/* Mot de statut sous le nom de l'onglet (2026-09-30, POC validé par Gildas) — pas DANS la jauge : à
+   54px le creux de l'arc fait ~30px, "Sous-charge" ou "Équilibré" n'y tiendraient pas sans abréger.
+   Charge/Récup : le niveau de leur jauge agrégée. Aujourd'hui : la position du curseur par rapport à
+   la zone conseillée, le même texte que sous la grande jauge. */
+function statusOf(key: HomeTab, previews?: HomeTabPreviews): { label: string; color: string } | null {
+  if (key === "today") {
+    const st = previews?.today;
+    if (!st) return null;
+    const v = Math.round(st.value);
+    if (v < st.zoneLow) return { label: "Sous la zone", color: "rgba(255,255,255,.62)" };
+    if (v > st.zoneHigh) return { label: "Au-dessus de la zone", color: "rgba(255,255,255,.62)" };
+    return { label: "Dans la zone", color: "#6ede8a" };
+  }
+  const band = previews?.[key]?.band;
+  return band ? { label: band.label, color: band.color } : null;
+}
 
 export default function HomeTabs({ active, onChange, dark = true, previews }: {
   active: HomeTab;
@@ -46,8 +65,15 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
   dark?: boolean;
   previews?: HomeTabPreviews;
 }) {
+  const { isMd } = useBreakpoint();
   return (
-    <div style={{ display: "flex", gap: 2, justifyContent: "center", flexWrap: "nowrap" as const, marginBottom: 16 }}>
+    /* Onglets espacés (22px) sur écran large ; sur téléphone ils ne tiennent plus à cette taille de
+       jauge, on resserre et la barre défile plutôt que de rétrécir les jauges. */
+    <div style={{
+      display: "flex", gap: isMd ? 22 : 6, justifyContent: isMd ? "center" : "flex-start",
+      flexWrap: "nowrap" as const, overflowX: isMd ? undefined : "auto", scrollbarWidth: "none" as const,
+      marginBottom: 16,
+    }}>
       {TABS.map(t => {
         /* Aujourd'hui = miniature FIDÈLE de la jauge de décision (2026-09-30) : même axe RPE, même
            dégradé, même zone, même curseur. Charge/Récup = miniature de leur jauge agrégée. */
@@ -58,14 +84,15 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
           const axis = previews?.[t.key] ?? null;
           if (axis) mini = <AggregateGauge bare size={MINI_W} pos={axis.pos} band={axis.band} bands={AGG_BANDS[GROUP_OF[t.key]]} />;
         }
+        const status = statusOf(t.key, previews);
         return (
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
+              display: "inline-flex", alignItems: "center", gap: isMd ? 10 : 8,
               border: "none", background: "transparent", cursor: "pointer",
-              padding: "11px 8px", marginBottom: -1, flexShrink: 0,
+              padding: isMd ? "12px 10px 11px" : "12px 6px 11px", marginBottom: -1, flexShrink: 0,
               borderBottom: active === t.key ? "2px solid #d44000" : "2px solid transparent",
               color: active === t.key ? "#ff8a55" : dark ? "rgba(255,255,255,.5)" : "#62686e",
               fontSize: 12.5, fontWeight: 800, whiteSpace: "nowrap" as const,
@@ -73,7 +100,12 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
           >
             {/* Miniature À GAUCHE du libellé (2026-09-30, Gildas). */}
             {mini}
-            {t.label}
+            <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-start", gap: 2 }}>
+              {t.label}
+              {status && (
+                <span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.1, color: status.color }}>{status.label}</span>
+              )}
+            </span>
           </button>
         );
       })}
