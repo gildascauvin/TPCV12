@@ -20,6 +20,10 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "always",
   },
+  plugins: {
+    // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.
+    SocialLogin: { providers: { google: true, apple: true, facebook: false, twitter: false } },
+  },
 };
 
 export default config;

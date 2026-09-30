@@ -1,5 +1,6 @@
 "use client";
 
+import { isNativeApp, nativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef, Fragment } from "react";
 import posthog from "posthog-js";
 import { useRouter } from "next/navigation";
@@ -1375,6 +1376,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       coachingContext, athleteCount, coachingChallenge, currentTool, trainingStyle, name,
     };
     const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(pending)))));
+    // App iOS : SDK Google natif, puis même atterrissage que /auth/callback (register?d=...).
+    if (isNativeApp()) {
+      const res = await nativeGoogleSignIn(supabase);
+      if (res?.ok) window.location.href = `/register?d=${encoded}`;
+      else if (res) setError(res.error);
+      return;
+    }
     const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${location.origin}/auth/callback?d=${encoded}` },

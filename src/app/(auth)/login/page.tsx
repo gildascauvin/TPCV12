@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import AuthBackground from "@/components/auth/AuthBackground";
+import { isNativeApp, nativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
 
 function EyeOn() {
   return (
@@ -60,6 +61,14 @@ export default function LoginPage() {
     setError(null);
     const supabase = createClient();
     await supabase.auth.signOut();
+    // App iOS : Google refuse la connexion dans une WebView, on passe par le SDK natif.
+    if (isNativeApp()) {
+      const res = await nativeGoogleSignIn(supabase);
+      if (res?.ok) { window.location.href = "/today"; return; }
+      if (res) setError(res.error);
+      setLoading(false);
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: `${location.origin}/auth/callback` },
