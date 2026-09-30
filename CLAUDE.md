@@ -4468,3 +4468,36 @@ explicitement. Les deux fonctions répondent à deux questions différentes, d'o
 et par le `decroche` des cartes d'indice (même bug : la carte ACWR affichait la pédagogie « tout va
 bien » au lieu de son texte d'action). Vérifié par script, y compris la non-régression de
 `chronicPenalty` et des autres couleurs.
+
+## Jauge de décision ronde, CTA dans la carte décision, comportements en carte (2026-09-30)
+
+Suite du POC `https://claude.ai/artifact/McRwVAu86X9vArN2JRHBGF` (variante **R2**, plage conseillée en cadre fermé arrondi) et d'une série de retours de Gildas testés en local. Commit `1b8322e`.
+
+### `DecisionRing.tsx` (nouveau) — jauge de décision en anneau
+Même contrat que `DecisionGauge.tsx` (la barre), branchée via `AutoregButtons shape="ring"` (+ `ringSize`). Arc ouvert 240° (géométrie d'`AggregateGauge`), axe RPE 1-10, remplissage aux **dégradés de `DiffGauge`** (un dégradé choisi selon la position du curseur, déroulé le long de l'arc en segments interpolés — un `linearGradient` suivrait la corde), zone conseillée en **cadre pointillé fermé** qui entoure l'épaisseur (`sectorPath`), **curseur du Planning** (19px, noir / vert dans la zone, poignée 3 traits, liseré blanc sur fond sombre), barre blanche radiale sur le RPE **prévu** (visible dès qu'on déplace le curseur, et en mode décidé). Centre = flèche + verbe de la reco ; dessous = « Sous la zone / Dans la zone / Au-dessus de la zone » (jamais de chiffre). Variante `light` pour fond blanc. Exports :
+- `RestDecisionRing` — jour de repos, lecture seule, curseur à 1 dans la zone 1-2, centre « Repos ».
+- `DoneDecisionRing` — séance faite (aujourd'hui ou passé), curseur sur le RPE réel, repère sur le prévu, centre « ✓ Faite ».
+- `decisionRingState()` + `DecisionRingMini` — la miniature de l'onglet Aujourd'hui (`HomeTabs.tsx`) reproduit exactement la grande (même zone calculée comme `AutoregButtons`, suit le drag sur /today via `autoregPreview`, pas côté coach).
+
+### Où elle vit
+- **/today** : en tête de l'onglet Aujourd'hui (188px) ; repos → `RestDecisionRing`, séances toutes faites → `DoneDecisionRing`.
+- **Coach Control** (`CoachAthleteCard.tsx`) : À LA PLACE du `WellnessRing` sous le prénom (150px, variante sombre) — la carte décision explique déjà la forme. Même logique repos/faite. Plus de badges de comportements sur la carte.
+- **Planning** (`/week`, `/coach/planning`) : garde la **barre** `DecisionGauge` dans la carte séance, restylée : fond gris `#e7e4df` (track de `DiffGauge`), même dégradé, plus de repères par point, zone qui déborde de 4px, bords 999, pointillé sombre sur fond clair, texte « Sous/Dans/Au-dessus de la zone ». Aussi `/p/[id]`.
+
+### CTA dans la carte décision partout — portail
+`AutoregButtons` gagne `actionsSlot?: HTMLElement | null` : la jauge reste où elle est montée, **Maintenir/Appliquer et le bandeau "décidé" sont rendus par `createPortal` dans ce nœud**, que l'appelant place dans les `actions` de son `AlertBox`, juste sous le texte de la reco (avant la ligne Phase). L'état (curseur, décision) reste dans le composant ; les événements remontent l'arbre React jusqu'au parent de la jauge (déjà protégé par ses `stopPropagation`). `undefined` = rendu classique ; `null` = nœud pas encore monté. Chaque page tient le nœud dans un `useState<HTMLDivElement|null>` (callback ref). `.autoreg-slot:empty` et `div:has(> .autoreg-slot:only-child:empty)` (globals.css) masquent le slot et sa marge quand il n'y a rien à décider. Boutons à largeur naturelle, centrés, en forme `ring`.
+
+### Libellés de journée
+- **Planning** passe `day` à `computeDecisionCard` (même `DecisionDay` que /today et Coach Control) : « Jour de repos », « Séance faite », « Plan à confirmer » au lieu d'un « Plan cohérent » générique. Côté sportif, le dimanche on ne dit rien de demain (la semaine chargée s'arrête là).
+- **Jour de repos** (`decisionCard.ts`) : la ligne 2 commente la récupération du jour (« Ta récupération est basse : ce repos tombe bien. », « …correcte. », « …bonne : le repos consolide. », relatif « sous/dans/au-dessus de ta norme » si baseline ; non renseigné → « Renseigne ton ressenti… »), puis « Demain : séance X. ».
+
+### Onglets / cartes d'indice
+- `AggregateGauge` : pastilles aux 2 extrémités aux couleurs de la première/dernière bande (couleur jusqu'au bout de l'arrondi), opacité portée par un `<g>`.
+- **Comportements = dernière carte de l'onglet Récupération** : `IndexCards` a désormais un gabarit partagé `renderCard()` et un prop `extraCard: ExtraIndexCard`. `behaviorIndexCard()` (`HomeAnalyticsSections.tsx`) : statut = comportement le plus pénalisant (sinon le plus aidant), phrase « À éviter … · à garder … », aperçu en barres centrées sur zéro (4 plus marqués), « Nj de données » ; déplié = `BehaviorImpactCard embedded` (sans titre ni halo). « En collecte » sous 10 jours. La carte séparée sous la liste disparaît (/today et fiche sportif coach).
+- **Agrégat récupération** (`recupAggregatePos`) : **70 % ressenti / 30 % Forme** (était une moyenne 50/50), renormalisé si un axe manque ; **plus de plafond « pas Frais »** en cas de comportement négatif la veille (retiré sur demande).
+
+### Coach Control — créer une séance
+Bouton « + Ajouter une séance » en bas de chaque carte (prop `onAddSession`, même style que /today) → `openCreator()` ouvre `CoachSessionModal` sans séance (création sur la date affichée, autosave via `handleSaveReview`).
+
+### Vérifié
+`tsc --noEmit` propre à chaque étape, sandboxes coach/sportif/planning smoke-testées (200), textes du jour de repos vérifiés par script `tsx` (4 ressentis × 2 perspectives). Pas de clic réel par Claude — Gildas teste en local.
