@@ -22,6 +22,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -29,10 +31,16 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>ThePerfClub utilise l'appareil photo pour filmer tes exercices et les partager avec ton coach.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>ThePerfClub lit ta fréquence cardiaque au repos, ta variabilité cardiaque (VFC) et ton sommeil pour ajuster tes séances à ta récupération.</string>
+	<string>ThePerfClub lit ta fréquence cardiaque au repos, ta variabilité cardiaque (VFC), ton sommeil et tes entraînements pour ajuster tes séances à ta récupération.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>ThePerfClub n'écrit aucune donnée dans Santé.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ThePerfClub utilise le micro pour enregistrer le son de tes vidéos d'exercice.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ThePerfClub accède à tes photos et vidéos pour joindre une exécution d'exercice ou importer un programme.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -63,8 +71,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
