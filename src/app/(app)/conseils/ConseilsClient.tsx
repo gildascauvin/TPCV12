@@ -58,6 +58,7 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
             sport={sport} sexe={sexe} poidsKg={poidsKg}
             onEditProfile={() => setProfileOpen(true)}
             onDarkPage
+            lockedAnalysis={!isActive && !sandboxMode ? { onUnlock: () => setPaywallStep("priming") } : null}
           />
         ) : testsFixture ? (
           <TestsPanel

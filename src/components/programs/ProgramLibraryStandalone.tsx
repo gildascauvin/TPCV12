@@ -36,8 +36,10 @@ export default function ProgramLibraryStandalone({ mode, userId, subscriptionSta
       <ProgramLibraryPage
         athletes={mode === "coach" ? athletes : []}
         selfUserId={mode === "athlete" ? userId : undefined}
-        requireSubscription={requireSubscription}
-        isActive={isActive}
+        /* Freemium (2026-09-30) : enregistrer/assigner/éditer un programme sont des entrées, libres ;
+           seule la sandbox garde sa porte d'inscription. */
+        requireSubscription={sandboxMode ? requireSubscription : undefined}
+        isActive={sandboxMode ? isActive : true}
         sandboxMode={sandboxMode}
         standalone
         onClose={() => router.push(backHref)}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
+import LockedBlur from "@/components/paywall/LockedBlur";
 import AlertBox from "@/components/calendar/AlertBox";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
@@ -166,7 +167,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, locked = false, onUnlock }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -225,6 +226,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      pilote seul, ex. /coach, /coach/planning). `null` explicite = force l'absence de preview même si
      l'état interne en a un (jamais utilisé aujourd'hui, gardé pour symétrie). */
   externalPreviewPct?: number | null;
+  /* Freemium : décision floutée (compte coach gratuit, hors 1re décision). */
+  locked?: boolean;
+  onUnlock?: () => void;
 }) {
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
   const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
@@ -341,10 +345,16 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
          côté du ring). La zone ("Fatigué"/"Équilibré"/"Frais") vit désormais DANS le ring (prop
          `label` de WellnessRing, coloré comme le score — POC `.ring .state`), remplace l'ancienne
          eyebrow orange séparée. */}
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
+      <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>
           {selfView ? "Ta forme" : firstName}
         </div>
+      </div>
+      {/* Freemium (2026-09-30) : jauge, badges et carte décision floutés ensemble — même la zone,
+         côté coach (un coach sait s'ajuster dès qu'il voit "au-dessus de la zone"). Le prénom et
+         la séance du jour restent lisibles. */}
+      <LockedBlur locked={!!locked} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={20}>
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {/* Jauge d'ajustement À LA PLACE du ring de récupération (2026-09-30, Gildas) : la carte
              décision juste en dessous explique déjà la forme ; le ring ne reste que sans séance
@@ -447,6 +457,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           )}
         />
       </div>
+
+      </LockedBlur>
 
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct

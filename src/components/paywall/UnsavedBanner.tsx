@@ -34,9 +34,7 @@ interface Props {
   ctaLabel?: string;
   onAction: () => void;
   roleToggle?: { role: "athlete" | "coach"; onToggle: (role: "athlete" | "coach") => void };
-  /** 2026-09-14 : non consommé par le composant depuis le retrait du badge d'économie annuelle
-      (wording "14 jours offerts" à la place) — gardé dans les props pour ne pas retoucher tous
-      les appelants, qui le passent déjà tous. */
+  /** Choisit le libellé du bouton (ajustement côté sportif, Coach Control côté coach). */
   role: "athlete" | "coach";
   /** Wizard post-signup uniquement - voir doc ci-dessus. Absent = comportement inchange (sticky,
       dans le flux normal de la page). */
@@ -44,11 +42,15 @@ interface Props {
 }
 
 export default function UnsavedBanner({
-  ctaLabel = "Activer mon compte",
+  ctaLabel,
   onAction,
   roleToggle,
+  role,
   fixed = false,
 }: Props) {
+  /* Freemium (2026-09-30) : le bandeau parle de valeur, jamais de prix ("14 jours offerts" ne
+     s'affiche plus que sur le priming et le formulaire, là où la question du prix se pose). */
+  const label = ctaLabel ?? (role === "coach" ? "🔓 Activer le Coach Control" : "🔓 Activer l'ajustement");
   return (
     <div
       style={{
@@ -79,9 +81,6 @@ export default function UnsavedBanner({
           ))}
         </div>
       )}
-      <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.88)", lineHeight: 1.4, whiteSpace: "nowrap" }}>
-        🔓 14 jours offerts
-      </span>
       <button
         onClick={onAction}
         style={{
@@ -90,7 +89,7 @@ export default function UnsavedBanner({
           fontSize: 11.5, fontWeight: 900, cursor: "pointer", whiteSpace: "nowrap",
         }}
       >
-        {ctaLabel}
+        {label}
       </button>
     </div>
   );

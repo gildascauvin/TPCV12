@@ -29,14 +29,19 @@ function formatDateFr(dateStr: string) {
 
 const W = 400, PAD_L = 8, PAD_R = 10, PAD_TOP = 12, PAD_BOT = 22;
 
-export default function MetricChart({ spec, height, weekLabels }: {
+export default function MetricChart({ spec, height, weekLabels, locked = false, onUnlock }: {
   spec: ChartSpec;
   height?: number;
   weekLabels?: boolean;
+  /* Freemium (2026-09-30) : seule la série de données est floutée — zones, légendes, axes et dates
+     restent nets — avec une action par chart. Pas de survol ni de marqueurs en mode verrouillé. */
+  locked?: boolean;
+  onUnlock?: () => void;
 }) {
   const H = height ?? 200;
   const [hover, setHover] = useState<number | null>(null);
   const gradId = `mc-grad-${useId().replace(/:/g, "")}`;
+  const blurId = `${gradId}-blur`;
 
   const { values: vals, dates, zones, fmt, colorAt } = spec;
   const n = vals.length;
@@ -95,6 +100,7 @@ export default function MetricChart({ spec, height, weekLabels }: {
       style={{ position: "relative" as const, width: "100%" }}
       onMouseLeave={() => setHover(null)}
       onMouseMove={e => {
+        if (locked) return;
         const r = e.currentTarget.getBoundingClientRect();
         const x = ((e.clientX - r.left) / r.width) * W;
         const i = Math.round(((x - padL) / plotW) * (n - 1));
@@ -142,6 +148,8 @@ export default function MetricChart({ spec, height, weekLabels }: {
           <line x1={padL} y1={toY(spec.refLine.value)} x2={W - PAD_R} y2={toY(spec.refLine.value)} stroke="rgba(255,255,255,.45)" strokeWidth={1.2} strokeDasharray="5 4" />
         )}
 
+        {locked && <defs><filter id={blurId} x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="7" /></filter></defs>}
+        <g filter={locked ? `url(#${blurId})` : undefined} opacity={locked ? 0.55 : 1}>
         {spec.kind === "bars" && vals.map((v, i) => {
           if (v === null || v <= lo) return null;
           const bw = Math.max(2, Math.min(18, (plotW / n) * 0.62));
@@ -162,6 +170,7 @@ export default function MetricChart({ spec, height, weekLabels }: {
             />
           ) : null
         ))}
+        </g>
 
         {hover !== null && (
           <line x1={toX(hover)} y1={0} x2={toX(hover)} y2={H - PAD_BOT} stroke="rgba(255,255,255,.22)" strokeWidth={1} strokeDasharray="3,3" />
@@ -170,6 +179,14 @@ export default function MetricChart({ spec, height, weekLabels }: {
 
       {/* ── overlay HTML : texte et marqueurs, à taille fixe ── */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" as const }}>
+        {locked && onUnlock && (
+          <button
+            onClick={e => { e.stopPropagation(); onUnlock(); }}
+            style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%, -50%)", pointerEvents: "auto" as const, zIndex: 5, border: "1px solid rgba(255,255,255,.25)", cursor: "pointer", color: "#fff", fontSize: 12, fontWeight: 800, borderRadius: 999, padding: "7px 13px", background: "rgba(7,10,13,.7)", whiteSpace: "nowrap" as const }}
+          >
+            Activer l&apos;ajustement
+          </button>
+        )}
         {/* Nom de zone ET seuil d'entrée : "ÉLEVÉE" ne dit pas à partir de quand, "ÉLEVÉE ≥ 2,00"
             si. Pas de seuil sur la zone du bas, qui n'en a pas (elle part du plancher de l'axe). */}
         {zones?.filter(z => z.to > lo && z.from < hi).map(z => (
@@ -192,7 +209,7 @@ export default function MetricChart({ spec, height, weekLabels }: {
           </div>
         )}
 
-        {spec.kind !== "bars" && known.filter(p => markerIdx.has(p.i)).map(p => {
+        {!locked && spec.kind !== "bars" && known.filter(p => markerIdx.has(p.i)).map(p => {
           const size = hover === p.i ? markerSize + 3 : markerSize;
           return (
             <div key={p.i} style={{

@@ -1892,7 +1892,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           topOffset={WIZARD_BANNER_H}
           programName={wizardProgramName}
           template={wizardTemplate ?? { weeks: [{}] }}
-          isActive={wizardUnlocked ? true : false}
+          /* Freemium (2026-09-30) : plus de flou S2+ — la programmation est une entrée, gratuite. */
+          isActive
           onUnlockClick={() => setWizardPaywallStage("priming")}
           footerVariant="wizardSingle"
           wizardSingleLabel="Continuer avec ce programme →"

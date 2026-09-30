@@ -1,5 +1,6 @@
 "use client";
 
+import LockedBlur from "@/components/paywall/LockedBlur";
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -237,8 +238,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* Freemium (2026-09-30) : gérer son roster est une entrée, libre ; l'analyse des tests est floutée. */
+  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  const analysisLocked = !isActive && !sandboxMode;
   async function handleDelete(athlete: CoachAthlete) {
-    await requireSubscription(async () => {
+    await gateInput(async () => {
       const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
       if (!confirm(label)) return;
       setDeleting(athlete.id);
@@ -292,6 +296,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 emptyHint={`Aucun test enregistré pour ${a.name} — marque une ligne d'exercice comme test (menu ⋯) dans une de ses séances.`}
                 sport={a.sport} sexe={a.sexe ?? null} poidsKg={a.poids_kg ?? null}
                 onDarkPage
+                lockedAnalysis={analysisLocked ? { onUnlock: () => setPaywallStep("priming") } : null}
               />
             </>
           );
@@ -404,7 +409,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                    l'insight qui vient des tests... pas l'autre sur l'insight croisé charge/recup") :
                    cette page ("Performance") ne montre plus que le suivi de tests, l'insight doit
                    parler de ça, pas de charge/récup qui vivent désormais sur /today. */}
-                {!isPending && <TestVerdictBox verdict={testVerdicts[a.id]} />}
+                {!isPending && testVerdicts[a.id] && (
+                  <LockedBlur locked={analysisLocked} surface="athletes_verdict" onUnlock={() => setPaywallStep("priming")} cta="Voir l'analyse" compact radius={12}>
+                    <TestVerdictBox verdict={testVerdicts[a.id]} />
+                  </LockedBlur>
+                )}
               </div>
               );
             })}

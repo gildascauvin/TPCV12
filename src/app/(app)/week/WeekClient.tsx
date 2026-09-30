@@ -14,6 +14,7 @@ import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import LockedBlur from "@/components/paywall/LockedBlur";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import type { LoadContext } from "@/lib/loadRule";
@@ -57,7 +58,7 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
+interface Props { firstDecisionOn?: string | null; userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
   /* Historique wellness (~42j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
      la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — carte "Aujourd'hui" uniquement.
      Absent par défaut (sandbox, données synthétiques) = repli cold-start automatique. */
@@ -70,7 +71,7 @@ interface Props { userId: string; userName?: string | null; initialSessions: Ses
   sessionsHistory?: Session[];
 }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [] }: Props) {
+export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [], firstDecisionOn = null }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,6 +81,10 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  /* Freemium (2026-09-30) : entrées libres (seule la sandbox garde sa porte d'inscription) ; la
+     décision du jour ne se lit qu'avec un abonnement, ou le jour de la 1re décision (posé par /today). */
+  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  const canDecideToday = sandboxMode || isActive || !firstDecisionOn || firstDecisionOn === todayStr;
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [weekBase, setWeekBase] = useState(initialDate ? new Date(initialDate + "T12:00:00") : new Date());
@@ -477,11 +482,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const viewedProgram = viewedMatch?.program ?? null;
   const viewedProgramWeek = viewedMatch?.week ?? -1;
   const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
-  // S1 du planning réel visible pour tout le monde, S2+ flouté tant que non abonné — même
-  // pattern que ProgramBuilderModal.tsx (weekLocked), étendu ici au vrai planning assigné :
-  // "assigner" n'est plus le gate (peut se faire gratuitement pendant le wizard post-signup),
-  // le gate est désormais "voir/utiliser le planning complet au quotidien".
-  const weekLocked = !isActive && viewedProgramWeek > 0;
+  // Plus de flou S2+ (freemium 2026-09-30) : la programmation est une entrée, tout le planning est lisible.
+  const weekLocked = false;
 
   // Rings + points de séance + titre semaine/programme dans le calendrier popup (2026-09-26,
   // "revoir le design du datepicker pour que ça fasse comme la vue mois quand on est dans le
@@ -673,7 +675,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 sessions: sessionsHistory, anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
               });
               const severityColor = decisionCardColor(decision.icon);
-              alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
+              const decisionLocked = !canDecideToday;
+              alert = decisionLocked
+                /* Freemium : le sens reste dit, le contenu de la décision non. */
+                ? { border: `${severityColor}66`, glow: severityColor, text: "Analyse du jour prête\nActive l'ajustement pour la lire." }
+                : { border: `${severityColor}66`, glow: severityColor, text: decision.text };
               if (autoregTarget) {
                 autoregTargetId = autoregTarget.id;
                 // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
@@ -683,6 +689,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 // sans suggestion (2026-09-25, "même quand ya pas de reco, je veux pouvoir bouger la
                 // jauge et avoir le range") — dir/reco undefined = mode libre, voir AutoregButtons.tsx.
                 decisionGaugeNode = (
+                  <LockedBlur locked={decisionLocked} surface="week_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer l'ajustement" light compact radius={12}>
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
@@ -694,11 +701,11 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={decision.suggestion ? severityColor : undefined}
-                    isActive={isActive}
+                    isActive={canDecideToday}
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
-                      if (!isActive) { setPaywallStep("priming"); return; }
+                      if (!canDecideToday) { setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                       const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
@@ -715,6 +722,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                       setDecisionTick(t => t + 1);
                     }}
                   />
+                  </LockedBlur>
                 );
               }
             }
@@ -740,7 +748,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
-                alertActions={autoregTargetId ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
+                alertActions={autoregTargetId && canDecideToday ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -765,17 +773,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           })}
         </div>
         </DndContext>
-        {weekLocked && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
-            <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
-              <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Ton programme est bien assigné — l&apos;abonnement débloque le reste de ton planning.</div>
-              <button onClick={() => requireSubscription(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
-                Débloquer →
-              </button>
-            </div>
-          </div>
-        )}
         </div>
       )}
 
@@ -935,16 +932,16 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       </div>{/* fond sombre plein-page */}
 
       {/* Modals — ouverture toujours libre (voir onClick plus haut), seule la persistance réelle
-          (onSave/onConfirm/onDuplicate/onDelete) est gatée derrière requireSubscription()
+          (onSave/onConfirm/onDuplicate/onDelete) passe par gateInput() : libre, sauf en sandbox (freemium 2026-09-30)
           (2026-08-19). */}
       {addingDate && (
-        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={(data, id) => requireSubscription(() => saveSession(data, id))} onClose={() => { setAddingDate(null); router.refresh(); }} />
+        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setAddingDate(null); router.refresh(); }} />
       )}
       {showReconduire && (
         <ReconduireModal
           daySlots={dates.map(d => ({ sessions: sessions.filter(s => s.date === format(d, "yyyy-MM-dd")) }))}
           onClose={() => setShowReconduire(false)}
-          onConfirm={weeksOut => requireSubscription(async () => {
+          onConfirm={weeksOut => gateInput(async () => {
             const inserts = weeksOut.flatMap((rows, w) => rows.map(r => ({
               user_id: userId,
               name: r.name,
@@ -962,21 +959,21 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         />
       )}
       {completing && (
-        <CompleteModal session={completing} onSave={data => requireSubscription(() => saveComplete(data))} onClose={() => setCompleting(null)} />
+        <CompleteModal session={completing} onSave={data => gateInput(() => saveComplete(data))} onClose={() => setCompleting(null)} />
       )}
       {editing && (
         <AddSessionModal
           date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"}
-          onSave={(data, id) => requireSubscription(() => saveSession(data, id ?? editing.id))}
-          onDelete={() => requireSubscription(() => deleteSession(editing))}
+          onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
+          onDelete={() => gateInput(() => deleteSession(editing))}
           onClose={() => { setEditing(null); router.refresh(); }}
         />
       )}
       {duplicating && (
-        <DuplicateModal session={duplicating} onDuplicate={(date, _targetAthleteIds, pct) => requireSubscription(() => duplicateSession(date, pct))} onClose={() => setDuplicating(null)} />
+        <DuplicateModal session={duplicating} onDuplicate={(date, _targetAthleteIds, pct) => gateInput(() => duplicateSession(date, pct))} onClose={() => setDuplicating(null)} />
       )}
       {showWellness && (
-        <WellnessModal date={todayStr} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={todayStr} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showLibrary && (
         <ProgramLibraryPage
@@ -984,8 +981,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           selfUserId={userId}
           activeProgram={activeProgram}
           activeProgramWeek={activeProgramWeek}
-          requireSubscription={requireSubscription}
-          isActive={isActive}
+          requireSubscription={sandboxMode ? requireSubscription : undefined}
+          isActive={sandboxMode ? isActive : true}
           sandboxMode={sandboxMode}
           initialStep="new"
           onClose={async () => { setShowLibrary(false); if (!sandboxMode) { await fetchActiveProgram(); router.refresh(); } }}

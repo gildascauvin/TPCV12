@@ -25,7 +25,7 @@ export default async function CoachPage() {
      check de redirection se fait maintenant après les deux — un coach mal routé (cas rare)
      déclenche quand même la requête coach_athletes avant de rediriger, accepté comme pour /today. */
   const [{ data: profile }, { data: rawAthletes }] = await Promise.all([
-    supabase.from("profiles").select("mode, name, subscription_status, invite_code").eq("user_id", user.id).maybeSingle(),
+    supabase.from("profiles").select("mode, name, subscription_status, invite_code, first_decision_on").eq("user_id", user.id).maybeSingle(),
     supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
   ]);
 
@@ -143,6 +143,7 @@ export default async function CoachPage() {
       baselines={baselines}
       wellnessBaselineHistory={wellnessBaselineHistory}
       recentSessions={recentSessions}
+      firstDecisionOn={(profile as { first_decision_on?: string | null }).first_decision_on ?? null}
     />
   );
 }

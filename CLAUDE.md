@@ -4542,3 +4542,21 @@ Bouton « + Ajouter une séance » en bas de chaque carte (prop `onAddSession`, 
 - Testeurs externes (lien public) : revue Apple + **masquer le paywall Stripe dans l'app** (guideline 3.1.1).
 - App Store public : Sign in with Apple (guideline 4.8), abonnement via Apple, fiche (captures, description, déclaration données de santé), vraie icône 1024×1024.
 - Décision pricing à prendre avant : premium vs freemium (piste évoquée : sync montre en premium).
+
+## Freemium "dispositif éteint" — ce qui entre est gratuit, ce qui sort est payant (2026-09-30 → 10-01)
+
+POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW. Pricing inchangé (9 €/59 € sportif, grille coach actuelle, trial Stripe 14 j conservé au moment de payer).
+
+### Règle
+- **Entrées libres pour un compte gratuit** : check-in (s'ouvre aussi tout seul le matin pour un gratuit), séances (ajout/édition/Terminer/suppression/dupliquer/Reconduire), programmes (enregistrer/assigner/éditer, toutes les semaines — le flou S2+ de /week, /coach/planning, bibliothèque ET wizard est supprimé), invitations, roster. Les `requireSubscription()` des entrées sont remplacés par `gateInput()` (défini localement dans chaque page) : bloque seulement la sandbox (visiteur sans compte).
+- **Constat libre** : nav (miniatures + statuts des 3 onglets), jauge agrégée et "statut · valeur" des cartes d'indice, ligne montre, puces, légendes/zones des charts, scores côté coach.
+- **Sorties floutées** (`LockedBlur.tsx`, vrai contenu flouté + action, jamais un cadenas) : carte décision + jauge + CTA (tous les jours et tous les états : repos, faite, jours passés), insights, aperçus/tendances des cartes, séries des charts (`MetricChart` prop `locked` : seule la courbe est floutée via un filtre SVG, légendes nettes, un CTA par chart, pas de survol), carte Comportements, analyse des tests (verdict, jauges, "Aussi comparé à", profil, courbe — l'historique brut et l'ajout restent libres), cartes Coach Control, insights/sparkline de la liste de groupe coach.
+- **1re décision en clair** : `profiles.first_decision_on` (migration 025, appliquée en prod), posé par `useFirstDecision` au 1er affichage d'une vraie décision sur /today (check-in fait + séance à ajuster) ; en clair ce jour-là, flouté dès le lendemain. Côté coach : sa carte "Ta forme" (sportif démo `!user_id && !invite_email`) le jour de son 1er passage sur Coach Control. /week et /coach/planning lisent la même date (pas d'écriture).
+- **Données d'exemple** (`src/lib/demoAnalytics.ts`) : onglet Charge (ACWR calculable) ou Récup (baseline ≥12 j) sans assez d'historique → exemple en clair via `buildAthleteFixture` + `computeConseilsData` (même moteur que la sandbox), bandeau `DemoAnalyticsBanner` en tête ("Les tiennes arrivent après ~2 semaines de check-ins et de séances", + bouton "Active tes 14 jours offerts" si gratuit). Vaut pour gratuit ET payant, onglet par onglet. Miniatures de la nav calculées sur l'exemple dans ce cas (incite au clic). Aussi sur la fiche d'un sportif côté coach (pas la liste de groupe).
+- **Bandeau du haut** (`UnsavedBanner`) : "🔓 Activer l'ajustement" / "🔓 Activer le Coach Control" — plus de "14 jours offerts" (le prix ne vit plus que sur priming/formulaire).
+- **Message jour 2** sur la décision floutée : "Comme hier (ou le {date}), elle croise ton ressenti et ta charge récente… Active l'ajustement pour la lire." Ne dit jamais le sens de la décision.
+- Sportif invité par un coach payant : débloqué (`hasActiveCoach` via `isActive`, inchangé).
+- PostHog : `locked_view`/`unlock_click` (propriété `surface`), `first_decision_shown`.
+
+### Limites connues
+Filtres métriques de Coach Control ("Sommeil bas"…) révèlent qui est bas ; 1re décision par sportif côté coach (plutôt que la seule carte du coach) discutée, pas faite ; `ProgramBuilderModal` garde son code `weekLocked` mais plus aucun appelant ne passe `isActive=false` hors sandbox.

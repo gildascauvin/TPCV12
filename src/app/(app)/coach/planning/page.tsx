@@ -19,7 +19,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   /* profil + liste des sportifs en parallèle (2026-09-18) — même principe que /coach/page.tsx,
      aucune dépendance entre les deux, toutes deux ne dépendent que de user.id déjà connu. */
   const [{ data: profile }, { data: rawAthletes }] = await Promise.all([
-    supabase.from("profiles").select("mode, name, subscription_status").eq("user_id", user.id).maybeSingle(),
+    supabase.from("profiles").select("mode, name, subscription_status, first_decision_on").eq("user_id", user.id).maybeSingle(),
     supabase.from("coach_athletes").select("*").eq("coach_id", user.id).order("created_at"),
   ]);
   if (!profile || profile.mode !== "coach") redirect("/today");
@@ -106,6 +106,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
       subscriptionStatus={profile.subscription_status ?? "free"}
       initialDate={searchParams.date}
       wellnessBaselineHistory={wellnessBaselineHistory}
+      firstDecisionOn={(profile as { first_decision_on?: string | null }).first_decision_on ?? null}
     />
   );
 }

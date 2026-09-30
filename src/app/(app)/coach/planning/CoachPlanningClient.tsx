@@ -30,6 +30,7 @@ import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import LockedBlur from "@/components/paywall/LockedBlur";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -75,6 +76,7 @@ function dayWellness(
 const DiffGauge = DiffGaugeShared;
 
 interface Props {
+  firstDecisionOn?: string | null;
   userId: string;
   coachName: string | null;
   athletes: CoachAthlete[];
@@ -92,7 +94,7 @@ interface Props {
   wellnessBaselineHistory?: Record<string, WellnessDaily[]>;
 }
 
-export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false, wellnessBaselineHistory: initialWellnessBaselineHistory = {} }: Props) {
+export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, firstDecisionOn = null }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -102,6 +104,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const sandboxPaywall = useSandboxGate("coach");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  /* Freemium (2026-09-30) : programmation et assignation libres (seule la sandbox garde sa porte
+     d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf, le jour de sa 1re
+     décision, celle de son propre sportif démo (même règle que Coach Control). */
+  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  const canDecideFor = (a: { user_id: string | null; invite_email: string | null }) =>
+    sandboxMode || isActive || (!a.user_id && !a.invite_email && (!firstDecisionOn || firstDecisionOn === todayStr));
 
   // "Tous" (2026-09-24, voir POC poc-coach-context_6.html, basePlanning() branche selectedAthleteId
   // ==="all") — selectedAthleteId devient explicitement nullable : `null` = Tous, choisi seulement
@@ -695,7 +703,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // S1 visible pour tout le monde, S2+ flouté tant que non abonné — même principe que /week
   // (WeekClient.tsx) et ProgramBuilderModal.tsx : assigner n'est plus le gate, voir/utiliser
   // le planning complet au quotidien l'est.
-  const weekLocked = !isActive && viewedWeek > 0;
+  // Plus de flou S2+ (freemium 2026-09-30) : la programmation est une entrée.
+  const weekLocked = false;
 
   // Rings + points de séance dans le calendrier popup (2026-09-24) — un sportif est toujours
   // sélectionné dans cette branche (athlete !== null, "Tous" a son propre rendu plus haut) : le
@@ -1042,6 +1051,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : wellness;
             let alert;
             let decisionGaugeNode: React.ReactNode;
+            let actionsAllowed = true;
             let autoregTargetId: string | null = null;
             if (isToday) {
               const baseline = dayBaseline;
@@ -1075,7 +1085,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 subject: athlete.name.split(" ")[0],
               });
               const severityColor = decisionCardColor(decision.icon);
-              alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };
+              const canDecide = canDecideFor(athlete);
+              const decisionLocked = !canDecide;
+              actionsAllowed = canDecide;
+              /* Freemium : côté coach même la zone est cachée — un coach sait s'ajuster dès qu'il voit
+                 "au-dessus de la zone". Le fait qu'une décision existe reste dit. */
+              alert = decisionLocked
+                ? { border: "rgba(0,0,0,.08)", glow: "#8a8f94", text: "Analyse du jour prête\nActive le Coach Control pour la lire." }
+                : { border: `${severityColor}66`, glow: severityColor, text: decision.text };
               if (autoregTarget) {
                 autoregTargetId = autoregTarget.id;
                 // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
@@ -1085,6 +1102,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 // Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
                 // pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre.
                 decisionGaugeNode = (
+                  <LockedBlur locked={decisionLocked} surface="coach_planning_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer le Coach Control" light compact radius={12}>
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
@@ -1096,11 +1114,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     sessionLabel={autoregTarget.name}
                     variant="light"
                     severityColor={decision.suggestion ? severityColor : undefined}
-                    isActive={isActive}
+                    isActive={canDecide}
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
-                      if (!isActive) { setPaywallStep("priming"); return; }
+                      if (!canDecide) { setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                       const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
@@ -1117,6 +1135,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       setDecisionTick(t => t + 1);
                     }}
                   />
+                  </LockedBlur>
                 );
               }
             }
@@ -1131,7 +1150,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
-                alertActions={autoregTargetId ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
+                alertActions={autoregTargetId && actionsAllowed ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}
@@ -1156,17 +1175,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           })}
         </div>
         </DndContext>
-        {weekLocked && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
-            <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
-              <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Ce programme est bien assigné — l&apos;abonnement débloque le reste du planning.</div>
-              <button onClick={() => requireSubscription(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>
-                Débloquer →
-              </button>
-            </div>
-          </div>
-        )}
         </div>
       )}
 
@@ -1191,8 +1199,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           } : null}
           athletes={athletes}
           initialAthleteId={athlete.id}
-          onSave={(data, athleteIds, id) => requireSubscription(() => saveSession(data, athleteIds, id))}
-          onDelete={editingSession ? (() => requireSubscription(() => deleteSession())) : undefined}
+          onSave={(data, athleteIds, id) => gateInput(() => saveSession(data, athleteIds, id))}
+          onDelete={editingSession ? (() => gateInput(() => deleteSession())) : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
           onMarkViewed={() => {
             if (!editingSession) return;
@@ -1202,7 +1210,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       )}
 
       {duplicating && athlete && (
-        <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds, pct) => requireSubscription(() => duplicateSessionToDate(date, targetAthleteIds, pct))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
+        <DuplicateModal session={duplicating} onDuplicate={(date, targetAthleteIds, pct) => gateInput(() => duplicateSessionToDate(date, targetAthleteIds, pct))} onClose={() => setDuplicating(null)} athletes={athletes} sourceAthleteId={athlete.id} />
       )}
       {showReconduire && athlete && (
         <ReconduireModal
@@ -1210,7 +1218,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           athletes={athletes}
           sourceAthleteId={athlete.id}
           onClose={() => setShowReconduire(false)}
-          onConfirm={(weeksOut, targetAthleteIds) => requireSubscription(async () => {
+          onConfirm={(weeksOut, targetAthleteIds) => gateInput(async () => {
             const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
             const allRows = weeksOut.flatMap((rows, w) => rows.map(r => ({
               name: r.name, notes: r.notes, target_difficulty: r.target_difficulty,
@@ -1238,8 +1246,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {showLibrary && (
         <ProgramLibraryPage
           athletes={athletes}
-          requireSubscription={requireSubscription}
-          isActive={isActive}
+          requireSubscription={sandboxMode ? requireSubscription : undefined}
+          isActive={sandboxMode ? isActive : true}
           sandboxMode={sandboxMode}
           initialStep="new"
           onClose={() => setShowLibrary(false)}
@@ -1275,7 +1283,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             created_at: completing.created_at,
           }}
           athleteName={athlete.name}
-          onSave={data => requireSubscription(() => completeSession(data))}
+          onSave={data => gateInput(() => completeSession(data))}
           onClose={() => setCompleting(null)}
         />
       )}

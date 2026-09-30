@@ -21,7 +21,9 @@ import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { decisionRingState } from "@/components/sessions/DecisionRing";
 import { aggregateFor } from "@/lib/metricCards";
-import { DemoDataChip, ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
+import { useFirstDecision } from "@/hooks/useFirstDecision";
+import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
+import { DemoAnalyticsBanner, DemoDataChip, ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 
@@ -39,6 +41,7 @@ import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments, WellnessDaily } from "@/types";
 
 interface Props {
+  firstDecisionOn?: string | null;
   coachName: string | null;
   athletes: CoachAthlete[];
   todaySessions: CoachViewSession[];
@@ -75,7 +78,7 @@ interface Props {
 
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, sandboxMode = false, sandboxSessionsByDate }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, sandboxMode = false, sandboxSessionsByDate, firstDecisionOn = null }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -89,6 +92,19 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   const [selectedDate, setSelectedDate] = useState(today);
+  /* Freemium (2026-09-30) : programmation, séances et invitations libres (seule la sandbox garde sa
+     porte d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf, le jour de sa
+     1re décision, celle de son propre sportif démo ("Ta forme"). */
+  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  const isDemoSelf = (a: { user_id: string | null; invite_email: string | null }) => !a.user_id && !a.invite_email;
+  const selfCanDecide = useFirstDecision({
+    userId, isActive, initial: firstDecisionOn, today,
+    eligible: selectedDate === today && initialAthletes.some(isDemoSelf),
+    enabled: !sandboxMode,
+  });
+  const canDecideFor = (a: CoachAthlete) => sandboxMode || isActive || (isDemoSelf(a) && selfCanDecide);
+  const coachFreeMode = !isActive && !sandboxMode;
+  const unlock = () => setPaywallStep("priming");
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
@@ -565,8 +581,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     if (!a) return null;
                     return decisionRingState(sessions.filter(s => s.athlete_id === a.id), cardSuggestion(a));
                   })(),
-                  charge: aggregateFor("charge", selectedTabData),
-                  recuperation: aggregateFor("recup", selectedTabData),
+                  charge: aggregateFor("charge", analyticsReady(selectedTabData, "charge") ? selectedTabData : demoConseilsData(selectedDate, "coach")),
+                  recuperation: aggregateFor("recup", analyticsReady(selectedTabData, "recup") ? selectedTabData : demoConseilsData(selectedDate, "coach")),
                 }
               : undefined}
           />
@@ -789,11 +805,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         baseline={baselines[a.id]}
                         recentSessions={recentSessions[a.id]}
                         coachName={coachName ?? "Coach"}
-                        isActive={isActive}
+                        isActive={canDecideFor(a)}
+                        locked={!canDecideFor(a)}
+                        onUnlock={unlock}
                         onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
-                        onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
-                        onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
+                        onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                        onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                         onAutoregDecided={() => markAutoregDecided(a.id)}
                         onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                     </div>
@@ -825,11 +843,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     baseline={baselines[a.id]}
                     recentSessions={recentSessions[a.id]}
                     coachName={coachName ?? "Coach"}
-                    isActive={isActive}
+                    isActive={canDecideFor(a)}
+                    locked={!canDecideFor(a)}
+                    onUnlock={unlock}
                     onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
-                    onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
-                    onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
+                    onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
                     onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                 )) : (
@@ -860,12 +880,19 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           if (!a || !data) return null;
           return (
             <>
-              {!a.user_id && <DemoDataChip />}
-              {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
+              {!a.user_id && analyticsReady(data, "charge") && analyticsReady(data, "recup") && <DemoDataChip />}
+              {/* Pas assez d'historique → exemple en clair et étiqueté, comme côté sportif (freemium 2026-09-30). */}
+              {homeTab === "charge" && (!analyticsReady(data, "charge") ? <>
+                <DemoAnalyticsBanner perspective="coach" free={coachFreeMode} onActivate={unlock} />
+                <ChargeSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
+              </> : <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" lockedHistory={coachFreeMode ? { onUnlock: unlock } : null} />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : dernier item du rapport de
                  récupération, dont il est un déterminant. Même changement que sur /today. */}
               {homeTab === "recuperation" && <>
-                <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
+                {!analyticsReady(data, "recup") ? <>
+                  <DemoAnalyticsBanner perspective="coach" free={coachFreeMode} onActivate={unlock} />
+                  <RecuperationSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
+                </> : <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" lockedHistory={coachFreeMode ? { onUnlock: unlock } : null} />}
               </>}
             </>
           );
@@ -880,6 +907,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             rows={athletes.map(a => ({ athlete: a, data: athleteConseilsData[a.id] })).filter((r): r is { athlete: CoachAthlete; data: ConseilsData } => !!r.data)}
             metric={homeTab as "charge" | "recuperation"}
             onSelect={selectAthleteFilter}
+            locked={coachFreeMode}
           />
         )}
 
@@ -911,7 +939,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           } : null}
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
-          onSave={(data, athleteIds, id) => requireSubscription(() => handleSaveReview(data, athleteIds, id))}
+          onSave={(data, athleteIds, id) => gateInput(() => handleSaveReview(data, athleteIds, id))}
           onClose={handleCloseReview}
           onMarkViewed={() => {
             if (!reviewSession) return;

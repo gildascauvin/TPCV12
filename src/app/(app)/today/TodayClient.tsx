@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
@@ -12,6 +12,9 @@ import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
+import { useFirstDecision } from "@/hooks/useFirstDecision";
+import LockedBlur from "@/components/paywall/LockedBlur";
+import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
@@ -38,7 +41,7 @@ import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { aggregateFor } from "@/lib/metricCards";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { DemoDataChip, ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
+import { DemoAnalyticsBanner, DemoDataChip, ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
@@ -279,6 +282,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
+  /* Freemium (2026-09-30) : ce qui entre (check-in, séances) est libre, seule la sandbox (visiteur
+     sans compte) garde sa porte d'inscription. Ce qui sort (décision, historique) passe par
+     LockedBlur + canDecide plus bas. */
+  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  const unlock = () => setPaywallStep("priming");
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
 
@@ -492,6 +500,35 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     deviceNote,
   });
   const decisionColor = decisionCardColor(decision.icon);
+  /* Freemium (2026-09-30) : 1re vraie décision (check-in fait + séance à ajuster, sur le jour réel)
+     en clair, floutée dès le lendemain pour un compte gratuit. */
+  const canDecide = useFirstDecision({
+    userId, isActive, initial: profile.first_decision_on, today: initialDate,
+    eligible: wellnessFilledToday && !!autoregTargetTop && selectedDate === initialDate,
+    enabled: !sandboxMode,
+  });
+  // Tout le bloc décision, quel que soit le jour affiché ou son état (repos, séance faite, jours passés).
+  const decisionLocked = !canDecide;
+  /* Message du jour 2 (freemium) : rappelle son jour 1, sans jamais dire dans quel sens irait la
+     décision d'aujourd'hui. */
+  const lockedSub = (() => {
+    const first = profile.first_decision_on;
+    if (!first) return "Active l'ajustement pour continuer à ajuster tes séances.";
+    const d = new Date(first + "T12:00:00"), y = new Date(initialDate + "T12:00:00"); y.setDate(y.getDate() - 1);
+    const when = first === format(y, "yyyy-MM-dd") ? "hier" : `le ${d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`;
+    return autoregTargetTop
+      ? `Comme ${when}, elle croise ton ressenti et ta charge récente pour ajuster ta séance. Active l'ajustement pour la lire.`
+      : `Comme ${when}, elle croise ton ressenti et ta charge récente. Active l'ajustement pour la lire.`;
+  })();
+  // Historique (28/90 j, comportements) : réservé aux abonnés, jour 1 compris — la 1re décision est l'aha, pas l'analyse.
+  const historyLocked = !isActive && !sandboxMode;
+  /* Pas assez d'historique (gratuit ou payant) → exemple en clair, étiqueté, plutôt que des indices
+     vides. Calculé seulement quand un des deux onglets n'est pas prêt. */
+  const analyticsDemo = useMemo(
+    () => analyticsData && !sandboxMode && (!analyticsReady(analyticsData, "charge") || !analyticsReady(analyticsData, "recup"))
+      ? demoConseilsData(selectedDate) : null,
+    [analyticsData, sandboxMode, selectedDate],
+  );
   /* Jauge de décision — 3e itération (2026-09-29, POC charge-variantes.html) : l'action SORT de la
      carte séance et passe EN TÊTE de l'onglet Aujourd'hui, au-dessus de l'encart insight. C'est la
      décision du jour, pas une propriété de la carte séance ; la carte séance qui suit n'a donc plus
@@ -513,14 +550,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       shape="ring"
       actionsSlot={autoregActionsSlot}
       severityColor={decision.suggestion ? decisionColor : undefined}
-      isActive={isActive}
+      isActive={canDecide}
       onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
       onApply={async (pct) => {
         /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
            est gatée (voir chantier gating save, 2026-08-19). isActive vient
            directement de usePaywall() : requireSubscription() ne peut pas envelopper
            ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
-        if (!isActive) { setPaywallStep("priming"); return; }
+        if (!canDecide) { setPaywallStep("priming"); return; }
         const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
         const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
         const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
@@ -546,9 +583,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   useEffect(() => {
     const key = `wellness_prompted_${initialDate}`;
+    // Freemium (2026-09-30) : le check-in est une entrée, il s'ouvre aussi pour un compte gratuit —
+    // c'est lui qui déclenche la 1re décision en clair. Seule la sandbox reste exclue.
     if (
-      subscriptionStatus !== "free" &&
-      subscriptionStatus !== "expired" &&
+      !sandboxMode &&
       !wellnessFilledToday &&
       !sessionStorage.getItem(key)
     ) {
@@ -746,8 +784,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onChange={setHomeTab}
           previews={{
             today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null),
-            charge: analyticsData ? aggregateFor("charge", analyticsData) : null,
-            recuperation: analyticsData ? aggregateFor("recup", analyticsData) : null,
+            /* Onglet en mode exemple → miniature de l'exemple (2026-09-30, Gildas : elle incite au clic,
+               et le bandeau "Exemple" de l'onglet dit ensuite ce que c'est). */
+            charge: analyticsData ? aggregateFor("charge", analyticsDemo && !analyticsReady(analyticsData, "charge") ? analyticsDemo : analyticsData) : null,
+            recuperation: analyticsData ? aggregateFor("recup", analyticsDemo && !analyticsReady(analyticsData, "recup") ? analyticsDemo : analyticsData) : null,
           }}
         />
 
@@ -842,6 +882,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               {/* La jauge en tête, SANS encart (2026-09-30, Gildas) : elle se pose directement sur le
                  fond sombre de la page. Forme ronde R2 depuis le 2026-09-30 (DecisionRing.tsx),
                  la barre reste celle des cartes séance de Coach Control et du Planning. */}
+              {/* Freemium (2026-09-30) : jauge + carte décision floutées ensemble pour un compte gratuit
+                 après son jour 1 (le CTA Maintenir/Appliquer, porté dans la carte, l'est avec). */}
+              <LockedBlur
+                locked={decisionLocked}
+                surface="today_decision"
+                onUnlock={unlock}
+                title={autoregTargetTop ? "Ta décision du jour est prête" : "Ton analyse du jour est prête"}
+                sub={lockedSub}
+                radius={18}
+              >
               {decisionGaugeSlot && (
                 <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
                   {decisionGaugeSlot}
@@ -872,6 +922,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   ) : undefined}
                 />
               </div>
+              </LockedBlur>
+              {decisionLocked && (
+                /* Le ressenti reste modifiable (c'est une entrée) ; aucun indice de la décision ne passe. */
+                <div style={{ textAlign: "center", marginTop: 10 }}>
+                  <button onClick={() => setShowWellness(true)} style={{ border: "none", background: "none", cursor: "pointer", color: "rgba(255,255,255,.55)", fontSize: 12, fontWeight: 700 }}>
+                    {wellnessFilledToday ? "✎ Modifier mon ressenti" : "Renseigner mon ressenti"}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ── Séance(s) du jour — imbriquée dans la même carte, TOUJOURS en dessous ── */}
@@ -949,11 +1008,17 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           analyticsData ? (
             <>
               {sandboxMode && <DemoDataChip />}
-              {homeTab === "charge" && <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
+              {homeTab === "charge" && (analyticsDemo && !analyticsReady(analyticsData, "charge") ? <>
+                <DemoAnalyticsBanner free={historyLocked} onActivate={unlock} />
+                <ChargeSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+              </> : <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
-                <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+                {analyticsDemo && !analyticsReady(analyticsData, "recup") ? <>
+                  <DemoAnalyticsBanner free={historyLocked} onActivate={unlock} />
+                  <RecuperationSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+                </> : <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />}
               </>}
             </>
           ) : (
@@ -963,31 +1028,31 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       </div>
       </div>
 
-      {/* Modals — ouverture toujours libre (voir les onClick plus haut), seule la persistance
-          réelle (onSave/onDelete) est gatée derrière requireSubscription() (2026-08-19). */}
+      {/* Modals — ouverture et enregistrement libres depuis le freemium (2026-09-30) : ce sont des
+          entrées. gateInput() ne bloque plus que la sandbox (visiteur sans compte). */}
       {showWellness && (
-        <WellnessModal date={selectedDate} onSave={data => requireSubscription(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={selectedDate} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => requireSubscription(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
       )}
       {completing && (
-        <CompleteModal session={completing} onSave={data => requireSubscription(() => saveComplete(data))} onClose={() => setCompleting(null)} />
+        <CompleteModal session={completing} onSave={data => gateInput(() => saveComplete(data))} onClose={() => setCompleting(null)} />
       )}
       {editing && (
         <AddSessionModal
           date={editing.date}
           session={editing}
           userName={profile.name ?? "Toi"}
-          onSave={(data, id) => requireSubscription(() => saveSession(data, id ?? editing.id))}
-          onDelete={() => requireSubscription(async () => { await deleteSession(editing); setEditing(null); })}
+          onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
+          onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}
           onClose={() => { setEditing(null); router.refresh(); }}
         />
       )}
       {duplicating && (
         <DuplicateModal
           session={duplicating}
-          onDuplicate={(date, _targetAthleteIds, pct) => requireSubscription(() => duplicateSession(date, pct))}
+          onDuplicate={(date, _targetAthleteIds, pct) => gateInput(() => duplicateSession(date, pct))}
           onClose={() => setDuplicating(null)}
         />
       )}

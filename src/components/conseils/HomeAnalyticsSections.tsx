@@ -34,18 +34,41 @@ export function DemoDataChip() {
   );
 }
 
+/* Bandeau des données d'exemple (2026-09-30, freemium) : en tête d'onglet, pas un petit badge — le
+   risque est qu'on prenne l'exemple pour ses propres données. Dit quand les vraies arrivent (après
+   ~2 semaines de check-ins et de séances, jamais "dans 14 jours" : ça dépend de ce qu'il remplit).
+   Compte gratuit : rappelle que l'essai couvre exactement ce délai. */
+export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate }: { perspective?: Perspective; free?: boolean; onActivate?: () => void }) {
+  const coach = perspective === "coach";
+  return (
+    <div style={{ background: "rgba(125,211,252,.08)", border: "1px solid rgba(125,211,252,.28)", borderRadius: 14, padding: "12px 14px", marginBottom: 14, display: "grid", gap: 8 }}>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#7dd3fc" }}>🔎 Exemple</div>
+      <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
+        {coach
+          ? "Ces analyses sont un exemple. Les siennes arrivent après ~2 semaines de check-ins et de séances."
+          : "Ces analyses sont un exemple. Les tiennes arrivent après ~2 semaines de check-ins et de séances."}
+      </div>
+      {free && onActivate && (
+        <button onClick={onActivate} style={{ justifySelf: "start", border: "none", cursor: "pointer", color: "#fff", fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 14px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}>
+          Active tes 14 jours offerts pour les avoir en entier
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* Cartes d'indice (2026-09-28, POC `charge-variantes.html` variante E1, retenue par Gildas) —
    remplacent les sous-onglets Charge/Adaptation et la rangée de badges : les badges disaient la même
    chose que le chart juste en dessous, et il fallait cliquer pour savoir où on en était sur chaque
    indice. Une carte par indice, statut visible en permanence, chart au clic. */
-export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} />;
+export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null }) {
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} lockedHistory={lockedHistory} />;
 }
 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
    à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
-export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} />;
+export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null }) {
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} lockedHistory={lockedHistory} />;
 }
 
 /* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que
@@ -231,11 +254,15 @@ function sectionFor(metric: Metric, data: ConseilsData): { title: string; order:
    chaque athlète (calculé une fois côté CoachClient.tsx, jamais recalculé ici) — ce composant ne
    fait que trier/regrouper/afficher, aucune nouvelle donnée fabriquée (contrairement au POC, dont
    les scores/insights sont des exemples fictifs). */
-export function TeamAnalyticsList({ rows, metric, onSelect }: {
+export function TeamAnalyticsList({ rows, metric, onSelect, locked = false }: {
   rows: { athlete: CoachAthlete; data: ConseilsData }[];
   metric: Metric;
   onSelect: (athleteId: string) => void;
+  /* Freemium (2026-09-30) : le constat (jauge, statut · valeur) reste lisible ; insight, aperçu
+     d'historique et tendance sont floutés. */
+  locked?: boolean;
 }) {
+  const blur: React.CSSProperties = locked ? { filter: "blur(6px)", userSelect: "none" } : {};
   const { isMd } = useBreakpoint();
 
   if (rows.length === 0) {
@@ -435,10 +462,10 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
                         {a.name}
                       </span>
                       {mainLine}
-                      {isMd && insightBox}
+                      {isMd && insightBox && <div style={blur}>{insightBox}</div>}
                     </div>
                     {sparklinePoints && (
-                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0, ...blur }}>
                         <MiniBars points={sparklinePoints} />
                         {trendLine && (
                           <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" as const }}>{trendLine}</span>
@@ -448,7 +475,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
                   </div>
                   {/* Même règle qu'en mobile côté sportif : sous une centaine de pixels de large,
                       l'insight coincé à côté de l'aperçu tombe sur cinq lignes. */}
-                  {!isMd && insightBox}
+                  {!isMd && insightBox && <div style={blur}>{insightBox}</div>}
                 </button>
               );
             })}

@@ -69,7 +69,7 @@ export type ExtraIndexCard = {
   body: React.ReactNode;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [] }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -84,6 +84,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   insight: string;
   perspective?: Perspective;
   extraCards?: ExtraIndexCard[];
+  /* Freemium (2026-09-30) : voir `locked` plus bas. Absent = tout lisible. */
+  lockedHistory?: { onUnlock: () => void } | null;
 }) {
   const { isMd } = useBreakpoint();
   const [open, setOpen] = useState<string | null>(null);
@@ -124,6 +126,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
 
   /* Gabarit d'une carte : résumé cliquable puis contenu déplié. Partagé par les cartes d'indice et
      la carte supplémentaire (comportements), pour qu'elles ne puissent pas diverger. */
+  /* Freemium (2026-09-30) : le constat reste lisible (jauge agrégée, nom, statut · valeur, ligne
+     montre, puces) ; ce qu'on en tire est flouté (insights, aperçus, tendances, séries des charts). */
+  const locked = !!lockedHistory;
+  const blur: React.CSSProperties = locked ? { filter: "blur(6px)", userSelect: "none", pointerEvents: "none" } : {};
+  const blurChart: React.CSSProperties = locked ? { filter: "blur(10px)", opacity: .6, userSelect: "none", pointerEvents: "none" } : {};
   const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
     const isOpen = open === key;
     return (
@@ -154,10 +161,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{` · ${c.value}`}</span>
               )}
             </span>
-            {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4 }}>{c.impact}</span>}
+            {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4, ...blur }}>{c.impact}</span>}
           </span>
 
-          <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto" }}>
+          <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto", ...blur }}>
             <span style={{ width: 118 }}>{c.preview}</span>
             <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)", textAlign: "right" as const, letterSpacing: "0.01em" }}>
               {c.trend}
@@ -165,7 +172,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           </span>
 
           <span style={{ color: "rgba(255,255,255,.35)", fontSize: 17, textAlign: "right" as const }}>{isOpen ? "⌄" : "›"}</span>
-          {!isMd && <span style={{ gridColumn: "1 / -1", fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 8 }}>{c.impact}</span>}
+          {!isMd && <span style={{ gridColumn: "1 / -1", fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 8, ...blur }}>{c.impact}</span>}
         </button>
 
         {isOpen && (
@@ -177,7 +184,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
     );
   };
 
-  return (
+  const content = (
     <div>
       {/* Jauge puis insight, centrés dans le même bloc (2026-09-29, Gildas) : c'est l'insight de la
           SECTION, donc le texte le plus important de l'écran — il passe devant les impacts des
@@ -192,9 +199,14 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
             légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
             plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}
-        <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", maxWidth: 460 }}>
+        <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", maxWidth: 460, ...blur }}>
           {insight}
         </div>
+        {locked && (
+          <button onClick={() => lockedHistory?.onUnlock()} style={{ border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.35)" }}>
+            Activer l'ajustement
+          </button>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 9 }}>
@@ -274,15 +286,17 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       : metric === "recovery" && subDim && subDim !== "rhr" && subDim !== "hrv"
                       ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
-                    weekLabels={days > 7} height={200}
+                    weekLabels={days > 7} locked={locked} onUnlock={() => lockedHistory?.onUnlock()} height={200}
                   />
                             </>
           ));
         })}
-        {extraCards.map(c => renderCard(c.key, c, c.body))}
+        {extraCards.map(c => renderCard(c.key, c, <div style={blurChart}>{c.body}</div>))}
       </div>
     </div>
   );
+
+  return content;
 }
 
 /* ── aperçus ─────────────────────────────────────────────────────────────────────────────────────
