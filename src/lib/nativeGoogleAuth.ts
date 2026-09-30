@@ -20,6 +20,15 @@ export function isNativeApp() {
 
 let initialized = false;
 
+/* Le SDK Google iOS met toujours un nonce dans l'idToken ; Supabase exige alors le nonce brut.
+   Convention Supabase : Google reçoit le SHA-256 (hex) du nonce, Supabase reçoit le nonce brut. */
+async function makeNonce() {
+  const raw = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, "0")).join("");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
+  const hashed = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+  return { raw, hashed };
+}
+
 /* Renvoie null si l'utilisateur a fermé la fenêtre Google (pas une erreur à afficher). */
 export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok: true } | { ok: false; error: string } | null> {
   if (!GOOGLE_IOS_CLIENT_ID || !GOOGLE_WEB_CLIENT_ID) {
@@ -34,9 +43,10 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
     initialized = true;
   }
 
+  const nonce = await makeNonce();
   let idToken: string | null = null;
   try {
-    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"] } });
+    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"], nonce: nonce.hashed } });
     idToken = res.result && "idToken" in res.result ? res.result.idToken : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -46,7 +56,7 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
   }
   if (!idToken) return { ok: false, error: "Connexion Google impossible. Réessaie ou utilise ton email." };
 
-  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken, nonce: nonce.raw });
   if (error) {
     console.error("[google-native] supabase", error.message);
     return { ok: false, error: error.message };
