@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
+import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
 
 /* Verrouillage de page entière (.locked, coin cadenas sur les CTA premium) retiré le 2026-08-19
    (chantier "gating save") : un compte gratuit navigue et interagit librement partout désormais,
@@ -26,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-bg pb-[132px]">
       {children}
       <BottomNav role={role} />
+      <HealthSyncOnOpen userId={user.id} />
     </div>
   );
 }

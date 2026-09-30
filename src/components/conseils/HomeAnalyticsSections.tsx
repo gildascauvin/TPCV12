@@ -45,7 +45,7 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
    à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
 export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCard={behaviorIndexCard(data)} />;
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} />;
 }
 
 /* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que

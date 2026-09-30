@@ -44,6 +44,12 @@ export interface WellnessDaily {
   behaviors: string[];
   bedtime: string | null;
   created_at: string;
+  // Montre via Apple Santé (voir healthSync.ts) — absents ou null = score 100% subjectif ce jour-là.
+  device_sleep_minutes?: number | null;
+  device_resting_hr?: number | null;
+  device_rhr_baseline?: number | null;
+  device_hrv_ms?: number | null;
+  device_hrv_baseline?: number | null;
 }
 
 export interface Session {

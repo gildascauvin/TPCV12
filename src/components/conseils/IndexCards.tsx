@@ -9,7 +9,7 @@ import { displaySeverityOf, type DayPoint } from "@/lib/fatigueSignature";
 import { wellnessColor } from "@/lib/wellness";
 import {
   METRICS, METRIC_GROUPS, TREND_ARROW, TREND_IS_STATUS, AGG_BANDS, aggregateFor,
-  chartSpecFor, DIMENSION_CHART_LABELS, dimensionSpec, impactFor, lastOf, prettyStatus,
+  chartSpecFor, DIMENSION_CHART_LABELS, dimensionSpec, rhrSpec, hrvSpec, impactFor, lastOf, prettyStatus,
   sessionQualifier, sessionReference, seriesOf, statusDisplayColor, trendFor, TREND_STATUS_LABEL,
   type MetricGroup, type MetricKey,
 } from "@/lib/metricCards";
@@ -69,7 +69,7 @@ export type ExtraIndexCard = {
   body: React.ReactNode;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCard }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [] }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -83,12 +83,12 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      c'est le scan en 2 secondes, il ne doit jamais être remplacé par le détail d'une métrique. */
   insight: string;
   perspective?: Perspective;
-  extraCard?: ExtraIndexCard;
+  extraCards?: ExtraIndexCard[];
 }) {
   const { isMd } = useBreakpoint();
   const [open, setOpen] = useState<string | null>(null);
   /* Sous-jacent affiché DANS la carte Récupération (null = le score composite). */
-  const [subDim, setSubDim] = useState<DimensionKey | null>(null);
+  const [subDim, setSubDim] = useState<DimensionKey | "rhr" | "hrv" | null>(null);
   const days = rangeMode === "quarter" ? 90 : rangeMode === "month" ? 28 : 7;
   const series = data.timeSeries.slice(-days);
   const sessionRef = sessionReference(data.timeSeries);
@@ -97,6 +97,24 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      rien — jamais un score absolu mélangé à une échelle de percentile. */
   const recoveryRelative = baselineWindow.map(b => (b?.hasEnoughHistory ? b.relativeScore : null));
   const dimBadges = dimensionBadgesSeries(data.wellnessBaselineSeries).slice(-1)[0] ?? null;
+  /* Montre (Apple Santé, 2026-09-30) : le sommeil mesuré complète le déclaré et la FC au repos entre
+     dans le score. Ligne de synthèse sous la carte + sous-jacent "FC repos" dès qu'une FC existe sur
+     la période. Rien de tout ça sans montre : la carte reste 100 % subjective. */
+  const hasRhr = baselineWindow.some(b => b?.rhr);
+  const hasHrv = baselineWindow.some(b => b?.hrv);
+  const lastB = data.wellnessBaselineSeries.slice(-1)[0] ?? null;
+  const deviceToday = (() => {
+    if (!lastB) return null;
+    const parts: string[] = [];
+    const sl = lastB.dimensions.sleep;
+    if (sl.deviceMinutes != null) {
+      const m = Math.round(sl.deviceMinutes);
+      parts.push(`sommeil ${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`);
+    }
+    if (lastB.rhr) parts.push(`FC au repos ${Math.round(lastB.rhr.bpm)} bpm (norme ${Math.round(lastB.rhr.norm)})`);
+    if (lastB.hrv) parts.push(`VFC ${Math.round(lastB.hrv.ms)} ms (norme ${Math.round(lastB.hrv.norm)})`);
+    return parts.length ? parts.join(" · ") + "." : null;
+  })();
 
   /* Score agrégé de l'onglet, centré au-dessus des cartes (2026-09-29, Gildas) — une POSITION sur un
      axe à 3 niveaux, pas une note ; voir aggregateFor() pour ce que chacun agrège et pourquoi.
@@ -109,7 +127,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
     const isOpen = open === key;
     return (
-      <div key={key}>
+      /* minWidth 0 : sans lui, la rangée de filtres de la carte Récupération dépliée (nowrap, jusqu'à 7
+         chips avec FC repos/VFC) imposait sa largeur à la carte et élargissait toute la page
+         (scroll horizontal dans l'app iOS, 2026-09-30). La rangée garde son propre scroll. */
+      <div key={key} style={{ minWidth: 0 }}>
         <button
           onClick={() => setOpen(isOpen ? null : key)}
           aria-expanded={isOpen}
@@ -176,7 +197,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: 9 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 9 }}>
         {METRIC_GROUPS[group].map(metric => {
           const meta = METRICS[metric];
           const info = statusOf(metric, data, series, perspective);
@@ -208,11 +229,17 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       composantes du score, pas des indices frères — en faire des cartes de plus
                       donnerait une liste plate sans hiérarchie. La flèche du badge est celle déjà
                       calculée par dimensionBadgesSeries(), pas un second calcul. */}
+                  {metric === "recovery" && deviceToday && (
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.45, marginBottom: 10 }}>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "#fff", marginRight: 6 }}>MONTRE</span>
+                      {deviceToday}
+                    </div>
+                  )}
                   {metric === "recovery" && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" as const, overflowX: "auto", scrollbarWidth: "none" as const, marginBottom: 12, paddingBottom: 2 }}>
-                      {[null, ...DIMENSION_KEYS].map(dim => {
+                      {([null, ...DIMENSION_KEYS, ...(hasRhr ? ["rhr" as const] : []), ...(hasHrv ? ["hrv" as const] : [])] as (DimensionKey | "rhr" | "hrv" | null)[]).map(dim => {
                         const active = subDim === dim;
-                        const badge = dim ? dimBadges?.find(b => b.key === dim) : null;
+                        const badge = dim && dim !== "rhr" && dim !== "hrv" ? dimBadges?.find(b => b.key === dim) : null;
                         return (
                           <span
                             key={dim ?? "composite"}
@@ -229,7 +256,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                               color: active ? "#fff" : "rgba(255,255,255,.55)",
                             }}
                           >
-                            {dim ? DIMENSION_CHART_LABELS[dim] : "Score"}
+                            {dim === "rhr" ? "FC repos" : dim === "hrv" ? "VFC" : dim ? DIMENSION_CHART_LABELS[dim] : "Score"}
                             {badge && <span style={{ color: dimensionBadgeColor(badge.arrow) }}>{DIMENSION_ARROW[badge.arrow]}</span>}
                           </span>
                         );
@@ -240,7 +267,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                     <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
                   </div>
                   <MetricChart
-                    spec={metric === "recovery" && subDim
+                    spec={metric === "recovery" && subDim === "rhr"
+                      ? rhrSpec(baselineWindow, series.map(p => p.date))
+                      : metric === "recovery" && subDim === "hrv"
+                      ? hrvSpec(baselineWindow, series.map(p => p.date))
+                      : metric === "recovery" && subDim && subDim !== "rhr" && subDim !== "hrv"
                       ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
                     weekLabels={days > 7} height={200}
@@ -248,7 +279,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                             </>
           ));
         })}
-        {extraCard && renderCard(extraCard.key, extraCard, extraCard.body)}
+        {extraCards.map(c => renderCard(c.key, c, c.body))}
       </div>
     </div>
   );

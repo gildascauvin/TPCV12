@@ -10,6 +10,8 @@ import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
 import { computeWellnessScore } from "@/lib/wellness";
+import { withDeviceScore } from "@/lib/deviceWellnessDb";
+import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
@@ -420,6 +422,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // jour" reste comparable à l'historique déjà bâti sur base_score dans wellnessBaseline plus bas.
   const score = wellness ? wellnessSignal(wellness) : null;
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
+  // Montre (Apple Santé) avant le check-in : affichée dans "Plan à confirmer" pour inviter à le faire.
+  const deviceNote = useDeviceNote(userId, selectedDate, !sandboxMode && !wellnessFilledToday);
   /* Plus d'impact fatigue post-séance ici (retiré partout, pas seulement sur ce chart) : le garder
      sur une seule surface créait exactement le type de confusion inter-surfaces ("le score n'est pas
      le même sur /today qu'ailleurs pour le même jour") que toute cette refonte relative vise à
@@ -487,6 +491,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     anchor: trendAnchor,
     perspective: "athlete",
     behaviorTip,
+    deviceNote,
   });
   const decisionColor = decisionCardColor(decision.icon);
   /* Jauge de décision — 3e itération (2026-09-29, POC charge-variantes.html) : l'action SORT de la
@@ -580,9 +585,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     sleep: number; stress: number; recovery: number; motivation: number;
     behaviors: string[]; bedtime: string; base_score: number; score: number;
   }) => {
+    // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
+    const payload = await withDeviceScore(supabase, userId, selectedDate, data);
     const { data: saved } = await supabase
       .from("wellness_daily")
-      .upsert({ user_id: userId, date: selectedDate, ...data }, { onConflict: "user_id,date" })
+      .upsert({ user_id: userId, date: selectedDate, ...payload }, { onConflict: "user_id,date" })
       .select().single();
     if (saved) {
       setWellness(saved as WellnessDaily);

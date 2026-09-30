@@ -220,6 +220,10 @@ export function computeDecisionCard(params: {
   behaviorTip?: string | null;
   // Présent = carte avec ligne "Phase" (/today, Coach Control). Absent = comportement inchangé.
   day?: DecisionDay;
+  /* Ce que dit la montre avant le check-in (2026-09-30, deviceSummary) : ajouté à "Plan à confirmer"
+     et au jour de repos non renseigné, avec l'invitation à faire le check-in. Sportif seul (le coach ne
+     lit pas health_daily). */
+  deviceNote?: string | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
   const coach = params.perspective === "coach";
@@ -283,9 +287,15 @@ export function computeDecisionCard(params: {
   }
 
   if (!params.wellnessFilledToday) {
-    return { suggestion: null, icon: "🟢", text: "Plan cohérent\nRenseigne ta récupération pour des conseils personnalisés." };
+    return { suggestion: null, icon: "🟢", text: `Plan cohérent\nRenseigne ta récupération pour des conseils personnalisés.${deviceNoteLine(params.deviceNote)}` };
   }
   return { suggestion: null, icon: "🟢", text: ctxLine ? `Plan cohérent\n${ctxLine}` : "Plan cohérent" };
+}
+
+/* Montre avant le check-in : " Ta montre : Nuit 5h40 · FC 4 bpm au-dessus de ta norme. Fais ton
+   check-in pour confirmer." — le ressenti reste la décision, la montre n'est qu'un signal d'appel. */
+function deviceNoteLine(note?: string | null): string {
+  return note ? ` Ta montre : ${note}. Fais ton check-in pour confirmer.` : "";
 }
 
 /* Carte "avec phase" (2026-09-29) : titre + ligne 2 selon l'état de la journée, puis la ligne Phase.
@@ -341,7 +351,9 @@ function withPhase(
        permet, bande 60-80 sinon (feel). */
     const ta = v(voice, "ta", "sa"), Ta = v(voice, "Ta", "Sa");
     const feelLine = !params.wellnessFilledToday
-      ? v(voice, "Renseigne ton ressenti pour savoir comment tu récupères.", "Ressenti du jour pas encore renseigné.")
+      ? (params.deviceNote && !voice.coach
+          ? `Ta montre : ${params.deviceNote}. Fais ton check-in pour confirmer ta récupération.`
+          : v(voice, "Renseigne ton ressenti pour savoir comment tu récupères.", "Ressenti du jour pas encore renseigné."))
       : feel === "bad"
       ? `${Ta} récupération est ${relative ? `sous ${ta} norme` : "basse"} : ce repos tombe bien.`
       : feel === "good"
@@ -363,7 +375,8 @@ function withPhase(
   const planned = params.plannedDifficulty ?? 6;
   const qualif = qualitativeDifficulty(planned);
   if (!params.wellnessFilledToday) {
-    return { suggestion: null, icon: "⚪", text: `Plan à confirmer\nSéance ${qualif} prévue.`, phase };
+    const montre = deviceNoteLine(params.deviceNote);
+    return { suggestion: null, icon: "⚪", text: `Plan à confirmer\nSéance ${qualif} prévue.${montre}`, phase };
   }
   if (suggestion) {
     return {

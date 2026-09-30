@@ -1,20 +1,28 @@
 import type { WellnessDaily } from "@/types";
 import { describeDrivingDimension, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { effectiveSleep, rhrComponent, hrvComponent, type DeviceInputs } from "@/lib/deviceWellness";
 
 export const POSITIVE_BEHAVIOR_KEYS = new Set([
   "stretching", "cold_shower", "reading", "meditation", "hydration", "walk",
 ]);
+
+/* Données montre (voir deviceWellness.ts) : sommeil mesuré combiné au déclaré, FC au repos en 5e composante. */
+export type { DeviceInputs } from "@/lib/deviceWellness";
 
 export function computeWellnessScore(
   sleep: number,
   stress: number,
   recovery: number,
   motivation: number,
-  behaviors: string[]
+  behaviors: string[],
+  device?: DeviceInputs | null,
 ): { base_score: number; score: number } {
-  const base_score = Math.round(
-    ((sleep + (10 - stress) + recovery + motivation) / 40) * 100
-  );
+  const parts = [effectiveSleep(sleep, device), 10 - stress, recovery, motivation];
+  const rhr = rhrComponent(device);
+  if (rhr != null) parts.push(rhr);
+  const hrv = hrvComponent(device);
+  if (hrv != null) parts.push(hrv);
+  const base_score = Math.round((parts.reduce((a, b) => a + b, 0) / (parts.length * 10)) * 100);
   const negatives = behaviors.filter(b => !POSITIVE_BEHAVIOR_KEYS.has(b));
   const positives = behaviors.filter(b => POSITIVE_BEHAVIOR_KEYS.has(b));
   const penalty = Math.min(negatives.length * 3, 15);

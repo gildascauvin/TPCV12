@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
@@ -92,6 +93,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
+  // Montre (Apple Santé) avant le check-in du jour : affichée dans la carte "Plan à confirmer" d'aujourd'hui.
+  const deviceNote = useDeviceNote(userId, todayStr, !sandboxMode && !wellnessList.some(w => w.date === todayStr && w.bedtime != null));
   // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
   // sur "aujourd'hui" (même bug/fix que TodayClient.tsx : sans ça, naviguer vers une semaine passée
   // réduit progressivement l'historique disponible jusqu'à retomber à tort sur l'ancien libellé
@@ -679,7 +682,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
                 plannedDifficulty: autoregTarget?.target_difficulty ?? null,
                 baseline, wellnessFilledToday, trendCode, trendInput,
-                sessions: sessionsHistory, anchor: trendAnchor, perspective: "athlete", behaviorTip,
+                sessions: sessionsHistory, anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
               });
               const severityColor = decisionCardColor(decision.icon);
               alert = { border: `${severityColor}66`, glow: severityColor, text: decision.text };

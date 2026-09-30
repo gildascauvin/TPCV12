@@ -522,7 +522,35 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
     tooltipExtra: i => {
       const r = raws[i];
       if (r === null || r === undefined) return null;
+      // Sommeil mesuré par la montre (2026-09-30) : le point tracé combine les deux, on les montre séparément.
+      const sl = dim === "sleep" ? baseline[i]?.dimensions?.sleep : undefined;
+      if (sl?.deviceMinutes != null && sl.declared != null) {
+        const m = Math.round(sl.deviceMinutes);
+        return `${Math.round(sl.declared)}/10 déclaré · ${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")} mesuré`;
+      }
       return `${Math.round(inverted ? 10 - r : r)}/10 déclaré`;
+    },
+  };
+}
+
+/* FC au repos (montre, 2026-09-30) : même lecture que les 4 autres sous-jacents (Z de la composante,
+   plus haut = mieux, donc une FC PLUS BASSE que d'habitude tire le chart vers le haut). Les libellés
+   nomment le sens réel pour ne pas refaire l'erreur du stress. Le bpm reste lisible au survol. */
+export function rhrSpec(baseline: (WellnessBaselineResult | null)[], dates: string[]): ChartSpec {
+  const values = baseline.map(b => b?.rhr?.z ?? null);
+  return {
+    values, dates, kind: "line", lo: -2.5, hi: 2.5, showTicks: false,
+    zones: [
+      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: "FC PLUS BASSE" },
+      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
+      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "FC PLUS HAUTE" },
+    ],
+    boundaryLines: [0],
+    fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
+    colorAt: v => rampAt(0.5 + v / 5),
+    tooltipExtra: i => {
+      const r = baseline[i]?.rhr;
+      return r ? `${Math.round(r.bpm)} bpm · norme ${Math.round(r.norm)}` : null;
     },
   };
 }
@@ -639,4 +667,25 @@ export function aggregateFor(group: MetricGroup, data: ConseilsData):
 function lastNonNull(a: (number | null)[]): number | null {
   for (let i = a.length - 1; i >= 0; i--) if (a[i] !== null) return a[i];
   return null;
+}
+
+/* VFC (montre, 2026-09-30) : même lecture que la FC au repos, mais ici plus haut = VFC plus haute =
+   mieux, sans inversion. Le ms reste lisible au survol. */
+export function hrvSpec(baseline: (WellnessBaselineResult | null)[], dates: string[]): ChartSpec {
+  const values = baseline.map(b => b?.hrv?.z ?? null);
+  return {
+    values, dates, kind: "line", lo: -2.5, hi: 2.5, showTicks: false,
+    zones: [
+      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: "AU-DESSUS" },
+      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
+      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "EN DESSOUS" },
+    ],
+    boundaryLines: [0],
+    fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
+    colorAt: v => rampAt(0.5 + v / 5),
+    tooltipExtra: i => {
+      const h = baseline[i]?.hrv;
+      return h ? `${Math.round(h.ms)} ms · norme ${Math.round(h.norm)}` : null;
+    },
+  };
 }

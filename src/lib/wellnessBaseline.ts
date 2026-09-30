@@ -1,5 +1,6 @@
 import type { WellnessDaily } from "@/types";
 import { daysAgoStr } from "@/lib/trainingLoad";
+import { effectiveSleep, rhrComponent, hrvComponent, RHR_BASELINE_MIN_DAYS } from "@/lib/deviceWellness";
 
 /* Baseline personnelle du wellness — Z-score vs moyenne/écart-type glissants (14-28j, défaut 21j),
    composite ET par dimension (sommeil/stress/récup/motivation), pour remplacer les seuils absolus
@@ -66,7 +67,14 @@ export const Z_SEVERE = -1.645;
 
 export type Perspective = "athlete" | "coach";
 export type DimensionKey = "sleep" | "stress" | "recovery" | "motivation";
-export type DimensionBaseline = { raw: number; z: number | null };
+/* `declared`/`deviceMinutes` : uniquement sur le sommeil, quand la montre a mesuré la nuit — `raw` est
+   alors la moyenne déclaré+mesuré (effectiveSleep), et le tooltip du chart montre les deux. */
+export type DimensionBaseline = { raw: number; z: number | null; declared?: number; deviceMinutes?: number | null };
+/* FC au repos (montre) : `raw` = composante 0-10 (plus haut = mieux, voir rhrScore), `bpm`/`norm` pour
+   l'affichage. null quand la montre n'a rien ce jour-là. */
+export type RhrBaseline = { raw: number; z: number | null; bpm: number; norm: number };
+// VFC (montre) : même forme, `ms`/`norm` en millisecondes.
+export type HrvBaseline = { raw: number; z: number | null; ms: number; norm: number };
 
 export type WellnessBaselineResult = {
   hasEnoughHistory: boolean;
@@ -79,6 +87,8 @@ export type WellnessBaselineResult = {
   // Control, chart Récupération).
   relativeScore: number;
   dimensions: Record<DimensionKey, DimensionBaseline>;
+  rhr: RhrBaseline | null;
+  hrv: HrvBaseline | null;
   // Dimension au Z le plus négatif parmi les 4 — même principe de priorité que le tri
   // `signals.filter(s=>s.low).sort((a,b)=>a.value-b.value)[0]` déjà utilisé dans getRecoveryAdvice()
   // (wellness.ts). null si historique insuffisant.
@@ -88,8 +98,9 @@ export type WellnessBaselineResult = {
   guardRailTriggered: boolean;
 };
 
-type WellnessRow = Pick<WellnessDaily, "date" | "score" | "base_score" | "sleep" | "stress" | "recovery" | "motivation">;
-type TodayRow = Pick<WellnessDaily, "score" | "base_score" | "sleep" | "stress" | "recovery" | "motivation">;
+type DeviceCols = "device_sleep_minutes" | "device_resting_hr" | "device_rhr_baseline" | "device_hrv_ms" | "device_hrv_baseline";
+type WellnessRow = Pick<WellnessDaily, "date" | "score" | "base_score" | "sleep" | "stress" | "recovery" | "motivation" | DeviceCols>;
+type TodayRow = Pick<WellnessDaily, "score" | "base_score" | "sleep" | "stress" | "recovery" | "motivation" | DeviceCols>;
 
 /* `base_score` en priorité, jamais `score` : `score` inclut le bonus/malus comportements
    (computeWellnessScore, wellness.ts) — un signal comportemental (alcool, écrans tard...) n'est pas
@@ -113,7 +124,10 @@ function compositeValue(row: TodayRow): number | null {
 // (conseilsData.ts), qui a besoin de la même normalisation pour comparer un comportement à chaque
 // dimension plutôt qu'au seul score composite.
 export function dimensionRaw(row: TodayRow, dim: DimensionKey): number {
-  return dim === "stress" ? 10 - row.stress : row[dim];
+  if (dim === "stress") return 10 - row.stress;
+  // Sommeil : la nuit mesurée par la montre complète le déclaré quand elle existe (2026-09-30).
+  if (dim === "sleep") return effectiveSleep(row.sleep, row);
+  return row[dim];
 }
 
 function clamp(min: number, max: number, v: number): number {
@@ -161,6 +175,43 @@ export function computeWellnessBaselineAt(
     const z = hasEnoughHistory ? zScore(rawToday, stat) : null;
     dimensions[dim] = { raw: rawToday, z };
   }
+  if (todayRow.device_sleep_minutes != null) {
+    dimensions.sleep.declared = todayRow.sleep;
+    dimensions.sleep.deviceMinutes = todayRow.device_sleep_minutes;
+  }
+
+  /* FC au repos : sa propre série (les jours sans montre n'existent pas pour elle), seuil propre de
+     RHR_BASELINE_MIN_DAYS jours plutôt que les 12 du composite — la montre peut arriver en cours de
+     route, on ne l'attend pas 12 jours de plus. */
+  const rhrToday = rhrComponent(todayRow);
+  let rhr: RhrBaseline | null = null;
+  if (rhrToday != null) {
+    const rhrSeries = history
+      .map(h => ({ date: h.date, value: rhrComponent(h) }))
+      .filter((p): p is { date: string; value: number } => p.value !== null);
+    const rhrStat = rollingMeanStd(rhrSeries, windowDays);
+    rhr = {
+      raw: rhrToday,
+      z: rhrSeries.length >= RHR_BASELINE_MIN_DAYS ? zScore(rhrToday, rhrStat) : null,
+      bpm: Number(todayRow.device_resting_hr),
+      norm: Number(todayRow.device_rhr_baseline),
+    };
+  }
+
+  const hrvToday = hrvComponent(todayRow);
+  let hrv: HrvBaseline | null = null;
+  if (hrvToday != null) {
+    const hrvSeries = history
+      .map(h => ({ date: h.date, value: hrvComponent(h) }))
+      .filter((p): p is { date: string; value: number } => p.value !== null);
+    const hrvStat = rollingMeanStd(hrvSeries, windowDays);
+    hrv = {
+      raw: hrvToday,
+      z: hrvSeries.length >= RHR_BASELINE_MIN_DAYS ? zScore(hrvToday, hrvStat) : null,
+      ms: Number(todayRow.device_hrv_ms),
+      norm: Number(todayRow.device_hrv_baseline),
+    };
+  }
 
   let drivingDimension: DimensionKey | null = null;
   if (hasEnoughHistory) {
@@ -177,6 +228,8 @@ export function computeWellnessBaselineAt(
     composite: { raw: todayComposite, z: compositeZ },
     relativeScore,
     dimensions,
+    rhr,
+    hrv,
     drivingDimension,
     guardRailTriggered: todayComposite < WELLNESS_ABSOLUTE_GUARD_SCORE,
   };
