@@ -4501,3 +4501,44 @@ Bouton « + Ajouter une séance » en bas de chaque carte (prop `onAddSession`, 
 
 ### Vérifié
 `tsc --noEmit` propre à chaque étape, sandboxes coach/sportif/planning smoke-testées (200), textes du jour de repos vérifiés par script `tsx` (4 ressentis × 2 perspectives). Pas de clic réel par Claude — Gildas teste en local.
+
+## App iOS (Capacitor) + Apple Santé + TestFlight (2026-09-30 → 10-01)
+
+### Architecture
+- **Coque Capacitor 8 (SPM)** qui charge l'app web hébergée (`capacitor.config.ts`, `server.url` = `https://go.theperfclub.com` par défaut, ou `CAP_SERVER_URL=http://<ip-du-mac>:3000` en local, iPhone sur le même wifi). Pas d'export statique possible (routes serveur + API). Conséquence clé : **tout changement web arrive dans l'app sans nouveau build** ; un build n'est nécessaire que pour du natif (plugin, permission, icône, Info.plist).
+- `webDir: capacitor-www` (placeholder), `ios.contentInset: "always"` (safe area gérée par iOS, fond `#f1f0ee`).
+- **CLI Capacitor exige Node ≥22** : `~/.nvm/versions/node/v22.23.3` (installé le 01/10, `nvm install 22` doit tourner hors sandbox). Le reste du repo reste sur Node 20.
+- `Capacitor.isNativePlatform()` est le seul interrupteur web/app ; les plugins natifs sont importés dynamiquement pour ne pas alourdir le bundle web.
+
+### Apple Santé (`@capgo/capacitor-health`)
+- `HealthSyncOnOpen` (layout `(app)`) : sync à l'ouverture et à chaque retour au premier plan, relit 30 jours (upsert idempotent, Garmin écrit en retard).
+- `src/lib/healthSync.ts` → table **`health_daily`** (FC repos, VFC, minutes de sommeil par jour local, migration 021) + table **`health_workouts`** (entraînements, clé = UUID HealthKit, migration 024).
+- Montre intégrée au score wellness (`deviceWellness.ts`/`deviceWellnessDb.ts`, colonnes `wellness_daily.device_*`, migrations 022/023) : sommeil = moyenne déclaré/mesuré, FC repos et VFC en composantes (norme 28j), recalcul des check-ins récents après chaque sync. Les curseurs subjectifs ne sont jamais modifiés.
+- Garmin écrit FC repos + sommeil dans Santé, **pas de VFC**.
+- `useDeviceNote` : résumé montre sur "Plan à confirmer" (/today, /week).
+- **Durée de séance pré-remplie** : `CompleteModal.tsx` lit `health_workouts` du jour (`src/lib/healthWorkouts.ts`, web-safe), puces ⌚ par entraînement, le plus long présélectionné si la séance n'a pas de durée, slider au pas de 1.
+- Migrations 021 à 024 **appliquées en prod**.
+
+### Connexion Google native (`@capgo/capacitor-social-login`, `src/lib/nativeGoogleAuth.ts`)
+- Google bloque son écran de connexion dans une WebView (`disallowed_useragent`) : dans l'app, login et onboarding passent par le SDK Google iOS puis `supabase.auth.signInWithIdToken`. Le web garde `signInWithOAuth`. Atterrissage identique à `/auth/callback` (`/today`, ou `/register?d=...` pour l'onboarding).
+- IDs client en dur (pas des secrets) : Web `…jqk4o3otggvrdgcoh5ipun5qiddbfnrk` (celui de Supabase, passé en `iOSServerClientId` → `aud` accepté par Supabase sans config), iOS `…m2mn04jtvdjmta7orum5slp6ictojccl`. URL scheme `com.googleusercontent.apps.<id iOS>` dans `Info.plist`.
+- **2 pièges** : (1) le SDK met toujours un nonce dans l'idToken → on génère un nonce, SHA-256 hex à Google, brut à Supabase ; (2) `forcePrompt: true` obligatoire, sinon le plugin restaure la session Google en cache et renvoie un ancien idToken ("nonces mismatch"). "Skip nonce check" côté Supabase volontairement **non coché**.
+- Testé OK sur iPhone le 01/10. `apple: true` activé dans la config du plugin pour Sign in with Apple (pas encore implémenté).
+
+### Projet iOS / TestFlight
+- Bundle `com.theperfclub.app`, Team `B4AJAX65W8` (compte Apple Developer particulier, actif le 01/10), iPhone uniquement (`TARGETED_DEVICE_FAMILY = 1`), portrait.
+- Info.plist : usages Santé (lecture FC/VFC/sommeil/entraînements, aucune écriture), caméra/photos/micro (upload vidéo d'exercice depuis la WebView, sinon crash), `ITSAppUsesNonExemptEncryption=false`. Entitlement `com.apple.developer.healthkit` seul (`.access` refusé).
+- Politique de confidentialité WordPress : paragraphe "Données issues d'Apple Santé" ajouté au Chapitre II (exigence Apple : pas de pub, pas de revente, pas d'iCloud, retrait de l'accès).
+- **Build 1.0 (1) sur TestFlight** (testeurs internes), installé par Gildas le 01/10. Commandes :
+  ```
+  cd ios/App && xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+    -destination "generic/platform=iOS" -archivePath <dir>/ThePerfClub.xcarchive -allowProvisioningUpdates archive
+  xcodebuild -exportArchive -archivePath <dir>/ThePerfClub.xcarchive -exportOptionsPlist upload.plist \
+    -exportPath <dir>/upload -allowProvisioningUpdates
+  ```
+  `upload.plist` : `method=app-store-connect`, `destination=upload`, `teamID=B4AJAX65W8`, `signingStyle=automatic`. **Incrémenter `CURRENT_PROJECT_VERSION`** avant chaque nouveau build, et `npx cap sync ios` (Node 22) après tout ajout de plugin.
+
+### Reste à faire
+- Testeurs externes (lien public) : revue Apple + **masquer le paywall Stripe dans l'app** (guideline 3.1.1).
+- App Store public : Sign in with Apple (guideline 4.8), abonnement via Apple, fiche (captures, description, déclaration données de santé), vraie icône 1024×1024.
+- Décision pricing à prendre avant : premium vs freemium (piste évoquée : sync montre en premium).
