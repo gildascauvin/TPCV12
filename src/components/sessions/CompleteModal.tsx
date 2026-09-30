@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Session } from "@/types";
 import { computeFatigueImpact } from "@/lib/wellness";
+import { createClient } from "@/lib/supabase/client";
+import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
 
 interface CompleteModalProps {
   session: Session;
@@ -14,6 +16,24 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   const [rpe, setRpe] = useState(session.rpe ?? 6);
   const [duration, setDuration] = useState(session.duration ?? 45);
   const [saving, setSaving] = useState(false);
+  // Entraînements enregistrés par la montre ce jour-là (app iOS → health_workouts). Si la séance n'a pas
+  // encore de durée, on pré-remplit avec le plus long ; le sportif peut en choisir un autre ou ajuster.
+  const [workouts, setWorkouts] = useState<HealthWorkout[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchWorkoutsForDay(createClient(), session.user_id, session.date).then(ws => {
+      if (!alive || !ws.length) return;
+      setWorkouts(ws);
+      if (session.duration == null) {
+        const longest = ws.reduce((a, b) => (b.duration_min > a.duration_min ? b : a));
+        setPicked(longest.platform_id);
+        setDuration(Math.min(240, longest.duration_min));
+      }
+    });
+    return () => { alive = false; };
+  }, [session.user_id, session.date, session.duration]);
 
   async function handleSave() {
     setSaving(true);
@@ -58,13 +78,40 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>{duration} <span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>min</span></div>
           </div>
           <input
-            type="range" min={5} max={240} step={5} value={duration}
-            onChange={e => setDuration(Number(e.target.value))}
+            type="range" min={5} max={240} step={1} value={duration}
+            onChange={e => { setDuration(Number(e.target.value)); setPicked(null); }}
             style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
             <span>5 min</span><span>2h</span><span>4h</span>
           </div>
+          {workouts.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 6 }}>
+                {workouts.length > 1 ? "Enregistrés par ta montre ce jour-là :" : "Enregistré par ta montre :"}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {workouts.map(w => {
+                  const on = picked === w.platform_id;
+                  return (
+                    <button
+                      key={w.platform_id}
+                      onClick={() => { setPicked(w.platform_id); setDuration(Math.min(240, w.duration_min)); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderRadius: 999,
+                        border: on ? "1px solid rgba(212,64,0,.45)" : "1px solid rgba(0,0,0,.10)",
+                        background: on ? "#fff3e8" : "#f7f8f9", color: on ? "#d44000" : "#3b4046",
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      <span aria-hidden>⌚</span>
+                      <span>{workoutLabel(w.workout_type)} · {workoutTime(w.start_at)} · {w.duration_min} min</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RPE */}

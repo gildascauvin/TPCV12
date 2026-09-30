@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { Health, type HealthDataType, type HealthSample } from "@capgo/capacitor-health";
+import { Health, type HealthDataType, type HealthSample, type Workout } from "@capgo/capacitor-health";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HEALTH_SYNCED_EVENT, type HealthDay } from "@/lib/healthDays";
 import { reapplyDeviceToRecentWellness } from "@/lib/deviceWellnessDb";
@@ -60,7 +60,8 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   const av = await Health.isAvailable();
   if (!av.available) return null;
   // Sur iOS, la fenêtre d'autorisation ne s'affiche qu'une fois ; les appels suivants rendent la main direct.
-  await Health.requestAuthorization({ read: TYPES });
+  // "workouts" ajouté après coup : iOS redemande l'accès pour ce seul type à la prochaine ouverture.
+  await Health.requestAuthorization({ read: [...TYPES, "workouts"] });
 
   /* Fenêtre : minuit local il y a SYNC_DAYS jours, moins 12 h pour capter en entier la nuit qui se
      termine ce jour-là (sinon le 1er jour n'avait qu'un morceau de nuit — 9 min vus en test réel). */
@@ -72,9 +73,11 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   );
   const firstDayStr = localDay(firstDay.toISOString());
   const days = aggregateHealthDays(rhr, hrv, sleep).filter(d => d.date >= firstDayStr);
+  const now = new Date().toISOString();
+  // Entraînements à part : un échec ici (accès refusé) ne doit pas bloquer FC / VFC / sommeil.
+  await syncWorkouts(supabase, userId, firstDay.toISOString(), endDate, now).catch(e => console.error("[health-sync] workouts", e));
   if (!days.length) return 0;
 
-  const now = new Date().toISOString();
   const { error } = await supabase
     .from("health_daily")
     .upsert(days.map((d) => ({ ...d, user_id: userId, updated_at: now })), { onConflict: "user_id,date" });
@@ -82,4 +85,27 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   // Les check-ins déjà faits intègrent maintenant la montre (sommeil mesuré + FC au repos).
   await reapplyDeviceToRecentWellness(supabase, userId);
   return days.length;
+}
+
+/* Entraînements de la montre → health_workouts, pour pré-remplir la durée dans "Terminer la séance".
+   Même relecture de 30 jours que le reste : upsert sur l'UUID HealthKit. */
+async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate: string, endDate: string, now: string) {
+  const { workouts } = await Health.queryWorkouts({ startDate, endDate, limit: 500, ascending: true });
+  const rows = workouts
+    .filter((w: Workout) => !!w.platformId)
+    .map((w: Workout) => ({
+      user_id: userId,
+      platform_id: w.platformId!,
+      date: localDay(w.startDate),
+      start_at: w.startDate,
+      end_at: w.endDate,
+      duration_min: Math.round(w.duration / 60),
+      workout_type: w.workoutType,
+      energy_kcal: w.totalEnergyBurned == null ? null : Math.round(w.totalEnergyBurned),
+      source: w.sourceName ?? null,
+      updated_at: now,
+    }));
+  if (!rows.length) return;
+  const { error } = await supabase.from("health_workouts").upsert(rows, { onConflict: "user_id,platform_id" });
+  if (error) throw new Error(`health_workouts upsert: ${error.message}`);
 }
