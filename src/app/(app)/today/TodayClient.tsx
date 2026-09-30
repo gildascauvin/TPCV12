@@ -9,7 +9,7 @@ import { fr } from "date-fns/locale";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
-import { computeWellnessScore, zoneLabel as formLabel, wellnessColor } from "@/lib/wellness";
+import { computeWellnessScore } from "@/lib/wellness";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
@@ -28,15 +28,16 @@ import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
 import ShareButton from "@/components/sessions/ShareButton";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
+import { aggregateFor } from "@/lib/metricCards";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
-import { BEHAVIOR_META } from "@/lib/behaviors";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { DemoDataChip, ChargeSection, RecuperationSection, BehaviorImpactCard } from "@/components/conseils/HomeAnalyticsSections";
+import { DemoDataChip, ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
@@ -47,62 +48,7 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 
 /* ─── helpers ─── */
-// Dégradé séquentiel bleu (wellnessColor, src/lib/wellness.ts) — voir SparkLineClient.tsx pour la
-// doc complète du choix (magnitude continue, pas un état catégoriel).
-function scoreColor(score: number | null) {
-  if (score === null) return "rgba(255,255,255,0.18)";
-  return wellnessColor(score);
-}
-
-/* Zone relative si `baseline` a assez d'historique, repli exact sur l'ancien zoneLabel() absolu
-   sinon (comportement inchangé) — voir CoachAthleteCard.tsx pour le même pattern côté coach. */
-function relativeOrAbsoluteZoneLabel(score: number | null, baseline: WellnessBaselineResult | null): string {
-  if (score === null) return "Non renseigné";
-  if (baseline?.hasEnoughHistory) return relativeZoneLabel(baseline, "athlete");
-  return formLabel(score);
-}
-
-/* ─── WellnessRing inline (responsive size) ─── */
-function WellnessRingPOC({ score, size = 104, label }: {
-  score: number | null; size?: number;
-  /* Texte sous le score, DANS le ring (2026-09-24, delta layout POC — même principe que WellnessRing
-     de CoachAthleteCard.tsx) : remplace le libellé générique "wellness" par la zone réelle
-     ("Fatigué"/"Équilibré"/"Frais"), colorée comme le score. `undefined` = repli "wellness" neutre. */
-  label?: string;
-}) {
-  const [animated, setAnimated] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 80);
-    return () => clearTimeout(t);
-  }, []);
-
-  const r = Math.round(size * 0.423);
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const pct = score !== null ? Math.max(0, Math.min(100, score)) : 0;
-  const offset = +(circ * (1 - pct / 100)).toFixed(1);
-  const color = scoreColor(score);
-  const sw = Math.round(size * 0.077);
-  return (
-    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={sw} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-          strokeDasharray={circ} strokeDashoffset={animated ? offset : circ} strokeLinecap="round"
-          style={{ transition: "all 0.6s cubic-bezier(0.2,0,0.38,0.9)" }} />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 6px" }}>
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: Math.round(size * 0.307), fontWeight: 700, color, lineHeight: 1, letterSpacing: "-0.02em" }}>
-          {score !== null ? score : "—"}
-        </span>
-        <span style={{ fontSize: label ? Math.round(size * 0.085) : Math.round(size * 0.077), fontWeight: 1000, color: label ? color : "rgba(255,255,255,0.58)", letterSpacing: "0.06em", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", textAlign: "center", lineHeight: 1.1 }}>
-          {label ?? "wellness"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Difficulty gauge (v46 POC — no label, single) ─── */
+/* Jauge de difficulté statique — mêmes paliers/couleurs que la constante de design du projet. */
 function DiffGauge({ value, height = 12 }: { value: number | null; height?: number }) {
   if (!value) return null;
   const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
@@ -126,7 +72,7 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, decisionGauge }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, hideGauge }: {
   session: Session;
   onComplete: (s: Session) => void;
   onEdit: (s: Session) => void;
@@ -143,11 +89,12 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
      (DraggableExerciseLine, DraggablePlanning.tsx). DndContext scopé à cette carte (une seule
      séance ici, contrairement au Planning qui en gère plusieurs sur une grille de jours). */
   onReorderExercises: (sessionId: string, fromIdx: number, toIdx: number) => void;
-  /* Remplace la jauge de difficulté statique par la jauge de décision interactive (AutoregButtons,
-     2026-09 2e itération — "la jauge de décision EST la jauge de la séance, pas 2 jauges") — fourni
-     UNIQUEMENT par TodayClient.tsx pour la séance ciblée par la suggestion d'autorégulation du jour,
-     undefined partout ailleurs (comportement inchangé : DiffGauge statique reste affiché). */
-  decisionGauge?: React.ReactNode;
+  /* Vrai pour la SEULE séance dont la jauge a été promue en tête de l'onglet (3e itération
+     2026-09-29) : son curseur y affiche déjà la difficulté prévue, une DiffGauge ici serait la
+     deuxième jauge de la même séance — exactement ce que "la jauge de décision EST la jauge de la
+     séance, pas 2 jauges" écartait. Les autres séances du jour (et toute séance terminée, qui
+     affiche son RPE réel) gardent la leur. */
+  hideGauge?: boolean;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
@@ -214,13 +161,9 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
         </div>
       </div>
 
-      {/* 2. Single difficulty gauge — jauge de décision interactive si une suggestion cible cette
-         séance, DiffGauge statique sinon (no label) */}
-      {decisionGauge ? (
-        <div style={{ marginBottom: 12 }} onClick={e => e.stopPropagation()}>
-          {decisionGauge}
-        </div>
-      ) : gaugeValue && (
+      {/* 2. Single difficulty gauge (no label) — masquée pour la séance dont la jauge de décision a
+         été promue en tête de l'onglet, voir `hideGauge`. */}
+      {!hideGauge && gaugeValue && (
         <div style={{ marginBottom: 12 }}>
           <DiffGauge value={gaugeValue} height={12} />
         </div>
@@ -352,8 +295,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (!sandboxMode) setAnalyticsData(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, sandboxMode]);
+  /* Fetch désormais déclenché dès le montage, plus seulement à l'ouverture d'un onglet analytique
+     (2026-09-29) : les miniatures des onglets Charge/Récupération (HomeTabs.tsx) ont besoin des
+     agrégats pour se dessiner, et leur raison d'être est justement de signaler au coup d'œil quel
+     onglet décroche — absentes à l'arrivée sur la page, elles ne serviraient à rien. Le coût reste
+     un `useEffect`, donc après le premier paint : les miniatures apparaissent un instant plus tard,
+     rien n'est bloqué. */
   useEffect(() => {
-    if (sandboxMode || homeTab === "today" || analyticsData || analyticsLoading) return;
+    if (sandboxMode || analyticsData || analyticsLoading) return;
     setAnalyticsLoading(true);
     fetch(`/api/conseils?date=${selectedDate}`)
       .then(res => (res.ok ? res.json() : null))
@@ -414,6 +363,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
+  /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
+  const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
 
   const [showActivation, setShowActivation] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -489,7 +440,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      et continue d'alimenter computeAutoregSuggestion()/row() ci-dessous : ces fonctions ont besoin du
      score ABSOLU pour leur garde-fou interne, même quand une baseline pilote déjà le déclenchement
      via le Z (voir wellnessBaseline?.guardRailTriggered). */
-  const relativeDisplayScore = wellnessBaseline?.hasEnoughHistory ? wellnessBaseline.relativeScore : displayScore;
   /* Hissé ici (au lieu de recalculé dans l'IIFE plus bas) pour être accessible à la fois par la
      carte "Score & conseils" (halo pulsant sur le CONTOUR de la carte, même mécanisme que Coach
      Control/CoachAthleteCard.tsx — un seul signal de mouvement, pas un 2e sur l'encart interne) et
@@ -539,9 +489,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     behaviorTip,
   });
   const decisionColor = decisionCardColor(decision.icon);
-  /* Jauge de décision — montée directement dans la carte séance ciblée (TodaySessionCard, "la jauge
-     de décision EST la jauge de la séance, pas 2 jauges", 2e itération 2026-09) plutôt que dans
-     l'encart insight ci-dessus. */
+  /* Jauge de décision — 3e itération (2026-09-29, POC charge-variantes.html) : l'action SORT de la
+     carte séance et passe EN TÊTE de l'onglet Aujourd'hui, au-dessus de l'encart insight. C'est la
+     décision du jour, pas une propriété de la carte séance ; la carte séance qui suit n'a donc plus
+     de jauge à elle. Annule le placement de la 2e itération ("la jauge de décision EST la jauge de
+     la séance"), qui la montait dans TodaySessionCard — changement de cap assumé de Gildas.
+     Reste propre à /today : Coach Control et Planning gardent la jauge dans leur carte séance. */
   // Montée dès qu'il y a une séance à ajuster, suggestion système ou non (2026-09-25, retour de
   // Gildas — "même quand ya pas de reco, je veux pouvoir bouger la jauge et avoir le range") :
   // dir/reco absents = jauge en mode libre (voir AutoregButtons.tsx).
@@ -553,7 +506,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       advice=""
       plannedDifficulty={autoregTargetTop.target_difficulty ?? 6}
       sessionLabel={autoregTargetTop.name}
-      variant="light"
+      variant="dark"
+      shape="ring"
+      actionsSlot={autoregActionsSlot}
       severityColor={decision.suggestion ? decisionColor : undefined}
       isActive={isActive}
       onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
@@ -576,7 +531,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
       }}
     />
-  ) : undefined;
+  ) : todaySessions.length === 0 ? (
+    /* Jour de repos : l'anneau reste affiché, en lecture seule, dans sa zone (2026-09-30). */
+    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing /></div>
+  ) : (() => {
+    /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
+       réel de la plus dure (2026-09-30). */
+    const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
+    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} /></div>;
+  })();
   const yesterdayDate = format(subDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
   const tomorrowDate = format(addDays(new Date(selectedDate + "T12:00:00"), 1), "yyyy-MM-dd");
 
@@ -715,8 +678,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // Agrandi (2026-09-24) — la zone ("Fatigué"...) vit désormais DANS le ring (plus de gros libellé
   // séparé en dessous, plus d'eyebrow "Score & conseils" au-dessus) : le ring redevient le seul
   // readout de ce bloc, il peut/doit prendre plus de place — même principe que CoachCard, à une
-  // échelle plus généreuse puisque c'est le SEUL ring de la page (pas une liste de cartes compactes).
-  const ringSize = isLg ? 156 : isMd ? 140 : 128;
   const pad = isLg ? 32 : isMd ? 24 : 16;
   // Même largeur que le contenu ci-dessous (voir dayScrollRef plus bas) — alignement CalendarHeader/
   // contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav... et les contenus").
@@ -786,7 +747,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div ref={dayScrollRef} style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
-        <HomeTabs active={homeTab} onChange={setHomeTab} />
+        <HomeTabs
+          active={homeTab}
+          onChange={setHomeTab}
+          previews={{
+            today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null),
+            charge: analyticsData ? aggregateFor("charge", analyticsData) : null,
+            recuperation: analyticsData ? aggregateFor("recup", analyticsData) : null,
+          }}
+        />
 
         {homeTab === "today" && (
         <>
@@ -854,70 +823,39 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         >
           <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
-          {wellnessFilledToday && (
-            <div style={{ position: "absolute", top: isMd ? 24 : 18, right: decision.suggestion?.dir === "low" ? (isMd ? 44 : 34) : (isMd ? 24 : 18), zIndex: 3 }}>
-              <ShareButton
-                resourceType="wellness"
-                variant="dark"
-                buildSnapshot={() => ({
-                  score: relativeDisplayScore,
-                  zoneLabel: relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline),
-                  behaviors: (wellness?.behaviors ?? []).map(b => BEHAVIOR_META[b]
-                    ? { emoji: BEHAVIOR_META[b].emoji, label: BEHAVIOR_META[b].label, positive: BEHAVIOR_META[b].positive }
-                    : { emoji: "", label: b, positive: true }),
-                  trainingAdvice: decision.text.split("\n")[0],
-                  recoveryAdvice: behaviorTip ?? decision.text.split("\n")[1] ?? decision.text.split("\n")[0],
-                  authorName: profile.name ?? "Toi",
-                })}
-                title={`${profile.name ?? "Mon"} — ${relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline)}`}
-                text={decision.text.split("\n")[1] ?? decision.text.split("\n")[0]}
-              />
-            </div>
-          )}
+          {/* Bouton de partage retiré de ce bloc (2026-09-30, Gildas : "ça gêne") — il flottait en
+             absolu au-dessus du score, qui n'existe plus ici de toute façon. Le partage du ressenti
+             reste possible depuis l'onglet Récupération et les liens /share/[id] déjà émis
+             continuent de fonctionner (rien n'a changé côté route ni snapshot). */}
 
-          {/* Sur md+ : 2 colonnes CÔTE À CÔTE à l'intérieur de la même carte (wellness+conseils à
-             gauche, séance à droite) — évite que les exercices se retrouvent tout en bas d'une
-             unique colonne étroite et forcent un scroll important sur desktop. Sur mobile, empilé
-             normalement (les 2 blocs sont de simples <div> block quand `display` vaut "block"). */}
-          <div style={{
-            position: "relative", zIndex: 2,
-            display: isMd ? "grid" : "block",
-            gridTemplateColumns: isMd ? (isLg ? "5fr 4fr" : "1fr 1fr") : undefined,
-            gap: isMd ? (isLg ? 28 : 20) : 0,
-            alignItems: "start",
-          }}>
+          {/* UNE seule colonne, à toutes les largeurs (2026-09-30, Gildas : "je veux que l'affichage
+             desktop soit le même que mobile, pas 2 colonnes, mais la séance dessous"). Remplace les
+             2 colonnes côte à côte de md+ (décision à gauche, séance à droite), qui étaient là pour
+             éviter un long scroll sur desktop — plus nécessaire depuis que le ring a disparu : la
+             colonne de gauche ne contient plus qu'une ligne de ressenti, la jauge et l'insight. */}
+          <div style={{ position: "relative", zIndex: 2 }}>
             <div>
-              {/* Ring + status — empilé et CENTRÉ (2026-09-24, delta layout POC `cardTop()`/`.ring-wrap`,
-                 même principe que CoachAthleteCard.tsx CoachCard) : plus d'eyebrow "Score & conseils" ni
-                 de gros libellé de zone séparé — la zone vit désormais DANS le ring (comme CoachCard),
-                 qui peut donc s'agrandir puisqu'il redevient le seul readout de ce bloc. Seule zone
-                 cliquable pour ouvrir le formulaire wellness (le reste de la carte contient la séance,
-                 avec ses propres actions Terminer/éditer). */}
-              <div
-                onClick={() => setShowWellness(true)}
-                style={{ textAlign: "center", marginBottom: 18, cursor: "pointer" }}
-              >
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-                  <WellnessRingPOC
-                    score={relativeDisplayScore}
-                    size={ringSize}
-                    label={wellnessFilledToday ? relativeOrAbsoluteZoneLabel(displayScore, wellnessBaseline) : "Non renseigné"}
-                  />
+              {/* Ring de fraîcheur retirée (2026-09-30) : le score est aperçu dans la miniature
+                 de l'onglet Récupération, son détail vit dans cet onglet-là. La ligne "Ressenti du
+                 jour ✎ + comportements" qui l'avait remplacée un temps est retirée aussi — la jauge
+                 d'ajustement est le seul readout de ce bloc, donc le seul mis en avant.
+
+                 Conséquence connue, signalée à Gildas : il n'y a plus d'entrée vers le formulaire de
+                 ressenti quand il est DÉJÀ rempli. Les 3 déclencheurs restants (ouverture auto au
+                 premier passage du jour, garde avant de terminer une séance, CTA flouté de la ligne
+                 Phase) ne se déclenchent tous que tant qu'il ne l'est pas. */}
+
+              {/* La jauge en tête, SANS encart (2026-09-30, Gildas) : elle se pose directement sur le
+                 fond sombre de la page. Forme ronde R2 depuis le 2026-09-30 (DecisionRing.tsx),
+                 la barre reste celle des cartes séance de Coach Control et du Planning. */}
+              {decisionGaugeSlot && (
+                <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
+                  {decisionGaugeSlot}
                 </div>
-                {wellnessFilledToday && wellness && wellness.behaviors.length > 0 && (
-                  <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 4 }}>
-                    {wellness.behaviors.map((b) => (
-                      <span key={b} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 999, background: "rgba(212,64,0,0.22)", color: "#ffd2bf" }}>{BEHAVIOR_META[b] ? `${BEHAVIOR_META[b].emoji} ${BEHAVIOR_META[b].label}` : b}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Carte décision, toujours affichée (2026-09, decisionCard.ts) — jour × tendance ×
-                 monotonie/contrainte combinés, le signal le plus sévère gagne. Insight seul ici
-                 (2e itération — la jauge/CTA d'ajustement vivent désormais DANS la carte séance,
-                 "la jauge de décision EST la jauge de la séance, pas 2 jauges", retour de Gildas —
-                 voir decisionGaugeSlot, construit plus bas et redescendu à TodaySessionCard). */}
+                 monotonie/contrainte combinés, le signal le plus sévère gagne. Insight seul ici. */}
               <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
                 {/* Ligne Phase (2026-09-29) : son CTA flouté "Renseigner mon ressenti" remplace
                    l'ancien bouton "Comment tu vas ? →" sous la carte. */}
@@ -925,13 +863,25 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   variant="darkColor"
                   centered
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
-                  actions={decision.phase ? <PhaseLine phase={decision.phase} onUnlock={() => setShowWellness(true)} /> : undefined}
+                  /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
+                  actions={(autoregTargetTop || decision.phase) ? (
+                    <div style={{ display: "grid", gap: 12 }}>
+                      {autoregTargetTop && <div ref={setAutoregActionsSlot} className="autoreg-slot" />}
+                      {decision.phase && (
+                        <PhaseLine
+                          phase={decision.phase}
+                          onUnlock={() => setShowWellness(true)}
+                          onEdit={wellnessFilledToday ? () => setShowWellness(true) : undefined}
+                        />
+                      )}
+                    </div>
+                  ) : undefined}
                 />
               </div>
             </div>
 
-            {/* ── Séance(s) du jour — imbriquée dans la même carte, colonne de droite sur md+ ── */}
-            <div style={{ marginTop: isMd ? 0 : 16, borderTop: isMd ? "none" : "1px solid rgba(255,255,255,0.12)", paddingTop: isMd ? 0 : 16 }}>
+            {/* ── Séance(s) du jour — imbriquée dans la même carte, TOUJOURS en dessous ── */}
+            <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
               <div id="day-sessions-container">
                 {/* Empty state semaine entière */}
                 {weekSessions.length === 0 ? (
@@ -973,7 +923,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
-                    decisionGauge={s.id === autoregTargetTop?.id ? decisionGaugeSlot : undefined}
+                    hideGauge={s.id === autoregTargetTop?.id}
                   />
                 ))}
                 {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx
@@ -1004,10 +954,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         {homeTab !== "today" && (
           analyticsData ? (
             <>
-              {sandboxMode && homeTab !== "comportements" && <DemoDataChip />}
+              {sandboxMode && <DemoDataChip />}
               {homeTab === "charge" && <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
-              {homeTab === "recuperation" && <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />}
-              {homeTab === "comportements" && <BehaviorImpactCard correlations={analyticsData.correlations} filledDays={analyticsData.filledDays} />}
+              {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
+                 récupération, il devient donc le dernier item de ce rapport-là. */}
+              {homeTab === "recuperation" && <>
+                <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+              </>}
             </>
           ) : (
             <div style={{ color: "rgba(255,255,255,.5)", fontSize: 13, padding: "24px 0" }}>Chargement…</div>

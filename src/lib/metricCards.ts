@@ -18,7 +18,6 @@ import { WELLNESS_RAMP, wellnessColor } from "@/lib/wellness";
 /* Import de TYPE seulement : effacé à la compilation, donc aucun cycle à l'exécution avec
    conseilsData.ts (qui, lui, n'importe rien d'ici — vérifié). */
 import type { ConseilsData } from "@/lib/conseilsData";
-import { BEHAVIOR_META } from "@/lib/behaviors";
 import { DIMENSION_LABELS, Z_SWC } from "@/lib/wellnessBaseline";
 import type { DimensionKey, Perspective, WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -580,7 +579,7 @@ export const AGG_BANDS: Record<MetricGroup, AggBand[]> = {
 
 const CHARGE_SURCHARGE_ENTRY = 0.66;  // juste dans la bande surcharge (elle commence à 0,65)
 const CHARGE_SURCHARGE_MID   = 0.82;  // milieu de la bande surcharge
-const RECUP_BELOW_FRESH      = 0.57;  // juste sous "Frais" (qui commence à 0,58)
+const RECUP_FEEL_WEIGHT      = 0.7;   // part du ressenti dans l'agrégat récup, le reste = Forme
 
 export function chargeAggregatePos(a: {
   acwr: number | null; monotonySeverity: Severity; strainSeverity: Severity;
@@ -594,14 +593,19 @@ export function chargeAggregatePos(a: {
 }
 
 export function recupAggregatePos(a: {
-  relativeScore: number | null; form: number | null; negativeBehaviors: number;
+  relativeScore: number | null; form: number | null;
 }): number | null {
-  const parts: number[] = [];
-  if (a.relativeScore !== null) parts.push(Math.max(0, Math.min(1, a.relativeScore / 100)));
-  if (a.form !== null) parts.push(Math.max(0, Math.min(1, (a.form + 50) / 100)));
+  /* Pondération 70 % ressenti / 30 % Forme (2026-09-30, Gildas — c'était une moyenne simple 50/50) :
+     le ressenti reste le signal principal de la récupération, la Forme le module. Un axe manquant
+     n'est pas compté (on renormalise sur les poids présents), jamais tiré vers 0. */
+  const parts: { v: number; w: number }[] = [];
+  if (a.relativeScore !== null) parts.push({ v: Math.max(0, Math.min(1, a.relativeScore / 100)), w: RECUP_FEEL_WEIGHT });
+  if (a.form !== null) parts.push({ v: Math.max(0, Math.min(1, (a.form + 50) / 100)), w: 1 - RECUP_FEEL_WEIGHT });
   if (!parts.length) return null;
-  const mean = parts.reduce((x, y) => x + y, 0) / parts.length;
-  return a.negativeBehaviors > 0 ? Math.min(mean, RECUP_BELOW_FRESH) : mean;
+  const mean = parts.reduce((x, p) => x + p.v * p.w, 0) / parts.reduce((x, p) => x + p.w, 0);
+  /* Plus de plafond "pas Frais" en cas de comportement négatif la veille (retiré le 2026-09-30,
+     Gildas) : leur effet passe déjà par le ressenti déclaré et par la carte Comportements. */
+  return mean;
 }
 
 export function bandFor(group: MetricGroup, pos: number): AggBand {
@@ -624,13 +628,9 @@ export function aggregateFor(group: MetricGroup, data: ConseilsData):
   } else {
     const last = data.timeSeries[data.timeSeries.length - 1];
     const b = data.wellnessBaseline;
-    /* Le jour de référence uniquement : les comportements de la ligne J sont ceux de la veille de J
-       (voir la sémantique de wellness_daily.behaviors), donc ceux qui pèsent sur CE score. */
-    const todayBehaviors = data.recentBehaviors.find(r => r.date === data.referenceDate)?.behaviors ?? [];
     pos = recupAggregatePos({
       relativeScore: b?.hasEnoughHistory ? b.relativeScore : (last?.recovery ?? null),
       form: last?.form ?? null,
-      negativeBehaviors: todayBehaviors.filter(k => BEHAVIOR_META[k] && !BEHAVIOR_META[k].positive).length,
     });
   }
   return pos === null ? null : { pos, band: bandFor(group, pos) };

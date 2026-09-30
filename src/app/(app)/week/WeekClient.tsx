@@ -17,7 +17,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { useHorizontalScrollNav } from "@/hooks/useHorizontalScrollNav";
 import type { LoadContext } from "@/lib/loadRule";
-import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -128,6 +128,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   // fix — même mécanisme que TodayClient.tsx, manquait ici : la jauge existait déjà en Planning mais
   // ne répercutait jamais son drag sur les lignes d'exercice en dessous).
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
+  /* Nœud des CTA d'ajustement dans la carte décision du jour (portail d'AutoregButtons, 2026-09-30) :
+     la jauge reste dans la carte séance, Maintenir/Appliquer passent sous le texte de la reco. */
+  const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
   const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -657,7 +660,22 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 sessionsHistory, wellnessBaselineHistory, trendAnchor, wellnessZByDate(wellnessBaselineHistory, 14, trendAnchor),
               );
               const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellnessToday?.behaviors, wellnessBaselineHistory, sessionsHistory) : null;
+              /* État de la journée (2026-09-30) : mêmes libellés que /today et Coach Control
+                 ("Jour de repos / Aucune séance prévue. Demain : …", "Séance faite", "Plan à
+                 confirmer") au lieu d'un "Plan cohérent" générique. `sessions` = semaine affichée,
+                 qui contient demain sauf un dimanche : dans ce cas on ne dit rien de demain. */
+              const tomorrowD = new Date(todayStr + "T12:00:00"); tomorrowD.setDate(tomorrowD.getDate() + 1);
+              const tomorrowStr = `${tomorrowD.getFullYear()}-${String(tomorrowD.getMonth() + 1).padStart(2, "0")}-${String(tomorrowD.getDate()).padStart(2, "0")}`;
+              const tomorrowList = sessions.filter(s => s.date === tomorrowStr);
+              const tomorrowDifficulty = tomorrowD.getDay() === 1 && tomorrowList.length === 0
+                ? undefined
+                : tomorrowList.length ? Math.max(...tomorrowList.map(s => s.target_difficulty ?? 0)) : null;
+              const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+              const decisionDay: DecisionDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
+                : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
+                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
               const decision = computeDecisionCard({
+                day: decisionDay,
                 wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
                 plannedDifficulty: autoregTarget?.target_difficulty ?? null,
                 baseline, wellnessFilledToday, trendCode, trendInput,
@@ -677,6 +695,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    actionsSlot={autoregActionsSlot}
                     dir={decision.suggestion?.dir}
                     reco={decision.suggestion?.reco}
                     advice=""
@@ -730,6 +749,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
+                alertActions={autoregTargetId ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}

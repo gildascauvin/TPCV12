@@ -336,7 +336,18 @@ function withPhase(
     : typeof tomorrow === "number" && tomorrow > 0 ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}.` : " Demain : repos.";
 
   if (day.kind === "rest") {
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\nAucune séance prévue.${tomorrowLine}`, phase };
+    /* La ligne 2 commente le ressenti du jour (2026-09-30, Gildas) au lieu de redire "aucune séance
+       prévue", que le titre dit déjà. Même lecture que la reco : zones relatives si la baseline le
+       permet, bande 60-80 sinon (feel). */
+    const ta = v(voice, "ta", "sa"), Ta = v(voice, "Ta", "Sa");
+    const feelLine = !params.wellnessFilledToday
+      ? v(voice, "Renseigne ton ressenti pour savoir comment tu récupères.", "Ressenti du jour pas encore renseigné.")
+      : feel === "bad"
+      ? `${Ta} récupération est ${relative ? `sous ${ta} norme` : "basse"} : ce repos tombe bien.`
+      : feel === "good"
+      ? `${Ta} récupération est ${relative ? `au-dessus de ${ta} norme` : "bonne"} : le repos consolide.`
+      : `${Ta} récupération est ${relative ? `dans ${ta} norme` : "correcte"}.`;
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${tomorrowLine}`, phase };
   }
   if (day.kind === "done") {
     const gap = day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null;

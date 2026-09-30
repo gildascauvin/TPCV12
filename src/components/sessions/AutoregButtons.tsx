@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   type AutoregDir, type AutoregOriginal, formatAutoregPoints, autoregCtaLabel, zoneRange,
   pointsToPct, pctToPoints,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
+import DecisionRing from "@/components/sessions/DecisionRing";
 
 // pct <-> difficulté (1-10) — vue/entrée de la jauge, jamais un nouvel axe de calcul : `selectedPct`
 // reste la seule source de vérité (voir plus bas), ces 2 fonctions ne font que le traduire pour
@@ -85,15 +87,28 @@ interface Props {
      sombre (texte blanc, boutons translucides blancs) — défaut "dark" pour les appelants pas
      concernés (AdjustSessionModal, FrisePreviews). */
   variant?: "dark" | "light";
+  /* "ring" = jauge ronde R2 (DecisionRing.tsx), montée seulement en tête de /today (2026-09-30).
+     Défaut "bar" : Coach Control et Planning gardent la barre horizontale dans leur carte. */
+  shape?: "bar" | "ring";
   /* Couleur du CTA principal ("⬇ Alléger →"), dérivée de la vraie sévérité (suggestionSeverityColor,
      autoregulation.ts) par l'appelant qui connaît la suggestion complète — le cas 🚨 critique a un
      CTA rouge, cohérent avec le bandeau et le halo déjà rouges dans ce cas, pas seulement l'orange
      générique du cas ⚠️ modéré. Absente = repli historique (orange fixe pour "low", vert fixe pour
      "high") — utilisé par les appelants pas concernés par ce raffinement. */
   severityColor?: string;
+  /* CTA dans la carte décision (2026-09-30, Gildas : "on mets les CTA dans la decision card
+     partout") — la jauge reste où l'appelant monte ce composant, mais Maintenir/Appliquer (et le
+     bandeau "décidé") sont rendus par portail dans ce nœud DOM, que l'appelant place dans les
+     `actions` de son AlertBox, juste sous le texte de la reco. Un portail plutôt qu'un état remonté
+     chez chaque appelant : l'état (curseur, décision) reste ici, et les événements continuent de
+     remonter l'arbre React jusqu'au parent de la jauge (déjà protégé par ses stopPropagation).
+     `undefined` = rendu classique sous la jauge ; `null` = nœud pas encore monté, rien à rendre. */
+  actionsSlot?: HTMLElement | null;
+  /* Taille de l'anneau (shape="ring"), défaut 188 sur fond sombre / 150 sur fond clair. */
+  ringSize?: number;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -263,6 +278,9 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     </div>
   );
 
+  const place = (node: React.ReactNode) =>
+    actionsSlot === undefined ? node : actionsSlot ? createPortal(node, actionsSlot) : null;
+
   return (
     <div>
       {advice && (() => {
@@ -287,29 +305,44 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
 
       {mode === "active" && (
         <div>
-          <div style={{ marginBottom: nothingToDecide ? 0 : 12 }}>
-            <DecisionGauge
-              dir={dir ?? cursorDir}
-              light={light}
-              zoneLow={zoneLow}
-              zoneHigh={zoneHigh}
-              value={diffFromPct(plannedDifficulty, selectedPct)}
-              onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
-            />
+          <div style={{ marginBottom: nothingToDecide || actionsSlot !== undefined ? 0 : 12 }}>
+            {shape === "ring" ? (
+              <DecisionRing
+                recoDir={dir}
+                light={light}
+                size={ringSize ?? (light ? 150 : 188)}
+                plannedMarker={plannedDifficulty}
+                zoneLow={zoneLow}
+                zoneHigh={zoneHigh}
+                value={diffFromPct(plannedDifficulty, selectedPct)}
+                onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
+              />
+            ) : (
+              <DecisionGauge
+                dir={dir ?? cursorDir}
+                light={light}
+                zoneLow={zoneLow}
+                zoneHigh={zoneHigh}
+                value={diffFromPct(plannedDifficulty, selectedPct)}
+                onChange={newDiff => selectChip(pctFromDiff(plannedDifficulty, newDiff))}
+              />
+            )}
           </div>
           {/* Aucun bouton si rien à décider (2026-09-25, voir nothingToDecide plus haut) — la jauge
              seule, déjà en zone, suffit ; pas de "Maintenir" pour confirmer un non-événement. */}
-          {!nothingToDecide && (
-            <div style={{ display: "flex", gap: 7 }}>
+          {!nothingToDecide && place(
+            /* En anneau (/today), boutons à leur largeur naturelle et centrés sous la jauge
+               (2026-09-30, Gildas) ; la barre garde ses boutons pleine largeur (flex 1/2). */
+            <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
               <button
                 onClick={maintenir}
                 style={light
-                  ? { flex: 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
-                  : { flex: 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
+                  ? { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
+                  : { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
               >
                 → Maintenir
               </button>
-              <button onClick={apply} disabled={applying} style={{ flex: 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 10, padding: 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
+              <button onClick={apply} disabled={applying} style={{ flex: shape === "ring" ? "none" : 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 10, padding: shape === "ring" ? "9px 18px" : 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
                 {applying ? "..." : inZone ? "Appliquer →" : autoregCtaLabel(cursorDir)}
               </button>
             </div>
@@ -329,20 +362,35 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
         const appliedZone = zoneRange(appliedDiff, dir ?? "low");
         return (
           <div>
-            <div style={{ marginBottom: 10 }}>
-              <DecisionGauge
-                dir={dir ?? "low"}
-                light={light}
-                zoneLow={appliedZone.zoneLow}
-                zoneHigh={appliedZone.zoneHigh}
-                value={plannedDifficulty}
-                plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
-                readOnly
-                hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
-                onChange={() => {}}
-              />
+            <div style={{ marginBottom: actionsSlot !== undefined ? 0 : 10 }}>
+              {shape === "ring" ? (
+                <DecisionRing
+                  recoDir={decidedPct ? dir : undefined}
+                  light={light}
+                  size={ringSize ?? (light ? 150 : 188)}
+                  zoneLow={appliedZone.zoneLow}
+                  zoneHigh={appliedZone.zoneHigh}
+                  value={plannedDifficulty}
+                  plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
+                  readOnly
+                  hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
+                  onChange={() => {}}
+                />
+              ) : (
+                <DecisionGauge
+                  dir={dir ?? "low"}
+                  light={light}
+                  zoneLow={appliedZone.zoneLow}
+                  zoneHigh={appliedZone.zoneHigh}
+                  value={plannedDifficulty}
+                  plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
+                  readOnly
+                  hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
+                  onChange={() => {}}
+                />
+              )}
             </div>
-            {decidedStrip}
+            {place(decidedStrip)}
           </div>
         );
       })()}

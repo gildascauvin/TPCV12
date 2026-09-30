@@ -10,7 +10,7 @@
 import { useState } from "react";
 import ShareButton from "@/components/sessions/ShareButton";
 import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import IndexCards from "@/components/conseils/IndexCards";
+import IndexCards, { type ExtraIndexCard } from "@/components/conseils/IndexCards";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
 import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_BANDS, aggregateFor, type MetricKey, type MetricGroup } from "@/lib/metricCards";
@@ -45,7 +45,69 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
    à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
 export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete" }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} />;
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCard={behaviorIndexCard(data)} />;
+}
+
+/* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que
+   les autres : une card, au clic le rapport complet"). Résumé = le comportement qui pèse le plus
+   (même seuils que le rapport, topBehaviors), aperçu = les impacts en barres centrées sur zéro, et le
+   rapport complet (BehaviorImpactCard) une fois déplié. */
+const BEHAVIOR_MIN_DAYS = 10;
+const HURT_COLOR = "#ff7a6b", HELP_COLOR = "#6ede8a";
+
+function behaviorIndexCard(data: ConseilsData): ExtraIndexCard {
+  const { correlations, filledDays } = data;
+  const body = <BehaviorImpactCard correlations={correlations} filledDays={filledDays} embedded />;
+  if (filledDays < BEHAVIOR_MIN_DAYS || correlations.length === 0) {
+    const remaining = Math.max(0, BEHAVIOR_MIN_DAYS - filledDays);
+    return {
+      key: "behaviors", label: "Comportements", status: "En collecte", statusColor: "rgba(255,255,255,.55)",
+      accent: null, body, trend: `${filledDays}/${BEHAVIOR_MIN_DAYS} jours`,
+      impact: remaining > 0
+        ? `Encore ${remaining} jour${remaining > 1 ? "s" : ""} de ressenti pour mesurer l'effet réel des comportements.`
+        : "Les corrélations apparaîtront dès qu'un comportement revient assez souvent.",
+      preview: <BehaviorPreview correlations={[]} />,
+    };
+  }
+  const { bestHelper, worstHurt } = topBehaviors(correlations);
+  const lead = worstHurt ?? bestHelper;
+  const fmt = (x: number) => `${x > 0 ? "+" : ""}${x.toFixed(1)} pts`;
+  const parts = [
+    worstHurt && `à éviter : ${worstHurt.emoji} ${worstHurt.label} (${fmt(worstHurt.impact)})`,
+    bestHelper && `à garder : ${bestHelper.emoji} ${bestHelper.label} (${fmt(bestHelper.impact)})`,
+  ].filter(Boolean) as string[];
+  return {
+    key: "behaviors", label: "Comportements",
+    status: lead ? `${lead.emoji} ${lead.label}` : "Aucun effet marqué",
+    statusColor: worstHurt ? HURT_COLOR : bestHelper ? HELP_COLOR : "rgba(255,255,255,.7)",
+    value: lead ? fmt(lead.impact) : undefined,
+    accent: worstHurt ? HURT_COLOR : null,
+    impact: parts.length
+      ? parts.map((t, i) => (i === 0 ? t[0].toUpperCase() + t.slice(1) : t)).join(" · ") + "."
+      : "Aucun comportement n'a d'effet marqué sur la récupération pour l'instant.",
+    preview: <BehaviorPreview correlations={correlations} />,
+    trend: `${filledDays}j de données`,
+    body,
+  };
+}
+
+/* Aperçu : les 4 comportements les plus marqués, en barres qui partent de zéro (vers la droite =
+   aide, vers la gauche = pénalise) — la même lecture que les jauges du rapport. */
+function BehaviorPreview({ correlations }: { correlations: BehaviorCorrelation[] }) {
+  const top = [...correlations].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, 4);
+  const maxAbs = Math.max(3, ...top.map(c => Math.abs(c.impact)));
+  const W = 118, rowH = 9, H = Math.max(4, top.length) * rowH;
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }} aria-hidden="true">
+      <line x1={W / 2} x2={W / 2} y1={0} y2={H} stroke="rgba(255,255,255,.25)" strokeWidth={1} />
+      {top.map((c, i) => {
+        const w = (Math.abs(c.impact) / maxAbs) * (W / 2 - 2);
+        const y = i * rowH + 2;
+        return <rect key={c.key} x={c.impact >= 0 ? W / 2 : W / 2 - w} y={y} width={Math.max(1, w)} height={rowH - 4} rx={2.5}
+          fill={Math.abs(c.impact) < 0.3 ? "rgba(255,255,255,.3)" : c.impact > 0 ? HELP_COLOR : HURT_COLOR} />;
+      })}
+    </svg>
+  );
 }
 
 /* ── Comportements (2026-09) — badge de statut sur la ligne du nom, jauge centrée sur zéro. */
@@ -397,13 +459,15 @@ export function TeamAnalyticsList({ rows, metric, onSelect }: {
   );
 }
 
-export function BehaviorImpactCard({ correlations, filledDays }: { correlations: BehaviorCorrelation[]; filledDays: number }) {
+/* `embedded` (2026-09-30) : rapport déplié DANS la carte "Comportements" de l'onglet Récupération —
+   sans son propre titre ni halo, la carte qui le contient porte déjà le nom et le résumé. */
+export function BehaviorImpactCard({ correlations, filledDays, embedded = false }: { correlations: BehaviorCorrelation[]; filledDays: number; embedded?: boolean }) {
   const MIN_DAYS = 10;
 
   if (filledDays < MIN_DAYS || correlations.length === 0) {
     const remaining = Math.max(0, MIN_DAYS - filledDays);
     return (
-      <div data-tour="conseils-chart" style={{ padding: "18px 0", color: "#fff", position: "relative" as const }}>
+      <div data-tour="conseils-chart" style={{ padding: embedded ? "2px 0 0" : "18px 0", color: "#fff", position: "relative" as const }}>
         <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
         <div style={{ position: "relative", zIndex: 2 }}>
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 6 }}>Impact comportements</div>
@@ -431,16 +495,16 @@ export function BehaviorImpactCard({ correlations, filledDays }: { correlations:
   const { bestHelper, worstHurt } = topBehaviors(correlations);
 
   return (
-    <div data-tour="conseils-chart" style={{ padding: "18px 0", color: "#fff", position: "relative" as const }}>
-      <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />
+    <div data-tour="conseils-chart" style={{ padding: embedded ? "2px 0 0" : "18px 0", color: "#fff", position: "relative" as const }}>
+      {!embedded && <div style={{ position: "absolute", right: -60, top: -60, width: 180, height: 180, background: "rgba(212,64,0,.12)", borderRadius: "50%", filter: "blur(28px)", pointerEvents: "none" }} />}
       <div style={{ position: "relative", zIndex: 2 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        {!embedded && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase" as const, color: "rgba(255,255,255,.45)", marginBottom: 4 }}>Impact comportements</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Ce qui t&apos;aide ou te pénalise</div>
           </div>
           <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.60)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const, flexShrink: 0 }}>{filledDays}j de données</div>
-        </div>
+        </div>}
 
         <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5, marginBottom: 16, display: "flex", flexDirection: "column" as const, gap: 6 }}>
           {bestHelper && (

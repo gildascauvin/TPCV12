@@ -300,3 +300,9 @@ select:focus {
   pointer-events: none;
   z-index: 10;
 }
+
+/* Nœud où AutoregButtons rend ses CTA par portail, dans la carte décision (2026-09-30) : masqué tant
+   qu'il est vide (rien à décider), pour ne pas laisser un écart dans la carte. */
+.autoreg-slot:empty { display: none; }
+/* Le conteneur d'actions d'AlertBox (marge haute) disparaît aussi quand il ne porte qu'un slot vide. */
+div:has(> .autoreg-slot:only-child:empty) { display: none; }

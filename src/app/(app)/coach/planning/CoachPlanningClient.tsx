@@ -26,7 +26,7 @@ import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { dailyLoad } from "@/lib/trainingLoad";
-import { computeDecisionCard, decisionCardColor } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
@@ -147,6 +147,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // Aperçu live de la décharge/surcharge en cours de sélection sur la jauge de décision (2026-09-24,
   // fix — même mécanisme que TodayClient.tsx/CoachAthleteCard.tsx, manquait ici en Planning).
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
+  /* Nœud des CTA d'ajustement dans la carte décision du jour (portail d'AutoregButtons, 2026-09-30) :
+     la jauge reste dans la carte séance, Maintenir/Appliquer passent sous le texte de la reco. */
+  const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   // Uniquement le "+" central (quickadd=program) — s'ouvre toujours directement sur le picker de
   // création ("new"), jamais sur l'écran liste (voir ProgramLibraryPage.tsx : la liste n'est plus
@@ -1065,7 +1068,19 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
                 athleteSessionHistory, athleteHistory, trendAnchor, wellnessZByDate(athleteHistory, 14, trendAnchor),
               );
+              /* État de la journée (2026-09-30) : mêmes libellés que /today et Coach Control au
+                 lieu d'un "Plan cohérent" générique — `athleteSessionHistory` couvre -42/+21j,
+                 donc demain est toujours connu. */
+              const tomorrowD = new Date(todayStr + "T12:00:00"); tomorrowD.setDate(tomorrowD.getDate() + 1);
+              const tomorrowStr = `${tomorrowD.getFullYear()}-${String(tomorrowD.getMonth() + 1).padStart(2, "0")}-${String(tomorrowD.getDate()).padStart(2, "0")}`;
+              const tomorrowList = athleteSessionHistory.filter(s => s.date === tomorrowStr);
+              const tomorrowDifficulty = tomorrowList.length ? Math.max(...tomorrowList.map(s => s.target_difficulty ?? 0)) : null;
+              const doneTop = [...daySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+              const decisionDay: DecisionDay = daySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
+                : daySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
+                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
               const decision = computeDecisionCard({
+                day: decisionDay,
                 wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
                 baseline, wellnessFilledToday, trendCode, trendInput,
                 sessions: athleteSessionHistory, anchor: trendAnchor, perspective: "coach",
@@ -1085,6 +1100,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    actionsSlot={autoregActionsSlot}
                     dir={decision.suggestion?.dir}
                     reco={decision.suggestion?.reco}
                     advice=""
@@ -1127,6 +1143,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 todayStr={todayStr}
                 ctx={ctx}
                 alert={alert}
+                alertActions={autoregTargetId ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
                 renderSession={(s) => (
                   <DraggableSessionCard
                     key={s.id}

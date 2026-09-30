@@ -53,7 +53,23 @@ function statusOf(metric: MetricKey, data: ConseilsData, series: DayPoint[], per
   }
 }
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete" }: {
+/* Carte supplémentaire rendue avec le MÊME gabarit que les cartes d'indice (2026-09-30, Gildas :
+   "les comportements dans récupération sous la même forme que les autres : une card, au clic le
+   rapport complet"). L'appelant fournit le contenu résumé et le rapport déplié. */
+export type ExtraIndexCard = {
+  key: string;
+  label: string;
+  status: string;
+  statusColor: string;
+  value?: string;
+  accent: string | null;   // couleur du liseré gauche quand la carte "décroche", null sinon
+  impact: string;
+  preview: React.ReactNode;
+  trend: string;
+  body: React.ReactNode;
+};
+
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCard }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -67,9 +83,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      c'est le scan en 2 secondes, il ne doit jamais être remplacé par le détail d'une métrique. */
   insight: string;
   perspective?: Perspective;
+  extraCard?: ExtraIndexCard;
 }) {
   const { isMd } = useBreakpoint();
-  const [open, setOpen] = useState<MetricKey | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
   /* Sous-jacent affiché DANS la carte Récupération (null = le score composite). */
   const [subDim, setSubDim] = useState<DimensionKey | null>(null);
   const days = rangeMode === "quarter" ? 90 : rangeMode === "month" ? 28 : 7;
@@ -86,6 +103,58 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      Pas de légende d'axe sous la jauge (demandée explicitement retirée) : le libellé de niveau est
      dans l'arc, et les bandes colorées disent déjà de quel côté on est. */
   const agg = aggregateFor(group, data);
+
+  /* Gabarit d'une carte : résumé cliquable puis contenu déplié. Partagé par les cartes d'indice et
+     la carte supplémentaire (comportements), pour qu'elles ne puissent pas diverger. */
+  const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
+    const isOpen = open === key;
+    return (
+      <div key={key}>
+        <button
+          onClick={() => setOpen(isOpen ? null : key)}
+          aria-expanded={isOpen}
+          style={{
+            width: "100%", textAlign: "left" as const, cursor: "pointer",
+            display: "grid", gridTemplateColumns: "1fr auto 14px", alignItems: "center", gap: 12,
+            background: "rgba(255,255,255,.055)",
+            border: "1px solid rgba(255,255,255,.10)",
+            borderLeft: c.accent ? `3px solid ${c.accent}` : "1px solid rgba(255,255,255,.10)",
+            borderRadius: 13, borderBottomLeftRadius: isOpen ? 0 : 13, borderBottomRightRadius: isOpen ? 0 : 13,
+            padding: "13px 15px", color: "#fff", font: "inherit",
+          }}
+        >
+          <span style={{ display: "flex", flexDirection: "column" as const, gap: 2, minWidth: 0 }}>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#fff" }}>
+              {c.label}
+            </span>
+            <span style={{ fontSize: 17.5, fontWeight: 800, color: c.statusColor, letterSpacing: "-.01em", lineHeight: 1.25 }}>
+              {c.status}
+              {c.value && (
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{` · ${c.value}`}</span>
+              )}
+            </span>
+            {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4 }}>{c.impact}</span>}
+          </span>
+
+          <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto" }}>
+            <span style={{ width: 118 }}>{c.preview}</span>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)", textAlign: "right" as const, letterSpacing: "0.01em" }}>
+              {c.trend}
+            </span>
+          </span>
+
+          <span style={{ color: "rgba(255,255,255,.35)", fontSize: 17, textAlign: "right" as const }}>{isOpen ? "⌄" : "›"}</span>
+          {!isMd && <span style={{ gridColumn: "1 / -1", fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 8 }}>{c.impact}</span>}
+        </button>
+
+        {isOpen && (
+          <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.10)", borderTop: 0, borderRadius: "0 0 13px 13px", padding: "14px 15px 10px", marginTop: -1, overflowX: "hidden", overflowY: "visible" as const }}>
+            {body}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -118,7 +187,6 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
              d'action et pas la pédagogie "tout va bien" (même bug que l'insight, 2026-09-29). */
           const decroche = info ? displaySeverityOf(info.color) !== "good" : false;
           const impact = impactFor(metric, info?.text ?? null, trend.dir, decroche, perspective);
-          const isOpen = open === metric;
           const trendIsStatus = TREND_IS_STATUS.includes(metric);
           /* Fitness et fatigue n'ont pas de zone : leur statut EST leur direction, écrite en toutes
              lettres et dérivée de la tendance que la carte affiche — jamais de celle que prod
@@ -127,60 +195,15 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           const color = statusDisplayColor(metric, info?.color);
           const showValue = v !== null && !trend.showsValue;
 
-          return (
-            <div key={metric}>
-              <button
-                onClick={() => setOpen(isOpen ? null : metric)}
-                aria-expanded={isOpen}
-                style={{
-                  width: "100%", textAlign: "left" as const, cursor: "pointer",
-                  display: "grid", gridTemplateColumns: "1fr auto 14px", alignItems: "center", gap: 12,
-                  background: "rgba(255,255,255,.055)",
-                  border: "1px solid rgba(255,255,255,.10)",
-                  borderLeft: decroche ? `3px solid ${info?.color ?? color}` : "1px solid rgba(255,255,255,.10)",
-                  borderRadius: 13, borderBottomLeftRadius: isOpen ? 0 : 13, borderBottomRightRadius: isOpen ? 0 : 13,
-                  padding: "13px 15px", color: "#fff", font: "inherit",
-                }}
-              >
-                {/* Trois lignes : le nom de l'indice en discret, puis la LIGNE PRINCIPALE qui
-                    porte le statut ET la valeur précise, puis l'insight. La tendance descend à
-                    droite sous l'aperçu : on lit "où j'en suis" à gauche, "dans quel sens ça bouge"
-                    du côté des chiffres. */}
-                <span style={{ display: "flex", flexDirection: "column" as const, gap: 2, minWidth: 0 }}>
-                  {/* En blanc (2026-09-28) : à 40 % d'opacité, le nom de l'indice passait derrière
-                      tout le reste de la carte alors que c'est lui qui dit de quoi on parle. Reste
-                      en petit et en capitales mono, donc il ne concurrence pas la ligne de statut,
-                      qui est deux fois plus grande et colorée. */}
-                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#fff" }}>
-                    {meta.label}
-                  </span>
-                  <span style={{ fontSize: 17.5, fontWeight: 800, color, letterSpacing: "-.01em", lineHeight: 1.25 }}>
-                    {statusLabel}
-                    {showValue && (
-                      <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{` · ${meta.fmt(v as number)}`}</span>
-                    )}
-                  </span>
-                  {/* En mobile l'insight sort de la colonne de gauche pour passer sous tout le
-                      contenu : coincé à côté de l'aperçu, il se retrouvait sur 4 ou 5 lignes dans
-                      une colonne d'une centaine de pixels. */}
-                  {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4 }}>{impact}</span>}
-                </span>
-
-                <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto" }}>
-                  <span style={{ width: 118 }}>
-                    <Preview metric={metric} series={series} sessionRef={sessionRef} override={metric === "recovery" ? recoveryRelative : undefined} />
-                  </span>
-                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)", textAlign: "right" as const, letterSpacing: "0.01em" }}>
-                    {TREND_ARROW[trend.dir]} {trend.text}
-                  </span>
-                </span>
-
-                <span style={{ color: "rgba(255,255,255,.35)", fontSize: 17, textAlign: "right" as const }}>{isOpen ? "⌄" : "›"}</span>
-                {!isMd && <span style={{ gridColumn: "1 / -1", fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 8 }}>{impact}</span>}
-              </button>
-
-              {isOpen && (
-                <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.10)", borderTop: 0, borderRadius: "0 0 13px 13px", padding: "14px 15px 10px", marginTop: -1, overflowX: "hidden", overflowY: "visible" as const }}>
+          return renderCard(metric, {
+            label: meta.label, status: statusLabel, statusColor: color,
+            value: showValue ? meta.fmt(v as number) : undefined,
+            accent: decroche ? (info?.color ?? color) : null,
+            impact,
+            preview: <Preview metric={metric} series={series} sessionRef={sessionRef} override={metric === "recovery" ? recoveryRelative : undefined} />,
+            trend: `${TREND_ARROW[trend.dir]} ${trend.text}`,
+          }, (
+            <>
                   {/* Les sous-jacents filtrent le chart DANS la carte Récupération : ce sont les
                       composantes du score, pas des indices frères — en faire des cartes de plus
                       donnerait une liste plate sans hiérarchie. La flèche du badge est celle déjà
@@ -222,11 +245,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
                     weekLabels={days > 7} height={200}
                   />
-                </div>
-              )}
-            </div>
-          );
+                            </>
+          ));
         })}
+        {extraCard && renderCard(extraCard.key, extraCard, extraCard.body)}
       </div>
     </div>
   );

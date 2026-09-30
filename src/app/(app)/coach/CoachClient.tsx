@@ -20,7 +20,9 @@ import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { monotonyStrainFor, computeDecisionCard } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { DemoDataChip, ChargeSection, RecuperationSection, BehaviorImpactCard, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
+import { decisionRingState } from "@/components/sessions/DecisionRing";
+import { aggregateFor } from "@/lib/metricCards";
+import { DemoDataChip, ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 
@@ -146,6 +148,19 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       athleteConseilsData[a.id] = computeConseilsData(selectedDate, null, recentSessions[a.id] ?? [], a.user_id ? wellnessBaselineHistory[a.user_id] ?? [] : [], "coach");
     }
   }
+  /* Données du sportif sélectionné, calculées même sur l'onglet Aujourd'hui (2026-09-29) : les
+     miniatures des onglets (HomeTabs.tsx) en ont besoin pour se dessiner avant qu'on ouvre l'onglet.
+     Un seul sportif, fonction pure sur des données déjà en mémoire — pas de fetch, contrairement à
+     la boucle sur tout le roster ci-dessus, qui reste gardée par l'onglet. En mode "Tous" (aucun
+     sportif sélectionné) il n'y a pas de miniature à montrer : un agrégat unique n'y voudrait rien
+     dire, c'est la liste elle-même qui porte l'information par sportif. */
+  const selectedTabData = (() => {
+    if (!selectedAthleteId) return undefined;
+    if (athleteConseilsData[selectedAthleteId]) return athleteConseilsData[selectedAthleteId];
+    const a = athletes.find(x => x.id === selectedAthleteId);
+    if (!a) return undefined;
+    return computeConseilsData(selectedDate, null, recentSessions[a.id] ?? [], a.user_id ? wellnessBaselineHistory[a.user_id] ?? [] : [], "coach");
+  })();
 
   useEffect(() => {
     if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
@@ -355,9 +370,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
      test Surcharger seul, qui appelait computeAutoregSuggestion sans la pénalité. La carte disait
      "Alléger recommandé" dans la section "Plan cohérent". computeDecisionCard avec les mêmes
      entrées que CoachAthleteCard : les deux ne peuvent plus diverger. */
-  function hasCardSuggestion(a: CoachAthlete): boolean {
+  /* Suggestion de la carte, extraite (2026-09-30) pour servir aussi la miniature de l'onglet
+     Aujourd'hui quand un sportif est sélectionné — même source que la carte, jamais recalculée à part. */
+  function cardSuggestion(a: CoachAthlete) {
     const topSession = getTopSession(a.id);
-    if (!topSession || topSession.done) return false;
+    if (!topSession || topSession.done) return null;
     return computeDecisionCard({
       wellnessScore: a.wellnessFilledToday === false ? null : a.wellness_score,
       plannedDifficulty: topSession.target_difficulty,
@@ -365,8 +382,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       wellnessFilledToday: a.wellnessFilledToday !== false,
       sessions: recentSessions[a.id] ?? [],
       perspective: "coach",
-    }).suggestion !== null;
+    }).suggestion;
   }
+  const hasCardSuggestion = (a: CoachAthlete) => cardSuggestion(a) !== null;
 
   /* Une décision PRISE sort de "À décider maintenant" (2026-09-27, demande de Gildas — "que les
      décisions une fois faites partent dans 'plan cohérent'"). `reviewedIds` est indispensable ici :
@@ -448,6 +466,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   function openEditor(athlete: CoachAthlete) {
     setReviewAthlete(athlete);
     setReviewSession(getTopSession(athlete.id));
+  }
+
+  /* "+ Ajouter une séance" d'une carte Coach Control (2026-09-30) : même drawer, sans séance, donc en
+     création sur la date affichée — handleSaveReview crée puis met à jour la même ligne. */
+  function openCreator(athlete: CoachAthlete) {
+    setReviewAthlete(athlete);
+    setReviewSession(null);
   }
 
   /* Contrat autosave (2026-09-26, remplace l'ancien "save = ferme le drawer" — plus de reviewContext
@@ -538,7 +563,23 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
-          <HomeTabs active={homeTab} onChange={setHomeTab} />
+          <HomeTabs
+            active={homeTab}
+            onChange={setHomeTab}
+            previews={selectedTabData
+              ? {
+                  /* Même lecture que /today : l'ajustement conseillé en points de RPE, null = pas
+                     de suggestion (arc sans curseur). */
+                  today: (() => {
+                    const a = athletes.find(x => x.id === selectedAthleteId);
+                    if (!a) return null;
+                    return decisionRingState(sessions.filter(s => s.athlete_id === a.id), cardSuggestion(a));
+                  })(),
+                  charge: aggregateFor("charge", selectedTabData),
+                  recuperation: aggregateFor("recup", selectedTabData),
+                }
+              : undefined}
+          />
         </div>
       )}
 
@@ -760,6 +801,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         coachName={coachName ?? "Coach"}
                         isActive={isActive}
                         onDecide={() => openEditor(a)}
+                    onAddSession={() => openCreator(a)}
                         onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                         onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                         onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -795,6 +837,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     coachName={coachName ?? "Coach"}
                     isActive={isActive}
                     onDecide={() => openEditor(a)}
+                    onAddSession={() => openCreator(a)}
                     onApplyAdjust={(session, pct) => requireSubscription(() => applyAutoregAdjust(a.id, session, pct))}
                     onUndoAdjust={(session, original) => requireSubscription(() => undoAutoregAdjust(a.id, session, original))}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -827,17 +870,25 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           if (!a || !data) return null;
           return (
             <>
-              {!a.user_id && homeTab !== "comportements" && <DemoDataChip />}
+              {!a.user_id && <DemoDataChip />}
               {homeTab === "charge" && <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
-              {homeTab === "recuperation" && <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />}
-              {homeTab === "comportements" && <BehaviorImpactCard correlations={data.correlations} filledDays={data.filledDays} />}
+              {/* Comportements n'est plus un onglet (2026-09-29) : dernier item du rapport de
+                 récupération, dont il est un déterminant. Même changement que sur /today. */}
+              {homeTab === "recuperation" && <>
+                <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
+              </>}
             </>
           );
         })()}
+        {/* `metric` ne vaut plus jamais "comportements" depuis que l'onglet a disparu
+            (2026-09-29) : la branche correspondante de TeamAnalyticsList reste en place mais n'est
+            plus atteignable d'ici, donc la vue "Groupe" n'a plus de colonne comportements.
+            Signalé plutôt que réinventé — la remettre demanderait de l'intégrer aux lignes
+            Récupération, ce qui n'a pas été demandé. */}
         {homeTab !== "today" && !selectedAthleteId && (
           <TeamAnalyticsList
             rows={athletes.map(a => ({ athlete: a, data: athleteConseilsData[a.id] })).filter((r): r is { athlete: CoachAthlete; data: ConseilsData } => !!r.data)}
-            metric={homeTab as "charge" | "recuperation" | "comportements"}
+            metric={homeTab as "charge" | "recuperation"}
             onSelect={selectAthleteFilter}
           />
         )}

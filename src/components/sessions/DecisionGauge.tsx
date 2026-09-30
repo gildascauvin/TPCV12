@@ -9,12 +9,14 @@ function clampDiff(v: number) { return Math.max(MIN, Math.min(MAX, v)); }
 function diffToLeft(d: number) { return ((d - MIN) / (MAX - MIN)) * 100; }
 function leftToDiff(l: number) { return clampDiff(MIN + (l / 100) * (MAX - MIN)); }
 
-// Dégradé continu vert→jaune→orange→rouge du POC (`poc-coach-contextclkaude.html`, `.gauge-fill`) —
-// pas les 3 paliers pleins de DiffGauge.tsx : ici le fill doit lire comme une position sur tout le
-// spectre 1-10, pas comme "facile/modérée/dure". Le fill est peint sur un canvas TOUJOURS large de
-// 100% du track (via la largeur relative ci-dessous), puis rogné à la position du curseur — même
-// technique que le POC (`background-size` en JS) portée en pourcentages CSS imbriqués.
-const FILL_GRADIENT = "linear-gradient(to right,#4ade80 0%,#a3e635 22%,#eab308 45%,#f97316 70%,#ef4444 100%)";
+/* Remplissage : les dégradés de la barre de difficulté de prod (DiffGauge.tsx — facile 1-4, modérée
+   5-7, dure 8-10), un seul dégradé choisi selon la position du curseur (2026-09-30, Gildas : "le
+   même gradient que les autres jauges"). Remplace les segments pleins par palier du 2026-09-29. */
+const DIFF_GRADIENT = {
+  hard: "linear-gradient(90deg,#ffb5a7,#d44000)",
+  moderate: "linear-gradient(90deg,#ffe0a0,#f28a00)",
+  easy: "linear-gradient(90deg,#bfeec8,#2f9e44)",
+} as const;
 
 export default function DecisionGauge({
   zoneLow, zoneHigh, dir, value, onChange, light, readOnly, plannedMarker, hint: hintOverride,
@@ -82,11 +84,9 @@ export default function DecisionGauge({
   const zoneWidth = diffToLeft(Math.min(MAX, bandHigh)) - zoneLeft;
   const dim = (o: number) => (light ? `rgba(0,0,0,${o})` : `rgba(255,255,255,${o})`);
 
-  const hint = hintOverride ?? (inZone
-    ? "Dans la zone recommandée"
-    : roundedValue < zoneLow
-      ? "Sous la difficulté cible"
-      : "Au dessus de la difficulté cible");
+  /* Position du curseur par rapport à la zone, en 3 états (2026-09-30, Gildas : jamais
+     "Zone conseillée : 6-7 / 10") — même wording que la jauge ronde (DecisionRing.tsx). */
+  const hint = hintOverride ?? (inZone ? "Dans la zone" : roundedValue < zoneLow ? "Sous la zone" : "Au-dessus de la zone");
   const markerLeft = plannedMarker != null && Math.round(plannedMarker) !== roundedValue
     ? diffToLeft(clampDiff(plannedMarker)) : null;
 
@@ -111,8 +111,14 @@ export default function DecisionGauge({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         style={{
-          position: "relative", height: 10, borderRadius: 5, cursor: readOnly ? "default" : "pointer", touchAction: "none",
-          background: "#e7e4df",
+          /* Partie VIDE du track (à droite du curseur) en SOMBRE (2026-09-30, Gildas : "mets la zone
+             où la jauge est vide à droite en dark") — le pointillé de la zone conseillée, lui, passe
+             en clair : sur un track clair il se perdait. Sombre plutôt que clair aussi parce que le
+             contraste avec les paliers colorés du remplissage est plus net des deux côtés. */
+          position: "relative", height: 12, borderRadius: 999, cursor: readOnly ? "default" : "pointer", touchAction: "none",
+          /* Fond gris clair (2026-09-30, Gildas : "trop différente des autres") — le même track que
+             DiffGauge.tsx, la barre de difficulté de toutes les autres cartes séance. */
+          background: light ? "#e7e4df" : "rgba(255,255,255,.12)",
         }}
       >
         {/* Repère de la difficulté PRÉVUE (mode décidé) — un simple trait, jamais un 2e curseur :
@@ -125,20 +131,29 @@ export default function DecisionGauge({
             </div>
           </div>
         )}
+        {/* Remplissage : le MÊME dégradé que DiffGauge.tsx (2026-09-30, Gildas : "le même gradient
+            que les autres jauges") — un dégradé par palier (facile 1-4 / modérée 5-7 / dure 8-10),
+            choisi selon la position du curseur. */}
         <div style={{
           position: "absolute", top: 0, left: 0, height: "100%",
-          width: `${cursorLeft}%`, overflow: "hidden", borderRadius: 5, zIndex: 1,
-        }}>
-          <div style={{
-            position: "absolute", top: 0, left: 0, height: "100%",
-            width: cursorLeft > 0 ? `${10000 / cursorLeft}%` : "100%",
-            background: FILL_GRADIENT,
-          }} />
-        </div>
+          width: `${cursorLeft}%`, borderRadius: 999, zIndex: 1,
+          background: DIFF_GRADIENT[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"],
+          transition: dragging ? "none" : "width .35s cubic-bezier(.22,1,.36,1)",
+        }} />
+        {/* Zone conseillée en POINTILLÉ, sans remplissage (2026-09-29, POC) : le pointillé est un
+            signal de forme, pas de couleur — un contour vert se serait confondu avec le palier vert
+            du remplissage juste en dessous. */}
         <div style={{
-          position: "absolute", top: "50%", transform: "translateY(-50%)",
-          left: `${zoneLeft}%`, width: `${zoneWidth}%`, height: 18, borderRadius: 9, zIndex: 2,
-          background: "rgba(47,158,68,.30)", border: "1.5px solid rgba(47,158,68,.6)", pointerEvents: "none",
+          /* Déborde de 4px au-dessus et en dessous du track (2026-09-30, Gildas) : la zone se lit
+             comme un cadre posé sur la barre, pas comme une bande de la barre. */
+          position: "absolute", top: -4, bottom: -4,
+          left: `${zoneLeft}%`, width: `${zoneWidth}%`, borderRadius: 999, zIndex: 2,
+          /* Pointillé CLAIR, et contenu dans la hauteur du track (2026-09-30) : il se lit sur les
+             paliers colorés du remplissage comme sur la partie vide sombre, et ne déborde plus sur
+             le fond de la carte — sinon il resterait invisible sur les surfaces à carte blanche
+             (Coach Control, Planning, AdjustSessionModal), qui utilisent la même jauge. */
+          /* Sombre sur le track clair, clair sur fond sombre : lisible des deux côtés du remplissage. */
+          border: `2px dashed ${light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.85)"}`, pointerEvents: "none",
         }} />
         <div style={{
           position: "absolute", top: "50%", left: `${cursorLeft}%`, transform: "translate(-50%,-50%)",

@@ -31,7 +31,7 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
 }
 
 export default function AggregateGauge({
-  pos, band, bands, size = 188, showLabel = true,
+  pos, band, bands, size = 188, showLabel = true, bare = false,
 }: {
   /** Position sur l'axe, 0..1. `null` = pas assez de données. */
   pos: number | null;
@@ -40,12 +40,17 @@ export default function AggregateGauge({
   size?: number;
   /** Masqué en petit (liste coach) : sous ~60px le libellé tomberait à 4px. */
   showLabel?: boolean;
+  /* Miniature (2026-09-29) : arc et curseur seuls, aucun calque de texte — pour les ~26px des
+     onglets de l'Accueil (HomeTabs.tsx), où même le chiffre serait illisible. Réutilise la MÊME
+     géométrie que la grande jauge plutôt qu'un second composant : "une seule forme de jauge dans
+     toute l'app, du 26px de la nav au ring de la page" (retour de Gildas sur le POC). */
+  bare?: boolean;
 }) {
   const r = Math.round(size * 0.36);
-  const sw = Math.max(4, Math.round(size * 0.075));
+  const sw = Math.max(bare ? 3 : 4, Math.round(size * (bare ? 0.17 : 0.075)));
   const cx = size / 2;
-  const cy = r + sw / 2 + 2;
-  const h = Math.round(cy + r * 0.5 + sw / 2 + 4);
+  const cy = r + sw / 2 + (bare ? 1 : 2);
+  const h = Math.round(cy + r * 0.5 + sw / 2 + (bare ? 1 : 4));
   const at = (f: number) => A0 + Math.max(0, Math.min(1, f)) * (A1 - A0);
   const color = band?.color ?? "rgba(255,255,255,.28)";
 
@@ -55,9 +60,25 @@ export default function AggregateGauge({
         <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth={sw} strokeLinecap="round" />
         {/* Bandes dessinées à l'envers : les extrémités arrondies de la première ne doivent pas
             mordre sur les suivantes (même ordre que les jauges contrainte/monotonie existantes). */}
-        {[...bands].reverse().map(b => (
-          <path key={b.label} d={arcPath(cx, cy, r, at(b.from), at(b.to))} fill="none" stroke={b.color} strokeWidth={sw} opacity={0.9} />
-        ))}
+        {/* Couleurs jusqu'au bout de l'arrondi (2026-09-30, Gildas) : pastilles aux 2 extrémités, aux
+            couleurs de la première et de la dernière bande — un linecap rond par bande ferait mordre
+            chaque bande sur la suivante. Opacité portée par le groupe, sinon le recouvrement
+            pastille/bande ressortirait plus foncé. */}
+        <g opacity={bare ? 0.55 : 0.9}>
+          {[...bands].reverse().map(b => (
+            <path key={b.label} d={arcPath(cx, cy, r, at(b.from), at(b.to))} fill="none" stroke={b.color} strokeWidth={sw} />
+          ))}
+          {bands.length > 0 && (() => {
+            const first = bands.reduce((m, b) => (b.from < m.from ? b : m), bands[0]);
+            const last = bands.reduce((m, b) => (b.to > m.to ? b : m), bands[0]);
+            const [sx, sy] = polar(cx, cy, r, at(first.from));
+            const [ex, ey] = polar(cx, cy, r, at(last.to));
+            return <>
+              <circle cx={sx.toFixed(2)} cy={sy.toFixed(2)} r={sw / 2} fill={first.color} />
+              <circle cx={ex.toFixed(2)} cy={ey.toFixed(2)} r={sw / 2} fill={last.color} />
+            </>;
+          })()}
+        </g>
         {pos !== null && (() => {
           const [mx, my] = polar(cx, cy, r, at(pos));
           return <circle cx={mx.toFixed(2)} cy={my.toFixed(2)} r={(sw * 0.62).toFixed(1)} fill={color} stroke="#0f1318" strokeWidth={Math.max(2, Math.round(sw * 0.24))} />;
@@ -65,7 +86,7 @@ export default function AggregateGauge({
       </svg>
       {/* Le centre du cercle n'est pas le centre de la boîte (l'arc est ouvert en bas, la boîte est
           plus courte sous le centre) : on ancre sur cy, jamais sur inset:0. */}
-      <div style={{
+      {!bare && <div style={{
         position: "absolute", left: 0, right: 0, top: cy, transform: "translateY(-50%)",
         display: "flex", flexDirection: "column", alignItems: "center", padding: "0 10px",
       }}>
@@ -84,7 +105,7 @@ export default function AggregateGauge({
             {band.label}
           </span>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

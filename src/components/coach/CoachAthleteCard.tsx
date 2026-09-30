@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
 import AlertBox from "@/components/calendar/AlertBox";
 import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
@@ -165,7 +166,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -184,6 +185,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   onAutoregDecided: () => void;
   /* Symétrique : "Annuler" repasse l'athlète en attente de décision. */
   onAutoregUndone: () => void;
+  /* "+ Ajouter une séance" en bas de la carte (2026-09-30, Gildas : "comme sur la partie sportif") —
+     même bouton que /today et le Planning. Absent = pas de bouton (aperçus onboarding/paywall). */
+  onAddSession?: () => void;
   tourId?: string;
   trend?: TrendCode | null;
   /* Input brut de la tendance (charge %/delta wellness/delta RPE) — nécessaire pour describeTrend()
@@ -281,6 +285,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     subject: selfView ? undefined : firstName,
   });
   const [previewPct, setPreviewPct] = useState<number | null>(null);
+  /* Nœud des CTA d'ajustement dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
+  const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
+  const adjustable = !!topSession && !topSession.done;
   const effectivePreviewPct = externalPreviewPct !== undefined ? externalPreviewPct : previewPct;
 
   /* Contour statique, pas de point/halo sur cette carte (2026-09, retour de Gildas — retiré, la
@@ -339,10 +346,48 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           {selfView ? "Ta forme" : firstName}
         </div>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-          <WellnessRing score={displayScore} size={88} label={zoneText} />
+          {/* Jauge d'ajustement À LA PLACE du ring de récupération (2026-09-30, Gildas) : la carte
+             décision juste en dessous explique déjà la forme ; le ring ne reste que sans séance
+             ajustable (repos, séance déjà faite). */}
+          {adjustable ? (
+            <div onClick={e => e.stopPropagation()}>
+              <AutoregButtons
+                sessionId={topSession!.id}
+                dir={decision.suggestion?.dir}
+                reco={decision.suggestion?.reco}
+                advice=""
+                plannedDifficulty={topSession!.target_difficulty ?? 6}
+                sessionLabel={topSession!.name}
+                variant="dark"
+                shape="ring"
+                ringSize={150}
+                actionsSlot={actionsSlot}
+                severityColor={decision.suggestion ? badgeColor : undefined}
+                onPreviewChange={setPreviewPct}
+                onApply={async (pct) => {
+                  const original: AutoregOriginal = { notes: topSession!.notes, target_difficulty: topSession!.target_difficulty };
+                  await onApplyAdjust(topSession!, pct);
+                  // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
+                  // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
+                  if (isActive !== false) onAutoregDecided();
+                  return original;
+                }}
+                onMaintenir={onAutoregDecided}
+                onUndo={async (original) => {
+                  if (original) await onUndoAdjust(topSession!, original);
+                  onAutoregUndone();
+                }}
+                isActive={isActive}
+              />
+            </div>
+          ) : todaySessions.length === 0 || !topSession ? (
+            <RestDecisionRing size={150} />
+          ) : (
+            <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />
+          )}
         </div>
         {(!!athlete.invite_email || showBadge || showReviewed) && (
-          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: behaviors.length > 0 ? 8 : 0 }}>
+          <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {!!athlete.invite_email && (
               <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", background: "rgba(255,255,255,.1)", color: "#c7ccd1", border: "1px solid rgba(255,255,255,.14)", borderRadius: 999, padding: "3px 8px" }}>
                 ⏳ En attente
@@ -360,23 +405,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             )}
           </div>
         )}
-        {behaviors.length > 0 && (
-          <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 4 }}>
-            {behaviors.map(b => {
-              const meta = BEHAVIOR_META[b];
-              if (!meta) return null;
-              return (
-                <span key={b} style={{
-                  fontSize: 9, padding: "2px 6px", borderRadius: 999,
-                  background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
-                  color: meta.positive ? "#bfeec8" : "#ffd2bf",
-                }}>
-                  {meta.emoji} {meta.label}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        {/* Plus de badges de comportements sur la carte (2026-09-30, Gildas). */}
       </div>
 
       {/* Encart décision — toujours affiché (2026-09, decisionCard.ts), jamais vide : insight seul
@@ -389,7 +418,13 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           variant="darkColor"
           alert={{ border: `${badgeColor}66`, glow: badgeColor, text: decision.text }}
           centered={!!decision.phase}
-          actions={topSession && !topSession.done ? (decision.phase ? <PhaseLine phase={decision.phase} /> : undefined) : (
+          actions={adjustable ? (
+            /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */
+            <div style={{ display: "grid", gap: 12 }}>
+              <div ref={setActionsSlot} className="autoreg-slot" />
+              {decision.phase && <PhaseLine phase={decision.phase} />}
+            </div>
+          ) : (
             <div style={{ display: "grid", gap: 10, justifyItems: decision.phase ? "center" : undefined }}>
             {decision.phase && <PhaseLine phase={decision.phase} />}
             <button
@@ -426,45 +461,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               {topSession.done ? "Terminé" : "Prévu"}
             </span>
           </div>
-          {!topSession.done ? (
-            <div style={{ marginBottom: 8 }} onClick={e => e.stopPropagation()}>
-              {/* Montée même sans suggestion (2026-09-25, "même quand ya pas de reco, je veux
-                 pouvoir bouger la jauge et avoir le range") — dir/reco undefined = mode libre. */}
-              {/* Plus de remount forcé sur `isReviewed` (2026-09-27) : ce `key` existait pour
-                 réinitialiser la jauge quand le coach cliquait "Revoir", un cas qui disparaît
-                 maintenant qu'une carte décidée quitte la section "À décider maintenant". Il
-                 provoquait surtout un bug documenté (l'encart revenait à l'état idle au lieu
-                 d'afficher "✓ appliqué") : le remount intervenait AVANT l'écriture en localStorage.
-                 Cette écriture est désormais faite avant l'await (voir AutoregButtons.apply), donc
-                 un remount — inévitable de toute façon quand la carte change de section — est
-                 maintenant sans conséquence. */}
-              <AutoregButtons
-                sessionId={topSession.id}
-                dir={decision.suggestion?.dir}
-                reco={decision.suggestion?.reco}
-                advice=""
-                plannedDifficulty={topSession.target_difficulty ?? 6}
-                sessionLabel={topSession.name}
-                variant="light"
-                severityColor={decision.suggestion ? badgeColor : undefined}
-                onPreviewChange={setPreviewPct}
-                onApply={async (pct) => {
-                  const original: AutoregOriginal = { notes: topSession.notes, target_difficulty: topSession.target_difficulty };
-                  await onApplyAdjust(topSession, pct);
-                  // isActive===false : onApplyAdjust n'a fait que déclencher le paywall (requireSubscription),
-                  // rien n'a été écrit — ne pas marquer l'athlète "traité" (voir prop isActive plus haut).
-                  if (isActive !== false) onAutoregDecided();
-                  return original;
-                }}
-                onMaintenir={onAutoregDecided}
-                onUndo={async (original) => {
-                  if (original) await onUndoAdjust(topSession, original);
-                  onAutoregUndone();
-                }}
-                isActive={isActive}
-              />
-            </div>
-          ) : (
+          {!topSession.done ? null : (
             (topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
               <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
             )
@@ -512,6 +509,18 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           {extraSessions > 0 && (
             <div style={{ fontSize: 10, color: "#8a8f94", marginTop: 7 }}>+{extraSessions} autre{extraSessions > 1 ? "s" : ""} séance{extraSessions > 1 ? "s" : ""}</div>
           )}
+        </div>
+      )}
+      {onAddSession && (
+        <div
+          onClick={e => { e.stopPropagation(); onAddSession(); }}
+          style={{
+            border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
+            borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11,
+            cursor: "pointer", fontWeight: 700, marginTop: topSession ? 8 : 12,
+          }}
+        >
+          + Ajouter une séance
         </div>
       )}
     </div>
