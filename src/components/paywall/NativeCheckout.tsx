@@ -94,9 +94,12 @@ export function NativePurchasePanel({
 
   const days = trialDays(product);
   const period = billing === "annual" ? "an" : "mois";
+  /* Minimum exigé par Apple (guideline 3.1.2) près du bouton : durée, prix, essai, renouvellement
+     automatique ; plus les liens Conditions/Confidentialité dans le parcours d'achat. Volontairement
+     condensé sur une ligne. */
   const legal = product
-    ? days ? `${days} jours offerts, puis ${product.priceString}/${period}. Renouvellement automatique, annulable dans les réglages de ton compte Apple.`
-           : `${product.priceString}/${period}. Renouvellement automatique, annulable dans les réglages de ton compte Apple.`
+    ? days ? `${days} jours offerts, puis ${product.priceString}/${period}, renouvelé automatiquement. Résiliable à tout moment.`
+           : `${product.priceString}/${period}, renouvelé automatiquement. Résiliable à tout moment.`
     : null;
 
   return (

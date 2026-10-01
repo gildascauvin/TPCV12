@@ -8,6 +8,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import NotificationToggle from "./NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
 import PaywallModal from "@/components/paywall/PaywallModal";
+import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import { buildAthleteFixture, buildCoachFixture } from "@/lib/sandboxFixtures";
 import type { Profile } from "@/types";
@@ -63,6 +64,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   const [saving, setSaving] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [nativeBilling, setNativeBilling] = useState<"monthly" | "annual">("annual");
   const [sandboxGateOpen, setSandboxGateOpen] = useState(false);
 
   useEffect(() => {
@@ -296,7 +298,19 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
         </div>
       </div>
 
-      {profile && paywallOpen && (
+      {/* App iOS : même écran d'offre que partout ailleurs, qui déclenche directement l'achat Apple. */}
+      {profile && paywallOpen && isNativeApp() && (
+        <PrimingJourneyModal
+          mode={profile.mode as "athlete" | "coach"}
+          billing={nativeBilling}
+          setBilling={setNativeBilling}
+          allowDismiss
+          onContinue={() => {}}
+          onDismiss={() => setPaywallOpen(false)}
+          onPurchased={() => { setPaywallOpen(false); window.location.reload(); }}
+        />
+      )}
+      {profile && paywallOpen && !isNativeApp() && (
         <PaywallModal
           mode={profile.mode as "athlete" | "coach"}
           allowDismiss
