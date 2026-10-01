@@ -97,9 +97,9 @@ export async function nativeAppleSignIn(supabase: SupabaseClient): Promise<{ ok:
     const msg = e instanceof Error ? e.message : String(e);
     if (/cancel|1001/i.test(msg)) return null;
     console.error("[apple-native]", msg);
-    return { ok: false, error: "Connexion Apple impossible. Réessaie ou utilise ton email." };
+    return { ok: false, error: `Connexion Apple impossible. Réessaie ou utilise ton email. (${msg})` };
   }
-  if (!idToken) return { ok: false, error: "Connexion Apple impossible. Réessaie ou utilise ton email." };
+  if (!idToken) return { ok: false, error: "Connexion Apple impossible. Réessaie ou utilise ton email. (jeton Apple absent)" };
 
   const { error } = await supabase.auth.signInWithIdToken({ provider: "apple", token: idToken, nonce: nonce.raw });
   if (error) {
