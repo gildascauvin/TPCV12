@@ -53,7 +53,7 @@ export default function NativeCheckout({
         // pas, l'appel peut ne jamais se terminer. On affiche alors un message, avec le détail.
         const products = await Promise.race([
           getStoreProducts(user.id),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai dépassé (15 s)")), 15000)),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai global dépassé")), 70000)),
         ]);
         if (alive) setProduct(products[PRODUCT_IDS[mode][billing]]);
         if (alive && !products[PRODUCT_IDS[mode][billing]]) setLoadError("Offre indisponible sur l'App Store pour le moment.");

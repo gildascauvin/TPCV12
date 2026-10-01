@@ -30,13 +30,18 @@ async function plugin() {
   return (await import("@revenuecat/purchases-capacitor")).Purchases;
 }
 
+// Diagnostic : chaque étape a son propre délai, pour savoir laquelle bloque.
+function withTimeout<T>(p: Promise<T>, ms: number, step: string): Promise<T> {
+  return Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${step} : délai dépassé`)), ms))]);
+}
+
 async function ensureConfigured(userId: string) {
   if (!REVENUECAT_IOS_KEY) throw new Error("Achat indisponible dans l'app pour le moment.");
-  const Purchases = await plugin();
+  const Purchases = await withTimeout(plugin(), 10000, "chargement du module");
   if (configuredFor === null) {
-    await Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId });
+    await withTimeout(Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId }), 10000, "configuration RevenueCat");
   } else if (configuredFor !== userId) {
-    await Purchases.logIn({ appUserID: userId });
+    await withTimeout(Purchases.logIn({ appUserID: userId }), 10000, "connexion RevenueCat");
   }
   configuredFor = userId;
   return Purchases;
@@ -50,7 +55,7 @@ export async function getStoreProducts(userId: string): Promise<Record<string, P
   const Purchases = await ensureConfigured(userId);
   const ids = Object.values(PRODUCT_IDS).flatMap(p => Object.values(p));
   if (ids.some(id => !productCache.has(id))) {
-    const { products } = await Purchases.getProducts({ productIdentifiers: ids });
+    const { products } = await withTimeout(Purchases.getProducts({ productIdentifiers: ids }), 45000, "produits App Store");
     products.forEach(p => productCache.set(p.identifier, p));
   }
   return Object.fromEntries(productCache);
