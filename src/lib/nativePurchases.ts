@@ -26,8 +26,12 @@ const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "appl_v
 
 let configuredFor: string | null = null;
 
+/* Piège Capacitor : un plugin natif est un Proxy qui répond à n'importe quelle propriété, y compris
+   "then". Le renvoyer tel quel depuis une fonction async le fait passer pour une promesse, que
+   JavaScript attend sans fin (bug vu sur TestFlight build 3). On le renvoie donc dans un objet. */
 async function plugin() {
-  return (await import("@revenuecat/purchases-capacitor")).Purchases;
+  const mod = await import("@revenuecat/purchases-capacitor");
+  return { Purchases: mod.Purchases };
 }
 
 // Diagnostic : chaque étape a son propre délai, pour savoir laquelle bloque.
@@ -37,14 +41,14 @@ function withTimeout<T>(p: Promise<T>, ms: number, step: string): Promise<T> {
 
 async function ensureConfigured(userId: string) {
   if (!REVENUECAT_IOS_KEY) throw new Error("Achat indisponible dans l'app pour le moment.");
-  const Purchases = await withTimeout(plugin(), 10000, "chargement du module");
+  const { Purchases } = await withTimeout(plugin(), 10000, "chargement du module");
   if (configuredFor === null) {
     await withTimeout(Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId }), 10000, "configuration RevenueCat");
   } else if (configuredFor !== userId) {
     await withTimeout(Purchases.logIn({ appUserID: userId }), 10000, "connexion RevenueCat");
   }
   configuredFor = userId;
-  return Purchases;
+  return { Purchases }; // jamais le Proxy nu depuis une fonction async (voir plugin())
 }
 
 const productCache = new Map<string, PurchasesStoreProduct>();
@@ -52,7 +56,7 @@ const productCache = new Map<string, PurchasesStoreProduct>();
 /* Prix affichés : ceux de l'App Store (devise et montant du pays de l'utilisateur), jamais nos
    constantes PRICING, qui peuvent différer des paliers de prix Apple. */
 export async function getStoreProducts(userId: string): Promise<Record<string, PurchasesStoreProduct>> {
-  const Purchases = await ensureConfigured(userId);
+  const { Purchases } = await ensureConfigured(userId);
   const ids = Object.values(PRODUCT_IDS).flatMap(p => Object.values(p));
   if (ids.some(id => !productCache.has(id))) {
     const { products } = await withTimeout(Purchases.getProducts({ productIdentifiers: ids }), 45000, "produits App Store");
@@ -73,7 +77,7 @@ export async function purchasePlan(userId: string, plan: Plan, billing: Billing)
     const products = await getStoreProducts(userId);
     const product = products[PRODUCT_IDS[plan][billing]];
     if (!product) return { ok: false, error: "Offre introuvable sur l'App Store. Réessaie plus tard." };
-    const Purchases = await ensureConfigured(userId);
+    const { Purchases } = await ensureConfigured(userId);
     await Purchases.purchaseStoreProduct({ product });
   } catch (e) {
     const err = e as { userCancelled?: boolean; message?: string };
@@ -91,7 +95,7 @@ export async function purchasePlan(userId: string, plan: Plan, billing: Billing)
 
 export async function restorePurchases(userId: string): Promise<{ restored: boolean; error?: string }> {
   try {
-    const Purchases = await ensureConfigured(userId);
+    const { Purchases } = await ensureConfigured(userId);
     await Purchases.restorePurchases();
   } catch (e) {
     console.error("[iap] restore", e);
