@@ -21,7 +21,8 @@ export const PRODUCT_IDS: Record<Plan, Record<Billing, string>> = {
   coach:   { monthly: "tpc_coach_monthly",   annual: "tpc_coach_annual" },
 };
 
-const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "";
+// Clé publique iOS RevenueCat (pas un secret).
+const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "appl_vhcyRQNdfWsPRCBPsjRpfuBxgcj";
 
 let configuredFor: string | null = null;
 
