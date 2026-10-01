@@ -312,7 +312,7 @@ export function computeConseilsData(
   const todayAcwr = timeSeries[timeSeries.length - 1]?.acwr ?? null;
   const loadInfo = todayAcwr !== null
     ? sigDimInfo("load", todayAcwr, perspective)
-    : { label: "HISTORIQUE INSUFFISANT", color: "#8a8f94", text: "Il faut au moins 14 jours d'historique pour calculer l'ACWR." };
+    : { label: "HISTORIQUE INSUFFISANT", color: "#8a8f94", text: perspective === "coach" ? "Disponible après 14 jours : compare sa charge de la semaine à sa charge habituelle." : "Disponible après 14 jours : compare ta charge de la semaine à ta charge habituelle." };
   const monotonyInfo = sig.monotony !== null
     ? sigDimInfo("monotony", sig.monotony, perspective)
     : { label: "PAS ASSEZ D'HISTORIQUE", color: "#8a8f94", text: "Termine des séances sur au moins 7 jours pour calculer ta monotonie." };

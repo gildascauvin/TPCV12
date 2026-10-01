@@ -109,8 +109,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
      d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf, le jour de sa 1re
      décision, celle de son propre sportif démo (même règle que Coach Control). */
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
-  const canDecideFor = (a: { user_id: string | null; invite_email: string | null }) =>
-    sandboxMode || isActive || (!a.user_id && !a.invite_email && (!firstDecisionOn || firstDecisionOn === todayStr));
+  // 1re décision de chaque sportif en clair (posée par Coach Control, coach_athletes.first_decision_on).
+  const canDecideFor = (a: { first_decision_on?: string | null }) =>
+    sandboxMode || isActive || !a.first_decision_on || a.first_decision_on === todayStr;
 
   // "Tous" (2026-09-24, voir POC poc-coach-context_6.html, basePlanning() branche selectedAthleteId
   // ==="all") — selectedAthleteId devient explicitement nullable : `null` = Tous, choisi seulement

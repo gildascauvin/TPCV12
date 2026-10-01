@@ -30,7 +30,9 @@ export async function GET() {
     const invitedBy = (profile as { invited_by_coach_id?: string | null }).invited_by_coach_id ?? null;
     const [wRes, sRes, aRes, doneRes, coachPays] = await Promise.all([
       supabase.from("wellness_daily").select("id").eq("user_id", user.id).gte("date", since).not("bedtime", "is", null).limit(1),
-      supabase.from("sessions").select("id").eq("user_id", user.id).gte("date", since).limit(1),
+      // Une séance créée par le check-in ("Séance du jour …", 2026-10-01) ne compte pas : sinon le
+      // check-in cocherait 2 étapes d'un coup et la checklist ne pousserait plus vers les programmes.
+      supabase.from("sessions").select("id").eq("user_id", user.id).gte("date", since).not("name", "like", "Séance du jour %").limit(1),
       supabase.from("program_assignments").select("id").eq("user_id", user.id).eq("status", "active").limit(1),
       supabase.from("sessions").select("id").eq("user_id", user.id).gte("date", since).eq("done", true).limit(1),
       coachIsPaying(invitedBy),
@@ -45,7 +47,8 @@ export async function GET() {
   } else {
     const admin = createAdminClient();
     const [athRes, assignRes] = await Promise.all([
-      supabase.from("coach_athletes").select("id").eq("coach_id", user.id).limit(1),
+      // Vrai sportif seulement (inscrit ou invité) : le sportif démo ne compte pas.
+      supabase.from("coach_athletes").select("id").eq("coach_id", user.id).or("user_id.not.is.null,invite_email.not.is.null").limit(1),
       admin.from("program_assignments").select("id, programs(name)").eq("coach_id", user.id).eq("status", "active"),
     ]);
     const ownAssign = (assignRes.data ?? []).some(a => {
@@ -53,6 +56,8 @@ export async function GET() {
       return (p as { name?: string } | null)?.name !== "Programme démo";
     });
     steps = [
+      // Toujours faite : la checklist ne part pas de 0 (2026-10-01).
+      { key: "account", label: "Crée ton compte", done: true },
       { key: "invite", label: "Invite tes sportifs", done: (athRes.data?.length ?? 0) > 0 },
       { key: "build", label: "Construis leur entraînement", done: ownAssign },
       { key: "adjust", label: "Ajuste leur séance", done: !!(profile as { first_adjustment_at?: string | null }).first_adjustment_at },

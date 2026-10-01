@@ -29,6 +29,23 @@ export function zScore(value: number, stat: ZStat): number | null {
 
 export const WELLNESS_BASELINE_WINDOW_DAYS = 21;
 export const WELLNESS_BASELINE_MIN_DAYS = 12;
+/* Norme PROVISOIRE (2026-10-01) : dès 5 check-ins, la moyenne et l'écart-type perso sont mélangés à
+   une norme a priori, avec un poids qui passe à 100 % perso au 12e check-in (shrinkage classique,
+   w = n / 12). Évite d'attendre 2 semaines pour lire la récup en relatif. A priori : moyenne et
+   écart-type intra-sportif observés sur l'historique réel le plus long en base (composite ~70 ± 8,
+   dimensions ± 1,25), dimensions centrées sur les valeurs par défaut du formulaire. */
+export const WELLNESS_BASELINE_PROVISIONAL_MIN_DAYS = 5;
+const PRIOR_COMPOSITE = { mean: 70, stdDev: 8 };
+const PRIOR_DIM: Record<"sleep" | "stress" | "recovery" | "motivation", { mean: number; stdDev: number }> = {
+  sleep: { mean: 7, stdDev: 1.25 }, stress: { mean: 5, stdDev: 1.25 }, recovery: { mean: 6, stdDev: 1.25 }, motivation: { mean: 7, stdDev: 1.25 },
+};
+function shrinkStat(stat: ZStat, prior: { mean: number; stdDev: number }): ZStat {
+  if (stat.n >= WELLNESS_BASELINE_MIN_DAYS) return stat;
+  const w = stat.n / WELLNESS_BASELINE_MIN_DAYS;
+  const mean = w * stat.mean + (1 - w) * prior.mean;
+  const variance = w * stat.stdDev ** 2 + (1 - w) * prior.stdDev ** 2;
+  return { mean, stdDev: Math.sqrt(variance), n: Math.max(stat.n, 2) };
+}
 // Réutilise le seuil critique déjà existant dans computeAutoregSuggestion (wellness<40→🚨) — pas un
 // nouveau chiffre inventé pour ce garde-fou.
 export const WELLNESS_ABSOLUTE_GUARD_SCORE = 40;
@@ -78,6 +95,8 @@ export type HrvBaseline = { raw: number; z: number | null; ms: number; norm: num
 
 export type WellnessBaselineResult = {
   hasEnoughHistory: boolean;
+  // Norme encore provisoire (5 à 11 check-ins, mélangée à la norme a priori) — à étiqueter.
+  provisional: boolean;
   historyDays: number;
   composite: DimensionBaseline;
   // Score d'affichage : score absolu tel quel si !hasEnoughHistory (repli exact du comportement
@@ -158,9 +177,10 @@ export function computeWellnessBaselineAt(
     .filter((p): p is { date: string; value: number } => p.value !== null);
 
   const historyDays = compositeSeries.length;
-  const hasEnoughHistory = historyDays >= WELLNESS_BASELINE_MIN_DAYS;
+  const hasEnoughHistory = historyDays >= WELLNESS_BASELINE_PROVISIONAL_MIN_DAYS;
+  const provisional = hasEnoughHistory && historyDays < WELLNESS_BASELINE_MIN_DAYS;
 
-  const compositeStat = rollingMeanStd(compositeSeries, windowDays);
+  const compositeStat = shrinkStat(rollingMeanStd(compositeSeries, windowDays), PRIOR_COMPOSITE);
   const compositeZ = hasEnoughHistory ? zScore(todayComposite, compositeStat) : null;
 
   const relativeScore = compositeZ !== null
@@ -170,7 +190,7 @@ export function computeWellnessBaselineAt(
   const dimensions = {} as Record<DimensionKey, DimensionBaseline>;
   for (const dim of DIMENSION_KEYS) {
     const series = history.map(h => ({ date: h.date, value: dimensionRaw(h, dim) }));
-    const stat = rollingMeanStd(series, windowDays);
+    const stat = shrinkStat(rollingMeanStd(series, windowDays), PRIOR_DIM[dim]);
     const rawToday = dimensionRaw(todayRow, dim);
     const z = hasEnoughHistory ? zScore(rawToday, stat) : null;
     dimensions[dim] = { raw: rawToday, z };
@@ -224,6 +244,7 @@ export function computeWellnessBaselineAt(
 
   return {
     hasEnoughHistory,
+    provisional,
     historyDays,
     composite: { raw: todayComposite, z: compositeZ },
     relativeScore,

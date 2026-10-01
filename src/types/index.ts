@@ -81,6 +81,7 @@ export interface CoachAthlete {
   wellnessFilledToday?: boolean; // true si une ligne wellness_daily existe pour le jour consulté (toujours true pour les démo, sans notion de jour)
   user_id: string | null; // null = démo ou invite pending, string = vrai sportif lié
   invite_email: string | null; // non-null = invitation pending (sportif pas encore inscrit)
+  first_decision_on?: string | null; // freemium coach : jour de la 1re décision en clair de CE sportif (migration 028)
   free_training_label?: Record<string, string>; // label "Séances libres" par semaine (clé = lundi) — pour un vrai sportif, la valeur réelle vient de profiles.free_training_label (fusionnée côté page.tsx), cette colonne ne sert que pour les démo
   sexe?: "homme" | "femme" | null; // même principe que free_training_label : réel = profiles.sexe (fusionné), cette colonne ne sert que pour les démo
   poids_kg?: number | null; // idem, profiles.poids_kg pour un vrai sportif

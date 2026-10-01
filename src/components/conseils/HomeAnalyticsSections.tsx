@@ -37,7 +37,7 @@ export function DemoDataChip() {
 
 /* Bandeau des données d'exemple (2026-09-30, freemium) : en tête d'onglet, pas un petit badge — le
    risque est qu'on prenne l'exemple pour ses propres données. Dit quand les vraies arrivent (après
-   ~2 semaines de check-ins et de séances, jamais "dans 14 jours" : ça dépend de ce qu'il remplit).
+   ~1 semaine de check-ins et de séances, jamais "dans 14 jours" : ça dépend de ce qu'il remplit).
    Compte gratuit : rappelle que l'essai couvre exactement ce délai. */
 export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate, demoAthlete = false }: { perspective?: Perspective; free?: boolean; onActivate?: () => void; /** Sportif de démo du coach (2026-10-01) : ses données sont un exemple, quel que soit leur volume. */ demoAthlete?: boolean }) {
   const coach = perspective === "coach";
@@ -46,10 +46,10 @@ export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onA
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#7dd3fc" }}>🔎 Exemple</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
         {demoAthlete
-          ? "Sportif de démo : ces analyses sont un exemple. Celles de tes vrais sportifs s'afficheront ici après ~2 semaines de check-ins et de séances."
+          ? "Sportif de démo : ces analyses sont un exemple. Celles de tes vrais sportifs s'afficheront ici après ~1 semaine de check-ins et de séances."
           : coach
-          ? "Ces analyses sont un exemple. Les siennes arrivent après ~2 semaines de check-ins et de séances."
-          : "Ces analyses sont un exemple. Les tiennes arrivent après ~2 semaines de check-ins et de séances."}
+          ? "Ces analyses sont un exemple. Ses analyses arrivent après ~1 semaine de check-ins et de séances."
+          : "Ces analyses sont un exemple. Tes analyses arrivent après ~1 semaine de check-ins et de séances."}
       </div>
       {free && onActivate && !demoAthlete && (
         <button onClick={onActivate} style={{ justifySelf: "start", border: "none", cursor: "pointer", color: "#fff", fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 14px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}>

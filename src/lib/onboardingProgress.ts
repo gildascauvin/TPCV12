@@ -7,7 +7,7 @@ import { useEffect, useSyncExternalStore } from "react";
    Rafraîchi au montage, au retour sur l'onglet et sur l'événement ONBOARDING_REFRESH (posé après
    chaque action qui peut cocher une étape). Cache module : une page = un seul fetch. */
 
-export type OnboardingStepKey = "form" | "build" | "adjust" | "unlock" | "invite";
+export type OnboardingStepKey = "account" | "form" | "build" | "adjust" | "unlock" | "invite";
 export interface OnboardingStep { key: OnboardingStepKey; label: string; done: boolean }
 export interface OnboardingProgress { userId?: string; role: "athlete" | "coach"; steps: OnboardingStep[]; complete: boolean }
 

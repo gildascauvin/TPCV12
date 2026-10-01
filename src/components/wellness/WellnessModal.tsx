@@ -8,6 +8,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import WellnessRing from "@/components/wellness/WellnessRing";
+import type { PlannedIntensity } from "@/lib/plannedIntensity";
 
 const BEDTIME_OPTIONS = [
   { value: "before22", label: "Avant 22h" },
@@ -39,6 +40,13 @@ const POSITIVE_BEHAVIORS = [
 
 const WQ_TOTAL = 5;
 
+const PLAN_OPTIONS: { key: PlannedIntensity; emoji: string; label: string; sub: string }[] = [
+  { key: "rest", emoji: "🛌", label: "Repos", sub: "Pas d'entraînement aujourd'hui" },
+  { key: "easy", emoji: "🚶", label: "Léger", sub: "Marche, mobilité, footing tranquille" },
+  { key: "mod", emoji: "🏃", label: "Modéré", sub: "Une séance classique" },
+  { key: "hard", emoji: "🔥", label: "Dur", sub: "Séance intense, compétition" },
+];
+
 interface Props {
   date: string;
   onSave: (data: {
@@ -50,7 +58,10 @@ interface Props {
     bedtime: string;
     base_score: number;
     score: number;
+    plannedIntensity?: PlannedIntensity | null;
   }) => Promise<void>;
+  /* Pose d'abord "Qu'as-tu prévu aujourd'hui ?" (aucune séance au planning ce jour-là). */
+  askPlan?: boolean;
   onClose: () => void;
   /* Wizard onboarding (2026-09-03) : bande d'habillage (dots + eyebrow + titre + sous-titre)
      injectée au-dessus du header réel — absent = comportement inchangé (usage in-app). */
@@ -71,10 +82,14 @@ interface Props {
   wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
+  const [plannedIntensity, setPlannedIntensity] = useState<PlannedIntensity | null>(null);
+  const off = askPlan ? 1 : 0;
+  const total = WQ_TOTAL + off;
+  const q = step - off; // index de la question de ressenti (−1 = séance prévue)
   const [sleep, setSleep] = useState(7);
   const [bedtime, setBedtime] = useState("23to00");
   const [stress, setStress] = useState(5);
@@ -116,12 +131,12 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   async function handleSave() {
     setSaving(true);
     const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
-    await onSave({ sleep, stress, recovery, motivation, behaviors, bedtime, base_score, score });
+    await onSave({ sleep, stress, recovery, motivation, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
     setSaving(false);
   }
 
   function goNext() {
-    if (step < WQ_TOTAL - 1) setStep((s) => s + 1);
+    if (step < total - 1) setStep((s) => s + 1);
     else handleSave();
   }
   function goBack() {
@@ -249,18 +264,45 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               💓 Wellness du jour
             </div>
           </div>
-          <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {WQ_TOTAL}</div>
+          <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {total}</div>
         </div>
 
         {/* Progress dots */}
         <div style={{ display: "flex", gap: 3, marginBottom: 24 }}>
-          {Array.from({ length: WQ_TOTAL }).map((_, i) => (
+          {Array.from({ length: total }).map((_, i) => (
             <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? "#d44000" : "rgba(0,0,0,0.10)", transition: "background 0.3s" }} />
           ))}
         </div>
 
+        {/* Séance prévue (askPlan) : clic = avance direct, aucune valeur présélectionnée. */}
+        {q === -1 && (
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+              Qu&apos;as-tu prévu aujourd&apos;hui ?
+            </div>
+            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
+              Rien n&apos;est encore au planning. On cale ta séance sur ta forme.
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {PLAN_OPTIONS.map(o => (
+                <button
+                  key={o.key}
+                  onClick={() => { setPlannedIntensity(o.key); setStep(s => s + 1); }}
+                  style={{ display: "flex", alignItems: "center", gap: 14, textAlign: "left", padding: "14px 16px", borderRadius: 16, cursor: "pointer", fontFamily: "inherit", color: "#172018", background: plannedIntensity === o.key ? "rgba(212,64,0,.06)" : "#f7f8f9", border: plannedIntensity === o.key ? "1.5px solid #d44000" : "1.5px solid transparent" }}
+                >
+                  <span style={{ fontSize: 24, width: 30, textAlign: "center" }}>{o.emoji}</span>
+                  <span style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 16, fontWeight: 800 }}>{o.label}</span>
+                    <span style={{ fontSize: 13, color: "#7b7f82", marginTop: 2 }}>{o.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Step 0: Sleep + Bedtime */}
-        {step === 0 && (
+        {q === 0 && (
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               😴 Comment as-tu dormi ?
@@ -298,7 +340,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 1: Stress */}
-        {step === 1 && (
+        {q === 1 && (
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               🧠 Niveau de stress mental
@@ -321,7 +363,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 2: Physical recovery */}
-        {step === 2 && (
+        {q === 2 && (
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               💪 État physique aujourd'hui
@@ -344,7 +386,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 3: Behaviors */}
-        {step === 3 && (
+        {q === 3 && (
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               🔍 Comportements d'hier
@@ -406,7 +448,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 4: Motivation */}
-        {step === 4 && (
+        {q === 4 && (
           <div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               ⚡ As-tu envie de t'entraîner ?
@@ -449,10 +491,10 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           )}
           <button
             onClick={goNext}
-            disabled={saving}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)" }}
+            disabled={saving || (q === -1 && !plannedIntensity)}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: q === -1 && !plannedIntensity ? 0.45 : 1 }}
           >
-            {saving ? "..." : step === WQ_TOTAL - 1 ? "Valider ✓" : "Suivant →"}
+            {saving ? "..." : step === total - 1 ? "Valider ✓" : "Suivant →"}
           </button>
         </div>
       </div>

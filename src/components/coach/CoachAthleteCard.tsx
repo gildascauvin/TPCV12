@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
@@ -15,6 +15,7 @@ import { parseAndApply } from "@/lib/loadAdjust";
 import type { AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
+import { demoConseilsData } from "@/lib/demoAnalytics";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
   type WellnessBaselineResult, type Perspective as BaselinePerspective,
@@ -291,6 +292,21 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     perspective,
     subject: selfView ? undefined : firstName,
   });
+  /* Phase d'exemple (2026-10-01) : même règle que /today et les onglets Charge/Récup. Sans assez
+     d'historique pour ce sportif, la phase de l'exemple, en clair et étiquetée. */
+  const exampleDate = todaySessions[0]?.date ?? new Date().toISOString().slice(0, 10);
+  const examplePhase = useMemo(() => {
+    if (!decision.phase?.insufficient) return null;
+    const d = demoConseilsData(exampleDate, perspective);
+    if (!d.trendText) return null;
+    return {
+      title: d.trendAction, text: d.trendText, lockedText: null,
+      severity: (d.trendEmoji === "🔴" ? "alert" : d.trendEmoji === "🟡" ? "watch" : "good") as "alert" | "watch" | "good",
+    };
+  }, [decision.phase?.insufficient, exampleDate, perspective]);
+  const phaseEl = examplePhase ? <PhaseLine phase={examplePhase} example coach={!selfView} /> : decision.phase ? <PhaseLine phase={decision.phase} /> : null;
+  // Exemple en clair même quand la carte est floutée (gratuit) : ce n'est pas une sortie.
+  const phaseInside = examplePhase && locked ? null : phaseEl;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
   /* Nœud des CTA d'ajustement dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
@@ -310,7 +326,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      au-dessus, quel que soit le fond sombre derrière (dashboard coach ET aperçus onboarding). */
   return (
     <div data-tour={tourId} style={{
-      position: "relative", overflow: "hidden",
+      position: "relative", overflow: "hidden", minWidth: 0,
       background: "rgba(255,255,255,.055)",
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
       borderRadius: 26, padding: 18,
@@ -435,11 +451,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */
             <div style={{ display: "grid", gap: 12 }}>
               <div ref={setActionsSlot} className="autoreg-slot" />
-              {decision.phase && <PhaseLine phase={decision.phase} />}
+              {phaseInside}
             </div>
           ) : (
             <div style={{ display: "grid", gap: 10, justifyItems: decision.phase ? "center" : undefined }}>
-            {decision.phase && <PhaseLine phase={decision.phase} />}
+            {phaseInside}
             <button
               data-tour={tourId ? "decider-btn" : undefined}
               onClick={onDecide}
@@ -462,6 +478,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       </div>
 
       </LockedBlur>
+      {examplePhase && locked && <div style={{ marginTop: 12 }}>{phaseEl}</div>}
 
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct

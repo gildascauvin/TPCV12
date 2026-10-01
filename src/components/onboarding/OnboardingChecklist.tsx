@@ -66,6 +66,7 @@ export default function OnboardingChecklist() {
     setOpen(false);
     const go = (path: string) => router.push(path);
     const key: OnboardingStepKey = step.key;
+    if (key === "account") return;
     if (key === "form") go("/today?checkin=1");
     else if (key === "build") window.dispatchEvent(new Event(OPEN_QUICKADD));
     else if (key === "adjust") go(role === "coach" ? "/coach?today=1" : "/today?today=1");

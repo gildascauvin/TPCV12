@@ -141,8 +141,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
     : { title: coachP ? "Son analyse de récupération est prête" : "Ton analyse de récupération est prête",
         sub: coachP ? "Elle croise son ressenti, sa forme et ses comportements." : "Elle croise ton ressenti, ta forme et tes comportements." };
   const exampleText = perspective === "coach"
-    ? "Les siennes arrivent après ~2 semaines de check-ins et de séances."
-    : "Les tiennes arrivent après ~2 semaines de check-ins et de séances.";
+    ? "Ses analyses arrivent après ~1 semaine de check-ins et de séances."
+    : "Tes analyses arrivent après ~1 semaine de check-ins et de séances.";
   const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
     const isOpen = open === key;
     return (
@@ -210,6 +210,18 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         textAlign: "center", marginBottom: 16, gap: 12,
       }}>
         {agg && <AggregateGauge pos={agg.pos} band={agg.band} bands={AGG_BANDS[group]} />}
+        {/* Analyses avant 2 semaines (2026-10-01) : on dit qu'elles sont partielles plutôt que
+            d'attendre ou de montrer l'exemple. */}
+        {!example && group === "recup" && lastB?.provisional && (
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
+            Norme provisoire · {lastB.historyDays}/12 check-ins
+          </div>
+        )}
+        {!example && group === "charge" && data.loadInfo.label === "HISTORIQUE INSUFFISANT" && (
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
+            Charge habituelle disponible après 14 jours
+          </div>
+        )}
         {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
             légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
             plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}

@@ -31,6 +31,16 @@ export function dailyLoad(sessions: Pick<Session, "rpe" | "duration" | "done">[]
 
 export type LoadPoint = { date: string; load: number };
 
+/* Charge PARTIELLE (2026-10-01) : la charge de la semaine, la monotonie et la contrainte se lisent
+   dès 7 jours (fenêtre de Foster) ; seule la comparaison à l'habituel (ACWR) attend 14 jours.
+   Vrai si la 1re séance remonte à au moins 7 jours et qu'au moins 2 jours chargés tombent dans les
+   7 derniers. `series` : charge jour par jour, se terminant au jour de référence. */
+export function partialChargeReady(series: LoadPoint[]): boolean {
+  const first = series.findIndex(p => p.load > 0);
+  if (first < 0 || series.length - 1 - first < 6) return false;
+  return series.slice(-7).filter(p => p.load > 0).length >= 2;
+}
+
 export function rollingStats(series: LoadPoint[], windowDays: number): { mean: number; stdDev: number; sum: number } {
   const slice = series.slice(-windowDays);
   const vals = slice.map(p => p.load);

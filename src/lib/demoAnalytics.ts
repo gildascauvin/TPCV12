@@ -2,6 +2,7 @@ import { buildAthleteFixture } from "@/lib/sandboxFixtures";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 import type { MetricGroup } from "@/lib/metricCards";
 import type { Perspective } from "@/lib/fatigueSignature";
+import { partialChargeReady } from "@/lib/trainingLoad";
 
 /* Données d'exemple pour les onglets Charge/Récupération (2026-09-30, freemium) : tant qu'un compte
    (gratuit OU payant) n'a pas assez d'historique, l'onglet montre un exemple en clair, bien étiqueté,
@@ -15,7 +16,7 @@ import type { Perspective } from "@/lib/fatigueSignature";
    check-in (bug du 2026-10-01). */
 export function analyticsReady(data: ConseilsData, group: MetricGroup): boolean {
   return group === "charge"
-    ? data.loadInfo.label !== "HISTORIQUE INSUFFISANT"
+    ? data.loadInfo.label !== "HISTORIQUE INSUFFISANT" || partialChargeReady(data.timeSeries)
     : !!data.wellnessBaseline?.hasEnoughHistory || data.wellnessBaselineSeries.some(b => !!b?.hasEnoughHistory);
 }
 

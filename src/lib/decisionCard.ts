@@ -1,5 +1,5 @@
 import type { Session } from "@/types";
-import { daysAgoStr, dailyLoad, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendDirection, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
+import { daysAgoStr, dailyLoad, partialChargeReady, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendDirection, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
 import { sigDimInfo, trendDimInfo, crossTrendInsight, type Severity as PhaseSeverity } from "@/lib/fatigueSignature";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -124,7 +124,11 @@ export interface DecisionCard {
      `title` = phase croisée (crossTrendInsight, 9 codes) ; null tant que le ressenti du jour manque.
      `lockedText` = phrase floutée derrière le CTA "Renseigner mon ressenti" (flou plutôt que
      cadenas) : jamais lue, elle donne seulement l'avant-goût. */
-  phase?: { title: string | null; text: string; severity: PhaseSeverity | null; lockedText: string | null };
+  phase?: { title: string | null; text: string; severity: PhaseSeverity | null; lockedText: string | null;
+    /* Historique trop court pour une vraie phase (2026-10-01) : ACWR non calculable, ou ressenti du jour
+       rempli mais pas encore de norme personnelle. L'appelant montre alors la phase de l'exemple, comme
+       les onglets Charge/Récup (demoAnalytics). */
+    insufficient?: boolean };
 }
 
 /* État de la journée vu par la carte (2026-09-29). `planned` = une séance reste à faire ;
@@ -334,13 +338,15 @@ function withPhase(
   const feel = feelOf(recoveryInfo.label);
   const tomorrow = day.tomorrowDifficulty;
 
-  const phase: NonNullable<DecisionCard["phase"]> = !params.wellnessFilledToday
+  const insufficient = (!acwrZone.hasEnoughHistory && !partialChargeReady(lastNLoadPoints(params.sessions, anchor, 42))) || (params.wellnessFilledToday && !params.baseline?.hasEnoughHistory);
+  const phaseCore: Omit<NonNullable<DecisionCard["phase"]>, "insufficient"> = !params.wellnessFilledToday
     ? { title: null, text: chargeHalfText(ff.fatigue, ff.fitness, voice, day.kind === "rest"), severity: null, lockedText: day.kind === "rest" ? restText(feel, relative, ff.fitness, tomorrow, voice) : cross.text }
     : day.kind === "rest"
     ? { title: cross.title, text: restText(feel, relative, ff.fitness, tomorrow, voice), severity: cross.severity, lockedText: null }
     : day.kind === "done"
     ? { title: cross.title, text: cross.text + afterText(feel, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow), severity: cross.severity, lockedText: null }
     : { title: cross.title, text: cross.text, severity: cross.severity, lockedText: null };
+  const phase: NonNullable<DecisionCard["phase"]> = { ...phaseCore, insufficient };
 
   const tomorrowLine = tomorrow === undefined ? ""
     : typeof tomorrow === "number" && tomorrow > 0 ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}.` : " Demain : repos.";
@@ -359,7 +365,9 @@ function withPhase(
       : feel === "good"
       ? `${Ta} récupération est ${relative ? `au-dessus de ${ta} norme` : "bonne"} : le repos consolide.`
       : `${Ta} récupération est ${relative ? `dans ${ta} norme` : "correcte"}.`;
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${tomorrowLine}`, phase };
+    // Repos déclaré ou subi (2026-10-01) : une piste douce, jamais imposée.
+    const restNudge = params.wellnessFilledToday ? v(voice, " Une marche de 20 à 30 min ou 10 min d'étirements aident à récupérer.", " Une marche ou des étirements l'aideraient à récupérer.") : "";
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${tomorrowLine}`, phase };
   }
   if (day.kind === "done") {
     const gap = day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null;

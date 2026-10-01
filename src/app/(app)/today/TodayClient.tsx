@@ -49,6 +49,7 @@ import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
+import { PLANNED_RPE, PLANNED_LABEL, type PlannedIntensity } from "@/lib/plannedIntensity";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -540,6 +541,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       ? demoConseilsData(selectedDate) : null,
     [analyticsData, sandboxMode, selectedDate],
   );
+  /* Phase d'exemple (2026-10-01) : même condition que les onglets Charge/Récup. Sans assez
+     d'historique, la vraie phase tombe sur un neutre sans rien derrière ; on montre celle de
+     l'exemple, en clair (jamais floutée, même jour 2+ en gratuit) et étiquetée. */
+  const examplePhase: NonNullable<typeof decision.phase> | null =
+    analyticsDemo && decision.phase && analyticsDemo.trendText
+      ? {
+          title: analyticsDemo.trendAction,
+          text: analyticsDemo.trendText,
+          severity: analyticsDemo.trendEmoji === "🔴" ? "alert" : analyticsDemo.trendEmoji === "🟡" ? "watch" : "good",
+          lockedText: null,
+        }
+      : null;
   /* Jauge de décision — 3e itération (2026-09-29, POC charge-variantes.html) : l'action SORT de la
      carte séance et passe EN TÊTE de l'onglet Aujourd'hui, au-dessus de l'encart insight. C'est la
      décision du jour, pas une propriété de la carte séance ; la carte séance qui suit n'a donc plus
@@ -620,28 +633,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     setWellness(w ?? null);
   }
 
-  const saveWellness = useCallback(async (data: {
-    sleep: number; stress: number; recovery: number; motivation: number;
-    behaviors: string[]; bedtime: string; base_score: number; score: number;
-  }) => {
-    notifyOnboardingProgressSoon();
-    // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
-    const payload = await withDeviceScore(supabase, userId, selectedDate, data);
-    const { data: saved } = await supabase
-      .from("wellness_daily")
-      .upsert({ user_id: userId, date: selectedDate, ...payload }, { onConflict: "user_id,date" })
-      .select().single();
-    if (saved) {
-      setWellness(saved as WellnessDaily);
-    }
-    setShowWellness(false);
-    if (pendingCompleteSession) {
-      const pending = pendingCompleteSession;
-      setPendingCompleteSession(null);
-      setCompleting(pending);
-    }
-    router.refresh();
-  }, [supabase, userId, selectedDate, router, pendingCompleteSession]);
 
   function handleTerminer(session: Session) {
     if (!wellnessFilledToday) {
@@ -669,6 +660,39 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
     return saved ? { id: saved.id } : undefined;
   }, [supabase, userId]);
+
+  const saveWellness = useCallback(async (data: {
+    sleep: number; stress: number; recovery: number; motivation: number;
+    behaviors: string[]; bedtime: string; base_score: number; score: number;
+    plannedIntensity?: PlannedIntensity | null;
+  }) => {
+    notifyOnboardingProgressSoon();
+    const { plannedIntensity, ...wellnessData } = data;
+    data = wellnessData;
+    // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
+    const payload = await withDeviceScore(supabase, userId, selectedDate, data);
+    const { data: saved } = await supabase
+      .from("wellness_daily")
+      .upsert({ user_id: userId, date: selectedDate, ...payload }, { onConflict: "user_id,date" })
+      .select().single();
+    if (saved) {
+      setWellness(saved as WellnessDaily);
+    }
+    /* Séance prévue déclarée au check-in (2026-10-01) : une vraie séance, comme une autre, pour que
+       la décision du jour existe même sans programme. Repos = rien. */
+    if (plannedIntensity && plannedIntensity !== "rest") {
+      try {
+        await saveSession({ name: `Séance du jour ${PLANNED_LABEL[plannedIntensity]}`, notes: "", date: selectedDate, target_difficulty: PLANNED_RPE[plannedIntensity], exercise_media: {} });
+      } catch (e) { console.error("[checkin] séance prévue non créée", e); }
+    }
+    setShowWellness(false);
+    if (pendingCompleteSession) {
+      const pending = pendingCompleteSession;
+      setPendingCompleteSession(null);
+      setCompleting(pending);
+    }
+    router.refresh();
+  }, [supabase, userId, selectedDate, router, pendingCompleteSession, saveSession]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     notifyOnboardingProgressSoon();
@@ -895,10 +919,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   centered
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
                   /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
-                  actions={(autoregTargetTop || decision.phase) ? (
+                  actions={(autoregTargetTop || (decision.phase && !(examplePhase && decisionLocked))) ? (
                     <div style={{ display: "grid", gap: 12 }}>
                       {autoregTargetTop && <div ref={setAutoregActionsSlot} className="autoreg-slot" />}
-                      {decision.phase && (
+                      {examplePhase && !decisionLocked ? (
+                        <PhaseLine phase={examplePhase} example />
+                      ) : decision.phase && !examplePhase && (
                         <PhaseLine
                           phase={decision.phase}
                           onUnlock={() => setShowWellness(true)}
@@ -910,6 +936,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 />
               </div>
               </LockedBlur>
+              {examplePhase && decisionLocked && (
+                /* Exemple en clair même quand la décision réelle est floutée : ce n'est pas une sortie. */
+                <div style={{ marginTop: 12 }}><PhaseLine phase={examplePhase} example /></div>
+              )}
               {decisionLocked && (
                 /* Le ressenti reste modifiable (c'est une entrée) ; aucun indice de la décision ne passe. */
                 <div style={{ textAlign: "center", marginTop: 10 }}>
@@ -1041,7 +1071,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       {/* Modals — ouverture et enregistrement libres depuis le freemium (2026-09-30) : ce sont des
           entrées. gateInput() ne bloque plus que la sandbox (visiteur sans compte). */}
       {showWellness && (
-        <WellnessModal date={selectedDate} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
       )}
       {showAddSession && (
         <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />

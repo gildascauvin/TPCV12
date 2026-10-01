@@ -21,7 +21,6 @@ import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { decisionRingState } from "@/components/sessions/DecisionRing";
 import { aggregateFor } from "@/lib/metricCards";
-import { useFirstDecision } from "@/hooks/useFirstDecision";
 import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
 import { ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
@@ -99,20 +98,40 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   const [selectedDate, setSelectedDate] = useState(today);
   /* Freemium (2026-09-30) : programmation, séances et invitations libres (seule la sandbox garde sa
-     porte d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf, le jour de sa
-     1re décision, celle de son propre sportif démo ("Ta forme"). */
+     porte d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf la 1re décision de
+     CHAQUE sportif (2026-10-01, avant : seule celle du sportif démo) : en clair le jour de son 1er
+     affichage (coach_athletes.first_decision_on), floutée dès le lendemain. Chaque nouveau sportif
+     invité apporte donc sa propre démonstration de la décision. */
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
-  const isDemoSelf = (a: { user_id: string | null; invite_email: string | null }) => !a.user_id && !a.invite_email;
-  const selfCanDecide = useFirstDecision({
-    userId, isActive, initial: firstDecisionOn, today,
-    eligible: selectedDate === today && initialAthletes.some(isDemoSelf),
-    enabled: !sandboxMode,
-  });
-  const canDecideFor = (a: CoachAthlete) => sandboxMode || isActive || (isDemoSelf(a) && selfCanDecide);
+  const [athleteFirstDecision, setAthleteFirstDecision] = useState<Record<string, string | null>>(
+    () => Object.fromEntries(initialAthletes.map(a => [a.id, a.first_decision_on ?? null])),
+  );
+  const canDecideFor = (a: CoachAthlete) => {
+    if (sandboxMode || isActive) return true;
+    const first = athleteFirstDecision[a.id];
+    return !first || first === today;
+  };
   const coachFreeMode = !isActive && !sandboxMode;
   const unlock = () => setPaywallStep("priming");
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
+  /* Pose la 1re décision d'un sportif le jour où elle s'affiche vraiment (même règle que
+     useFirstDecision côté sportif) : aujourd'hui, ressenti du jour connu, séance à ajuster. */
+  useEffect(() => {
+    if (sandboxMode || isActive || selectedDate !== today) return;
+    const toMark = athletes.filter(a =>
+      !athleteFirstDecision[a.id]
+      && a.wellnessFilledToday !== false
+      && sessions.some(x => x.athlete_id === a.id && x.date === today && !x.done));
+    if (!toMark.length) return;
+    setAthleteFirstDecision(prev => ({ ...prev, ...Object.fromEntries(toMark.map(a => [a.id, today])) }));
+    toMark.forEach(a => {
+      posthog.capture("first_decision_shown", { surface: "coach", demo_athlete: !a.user_id && !a.invite_email });
+      supabase.from("coach_athletes").update({ first_decision_on: today }).eq("id", a.id)
+        .then(({ error }) => { if (error) console.error("[coach] first_decision_on update error:", error); });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [athletes, sessions, selectedDate, isActive]);
   const [wellnessBaselineHistory, setWellnessBaselineHistory] = useState<Record<string, WellnessDaily[]>>(initialWellnessBaselineHistory);
 
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
@@ -828,7 +847,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               {displayedPriority.length > 0 ? (
                 <div style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x mandatory", margin: "0 -16px", padding: "0 16px 4px", scrollbarWidth: "none" as const }}>
                   {displayedPriority.map((a, idx) => (
-                    <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
+                    <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", minWidth: 0, scrollSnapAlign: "start" }}>
                       {/* isReviewed toujours false ici : un sportif traité a quitté cette section. */}
                       <CoachCard showPhase athlete={a} sessions={sessions} isPriority={true}
                         isReviewed={false}
@@ -853,7 +872,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   {/* Carte d'invitation en fin de carrousel (onboarding in-app, 2026-10-01) — un
                      sportif invité arrive avec sa carte, prêt à recevoir un programme. */}
                   {!selectedAthleteId && (
-                    <div style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
+                    <div style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", minWidth: 0, scrollSnapAlign: "start" }}>
                       <button
                         onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes?quickadd=invite" : "/coach/athletes?quickadd=invite")}
                         style={{
@@ -889,7 +908,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>Plan cohérent</div>
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isLg ? "1fr 1fr 1fr" : isMd ? "1fr 1fr" : "1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isLg ? "repeat(3, minmax(0,1fr))" : isMd ? "repeat(2, minmax(0,1fr))" : "minmax(0,1fr)", gap: 10 }}>
                 {displayedStable.length > 0 ? displayedStable.map(a => (
                   <CoachCard showPhase key={a.id} athlete={a} sessions={sessions} isPriority={false}
                     isReviewed={false}
