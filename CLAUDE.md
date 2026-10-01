@@ -4609,3 +4609,22 @@ Puce `n/4` à gauche du sélecteur de date (CalendarHeader) + panneau. Données 
 Page Sportifs, sportif sans aucun test (`lastTests[a.id]` vide) : même exemple que /conseils (`TestsPanel example examplePerspective="coach"`), bouton "Ajouter son 1er test →". Jamais en sandbox.
 
 Migrations 026/027 appliquées en prod le 2026-10-01.
+
+## Analyses avant 2 semaines, check-in "séance prévue", 1re décision par sportif (2026-10-01)
+
+POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW (section "Check-in · séance prévue"). Commit `deb307d`.
+
+### Analyses dès ~1 semaine
+- **Norme de récup provisoire dès 5 check-ins** (`wellnessBaseline.ts`, `WELLNESS_BASELINE_PROVISIONAL_MIN_DAYS`) : entre 5 et 11 jours, moyenne et écart-type perso sont mélangés à une norme a priori (`shrinkStat`, poids perso = n/12, 100 % au 12e). A priori : composite 70 ± 8, dimensions sommeil 7 / stress 5 / état physique 6 / motivation 7, ± 1,25 (observé sur le seul vrai historique long en base). `hasEnoughHistory` passe donc à vrai dès 5 jours, nouveau champ `provisional` ; l'onglet Récup affiche « Norme provisoire · n/12 check-ins ». Effet connu : au début, la norme est tirée vers 70.
+- **Charge partielle dès 7 jours** (`partialChargeReady`, trainingLoad.ts) : 1re séance il y a ≥7 jours et ≥2 jours chargés sur les 7 derniers. `analyticsReady("charge")` l'accepte : l'onglet sort de l'exemple avec charge de la semaine, monotonie, contrainte. L'ACWR et la jauge agrégée attendent toujours 14 jours (« Charge habituelle disponible après 14 jours »).
+- **Phase d'exemple** : tant que l'historique manque (même seuils), la ligne Phase de /today et de Coach Control affiche la phase de l'exemple (`demoConseilsData`), en clair même quand la décision est floutée, avec la mention `ExampleNote` posée au milieu. `decisionCard.phase.insufficient` porte la condition côté coach. Texte des mentions : « Tes analyses arrivent après ~1 semaine de check-ins et de séances » (« Ses analyses » côté coach).
+
+### Check-in : "Qu'as-tu prévu aujourd'hui ?"
+- 1re question de `WellnessModal` (prop `askPlan`) quand aucune séance n'existe aujourd'hui, sur /today et le jour même seulement (pas sur /week). Repos / Léger / Modéré / Dur, clic = avance.
+- Léger/Modéré/Dur créent une vraie séance « Séance du jour légère/modérée/dure », RPE prévu 3/6/8 (`src/lib/plannedIntensity.ts`), sans mention d'origine. Repos ne crée rien ; la carte "Jour de repos" propose une marche ou des étirements.
+- Cette séance ne coche pas « Construis ton entraînement » (exclue par son nom dans `/api/onboarding/progress` ; si renommée, elle compte).
+
+### Coach
+- **1re décision en clair par sportif** : `coach_athletes.first_decision_on` (migration 028, appliquée en prod), posée au 1er affichage d'une vraie décision pour ce sportif (CoachClient) ; CoachPlanningClient gate dessus.
+- Checklist coach : étape « Crée ton compte » toujours cochée ; « Invite tes sportifs » ne compte que les vrais sportifs (`user_id` ou `invite_email`), plus Thomas.
+- Cartes Coach Control : `minWidth:0` + grilles en `minmax(0,1fr)` (un nom de programme long élargissait la colonne).
