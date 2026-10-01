@@ -49,12 +49,18 @@ export default function NativeCheckout({
       if (!user) { setLoadError("Connecte-toi pour activer ton abonnement."); return; }
       setUserId(user.id);
       try {
-        const products = await getStoreProducts(user.id);
+        // Garde-fou : si le plugin natif est absent (ancien build) ou que l'App Store ne répond
+        // pas, l'appel peut ne jamais se terminer. On affiche alors un message, avec le détail.
+        const products = await Promise.race([
+          getStoreProducts(user.id),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai dépassé (15 s)")), 15000)),
+        ]);
         if (alive) setProduct(products[PRODUCT_IDS[mode][billing]]);
         if (alive && !products[PRODUCT_IDS[mode][billing]]) setLoadError("Offre indisponible sur l'App Store pour le moment.");
       } catch (e) {
         console.error("[iap] products", e);
-        if (alive) setLoadError("Impossible de charger l'offre App Store.");
+        const detail = e instanceof Error ? e.message : String(e);
+        if (alive) setLoadError(`Impossible de charger l'offre App Store (${detail}).`);
       }
     })();
     return () => { alive = false; };
