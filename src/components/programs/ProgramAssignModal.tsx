@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
@@ -84,7 +85,9 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
     const res = await fetch(`/api/programs/${programId}/assign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      /* Départ aujourd'hui → la 1re séance du programme tombe aujourd'hui (semaine type décalée,
+         écarts gardés), pour qu'il y ait une vraie séance à ajuster dès le jour même. */
+      body: JSON.stringify({ ...body, align_first_session: body.start_date === todayISO() }),
     });
     if (res.ok) return { ok: true };
     if (res.status === 409) return { ok: false, reason: "déjà assigné" };
@@ -105,7 +108,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
           return;
         }
         setSuccess(true);
-        setTimeout(() => { onAssigned(); onClose(); }, 1400);
+        notifyOnboardingProgressSoon(0); setTimeout(() => { onAssigned(); onClose(); }, 1400);
         return;
       }
 
@@ -121,7 +124,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
 
       if (failed.length === 0) {
         setSuccess(true);
-        setTimeout(() => { onAssigned(); onClose(); }, 1400);
+        notifyOnboardingProgressSoon(0); setTimeout(() => { onAssigned(); onClose(); }, 1400);
       } else {
         onAssigned(); // rafraîchit la liste — les réussites restent acquises même si certaines ont échoué
         const failText = failed.map(f => `${f.name} (${f.reason})`).join(", ");

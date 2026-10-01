@@ -3,13 +3,17 @@ export const dynamic = "force-dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { pickRelevantAssignment, type AthleteActiveProgram } from "@/lib/programAssignment";
 import CoachClient from "./CoachClient";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import { computeWeekOverWeekTrend, daysAgoStr, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
 import { wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
-import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily } from "@/types";
+import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDaily, Program } from "@/types";
+
+type AssignProgram = Program;
+type AssignRow = { athlete_id: string | null; user_id: string | null; start_date: string; programs: AssignProgram | AssignProgram[] | null };
 
 export default async function CoachPage() {
   const supabase = await createClient();
@@ -55,7 +59,7 @@ export default async function CoachPage() {
      seulement envers realUserIds/allAthleteIds/sinceHistory, déjà connus ici. Étaient dans 2
      Promise.all séparés l'un après l'autre (2 aller-retours en série) ; fusionnés en un seul
      (2026-09-18). */
-  const [liveWellnessRes, realSessionsRes, demoSessionsRes, historySessionsRes, historyWellnessRes] = await Promise.all([
+  const [liveWellnessRes, realSessionsRes, demoSessionsRes, historySessionsRes, historyWellnessRes, assignByAthleteRes, assignByUserRes] = await Promise.all([
     realUserIds.length
       ? admin.from("wellness_daily").select("user_id, score, base_score, behaviors").in("user_id", realUserIds).eq("date", today)
       : Promise.resolve({ data: [] as { user_id: string; score: number | null; base_score: number | null; behaviors: string[] | null }[] }),
@@ -71,7 +75,24 @@ export default async function CoachPage() {
     realUserIds.length
       ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceHistory)
       : Promise.resolve({ data: [] as WellnessDaily[] }),
+    // Bandeau programme des cartes Coach Control (onboarding in-app, 2026-10-01) : programmes
+    // actifs assignés par le coach (athlete_id) ou par le sportif lui-même (user_id).
+    allAthleteIds.length
+      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, programs(*)").eq("status", "active").in("athlete_id", allAthleteIds)
+      : Promise.resolve({ data: [] as AssignRow[] }),
+    realUserIds.length
+      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, programs(*)").eq("status", "active").in("user_id", realUserIds)
+      : Promise.resolve({ data: [] as AssignRow[] }),
   ]);
+
+  const allAssignments = [...((assignByAthleteRes.data ?? []) as unknown as AssignRow[]), ...((assignByUserRes.data ?? []) as unknown as AssignRow[])];
+  const activePrograms: Record<string, AthleteActiveProgram> = {};
+  for (const a of athletes) {
+    const mine = allAssignments.filter(x => x.athlete_id === a.id || (!!a.user_id && x.user_id === a.user_id));
+    const picked = pickRelevantAssignment(mine);
+    const p = picked ? (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) : null;
+    if (picked && p) activePrograms[a.id] = { program: p, start_date: picked.start_date };
+  }
 
   // base_score en priorité (jamais score, qui inclut le bonus/malus comportements) — voir
   // wellnessSignal() dans wellnessBaseline.ts.
@@ -143,6 +164,7 @@ export default async function CoachPage() {
       baselines={baselines}
       wellnessBaselineHistory={wellnessBaselineHistory}
       recentSessions={recentSessions}
+      activePrograms={activePrograms}
       firstDecisionOn={(profile as { first_decision_on?: string | null }).first_decision_on ?? null}
     />
   );

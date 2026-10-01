@@ -1,6 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
+import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AlertBox from "@/components/calendar/AlertBox";
@@ -169,7 +170,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
+export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
@@ -180,6 +181,10 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
   /* Masque le CTA "+ Ajouter une séance" en pied de colonne — réservé à l'aperçu mobile de
      DecisionStep.tsx (FrisePreviews.tsx, `ProgramPreview3Days`), qui n'a aucun geste réel à offrir. */
   hideAddSession?: boolean;
+  /* Jour d'aujourd'hui sans séance (2026-10-01) : activé par /week et /coach/planning, remplace
+     "Repos / libre" + "+ Ajouter une séance" par la carte "Aucune séance aujourd'hui" (EmptyDayCard). */
+  emptyToday?: boolean;
+  emptyPerspective?: "athlete" | "coach";
   recoveryAdvice?: string;
   /* Remplace tout l'encart (prioritaire sur recoveryAdvice) — réservé à la carte "aujourd'hui",
      reprend le style/logique réels de l'alerte wellness de TodayClient.tsx (sportif) ou de
@@ -200,6 +205,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
   const score = wellness?.score ?? null;
   const rule = loadRule(sessions, ctx);
   const tagColor = ruleTagColors[rule.cls];
+  const showEmptyToday = isToday && sessions.length === 0 && !!emptyToday && !hideAddSession;
 
   return (
     <div ref={columnRef} className="week-col-width" style={{
@@ -269,7 +275,10 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {sessions.length === 0 && (
+        {showEmptyToday && (
+          <EmptyDayCard inline perspective={emptyPerspective} onAddFree={() => onAddSession(dstr)} />
+        )}
+        {sessions.length === 0 && !showEmptyToday && (
           <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
             Repos / libre
           </div>
@@ -277,7 +286,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
         {sessions.map(s => renderSession ? renderSession(s) : (
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
-        {!hideAddSession && (
+        {!hideAddSession && !showEmptyToday && (
           <div
             data-tour="add-session-btn"
             onClick={e => { e.stopPropagation(); onAddSession(dstr); }}

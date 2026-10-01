@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { OPEN_PRIMING } from "@/lib/onboardingProgress";
 import type { SubscriptionStatus } from "@/types";
 
 export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = false) {
@@ -24,6 +25,15 @@ export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = fa
     if (isActive) return await fn();
     setPaywallStep("priming");
   }
+
+  /* Étape "Débloque…" de la checklist et priming après la 1re décision (onboarding in-app,
+     2026-10-01) : un événement global ouvre le priming de la page courante, quelle qu'elle soit. */
+  useEffect(() => {
+    if (isActive) return;
+    const open = () => setPaywallStep("priming");
+    window.addEventListener(OPEN_PRIMING, open);
+    return () => window.removeEventListener(OPEN_PRIMING, open);
+  }, [isActive]);
 
   function handleDismiss() {
     setPaywallStep("idle");

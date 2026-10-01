@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import posthog from "posthog-js";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -25,7 +26,9 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
-import EmptySessionState from "@/components/sessions/EmptySessionState";
+import EmptyDayCard from "@/components/sessions/EmptyDayCard";
+import ProgramBanner from "@/components/programs/ProgramBanner";
+import { programWeekIndex } from "@/lib/programAssignment";
 import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
@@ -39,9 +42,9 @@ import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { aggregateFor } from "@/lib/metricCards";
-import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments } from "@/types";
+import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments, Program } from "@/types";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { DemoAnalyticsBanner, DemoDataChip, ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
+import { ChargeSection, RecuperationSection } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
@@ -251,7 +254,7 @@ interface Props {
      plus bas) — hasActiveCoach = "ce coach paie", seule condition qui débloque un accès gratuit
      réel désormais (voir src/lib/access.ts, 2026-08-19). */
   hasActiveCoach?: boolean;
-  activeProgram?: { start_date: string; name: string } | null;
+  activeProgram?: { start_date: string; name: string; program?: Program } | null;
   /* Sandbox uniquement (2026-08-19) : quand true, remplace usePaywall par useSandboxGate (même
      interface, destination = signup au lieu de priming/paywall) et neutralise les effets qui
      rafraîchiraient les données via Supabase (le fixture initial couvre déjà toute la fenêtre
@@ -365,6 +368,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showWellness, setShowWellness] = useState(false);
+  const searchParams = useSearchParams();
+  /* Checklist d'onboarding : ?checkin=1 (Renseigne ta forme) ouvre le check-in, ?today=1 (Ajuste et
+     fais ta séance) ramène sur aujourd'hui — dans les deux cas, la page se recale sur aujourd'hui. */
+  useEffect(() => {
+    const checkin = searchParams.get("checkin") === "1";
+    if (!checkin && searchParams.get("today") !== "1") return;
+    const todayIso = format(new Date(), "yyyy-MM-dd");
+    if (selectedDate !== todayIso) handleDateChange(todayIso);
+    if (checkin) setShowWellness(true);
+    router.replace(sandboxMode ? "/sandbox/athlete" : "/today");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [showAddSession, setShowAddSession] = useState(false);
   const [addSessionInitialName, setAddSessionInitialName] = useState<string | undefined>(undefined);
   const [completing, setCompleting] = useState<Session | null>(null);
@@ -374,12 +389,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
 
-  const [showActivation, setShowActivation] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  useEffect(() => {
-    if (!localStorage.getItem(`activation_shown_athlete_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "athlete" }); }
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ref pour les closures realtime (évite staleness sur selectedDate)
   const selectedDateRef = useRef(selectedDate);
@@ -582,7 +593,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   })();
 
   useEffect(() => {
-    const key = `wellness_prompted_${initialDate}`;
+    // Par compte (2026-10-01) : une clé par date seule bloquait le check-in d'un nouveau compte
+    // ouvert dans le même onglet qu'un autre le même jour (tests, appareil partagé).
+    const key = `wellness_prompted_${userId}_${initialDate}`;
     // Freemium (2026-09-30) : le check-in est une entrée, il s'ouvre aussi pour un compte gratuit —
     // c'est lui qui déclenche la 1re décision en clair. Seule la sandbox reste exclue.
     if (
@@ -611,6 +624,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     sleep: number; stress: number; recovery: number; motivation: number;
     behaviors: string[]; bedtime: string; base_score: number; score: number;
   }) => {
+    notifyOnboardingProgressSoon();
     // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
     const payload = await withDeviceScore(supabase, userId, selectedDate, data);
     const { data: saved } = await supabase
@@ -642,6 +656,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      (1er autosave d'une séance neuve), `id` fourni = mettre à jour cette même ligne. Ne ferme jamais
      le drawer — c'est `onClose` qui s'en charge, séparément, avec le `router.refresh()`. */
   const saveSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, id?: string) => {
+    notifyOnboardingProgressSoon();
     if (id) {
       const { data: saved, error } = await supabase.from("sessions").update(data).eq("id", id).select().single();
       if (error) throw error;
@@ -656,6 +671,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [supabase, userId]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
+    notifyOnboardingProgressSoon();
     if (!completing) return;
     const { data: saved } = await supabase
       .from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
@@ -673,7 +689,21 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
   // surcharge), déclenchée depuis le bouton "⎘" de TodaySessionCard.
   const [duplicating, setDuplicating] = useState<Session | null>(null);
+  // "↻ Reconduire" du bandeau programme : même modale, date par défaut = même jour la semaine suivante.
+  const [duplicateDefaultDate, setDuplicateDefaultDate] = useState<string | undefined>(undefined);
+  // Libellé "Séances libres" par semaine (clé = lundi), même stockage que /week.
+  const [freeLabels, setFreeLabels] = useState<Record<string, string>>((profile.free_training_label as Record<string, string> | null) ?? {});
+  async function setFreeLabelForWeek(mondayStr: string, label: string) {
+    const value = label.trim();
+    const next = { ...freeLabels };
+    if (value) next[mondayStr] = value; else delete next[mondayStr];
+    setFreeLabels(next);
+    if (sandboxMode) return;
+    const { error } = await supabase.from("profiles").update({ free_training_label: next }).eq("user_id", userId);
+    if (error) console.error("[today] free_training_label update error:", error);
+  }
   const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
+    notifyOnboardingProgressSoon();
     if (!duplicating) return;
     const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
     const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
@@ -743,7 +773,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="athlete"
           onAction={() => requireSubscription(() => {})}
@@ -795,51 +827,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <>
         {/* ── Welcome handled by overlay modal below ── */}
 
-        {/* ── Bandeau d'activation (J0) ── */}
-        {showActivation && (() => {
-          const dismissActivation = () => { localStorage.setItem(`activation_shown_athlete_${userId}`, "1"); setShowActivation(false); };
-          const todaySession = allSessions.find(s => s.date === initialDate && !s.done);
-          const weekStart = format(startOfWeek(new Date(initialDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
-          const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
-          const hasWeekSession = allSessions.some(s => s.date >= weekStart && s.date <= weekEnd);
-          const programPending = !todaySession && !hasWeekSession && !!activeProgram
-            && new Date(activeProgram.start_date + "T12:00:00").getTime() > Date.now();
-          const programStartLabel = programPending
-            ? new Date(activeProgram!.start_date + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
-            : null;
-          return (
-            <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
-                Ton espace est prêt, à toi de jouer 💪
-              </div>
-              <div style={{ fontSize: 12, color: "#62686e", marginBottom: 14, lineHeight: 1.5 }}>
-                {todaySession ? `Séance du jour : ${todaySession.name}` : hasWeekSession ? "Tes séances de la semaine sont planifiées." : programPending ? `Ta semaine 1 démarre ${programStartLabel}.` : "Lance-toi dès maintenant."}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => {
-                    const ctaType = todaySession ? "start_session" : hasWeekSession ? "view_planning" : programPending ? "view_week1" : "add_session";
-                    posthog.capture("activation_banner_cta_clicked", { mode: "athlete", cta_type: ctaType });
-                    dismissActivation();
-                    if (todaySession) handleTerminer(todaySession);
-                    else if (hasWeekSession) router.push(sandboxMode ? "/sandbox/athlete/week" : "/week");
-                    else if (programPending) router.push(sandboxMode ? "/sandbox/athlete/week" : `/week?date=${activeProgram!.start_date}`);
-                    else { setAddSessionInitialName(undefined); setShowAddSession(true); }
-                  }}
-                  style={{ flex: 1, height: 42, borderRadius: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)" }}
-                >
-                  {todaySession ? "▶ Démarrer ma séance" : hasWeekSession ? "Voir mon planning →" : programPending ? "Voir ma semaine 1 →" : "+ Planifier une séance"}
-                </button>
-                <button
-                  onClick={dismissActivation}
-                  style={{ height: 42, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-                >
-                  Passer
-                </button>
-              </div>
-            </div>
-          );
-        })()}
 
         {/* ── Wellness + séance du jour — "plus de card" (2026-09-24, voir POC `poc-coach-context_4.html`,
             body.ath-dark .card{background:transparent;border:none;padding:0}) : cet en-tête ring/décision
@@ -936,9 +923,41 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             {/* ── Séance(s) du jour — imbriquée dans la même carte, TOUJOURS en dessous ── */}
             <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
               <div id="day-sessions-container">
-                {/* Empty state semaine entière */}
-                {weekSessions.length === 0 ? (
-                  activeProgram && activeProgram.start_date > initialDate ? (
+                {(() => {
+                  /* Bandeau programme (onboarding in-app, 2026-10-01) — le même ProgramBanner que le
+                     Planning, libellé "Séances libres" éditable par semaine. Programme actif →
+                     "Modifier" (Programmes, sur ce programme) ; sinon séance du jour → "Reconduire" ;
+                     sinon "Programmes →". */
+                  const ap = activeProgram;
+                  const prefix = sandboxMode ? "/sandbox/athlete" : "";
+                  const monday = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+                  return (
+                    <div>
+                      <ProgramBanner
+                        dark
+                        flush
+                        hideBars
+                        program={ap?.program ?? null}
+                        currentWeek={ap ? programWeekIndex(ap.start_date, selectedDate) : -1}
+                        onEdit={ap?.program ? () => router.push(`${prefix}/programmes?focus=${ap.program!.id}`) : undefined}
+                        reconduireLabel="Reconduire"
+                        onReconduire={!ap && todaySessions.length > 0 ? () => {
+                          const d = new Date(selectedDate + "T12:00:00"); d.setDate(d.getDate() + 7);
+                          setDuplicateDefaultDate(format(d, "yyyy-MM-dd"));
+                          setDuplicating(todaySessions[0]);
+                        } : undefined}
+                        onLibrary={() => router.push(`${prefix}/programmes`)}
+                        freeLabel={freeLabels[monday] ?? null}
+                        onEditFreeLabel={label => setFreeLabelForWeek(monday, label)}
+                      />
+                    </div>
+                  );
+                })()}
+                {/* Jour sans séance (onboarding in-app, 2026-10-01) : programme en attente (départ
+                   futur, rien cette semaine) → encart d'attente ; sinon carte blanche "Aucune séance
+                   aujourd'hui" avec Importer / Séance libre. Plus de séance démo. */}
+                {todaySessions.length === 0 && (
+                  weekSessions.length === 0 && activeProgram && activeProgram.start_date > initialDate ? (
                     <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
                       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#2f9e44", marginBottom: 4 }}>
                         Programme en attente
@@ -955,17 +974,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                       </div>
                     </div>
                   ) : (
-                    <EmptySessionState
-                      sport={profile.sport}
-                      label="Créer ma première séance"
-                      onAdd={(name) => { setAddSessionInitialName(name); setShowAddSession(true); }}
+                    <EmptyDayCard
+                      onAddFree={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
                     />
                   )
-                ) : todaySessions.length === 0 ? (
-                  <div style={{ border: "0.5px dashed rgba(255,255,255,0.22)", borderRadius: "var(--radius)", padding: 12, textAlign: "center", color: "rgba(255,255,255,0.5)", fontSize: 12, marginBottom: 9 }}>
-                    Repos ou séance libre
-                  </div>
-                ) : null}
+                )}
                 {todaySessions.map((s) => (
                   <TodaySessionCard
                     key={s.id}
@@ -983,7 +996,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                    (Planning) — "'ajouter une séance' doit être dans la carte de séance en bas,
                    comme le planning" (2026-09-24) : plus une boîte flottante séparée sous toute
                    la carte wellness, un continuateur de la même liste. */}
-                {weekSessions.length > 0 && (
+                {todaySessions.length > 0 && (
                   <div
                     data-tour="add-session-btn"
                     onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
@@ -1007,17 +1020,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         {homeTab !== "today" && (
           analyticsData ? (
             <>
-              {sandboxMode && <DemoDataChip />}
               {homeTab === "charge" && (analyticsDemo && !analyticsReady(analyticsData, "charge") ? <>
-                <DemoAnalyticsBanner free={historyLocked} onActivate={unlock} />
-                <ChargeSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+                <ChargeSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} example />
               </> : <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
                 {analyticsDemo && !analyticsReady(analyticsData, "recup") ? <>
-                  <DemoAnalyticsBanner free={historyLocked} onActivate={unlock} />
-                  <RecuperationSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} />
+                  <RecuperationSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} example />
                 </> : <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />}
               </>}
             </>
@@ -1053,7 +1063,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <DuplicateModal
           session={duplicating}
           onDuplicate={(date, _targetAthleteIds, pct) => gateInput(() => duplicateSession(date, pct))}
-          onClose={() => setDuplicating(null)}
+          defaultDate={duplicateDefaultDate}
+          onClose={() => { setDuplicating(null); setDuplicateDefaultDate(undefined); }}
         />
       )}
       {paywallStep === "priming" && (

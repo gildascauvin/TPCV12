@@ -8,8 +8,6 @@ import { createClient } from "@/lib/supabase/client";
 import { getSessionTemplates } from "@/lib/sessionTemplates";
 import { SPORT_CATEGORIES, guessSportChip } from "@/lib/sportCategories";
 import { buildCoachDemoSessions } from "@/lib/coachDemoSessions";
-import { computeAutoregSuggestion } from "@/lib/autoregulation";
-import { computeWellnessBaselineAt, wellnessSignal } from "@/lib/wellnessBaseline";
 import { DARK_CARD_BG } from "@/lib/theme";
 import type { ProgramTemplate, ProgramFocus, SessionTemplate, CoachAthlete } from "@/types";
 import Link from "next/link";
@@ -119,32 +117,16 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
         `resumeRoleApplied`, plus bas) gardent leur repli `decisionStepIdFor(role)` en filet de
         sécurité (jamais atteint tant que "account" est dans le path résolu, mais inoffensif à
         laisser — évite de rouvrir ce fichier une 5e fois pour un simple retrait défensif). */
-const ATHLETE_PATH: StepId[] = [
-  "value_intro",
-  "decision_2a",
-  "account",
-  "wizard_picker",
-  "wizard_library",
-  "wizard_criteria",
-  "wizard_builder",
-  "wizard_activate",
-  "wizard_assign",
-  "paywall_priming",
-  "paywall_form",
-];
-const COACH_PATH: StepId[] = [
-  "value_intro",
-  "decision_2b",
-  "account",
-  "wizard_picker",
-  "wizard_library",
-  "wizard_criteria",
-  "wizard_builder",
-  "wizard_activate",
-  "wizard_assign",
-  "paywall_priming",
-  "paywall_form",
-];
+/* Onboarding dans l'app (2026-10-01) : le parcours s'arrête au compte — le produit fait
+   l'onboarding (checklist dans le header, cartes "À faire"). Plus de wizard ni de paywall forcé :
+   le priming s'ouvre après la 1re décision prise. Les steps wizard_* restent dans le type et le
+   JSX (code mort assumé) le temps de valider le nouveau parcours. */
+const ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
+/* Onboarding dans l'app (2026-10-01) : le parcours s'arrête au compte — le produit fait
+   l'onboarding (checklist dans le header, cartes "À faire"). Plus de wizard ni de paywall forcé :
+   le priming s'ouvre après la 1re décision prise. Les steps wizard_* restent dans le type et le
+   JSX (code mort assumé) le temps de valider le nouveau parcours. */
+const COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
 
 /* DARK_STEPS ne contient plus que value_intro — les autres steps sombres (autoreg_score,
    celebration, concept_autoreg, wellness_reveal) ont disparu avec le nettoyage du code mort du
@@ -292,20 +274,8 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
    programme" cliqué). Un event onboarding_wizard_builder_viewed synthétique est émis quand même à
    ce moment-là (même principe déjà utilisé pour onboarding_role_viewed lors de la fusion
    role/value_intro du 2026-07-31) — il l'a techniquement vu, sur /p/[id], juste avant ce funnel. */
-const PROGRAM_ATHLETE_PATH: StepId[] = [
-  "value_intro",
-  "decision_2a",
-  "account",
-  "wizard_activate", "wizard_assign",
-  "paywall_priming", "paywall_form",
-];
-const PROGRAM_COACH_PATH: StepId[] = [
-  "value_intro",
-  "decision_2b",
-  "account",
-  "wizard_activate", "wizard_assign",
-  "paywall_priming", "paywall_form",
-];
+const PROGRAM_ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
+const PROGRAM_COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
 
 /* Sportif invité par un coach (coach_invite_code en localStorage, posé par /join/[code]) : le lien
    coach→sportif est confirmé au submit d'"account" via /api/invite/join (voir handleFinish()), donc
@@ -428,59 +398,6 @@ const GOAL_META: { label: string; icon: string; focus: ProgramFocus; lower: stri
 ];
 const GOAL_TO_FOCUS: Record<string, ProgramFocus> = Object.fromEntries(GOAL_META.map(g => [g.label, g.focus]));
 
-function buildWellnessBaseline(userId: string, level: Level) {
-  const bonus = level === "elite" ? 4 : 0;
-  const base  = Math.max(35, 74 + bonus);
-  const today = new Date().toISOString().split("T")[0];
-  return { user_id: userId, date: today, sleep: 7, stress: 5, recovery: 6, motivation: 7, base_score: base, score: base, behaviors: [] };
-}
-
-function toIso(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function buildAthleteHistory(userId: string, sport: string, level: Level, days: number[]) {
-  const templates = getSessionTemplates(sport);
-  const rpe: Record<Level, number> = { beginner: 5, intermediate: 7, elite: 8 };
-  const dow = days.length > 0 ? days : [1, 3, 5];
-  const targetRpe = rpe[level];
-  const today = new Date();
-  const todayDow = today.getDay();
-  const daysToCurrentMonday = todayDow === 0 ? -6 : 1 - todayDow;
-
-  const sessions: object[] = [];
-  for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
-    dow.forEach((d, i) => {
-      const offsetFromMonday = d === 0 ? 6 : d - 1;
-      const result = new Date(today);
-      result.setDate(today.getDate() + daysToCurrentMonday + offsetFromMonday + weekOffset * 7);
-      if (result >= today) return;
-      const sessionRpe = Math.max(1, Math.min(10, targetRpe + Math.round((Math.random() - 0.5) * 4)));
-      const duration = 45 + Math.round(Math.random() * 30);
-      const [name, notes] = templates[i % templates.length];
-      sessions.push({ user_id: userId, date: toIso(result), name, notes: `${notes}\nDifficulté cible : ${targetRpe}`, done: true, target_difficulty: targetRpe, rpe: sessionRpe, duration });
-    });
-  }
-
-  const wellnessRows: object[] = [];
-  const baseScore = level === "elite" ? 74 : level === "intermediate" ? 70 : 65;
-  for (let i = 28; i >= 1; i--) {
-    const d = new Date(today);
-    d.setDate(today.getDate() - i);
-    const sleep = Math.max(4, Math.min(10, 7 + Math.round((Math.random() - 0.5) * 4)));
-    const stress = Math.max(1, Math.min(10, 5 + Math.round((Math.random() - 0.5) * 4)));
-    const recovery = Math.max(3, Math.min(10, 6 + Math.round((Math.random() - 0.5) * 4)));
-    const motivation = Math.max(4, Math.min(10, 7 + Math.round((Math.random() - 0.5) * 4)));
-    const variation = Math.round((Math.random() - 0.5) * 16);
-    const score = Math.max(30, Math.min(95, baseScore + variation));
-    wellnessRows.push({ user_id: userId, date: toIso(d), sleep, stress, recovery, motivation, behaviors: [], bedtime: "23to00", base_score: score, score });
-  }
-
-  return { sessions, wellnessRows };
-}
 
 function GoogleIcon() {
   return (
@@ -705,6 +622,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     return r === "coach" ? COACH_PATH : ATHLETE_PATH;
   };
   const path         = getPath(role);
+  // Tout parcours sauf INVITE_ATHLETE_PATH (sportif invité : ni profil généré ni sportif démo).
+  const isFullPath   = path !== INVITE_ATHLETE_PATH;
   /* Filet de sécurité : si stepIdx dépasse jamais path.length (double-invocation d'un handler,
      changement de path non anticipé…), on ne rend jamais un currentStep undefined — écran
      blanc et irrécupérable sinon, confirmé en prod via des sessions PostHog qui s'arrêtaient
@@ -908,7 +827,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      INVITE_ATHLETE_PATH (aucun diagnostic sur ce chemin) — gardé par un simple `path.includes(...)`
      aux 3 points d'appel, qui reproduit exactement le gate de l'ancien effet (`currentStep ===
      "week_preview_2a"/"week_preview_2b"`, jamais atteint sur ce path).
-     Marqueur `path.includes("wizard_activate")` (pas "wizard_builder", 2026-09-18) : depuis que
+     Marqueur `isFullPath` (pas "wizard_builder", 2026-09-18) : depuis que
      wizard_builder est sauté pour le trafic claimé (voir PROGRAM_ATHLETE_PATH/PROGRAM_COACH_PATH),
      "wizard_builder" n'est plus un marqueur fiable de "n'importe quel path sauf INVITE_ATHLETE_PATH"
      — "wizard_activate", lui, reste présent dans les 4 autres paths (ATHLETE_PATH/COACH_PATH/
@@ -971,12 +890,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      pour ce `uid`), jamais sur un flag qui peut mentir. Ne bloque jamais un premier passage légitime
      (compte tout juste créé, aucune des deux tables n'a encore de ligne pour lui). */
   async function alreadyHasRealHistory(uid: string): Promise<boolean> {
-    const [{ data: w }, { data: s }, { data: p }] = await Promise.all([
+    const [{ data: w }, { data: s }, { data: p }, { data: ca }] = await Promise.all([
       supabase.from("wellness_daily").select("id").eq("user_id", uid).limit(1),
       supabase.from("sessions").select("id").eq("user_id", uid).limit(1),
       supabase.from("profiles").select("onboarding_done").eq("user_id", uid).maybeSingle(),
+      // Coach : pas de wellness/sessions à lui, mais son sportif démo prouve un 1er passage.
+      supabase.from("coach_athletes").select("id").eq("coach_id", uid).limit(1),
     ]);
-    return (w?.length ?? 0) > 0 || (s?.length ?? 0) > 0 || p?.onboarding_done === true;
+    return (w?.length ?? 0) > 0 || (s?.length ?? 0) > 0 || (ca?.length ?? 0) > 0 || p?.onboarding_done === true;
   }
 
   async function createAccount(uid: string) {
@@ -1009,23 +930,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
     }, { onConflict: "user_id" });
 
-    if (role === "athlete") {
-      const { sessions: pastSessions, wellnessRows } = buildAthleteHistory(uid, sportValue, level, trainingDays);
-      /* Programme (claimé ou non) : plus généré+assigné ici depuis le 2026-09-02 (retour à
-         l'architecture POC) — se construit désormais DANS le wizard post-signup (wizard_builder,
-         réel ProgramBuilderModal) puis s'assigne réellement à wizard_assign (réel
-         ProgramAssignModal). L'ancien pipeline pré-signup (pendingAthleteProgramOptsRef,
-         claimAndAssignProgram, generateAndAssignProgram) a été retiré du fichier (2026-09-05,
-         nettoyage du code mort) — plus aucun appelant depuis que ce chemin n'existe plus. */
-      const [sessionsRes, baselineRes, historyRes] = await Promise.all([
-        supabase.from("sessions").insert(pastSessions),
-        supabase.from("wellness_daily").upsert(buildWellnessBaseline(uid, level), { onConflict: "user_id,date" }),
-        supabase.from("wellness_daily").upsert(wellnessRows, { onConflict: "user_id,date" }),
-      ]);
-      if (sessionsRes.error) console.error("[completeProfile] sessions insert error:", sessionsRes.error);
-      if (baselineRes.error) console.error("[completeProfile] wellness_daily baseline upsert error:", baselineRes.error);
-      if (historyRes.error) console.error("[completeProfile] wellness_daily history upsert error:", historyRes.error);
-    }
+    /* Sportif : plus aucun historique fictif à l'inscription (2026-10-01). Les 4 semaines de ressenti
+       et de séances inventées entraient dans les vrais calculs (norme personnelle du score de forme,
+       charge chronique, comportements, phase) et étaient affichées comme les données du sportif. Un
+       compte neuf voit désormais l'exemple (bandeau "données d'exemple", demoAnalytics.ts) jusqu'à
+       avoir ses propres données ; le score se lit sur l'échelle fixe tant que sa norme n'existe pas. */
     if (role === "coach") {
       const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
       const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
@@ -1050,7 +959,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           .select("id").single();
         if (athlete?.id) {
           demoAthleteIds.push(athlete.id);
-          await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase));
+          /* Vrai programme assigné dès l'inscription (onboarding in-app, 2026-10-01) : Thomas a une
+             séance aujourd'hui (1re séance alignée sur aujourd'hui) et la 1re décision est immédiate.
+             Seul son historique passé reste synthétique (graphes Charge/Récupération). Repli sur les
+             séances démo si la génération échoue. */
+          await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase, true, "past"));
+          const assigned = await assignDemoProgram(athlete.id, sportValue);
+          if (!assigned) await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase, true, "upcoming"));
         }
       }
       /* Plus d'auto-génération+assignation synchrone ici depuis le 2026-09-02 (retour à
@@ -1175,54 +1090,38 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     return `${window.location.origin}/p/${id}`;
   }
 
-  /* Séance démo garantie le jour de l'inscription — sportif solo (2026-09-03, demande explicite de
-     Gildas). Problème visé : le geste Alléger/Surcharger réel ne se déclenche que s'il existe une
-     séance datée d'aujourd'hui avec un mismatch wellness/difficulté — or l'assignation à
-     wizard_assign est skippable ("Plus tard") et sa date de départ, bien que par défaut aujourd'hui,
-     reste éditable vers une date future. Si aucune vraie séance n'existe pour aujourd'hui à la fin du
-     wizard, on en crée une explicitement titrée "Séance démo" — même principe que côté coach
-     (buildCoachDemoSessions()/PLACEHOLDER_WELLNESS_SCORE, voir leur doc), pas un mécanisme différent.
-     Contenu : un exemple réel du sport choisi (getSessionTemplates(sport)). Difficulté : choisie
-     parmi 2 extrêmes (9 très dure / 2 très légère) en rejouant la VRAIE fonction
-     computeAutoregSuggestion contre le wellness réel du jour (déjà écrit à wizard_activate,
-     WellnessModal.onSave) — pas une paire fixe devinée comme côté coach (où le wellness est lui-même
-     fictif) : ici le wellness est réel, donc la calibration doit l'être aussi pour garantir le
-     déclenchement quel que soit le score entré. Repli neutre (7) si le wellness du jour est inconnu
-     (WellnessModal skippée via "Annuler") — la séance existe quand même, juste sans garantie de
-     mismatch ; ce gap-là (aha qui dépend aussi du wellness, pas seulement de la séance) reste
-     assumé, distinct de ce que ce chantier corrige.
-     MAJ 2026-09-27 : depuis que la reco se calcule sur l'écart à la norme personnelle et non plus
-     sur la difficulté prévue (voir computeAutoregSuggestion), cette boucle ne peut plus "trouver"
-     une difficulté qui déclenche quand le sportif est pile à sa norme ("Équilibré") — aucune ne
-     déclenche, par construction, et c'est voulu. Elle reste utile pour le seul cas où la difficulté
-     compte encore : une séance ≤3/10 ne se surcharge jamais (garde-fou périodisation), donc 9 est
-     le bon candidat pour un sportif frais. Conséquence assumée : un tout nouveau compte qui répond
-     neutralement au check-in n'aura pas de geste d'autorégulation à faire ce jour-là. */
-  async function ensureTodayDemoSession(uid: string) {
-    const todayIso = new Date().toISOString().split("T")[0];
-    const { data: existing } = await supabase.from("sessions").select("id").eq("user_id", uid).eq("date", todayIso).limit(1);
-    if (existing && existing.length > 0) return; // déjà une vraie séance aujourd'hui (assignation réelle à today)
-
-    const { data: history } = await supabase
-      .from("wellness_daily")
-      .select("date, sleep, stress, recovery, motivation, base_score, score")
-      .eq("user_id", uid)
-      .order("date", { ascending: true });
-    const todayRow = history?.find(r => r.date === todayIso) ?? null;
-    const priorHistory = (history ?? []).filter(r => r.date < todayIso);
-    const baseline = todayRow ? computeWellnessBaselineAt(priorHistory, todayRow) : null;
-    const wellness = todayRow ? wellnessSignal(todayRow) : null;
-
-    let difficulty = 7;
-    for (const candidate of [9, 2]) {
-      if (computeAutoregSuggestion(wellness, candidate, baseline)) { difficulty = candidate; break; }
+  /* Programme démo du sportif démo du coach (onboarding in-app, 2026-10-01) — remplace aussi la
+     séance démo sportif (ensureTodayDemoSession, retirée : plus de séance démo côté sportif, le jour
+     vide affiche la carte Importer / Séance libre). Génère un programme 4 semaines du sport du coach,
+     l'enregistre dans sa bibliothèque et l'assigne au sportif démo en démarrant aujourd'hui. */
+  async function assignDemoProgram(athleteId: string, sportValue: string): Promise<boolean> {
+    try {
+      const days = ["Lun", "Mer", "Ven", "Sam"];
+      const gen = await fetch("/api/programs/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sport: sportValue || "Autre", level: "intermediaire", days, duration: 4, focus: "mixte" }),
+      });
+      if (!gen.ok) return false;
+      const { template } = await gen.json();
+      const created = await fetch("/api/programs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Programme démo", sport: sportValue || null, level: "intermediaire", focus: "mixte", weeks_count: 4, sessions_per_week: days.length, template }),
+      });
+      if (!created.ok) return false;
+      const programId = (await created.json()).program?.id;
+      if (!programId) return false;
+      const todayIso = new Date().toISOString().split("T")[0];
+      const assign = await fetch(`/api/programs/${programId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athlete_id: athleteId, start_date: todayIso, align_first_session: true }),
+      });
+      return assign.ok;
+    } catch {
+      return false;
     }
-
-    const [, notes] = getSessionTemplates(sport || "Autre")[0];
-    const { error } = await supabase.from("sessions").insert({
-      user_id: uid, date: todayIso, name: "Séance démo", notes, done: false, target_difficulty: difficulty,
-    });
-    if (error) console.error("[ensureTodayDemoSession] insert error:", error);
   }
 
   /* Fin du wizard (2026-09-02) — remplace finishAthleteActivation()/finishCoachActivation() pour
@@ -1238,8 +1137,37 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      "free", accès complet à l'app gated). Seul `handlePaymentSuccess()` le pose désormais. */
   async function finishWizard() {
     const uid = userId || newUserId;
-    if (uid && role === "athlete") await ensureTodayDemoSession(uid);
     next();
+  }
+
+  /* Fin du parcours (onboarding in-app, 2026-10-01) : compte créé → on entre dans l'app.
+     Programme réclamé : enregistré dans la bibliothèque (section "Prêt à démarrer" de Programmes),
+     jamais assigné d'office. `onboarding_done` posé ici, plus après paiement (freemium : l'app est
+     utilisable sans payer, seules les sorties sont floutées). */
+  const enterAppGuardRef = useRef(false);
+  async function enterApp(uid: string) {
+    if (enterAppGuardRef.current) return;
+    enterAppGuardRef.current = true;
+    if (hasClaimedProgram && wizardTemplate && !wizardProgramId) {
+      try { await saveWizardProgram(wizardProgramName, wizardTemplate); }
+      catch (e) { console.error("[enterApp] claimed program save error:", e); }
+    }
+    /* Upsert, pas update : un compte peut n'avoir aucune ligne profiles (comptes orphelins dont
+       createAccount() a été refusé par alreadyHasRealHistory) — un update ne toucherait rien et le
+       middleware renverrait sur /register en boucle. */
+    const { error } = await supabase.from("profiles").upsert(
+      { user_id: uid, mode: role, onboarding_done: true, ...(name.trim() ? { name: name.trim() } : {}) },
+      { onConflict: "user_id" },
+    );
+    if (error) {
+      console.error("[enterApp] profiles upsert error:", error);
+      enterAppGuardRef.current = false;
+      setError("Impossible d'ouvrir ton espace. Réessaie.");
+      setSaving(false);
+      return;
+    }
+    posthog.capture("onboarding_entered_app", { role });
+    window.location.href = role === "coach" ? "/coach" : "/today";
   }
 
   async function handleFinish() {
@@ -1310,23 +1238,21 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           setSaving(false);
           return;
         }
-        if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
+        if (!profileCompleteGuardRef.current && isFullPath) {
           profileCompleteGuardRef.current = true;
           await completeProfile(uid);
         }
         supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
         }).catch(() => {});
-        setSaving(false);
-        next();
+        await enterApp(uid);
       } else {
         await createAccount(userId!);
-        if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
+        if (!profileCompleteGuardRef.current && isFullPath) {
           profileCompleteGuardRef.current = true;
           await completeProfile(userId!);
         }
-        setSaving(false);
-        next();
+        await enterApp(userId!);
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -1346,6 +1272,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   useEffect(() => {
     if (!inviteJoinFailed) return;
     const accountIdx = path.indexOf("account");
+    const uid = userId || newUserId;
+    if (uid && accountIdx === path.length - 1) {
+      // Compte déjà créé, "account" est la fin du parcours : profil complété puis app.
+      (async () => {
+        if (!profileCompleteGuardRef.current && isFullPath) {
+          profileCompleteGuardRef.current = true;
+          await completeProfile(uid);
+        }
+        await enterApp(uid);
+      })();
+      return;
+    }
     const decisionIdx = path.indexOf(decisionStepIdFor(role));
     setStepIdx(accountIdx >= 0 ? accountIdx + 1 : decisionIdx >= 0 ? decisionIdx + 1 : 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1477,7 +1415,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        s'exécute, alors que la closure de init() est figée au tout premier render, avant que
        hasClaimedProgram ait pu résoudre. userId est garanti non-null ici (googleInitDone ne passe
        à true qu'après la fin de init(), qui a déjà créé le compte). */
-    if (!profileCompleteGuardRef.current && userId && path.includes("wizard_activate")) {
+    if (userId && path.indexOf("account") === path.length - 1) {
+      // "account" est la fin du parcours : profil complété puis entrée directe dans l'app.
+      (async () => {
+        if (!profileCompleteGuardRef.current && isFullPath) {
+          profileCompleteGuardRef.current = true;
+          await completeProfile(userId);
+        }
+        await enterApp(userId);
+      })();
+      return;
+    }
+    if (!profileCompleteGuardRef.current && userId && isFullPath) {
       profileCompleteGuardRef.current = true;
       completeProfile(userId);
     }
@@ -1506,7 +1455,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   useEffect(() => {
     if (!resumeRoleApplied || !userId) return;
-    if (!profileCompleteGuardRef.current && path.includes("wizard_activate")) {
+    if (path.indexOf("account") === path.length - 1) {
+      // Compte déjà créé qui reprend (ex. ancien parcours avec wizard) : directement dans l'app.
+      (async () => {
+        if (!profileCompleteGuardRef.current && isFullPath) {
+          profileCompleteGuardRef.current = true;
+          await completeProfile(userId);
+        }
+        await enterApp(userId);
+      })();
+      return;
+    }
+    if (!profileCompleteGuardRef.current && isFullPath) {
       profileCompleteGuardRef.current = true;
       completeProfile(userId);
     }

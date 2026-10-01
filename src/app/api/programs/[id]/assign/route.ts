@@ -1,26 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ProgramTemplate, SessionTemplate } from "@/types";
-
-// Index calendaire réel (0=Dimanche...6=Samedi, comme Date.getDay()) — sert à calculer le
-// décalage d'un jour du template PAR RAPPORT AU VRAI JOUR DE LA SEMAINE de start_date, plutôt que
-// de supposer que start_date tombe toujours un lundi (bug corrigé le 2026-08-29 : depuis que la
-// date de départ est libre — cf. CelebrationScreen —, "Lun"=+0 assigné littéralement à start_date
-// produisait des séances aux mauvais jours calendaires dès que start_date n'était pas un lundi).
-const DOW_INDEX: Record<string, number> = {
-  Dim: 0, Lun: 1, Mar: 2, Mer: 3, Jeu: 4, Ven: 5, Sam: 6,
-};
+import type { ProgramTemplate } from "@/types";
+import { firstTrainingDay, scheduleSessions } from "@/lib/programSchedule";
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
-}
-
-function dayOffsetFromStart(day: string, startDate: string): number {
-  const startDow = new Date(`${startDate}T12:00:00`).getDay();
-  const targetDow = DOW_INDEX[day] ?? startDow;
-  return (targetDow - startDow + 7) % 7;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: "Non authentifié" }, { status: 401 });
 
-    const { athlete_id, user_id, start_date, wellnessAdjustment } = await req.json();
+    const { athlete_id, user_id, start_date, wellnessAdjustment, align_first_session } = await req.json();
     const admin = createAdminClient();
 
     const { data: program } = await admin
@@ -77,9 +63,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
+    /* "Démarrer aujourd'hui" (2026-10-01) : la 1re séance du programme tombe sur start_date, toute la
+       semaine type est décalée d'autant (écarts gardés). L'ancre est mémorisée pour que la mise à
+       jour des séances à venir retombe sur les mêmes dates (src/lib/programSchedule.ts). */
+    const template: ProgramTemplate = program.template;
+    const anchorDay = align_first_session ? firstTrainingDay(template) : null;
+
     const { data: assignment, error: assignError } = await admin
       .from("program_assignments")
-      .insert({ program_id: id, coach_id: user.id, athlete_id: athlete_id ?? null, user_id: user_id ?? null, start_date })
+      .insert({ program_id: id, coach_id: user.id, athlete_id: athlete_id ?? null, user_id: user_id ?? null, start_date, day_anchor: anchorDay })
       .select()
       .single();
 
@@ -88,36 +80,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json({ error: assignError.message }, { status: 500 });
     }
 
-    const template: ProgramTemplate = program.template;
     const sessionsToInsert: object[] = [];
     const coachSessionsToInsert: object[] = [];
 
-    template.weeks.forEach((week, weekIdx) => {
-      Object.entries(week).forEach(([day, daySessionsRaw]) => {
-        const daySessions = daySessionsRaw as SessionTemplate[];
-        const dayOffset = dayOffsetFromStart(day, start_date);
-        const date = addDays(start_date, weekIdx * 7 + dayOffset);
-
-        daySessions.forEach((s) => {
-          // Semaine 1 seulement : ajuste la difficulté à la récupération réelle déclarée à l'inscription
-          const target_difficulty = weekIdx === 0 && typeof wellnessAdjustment === "number"
-            ? Math.max(1, Math.min(10, s.target_difficulty + wellnessAdjustment))
-            : s.target_difficulty;
-          const base = {
-            date,
-            name: s.name,
-            notes: s.notes,
-            target_difficulty,
-            done: false,
-          };
-
-          if (user_id) {
-            sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
-          } else if (athlete_id) {
-            coachSessionsToInsert.push({ ...base, coach_id: user.id, athlete_id, program_assignment_id: assignment.id });
-          }
-        });
-      });
+    scheduleSessions(template, start_date, anchorDay).forEach(({ date, weekIdx, session: s }) => {
+      // Semaine 1 seulement : ajuste la difficulté à la récupération réelle déclarée à l'inscription
+      const target_difficulty = weekIdx === 0 && typeof wellnessAdjustment === "number"
+        ? Math.max(1, Math.min(10, s.target_difficulty + wellnessAdjustment))
+        : s.target_difficulty;
+      const base = { date, name: s.name, notes: s.notes, target_difficulty, done: false };
+      if (user_id) {
+        sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
+      } else if (athlete_id) {
+        coachSessionsToInsert.push({ ...base, coach_id: user.id, athlete_id, program_assignment_id: assignment.id });
+      }
     });
 
     if (sessionsToInsert.length > 0) {

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -395,6 +396,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
        (un seul id, la cible) et l'action explicite "Dupliquer (N) →" (les extras uniquement, jamais
        la cible déjà créée par ailleurs). Ne ferme jamais le drawer — `onClose` s'en charge. */
   const saveSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[], id?: string) => {
+    notifyOnboardingProgressSoon();
     if (id) {
       const primaryId = athleteIds[0];
       if (!primaryId) return;
@@ -479,6 +481,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   }, [athlete, sessions]);
 
   const duplicateSessionToDate = useCallback(async (newDate: string, targetAthleteIds?: string[], pct: number = 0) => {
+    notifyOnboardingProgressSoon();
     if (!duplicating || !athlete) return;
     const recipientIds = targetAthleteIds && targetAthleteIds.length > 0 ? targetAthleteIds : [athlete.id];
     const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (duplicating.notes ?? "");
@@ -736,7 +739,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="coach"
           onAction={() => requireSubscription(() => {})}
@@ -1164,6 +1169,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
+                emptyToday
+                emptyPerspective="coach"
                 onComplete={(s) => setCompleting(s)}
                 onEdit={(s) => setEditingSession(s)}
                 onDuplicate={(s) => setDuplicating(s)}

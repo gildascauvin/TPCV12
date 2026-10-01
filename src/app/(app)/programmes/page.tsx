@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import ProgramLibraryStandalone from "@/components/programs/ProgramLibraryStandalone";
 
-export default async function ProgrammesPage() {
+export default async function ProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string } }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -24,6 +24,8 @@ export default async function ProgrammesPage() {
       subscriptionStatus={profile?.subscription_status ?? "free"}
       hasActiveCoach={hasActiveCoach}
       backHref="/week"
+      focusProgramId={searchParams?.focus}
+      initialStep={searchParams?.step === "import" ? "import" : searchParams?.step === "new" ? "new" : undefined}
     />
   );
 }

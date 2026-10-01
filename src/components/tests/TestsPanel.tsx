@@ -9,6 +9,7 @@ import {
   type TestResultRow, type TestSubject, type MergedTest, type StrengthRepRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
+import { ExampleNote } from "@/components/conseils/MetricChart";
 import { guessSportChip } from "@/lib/sportCategories";
 import {
   computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
@@ -208,7 +209,8 @@ function targetRealUnitNumeric(insight: CardInsight): number | null {
    n'ont pas la même échelle physique que l'écart réel, un mélange des deux serait trompeur). Repli
    sur l'ancien remplissage linéaire 0→score% quand aucun repère théorique n'existe (classification
    graduée sans cible unique, ex. VO2max) — pas de centre à définir dans ce cas. */
-function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: CardInsight; deltaRealUnit: string | null; rawValueLabel: string | null }) {
+function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = false }: { insight: CardInsight; deltaRealUnit: string | null; rawValueLabel: string | null; /** Compte gratuit : valeur loggée lisible (entrée), badge/barre/cible floutés. */ analysisLocked?: boolean }) {
+  const lockBlur: React.CSSProperties = analysisLocked ? { filter: "blur(6px)", userSelect: "none", pointerEvents: "none" } : {};
   const c = STATUS_COLOR[insight.status!];
   const hasTarget = insight.refValue != null && insight.norms[1] !== insight.norms[0];
   const targetScore = hasTarget
@@ -227,11 +229,11 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
         {rawValueLabel != null ? (
           <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
         ) : <span />}
-        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26` }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26`, ...lockBlur }}>
           {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
         </span>
       </div>
-      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
+      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6, ...lockBlur }}>
         {targetScore != null ? (
           <>
             <div style={{ position: "absolute", left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
@@ -254,7 +256,7 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
         )}
       </div>
       {targetLabel != null && (
-        <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
+        <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)", ...lockBlur }}>
           cible vs {insight.compareLabel} : <b style={{ color: "#fff", fontWeight: 700 }}>{targetLabel}</b>
         </div>
       )}
@@ -268,7 +270,8 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel }: { insight: Card
    SprintAxisComparison (pas de CardInsight/score ici, juste actual/predicted/deltaPct) plutôt qu'une
    fausse CardInsight avec des champs inventés. `deltaPct` > 0 = plus LENT que prévu (voir
    sprintProfile.ts) — la barre va donc vers la DROITE (mieux) quand deltaPct est NÉGATIF. */
-function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hideLabel?: boolean }) {
+function SprintAxisGauge({ comp, hideLabel, analysisLocked = false }: { comp: SprintAxisComparison; hideLabel?: boolean; /** Compte gratuit : le temps mesuré reste lisible (entrée), badge/barre/attendu floutés. */ analysisLocked?: boolean }) {
+  const lockBlur: React.CSSProperties = analysisLocked ? { filter: "blur(6px)", userSelect: "none", pointerEvents: "none" } : {};
   const col = COMPARISON_LABEL_COLOR[comp.label];
   const better = -comp.deltaPct; // positif = plus rapide que prévu
   const dir = better >= 0 ? "right" : "left";
@@ -286,11 +289,11 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
           mieux") : même raisonnement, plus de position:absolute superposée à la ligne résultat/badge. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
-        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26` }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26`, ...lockBlur }}>
           {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
         </span>
       </div>
-      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
+      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6, ...lockBlur }}>
         <div style={{ position: "absolute", left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
         <div
           style={{
@@ -299,7 +302,7 @@ function SprintAxisGauge({ comp, hideLabel }: { comp: SprintAxisComparison; hide
           }}
         />
       </div>
-      <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
+      <div style={{ marginTop: 6, textAlign: "center", fontSize: 10.5, color: "rgba(255,255,255,.45)", ...lockBlur }}>
         attendu : <b style={{ color: "#fff", fontWeight: 700 }}>{comp.predicted.toFixed(2)}s</b>
       </div>
     </div>
@@ -494,9 +497,11 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
    `comparisons` est fourni (sinon carte "brute", sans interprétation — cas d'un test hors des
    normes connues, toujours affiché mais sans jugement forces/faiblesses). Toujours visible en
    entier, jamais un détail caché derrière une sélection préalable. */
-function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false }: {
+function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPair, readOnly, batteryInfo, onDeleteResult, metric, sscProfile, secondaryByDate, ftctInfo, repEntries, onAddRepEntry, onDeleteRepEntry, initialOpen, analysisLocked = false, exampleNote }: {
   /* Freemium : comparaisons, profil et courbe floutés ; l'historique brut et l'ajout restent libres. */
   analysisLocked?: boolean;
+  /** Tests d'exemple (2026-10-01) : mention centrée sur la courbe d'évolution. */
+  exampleNote?: string;
   title: string;
   unit: string;
   results: TestResultRow[];
@@ -720,9 +725,16 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
         </div>
       )}
 
+      </LockedBlur>
+
+      {/* Courbe et premier/dernier = tes propres résultats (des entrées) : toujours lisibles, même
+          en compte gratuit (2026-10-01). Seuls les repères et l'analyse au-dessus sont floutés. */}
       {results.length >= 2 ? (
         <div style={{ marginTop: 10 }}>
-          <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={70} />
+          <div style={{ position: "relative" }}>
+            <TestEvolutionChart points={results.map(r => ({ date: r.date, value: r.value }))} height={exampleNote ? 96 : 70} />
+            {exampleNote && <ExampleNote text={exampleNote} top="50%" />}
+          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
               Premier : <b style={{ color: "#fff" }}>{formatRawValue(metric, results[0].value, results[0].unit, results[0].date, secondaryByDate)}</b>
@@ -735,8 +747,6 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
       ) : results.length === 1 ? null : (
         <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: results.length || comparisons || sscProfile || batteryInfo ? 10 : 0 }}>Aucun résultat encore.</div>
       )}
-
-      </LockedBlur>
 
       {/* Historique affiché par défaut (2026-09, suite — retour de Gildas) : plus de 2e niveau de
           repli, la carte entière n'étant déjà montée qu'au dépli de la ligne (voir TestsPanel), un
@@ -1048,7 +1058,7 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
   };
 }
 
-export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null }: {
+export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false }: {
   ownerId: string;
   subject: TestSubject;
   linkedUserId?: string | null;
@@ -1071,6 +1081,8 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
      fetch réseau (qui échouerait ou retournerait vide silencieusement) et passe le panneau en lecture
      seule (pas de "+ Ajouter", rien à persister). Absente = comportement inchangé (fetch réel). */
   fixture?: { merged: MergedTest[]; results: TestResultRow[] };
+  /** Tests d'exemple (2026-10-01) : pastille "Exemple" sur chaque test et sur les recommandations, pas de bandeau en haut. */
+  example?: boolean;
   /* La page hôte porte déjà son propre fond DARK_CARD_BG plein-page (2026-09-25, /conseils sportif
      uniquement — jamais /coach/athletes, page claire) : la carte "Recommandations" ci-dessous perd
      alors son propre fond (transparent) pour ne pas empiler 2 surfaces dark distinctes ("pas censé
@@ -1735,9 +1747,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
               </div>
 
               <LockedBlur locked={!!lockedAnalysis} surface="tests_verdict" onUnlock={() => lockedAnalysis?.onUnlock()} title="Tes forces et tes axes de travail" sub="Calculés sur les ratios de tes tests." cta="Débloquer l'analyse" radius={12}>
+              <div style={{ position: "relative" }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 10 }}>{verdict.title}</div>
               <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
                 <b style={{ color: "#fff" }}>{verdict.emoji} {verdict.action} :</b> {verdict.sub}
+              </div>
+              {example && <ExampleNote text="Tes recommandations apparaissent dès ton 1er test." top="50%" />}
               </div>
               </LockedBlur>
             </>
@@ -1747,12 +1762,12 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
               donc elles restent ici plutôt que dans la liste ci-dessous — mais avec le même langage
               visuel que PrimaryGauge (centre = temps attendu, la barre part du centre vers le temps
               réel) plutôt qu'une ligne de texte brut. */}
-          <LockedBlur locked={!!lockedAnalysis} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
           {sprintAxisRows.length > 0 && (
             <div style={{ marginTop: 14 }}>
-              {sprintAxisRows.map(c => <SprintAxisGauge key={c.axis} comp={c} />)}
+              {sprintAxisRows.map(c => <SprintAxisGauge key={c.axis} comp={c} analysisLocked={!!lockedAnalysis} />)}
             </div>
           )}
+          <LockedBlur locked={!!lockedAnalysis} surface="tests_signals" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={12}>
           {/* Signal Force (2026-09) — pas de repère actual/predicted à jauger de la même façon (voir
               StrengthEnduranceComparison), reste en texte. */}
           {forceExtraWeak.length > 0 && (
@@ -1832,25 +1847,24 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                             badge de PrimaryGauge (les 3 alignées : résultat à gauche, cible au
                             centre, badge à droite) — jamais répétée sur sa propre ligne au-dessus.
                             Sinon (aucune comparaison), sa propre grande ligne reste la seule info. */}
+                        <div style={{ position: "relative" }}>
+                        {example && (row.sprintComparison || row.primaryComparison || row.rawValueLabel != null) && <ExampleNote compact top="50%" />}
                         {row.sprintComparison ? (
-                          <LockedBlur locked={!!lockedAnalysis} surface="tests_row" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={8}>
-                            <SprintAxisGauge comp={row.sprintComparison} hideLabel />
-                          </LockedBlur>
+                          <SprintAxisGauge comp={row.sprintComparison} hideLabel analysisLocked={!!lockedAnalysis} />
                         ) : row.primaryComparison ? (
-                          <LockedBlur locked={!!lockedAnalysis} surface="tests_row" onUnlock={() => lockedAnalysis?.onUnlock()} bare radius={8}>
-                            <PrimaryGauge insight={row.primaryComparison} deltaRealUnit={row.deltaRealUnit} rawValueLabel={row.rawValueLabel} />
-                          </LockedBlur>
+                          <PrimaryGauge insight={row.primaryComparison} deltaRealUnit={row.deltaRealUnit} rawValueLabel={row.rawValueLabel} analysisLocked={!!lockedAnalysis} />
                         ) : row.rawValueLabel != null ? (
                           <>
                             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, letterSpacing: "-0.01em", color: "#fff", marginTop: 4, lineHeight: 1.1 }}>{row.rawValueLabel}</div>
                             <div style={{ fontSize: 11, color: "rgba(255,255,255,.4)", marginTop: 2 }}>pas de repère</div>
                           </>
                         ) : null}
+                        </div>
                       </div>
                     </div>
                     {isExpanded && (
                       <div style={{ marginTop: 4, paddingLeft: 42 }}>
-                        <TestCard {...row.cardProps} initialOpen={autoAddKey === row.key} analysisLocked={!!lockedAnalysis} />
+                        <TestCard {...row.cardProps} initialOpen={autoAddKey === row.key} analysisLocked={!!lockedAnalysis} exampleNote={example ? "Tes propres tests remplacent cet exemple." : undefined} />
                       </div>
                     )}
                   </div>

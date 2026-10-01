@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import MetricChart from "@/components/conseils/MetricChart";
+import MetricChart, { ExampleNote } from "@/components/conseils/MetricChart";
 import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, DIMENSION_KEYS, type DimensionKey, type Perspective } from "@/lib/wellnessBaseline";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { displaySeverityOf, type DayPoint } from "@/lib/fatigueSignature";
@@ -69,7 +69,7 @@ export type ExtraIndexCard = {
   body: React.ReactNode;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -86,6 +86,9 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   extraCards?: ExtraIndexCard[];
   /* Freemium (2026-09-30) : voir `locked` plus bas. Absent = tout lisible. */
   lockedHistory?: { onUnlock: () => void } | null;
+  /* Données d'exemple (2026-10-01, Gildas : pas de bandeau en haut, le message sur chaque chart) :
+     pastille "Exemple" sur la jauge et sur chaque carte, phrase explicite au-dessus de chaque chart. */
+  example?: boolean;
 }) {
   const { isMd } = useBreakpoint();
   const [open, setOpen] = useState<string | null>(null);
@@ -131,6 +134,15 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const locked = !!lockedHistory;
   const blur: React.CSSProperties = locked ? { filter: "blur(6px)", userSelect: "none", pointerEvents: "none" } : {};
   const blurChart: React.CSSProperties = locked ? { filter: "blur(10px)", opacity: .6, userSelect: "none", pointerEvents: "none" } : {};
+  const coachP = perspective === "coach";
+  const lockedCopy = group === "charge"
+    ? { title: coachP ? "Son analyse de charge est prête" : "Ton analyse de charge est prête",
+        sub: coachP ? "Elle croise sa charge récente, sa charge chronique et la variété de ses séances." : "Elle croise ta charge récente, ta charge chronique et la variété de tes séances." }
+    : { title: coachP ? "Son analyse de récupération est prête" : "Ton analyse de récupération est prête",
+        sub: coachP ? "Elle croise son ressenti, sa forme et ses comportements." : "Elle croise ton ressenti, ta forme et tes comportements." };
+  const exampleText = perspective === "coach"
+    ? "Les siennes arrivent après ~2 semaines de check-ins et de séances."
+    : "Les tiennes arrivent après ~2 semaines de check-ins et de séances.";
   const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
     const isOpen = open === key;
     return (
@@ -164,7 +176,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4, ...blur }}>{c.impact}</span>}
           </span>
 
-          <span style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto", ...blur }}>
+          <span style={{ position: "relative", display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto", ...blur }}>
+            {example && !locked && <ExampleNote compact top="40%" />}
             <span style={{ width: 118 }}>{c.preview}</span>
             <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)", textAlign: "right" as const, letterSpacing: "0.01em" }}>
               {c.trend}
@@ -192,6 +205,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           `maxWidth` : au-delà d'une soixantaine de caractères par ligne un texte centré devient
           pénible à lire, la colonne est donc bornée même sur grand écran. */}
       <div style={{
+        position: "relative",
         display: "flex", flexDirection: "column", alignItems: "center",
         textAlign: "center", marginBottom: 16, gap: 12,
       }}>
@@ -199,14 +213,24 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
             légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
             plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}
-        <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", maxWidth: 460, ...blur }}>
-          {insight}
+        <div style={{ position: "relative", maxWidth: 460, minHeight: locked ? 120 : undefined, display: "flex", alignItems: "center" }}>
+          <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", ...blur }}>
+            {insight}
+          </div>
+          {/* Données d'exemple : la mention couvre l'insight, jamais la jauge et son score. */}
+          {example && !locked && <ExampleNote text={exampleText} top="50%" />}
+          {/* Freemium : accroche + action posées sur l'insight flouté, comme la décision et les
+              tests (2026-10-01) — le bouton seul ne disait pas ce qu'on débloque. */}
+          {locked && (
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center", padding: "0 8px" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.25 }}>{lockedCopy.title}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 300 }}>{lockedCopy.sub}</div>
+              <button onClick={() => lockedHistory?.onUnlock()} style={{ marginTop: 2, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.35)" }}>
+                Activer l'ajustement
+              </button>
+            </div>
+          )}
         </div>
-        {locked && (
-          <button onClick={() => lockedHistory?.onUnlock()} style={{ border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.35)" }}>
-            Activer l'ajustement
-          </button>
-        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 9 }}>
@@ -287,11 +311,17 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
                     weekLabels={days > 7} locked={locked} onUnlock={() => lockedHistory?.onUnlock()} height={200}
+                    exampleNote={example ? exampleText : undefined}
                   />
                             </>
           ));
         })}
-        {extraCards.map(c => renderCard(c.key, c, <div style={blurChart}>{c.body}</div>))}
+        {extraCards.map(c => renderCard(c.key, c, (
+          <div style={{ position: "relative" }}>
+            <div style={blurChart}>{c.body}</div>
+            {example && !locked && <ExampleNote text={exampleText} top="50%" />}
+          </div>
+        )))}
       </div>
     </div>
   );

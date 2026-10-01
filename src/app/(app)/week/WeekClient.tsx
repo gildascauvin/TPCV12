@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useRouter, useSearchParams } from "next/navigation";
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -345,6 +346,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   });
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
+    notifyOnboardingProgressSoon();
     if (!completing) return;
     const { data: saved } = await supabase.from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
     if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
@@ -356,6 +358,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
      (1er autosave d'une séance neuve), `id` fourni = mettre à jour cette même ligne. Ne ferme jamais
      le drawer — c'est `onClose` qui s'en charge, séparément, avec le `router.refresh()`. */
   const saveSession = useCallback(async (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, id?: string) => {
+    notifyOnboardingProgressSoon();
     if (id) {
       const { data: saved, error } = await supabase.from("sessions").update(data).eq("id", id).select().single();
       if (error) throw error;
@@ -432,6 +435,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
+    notifyOnboardingProgressSoon();
     if (!duplicating) return;
     const notes = duplicating.notes ? duplicating.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : duplicating.notes;
     const target_difficulty = adjustDifficulty(duplicating.target_difficulty ?? 6, pct);
@@ -452,6 +456,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     sleep: number; stress: number; recovery: number; motivation: number;
     behaviors: string[]; bedtime: string; base_score: number; score: number;
   }) => {
+    notifyOnboardingProgressSoon();
     const today = format(new Date(), "yyyy-MM-dd");
     const { data: saved } = await supabase.from("wellness_daily")
       .upsert({ user_id: userId, date: today, ...data }, { onConflict: "user_id,date" })
@@ -513,7 +518,9 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="athlete"
           onAction={() => requireSubscription(() => {})}
@@ -762,6 +769,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
+                emptyToday
                 onComplete={(s) => handleTerminer(s)}
                 onEdit={(s) => setEditing(s)}
                 onDuplicate={(s) => setDuplicating(s)}

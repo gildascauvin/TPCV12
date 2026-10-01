@@ -10,6 +10,7 @@ import { fr } from "date-fns/locale";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
+import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 export type ViewMode = "week" | "month";
 export type HeaderMode = "day" | "period" | "title";
@@ -425,6 +426,8 @@ export default function CalendarHeader({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, width: "100%" }}>
+          {/* Checklist d'onboarding (2026-10-01) : à gauche, jusqu'à ce que tout soit fait. */}
+          <div style={{ marginRight: "auto", display: "flex" }}><OnboardingChecklist /></div>
           {extraControls}
           {onProfileClick && (
             <button

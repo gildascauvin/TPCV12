@@ -29,7 +29,7 @@ function formatDateFr(dateStr: string) {
 
 const W = 400, PAD_L = 8, PAD_R = 10, PAD_TOP = 12, PAD_BOT = 22;
 
-export default function MetricChart({ spec, height, weekLabels, locked = false, onUnlock }: {
+export default function MetricChart({ spec, height, weekLabels, locked = false, onUnlock, exampleNote }: {
   spec: ChartSpec;
   height?: number;
   weekLabels?: boolean;
@@ -37,6 +37,9 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
      restent nets — avec une action par chart. Pas de survol ni de marqueurs en mode verrouillé. */
   locked?: boolean;
   onUnlock?: () => void;
+  /* Données d'exemple (2026-10-01) : mention centrée au milieu du chart, à la place du bouton du
+     mode flouté — la courbe reste nette. */
+  exampleNote?: string;
 }) {
   const H = height ?? 200;
   const [hover, setHover] = useState<number | null>(null);
@@ -179,6 +182,7 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
 
       {/* ── overlay HTML : texte et marqueurs, à taille fixe ── */}
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none" as const }}>
+        {!locked && exampleNote && <ExampleNote text={exampleNote} />}
         {locked && onUnlock && (
           <button
             onClick={e => { e.stopPropagation(); onUnlock(); }}
@@ -238,6 +242,32 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* Mention "Exemple" centrée sur un chart (2026-10-01) — même emplacement que l'action du mode
+   flouté. Réutilisée par les tests et la carte Comportements. */
+export function ExampleNote({ text, top = "44%", compact = false }: { text?: string; top?: string; compact?: boolean }) {
+  if (compact) {
+    /* Petits aperçus (cartes repliées, lignes de liste, jauges de tests) : une seule pastille. */
+    return (
+      <div style={{
+        position: "absolute", left: "50%", top, transform: "translate(-50%, -50%)", zIndex: 5, pointerEvents: "none",
+        fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+        color: "#7dd3fc", whiteSpace: "nowrap", border: "1px solid rgba(125,211,252,.35)", borderRadius: 999,
+        padding: "3px 8px", background: "rgba(7,10,13,.82)",
+      }}>🔎 Exemple</div>
+    );
+  }
+  return (
+    <div style={{
+      position: "absolute", left: "50%", top, transform: "translate(-50%, -50%)", zIndex: 5, pointerEvents: "none",
+      textAlign: "center", maxWidth: "86%", border: "1px solid rgba(125,211,252,.35)", borderRadius: 14,
+      padding: "8px 13px", background: "rgba(7,10,13,.78)", boxShadow: "0 8px 22px rgba(0,0,0,.35)",
+    }}>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#7dd3fc", textTransform: "uppercase" }}>🔎 Exemple</div>
+      {text && <div style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,.85)", lineHeight: 1.35, marginTop: 2 }}>{text}</div>}
     </div>
   );
 }

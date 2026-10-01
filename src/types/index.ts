@@ -18,6 +18,7 @@ export interface Profile {
   mode: UserMode;
   subscription_status: SubscriptionStatus;
   first_decision_on?: string | null; // freemium : jour de la 1re décision en clair (migration 025)
+  first_adjustment_at?: string | null; // onboarding in-app : 1re décision prise (migration 027)
   stripe_customer_id: string | null;
   onboarding_done: boolean;
   invite_code: string | null;

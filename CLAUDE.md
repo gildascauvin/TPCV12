@@ -4560,3 +4560,45 @@ POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW. Pricing inchangé (9 �
 
 ### Limites connues
 Filtres métriques de Coach Control ("Sommeil bas"…) révèlent qui est bas ; 1re décision par sportif côté coach (plutôt que la seule carte du coach) discutée, pas faite ; `ProgramBuilderModal` garde son code `weekLocked` mais plus aucun appelant ne passe `isActive=false` hors sandbox.
+
+## Onboarding dans l'app — checklist, plus de wizard (2026-10-01)
+
+POC : scratchpad `dispositif-eteint.html` (artifact v23). Remplace le wizard post-signup et le paywall de fin de parcours : **le produit fait l'onboarding**.
+
+### Parcours
+`value_intro → decision_2a/2b (AHA) → account → app` pour sportif, coach et programme claimé (`ATHLETE_PATH`/`COACH_PATH`/`PROGRAM_*_PATH`). `INVITE_ATHLETE_PATH` inchangé. Les steps `wizard_*`/`paywall_*` restent dans le type et le JSX (code mort assumé, à nettoyer une fois le parcours validé).
+- `enterApp(uid)` (OnboardingFlow.tsx) : programme claimé enregistré en bibliothèque (jamais assigné d'office), puis **upsert** `profiles` `{mode, onboarding_done: true}` et redirection `/today`/`/coach`. Upsert et non update : un compte orphelin sans ligne `profiles` (refusée par `alreadyHasRealHistory`) bouclait sur `/register` (cas réel `+liv`). Appelé par `handleFinish`, la continuation Google, la reprise `resumeRole` et l'échec d'invitation.
+- `alreadyHasRealHistory` compte aussi `coach_athletes` (un coach qui reprenait recréait un sportif démo).
+- **Sportif : plus aucune donnée fictive à l'inscription** (ni historique 28 j, ni ligne de ressenti placeholder du jour). Elles entraient dans les vrais calculs (norme du score, ACWR, comportements, phase). Un compte neuf voit l'exemple jusqu'à avoir ses données.
+- **Coach : Thomas (démo)** garde son historique passé synthétique, mais reçoit un vrai programme ("Programme démo", 4 semaines, `assignDemoProgram`) démarrant aujourd'hui → séance du jour et 1re décision immédiate. Repli sur les séances démo si la génération échoue (`buildCoachDemoSessions(..., parts)`).
+- Bannières d'activation J0 (sportif et coach) supprimées.
+
+### Checklist dans le header (`OnboardingChecklist.tsx`)
+Puce `n/4` à gauche du sélecteur de date (CalendarHeader) + panneau. Données : `GET /api/onboarding/progress` (dérivé des vraies données, rien coché à la main ; "depuis l'inscription" = date ≥ jour de création du profil). Cache client partagé `src/lib/onboardingProgress.ts` (`useOnboardingProgress`, `notifyOnboardingProgressSoon()` appelé par les handlers d'écriture, rafraîchi à chaque changement de page et au retour sur l'onglet). S'ouvre seule à l'arrivée (1×/session) et à chaque étape cochée ; disparaît une fois tout fait ; jamais en sandbox.
+- Sportif : Renseigne ta forme (ressenti avec `bedtime`) → `/today?checkin=1` ; Construis ton entraînement (séance ≥ inscription ou assignation active, pré-coché si invité par un coach) → ouvre le "+" (`OPEN_QUICKADD`) ; Ajuste et fais ta séance (séance faite) → `/today?today=1` ; Débloque tes performances (abonné ; masquée si le coach paie) → `OPEN_PRIMING`.
+- Coach : Invite tes sportifs (Thomas compte → démarre à 1/4) → invitation ; Construis leur entraînement (assignation dont le programme n'est pas "Programme démo") ; Ajuste leur séance (`profiles.first_adjustment_at`) → `/coach?today=1` ; Débloque leurs performances.
+- L'étape 4 est un CTA orange pleine largeur en bas du panneau. Plus aucun tag "À faire" dans l'app (essayés puis retirés).
+- `usePaywall` écoute `OPEN_PRIMING` ; `BottomNav` écoute `OPEN_QUICKADD`.
+- **Priming après la 1re décision** : `markFirstAdjustment()` (AutoregButtons, Appliquer ou Maintenir) pose `first_adjustment_at` une seule fois et ouvre le priming si non abonné (event `priming_after_first_decision`).
+- Bannière du haut (`UnsavedBanner`) retirée hors sandbox (y garde la bascule sportif/coach).
+
+### Jour sans séance, bandeau programme
+- `EmptyDayCard.tsx` : carte blanche "Aucune séance aujourd'hui" + "+ Séance libre" (Importer retiré) sur `/today`, carte du jour du Planning (`DayColumn emptyToday`) et Coach Control.
+- `/today` et cartes Coach Control : le **vrai `ProgramBanner`** (`flush`, `hideBars`) au-dessus de la séance, libellé "Séances libres" éditable par semaine (même stockage que le Planning). Bouton : programme actif → Modifier (`/programmes?focus=id`) ; sinon séance du jour → Reconduire (DuplicateModal, `defaultDate` = +7 j) ; sinon "Programmes →" (`onLibrary`). "Séances libres disponibles" et le niveau ("Intermédiaire") retirés de la bannière ; niveau retiré aussi des cartes de la page Programmes (gardé dans la bibliothèque de modèles).
+- Carte "Invite un sportif" en fin de carrousel Coach Control (si au moins un sportif "À décider").
+
+### Programmes
+- **Démarrer aujourd'hui** : `align_first_session` (assign) décale la semaine type pour que la 1re séance tombe aujourd'hui, écarts gardés. Ancre mémorisée dans `program_assignments.day_anchor` (migration 026) ; calcul partagé `src/lib/programSchedule.ts` (`scheduleSessions`).
+- Ligne d'un sportif qui suit un programme : nom cliquable → son planning ; "⋯" → Changer la date de départ (arrêt + réassignation en un geste) / Arrêter.
+- Enregistrer un programme suivi propose "Mettre à jour mes séances à venir" / "Garder mon planning actuel" → `POST /api/programs/[id]/resync` (séances non faites ≥ aujourd'hui remplacées aux mêmes dates, séances faites intouchées).
+- "+" de la nav : "Nouveau programme" → "Programmes" (ouvre la page). `?step=import` et `?focus=` supportés sur les 3 pages Programmes.
+
+### Données d'exemple et freemium
+- Plus de bandeau d'exemple en haut : mention `ExampleNote` (MetricChart.tsx) **au milieu des charts**, à l'emplacement du CTA flouté, courbe nette. Grande sur l'insight de section et les charts dépliés, pastille sur les aperçus repliés, lignes Groupe (sportif démo) et jauges de tests. Jamais en sandbox (tout y est démo). Sportif démo côté coach : jamais flouté, mention à la place.
+- Tests : exemple (fixture sandbox, avec son profil pour avoir recommandations et filtres) tant qu'aucun test n'est loggué, bouton "Ajouter mon 1er test →" en bas.
+- **Fix freemium tests** : en gratuit, la valeur loggée, la courbe d'évolution et premier/dernier restent lisibles (entrées) ; seuls badge/barre/cible et l'analyse sont floutés (`PrimaryGauge`/`SprintAxisGauge` `analysisLocked`).
+- Charge/Récupération en gratuit : titre + phrase au-dessus de "Activer l'ajustement", posés sur l'insight flouté.
+- Check-in auto du matin : clé `wellness_prompted_{userId}_{date}` (par compte ; la clé par date seule bloquait un nouveau compte ouvert dans le même onglet).
+
+### Reste à faire
+Lot C : events PostHog par étape de checklist et reconstruction du funnel `wmxQuLFz` (les étapes wizard ne se déclenchent plus). Exemple de tests côté coach (page Sportifs) non fait. Migrations 026/027 appliquées en prod le 2026-10-01.

@@ -17,6 +17,8 @@ interface Props {
   athletes?: CoachAthlete[];
   backHref: string;
   sandboxMode?: boolean;
+  initialStep?: "new" | "import";
+  focusProgramId?: string;
 }
 
 /* Onglet "Programmes" de la bottom nav (2026-08-31) — ProgramLibraryPage.tsx est déjà un
@@ -25,7 +27,7 @@ interface Props {
    rend accessible comme vraie page (/programmes, /coach/programmes), avec le même câblage
    paywall (usePaywall/useSandboxGate → PrimingJourneyModal/PaywallModal/SandboxGateModal) que
    ces deux fichiers, pour ne jamais bypasser le gating "Enregistrer en librairie"/"Assigner". */
-export default function ProgramLibraryStandalone({ mode, userId, subscriptionStatus, hasActiveCoach = false, athletes = [], backHref, sandboxMode = false }: Props) {
+export default function ProgramLibraryStandalone({ mode, userId, subscriptionStatus, hasActiveCoach = false, athletes = [], backHref, sandboxMode = false, initialStep, focusProgramId }: Props) {
   const router = useRouter();
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate(mode);
@@ -42,6 +44,8 @@ export default function ProgramLibraryStandalone({ mode, userId, subscriptionSta
         isActive={sandboxMode ? isActive : true}
         sandboxMode={sandboxMode}
         standalone
+        initialStep={initialStep}
+        focusProgramId={focusProgramId}
         onClose={() => router.push(backHref)}
       />
       {paywallStep === "priming" && (

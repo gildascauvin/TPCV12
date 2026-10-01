@@ -747,7 +747,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
       {/* Warning: programme with active assignments */}
       {assignmentCount > 0 && (
         <div style={{ background: "#fff8f0", borderBottom: "1px solid rgba(212,64,0,.15)", padding: "8px 18px", fontSize: 12, color: "#b96500", fontWeight: 600, flexShrink: 0 }}>
-          ⚠️ {assignmentCount} sportif{assignmentCount > 1 ? "s suivent" : " suit"} ce programme — les séances déjà planifiées ne seront pas modifiées.
+          ⚠️ Ce programme est suivi ({assignmentCount}) : en enregistrant, tu choisiras de mettre à jour les séances à venir ou de garder le planning actuel.
         </div>
       )}
 

@@ -22,16 +22,20 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 
-export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] } }) {
+export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null } }) {
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  // Exemple affiché tant qu'aucun test n'est loggué ; "Ajouter mon 1er test" bascule sur le vrai panneau.
+  const [showExample, setShowExample] = useState(!!exampleTests);
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="athlete"
           onAction={() => setPaywallStep("priming")}
@@ -52,7 +56,25 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div className="page-shell">
-        {userId ? (
+        {userId && showExample && exampleTests ? (
+          <>
+            <TestsPanel
+              ownerId="example" subject={{ subjectUserId: "example" }}
+              sport={exampleTests.sport ?? sport} sexe={exampleTests.sexe ?? sexe} poidsKg={exampleTests.poidsKg ?? poidsKg}
+              fixture={exampleTests}
+              onDarkPage
+              example
+            />
+            {/* Pas de bandeau en haut (2026-10-01) : chaque test porte sa mention "Exemple" ; le
+                passage aux vrais tests se fait ici. */}
+            <button
+              onClick={() => setShowExample(false)}
+              style={{ display: "block", width: "100%", marginTop: 14, border: "none", cursor: "pointer", color: "#fff", fontSize: 14, fontWeight: 800, borderRadius: 12, padding: "12px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}
+            >
+              Ajouter mon 1er test →
+            </button>
+          </>
+        ) : userId ? (
           <TestsPanel
             ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
             sport={sport} sexe={sexe} poidsKg={poidsKg}

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { OPEN_QUICKADD } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import QuickAddSheet from "./QuickAddSheet";
 
@@ -155,7 +156,9 @@ function quickAddOptions(role: "athlete" | "coach", basePath?: string) {
   const planningHref = role === "coach" ? "/coach/planning" : "/week";
   const options = [
     { label: "Ajouter une séance", icon: "📝", href: hrefFor(planningHref, "session") },
-    { label: "Nouveau programme", icon: "📚", href: hrefFor(planningHref, "program") },
+    /* "Programmes" (2026-10-01, onboarding in-app) : ouvre la page Programmes elle-même (section
+       "Prêt à démarrer", programmes suivis, "+ Nouveau") plutôt que le seul picker de création. */
+    { label: "Programmes", icon: "📚", href: basePath ? sandboxHref(role === "coach" ? "/coach/programmes" : "/programmes", basePath) : (role === "coach" ? "/coach/programmes" : "/programmes") },
   ];
   if (role === "coach") {
     options.push({ label: "Inviter un sportif", icon: "👥", href: hrefFor("/coach/athletes", "invite") });
@@ -168,6 +171,12 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
   const { isMd } = useBreakpoint();
   const tabs = role === "coach" ? coachTabs : athleteTabs;
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Étape "Construis ton entraînement" de la checklist d'onboarding : ouvre ce même menu.
+  useEffect(() => {
+    const open = () => setQuickAddOpen(true);
+    window.addEventListener(OPEN_QUICKADD, open);
+    return () => window.removeEventListener(OPEN_QUICKADD, open);
+  }, []);
   const leftTabs = tabs.slice(0, 2);
   const rightTabs = tabs.slice(2);
 

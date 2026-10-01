@@ -5,9 +5,6 @@ import type { Program } from "@/types";
 import { programSportEmoji } from "@/lib/sportCategories";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
-const LEVEL_LABELS: Record<string, string> = {
-  debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite",
-};
 const DEFAULT_FREE_LABEL = "Séances libres";
 
 function avgWeekRpe(week: Record<string, { target_difficulty: number }[]>): number {
@@ -46,11 +43,20 @@ interface Props {
       menu positionné sur son bouton — pas séparable en trigger+composant. Rendu seulement sur la
       vue non-compacte, à côté de "✏️ Modifier" (2026-09-13, voir CLAUDE.md). */
   inviteCoachAction?: React.ReactNode;
+  /** Libellé du bouton Reconduire (défaut "Reconduire la semaine") — /today et Coach Control
+      reconduisent la séance du jour, pas la semaine (2026-10-01). */
+  reconduireLabel?: string;
+  /** Sans programme ni séance à reconduire : bouton "Programmes →" à la place (2026-10-01). */
+  onLibrary?: () => void;
+  /** Sans marge horizontale : posé dans une carte qui a déjà son padding (/today, Coach Control). */
+  flush?: boolean;
+  /** Masque les barres de charge par semaine (bannière de la journée : /today, Coach Control). */
+  hideBars?: boolean;
 }
 
 export default function ProgramBanner({
   program, currentWeek, onEdit, onStop, onReconduire,
-  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction, dark = false,
+  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction, dark = false, reconduireLabel = "Reconduire la semaine", onLibrary, flush = false, hideBars = false,
 }: Props) {
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
@@ -108,7 +114,7 @@ export default function ProgramBanner({
 
     return (
       <div style={{
-        padding: "11px 18px",
+        padding: flush ? "4px 0 12px" : "11px 18px",
         // Toujours en ligne, même mobile (2026-09-01) — le CTA Reconduire doit rester à droite,
         // pas passer en dessous ; "Les séances libres restent disponibles" raccourci en
         // "Séances libres disponibles" pour laisser assez de place au titre à gauche.
@@ -138,17 +144,21 @@ export default function ProgramBanner({
               {onEditFreeLabel && <span style={{ fontSize: 11, opacity: 0.45, flexShrink: 0 }}>✏️</span>}
             </div>
           )}
-          <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,.55)" : "#8a8f94", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Séances libres disponibles</div>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
           {onReconduire && (
             <button onClick={onReconduire} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
-              Reconduire la semaine
+              {reconduireLabel}
               <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 12a9 9 0 1 1 2.6 6.36" />
                 <path d="M3 21v-6h6" />
               </svg>
+            </button>
+          )}
+          {!onReconduire && onLibrary && (
+            <button onClick={onLibrary} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
+              Programmes →
             </button>
           )}
         </div>
@@ -158,7 +168,6 @@ export default function ProgramBanner({
 
   const bars = program!.template.weeks.map(w => avgWeekRpe(w as Record<string, { target_difficulty: number }[]>));
   const maxBar = Math.max(...bars, 1);
-  const levelLabel = program!.level ? LEVEL_LABELS[program!.level] : null;
   const focusLabel = `S${curWi + 1}/${program!.weeks_count}`;
 
   if (compact) {
@@ -178,7 +187,7 @@ export default function ProgramBanner({
   }
 
   return (
-    <div style={{ padding: "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+    <div style={{ padding: flush ? "4px 0 12px" : "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       {/* Sport icon */}
       <div style={{ width: 38, height: 38, borderRadius: 11, background: dark ? "rgba(255,255,255,.08)" : "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
         {programSportEmoji(program!.sport)}
@@ -190,12 +199,12 @@ export default function ProgramBanner({
           {program!.name}
         </div>
         <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,.55)" : "#8a8f94", marginTop: 1 }}>
-          {[focusLabel, levelLabel].filter(Boolean).join(" · ")}
+          {focusLabel}
         </div>
       </div>
 
       {/* Load bars */}
-      <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 28, flexShrink: 0 }}>
+      {!hideBars && <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 28, flexShrink: 0 }}>
         {bars.map((b, i) => (
           <div key={i} style={{
             width: 10, borderRadius: "2px 2px 0 0",
@@ -205,7 +214,7 @@ export default function ProgramBanner({
             outlineOffset: 1,
           }} />
         ))}
-      </div>
+      </div>}
 
       {/* Actions */}
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>

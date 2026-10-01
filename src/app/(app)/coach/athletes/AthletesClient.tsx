@@ -258,7 +258,9 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="coach"
           onAction={() => setPaywallStep("priming")}

@@ -24,7 +24,11 @@ function toIso(d: Date): string {
    (DEMO_ATHLETES, OnboardingFlow.tsx) garde `fullHistory=true` (par défaut) — lui reste affiché
    indéfiniment et alimente aussi les graphes "signature de fatigue", un historique réaliste y garde
    son utilité. */
-export function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number, fullHistory = true) {
+/* `parts` (2026-10-01) : le sportif démo du coach reçoit désormais un vrai programme assigné dès
+   l'inscription (OnboardingFlow.tsx) — seul son historique passé reste synthétique ("past"), les
+   séances futures et la séance du jour venant du programme. "upcoming" ne sert plus que de repli si
+   la génération du programme échoue. */
+export function buildCoachDemoSessions(coachId: string, athleteId: string, sport: string, rpeBase: number, fullHistory = true, parts: "all" | "past" | "upcoming" = "all") {
   const templates = getSessionTemplates(sport);
   const today = new Date();
   const todayIso = toIso(today);
@@ -40,7 +44,7 @@ export function buildCoachDemoSessions(coachId: string, athleteId: string, sport
 
   if (fullHistory) {
     // 4 semaines passées
-    for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
+    if (parts !== "upcoming") for (let weekOffset = -4; weekOffset <= -1; weekOffset++) {
       [1, 3, 5, 6].forEach((d, i) => {
         const offset = d === 0 ? 6 : d - 1;
         const result = new Date(today);
@@ -55,7 +59,7 @@ export function buildCoachDemoSessions(coachId: string, athleteId: string, sport
 
     // 2 semaines futures (S0 + S1) — aujourd'hui exclu de cette rotation, voir "Séance démo" plus bas
     const scheduledDays = [1, 3, 5, 6];
-    for (const weekOffset of [0, 1]) {
+    if (parts !== "past") for (const weekOffset of [0, 1]) {
       scheduledDays.forEach((d, i) => {
         const date = dateForDow(d, weekOffset);
         if (date === todayIso) return;
@@ -69,7 +73,7 @@ export function buildCoachDemoSessions(coachId: string, athleteId: string, sport
   // qu'aujourd'hui n'est jamais vide (filtre hasSessions de Coach Control) et une difficulté stable
   // (rpeBase) quel que soit le jour de la semaine.
   const [, demoNotes] = templates[0];
-  sessions.push({ coach_id: coachId, athlete_id: athleteId, date: todayIso, name: "Séance démo", notes: demoNotes, done: false, target_difficulty: rpeBase, is_demo: true });
+  if (parts !== "past") sessions.push({ coach_id: coachId, athlete_id: athleteId, date: todayIso, name: "Séance démo", notes: demoNotes, done: false, target_difficulty: rpeBase, is_demo: true });
 
   return sessions;
 }

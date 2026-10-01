@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { markFirstAdjustment } from "@/lib/onboardingProgress";
 import { createPortal } from "react-dom";
 import {
   type AutoregDir, type AutoregOriginal, formatAutoregPoints, autoregCtaLabel, zoneRange,
@@ -201,6 +202,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     // disparaître quand même (il n'a plus rien à représenter).
     onPreviewChange?.(null);
     onMaintenir?.();
+    markFirstAdjustment();
   }
 
   async function apply() {
@@ -248,6 +250,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     setDecidedPlannedDiff(original?.target_difficulty ?? null);
     // Plus de barré une fois validé — voir le commentaire de l'effet de montage ci-dessus.
     onPreviewChange?.(null);
+    markFirstAdjustment();
   }
 
   async function undo() {

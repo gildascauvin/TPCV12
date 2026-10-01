@@ -11,9 +11,6 @@ import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
 import { programSportEmoji } from "@/lib/sportCategories";
 
-const LEVEL_LABELS: Record<string, string> = {
-  debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite",
-};
 const FOCUS_LABELS: Record<string, string> = {
   mixte: "Mixte", technique: "Technique", volume: "Volume", intensite: "Intensité",
   competition: "Compétition", combat: "Combat", autre: "Autre",
@@ -61,7 +58,10 @@ interface Props {
   sandboxMode?: boolean;
   /* Routage rapide depuis le "+" central de la nav (2026-08-31) : "new" saute directement
      l'écran liste pour ouvrir le picker de création (ProgramCreatePicker). */
-  initialStep?: "new";
+  /* "import" (2026-10-01) : carte "Aucune séance aujourd'hui" → ouvre directement l'import. */
+  initialStep?: "new" | "import";
+  /* "Modifier →" du bandeau programme (2026-10-01) : la liste s'ouvre centrée sur ce programme. */
+  focusProgramId?: string;
   /* Onglet "Programmes" de la bottom nav (2026-09-01) — true uniquement depuis
      ProgramLibraryStandalone (route /programmes). L'écran liste devient alors une page normale
      (plus de position:fixed plein écran, plus de flèche retour) pour laisser la bottom nav
@@ -86,15 +86,24 @@ const NEUTRAL_LEVEL = "intermediaire" as const;
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, standalone = false }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, standalone = false }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : { type: "list" });
+  const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : initialStep === "import" ? { type: "criteria", mode: "import" } : { type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  // Choix après enregistrement d'un programme suivi : mettre à jour les séances à venir ou non.
+  const [resyncPrompt, setResyncPrompt] = useState<{ programId: string; names: string[] } | null>(null);
+  const [resyncBusy, setResyncBusy] = useState(false);
+  // "✎ Changer la date de départ" — assignment en cours d'édition + nouvelle date.
+  const [dateEdit, setDateEdit] = useState<{ assignmentId: string; date: string } | null>(null);
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  // Menu "⋯" d'un sportif qui suit un programme (Changer la date / Arrêter).
+  const [rowMenuId, setRowMenuId] = useState<string | null>(null);
+  const todayStr = new Date().toISOString().split("T")[0];
 
   /* Sortie d'un step "création" (new/criteria/builder/assign) — 2026-09-01. En standalone
      (/programmes), revient à l'écran liste de CETTE page. En modal (WeekClient.tsx/
@@ -123,6 +132,10 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   }
 
   useEffect(() => { fetchPrograms(); }, []);
+  useEffect(() => {
+    if (loading || !focusProgramId) return;
+    document.getElementById(`program-${focusProgramId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loading, focusProgramId]);
 
   async function saveProgram(name: string, template: ProgramTemplate, meta: ProgramMeta): Promise<string | null> {
     const res = await fetch("/api/programs", {
@@ -163,6 +176,40 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     fetchPrograms();
   }
 
+  /* Noms des sportifs qui suivent un programme (en cours ou à venir) — "Moi" pour le sportif lui-même. */
+  function followerNames(programId: string): string[] {
+    return assignments
+      .filter(a => a.program_id === programId && a.status === "active")
+      .map(a => (selfUserId && a.user_id === selfUserId) ? "Moi" : (athletes.find(x => x.id === a.athlete_id || (!!a.user_id && x.user_id === a.user_id))?.name ?? "—"));
+  }
+
+  async function runResync(programId: string) {
+    setResyncBusy(true);
+    await fetch(`/api/programs/${programId}/resync`, { method: "POST" }).catch(() => {});
+    setResyncBusy(false);
+    setResyncPrompt(null);
+    closeOrList();
+  }
+
+  /* Changer la date de départ en un geste : arrêt (séances futures non faites retirées) + réassignation
+     à la nouvelle date. Démarrer aujourd'hui aligne la 1re séance sur aujourd'hui. */
+  async function changeStartDate(a: ProgramAssignment, newDate: string) {
+    setRowBusy(a.id);
+    try {
+      const del = await fetch(`/api/program-assignments/${a.id}`, { method: "DELETE" });
+      if (!del.ok) throw new Error();
+      await fetch(`/api/programs/${a.program_id}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athlete_id: a.user_id ? undefined : a.athlete_id, user_id: a.user_id ?? undefined, start_date: newDate, align_first_session: newDate === todayStr }),
+      });
+    } finally {
+      setRowBusy(null);
+      setDateEdit(null);
+      fetchPrograms();
+    }
+  }
+
   /* Partager — tous les programmes sont partageables par défaut (2026-09-05, simplifié à la
      demande de Gildas après un 1er design public/privé jugé inutilement compliqué — bug réel
      trouvé au passage : l'ancienne version "toggleShare" inversait is_public à chaque clic, donc
@@ -193,6 +240,36 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     });
     if (res.ok) fetchPrograms();
   }
+
+  const coachSide = !selfUserId;
+  const resyncModal = resyncPrompt && (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 2147483300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 6 }}>
+          Programme enregistré
+        </div>
+        <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.5, marginBottom: 14 }}>
+          {coachSide
+            ? <>Suivi par {resyncPrompt.names.join(", ")}. Leurs séances déjà faites ne bougent pas, les dates restent les mêmes.</>
+            : <>Tes séances déjà faites ne bougent pas, les dates restent les mêmes.</>}
+        </div>
+        <button
+          disabled={resyncBusy}
+          onClick={() => runResync(resyncPrompt.programId)}
+          style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8, opacity: resyncBusy ? .6 : 1 }}
+        >
+          {resyncBusy ? "Mise à jour…" : coachSide ? "Mettre à jour leurs séances à venir" : "Mettre à jour mes séances à venir"}
+        </button>
+        <button
+          disabled={resyncBusy}
+          onClick={() => { setResyncPrompt(null); closeOrList(); }}
+          style={{ width: "100%", padding: "11px 0", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#555", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+        >
+          Garder {coachSide ? "le" : "mon"} planning actuel
+        </button>
+      </div>
+    </div>
+  );
 
   /* ─── Picker "+ Nouveau" (écran racine du flux de création, 4 cartes à plat) ─── */
   if (step.type === "new") {
@@ -239,6 +316,8 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   if (step.type === "builder") {
     const isEdit = !!step.programId;
     return (
+      <>
+      {resyncModal}
       <ProgramBuilderModal
         programName={step.programName ?? (step.meta.sport ? `Programme ${step.meta.sport}` : "Mon programme")}
         template={step.template}
@@ -250,7 +329,9 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           if (isEdit) await updateProgram(step.programId!, name, template);
           else await saveProgram(name, template, step.meta);
           await fetchPrograms();
-          closeOrList();
+          const names = isEdit ? followerNames(step.programId!) : [];
+          if (names.length) setResyncPrompt({ programId: step.programId!, names });
+          else closeOrList();
         }}
         onSaveAndAssign={async (name, template) => {
           let id = step.programId;
@@ -278,6 +359,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           return `${window.location.origin}/p/${id}`;
         }}
       />
+      </>
     );
   }
 
@@ -339,6 +421,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
             <div style={{ fontSize: 13, color: "#8a8f94" }}>Crée ton premier programme avec le bouton "+ Nouveau".</div>
           </div>
         ) : (
+          <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
             {programs.map(p => {
               const bars = weekAvgRpes(p);
@@ -354,7 +437,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               });
 
               return (
-                <div key={p.id} style={{ position: "relative", background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: "1px solid rgba(0,0,0,.07)", boxShadow: "0 2px 12px rgba(0,0,0,.04)" }}>
+                <div key={p.id} id={`program-${p.id}`} style={{ position: "relative", background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: p.id === focusProgramId ? "2px solid #d44000" : "1px solid rgba(0,0,0,.07)", boxShadow: p.id === focusProgramId ? "0 8px 24px rgba(212,64,0,.12)" : "0 2px 12px rgba(0,0,0,.04)" }}>
                   {/* Partager — haut à droite de la carte (2026-09-05, demande explicite de
                       Gildas) — reste ici plutôt que dans la ligne d'actions du bas, qui ne garde
                       que les 2 CTA principaux + le menu "⋯" (Dupliquer/Supprimer). Style piloté
@@ -386,7 +469,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
 
                   {/* Meta */}
                   <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 12 }}>
-                    {[p.sport, p.level ? LEVEL_LABELS[p.level] : null, `${p.weeks_count} semaines`, `${p.sessions_per_week}j/sem`].filter(Boolean).join(" · ")}
+                    {[p.sport, `${p.weeks_count} semaines`, `${p.sessions_per_week}j/sem`].filter(Boolean).join(" · ")}
                   </div>
 
                   {/* Load bars + label inline */}
@@ -412,22 +495,52 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                           const displayName = isSelf ? "Moi" : (athlete?.name ?? "—");
                           const color = AVATAR_COLORS[ai % AVATAR_COLORS.length];
                           return (
-                            <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color }}>{initials(displayName)}</span>
+                            <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 6, borderBottom: "1px solid rgba(0,0,0,.05)" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${color}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color }}>{initials(displayName)}</span>
+                                </div>
+                                <span
+                                  onClick={() => { onClose(); router.push(isSelf ? (sandboxMode ? "/sandbox/athlete/week" : `/week?date=${a.start_date > todayStr ? a.start_date : todayStr}`) : `${sandboxMode ? "/sandbox" : ""}/coach/planning?athlete=${a.athlete_id}`); }}
+                                  title="Voir le planning"
+                                  style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#171b1f", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(0,0,0,.2)", textUnderlineOffset: 3 }}
+                                >{displayName}</span>
+                                <span style={{ fontSize: 11, color: "#8a8f94" }}>{a.start_date > todayStr ? "Démarre" : "Démarré"} {fmtDate(a.start_date)}</span>
+                                <div style={{ position: "relative" }}>
+                                  <button
+                                    onClick={() => setRowMenuId(id => id === a.id ? null : a.id)}
+                                    aria-label="Actions"
+                                    style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#f1f0ee", color: "#8a8f94", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
+                                  >⋯</button>
+                                  {rowMenuId === a.id && (
+                                    <>
+                                      <div onClick={() => setRowMenuId(null)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
+                                      <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 210, overflow: "hidden" }}>
+                                        <button
+                                          onClick={() => { setRowMenuId(null); setDateEdit({ assignmentId: a.id, date: todayStr }); }}
+                                          style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#171b1f" }}
+                                        >✎ Changer la date de départ</button>
+                                        <button
+                                          onClick={() => { setRowMenuId(null); gate(() => stopAssignment(a.id)); }}
+                                          style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", borderTop: "1px solid rgba(0,0,0,.06)", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#d44000" }}
+                                        >⏹ Arrêter</button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
                               </div>
-                              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#171b1f" }}>{displayName}</span>
-                              <span style={{ fontSize: 11, color: "#8a8f94" }}>Démarre {fmtDate(a.start_date)}</span>
-                              <button
-                                onClick={() => gate(() => stopAssignment(a.id))}
-                                style={{ fontSize: 11, fontWeight: 600, color: "#d44000", background: "rgba(212,64,0,0.08)", border: "none", borderRadius: 8, padding: "3px 8px", cursor: "pointer" }}
-                              >Arrêter ×</button>
-                              {!isSelf && (
-                                <button
-                                  onClick={() => { onClose(); router.push(`/coach/planning?athlete=${a.athlete_id}`); }}
-                                  style={{ fontSize: 11, fontWeight: 600, color: "#8a8f94", background: "#f1f0ee", border: "none", borderRadius: 8, padding: "3px 8px", cursor: "pointer" }}
-                                >Voir →</button>
-                              )}
+                              {dateEdit?.assignmentId === a.id ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                  <button onClick={() => setDateEdit({ assignmentId: a.id, date: todayStr })} style={{ fontSize: 11, fontWeight: 700, color: dateEdit.date === todayStr ? "#fff" : "#d44000", background: dateEdit.date === todayStr ? "#d44000" : "rgba(212,64,0,0.08)", border: "none", borderRadius: 8, padding: "4px 8px", cursor: "pointer" }}>Aujourd'hui</button>
+                                  <input type="date" value={dateEdit.date} onChange={e => setDateEdit({ assignmentId: a.id, date: e.target.value })} style={{ fontSize: 16, border: "1px solid rgba(0,0,0,.12)", borderRadius: 8, padding: "2px 6px", fontFamily: "inherit" }} />
+                                  <button
+                                    disabled={rowBusy === a.id || !dateEdit.date}
+                                    onClick={() => gate(() => changeStartDate(a, dateEdit.date))}
+                                    style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", border: "none", borderRadius: 8, padding: "5px 10px", cursor: "pointer", opacity: rowBusy === a.id ? .6 : 1 }}
+                                  >{rowBusy === a.id ? "…" : "Valider"}</button>
+                                  <button onClick={() => setDateEdit(null)} style={{ fontSize: 11, fontWeight: 600, color: "#8a8f94", background: "none", border: "none", cursor: "pointer" }}>Annuler</button>
+                                </div>
+                              ) : null}
                             </div>
                           );
                         })}
@@ -481,8 +594,10 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               );
             })}
           </div>
+          </>
         )}
       </div>
+      {resyncModal}
     </div>
   );
 }

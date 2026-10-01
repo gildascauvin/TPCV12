@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
@@ -167,7 +168,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, locked = false, onUnlock }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -189,6 +190,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   /* "+ Ajouter une séance" en bas de la carte (2026-09-30, Gildas : "comme sur la partie sportif") —
      même bouton que /today et le Planning. Absent = pas de bouton (aperçus onboarding/paywall). */
   onAddSession?: () => void;
+  /* Bandeau programme (ProgramBanner) posé juste au-dessus de la carte séance. */
+  programPill?: React.ReactNode;
   tourId?: string;
   trend?: TrendCode | null;
   /* Input brut de la tendance (charge %/delta wellness/delta RPE) — nécessaire pour describeTrend()
@@ -463,6 +466,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct
          interne, ou externalPreviewPct si le parent le pilote — voir sa doc plus haut). */}
+      {programPill && <div style={{ marginTop: 12 }}>{programPill}</div>}
       {topSession && (
         <div onClick={onDecide} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
@@ -523,7 +527,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           )}
         </div>
       )}
-      {onAddSession && (
+      {!topSession && onAddSession && (
+        <div style={{ marginTop: programPill ? 0 : 12 }}>
+          <EmptyDayCard perspective="coach" onAddFree={onAddSession} />
+        </div>
+      )}
+      {onAddSession && topSession && (
         <div
           onClick={e => { e.stopPropagation(); onAddSession(); }}
           style={{

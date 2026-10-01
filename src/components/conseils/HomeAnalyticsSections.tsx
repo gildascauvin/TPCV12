@@ -11,6 +11,7 @@ import { useState } from "react";
 import ShareButton from "@/components/sessions/ShareButton";
 import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import IndexCards, { type ExtraIndexCard } from "@/components/conseils/IndexCards";
+import { ExampleNote } from "@/components/conseils/MetricChart";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
 import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_BANDS, aggregateFor, type MetricKey, type MetricGroup } from "@/lib/metricCards";
@@ -38,17 +39,19 @@ export function DemoDataChip() {
    risque est qu'on prenne l'exemple pour ses propres données. Dit quand les vraies arrivent (après
    ~2 semaines de check-ins et de séances, jamais "dans 14 jours" : ça dépend de ce qu'il remplit).
    Compte gratuit : rappelle que l'essai couvre exactement ce délai. */
-export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate }: { perspective?: Perspective; free?: boolean; onActivate?: () => void }) {
+export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate, demoAthlete = false }: { perspective?: Perspective; free?: boolean; onActivate?: () => void; /** Sportif de démo du coach (2026-10-01) : ses données sont un exemple, quel que soit leur volume. */ demoAthlete?: boolean }) {
   const coach = perspective === "coach";
   return (
     <div style={{ background: "rgba(125,211,252,.08)", border: "1px solid rgba(125,211,252,.28)", borderRadius: 14, padding: "12px 14px", marginBottom: 14, display: "grid", gap: 8 }}>
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#7dd3fc" }}>🔎 Exemple</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
-        {coach
+        {demoAthlete
+          ? "Sportif de démo : ces analyses sont un exemple. Celles de tes vrais sportifs s'afficheront ici après ~2 semaines de check-ins et de séances."
+          : coach
           ? "Ces analyses sont un exemple. Les siennes arrivent après ~2 semaines de check-ins et de séances."
           : "Ces analyses sont un exemple. Les tiennes arrivent après ~2 semaines de check-ins et de séances."}
       </div>
-      {free && onActivate && (
+      {free && onActivate && !demoAthlete && (
         <button onClick={onActivate} style={{ justifySelf: "start", border: "none", cursor: "pointer", color: "#fff", fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 14px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}>
           Active tes 14 jours offerts pour les avoir en entier
         </button>
@@ -61,14 +64,14 @@ export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onA
    remplacent les sous-onglets Charge/Adaptation et la rangée de badges : les badges disaient la même
    chose que le chart juste en dessous, et il fallait cliquer pour savoir où on en était sur chaque
    indice. Une carte par indice, statut visible en permanence, chart au clic. */
-export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} lockedHistory={lockedHistory} />;
+export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean }) {
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
    à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
-export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} lockedHistory={lockedHistory} />;
+export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean }) {
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que
@@ -254,13 +257,15 @@ function sectionFor(metric: Metric, data: ConseilsData): { title: string; order:
    chaque athlète (calculé une fois côté CoachClient.tsx, jamais recalculé ici) — ce composant ne
    fait que trier/regrouper/afficher, aucune nouvelle donnée fabriquée (contrairement au POC, dont
    les scores/insights sont des exemples fictifs). */
-export function TeamAnalyticsList({ rows, metric, onSelect, locked = false }: {
+export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, showExamples = true }: {
   rows: { athlete: CoachAthlete; data: ConseilsData }[];
   metric: Metric;
   onSelect: (athleteId: string) => void;
   /* Freemium (2026-09-30) : le constat (jauge, statut · valeur) reste lisible ; insight, aperçu
      d'historique et tendance sont floutés. */
   locked?: boolean;
+  /** Mention "Exemple" sur les sportifs de démo — désactivée en sandbox, où tout est démo (2026-10-01). */
+  showExamples?: boolean;
 }) {
   const blur: React.CSSProperties = locked ? { filter: "blur(6px)", userSelect: "none" } : {};
   const { isMd } = useBreakpoint();
@@ -327,6 +332,10 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false }: {
           </div>
           <div style={{ display: "flex", flexDirection: "column" as const, gap: 8 }}>
             {bucketRows.map(({ athlete: a, data, agg: rowAggPos }) => {
+              /* Ligne d'exemple (sportif de démo, sandbox) : jamais floutée, elle porte la mention
+                 "Exemple" à la place — flouter des données fictives n'a pas de sens (2026-10-01). */
+              const isExample = showExamples && !a.user_id && !a.invite_email;
+              const rowBlur: React.CSSProperties = locked && !isExample ? blur : {};
               // Score de récupération — même résolution que RecuperationSection, hissé pour aussi
               // alimenter l'AthleteRing (un seul score par athlète, jamais deux calculs qui
               // pourraient diverger entre le ring et les badges).
@@ -462,10 +471,11 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false }: {
                         {a.name}
                       </span>
                       {mainLine}
-                      {isMd && insightBox && <div style={blur}>{insightBox}</div>}
+                      {isMd && insightBox && <div style={rowBlur}>{insightBox}</div>}
                     </div>
                     {sparklinePoints && (
-                      <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0, ...blur }}>
+                      <div style={{ position: "relative", display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0, ...rowBlur }}>
+                        {isExample && <ExampleNote compact top="40%" />}
                         <MiniBars points={sparklinePoints} />
                         {trendLine && (
                           <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 600, color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" as const }}>{trendLine}</span>
@@ -475,7 +485,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false }: {
                   </div>
                   {/* Même règle qu'en mobile côté sportif : sous une centaine de pixels de large,
                       l'insight coincé à côté de l'aperçu tombe sur cinq lignes. */}
-                  {!isMd && insightBox && <div style={blur}>{insightBox}</div>}
+                  {!isMd && insightBox && <div style={rowBlur}>{insightBox}</div>}
                 </button>
               );
             })}

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import posthog from "posthog-js";
-import { format, addDays, subDays } from "date-fns";
+import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -23,7 +23,7 @@ import { decisionRingState } from "@/components/sessions/DecisionRing";
 import { aggregateFor } from "@/lib/metricCards";
 import { useFirstDecision } from "@/hooks/useFirstDecision";
 import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
-import { DemoAnalyticsBanner, DemoDataChip, ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
+import { ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
 
@@ -35,6 +35,10 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
+import ProgramBanner from "@/components/programs/ProgramBanner";
+import { programWeekIndex, type AthleteActiveProgram } from "@/lib/programAssignment";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
@@ -71,6 +75,8 @@ interface Props {
      computeDecisionCard le tolère), comportement inchangé pour tout appelant qui ne le fournit pas
      encore (sandbox). */
   recentSessions?: Record<string, Session[]>;
+  /** Programme actif par sportif (bandeau compact des cartes, 2026-10-01). */
+  activePrograms?: Record<string, AthleteActiveProgram>;
   /* Sandbox uniquement (2026-08-19) — voir TodayClient.tsx pour le détail du mécanisme. */
   sandboxMode?: boolean;
   sandboxSessionsByDate?: Record<string, CoachViewSession[]>;
@@ -78,7 +84,7 @@ interface Props {
 
 function greeting() { const h = new Date().getHours(); return h < 5 ? "Bonne nuit" : h < 12 ? "Bonjour" : h < 18 ? "Bon après-midi" : "Bonsoir"; }
 
-export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, sandboxMode = false, sandboxSessionsByDate, firstDecisionOn = null }: Props) {
+export default function CoachClient({ coachName, athletes: initialAthletes, todaySessions, today, userId, subscriptionStatus, inviteCode: initialInviteCode, trends, trendInputs = {}, baselines: demoBaselines = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, recentSessions = {}, activePrograms = {}, sandboxMode = false, sandboxSessionsByDate, firstDecisionOn = null }: Props) {
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
@@ -123,8 +129,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [profileOpen, setProfileOpen] = useState(false);
 
   const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [showActivation, setShowActivation] = useState(false);
 
   // Barre de filtre sportifs persistante (2026-09-24, redesign) — hydratée après montage (localStorage,
   // même précaution SSR que reviewedIds ci-dessus) plutôt qu'au useState initial. Écrite/lue via la
@@ -176,9 +180,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     return computeConseilsData(selectedDate, null, recentSessions[a.id] ?? [], a.user_id ? wellnessBaselineHistory[a.user_id] ?? [] : [], "coach");
   })();
 
-  useEffect(() => {
-    if (!localStorage.getItem(`activation_shown_coach_${userId}`)) { setShowActivation(true); posthog.capture("activation_banner_viewed", { mode: "coach" }); }
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load persisted reviewed IDs after hydration to avoid SSR mismatch
   useEffect(() => {
@@ -285,6 +286,15 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   selectedDateRef.current = selectedDate;
   const handleDateChangeRef = useRef(handleDateChange);
   handleDateChangeRef.current = handleDateChange;
+  /* Étape "Ajuste leur séance" de la checklist d'onboarding : ?today=1 recale Coach Control sur
+     aujourd'hui (la page peut être déjà montée sur un autre jour). */
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("today") !== "1") return;
+    if (selectedDateRef.current !== today) handleDateChangeRef.current(today);
+    router.replace(sandboxMode ? "/sandbox/coach" : "/coach");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   useEffect(() => {
     if (sandboxMode) return;
     const realAthletes = athletes.filter(a => a.user_id);
@@ -476,6 +486,61 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   /* "+ Ajouter une séance" d'une carte Coach Control (2026-09-30) : même drawer, sans séance, donc en
      création sur la date affichée — handleSaveReview crée puis met à jour la même ligne. */
+  /* "↻ Reconduire" du bandeau programme (2026-10-01) : duplique la séance du jour vers la semaine
+     suivante (date modifiable), même modale et même calcul que le Planning coach. */
+  const [reconduire, setReconduire] = useState<{ athlete: CoachAthlete; session: CoachViewSession } | null>(null);
+  async function reconduireTo(newDate: string, targetAthleteIds: string[] | undefined, pct: number) {
+    if (!reconduire) return;
+    const src = reconduire.session;
+    const notes = src.notes ? src.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (src.notes ?? "");
+    const target_difficulty = adjustDifficulty(src.target_difficulty ?? 6, pct);
+    const ids = targetAthleteIds?.length ? targetAthleteIds : [reconduire.athlete.id];
+    await Promise.all(ids.map(athleteId => callSessionAPI({ action: "add", athleteId, data: { name: src.name, notes, target_difficulty, date: newDate } })));
+    setReconduire(null);
+  }
+  /* Libellé "Séances libres" par sportif et par semaine — même stockage et même route que le
+     Planning coach (athlete.free_training_label, POST /api/coach/free-label). */
+  const [freeLabelOverrides, setFreeLabelOverrides] = useState<Record<string, Record<string, string>>>({});
+  function freeLabelsFor(a: CoachAthlete): Record<string, string> {
+    return freeLabelOverrides[a.id] ?? (a.free_training_label as Record<string, string> | undefined) ?? {};
+  }
+  async function setFreeLabelForWeek(a: CoachAthlete, mondayStr: string, label: string) {
+    const value = label.trim();
+    const next = { ...freeLabelsFor(a) };
+    if (value) next[mondayStr] = value; else delete next[mondayStr];
+    setFreeLabelOverrides(prev => ({ ...prev, [a.id]: next }));
+    if (sandboxMode) return;
+    await fetch("/api/coach/free-label", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteId: a.id, monday: mondayStr, label: value }),
+    });
+  }
+
+  /* Bandeau programme de chaque carte (onboarding in-app, 2026-10-01) — le même ProgramBanner que
+     le Planning : programme actif → "Modifier", sinon séance du jour → "Reconduire", sinon
+     "Programmes →". */
+  function programPillFor(a: CoachAthlete) {
+    const prefix = sandboxMode ? "/sandbox/coach" : "/coach";
+    const ap = activePrograms[a.id];
+    const mine = sessions.filter(s => s.athlete_id === a.id && s.date === selectedDate);
+    const monday = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    return (
+      <ProgramBanner
+        dark
+        flush
+        hideBars
+        program={ap?.program ?? null}
+        currentWeek={ap ? programWeekIndex(ap.start_date, selectedDate) : -1}
+        onEdit={ap ? () => router.push(`${prefix}/programmes?focus=${ap.program.id}`) : undefined}
+        reconduireLabel="Reconduire"
+        onReconduire={!ap && mine.length ? () => setReconduire({ athlete: a, session: mine[0] }) : undefined}
+        onLibrary={() => router.push(`${prefix}/programmes`)}
+        freeLabel={freeLabelsFor(a)[monday] ?? null}
+        onEditFreeLabel={label => setFreeLabelForWeek(a, monday, label)}
+      />
+    );
+  }
+
   function openCreator(athlete: CoachAthlete) {
     setReviewAthlete(athlete);
     setReviewSession(null);
@@ -488,6 +553,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
      saveSession() dans CoachPlanningClient.tsx. */
   async function handleSaveReview(data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, _athleteIds: string[], id?: string) {
     if (!reviewAthlete) return;
+    notifyOnboardingProgressSoon();
 
     if (id) {
       const result = await callSessionAPI({ action: "update", athleteId: reviewAthlete.id, sessionId: id, data });
@@ -541,7 +607,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   return (
     <>
-      {!isActive && (
+      {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
+         de la checklist du header la remplace. En sandbox elle porte la bascule sportif/coach. */}
+      {sandboxMode && !isActive && (
         <UnsavedBanner
           role="coach"
           onAction={() => requireSubscription(() => {})}
@@ -566,6 +634,16 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
       />
+      {reconduire && (
+        <DuplicateModal
+          session={reconduire.session}
+          defaultDate={format(addDays(new Date(selectedDate + "T12:00:00"), 7), "yyyy-MM-dd")}
+          athletes={athletes}
+          sourceAthleteId={reconduire.athlete.id}
+          onDuplicate={(date, ids, pct) => gateInput(() => reconduireTo(date, ids, pct))}
+          onClose={() => setReconduire(null)}
+        />
+      )}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
@@ -597,51 +675,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         <>
         {/* ── Welcome overlay handled below ── */}
 
-        {/* ── Bandeau d'activation coach (J0) ── */}
-        {showActivation && inviteCode && (
-          <div data-tour="activation-banner" style={{ background: "#fff", borderRadius: 24, padding: "18px 18px 14px", boxShadow: "0 8px 28px rgba(0,0,0,.08)", border: "1px solid rgba(212,64,0,.14)", marginBottom: 14 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 4 }}>
-              Invite ton premier sportif 🎯
-            </div>
-            <div style={{ fontSize: 12, color: "#62686e", marginBottom: 10, lineHeight: 1.5 }}>
-              Envoie le lien, il rejoint ton espace en 30 secondes.
-            </div>
-            <div style={{ background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.18)", borderRadius: 10, padding: "8px 12px", marginBottom: 12, fontSize: 12, fontWeight: 700, color: "#d44000", wordBreak: "break-all" }}>
-              go.theperfclub.com/join/{inviteCode}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => {
-                  posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "copy_link" });
-                  navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
-                  setLinkCopied(true);
-                  setTimeout(() => setLinkCopied(false), 2500);
-                  localStorage.setItem(`activation_shown_coach_${userId}`, "1");
-                  setShowActivation(false);
-                }}
-                style={{ flex: 1, height: 42, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 13, fontWeight: 900, cursor: "pointer", boxShadow: "0 6px 16px rgba(212,64,0,.22)", transition: "background .2s" }}
-              >
-                {linkCopied ? "✓ Lien copié !" : "📋 Copier le lien"}
-              </button>
-              <button
-                onClick={() => {
-                  posthog.capture("activation_banner_cta_clicked", { mode: "coach", cta_type: "whatsapp" });
-                  const msg = encodeURIComponent(`Salut ! Rejoins mon espace ThePerfClub ici : https://go.theperfclub.com/join/${inviteCode}`);
-                  window.open(`https://wa.me/?text=${msg}`, "_blank");
-                }}
-                style={{ height: 42, width: 42, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                📲
-              </button>
-              <button
-                onClick={() => { localStorage.setItem(`activation_shown_coach_${userId}`, "1"); setShowActivation(false); }}
-                style={{ height: 42, paddingLeft: 12, paddingRight: 12, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "transparent", color: "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                Plus tard
-              </button>
-            </div>
-          </div>
-        )}
 
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600, color: "#fff" }}>
@@ -810,12 +843,34 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         onUnlock={unlock}
                         onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
+                    programPill={programPillFor(a)}
                         onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
                         onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                         onAutoregDecided={() => markAutoregDecided(a.id)}
                         onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
                     </div>
                   ))}
+                  {/* Carte d'invitation en fin de carrousel (onboarding in-app, 2026-10-01) — un
+                     sportif invité arrive avec sa carte, prêt à recevoir un programme. */}
+                  {!selectedAthleteId && (
+                    <div style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", scrollSnapAlign: "start" }}>
+                      <button
+                        onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes?quickadd=invite" : "/coach/athletes?quickadd=invite")}
+                        style={{
+                          width: "100%", height: "100%", minHeight: 220, borderRadius: 22, cursor: "pointer", fontFamily: "inherit",
+                          background: "rgba(255,255,255,.035)", border: "1.5px dashed rgba(255,255,255,.22)", color: "#fff",
+                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 20,
+                        }}
+                      >
+                        <span style={{ fontSize: 28 }}>👥</span>
+                        <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Invite un sportif</span>
+                        <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.45, maxWidth: 240 }}>
+                          Il arrive avec sa carte ici. Tu peux déjà lui assigner un programme avant qu'il crée son compte.
+                        </span>
+                        <span style={{ marginTop: 4, fontSize: 13, fontWeight: 800, color: "#ff8a55" }}>Inviter →</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)" }}>
@@ -848,6 +903,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     onUnlock={unlock}
                     onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
+                    programPill={programPillFor(a)}
                     onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
                     onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                     onAutoregDecided={() => markAutoregDecided(a.id)}
@@ -878,21 +934,22 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           const a = athletes.find(x => x.id === selectedAthleteId);
           const data = a ? athleteConseilsData[a.id] : undefined;
           if (!a || !data) return null;
+          // Pas de mention en sandbox : tout y est démo par principe (2026-10-01).
+          const demoAthlete = !sandboxMode && !a.user_id && !a.invite_email;
           return (
             <>
-              {!a.user_id && analyticsReady(data, "charge") && analyticsReady(data, "recup") && <DemoDataChip />}
+              {/* Données d'exemple (2026-10-01) : mention sur chaque chart, pas de bandeau en haut —
+                 historique insuffisant, ou sportif de démo (historique fictif). */}
               {/* Pas assez d'historique → exemple en clair et étiqueté, comme côté sportif (freemium 2026-09-30). */}
               {homeTab === "charge" && (!analyticsReady(data, "charge") ? <>
-                <DemoAnalyticsBanner perspective="coach" free={coachFreeMode} onActivate={unlock} />
-                <ChargeSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
-              </> : <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" lockedHistory={coachFreeMode ? { onUnlock: unlock } : null} />)}
+                <ChargeSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example />
+              </> : <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={coachFreeMode && !demoAthlete ? { onUnlock: unlock } : null} />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : dernier item du rapport de
                  récupération, dont il est un déterminant. Même changement que sur /today. */}
               {homeTab === "recuperation" && <>
                 {!analyticsReady(data, "recup") ? <>
-                  <DemoAnalyticsBanner perspective="coach" free={coachFreeMode} onActivate={unlock} />
-                  <RecuperationSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" />
-                </> : <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" lockedHistory={coachFreeMode ? { onUnlock: unlock } : null} />}
+                  <RecuperationSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example />
+                </> : <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={coachFreeMode && !demoAthlete ? { onUnlock: unlock } : null} />}
               </>}
             </>
           );
@@ -908,6 +965,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             metric={homeTab as "charge" | "recuperation"}
             onSelect={selectAthleteFilter}
             locked={coachFreeMode}
+            showExamples={!sandboxMode}
           />
         )}
 

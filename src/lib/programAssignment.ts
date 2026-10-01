@@ -51,3 +51,12 @@ export function findProgramForWeek<P extends { weeks_count: number }>(
   }
   return null;
 }
+
+/** Programme actif d'un sportif tel que transmis aux cartes Coach Control (bandeau programme). */
+export interface AthleteActiveProgram<P = import("@/types").Program> { program: P; start_date: string }
+
+/** Index de semaine (0 = S1) du programme démarré le `startDate` qui couvre `date` ; -1 avant le départ. */
+export function programWeekIndex(startDate: string, date: string): number {
+  const days = Math.floor((new Date(date + "T12:00:00").getTime() - new Date(startDate + "T12:00:00").getTime()) / 86400000);
+  return days < 0 ? -1 : Math.floor(days / 7);
+}

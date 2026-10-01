@@ -28,11 +28,13 @@ interface DuplicateModalProps {
      comportement inchangé pour WeekClient (sportif, pas d'autre destinataire possible). */
   athletes?: CoachAthlete[];
   sourceAthleteId?: string;
+  /* Date proposée à l'ouverture ("↻ Reconduire" du bandeau programme : semaine suivante). */
+  defaultDate?: string;
 }
 
-export default function DuplicateModal({ session, onDuplicate, onClose, athletes = [], sourceAthleteId }: DuplicateModalProps) {
+export default function DuplicateModal({ session, onDuplicate, onClose, athletes = [], sourceAthleteId, defaultDate }: DuplicateModalProps) {
   const { isMd } = useBreakpoint();
-  const [newDate, setNewDate] = useState(session.date);
+  const [newDate, setNewDate] = useState(defaultDate ?? session.date);
   const [mode, setMode] = useState<Mode>("maintien");
   const [customPct, setCustomPct] = useState(10);
   const [saving, setSaving] = useState(false);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -81,6 +82,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
     const sent = results.filter(r => r.ok);
     const failed = results.filter(r => !r.ok);
     setSentCount(sent.length);
+    notifyOnboardingProgressSoon(0);
     if (sent.length) {
       setResult(sent.some(r => r.linked) ? "linked" : "pending");
       if (sent.some(r => r.linked)) onLinked();
