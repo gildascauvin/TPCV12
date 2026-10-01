@@ -1,5 +1,6 @@
 "use client";
 
+import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -111,6 +112,11 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   }
 
   async function handlePortal() {
+    // Abonné via l'App Store (pas de client Stripe) : la gestion se fait chez Apple.
+    if (isNativeApp() && !profile?.stripe_customer_id) {
+      window.location.href = "https://apps.apple.com/account/subscriptions";
+      return;
+    }
     setPortalLoading(true);
     const res = await fetch("/api/stripe/portal", { method: "POST" });
     const { url } = await res.json();

@@ -1,5 +1,7 @@
 "use client";
 
+import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import NativeCheckout from "@/components/paywall/NativeCheckout";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { loadStripe } from "@stripe/stripe-js";
@@ -257,7 +259,11 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
     posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // App iOS : achat Apple (NativeCheckout), jamais de Stripe ni de setup-intent.
+  const native = isNativeApp();
+
   useEffect(() => {
+    if (native) { setLoadingIntent(false); return; }
     fetch("/api/stripe/setup-intent", { method: "POST" })
       .then(r => r.json())
       .then((json) => {
@@ -266,7 +272,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         setLoadingIntent(false);
       })
       .catch(() => { setSetupError("Impossible de charger le formulaire."); setLoadingIntent(false); });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Réassurance condensée en une ligne (2026-09-16, 2e itération — retour explicite de Gildas :
      "renforcer le testimonial" plutôt que la faire concurrencer par 3 blocs de réassurance) — sous
@@ -387,7 +393,11 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             </div>
           )}
 
-          {clientSecret && (
+          {native && (
+            <NativeCheckout mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} ctaLabel={PAYWALL_CTA_LABEL[mode]} />
+          )}
+
+          {!native && clientSecret && (
             <Elements
               stripe={getStripePromise()}
               options={{
