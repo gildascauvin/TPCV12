@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import NotificationToggle from "./NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
+import DeleteAccountButton from "./DeleteAccountButton";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
@@ -292,6 +293,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 <NotificationToggle />
 
                 <LogoutButton />
+
+                {!sandboxMode && <DeleteAccountButton hasStripeSub={!!profile?.stripe_customer_id && subActive} />}
               </>
             )}
           </div>

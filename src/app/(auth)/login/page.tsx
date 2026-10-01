@@ -50,6 +50,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("deleted") === "1") {
+      setError("Ton compte a bien été supprimé.");
+    }
     if (new URLSearchParams(window.location.search).get("expired") === "1") {
       setView("forgot");
       setError("Ton lien a expiré ou a déjà été utilisé. Redemande un email ci-dessous.");
