@@ -24,12 +24,14 @@ function trialDays(p: PurchasesStoreProduct | undefined): number | null {
   return unit === "DAY" ? n : unit === "WEEK" ? n * 7 : unit === "MONTH" ? n * 30 : null;
 }
 
-export default function NativeCheckout({
-  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel,
+/* Bloc d'achat Apple autonome (messages, mentions, bouton, restaurer, liens). Utilisé directement
+   par l'écran d'offre (PrimingJourneyModal) sur iOS, où il remplace l'enchaînement offre → paiement :
+   la feuille Apple fait office de formulaire, l'écran Stripe intermédiaire n'a plus de raison d'être. */
+export function NativePurchasePanel({
+  mode, billing, onSuccess, abVariant, ctaLabel,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
-  footerPortalNode: HTMLDivElement | null;
   onSuccess: () => void;
   abVariant?: string;
   ctaLabel: string;
@@ -98,49 +100,64 @@ export default function NativeCheckout({
     : null;
 
   return (
-    <>
+    <div>
       {loadError && (
-        <div style={{ color: "#d10000", fontSize: 13, textAlign: "center", padding: "12px 0" }}>{loadError}</div>
+        <div style={{ color: "#d10000", fontSize: 12, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>{loadError}</div>
       )}
       {!loadError && !product && (
-        <div style={{ textAlign: "center", padding: "20px 0", color: "#8a8f94", fontSize: 13 }}>Chargement de l&apos;offre...</div>
+        <div style={{ textAlign: "center", margin: "0 0 10px", color: "#8a8f94", fontSize: 12 }}>Chargement de l&apos;offre...</div>
       )}
       {error && (
-        <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>{error}</div>
+        <div style={{ color: "#d10000", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>{error}</div>
       )}
       {info && (
-        <div style={{ color: "#3a3f44", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(0,0,0,.04)", borderRadius: 10 }}>{info}</div>
+        <div style={{ color: "#3a3f44", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(0,0,0,.04)", borderRadius: 10 }}>{info}</div>
       )}
+      {legal && (
+        <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>{legal}</div>
+      )}
+      <button
+        type="button"
+        onClick={buy}
+        disabled={!product || busy !== null}
+        style={{
+          width: "100%", height: 50, borderRadius: 14, border: "none",
+          background: !product || busy ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
+          color: "#fff", fontSize: 14, fontWeight: 900, cursor: !product || busy ? "default" : "pointer",
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {busy === "buy" ? "Traitement..." : ctaLabel}
+      </button>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12, fontSize: 11, color: "#8a8f94" }}>
+        <button type="button" onClick={restore} disabled={!userId || busy !== null}
+          style={{ background: "none", border: "none", padding: 0, color: "#8a8f94", fontSize: 11, textDecoration: "underline", cursor: "pointer" }}>
+          {busy === "restore" ? "..." : "Restaurer mes achats"}
+        </button>
+        <a href={TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Conditions</a>
+        <a href={PRIVACY_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Confidentialité</a>
+      </div>
+    </div>
+  );
+}
 
-      {footerPortalNode && createPortal(
-        <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
-          {legal && (
-            <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>{legal}</div>
-          )}
-          <button
-            type="button"
-            onClick={buy}
-            disabled={!product || busy !== null}
-            style={{
-              width: "100%", height: 50, borderRadius: 14, border: "none",
-              background: !product || busy ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
-              color: "#fff", fontSize: 14, fontWeight: 900, cursor: !product || busy ? "default" : "pointer",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {busy === "buy" ? "Traitement..." : ctaLabel}
-          </button>
-          <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12, fontSize: 11, color: "#8a8f94" }}>
-            <button type="button" onClick={restore} disabled={!userId || busy !== null}
-              style={{ background: "none", border: "none", padding: 0, color: "#8a8f94", fontSize: 11, textDecoration: "underline", cursor: "pointer" }}>
-              {busy === "restore" ? "..." : "Restaurer mes achats"}
-            </button>
-            <a href={TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Conditions</a>
-            <a href={PRIVACY_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Confidentialité</a>
-          </div>
-        </div>,
-        footerPortalNode
-      )}
-    </>
+/* Pendant iOS du formulaire Stripe dans PaywallModal (encore ouvert directement par « S'abonner »
+   du profil) : le même bloc, porté dans le footer du drawer. */
+export default function NativeCheckout({
+  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel,
+}: {
+  mode: "athlete" | "coach";
+  billing: Billing;
+  footerPortalNode: HTMLDivElement | null;
+  onSuccess: () => void;
+  abVariant?: string;
+  ctaLabel: string;
+}) {
+  if (!footerPortalNode) return null;
+  return createPortal(
+    <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
+      <NativePurchasePanel mode={mode} billing={billing} onSuccess={onSuccess} abVariant={abVariant} ctaLabel={ctaLabel} />
+    </div>,
+    footerPortalNode
   );
 }

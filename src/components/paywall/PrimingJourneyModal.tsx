@@ -1,5 +1,7 @@
 "use client";
 
+import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect } from "react";
 import posthog from "posthog-js";
 import { PricingPrimingContent, PricingPrimingValue, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
@@ -14,6 +16,9 @@ interface Props {
   allowDismiss: boolean;
   onContinue: () => void;
   onDismiss: () => void;
+  /** App iOS : le bouton déclenche directement l'achat Apple (pas d'écran de paiement intermédiaire).
+      Appelé après un achat réussi ; par défaut la page se recharge (statut relu côté serveur). */
+  onPurchased?: () => void;
   /** Personnalisation optionnelle (2026-08-31) — l'onboarding rend désormais ce composant tel
       quel pour paywall_priming (plus une copie parallèle) afin de garder "le même habillage" que
       le gating in-app, y compris le "×"/onDismiss. Ces 5 props restent absentes de tous les
@@ -36,7 +41,7 @@ interface Props {
    Décision explicite de Gildas (2026-08-07) : ce composant et l'étape paywall_priming de
    l'onboarding (OnboardingFlow.tsx) doivent rester "exactement le même composant" — toute
    modification de contenu se fait uniquement dans PricingPriming.tsx. */
-export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name, athleteSelfId }: Props) {
+export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline: headlineProp, sub, sport, sessionCount, weaknessLabels, name, athleteSelfId }: Props) {
   const { isMd } = useBreakpoint();
   useEffect(() => {
     posthog.capture("paywall_priming_viewed", { plan: mode });
@@ -106,12 +111,23 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
         <div style={{ flexShrink: 0, background: "#f1f0ee", borderTop: "1px solid rgba(0,0,0,.06)", padding: "16px 20px 20px" }}>
           <div style={{ maxWidth: 640, margin: "0 auto" }}>
-            <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
-              {PAYWALL_CTA_LABEL[mode]}
-            </button>
-            <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
-              {PRICING_PRIMING_GUARANTEE_CAPTION}
-            </div>
+            {isNativeApp() ? (
+              <NativePurchasePanel
+                mode={mode}
+                billing={billing}
+                ctaLabel={PAYWALL_CTA_LABEL[mode]}
+                onSuccess={() => { if (onPurchased) onPurchased(); else window.location.reload(); }}
+              />
+            ) : (
+              <>
+                <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
+                  {PAYWALL_CTA_LABEL[mode]}
+                </button>
+                <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
+                  {PRICING_PRIMING_GUARANTEE_CAPTION}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

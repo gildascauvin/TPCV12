@@ -1308,6 +1308,17 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     next();
   }
 
+  /* App iOS : l'achat Apple part directement de paywall_priming, paywall_form (formulaire Stripe)
+     est sauté. Même effet que handlePaymentSuccess, mais on avance après paywall_form. */
+  async function handleNativePurchaseFromPriming() {
+    const uid = userId || newUserId;
+    if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+    const formIdx = path.indexOf("paywall_form");
+    const after = (formIdx >= 0 ? formIdx : stepIdx) + 1;
+    if (after < path.length) setStepIdx(after);
+    else window.location.href = role === "coach" ? "/coach" : "/today";
+  }
+
   async function handleGoogleRegister() {
     const pending: PendingData = {
       role, sport, sportPrecision, level, weaknesses, goal, frustration, trainingDays,
@@ -1731,6 +1742,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           allowDismiss
           onContinue={() => setWizardPaywallStage("form")}
           onDismiss={() => setWizardPaywallStage(null)}
+          onPurchased={async () => {
+            const uid = userId || newUserId;
+            if (uid) await supabase.from("profiles").update({ onboarding_done: true }).eq("user_id", uid);
+            setWizardUnlocked(true);
+            setWizardPaywallStage(null);
+          }}
           athleteSelfId={role === "coach" ? undefined : ((userId || newUserId) ?? undefined)}
         />
       )}
@@ -2181,6 +2198,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               allowDismiss={false}
               onContinue={next}
               onDismiss={() => {}}
+              onPurchased={handleNativePurchaseFromPriming}
               headline={headline}
               sport={displaySport}
               sessionCount={role === "coach" ? undefined : realSessionCount}
