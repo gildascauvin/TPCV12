@@ -9,11 +9,14 @@ import type { Perspective } from "@/lib/fatigueSignature";
    moteur que la sandbox (buildAthleteFixture → computeConseilsData), aucune donnée inventée à part. */
 
 /* Même seuils que le moteur : ACWR calculable (14 j + 4 séances, voir acuteChronicAt) pour la charge,
-   baseline personnelle suffisante (12 j) pour la récupération. */
+   baseline personnelle suffisante (12 j) pour la récupération — sur N'IMPORTE QUEL jour de la
+   période, pas seulement le jour de référence : la baseline du jour n'existe qu'une fois le check-in
+   du jour rempli, et un sportif avec des mois d'historique basculait en démo chaque matin avant son
+   check-in (bug du 2026-10-01). */
 export function analyticsReady(data: ConseilsData, group: MetricGroup): boolean {
   return group === "charge"
     ? data.loadInfo.label !== "HISTORIQUE INSUFFISANT"
-    : !!data.wellnessBaseline?.hasEnoughHistory;
+    : !!data.wellnessBaseline?.hasEnoughHistory || data.wellnessBaselineSeries.some(b => !!b?.hasEnoughHistory);
 }
 
 export function demoConseilsData(referenceDate: string, perspective: Perspective = "athlete"): ConseilsData {
