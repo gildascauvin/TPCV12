@@ -56,7 +56,10 @@ export default function NativeCheckout({
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error("délai global dépassé")), 70000)),
         ]);
         if (alive) setProduct(products[PRODUCT_IDS[mode][billing]]);
-        if (alive && !products[PRODUCT_IDS[mode][billing]]) setLoadError("Offre indisponible sur l'App Store pour le moment.");
+        if (alive && !products[PRODUCT_IDS[mode][billing]]) {
+          const found = Object.keys(products);
+          setLoadError(`Offre indisponible sur l'App Store pour le moment (${PRODUCT_IDS[mode][billing]} absent ; Apple a renvoyé ${found.length} produit(s)${found.length ? " : " + found.join(", ") : ""}).`);
+        }
       } catch (e) {
         console.error("[iap] products", e);
         const detail = e instanceof Error ? e.message : String(e);
