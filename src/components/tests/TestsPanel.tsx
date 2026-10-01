@@ -1058,7 +1058,7 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
   };
 }
 
-export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false }: {
+export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false, examplePerspective = "athlete" }: {
   ownerId: string;
   subject: TestSubject;
   linkedUserId?: string | null;
@@ -1083,6 +1083,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   fixture?: { merged: MergedTest[]; results: TestResultRow[] };
   /** Tests d'exemple (2026-10-01) : pastille "Exemple" sur chaque test et sur les recommandations, pas de bandeau en haut. */
   example?: boolean;
+  examplePerspective?: "athlete" | "coach";
   /* La page hôte porte déjà son propre fond DARK_CARD_BG plein-page (2026-09-25, /conseils sportif
      uniquement — jamais /coach/athletes, page claire) : la carte "Recommandations" ci-dessous perd
      alors son propre fond (transparent) pour ne pas empiler 2 surfaces dark distinctes ("pas censé
@@ -1752,7 +1753,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
               <div style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12, padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,.85)", lineHeight: 1.5 }}>
                 <b style={{ color: "#fff" }}>{verdict.emoji} {verdict.action} :</b> {verdict.sub}
               </div>
-              {example && <ExampleNote text="Tes recommandations apparaissent dès ton 1er test." top="50%" />}
+              {example && <ExampleNote text={examplePerspective === "coach" ? "Ses recommandations apparaissent dès son 1er test." : "Tes recommandations apparaissent dès ton 1er test."} top="50%" />}
               </div>
               </LockedBlur>
             </>
@@ -1864,7 +1865,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                     </div>
                     {isExpanded && (
                       <div style={{ marginTop: 4, paddingLeft: 42 }}>
-                        <TestCard {...row.cardProps} initialOpen={autoAddKey === row.key} analysisLocked={!!lockedAnalysis} exampleNote={example ? "Tes propres tests remplacent cet exemple." : undefined} />
+                        <TestCard {...row.cardProps} initialOpen={autoAddKey === row.key} analysisLocked={!!lockedAnalysis} exampleNote={example ? (examplePerspective === "coach" ? "Ses propres tests remplacent cet exemple." : "Tes propres tests remplacent cet exemple.") : undefined} />
                       </div>
                     )}
                   </div>

@@ -9,7 +9,7 @@ import { useEffect, useSyncExternalStore } from "react";
 
 export type OnboardingStepKey = "form" | "build" | "adjust" | "unlock" | "invite";
 export interface OnboardingStep { key: OnboardingStepKey; label: string; done: boolean }
-export interface OnboardingProgress { role: "athlete" | "coach"; steps: OnboardingStep[]; complete: boolean }
+export interface OnboardingProgress { userId?: string; role: "athlete" | "coach"; steps: OnboardingStep[]; complete: boolean }
 
 export const ONBOARDING_REFRESH = "tpc:onboarding-refresh";
 /** Ouvre le "+" de la nav (étape "Construis ton entraînement"). */
@@ -23,11 +23,39 @@ const listeners = new Set<() => void>();
 
 function emit() { listeners.forEach(l => l()); }
 
+/* Lot C (2026-10-01) : un événement par étape au moment où elle se coche, une seule fois par compte
+   (mémoire locale par utilisateur). Un seul nom d'événement, l'étape et le rôle en propriétés, plus
+   un nom spécifique par étape pour les funnels (même convention que onboarding_step_viewed +
+   onboarding_${step}_viewed). Une étape déjà faite à la 1re observation (ex. coach : Thomas compte
+   pour "Invite tes sportifs") part aussi, avec `already_done_on_arrival`. */
+async function trackCompletions(p: OnboardingProgress) {
+  if (!p.userId || !p.steps.length) return;
+  const key = `tpc_onb_tracked_${p.userId}`;
+  let seen: string[] | null = null;
+  try { const raw = localStorage.getItem(key); seen = raw ? JSON.parse(raw) : null; } catch { /* stockage indisponible */ }
+  const firstObservation = seen === null;
+  const tracked = new Set(seen ?? []);
+  const newlyDone = p.steps.filter(s => s.done && !tracked.has(s.key));
+  if (!newlyDone.length && !(p.complete && !tracked.has("__complete"))) return;
+  const posthog = (await import("posthog-js")).default;
+  for (const s of newlyDone) {
+    const props = { role: p.role, step: s.key, step_index: p.steps.findIndex(x => x.key === s.key) + 1, steps_total: p.steps.length, already_done_on_arrival: firstObservation };
+    posthog.capture("onboarding_checklist_step_completed", props);
+    posthog.capture(`onboarding_checklist_${s.key}_completed`, props);
+    tracked.add(s.key);
+  }
+  if (p.complete && !tracked.has("__complete")) {
+    posthog.capture("onboarding_checklist_completed", { role: p.role, steps_total: p.steps.length });
+    tracked.add("__complete");
+  }
+  try { localStorage.setItem(key, JSON.stringify(Array.from(tracked))); } catch { /* idem */ }
+}
+
 export function refreshOnboardingProgress(): Promise<void> {
   if (inflight) return inflight;
   inflight = fetch("/api/onboarding/progress", { cache: "no-store" })
     .then(r => (r.ok ? r.json() : null))
-    .then((d: OnboardingProgress | null) => { if (d && Array.isArray(d.steps)) { current = d; emit(); } })
+    .then((d: OnboardingProgress | null) => { if (d && Array.isArray(d.steps)) { current = d; emit(); trackCompletions(d); } })
     .catch(() => {})
     .finally(() => { inflight = null; });
   return inflight;

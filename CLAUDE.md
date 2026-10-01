@@ -4600,5 +4600,12 @@ Puce `n/4` à gauche du sélecteur de date (CalendarHeader) + panneau. Données 
 - Charge/Récupération en gratuit : titre + phrase au-dessus de "Activer l'ajustement", posés sur l'insight flouté.
 - Check-in auto du matin : clé `wellness_prompted_{userId}_{date}` (par compte ; la clé par date seule bloquait un nouveau compte ouvert dans le même onglet).
 
-### Reste à faire
-Lot C : events PostHog par étape de checklist et reconstruction du funnel `wmxQuLFz` (les étapes wizard ne se déclenchent plus). Exemple de tests côté coach (page Sportifs) non fait. Migrations 026/027 appliquées en prod le 2026-10-01.
+### Tracking (Lot C)
+- `onboarding_checklist_step_completed {role, step, step_index, steps_total, already_done_on_arrival}` + nom spécifique `onboarding_checklist_{step}_completed` (convention générique + spécifique comme `onboarding_step_viewed`), émis par `trackCompletions()` (onboardingProgress.ts) quand une étape se coche, une fois par compte (mémoire locale `tpc_onb_tracked_{userId}`). Une étape déjà faite à la 1re observation part avec `already_done_on_arrival: true` (coach : Thomas coche "invite").
+- `onboarding_checklist_completed {role}`, `onboarding_entered_app {role}` (enterApp), `onboarding_checklist_step_clicked`, `onboarding_checklist_toggled`, `priming_after_first_decision`.
+- Funnels : un par rôle (les étapes de checklist diffèrent : `form` côté sportif, `invite` côté coach).
+
+### Exemple de tests côté coach
+Page Sportifs, sportif sans aucun test (`lastTests[a.id]` vide) : même exemple que /conseils (`TestsPanel example examplePerspective="coach"`), bouton "Ajouter son 1er test →". Jamais en sandbox.
+
+Migrations 026/027 appliquées en prod le 2026-10-01.

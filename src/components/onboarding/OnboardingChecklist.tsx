@@ -42,7 +42,6 @@ export default function OnboardingChecklist() {
     if (!openedThisSession || doneCount > seen) {
       setOpen(true);
       try { sessionStorage.setItem(OPENED_KEY, "1"); localStorage.setItem(SEEN_KEY, String(doneCount)); } catch { /* idem */ }
-      if (doneCount > seen && seen >= 0) posthog.capture("onboarding_checklist_step_completed", { role: progress.role, done: doneCount, total });
     }
   }, [progress, doneCount, total]);
 

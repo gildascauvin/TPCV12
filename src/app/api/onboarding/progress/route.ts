@@ -20,7 +20,7 @@ export async function GET() {
     .select("mode, created_at, subscription_status, invited_by_coach_id, first_adjustment_at")
     .eq("user_id", user.id)
     .maybeSingle();
-  if (!profile) return Response.json({ role: "athlete", steps: [], complete: true } satisfies OnboardingProgress);
+  if (!profile) return Response.json({ userId: user.id, role: "athlete", steps: [], complete: true } satisfies OnboardingProgress);
 
   const since = (profile.created_at ?? new Date().toISOString()).split("T")[0];
   const role = profile.mode === "coach" ? "coach" : "athlete";
@@ -59,5 +59,5 @@ export async function GET() {
       { key: "unlock", label: "Débloque leurs performances", done: profile.subscription_status === "coach" },
     ];
   }
-  return Response.json({ role, steps, complete: steps.every(s => s.done) } satisfies OnboardingProgress);
+  return Response.json({ userId: user.id, role, steps, complete: steps.every(s => s.done) } satisfies OnboardingProgress);
 }

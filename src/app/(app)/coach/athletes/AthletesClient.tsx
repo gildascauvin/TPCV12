@@ -1,7 +1,8 @@
 "use client";
 
 import LockedBlur from "@/components/paywall/LockedBlur";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { buildAthleteFixture, buildTestFixture } from "@/lib/sandboxFixtures";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
@@ -154,6 +155,13 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [trends, setTrends] = useState(initialTrends);
   const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
   const [lastTests] = useState(initialLastTests);
+  /* Tests d'exemple côté coach (2026-10-01, même règle que /conseils) : un sportif sans aucun test
+     affiche l'exemple tant que le coach n'a pas choisi d'ajouter son 1er test. Jamais en sandbox. */
+  const [exampleDismissed, setExampleDismissed] = useState<Record<string, boolean>>({});
+  const exampleTests = useMemo(() => {
+    const p = buildAthleteFixture().profile;
+    return { ...buildTestFixture(), sport: p.sport, sexe: p.sexe, poidsKg: p.poids_kg };
+  }, []);
   const [testVerdicts] = useState(initialTestVerdicts);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
@@ -288,6 +296,26 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
         {selectedAthleteId ? (() => {
           const a = athletes.find(x => x.id === selectedAthleteId);
           if (!a) return null;
+          if (!sandboxMode && !lastTests[a.id] && !exampleDismissed[a.id]) {
+            return (
+              <>
+                <TestsPanel
+                  ownerId="example" subject={{ subjectUserId: "example" }}
+                  sport={exampleTests.sport} sexe={exampleTests.sexe} poidsKg={exampleTests.poidsKg}
+                  fixture={exampleTests}
+                  onDarkPage
+                  example
+                  examplePerspective="coach"
+                />
+                <button
+                  onClick={() => setExampleDismissed(prev => ({ ...prev, [a.id]: true }))}
+                  style={{ display: "block", width: "100%", marginTop: 14, border: "none", cursor: "pointer", color: "#fff", fontSize: 14, fontWeight: 800, borderRadius: 12, padding: "12px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}
+                >
+                  Ajouter son 1er test →
+                </button>
+              </>
+            );
+          }
           return (
             <>
               {/* Pas de titre "Performance / {nom}" ici (2026-09-24, retour de Gildas) — le nom du
