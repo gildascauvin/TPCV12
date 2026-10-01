@@ -4603,7 +4603,7 @@ Puce `n/4` à gauche du sélecteur de date (CalendarHeader) + panneau. Données 
 ### Tracking (Lot C)
 - `onboarding_checklist_step_completed {role, step, step_index, steps_total, already_done_on_arrival}` + nom spécifique `onboarding_checklist_{step}_completed` (convention générique + spécifique comme `onboarding_step_viewed`), émis par `trackCompletions()` (onboardingProgress.ts) quand une étape se coche, une fois par compte (mémoire locale `tpc_onb_tracked_{userId}`). Une étape déjà faite à la 1re observation part avec `already_done_on_arrival: true` (coach : Thomas coche "invite").
 - `onboarding_checklist_completed {role}`, `onboarding_entered_app {role}` (enterApp), `onboarding_checklist_step_clicked`, `onboarding_checklist_toggled`, `priming_after_first_decision`.
-- Funnels : un par rôle (les étapes de checklist diffèrent : `form` côté sportif, `invite` côté coach).
+- Funnels (dashboard 706709, créés 2026-10-01, `date_from` 2026-10-01, fenêtre 14 j) : **Funnel Onboarding Sportif (checklist)** `6JLNeyfb` (value_intro → decision_2a → account_created → form → build → adjust → unlock) et **Funnel Onboarding Coach (checklist)** `M71wHM4I` (… decision_2b … invite → build → adjust → unlock). `onboarding_entered_app` volontairement hors funnel (capturé juste avant une redirection, perte possible). L'ancien `wmxQuLFz` (étapes wizard) est retiré du dashboard, pas supprimé.
 
 ### Exemple de tests côté coach
 Page Sportifs, sportif sans aucun test (`lastTests[a.id]` vide) : même exemple que /conseils (`TestsPanel example examplePerspective="coach"`), bouton "Ajouter son 1er test →". Jamais en sandbox.
