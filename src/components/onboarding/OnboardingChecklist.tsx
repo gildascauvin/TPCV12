@@ -17,6 +17,24 @@ import {
 const SEEN_KEY = "tpc_onb_seen_count";
 const OPENED_KEY = "tpc_onb_opened_session";
 
+/* Le pourquoi de chaque étape (2026-10-01) : une phrase qui vend l'étape, affichée tant qu'elle n'est
+   pas faite. Panneau élargi et fond flouté pour leur laisser la place. */
+const WHY: Record<"athlete" | "coach", Partial<Record<OnboardingStepKey, string>>> = {
+  athlete: {
+    form: "30 secondes chaque matin : c'est ce qui cale ta séance sur ton état réel, pas sur un plan figé.",
+    build: "Un programme ou une séance libre : sans séance prévue, il n'y a rien à ajuster.",
+    adjust: "Ta 1re décision : alléger, maintenir ou pousser selon ta forme du jour. Puis note ton ressenti.",
+    unlock: "Garde la décision chaque jour, tes tendances de charge et de récup, et l'analyse de tes tests.",
+  },
+  coach: {
+    invite: "Ils renseignent leur forme en 30 secondes. Tu la vois chaque matin, sans leur écrire.",
+    build: "Assigne un programme : chaque séance devient une décision à prendre au bon moment.",
+    adjust: "Coach Control te dit qui alléger, qui pousser. Une décision prend un clic.",
+    unlock: "Garde Coach Control pour tout ton groupe, avec la charge, la récup et les tests de chacun.",
+  },
+};
+const PANEL_W = 400;
+
 export default function OnboardingChecklist() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
@@ -49,7 +67,8 @@ export default function OnboardingChecklist() {
     if (!open) return;
     const place = () => {
       const r = chipRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 8, left: Math.max(12, r.left) });
+      const w = Math.min(PANEL_W, window.innerWidth - 24);
+      if (r) setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) });
     };
     place();
     window.addEventListener("resize", place);
@@ -95,16 +114,17 @@ export default function OnboardingChecklist() {
       </button>
       {open && pos && createPortal(
         <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 2147483090 }} />
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 2147483090, background: "rgba(4,6,8,.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />
           <div style={{
-            position: "fixed", top: pos.top, left: pos.left, zIndex: 2147483095, width: "min(320px, calc(100vw - 24px))",
-            background: "#1a1f24", border: "1px solid rgba(255,255,255,.14)", borderRadius: 18, padding: 14,
-            boxShadow: "0 16px 40px rgba(0,0,0,.5)", color: "#fff",
+            position: "fixed", top: pos.top, left: pos.left, zIndex: 2147483095, width: `min(${PANEL_W}px, calc(100vw - 24px))`,
+            maxHeight: `calc(100dvh - ${pos.top + 16}px)`, overflowY: "auto",
+            background: "#1a1f24", border: "1px solid rgba(255,255,255,.14)", borderRadius: 20, padding: 18,
+            boxShadow: "0 20px 50px rgba(0,0,0,.55)", color: "#fff",
           }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2 }}>
               {role === "coach" ? "Lance ton équipe" : "Lance ton autorégulation"}
             </div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)", marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", marginBottom: 14 }}>
               {doneCount}/{total} étapes · {nextStep ? `Prochaine : ${nextStep.label.toLowerCase()}` : "Tout est prêt"}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -112,17 +132,19 @@ export default function OnboardingChecklist() {
                 /* Étape "Débloque…" mise en avant en CTA tant qu'elle n'est pas faite (2026-10-01). */
                 if (s.key === "unlock" && !s.done) {
                   return (
+                    <div key={s.key} style={{ marginTop: 8 }}>
+                    {WHY[role][s.key] && <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.45, textAlign: "center", margin: "0 6px 10px" }}>{WHY[role][s.key]}</div>}
                     <button
-                      key={s.key}
                       onClick={() => runStep(s)}
                       style={{
-                        marginTop: 8, width: "100%", padding: "12px 14px", borderRadius: 12, border: "none", cursor: "pointer",
+                        width: "100%", padding: "13px 14px", borderRadius: 12, border: "none", cursor: "pointer",
                         fontFamily: "inherit", fontSize: 14, fontWeight: 800, color: "#fff",
                         background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.35)",
                       }}
                     >
                       🔓 {s.label}
                     </button>
+                    </div>
                   );
                 }
                 const isNext = s.key === nextStep?.key;
@@ -131,15 +153,15 @@ export default function OnboardingChecklist() {
                     key={s.key}
                     onClick={() => runStep(s)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
-                      padding: "9px 10px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+                      display: "flex", alignItems: "flex-start", gap: 12, textAlign: "left", width: "100%",
+                      padding: "11px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
                       background: isNext ? "rgba(255,138,85,.12)" : "transparent",
                       border: isNext ? "1px solid rgba(255,138,85,.35)" : "1px solid transparent",
                       color: s.done ? "rgba(255,255,255,.45)" : "#fff",
                     }}
                   >
                     <span style={{
-                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                      width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center",
                       fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700,
                       background: s.done ? "#2f9e44" : "transparent",
                       border: s.done ? "none" : `1.5px solid ${isNext ? "#ff8a55" : "rgba(255,255,255,.3)"}`,
@@ -147,7 +169,12 @@ export default function OnboardingChecklist() {
                     }}>
                       {s.done ? "✓" : i + 1}
                     </span>
-                    <span style={{ flex: 1, fontSize: 13.5, fontWeight: isNext ? 800 : 600, textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 14.5, fontWeight: isNext ? 800 : 700, textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
+                      {!s.done && WHY[role][s.key] && (
+                        <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: "rgba(255,255,255,.62)", marginTop: 3 }}>{WHY[role][s.key]}</span>
+                      )}
+                    </span>
                     {isNext && <span style={{ fontSize: 12, fontWeight: 800, color: "#ff8a55" }}>→</span>}
                   </button>
                 );

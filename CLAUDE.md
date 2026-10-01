@@ -4628,3 +4628,8 @@ POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW (section "Check-in · s�
 - **1re décision en clair par sportif** : `coach_athletes.first_decision_on` (migration 028, appliquée en prod), posée au 1er affichage d'une vraie décision pour ce sportif (CoachClient) ; CoachPlanningClient gate dessus.
 - Checklist coach : étape « Crée ton compte » toujours cochée ; « Invite tes sportifs » ne compte que les vrais sportifs (`user_id` ou `invite_email`), plus Thomas.
 - Cartes Coach Control : `minWidth:0` + grilles en `minmax(0,1fr)` (un nom de programme long élargissait la colonne).
+
+### Checklist élargie avec le pourquoi de chaque étape (2026-10-01, suite)
+- `OnboardingChecklist.tsx` : panneau 400px (plein écran moins 24px sur mobile), toujours ancré sous la pastille n/4, fond assombri + flouté (clic = fermer), défile si l'écran est court.
+- Table `WHY` (sportif/coach) : une phrase qui vend chaque étape, affichée tant qu'elle n'est pas faite ; pour « Débloque… », au-dessus du bouton orange.
+- Modale centrée testée dans le POC puis écartée : elle bloquerait le produit et couvrirait la 1re décision au moment où l'étape se coche. Ordre assumé à l'arrivée : check-in d'abord, checklist juste après (1re étape cochée).
