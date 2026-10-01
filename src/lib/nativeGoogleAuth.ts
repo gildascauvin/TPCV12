@@ -31,6 +31,20 @@ async function makeNonce() {
   return { raw, hashed };
 }
 
+type SocialLoginPlugin = typeof import("@capgo/capacitor-social-login").SocialLogin;
+
+// Initialisé une seule fois pour les deux fournisseurs (Google et Apple).
+async function initSocialLogin(SocialLogin: SocialLoginPlugin) {
+  if (initialized) return;
+  await SocialLogin.initialize({
+    google: { iOSClientId: GOOGLE_IOS_CLIENT_ID, iOSServerClientId: GOOGLE_WEB_CLIENT_ID, mode: "online" },
+    // iOS : Sign in with Apple passe par le système ; clientId sert juste à activer le fournisseur,
+    // redirectUrl vide évite toute redirection web.
+    apple: { clientId: "com.theperfclub.app", redirectUrl: "" },
+  });
+  initialized = true;
+}
+
 /* Renvoie null si l'utilisateur a fermé la fenêtre Google (pas une erreur à afficher). */
 export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok: true } | { ok: false; error: string } | null> {
   if (!GOOGLE_IOS_CLIENT_ID || !GOOGLE_WEB_CLIENT_ID) {
@@ -38,12 +52,7 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
   }
   // Import dynamique : le plugin n'a rien à faire dans le bundle web.
   const { SocialLogin } = await import("@capgo/capacitor-social-login");
-  if (!initialized) {
-    await SocialLogin.initialize({
-      google: { iOSClientId: GOOGLE_IOS_CLIENT_ID, iOSServerClientId: GOOGLE_WEB_CLIENT_ID, mode: "online" },
-    });
-    initialized = true;
-  }
+  await initSocialLogin(SocialLogin);
 
   const nonce = await makeNonce();
   let idToken: string | null = null;
@@ -63,5 +72,40 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
     console.error("[google-native] supabase", error.message);
     return { ok: false, error: error.message };
   }
+  return { ok: true };
+}
+
+/* Se connecter avec Apple (2026-10-01) — obligatoire sur iOS dès qu'on propose Google (guideline
+   4.8). Même schéma que Google : nonce haché envoyé à Apple, nonce brut à Supabase. Côté Supabase,
+   le fournisseur Apple doit être activé avec le bundle ID com.theperfclub.app dans ses Client IDs
+   (pas de clé secrète nécessaire pour la connexion native).
+   Apple ne transmet le nom qu'à la toute première connexion : on le pose alors dans les
+   métadonnées (full_name), là où l'onboarding le lit déjà pour Google. */
+export async function nativeAppleSignIn(supabase: SupabaseClient): Promise<{ ok: true } | { ok: false; error: string } | null> {
+  const { SocialLogin } = await import("@capgo/capacitor-social-login");
+  await initSocialLogin(SocialLogin);
+
+  const nonce = await makeNonce();
+  let idToken: string | null = null;
+  let fullName = "";
+  try {
+    const res = await SocialLogin.login({ provider: "apple", options: { scopes: ["email", "name"], nonce: nonce.hashed } });
+    const r = res.result as { idToken?: string | null; profile?: { givenName?: string | null; familyName?: string | null } };
+    idToken = r?.idToken ?? null;
+    fullName = [r?.profile?.givenName, r?.profile?.familyName].filter(Boolean).join(" ");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/cancel|1001/i.test(msg)) return null;
+    console.error("[apple-native]", msg);
+    return { ok: false, error: "Connexion Apple impossible. Réessaie ou utilise ton email." };
+  }
+  if (!idToken) return { ok: false, error: "Connexion Apple impossible. Réessaie ou utilise ton email." };
+
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "apple", token: idToken, nonce: nonce.raw });
+  if (error) {
+    console.error("[apple-native] supabase", error.message);
+    return { ok: false, error: error.message };
+  }
+  if (fullName) await supabase.auth.updateUser({ data: { full_name: fullName } }).catch(() => {});
   return { ok: true };
 }

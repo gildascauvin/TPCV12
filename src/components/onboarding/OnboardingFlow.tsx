@@ -1,6 +1,6 @@
 "use client";
 
-import { isNativeApp, nativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
+import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef, Fragment } from "react";
 import posthog from "posthog-js";
 import { useRouter } from "next/navigation";
@@ -430,6 +430,9 @@ function EmailSentScreen({ email }: { email: string }) {
 
 /* ── main ── */
 export default function OnboardingFlow({ userId, pendingData, initialRole, resumeRole }: Props) {
+  // Bouton "Continuer avec Apple" : app iOS uniquement, résolu après montage (pas d'écart SSR).
+  const [nativeShell, setNativeShell] = useState(false);
+  useEffect(() => { setNativeShell(isNativeApp()); }, []);
   const router   = useRouter();
   const supabase = createClient();
   /* Une continuation Google (pendingData) a déjà un userId (compte créé), mais c'est toujours
@@ -1319,6 +1322,19 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     else window.location.href = role === "coach" ? "/coach" : "/today";
   }
 
+  /* Se connecter avec Apple (app iOS uniquement, guideline 4.8) : même atterrissage que Google
+     (register?d=... reprend l'onboarding avec les réponses déjà données). */
+  async function handleAppleRegister() {
+    const pending: PendingData = {
+      role, sport, sportPrecision, level, weaknesses, goal, frustration, trainingDays,
+      coachingContext, athleteCount, coachingChallenge, currentTool, trainingStyle, name,
+    };
+    const encoded = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(pending)))));
+    const res = await nativeAppleSignIn(supabase);
+    if (res?.ok) window.location.href = `/register?d=${encoded}`;
+    else if (res) setError(res.error);
+  }
+
   async function handleGoogleRegister() {
     const pending: PendingData = {
       role, sport, sportPrecision, level, weaknesses, goal, frustration, trainingDays,
@@ -1581,6 +1597,25 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         )}
 
         <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
+          {nativeShell && (
+            <button
+              type="button"
+              onClick={() => { if (!saving) handleAppleRegister(); }}
+              disabled={saving}
+              style={{
+                width: "100%", height: 48, borderRadius: 14, border: "none", background: "#000",
+                color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
+                opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
+                gap: 10, marginBottom: 10,
+              }}
+            >
+              <svg width="16" height="18" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true">
+                <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-157 124s-87-40-166-40c-77 0-104 41-167 41s-107-57-157-127C42 790 0 677 0 569c0-173 112-265 223-265 59 0 108 39 145 39 35 0 90-41 157-41 25 0 117 2 177 89zM554 159c28-33 48-79 48-125 0-6-1-13-2-18-45 2-99 30-131 68-25 29-49 75-49 122 0 7 1 14 2 16 3 1 8 1 12 1 41 0 92-27 120-64z"/>
+              </svg>
+              Continuer avec Apple
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => { if (!saving) handleGoogleRegister(); }}

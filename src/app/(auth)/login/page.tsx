@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import AuthBackground from "@/components/auth/AuthBackground";
-import { isNativeApp, nativeGoogleSignIn } from "@/lib/nativeGoogleAuth";
+import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 
 function EyeOn() {
   return (
@@ -23,6 +23,14 @@ function EyeOff() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
       <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="16" height="18" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true">
+      <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-157 124s-87-40-166-40c-77 0-104 41-167 41s-107-57-157-127C42 790 0 677 0 569c0-173 112-265 223-265 59 0 108 39 145 39 35 0 90-41 157-41 25 0 117 2 177 89zM554 159c28-33 48-79 48-125 0-6-1-13-2-18-45 2-99 30-131 68-25 29-49 75-49 122 0 7 1 14 2 16 3 1 8 1 12 1 41 0 92-27 120-64z"/>
     </svg>
   );
 }
@@ -58,6 +66,21 @@ export default function LoginPage() {
       setError("Ton lien a expiré ou a déjà été utilisé. Redemande un email ci-dessous.");
     }
   }, []);
+
+  // Bouton Apple : app iOS uniquement (guideline 4.8), résolu après montage pour éviter un écart SSR.
+  const [native, setNative] = useState(false);
+  useEffect(() => { setNative(isNativeApp()); }, []);
+
+  async function handleApple() {
+    setLoading(true);
+    setError(null);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    const res = await nativeAppleSignIn(supabase);
+    if (res?.ok) { window.location.href = "/today"; return; }
+    if (res) setError(res.error);
+    setLoading(false);
+  }
 
   async function handleGoogle() {
     setLoading(true);
@@ -266,6 +289,16 @@ export default function LoginPage() {
                 <span style={{ fontSize: 12, color: "#8a8f94" }}>ou</span>
                 <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
               </div>
+
+              {native && (
+                <button
+                  type="button" onClick={handleApple} disabled={loading}
+                  style={{ height: 46, borderRadius: 16, border: "none", background: "#000", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}
+                >
+                  <AppleIcon />
+                  Continuer avec Apple
+                </button>
+              )}
 
               <button
                 type="button" onClick={handleGoogle} disabled={loading}
