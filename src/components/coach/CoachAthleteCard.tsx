@@ -390,7 +390,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             </div>
           )
             : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={150} />
-            : <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />}
+            : <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone />}
         </div>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>

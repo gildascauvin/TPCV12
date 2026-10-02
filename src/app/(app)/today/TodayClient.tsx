@@ -647,7 +647,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} /></div>;
+    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} /></div>;
   })();
 
   useEffect(() => {

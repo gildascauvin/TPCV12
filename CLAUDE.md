@@ -4692,3 +4692,4 @@ POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW. Règle précisée par G
 - **Coach Control** : bouton « Voir → / Décider → » sous la carte supprimé.
 - Supprimés : `analyticsDemo`/`examplePhase` (/today), phase d'exemple de `CoachAthleteCard`, usages de `demoConseilsData` dans l'app (reste dans `src/lib/demoAnalytics.ts`). Le sportif démo du coach (Thomas) garde sa mention « Exemple ».
 - Non traité : anneaux de récupération du sélecteur de dates et du Planning, nets en gratuit (cohérent avec « mesures gratuites »).
+- **Libellés de l'onglet Aujourd'hui et anneaux (suite 02/10)** : jour de repos = « Repos », sans zone circulaire, gratuit ET Premium (grand anneau : « Jour de repos »). Séance faite : gratuit = « Séance légère/modérée/dure » sans zone ; Premium inchangé (« Dans la zone » / sous / au-dessus, zone visible). `DecisionRingState.done`/`rest`, `DoneDecisionRing` prop `hideZone`.

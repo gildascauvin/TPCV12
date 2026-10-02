@@ -46,11 +46,15 @@ const MINI_W = 54;
    54px le creux de l'arc fait ~30px, "Sous-charge" ou "Équilibré" n'y tiendraient pas sans abréger.
    Charge/Récup : le niveau de leur jauge agrégée. Aujourd'hui : la position du curseur par rapport à
    la zone conseillée, le même texte que sous la grande jauge. */
-function statusOf(key: HomeTab, previews?: HomeTabPreviews): { label: string; color: string } | null {
+function statusOf(key: HomeTab, previews?: HomeTabPreviews, plain = false): { label: string; color: string } | null {
   if (key === "today") {
     const st = previews?.today;
     if (!st) return null;
     const v = Math.round(st.value);
+    // Séance faite (2026-10-02, Gildas) : juste son intensité, pas de « zone ».
+    if (st.rest) return { label: "Repos", color: "rgba(255,255,255,.62)" };
+    // Séance faite : intensité seule en gratuit, la zone reste en Premium (2026-10-02, Gildas).
+    if (st.done && plain) return { label: `Séance ${v >= 8 ? "dure" : v >= 5 ? "modérée" : "légère"}`, color: "rgba(255,255,255,.62)" };
     if (v < st.zoneLow) return { label: "Sous la zone", color: "rgba(255,255,255,.62)" };
     if (v > st.zoneHigh) return { label: "Au-dessus de la zone", color: "rgba(255,255,255,.62)" };
     return { label: "Dans la zone", color: "#6ede8a" };
@@ -89,7 +93,7 @@ export default function HomeTabs({ active, onChange, dark = true, previews, lock
            dégradé, même zone, même curseur. Charge/Récup = miniature de leur jauge agrégée. */
         let mini: React.ReactNode = null;
         if (t.key === "today") {
-          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={isMd ? MINI_W : 44} hideZone={isLocked("today") && !!previews.today.planned} />;
+          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={isMd ? MINI_W : 44} hideZone={!!previews.today.rest || (isLocked("today") && (!!previews.today.done || !!previews.today.planned))} />;
         } else {
           const axis = previews?.[t.key] ?? null;
           if (axis) mini = <AggregateGauge bare size={isMd ? MINI_W : 44} pos={axis.pos} band={axis.band} bands={AGG_BANDS[GROUP_OF[t.key]]} />;
@@ -98,7 +102,7 @@ export default function HomeTabs({ active, onChange, dark = true, previews, lock
         const pv = previews?.today ? Math.round(previews.today.value) : 0;
         const status = plannedOnly
           ? { label: `Séance ${pv >= 8 ? "dure" : pv >= 5 ? "modérée" : "légère"} prévue`, color: "rgba(255,255,255,.62)" }
-          : statusOf(t.key, previews);
+          : statusOf(t.key, previews, isLocked(t.key));
         return (
           <button
             key={t.key}

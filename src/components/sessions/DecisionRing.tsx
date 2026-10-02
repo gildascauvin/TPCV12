@@ -59,7 +59,7 @@ function sectorPath(cx: number, cy: number, rIn: number, rOut: number, a0: numbe
    (AutoregButtons.tsx) — sert à la miniature de l'onglet Aujourd'hui (HomeTabs.tsx), pour qu'elle
    montre exactement la même chose que la grande (2026-09-30, Gildas : "fidèle"). */
 /* `planned` : séance encore à faire (la zone est alors une décision, masquée en gratuit). */
-export type DecisionRingState = { value: number; zoneLow: number; zoneHigh: number; planned?: boolean };
+export type DecisionRingState = { value: number; zoneLow: number; zoneHigh: number; planned?: boolean; done?: boolean; rest?: boolean };
 export function decisionRingState(
   sessions: { done: boolean; rpe?: number | null; target_difficulty?: number | null }[],
   suggestion: { dir: AutoregDir; reco: number } | null | undefined,
@@ -76,9 +76,9 @@ export function decisionRingState(
     return { value, ...zone, planned: true };
   }
   const done = byDiff[0];
-  if (!done) return { value: 1, zoneLow: 1, zoneHigh: 2 };   // repos
+  if (!done) return { value: 1, zoneLow: 1, zoneHigh: 2, rest: true };   // repos
   const target = Math.round(done.target_difficulty ?? done.rpe ?? 5);
-  return { value: done.rpe ?? target, zoneLow: target, zoneHigh: target };
+  return { value: done.rpe ?? target, zoneLow: target, zoneHigh: target, done: true };
 }
 
 /* Miniature de la jauge de décision (onglet Aujourd'hui) : même dégradé, même zone pointillée, même
@@ -116,10 +116,10 @@ export function DecisionRingMini({ state, size = 40, hideZone = false }: { state
 export function RestDecisionRing({ size, light }: { size?: number; light?: boolean }) {
   return (
     <DecisionRing
-      zoneLow={1} zoneHigh={2} value={1} readOnly onChange={() => {}}
+      zoneLow={1} zoneHigh={2} value={1} readOnly hideZone onChange={() => {}}
       size={size} light={light}
       centerLabel={{ arrow: "→", verb: "Repos" }}
-      hint="Jour de repos · dans la zone"
+      hint="Jour de repos"
     />
   );
 }
@@ -127,7 +127,7 @@ export function RestDecisionRing({ size, light }: { size?: number; light?: boole
 /* Séance déjà faite (2026-09-30, Gildas : "dans le passé, je veux voir la jauge qu'il y ait une
    séance de faite ou non") — lecture seule, curseur sur le RPE réellement ressenti, repère blanc sur
    le prévu, zone = la difficulté prévue. Sans RPE noté, le curseur reste sur le prévu. */
-export function DoneDecisionRing({ rpe, planned, size, light }: { rpe: number | null; planned: number | null; size?: number; light?: boolean }) {
+export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean }) {
   const target = planned ?? rpe ?? 5;
   const value = rpe ?? target;
   const hint = rpe === null ? "Séance faite · RPE non noté"
@@ -136,7 +136,7 @@ export function DoneDecisionRing({ rpe, planned, size, light }: { rpe: number | 
     : `Séance faite · RPE ${rpe} pour ${planned} prévu`;
   return (
     <DecisionRing
-      zoneLow={Math.round(target)} zoneHigh={Math.round(target)} value={value} readOnly onChange={() => {}}
+      zoneLow={Math.round(target)} zoneHigh={Math.round(target)} value={value} readOnly hideZone={hideZone} onChange={() => {}}
       plannedMarker={planned}
       size={size} light={light}
       centerLabel={{ arrow: "✓", verb: "Faite" }}
