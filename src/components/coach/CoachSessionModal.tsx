@@ -6,6 +6,8 @@ import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
 import { Z_MODERATE, Z_SWC, relativeZoneLabel, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
+import DecisionGauge from "@/components/sessions/DecisionGauge";
+import SessionQuickFill from "@/components/sessions/SessionQuickFill";
 import ShareButton from "@/components/sessions/ShareButton";
 import AutosaveFooterButton, { type AutosaveFooterState } from "@/components/sessions/AutosaveFooterButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
@@ -101,6 +103,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
   const [difficulty, setDifficulty] = useState(session?.target_difficulty ?? 6);
   const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
   const [exerciseMedia, setExerciseMedia] = useState<Record<string, ExerciseAttachments>>(session?.exercise_media ?? {});
+  const [editorKey, setEditorKey] = useState(0);
   const [recipients, setRecipients] = useState<string[]>(() =>
     initialAthleteId ? [initialAthleteId] : athletes.length > 0 ? [athletes[0].id] : []
   );
@@ -386,16 +389,31 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
               <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: diffColor, lineHeight: 1, letterSpacing: "-0.02em" }}>{difficulty}</span>
             </div>
           </div>
-          <input type="range" min={1} max={10} value={difficulty} step={1} onChange={e => setDifficulty(Number(e.target.value))}
-            style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }} />
+          {/* Même jauge que le Planning (2026-10-02), en simple réglage : pas de zone. */}
+          <div style={{ padding: "4px 0 2px" }}><DecisionGauge noZone light zoneLow={0} zoneHigh={0} dir="low" value={difficulty} onChange={setDifficulty} /></div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
             <span>Facile</span><span>Modérée</span><span>Dure</span>
           </div>
         </div>
 
+        {/* Séance vide : raccourcis Modèle / Importer / Générer (2026-10-02). Sport du sportif ciblé
+            présélectionné seulement s'il est renseigné et reconnu ; sinon tout est proposé. */}
+        {!exercisesText.trim() && (
+          <SessionQuickFill
+            sport={athletes.find(a => a.id === initialAthleteId)?.sport ?? null}
+            onFill={r => {
+              if (!name.trim()) setName(r.name);
+              setExercisesText(r.notes);
+              if (!isEdit) setDifficulty(r.target_difficulty);
+              setEditorKey(k => k + 1);
+            }}
+          />
+        )}
+
         {/* Exercises */}
         <div style={{ marginBottom: 16 }}>
           <ExerciseBlockEditor
+            key={editorKey}
             value={exercisesText}
             onChange={setExercisesText}
             authorRole="coach"

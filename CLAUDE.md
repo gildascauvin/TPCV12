@@ -4657,3 +4657,16 @@ POC : https://claude.ai/artifact/6aJZAyCz7c1gi5DVb4P5MF
 - **Fond sombre sous l'heure** : `themeColor` et manifest en `#070a0d` ; app iOS : `backgroundColor` Capacitor `#070a0d` + texte de barre d'état blanc (`UIStatusBarStyleLightContent`, `UIViewControllerBasedStatusBarAppearance=false`). Build iOS 1.0 (5).
 - **Programmes sans programme** : la page montre directement les 4 façons de créer (`ProgramCreateOptions`, extrait de `ProgramCreatePicker`). Fond clair de la page étendu sous la marge de la nav (seule page restée claire).
 - **RPE dans la carte séance** : pas de 2e jauge sur la séance qui porte la décision (/today, Coach Control) ; la jauge de décision démarre sur le prévu. Même règle qu'au Planning.
+
+## Créer une séance en 30 secondes + jauge de difficulté dans les tiroirs (2026-10-02, suite)
+
+POC : https://claude.ai/artifact/6aJZAyCz7c1gi5DVb4P5MF (section « Créer une séance »). Objectif activation : une vraie séance (donc décision + chrono) dès le 1er jour, sans programme.
+
+- **`SessionQuickFill.tsx`** : dans le tiroir de séance (sportif `AddSessionModal` et coach `CoachSessionModal`), tant que la séance n'a aucun exercice, une ligne de 3 boutons 📚 Modèle · 📷 Importer · ✨ Générer au-dessus de l'éditeur ; le résultat remplit l'éditeur normal (nom seulement s'il était vide, exercices, difficulté en création), tout reste modifiable. Jamais pour un template de programme.
+  - **Modèle** : séances de la 1re semaine des programmes officiels (`/api/programs/library`), dédoublonnées, recherche + filtre par sport.
+  - **Importer** : texte ou photo via `/api/programs/import` (si plusieurs séances reconnues, on choisit). Clé IA vide en local : ne marche qu'en prod.
+  - **Générer** : passe par le vrai générateur (`/api/programs/generate`, 1 jour × 4 semaines) pour profiter du biais « 🎯 Points à travailler en priorité » (2 max, `WEAKNESSES_BY_SPORT` déplacé dans `sportCategories.ts`, partagé avec ProgramCriteriaModal) ; garde la séance la plus proche de l'intensité (Légère 3 / Modérée 6 / Dure 8), jamais une séance de tests ; la durée limite le nombre d'exercices en gardant la ligne du point travaillé. Repli sur `getSessionTemplates` si l'appel échoue.
+  - Sport présélectionné (Modèle, Générer) seulement s'il est renseigné et reconnu (profil côté sportif, sportif ciblé côté coach) ; « Autre » ou vide → rien de présélectionné.
+  - Tracking : `session_quick_fill_opened`, `session_quick_fill` (`source`).
+- **Carte du jour vide** (`EmptyDayCard`, sportif et coach) : un seul bouton principal « + Ajouter une séance » (raccourcis retirés de la carte, demande de Gildas : moins de bruit). Côté sportif, lien discret « Ou démarre un programme pour toutes tes semaines ».
+- **Jauge de difficulté dans les tiroirs d'édition** : `DecisionGauge` gagne `noZone` (même barre/remplissage/curseur que le Planning, sans zone, en-tête ni repère) ; remplace le `<input type="range">` du tiroir sportif, coach et de l'éditeur de programme.

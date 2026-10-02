@@ -190,8 +190,10 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 /* ─── Day column — extrait de WeekClient.tsx, réutilisé à l'identique par /coach/planning
    (CoachPlanningClient.tsx, générique sur CoachViewSession) et par l'aperçu programme de
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
-export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle }: {
+export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
+  /* Carte du jour vide : lien vers Programmes (2026-10-02). */
+  onProgram?: () => void;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
   onDuplicate: (s: T) => void; onWellness: () => void;
@@ -296,7 +298,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {showEmptyToday && (
-          <EmptyDayCard inline perspective={emptyPerspective} onAddFree={() => onAddSession(dstr)} />
+          <EmptyDayCard inline perspective={emptyPerspective} onAddFree={() => onAddSession(dstr)} onProgram={onProgram} />
         )}
         {sessions.length === 0 && !showEmptyToday && (
           <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>

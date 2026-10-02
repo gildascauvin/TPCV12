@@ -32,7 +32,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
       .gte("date", start).lte("date", end).order("created_at"),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id)
       .gte("date", start).lte("date", end),
-    supabase.from("profiles").select("subscription_status, invited_by_coach_id, name, free_training_label, first_decision_on").eq("user_id", user!.id).single(),
+    supabase.from("profiles").select("subscription_status, invited_by_coach_id, name, sport, free_training_label, first_decision_on").eq("user_id", user!.id).single(),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id)
       .gte("date", sinceBaseline).lte("date", end),
     supabase.from("sessions").select("*").eq("user_id", user!.id)
@@ -47,6 +47,7 @@ export default async function WeekPage({ searchParams }: { searchParams: { date?
     <WeekClient
       userId={user!.id}
       userName={(profile as { name?: string | null } | null)?.name ?? null}
+      userSport={(profile as { sport?: string | null } | null)?.sport ?? null}
       initialSessions={sessions ?? []}
       initialWellness={wellness ?? []}
       subscriptionStatus={profile?.subscription_status ?? "free"}

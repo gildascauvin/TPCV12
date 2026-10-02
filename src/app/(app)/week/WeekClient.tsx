@@ -60,7 +60,7 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { firstDecisionOn?: string | null; userId: string; userName?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
+interface Props { firstDecisionOn?: string | null; userId: string; userName?: string | null; userSport?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
   /* Historique wellness (~42j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
      la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — carte "Aujourd'hui" uniquement.
      Absent par défaut (sandbox, données synthétiques) = repli cold-start automatique. */
@@ -73,7 +73,7 @@ interface Props { firstDecisionOn?: string | null; userId: string; userName?: st
   sessionsHistory?: Session[];
 }
 
-export default function WeekClient({ userId, userName, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [], firstDecisionOn = null }: Props) {
+export default function WeekClient({ userId, userName, userSport = null, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [], firstDecisionOn = null }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -801,6 +801,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                   />
                 )}
                 onAddSession={(d) => setAddingDate(d)}
+                onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
                 emptyToday
                 onComplete={(s) => handleTerminer(s)}
                 onEdit={(s) => setEditing(s)}
@@ -975,7 +976,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           (onSave/onConfirm/onDuplicate/onDelete) passe par gateInput() : libre, sauf en sandbox (freemium 2026-09-30)
           (2026-08-19). */}
       {addingDate && (
-        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setAddingDate(null); router.refresh(); }} />
+        <AddSessionModal date={addingDate} userId={userId} userName={userName ?? "Toi"} sport={userSport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setAddingDate(null); router.refresh(); }} />
       )}
       {showReconduire && (
         <ReconduireModal
@@ -1003,7 +1004,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       )}
       {editing && (
         <AddSessionModal
-          date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"}
+          date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"} sport={userSport}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(() => deleteSession(editing))}
           onClose={() => { setEditing(null); router.refresh(); }}

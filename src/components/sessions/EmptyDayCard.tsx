@@ -5,8 +5,10 @@
    Importer a été retiré à la demande de Gildas). Utilisée sur /today,
    la carte "aujourd'hui" du Planning (variante `inline`, la colonne est déjà une carte blanche) et
    les cartes Coach Control. */
-export default function EmptyDayCard({ onAddFree, perspective = "athlete", inline = false, todo }: {
+export default function EmptyDayCard({ onAddFree, perspective = "athlete", inline = false, todo, onProgram }: {
   onAddFree: () => void;
+  /* Lien discret vers Programmes sous le bouton principal (sportif). */
+  onProgram?: () => void;
   perspective?: "athlete" | "coach";
   /** Sans habillage de carte : posée dans un conteneur déjà blanc (colonne du Planning). */
   inline?: boolean;
@@ -14,13 +16,8 @@ export default function EmptyDayCard({ onAddFree, perspective = "athlete", inlin
   todo?: React.ReactNode;
 }) {
   const hint = perspective === "coach"
-    ? "Repos ou séance libre. Ajoute-lui une séance, ou assigne-lui un programme depuis Programmes."
-    : "Repos ou séance libre. Ajoute une séance, ou démarre un programme depuis Programmes.";
-  const btn: React.CSSProperties = {
-    border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-    borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
-    cursor: "pointer", fontFamily: "inherit",
-  };
+    ? "Repos, ou ajoute-lui une séance du jour."
+    : "Repos, ou ajoute ta séance du jour.";
   return (
     <div style={inline ? undefined : {
       background: "#fff", color: "#171b1f", border: "1px solid rgba(212,64,0,.16)",
@@ -31,7 +28,17 @@ export default function EmptyDayCard({ onAddFree, perspective = "athlete", inlin
         Aucune séance aujourd'hui
       </div>
       <div style={{ fontSize: inline ? 11 : 12, color: "#62686e", marginBottom: 12, lineHeight: 1.45 }}>{hint}</div>
-      <button type="button" onClick={e => { e.stopPropagation(); onAddFree(); }} style={{ ...btn, width: "100%" }}>+ Séance libre</button>
+      <button type="button" onClick={e => { e.stopPropagation(); onAddFree(); }}
+        style={{ width: "100%", height: inline ? 32 : 46, borderRadius: inline ? 8 : 16, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: inline ? 12 : 14, fontWeight: 800, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+        + Ajouter une séance
+      </button>
+      {onProgram && (
+        <div style={{ textAlign: "center", marginTop: 10 }}>
+          <button type="button" onClick={e => { e.stopPropagation(); onProgram(); }} style={{ border: "none", background: "none", cursor: "pointer", color: "#8a8f94", fontSize: inline ? 10.5 : 12, fontWeight: 700, textDecoration: "underline", fontFamily: "inherit" }}>
+            Ou démarre un programme pour toutes tes semaines
+          </button>
+        </div>
+      )}
     </div>
   );
 }

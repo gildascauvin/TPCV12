@@ -5,7 +5,7 @@ import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
-import { guessSportChip } from "@/lib/sportCategories";
+import { guessSportChip, WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 
 const IMPORT_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -49,72 +49,6 @@ const SPORT_META: { value: string; icon: string; label: string; sub: string }[] 
   { value: "Arts martiaux & combat", icon: "🥋", label: "Arts martiaux & combat", sub: "MMA, boxe, judo…" },
 ];
 
-// Clés partagées avec WEAKNESS_META/WEAKNESS_ARCHETYPE_L1 côté generate/route.ts — biaise la
-// génération sur 2 niveaux (voir route.ts pour le détail) : jamais juste décoratif.
-const WEAKNESSES_BY_SPORT: Record<string, { key: string; label: string }[]> = {
-  "Haltérophilie": [
-    { key: "arrache", label: "Technique arraché" },
-    { key: "epaule_jete", label: "Technique épaulé-jeté" },
-    { key: "mobilite", label: "Mobilité hanches/chevilles" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Powerlifting": [
-    { key: "jambes", label: "Jambes" },
-    { key: "dos_bras", label: "Dos & bras" },
-    { key: "pecs_epaules", label: "Pectoraux & épaules" },
-    { key: "technique", label: "Technique de mouvement" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Musculation / Hypertrophie": [
-    { key: "jambes", label: "Jambes" },
-    { key: "dos", label: "Dos" },
-    { key: "pectoraux", label: "Pectoraux" },
-    { key: "epaules", label: "Épaules" },
-    { key: "bras", label: "Bras" },
-  ],
-  "Athlétisme & vitesse": [
-    { key: "vitesse", label: "Vitesse pure" },
-    { key: "endurance_vitesse", label: "Endurance de vitesse" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "technique_course", label: "Technique de course" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Endurance": [
-    { key: "vitesse", label: "Vitesse" },
-    { key: "endurance_fond", label: "Endurance de fond" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "technique_course", label: "Technique de course" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Sports collectifs": [
-    { key: "puissance", label: "Puissance" },
-    { key: "vitesse", label: "Vitesse" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "gainage", label: "Gainage / contact" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Fitness / CrossFit": [
-    { key: "cardio", label: "Endurance cardio" },
-    { key: "force_generale", label: "Force générale" },
-    { key: "technique", label: "Technique des mouvements" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Arts martiaux & combat": [
-    { key: "frappe", label: "Puissance de frappe" },
-    { key: "cardio", label: "Endurance cardio" },
-    { key: "explosivite", label: "Explosivité" },
-    { key: "gainage", label: "Gainage" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-  "Autre": [
-    { key: "force_generale", label: "Force générale" },
-    { key: "cardio", label: "Endurance cardio" },
-    { key: "technique", label: "Technique" },
-    { key: "recuperation", label: "Récupération" },
-  ],
-};
 
 // Wording/icônes repris du POC (FOCUS_META) — pilote réellement ProgramFocus (shapeForCycle),
 // pas juste une étiquette narrative. "technique"/"combat"/"autre" (ProgramFocus valides mais pas

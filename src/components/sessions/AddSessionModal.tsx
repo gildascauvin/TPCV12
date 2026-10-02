@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import type { Session, ExerciseAttachments } from "@/types";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
+import DecisionGauge from "@/components/sessions/DecisionGauge";
+import SessionQuickFill from "@/components/sessions/SessionQuickFill";
 import ShareButton from "@/components/sessions/ShareButton";
 import AutosaveFooterButton, { type AutosaveFooterState } from "@/components/sessions/AutosaveFooterButton";
 import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerciseAutocomplete";
@@ -31,9 +33,12 @@ interface AddSessionModalProps {
      cette modale (position:fixed inset:0) démarre à y=0 et la bannière (zIndex plus haut) se
      retrouve à recouvrir son propre header. Absent = comportement inchangé (usage in-app normal). */
   topOffset?: number;
+  /* Créer une séance en 30 secondes (2026-10-02) : sport du sportif, présélectionné dans Modèle et
+     Générer seulement s'il est renseigné et reconnu. */
+  sport?: string | null;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose, topOffset }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose, topOffset, sport }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
 
   useEffect(() => {
@@ -59,6 +64,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   const [selectedDate, setSelectedDate] = useState(session?.date ?? date);
   const [targetDiff, setTargetDiff] = useState(session?.target_difficulty ?? 6);
   const [exercisesText, setExercisesText] = useState(session?.notes ?? "");
+  const [editorKey, setEditorKey] = useState(0);
   const [exerciseMedia, setExerciseMedia] = useState<Record<string, ExerciseAttachments>>(session?.exercise_media ?? {});
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -218,18 +224,30 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: diffColor, lineHeight: 1, letterSpacing: "-0.02em" }}>{targetDiff}</span>
               </div>
             </div>
-            <input
-              type="range" min={1} max={10} value={targetDiff} step={1}
-              onChange={e => setTargetDiff(Number(e.target.value))}
-              style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }}
-            />
+            {/* Même jauge que le Planning (2026-10-02), en simple réglage : pas de zone. */}
+            <div style={{ padding: "4px 0 2px" }}><DecisionGauge noZone light zoneLow={0} zoneHigh={0} dir="low" value={targetDiff} onChange={setTargetDiff} /></div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
               <span>Facile</span><span>Modérée</span><span>Dure</span>
             </div>
           </div>
 
+          {/* Séance vide : raccourcis modèle / import / générer au-dessus de l'éditeur, repliés dès qu'un
+              exercice existe. Jamais pour un template de programme (pas une séance du jour). */}
+          {!exercisesText.trim() && session?.user_id !== "template" && (
+            <SessionQuickFill
+              sport={sport}
+              onFill={r => {
+                if (!name.trim()) setName(r.name);
+                setExercisesText(r.notes);
+                if (!isEdit) setTargetDiff(r.target_difficulty);
+                setEditorKey(k => k + 1);
+              }}
+            />
+          )}
+
           {/* Exercices */}
           <ExerciseBlockEditor
+            key={editorKey}
             value={exercisesText}
             onChange={setExercisesText}
             authorRole="athlete"

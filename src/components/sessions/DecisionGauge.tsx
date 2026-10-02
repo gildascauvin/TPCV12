@@ -19,8 +19,12 @@ const DIFF_GRADIENT = {
 } as const;
 
 export default function DecisionGauge({
-  zoneLow, zoneHigh, dir, value, onChange, light, readOnly, plannedMarker, hint: hintOverride,
+  zoneLow, zoneHigh, dir, value, onChange, light, readOnly, plannedMarker, hint: hintOverride, noZone = false,
 }: {
+  /* Simple réglage de difficulté (2026-10-02, tiroirs d'édition de séance) : même barre, même
+     remplissage, même curseur, mais sans zone conseillée, sans en-tête ni repère — on planifie, on
+     ne décide pas d'un ajustement. zoneLow/zoneHigh/dir sont alors ignorés. */
+  noZone?: boolean;
   // Les 2 entiers (ou 1 si identiques) qui bornent la zone conseillée — voir zoneRange() ci-dessus,
   // calculée par l'appelant (AutoregButtons.tsx) à partir de la cible brute.
   zoneLow: number;
@@ -48,7 +52,7 @@ export default function DecisionGauge({
   // toujours un entier (voir diffFromClientX plus bas). Les deux cas se comparent à des entiers
   // (zoneLow/zoneHigh), donc toujours arrondir `value` en premier.
   const roundedValue = Math.round(value);
-  const inZone = roundedValue >= zoneLow && roundedValue <= zoneHigh;
+  const inZone = !noZone && roundedValue >= zoneLow && roundedValue <= zoneHigh;
 
   function diffFromClientX(x: number): number {
     const rect = trackRef.current!.getBoundingClientRect();
@@ -92,7 +96,7 @@ export default function DecisionGauge({
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
+      {!noZone && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 7 }}>
         <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: dim(0.45) }}>
           Difficulté
         </span>
@@ -100,7 +104,7 @@ export default function DecisionGauge({
           {value % 1 === 0 ? value : value.toFixed(1)}
           <span style={{ fontSize: 11, fontWeight: 600, color: dim(0.45) }}> / 10</span>
         </span>
-      </div>
+      </div>}
       {/* `overflow: visible` (jamais hidden) — la zone conseillée (18px) doit déborder au-dessus/en
           dessous des 10px du track pour bien se voir "flotter" par-dessus, comme dans le POC. Seul
           le fill (ci-dessous) est rogné, dans son propre conteneur imbriqué. */}
@@ -143,7 +147,7 @@ export default function DecisionGauge({
         {/* Zone conseillée en POINTILLÉ, sans remplissage (2026-09-29, POC) : le pointillé est un
             signal de forme, pas de couleur — un contour vert se serait confondu avec le palier vert
             du remplissage juste en dessous. */}
-        <div style={{
+        {!noZone && <div style={{
           /* Déborde de 4px au-dessus et en dessous du track (2026-09-30, Gildas) : la zone se lit
              comme un cadre posé sur la barre, pas comme une bande de la barre. */
           position: "absolute", top: -4, bottom: -4,
@@ -154,7 +158,7 @@ export default function DecisionGauge({
              (Coach Control, Planning, AdjustSessionModal), qui utilisent la même jauge. */
           /* Sombre sur le track clair, clair sur fond sombre : lisible des deux côtés du remplissage. */
           border: `2px dashed ${light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.85)"}`, pointerEvents: "none",
-        }} />
+        }} />}
         <div style={{
           position: "absolute", top: "50%", left: `${cursorLeft}%`, transform: "translate(-50%,-50%)",
           width: 19, height: 19, borderRadius: "50%", zIndex: 3,
@@ -170,9 +174,9 @@ export default function DecisionGauge({
           }} />
         </div>
       </div>
-      <div style={{ marginTop: 7, fontSize: 10.5, fontWeight: 700, textAlign: "center", color: inZone ? "#2a8045" : dim(0.5) }}>
+      {!noZone && <div style={{ marginTop: 7, fontSize: 10.5, fontWeight: 700, textAlign: "center", color: inZone ? "#2a8045" : dim(0.5) }}>
         {hint}
-      </div>
+      </div>}
     </div>
   );
 }

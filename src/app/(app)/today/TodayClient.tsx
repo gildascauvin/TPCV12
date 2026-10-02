@@ -1058,6 +1058,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   ) : (
                     <EmptyDayCard
                       onAddFree={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
+                      onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
                     />
                   )
                 )}
@@ -1127,7 +1128,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} sport={profile.sport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={data => gateInput(() => saveComplete(data))} onClose={() => setCompleting(null)} />
@@ -1136,6 +1137,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <AddSessionModal
           date={editing.date}
           session={editing}
+          sport={profile.sport}
           userName={profile.name ?? "Toi"}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}
