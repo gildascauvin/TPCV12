@@ -1,4 +1,4 @@
-const CACHE = "theperfclub-v3";
+const CACHE = "theperfclub-v4";
 /* Mode hors ligne (2026-10-02) : /offline.html est la page affichée quand une page ne peut pas
    se charger sans réseau (séances de la semaine + file d'attente, voir public/offline.html). */
 const PRECACHE_URLS = ["/offline.html"];
@@ -56,8 +56,28 @@ self.addEventListener("fetch", (event) => {
      usage quotidien, pas seulement en dev). */
   /* Navigation (ouverture d'une page) : sans réseau, toujours la page hors ligne — une ancienne
      version en cache d'une page de l'app ne fonctionnerait pas sans serveur. */
+  /* Vraie app hors ligne sur l'Accueil (2026-10-02) : chaque ouverture de /today avec réseau est
+     gardée ; sans réseau, l'Accueil (ou la racine, page de démarrage de l'app iOS) est servi tel qu'à
+     la dernière ouverture — TodayClient rejoue les actions en attente et la séance se fait hors ligne.
+     Les autres pages renvoient sur l'écran hors ligne de secours. */
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (pathname === "/today" && response.ok && !response.redirected && response.type === "basic") {
+            const clone = response.clone();
+            caches.open(CACHE).then((cache) => cache.put("/today", clone)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(async () => {
+          if (pathname === "/" || pathname === "/today") {
+            const today = await caches.match("/today");
+            if (today) return today;
+          }
+          return caches.match("/offline.html");
+        })
+    );
     return;
   }
 

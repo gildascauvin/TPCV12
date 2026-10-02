@@ -40,8 +40,20 @@ export type OfflineAction =
       rpe: number; duration: number;
     }
   | {
+      /* Modification d'une de ses propres séances faite hors ligne depuis la vraie app (/today) :
+         démarrer / pause / terminer la séance en cours, exercices modifiés pendant la séance. */
+      id: string; type: "patch"; at: string; sessionId: string; patch: OfflineSessionPatch;
+    }
+  | {
       id: string; type: "wellness"; at: string; date: string;
       sleep: number; bedtime: string; stress: number; recovery: number; motivation: number; behaviors: string[];
     };
+
+/* Champs qu'une modification hors ligne a le droit de toucher (liste blanche, côté serveur aussi). */
+export const OFFLINE_PATCH_FIELDS = ["started_at", "paused_at", "paused_ms", "done", "rpe", "duration", "notes", "target_difficulty"] as const;
+export type OfflineSessionPatch = Partial<{
+  started_at: string | null; paused_at: string | null; paused_ms: number;
+  done: boolean; rpe: number | null; duration: number | null; notes: string | null; target_difficulty: number | null;
+}>;
 
 export type OfflineFlushResult = { id: string; status: "ok" | "skipped" | "error"; reason?: string };

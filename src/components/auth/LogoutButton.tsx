@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { clearOfflineData } from "@/lib/offlineStore";
 
 export default function LogoutButton() {
   const supabase = createClient();
@@ -9,6 +10,7 @@ export default function LogoutButton() {
 
   async function handleLogout() {
     await supabase.auth.signOut();
+    await clearOfflineData().catch(() => {});
     router.push("/login");
   }
 

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeWellnessScore } from "@/lib/wellness";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
-import type { OfflineAction, OfflineFlushResult } from "@/lib/offlineTypes";
+import { OFFLINE_PATCH_FIELDS, type OfflineAction, type OfflineFlushResult } from "@/lib/offlineTypes";
 
 /* Envoi des actions faites hors ligne (2026-10-02), au retour du réseau.
    - "complete" : séance terminée (RPE + durée). Sportif : sa propre séance. Coach : séance d'un de
@@ -48,6 +48,14 @@ export async function POST(req: Request) {
             ? admin.from("sessions").update(update).eq("id", a.sessionId).eq("user_id", target.userId)
             : admin.from("coach_sessions").update(update).eq("id", a.sessionId).eq("athlete_id", target.athleteId);
         const { data, error } = await q.select("id");
+        if (error) throw new Error(error.message);
+        results.push({ id: a.id, status: data?.length ? "ok" : "skipped", reason: data?.length ? undefined : "séance supprimée" });
+      } else if (a.type === "patch") {
+        // Ses propres séances uniquement, champs en liste blanche, appliqués dans l'ordre de la file.
+        const patch: Record<string, unknown> = {};
+        for (const k of OFFLINE_PATCH_FIELDS) if (a.patch && k in a.patch) patch[k] = (a.patch as Record<string, unknown>)[k];
+        if (!Object.keys(patch).length) { results.push({ id: a.id, status: "skipped", reason: "rien à appliquer" }); continue; }
+        const { data, error } = await supabase.from("sessions").update(patch).eq("id", a.sessionId).eq("user_id", user.id).select("id");
         if (error) throw new Error(error.message);
         results.push({ id: a.id, status: data?.length ? "ok" : "skipped", reason: data?.length ? undefined : "séance supprimée" });
       } else if (a.type === "wellness") {

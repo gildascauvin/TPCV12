@@ -13,6 +13,7 @@ import {
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
+import { isOffline, rememberLive, updateOwnSession } from "@/lib/offlineSessions";
 
 const ExerciseBlockEditor = dynamic(() => import("@/components/sessions/ExerciseBlockEditor"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
@@ -84,9 +85,11 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     setLive(prev => prev ? { ...prev, notes: text } : prev);
     if (notesTimer.current) clearTimeout(notesTimer.current);
     const id = live!.id;
+    const base = live!;
     notesTimer.current = setTimeout(async () => {
-      const { error } = await supabase.from("sessions").update({ notes: text }).eq("id", id);
-      if (error) console.error("[live] notes", error);
+      // Hors ligne : mis en attente, envoyé au retour du réseau (updateOwnSession).
+      const s = await updateOwnSession(supabase, { ...base, id }, { notes: text });
+      if (s) rememberLive(s);
     }, 600);
   }
   async function saveMedia(media: Record<string, ExerciseAttachments>) {
@@ -101,30 +104,28 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
   async function finish(data: { rpe: number; duration: number }) {
     notifyOnboardingProgressSoon();
     if (notesTimer.current) clearTimeout(notesTimer.current);
-    const { error } = await supabase.from("sessions")
-      .update({ done: true, ...data, notes: live!.notes, paused_at: null })
-      .eq("id", live!.id);
-    if (error) { console.error("[live] terminer", error); return; }
+    const saved = await updateOwnSession(supabase, live!, { done: true, ...data, notes: live!.notes, paused_at: null });
+    if (!saved) return;
+    rememberLive(null);
     setCompleting(false);
     setOpen(false);
     setLive(null);
     notifyLiveChanged();
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }
 
   /* Annuler la séance en cours : le chrono est effacé, la séance redevient "Prévu", rien n'est compté.
      Les exercices modifiés pendant la séance restent tels quels. */
   async function cancelLive() {
     if (notesTimer.current) clearTimeout(notesTimer.current);
-    const { error } = await supabase.from("sessions")
-      .update({ started_at: null, paused_at: null, paused_ms: 0, notes: live!.notes })
-      .eq("id", live!.id);
-    if (error) { console.error("[live] annuler", error); return; }
+    const saved = await updateOwnSession(supabase, live!, { started_at: null, paused_at: null, paused_ms: 0, notes: live!.notes });
+    if (!saved) return;
+    rememberLive(null);
     setStopAsk(null);
     setOpen(false);
     setLive(null);
     notifyLiveChanged();
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }
 
   const arrowBtn = (disabled: boolean): React.CSSProperties => ({

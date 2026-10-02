@@ -31,6 +31,14 @@ async function setItem(key: string, value: string) {
 async function readQueue(): Promise<OfflineAction[]> {
   try { return JSON.parse((await getItem(OFFLINE_QUEUE_KEY)) || "[]"); } catch { return []; }
 }
+export const readOfflineQueue = readQueue;
+
+/* Ajoute une action à la file (vraie app hors ligne : séance en cours, Terminer, check-in). */
+export async function enqueueOfflineAction(action: OfflineAction) {
+  const queue = await readQueue();
+  queue.push(action);
+  await setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+}
 
 /* Envoie les actions faites hors ligne. Retire de la file celles traitées ("ok") ou sans objet
    ("skipped"), garde les erreurs pour la prochaine tentative. Renvoie le nombre d'actions appliquées. */
@@ -64,4 +72,23 @@ export async function syncOffline(): Promise<number> {
   const applied = await flushOfflineQueue().catch(e => { console.error("[offline] flush", e); return 0; });
   await refreshOfflineSnapshot().catch(e => console.error("[offline] snapshot", e));
   return applied;
+}
+
+/* Déconnexion : rien de ce compte ne doit rester lisible hors ligne sur l'appareil (Accueil en
+   cache du service worker, instantané, file d'attente, séance en cours locale). */
+export async function clearOfflineData() {
+  try {
+    if (typeof caches !== "undefined") {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.open(k).then(c => c.delete("/today"))));
+    }
+  } catch { /* cache indisponible */ }
+  try { localStorage.removeItem("tpc_offline_live"); } catch { /* idem */ }
+  if (Capacitor.isNativePlatform()) {
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.remove({ key: OFFLINE_SNAPSHOT_KEY });
+    await Preferences.remove({ key: OFFLINE_QUEUE_KEY });
+  } else {
+    try { localStorage.removeItem(OFFLINE_SNAPSHOT_KEY); localStorage.removeItem(OFFLINE_QUEUE_KEY); } catch { /* idem */ }
+  }
 }

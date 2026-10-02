@@ -49,6 +49,9 @@ import type { ConseilsData } from "@/lib/conseilsData";
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 import { PLANNED_RPE, PLANNED_LABEL, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
+import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
+import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
+import { computeWellnessScore } from "@/lib/wellness";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -56,6 +59,16 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 
 /* ─── helpers ─── */
 /* Jauge de difficulté statique — mêmes paliers/couleurs que la constante de design du projet. */
+/* Check-in fait hors ligne, en attente d'envoi : reconstruit pour l'affichage (le serveur recalcule
+   le score à l'envoi, montre comprise). */
+function localWellness(d: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string }, date: string): WellnessDaily {
+  const { base_score, score } = computeWellnessScore(d.sleep, d.stress, d.recovery, d.motivation, d.behaviors);
+  return {
+    id: `offline-${date}`, user_id: "", date, sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation,
+    base_score, score, behaviors: d.behaviors, bedtime: d.bedtime, created_at: new Date().toISOString(),
+  };
+}
+
 function DiffGauge({ value, height = 12 }: { value: number | null; height?: number }) {
   if (!value) return null;
   const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
@@ -336,6 +349,31 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
+  /* Hors ligne (2026-10-02) : la page peut être servie depuis le cache, telle qu'à la dernière
+     ouverture. On y rejoue les actions encore en attente (séance démarrée / terminée, check-in). */
+  const applyOfflinePending = useCallback(async () => {
+    const queue = await readOfflineQueue();
+    if (!queue.length) return;
+    const patches = queue.filter(a => a.type === "patch");
+    if (patches.length) setAllSessions(prev => prev.map(s => patches.reduce((acc, a) => (a.type === "patch" && a.sessionId === s.id ? { ...acc, ...a.patch } : acc), s)));
+    const w = [...queue].reverse().find(a => a.type === "wellness" && a.date === selectedDateRef.current);
+    if (w && w.type === "wellness") setWellness(prev => prev?.bedtime ? prev : localWellness(w, w.date));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { applyOfflinePending(); }, [applyOfflinePending]);
+  /* Avec réseau : précharge les écrans ouverts pendant une séance (check-in, Terminer, séance en
+     cours), pour que le service worker les ait en cache — sinon l'Accueil rouvert hors ligne
+     planterait au premier clic. */
+  useEffect(() => {
+    if (isOffline()) return;
+    const t = setTimeout(() => {
+      Promise.all([
+        import("@/components/wellness/WellnessModal"),
+        import("@/components/sessions/CompleteModal"),
+        import("@/components/sessions/ExerciseBlockEditor"),
+      ]).catch(() => {});
+    }, 2500);
+    return () => clearTimeout(t);
+  }, []);
   // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
   // sur "aujourd'hui" : sans ça, naviguer vers une semaine passée réduit progressivement l'historique
   // disponible (la fenêtre initiale ne couvrait que les 21j avant AUJOURD'HUI) jusqu'à retomber sous
@@ -569,8 +607,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
          est floutée) ; c'est une entrée, donc enregistrée. */
       free={decisionLocked}
       onSetDifficulty={async (target_difficulty) => {
-        const { data: saved } = await supabase.from("sessions").update({ target_difficulty }).eq("id", autoregTargetTop.id).select().single();
-        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+        const saved = await updateOwnSession(supabase, autoregTargetTop, { target_difficulty });
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
       }}
       dir={decisionLocked ? undefined : decision.suggestion?.dir}
       reco={decisionLocked ? undefined : decision.suggestion?.reco}
@@ -592,14 +630,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
         const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
         const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
-        const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTargetTop.id).select().single();
-        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+        const saved = await updateOwnSession(supabase, autoregTargetTop, { notes, target_difficulty });
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
         return original;
       }}
       onUndo={async (original) => {
         if (!original) return;
-        const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTargetTop.id).select().single();
-        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+        const saved = await updateOwnSession(supabase, autoregTargetTop, { notes: original.notes, target_difficulty: original.target_difficulty });
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
       }}
     />
   ) : todaySessions.length === 0 ? (
@@ -650,6 +688,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // La séance en direct est modifiée ailleurs (écran plein, Terminer) : on relit les séances du jour.
   useEffect(() => {
     const onChanged = async () => {
+      // Hors ligne : la base est injoignable, on rejoue les modifications en attente sur l'état affiché.
+      if (isOffline()) { await applyOfflinePending(); return; }
       const { data } = await supabase.from("sessions").select("*").eq("user_id", userId).eq("date", initialDate);
       if (data) setAllSessions(prev => [...prev.filter(x => x.date !== initialDate), ...(data as Session[])]);
     };
@@ -692,6 +732,25 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     notifyOnboardingProgressSoon();
     const { plannedIntensity, ...wellnessData } = data;
     data = wellnessData;
+    /* Hors ligne : check-in mis en attente (score recalculé par le serveur à l'envoi, montre
+       comprise), affiché tout de suite, et la suite (démarrer / terminer la séance) continue. */
+    if (isOffline()) {
+      await enqueueOfflineAction({
+        id: crypto.randomUUID(), type: "wellness", at: new Date().toISOString(), date: selectedDate,
+        sleep: data.sleep, bedtime: data.bedtime, stress: data.stress, recovery: data.recovery, motivation: data.motivation, behaviors: data.behaviors,
+      });
+      notifyQueued();
+      setWellness(localWellness(data, selectedDate));
+      setShowWellness(false);
+      if (pendingStartSession) {
+        const toStart = pendingStartSession;
+        setPendingStartSession(null);
+        const started = await startLiveSession(supabase, toStart);
+        if (started) { setAllSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
+      }
+      if (pendingCompleteSession) { const p = pendingCompleteSession; setPendingCompleteSession(null); setCompleting(p); }
+      return;
+    }
     // Montre (Apple Santé via l'app iOS) : sommeil mesuré + FC au repos du jour intégrés au score s'ils existent.
     const payload = await withDeviceScore(supabase, userId, selectedDate, data);
     const { data: saved } = await supabase
@@ -720,23 +779,23 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       setPendingCompleteSession(null);
       setCompleting(pending);
     }
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     notifyOnboardingProgressSoon();
     if (!completing) return;
-    const { data: saved } = await supabase
-      .from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
-    if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved as Session : s));
+    // Hors ligne : mis en attente et affiché tout de suite (updateOwnSession).
+    const saved = await updateOwnSession(supabase, completing, { done: true, ...data });
+    if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved : s));
     setCompleting(null);
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }, [supabase, completing, router]);
 
   const deleteSession = useCallback(async (session: Session) => {
     await supabase.from("sessions").delete().eq("id", session.id);
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }, [supabase, router]);
 
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
@@ -770,7 +829,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     }).select().single();
     if (saved) setAllSessions((prev) => [...prev, saved as Session]);
     setDuplicating(null);
-    router.refresh();
+    if (!isOffline()) router.refresh();
   }, [supabase, userId, duplicating, router]);
 
   // Réordonner les exercices d'une séance par drag & drop — même mécanique que WeekClient.tsx
@@ -1112,7 +1171,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (
-        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} sport={profile.sport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />
+        <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} sport={profile.sport} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); if (!isOffline()) router.refresh(); }} />
       )}
       {completing && (
         <CompleteModal session={completing} onSave={data => gateInput(() => saveComplete(data))} onClose={() => setCompleting(null)} />
@@ -1126,7 +1185,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}
           onDuplicate={draft => { setDuplicating({ ...editing, ...draft }); setEditing(null); }}
-          onClose={() => { setEditing(null); router.refresh(); }}
+          onClose={() => { setEditing(null); if (!isOffline()) router.refresh(); }}
         />
       )}
       {duplicating && (

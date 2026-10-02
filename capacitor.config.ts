@@ -22,6 +22,9 @@ const config: CapacitorConfig = {
   backgroundColor: "#070a0d",
   ios: {
     contentInset: "always",
+    /* Mode hors ligne (2026-10-02) : nécessaire pour que le service worker fonctionne dans l'app
+       (Accueil rouvert hors ligne). Domaines listés dans WKAppBoundDomains (Info.plist). */
+    limitsNavigationsToAppBoundDomains: true,
   },
   plugins: {
     // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.
