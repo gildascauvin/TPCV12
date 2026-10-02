@@ -270,7 +270,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
      jauge reste affichée (annuler quoi — la décision, la saisie ?), alors que l'action est très
      précisément un retour à la séance telle qu'elle était planifiée. */
   const decidedStrip = (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 10, padding: "8px 11px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 12, padding: "8px 11px" }}>
       <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
       <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
         {decidedPct !== null ? `${formatAutoregPoints(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
@@ -340,12 +340,12 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
               <button
                 onClick={maintenir}
                 style={light
-                  ? { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 10, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
-                  : { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 10, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
+                  ? { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 12, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
+                  : { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 12, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
               >
                 → Maintenir
               </button>
-              <button onClick={apply} disabled={applying} style={{ flex: shape === "ring" ? "none" : 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 10, padding: shape === "ring" ? "9px 18px" : 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
+              <button onClick={apply} disabled={applying} style={{ flex: shape === "ring" ? "none" : 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 12, padding: shape === "ring" ? "9px 18px" : 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
                 {applying ? "..." : inZone ? "Appliquer →" : autoregCtaLabel(cursorDir)}
               </button>
             </div>

@@ -18,7 +18,7 @@ export default function EmptyDayCard({ onAddFree, perspective = "athlete", inlin
     : "Repos ou séance libre. Ajoute une séance, ou démarre un programme depuis Programmes.";
   const btn: React.CSSProperties = {
     border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-    borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
+    borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, fontWeight: 700,
     cursor: "pointer", fontFamily: "inherit",
   };
   return (

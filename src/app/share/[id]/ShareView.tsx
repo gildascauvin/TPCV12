@@ -32,7 +32,7 @@ function BadgeRow({ badges }: { badges: Badge[] }) {
 function Card({ children, dark, maxWidth = 460 }: { children: React.ReactNode; dark?: boolean; maxWidth?: number }) {
   return (
     <div style={{
-      borderRadius: 26, padding: 22, maxWidth, margin: "0 auto",
+      borderRadius: 24, padding: 22, maxWidth, margin: "0 auto",
       background: dark ? "linear-gradient(145deg,#1a1a1a,#282828)" : "#fff",
       color: dark ? "#fff" : "#171b1f",
       boxShadow: "0 24px 60px rgba(0,0,0,.14)",
@@ -49,7 +49,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
   return (
     <div style={{ minHeight: "100vh", background: "#f1f0ee", padding: "40px 16px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginBottom: 22 }}>
-        <div style={{ width: 22, height: 22, borderRadius: 7, background: "linear-gradient(180deg,#f04a08,#d44000)" }} />
+        <div style={{ width: 22, height: 22, borderRadius: 8, background: "linear-gradient(180deg,#f04a08,#d44000)" }} />
         <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>ThePerfClub</span>
       </div>
 
@@ -69,11 +69,11 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
           </div>
           <div style={{ height: 1, background: "rgba(255,255,255,.08)", margin: "14px 0" }} />
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.1em", color: "#ff8a55", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 10 }}>✦ Conseils</div>
-          <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 14, padding: "12px 14px", marginBottom: 8 }}>
+          <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 16, padding: "12px 14px", marginBottom: 8 }}>
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>⚡ Entraînement</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>{s.trainingAdvice}</div>
           </div>
-          <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 14, padding: "12px 14px" }}>
+          <div style={{ background: "rgba(255,255,255,.05)", borderRadius: 16, padding: "12px 14px" }}>
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", marginBottom: 4 }}>🌿 Récupération</div>
             <div style={{ fontSize: 14, lineHeight: 1.5 }}>{s.recoveryAdvice}</div>
           </div>
@@ -158,7 +158,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             </div>
           </div>
           <div style={{
-            borderRadius: 14, padding: "12px 14px", marginBottom: s.topSession ? 12 : 0,
+            borderRadius: 16, padding: "12px 14px", marginBottom: s.topSession ? 12 : 0,
             background: s.isPriority ? "rgba(212,64,0,.16)" : "rgba(47,158,68,.14)",
             border: `1px solid ${s.isPriority ? "rgba(212,64,0,.3)" : "rgba(47,158,68,.3)"}`,
             fontSize: 13, lineHeight: 1.45, fontWeight: 600,
@@ -166,7 +166,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             {s.isPriority ? "⚠️" : "👌"} {s.decision}
           </div>
           {s.topSession && (
-            <div style={{ background: "#fff", borderRadius: 14, padding: "10px 12px", color: "#171b1f" }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: "10px 12px", color: "#171b1f" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700 }}>{s.topSession.name}</span>
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: s.topSession.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,.1)", color: s.topSession.done ? "#2f9e44" : "#d44000" }}>

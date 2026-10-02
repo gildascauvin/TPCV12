@@ -49,7 +49,7 @@ export default function SandboxGateModal({ role, page, onClose, onSignup }: Prop
         </div>
         <button
           onClick={() => { posthog.capture("sandbox_gate_signup_clicked", { role, page, sandbox: true }); onSignup(); }}
-          style={{ width: "100%", height: 46, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", marginBottom: 8 }}
+          style={{ width: "100%", height: 46, borderRadius: 16, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", marginBottom: 8 }}
         >
           Créer mon compte →
         </button>

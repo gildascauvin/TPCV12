@@ -233,7 +233,7 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
             <div key={v.slug} style={{ flex: "0 0 240px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
               <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
                 <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 5, letterSpacing: "0.02em" }}>▶ YouTube</div>
+                <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 8, letterSpacing: "0.02em" }}>▶ YouTube</div>
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
                 <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#1f2428" }}>{v.name}</div>

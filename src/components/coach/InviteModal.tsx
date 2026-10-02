@@ -119,7 +119,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                 const previewScore = PREVIEW_SCORES[i % PREVIEW_SCORES.length];
                 const status = athleteStatus(previewScore);
                 return (
-                  <div key={i} style={{ position: "relative", background: "#fff", borderRadius: 20, padding: 14, boxShadow: "0 8px 20px rgba(0,0,0,.18)" }}>
+                  <div key={i} style={{ position: "relative", background: "#fff", borderRadius: 24, padding: 14, boxShadow: "0 8px 20px rgba(0,0,0,.18)" }}>
                     {/* Badge "Aperçu" (2026-09-14, retour explicite de Gildas) — le prénom est réel,
                         le score/statut restent factices tant que le sportif n'a pas rempli sa
                         propre forme. */}
@@ -143,7 +143,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -202,7 +202,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
             </div>
             <button
               onClick={onClose}
-              style={{ width: "100%", height: 46, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
+              style={{ width: "100%", height: 46, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
             >
               Fermer
             </button>
@@ -232,7 +232,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                       setLinkCopied(true);
                       setTimeout(() => setLinkCopied(false), 2500);
                     }}
-                    style={{ flex: 1, height: 38, borderRadius: 11, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}
+                    style={{ flex: 1, height: 38, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}
                   >
                     {linkCopied ? "✓ Copié !" : "📋 Copier le lien"}
                   </button>
@@ -241,7 +241,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                       const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
                       window.open(`https://wa.me/?text=${msg}`, "_blank");
                     }}
-                    style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 11, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}
+                    style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}
                   >
                     📲
                   </button>
@@ -274,7 +274,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                   onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
                   placeholder="Prénom"
                   autoFocus={i === 0}
-                  style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                  style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
                 />
                 <input
                   type="email"
@@ -282,12 +282,12 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
                   onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, email: e.target.value } : v))}
                   onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
                   placeholder="sportif@exemple.com"
-                  style={{ flex: 1.4, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+                  style={{ flex: 1.4, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
                 />
                 {invites.length > 1 && (
                   <button
                     onClick={() => setInvites(arr => arr.filter((_, idx) => idx !== i))}
-                    style={{ width: 40, flexShrink: 0, borderRadius: 14, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
+                    style={{ width: 40, flexShrink: 0, borderRadius: 16, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
                   >
                     ✕
                   </button>
@@ -311,14 +311,14 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
           <div style={{ flexShrink: 0, padding: "16px 28px 20px", background: "#fff", borderTop: "1px solid rgba(0,0,0,.06)", display: "flex", flexDirection: "column", gap: 10 }}>
             <button
               onClick={handleInvite}
-              style={{ width: "100%", height: 48, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", opacity: saving || !invites.some(r => r.email.trim()) ? 0.6 : 1 }}
+              style={{ width: "100%", height: 48, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)", opacity: saving || !invites.some(r => r.email.trim()) ? 0.6 : 1 }}
             >
               {saving ? "Vérification…" : "Ajouter et inviter →"}
             </button>
 
             <button
               onClick={onClose}
-              style={{ width: "100%", height: 44, borderRadius: 14, background: "none", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              style={{ width: "100%", height: 44, borderRadius: 16, background: "none", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               {cancelLabel}
             </button>

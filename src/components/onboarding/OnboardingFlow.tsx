@@ -213,7 +213,7 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
   return (
     <div style={{
       display: "inline-block", background: "rgba(24,24,24,.85)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-      border: "1.5px solid rgba(255,255,255,.28)", borderRadius: isMd ? 18 : 14, padding: isMd ? "14px 16px" : "10px 12px",
+      border: "1.5px solid rgba(255,255,255,.28)", borderRadius: isMd ? 16 : 16, padding: isMd ? "14px 16px" : "10px 12px",
       maxWidth: isMd ? 270 : 208, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
     }}>
       <div style={{ fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a70", marginBottom: isMd ? 10 : 7 }}>
@@ -1596,14 +1596,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           </div>
         )}
 
-        <div style={{ background: "#fff", borderRadius: 20, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
+        <div style={{ background: "#fff", borderRadius: 24, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
           {nativeShell && (
             <button
               type="button"
               onClick={() => { if (!saving) handleAppleRegister(); }}
               disabled={saving}
               style={{
-                width: "100%", height: 48, borderRadius: 14, border: "none", background: "#000",
+                width: "100%", height: 48, borderRadius: 16, border: "none", background: "#000",
                 color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
                 opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
                 gap: 10, marginBottom: 10,
@@ -1621,7 +1621,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             onClick={() => { if (!saving) handleGoogleRegister(); }}
             disabled={saving}
             style={{
-              width: "100%", height: 48, borderRadius: 14, border: "none", background: "#171b1f",
+              width: "100%", height: 48, borderRadius: 16, border: "none", background: "#171b1f",
               color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
               opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
               gap: 10, marginBottom: 18,
@@ -1650,7 +1650,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {showBack && (
           <button
             onClick={doBack} aria-label="Retour"
-            style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}
+            style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}
           >←</button>
         )}
         <button
@@ -1658,7 +1658,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           onClick={() => { if (!saving && emailValid) handleFinish(); }}
           disabled={saving || !emailValid}
           style={{
-            flex: 1, height: 52, borderRadius: 14, border: "none",
+            flex: 1, height: 52, borderRadius: 16, border: "none",
             background: "linear-gradient(180deg,#f04a08,#d44000)",
             color: "#fff", fontSize: 15, fontWeight: 900, cursor: (saving || !emailValid) ? "default" : "pointer",
             opacity: (saving || !emailValid) ? 0.5 : 1,
@@ -2173,13 +2173,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                         return (
                           <div key={r} onClick={() => chooseRole(r)}
                             style={{
-                              cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 18, padding: "16px 18px",
+                              cursor: "pointer", display: "flex", alignItems: "center", gap: 16, borderRadius: 16, padding: "16px 18px",
                               border: picked ? "2px solid #d44000" : "1.5px solid rgba(255,255,255,.16)",
                               background: picked ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.08)",
                               backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
                               transition: "all .15s",
                             }}>
-                            <div style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 14, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{icon}</div>
+                            <div style={{ flexShrink: 0, width: 52, height: 52, borderRadius: 16, background: badgeBg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 }}>{icon}</div>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.01em", color: picked ? "#ff8a55" : "#fff", marginBottom: 2 }}>{label}</div>
                               <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.35 }}>{sub}</div>

@@ -403,7 +403,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
             un même nombre de clics (1 pour ouvrir, 1 pour choisir) — retour explicite de Gildas. */}
         <button
           onClick={() => setStep({ type: "new" })}
-          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
+          style={{ padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
         >
           + Nouveau
         </button>
@@ -437,7 +437,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               });
 
               return (
-                <div key={p.id} id={`program-${p.id}`} style={{ position: "relative", background: "#fff", borderRadius: 18, padding: "18px 18px 14px", border: p.id === focusProgramId ? "2px solid #d44000" : "1px solid rgba(0,0,0,.07)", boxShadow: p.id === focusProgramId ? "0 8px 24px rgba(212,64,0,.12)" : "0 2px 12px rgba(0,0,0,.04)" }}>
+                <div key={p.id} id={`program-${p.id}`} style={{ position: "relative", background: "#fff", borderRadius: 16, padding: "18px 18px 14px", border: p.id === focusProgramId ? "2px solid #d44000" : "1px solid rgba(0,0,0,.07)", boxShadow: p.id === focusProgramId ? "0 8px 24px rgba(212,64,0,.12)" : "0 2px 12px rgba(0,0,0,.04)" }}>
                   {/* Partager — haut à droite de la carte (2026-09-05, demande explicite de
                       Gildas) — reste ici plutôt que dans la ligne d'actions du bas, qui ne garde
                       que les 2 CTA principaux + le menu "⋯" (Dupliquer/Supprimer). Style piloté
@@ -448,7 +448,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                     title="Copier le lien de partage"
                     style={{
                       position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-                      padding: "6px 10px", borderRadius: 9,
+                      padding: "6px 10px", borderRadius: 8,
                       border: `1.5px solid ${linkCopied[p.id] ? "#d44000" : "rgba(0,0,0,.10)"}`,
                       background: linkCopied[p.id] ? "rgba(212,64,0,0.06)" : "#fff",
                       color: linkCopied[p.id] ? "#d44000" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer",
@@ -552,7 +552,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                   <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
                     <button
                       onClick={() => gate(() => setStep({ type: "assign", programId: p.id, programName: p.name }))}
-                      style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+                      style={{ flex: 1, padding: "9px 0", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
                     >
                       Assigner →
                     </button>
@@ -562,7 +562,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                         const activeCount = assignments.filter(a => a.program_id === p.id && a.status === "active").length;
                         setStep({ type: "builder", template: p.template, meta: fakeMeta, programId: p.id, programName: p.name, assignmentCount: activeCount });
                       }}
-                      style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#555" }}
+                      style={{ flex: 1, padding: "9px 0", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#555" }}
                     >
                       ✏️ Modifier
                     </button>
@@ -571,7 +571,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                     <div style={{ position: "relative" }}>
                       <button
                         onClick={() => setMenuOpenId(id => id === p.id ? null : p.id)}
-                        style={{ padding: "9px 10px", borderRadius: 10, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}
+                        style={{ padding: "9px 10px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}
                       >⋯</button>
                       {menuOpenId === p.id && (
                         <>

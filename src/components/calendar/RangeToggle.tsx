@@ -15,7 +15,7 @@ const OPTIONS: { key: RangeMode; label: string }[] = [
    à 3 boutons, celui actif surligné — même esprit que le seg() du POC. */
 export default function RangeToggle({ mode, onChange }: { mode: RangeMode; onChange: (m: RangeMode) => void }) {
   return (
-    <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, padding: 2 }}>
+    <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, padding: 2 }}>
       {OPTIONS.map(o => (
         <button
           key={o.key}

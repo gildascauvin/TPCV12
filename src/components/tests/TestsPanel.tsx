@@ -96,7 +96,7 @@ function movementEmoji(metric: MetricKey | undefined, fallbackQualities?: Qualit
 
 // Dark (2026-09, suite) — la liste de tests vit désormais dans la carte "Recommandations" (fond
 // sombre), recolorée en conséquence.
-const INPUT_STYLE = { width: "100%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", borderRadius: 10, padding: "9px 10px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, color: "#fff" };
+const INPUT_STYLE = { width: "100%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.18)", borderRadius: 12, padding: "9px 10px", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, color: "#fff" };
 
 function sexeLabel(s: Sexe): string { return s === "homme" ? "Homme" : s === "femme" ? "Femme" : "Sexe non renseigné"; }
 function poidsLabel(p: number | null | undefined): string { return p ? `${p} kg` : "Poids non renseigné"; }
@@ -165,7 +165,7 @@ function ComparisonBlock({ insight, first }: { insight: CardInsight; first: bool
   return (
     <div style={{ marginTop: first ? 0 : 10, paddingTop: first ? 0 : 10, borderTop: first ? undefined : "1px solid rgba(255,255,255,.08)" }}>
       <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.05em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>vs {insight.compareLabel}</div>
-      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5 }}>
+      <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 12, padding: "9px 12px", lineHeight: 1.5 }}>
         {insight.locked?.kind === "weight" ? "Renseigne ton poids dans ton profil pour voir ce repère."
           : insight.locked?.kind === "reference" ? `Ajoute un résultat pour « ${insight.locked.refLabel} » pour voir ce repère.`
           : "Ajoute un résultat ci-dessous pour voir ce repère."}
@@ -229,11 +229,11 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = 
         {rawValueLabel != null ? (
           <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1.1 }}>{rawValueLabel}</span>
         ) : <span />}
-        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26`, ...lockBlur }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 24, flexShrink: 0, whiteSpace: "nowrap", color: c.fill, background: `${c.fill}26`, ...lockBlur }}>
           {STATUS_LABEL[insight.status!]}{deltaRealUnit && ` : ${deltaRealUnit}`}
         </span>
       </div>
-      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6, ...lockBlur }}>
+      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 8, ...lockBlur }}>
         {targetScore != null ? (
           <>
             <div style={{ position: "absolute", left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
@@ -244,7 +244,7 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = 
               return (
                 <div
                   style={{
-                    position: "absolute", top: 0, height: "100%", borderRadius: 6, background: c.fill,
+                    position: "absolute", top: 0, height: "100%", borderRadius: 8, background: c.fill,
                     ...(dir === "left" ? { right: "50%", width: `${width}%` } : { left: "50%", width: `${width}%` }),
                   }}
                 />
@@ -252,7 +252,7 @@ function PrimaryGauge({ insight, deltaRealUnit, rawValueLabel, analysisLocked = 
             })()}
           </>
         ) : (
-          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${insight.score}%`, background: c.fill, borderRadius: 6 }} />
+          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${insight.score}%`, background: c.fill, borderRadius: 8 }} />
         )}
       </div>
       {targetLabel != null && (
@@ -289,15 +289,15 @@ function SprintAxisGauge({ comp, hideLabel, analysisLocked = false }: { comp: Sp
           mieux") : même raisonnement, plus de position:absolute superposée à la ligne résultat/badge. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>{comp.actual.toFixed(2)}s</span>
-        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26`, ...lockBlur }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 24, flexShrink: 0, whiteSpace: "nowrap", color: col.text, background: `${col.text}26`, ...lockBlur }}>
           {comp.label.charAt(0).toUpperCase() + comp.label.slice(1)}
         </span>
       </div>
-      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6, ...lockBlur }}>
+      <div style={{ position: "relative", height: 12, background: "rgba(255,255,255,.10)", borderRadius: 8, ...lockBlur }}>
         <div style={{ position: "absolute", left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
         <div
           style={{
-            position: "absolute", top: 0, height: "100%", borderRadius: 6, background: col.text,
+            position: "absolute", top: 0, height: "100%", borderRadius: 8, background: col.text,
             ...(dir === "left" ? { right: "50%", width: `${width}%` } : { left: "50%", width: `${width}%` }),
           }}
         />
@@ -347,7 +347,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
     : [];
   const canSave = name.trim().length > 0 && parseResultValue(value) !== null && !!date;
   const showQualityPicker = trimmedName.length >= 3 && !canonicalMetricKey(trimmedName);
-  const fieldStyle = { boxSizing: "border-box" as const, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 10, color: "#fff", fontSize: 13.5 };
+  const fieldStyle = { boxSizing: "border-box" as const, background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, color: "#fff", fontSize: 13.5 };
   async function handleSubmit() {
     const v = parseResultValue(value);
     if (v === null || !name.trim() || !date || saving) return;
@@ -361,7 +361,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
     if (key) setUnit(METRIC_DISPLAY[key].unit);
   }
   return (
-    <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 14, padding: 14, marginBottom: 12 }}>
+    <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 16, padding: 14, marginBottom: 12 }}>
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700, color: "#fff", marginBottom: 10 }}>🆕 Nouveau test</div>
       <input
         value={name} onChange={e => setName(e.target.value)} placeholder="Nom du test (ex. Test T, Beep test...)" autoFocus
@@ -374,7 +374,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
             <button
               key={s.toName}
               onClick={() => applySuggestion(s.toName)}
-              style={{ background: "rgba(240,74,8,.16)", border: "1px solid rgba(240,74,8,.4)", borderRadius: 20, color: "#fff", fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}
+              style={{ background: "rgba(240,74,8,.16)", border: "1px solid rgba(240,74,8,.4)", borderRadius: 24, color: "#fff", fontSize: 12, fontWeight: 700, padding: "4px 10px", cursor: "pointer" }}
             >
               🔗 {s.label}
             </button>
@@ -411,7 +411,7 @@ function AddCustomTestForm({ onSave, onCancel }: {
                     display: "flex", alignItems: "center", gap: 5,
                     background: active ? "#f04a08" : "rgba(255,255,255,.08)",
                     border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.16)",
-                    borderRadius: 20, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 11px", cursor: "pointer",
+                    borderRadius: 24, color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 11px", cursor: "pointer",
                   }}
                 >
                   <span>{meta.emoji}</span>{meta.label}
@@ -424,13 +424,13 @@ function AddCustomTestForm({ onSave, onCancel }: {
       <div style={{ display: "flex", gap: 8 }}>
         <button
           onClick={handleSubmit} disabled={!canSave || saving}
-          style={{ flex: 1, background: canSave ? "#f04a08" : "rgba(255,255,255,.10)", border: "none", borderRadius: 10, color: "#fff", fontWeight: 800, fontSize: 13.5, padding: "9px 0", cursor: canSave ? "pointer" : "default" }}
+          style={{ flex: 1, background: canSave ? "#f04a08" : "rgba(255,255,255,.10)", border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 13.5, padding: "9px 0", cursor: canSave ? "pointer" : "default" }}
         >
           {saving ? "..." : "Ajouter"}
         </button>
         <button
           onClick={onCancel}
-          style={{ background: "none", border: "1px solid rgba(255,255,255,.18)", borderRadius: 10, color: "rgba(255,255,255,.7)", fontWeight: 700, fontSize: 13.5, padding: "9px 14px", cursor: "pointer" }}
+          style={{ background: "none", border: "1px solid rgba(255,255,255,.18)", borderRadius: 12, color: "rgba(255,255,255,.7)", fontWeight: 700, fontSize: 13.5, padding: "9px 14px", cursor: "pointer" }}
         >
           Annuler
         </button>
@@ -465,7 +465,7 @@ function RowMenu({ mergeSuggestions, onMerge, onDeleteWhole }: {
                       <button
                         key={s.toName} disabled={!!merging}
                         onClick={async () => { setMerging(s.toName); await onMerge(s.toName); setMerging(null); setOpen(false); }}
-                        style={{ fontSize: 10.5, fontWeight: 700, color: "#ff9d6e", background: "rgba(240,74,8,.15)", border: "1px solid rgba(240,74,8,.4)", borderRadius: 20, padding: "3px 9px", cursor: "pointer", opacity: merging && merging !== s.toName ? 0.5 : 1 }}
+                        style={{ fontSize: 10.5, fontWeight: 700, color: "#ff9d6e", background: "rgba(240,74,8,.15)", border: "1px solid rgba(240,74,8,.4)", borderRadius: 24, padding: "3px 9px", cursor: "pointer", opacity: merging && merging !== s.toName ? 0.5 : 1 }}
                       >
                         {merging === s.toName ? "…" : s.label}
                       </button>
@@ -651,7 +651,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
   return (
     <div>
       {batteryInfo && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10, padding: "8px 10px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10, padding: "8px 10px", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 2 }}>🎯 {batteryInfo.quality}</div>
             <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.65)", lineHeight: 1.4 }}>{batteryInfo.desc}</div>
@@ -679,11 +679,11 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           Mélange des 2 kinds (ou `weight`) : pas condensé, chaque ComparisonBlock reste explicite
           plutôt que de fabriquer une phrase qui mélangerait 2 actions différentes. */}
       {lockedComparisons.length > 1 && lockedComparisons.every(c => c.locked?.kind === "primary") ? (
-        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5, marginBottom: 10 }}>
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 12, padding: "9px 12px", lineHeight: 1.5, marginBottom: 10 }}>
           {lockedComparisons.length} repères disponibles une fois loggué (vs {lockedComparisons.map(c => c.compareLabel).join(", ")}).
         </div>
       ) : lockedComparisons.length > 1 && lockedComparisons.every(c => c.locked?.kind === "reference") ? (
-        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 10, padding: "9px 12px", lineHeight: 1.5, marginBottom: 10 }}>
+        <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", background: "rgba(255,255,255,.05)", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 12, padding: "9px 12px", lineHeight: 1.5, marginBottom: 10 }}>
           {lockedComparisons.length} repères disponibles en ajoutant un résultat pour : {lockedComparisons.map(c => c.locked!.refLabel).join(", ")}.
         </div>
       ) : (
@@ -692,9 +692,9 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
 
       {/* Autres comparaisons résolues d'un exercice multi-axes (2026-09) — jamais le "primary" déjà
           montré par la ligne, uniquement le reste. */}
-      <LockedBlur locked={analysisLocked} surface="tests_card" onUnlock={() => {}} bare radius={10}>
+      <LockedBlur locked={analysisLocked} surface="tests_card" onUnlock={() => {}} bare radius={12}>
       {secondaryComparisons.length > 0 && (
-        <div style={{ marginTop: lockedComparisons.length ? 10 : 0, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 10 }}>
+        <div style={{ marginTop: lockedComparisons.length ? 10 : 0, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 12 }}>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>Aussi comparé à</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {secondaryComparisons.map(ins => (
@@ -714,7 +714,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
           répété ici : c'est le "primary" de cette carte, déjà sur la ligne. Seuls le label/detail
           (classification) et le ratio temps de vol/contact (jamais scoré) sont une info nouvelle. */}
       {sscProfile && (
-        <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 10 }}>
+        <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 12 }}>
           {ftctInfo != null && (
             <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginBottom: 4 }}>
               Ratio temps de vol/contact (style MyJump) : {ftctInfo.toFixed(2)} · non normé, indicatif (pas de seuil scientifique publié pour cette variante).
@@ -736,10 +736,10 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
             {exampleNote && <ExampleNote text={exampleNote} top="50%" />}
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
+            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
               Premier : <b style={{ color: "#fff" }}>{formatRawValue(metric, results[0].value, results[0].unit, results[0].date, secondaryByDate)}</b>
             </span>
-            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
+            <span style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "5px 9px", fontSize: 10.5, fontWeight: 700, color: "rgba(255,255,255,.65)" }}>
               Dernier : <b style={{ color: "#fff" }}>{formatRawValue(metric, last!.value, last!.unit, last!.date, secondaryByDate)}</b>
             </span>
           </div>
@@ -762,7 +762,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
             <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 2px", borderBottom: "1px solid rgba(255,255,255,.07)", fontSize: 13 }}>
               <span style={{ color: "rgba(255,255,255,.5)", width: 90, flexShrink: 0 }}>{formatLong(r.date)}</span>
               <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, flex: 1, color: "#fff" }}>{formatRawValue(metric, r.value, r.unit, r.date, secondaryByDate)}</span>
-              {r.video_url && <span style={{ width: 20, height: 20, borderRadius: 6, background: "rgba(212,64,0,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>🎥</span>}
+              {r.video_url && <span style={{ width: 20, height: 20, borderRadius: 8, background: "rgba(212,64,0,.18)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>🎥</span>}
               {!readOnly && onDeleteResult && (
                 <button
                   disabled={deletingRowId === r.id}
@@ -793,7 +793,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                 <button
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
-                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
                     border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
                     background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
                   }}
@@ -811,7 +811,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                 <button
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
-                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
                     border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
                     background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
                   }}
@@ -827,7 +827,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
                 <button
                   key={m} type="button" onClick={() => setInputMode(m)}
                   style={{
-                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 20, cursor: "pointer",
+                    fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 24, cursor: "pointer",
                     border: inputMode === m ? "1px solid #fff" : "1px solid rgba(255,255,255,.15)",
                     background: inputMode === m ? "#fff" : "transparent", color: inputMode === m ? "#171b1f" : "#fff",
                   }}
@@ -885,7 +885,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
             </div>
             <button
               onClick={handleSave} disabled={saving || !value.trim() || (!!onAddPair && !contactValue.trim())}
-              style={{ height: 36, padding: "0 16px", borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: (!value.trim() || (!!onAddPair && !contactValue.trim())) ? 0.6 : 1 }}
+              style={{ height: 36, padding: "0 16px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: (!value.trim() || (!!onAddPair && !contactValue.trim())) ? 0.6 : 1 }}
             >
               {saving ? "..." : "Enregistrer"}
             </button>
@@ -907,7 +907,7 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
         const col = cmp?.focus ? COMPARISON_LABEL_COLOR["axe de travail"] : null;
         if (!repEntries.length && !cmp) return null;
         return (
-          <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 10 }}>
+          <div style={{ marginTop: 10, padding: "9px 11px", background: "rgba(255,255,255,.05)", borderRadius: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "rgba(255,255,255,.4)", marginBottom: 6 }}>💪 Séries à charge sous-maximale</div>
             {repEntries.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: cmp?.focus ? 8 : 0 }}>
@@ -1689,7 +1689,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
           verdict (ex. aucun sport de profil et aucun signal sprint/force), même si ce sont les 2
           raisons pour lesquelles cette carte existe à l'origine. */}
       {(showReco || unifiedRows.length > 0) && (
-        <div style={{ background: onDarkPage ? "transparent" : "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 20, padding: onDarkPage ? "0 0 16px" : "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
+        <div style={{ background: onDarkPage ? "transparent" : "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 24, padding: onDarkPage ? "0 0 16px" : "18px 18px 16px", marginBottom: 14, color: "#fff" }}>
           {showReco && (
             <>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#f04a08", marginBottom: 6, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em" }}>Recommandations d&apos;entraînement</div>
@@ -1717,7 +1717,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                     onClick={() => setActiveQuality(null)}
                     style={{
                       flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 13px", borderRadius: 20,
+                      padding: "8px 13px", borderRadius: 24,
                       border: activeQuality == null ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
                       background: activeQuality == null ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
                       fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
@@ -1734,7 +1734,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                         onClick={() => setActiveQuality(prev => (prev === q ? null : q))}
                         style={{
                           flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-                          padding: "8px 13px", borderRadius: 20,
+                          padding: "8px 13px", borderRadius: 24,
                           border: active ? "1px solid #f04a08" : "1px solid rgba(255,255,255,.14)",
                           background: active ? "#f04a08" : "rgba(255,255,255,.06)", color: "#fff",
                           fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
@@ -1775,7 +1775,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
             <div style={{ marginTop: sprintAxisRows.length > 0 ? 4 : 14, display: "flex", flexDirection: "column", gap: 8 }}>
               {forceExtraWeak.map((it, i) => (
                 <div key={`sig-force-${i}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <span style={{ width: 18, height: 18, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#ff8a6a", background: "rgba(209,0,0,.22)" }}>!</span>
+                  <span style={{ width: 18, height: 18, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#ff8a6a", background: "rgba(209,0,0,.22)" }}>!</span>
                   <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.78)", lineHeight: 1.4 }}><b style={{ color: "#fff" }}>{it.label}</b> — {it.detail}</div>
                 </div>
               ))}
@@ -1818,7 +1818,7 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
                 return (
                   <div key={row.key} style={{ borderBottom: "1px solid rgba(255,255,255,.06)", padding: "13px 2px" }}>
                     <div onClick={() => toggleRow(row.key)} style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                      <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{row.emoji}</div>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{row.emoji}</div>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>

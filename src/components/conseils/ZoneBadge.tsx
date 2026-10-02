@@ -45,7 +45,7 @@ export default function ZoneBadge({ label, color, definition, size = "md" }: {
         <div style={{
           position: "absolute", bottom: "calc(100% + 6px)",
           zIndex: 30, background: "rgba(18,18,18,0.96)", color: "#fff", fontSize: 11, fontWeight: 600,
-          padding: "9px 11px", borderRadius: 10, width: 210, lineHeight: 1.45,
+          padding: "9px 11px", borderRadius: 12, width: 210, lineHeight: 1.45,
           border: "1px solid rgba(255,255,255,0.13)", boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
           whiteSpace: "normal" as const, textTransform: "none" as const, letterSpacing: "normal",
           ...(align === "left" ? { left: 0 } : align === "right" ? { right: 0 } : { left: "50%", transform: "translateX(-50%)" }),

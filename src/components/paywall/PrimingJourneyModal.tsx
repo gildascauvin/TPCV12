@@ -50,7 +50,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const headline = headlineProp ?? (mode === "coach" ? "Améliore ton coaching maintenant." : "Améliore tes performances maintenant.");
 
   const ctaBtn: React.CSSProperties = {
-    width: "100%", height: 50, borderRadius: 14, border: "none",
+    width: "100%", height: 50, borderRadius: 16, border: "none",
     background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff",
     fontSize: 14, fontWeight: 900, cursor: "pointer",
     boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10,
@@ -86,7 +86,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         position: "relative",
         background: "#f1f0ee",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",

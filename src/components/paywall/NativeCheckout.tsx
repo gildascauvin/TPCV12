@@ -111,10 +111,10 @@ export function NativePurchasePanel({
         <div style={{ textAlign: "center", margin: "0 0 10px", color: "#8a8f94", fontSize: 12 }}>Chargement de l&apos;offre...</div>
       )}
       {error && (
-        <div style={{ color: "#d10000", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>{error}</div>
+        <div style={{ color: "#d10000", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 12 }}>{error}</div>
       )}
       {info && (
-        <div style={{ color: "#3a3f44", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(0,0,0,.04)", borderRadius: 10 }}>{info}</div>
+        <div style={{ color: "#3a3f44", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(0,0,0,.04)", borderRadius: 12 }}>{info}</div>
       )}
       {legal && (
         <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>{legal}</div>
@@ -124,7 +124,7 @@ export function NativePurchasePanel({
         onClick={buy}
         disabled={!product || busy !== null}
         style={{
-          width: "100%", height: 50, borderRadius: 14, border: "none",
+          width: "100%", height: 50, borderRadius: 16, border: "none",
           background: !product || busy ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
           color: "#fff", fontSize: 14, fontWeight: 900, cursor: !product || busy ? "default" : "pointer",
           letterSpacing: "-0.01em",

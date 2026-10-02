@@ -118,7 +118,7 @@ export default function OnboardingChecklist() {
           <div style={{
             position: "fixed", top: pos.top, left: pos.left, zIndex: 2147483095, width: `min(${PANEL_W}px, calc(100vw - 24px))`,
             maxHeight: `calc(100dvh - ${pos.top + 16}px)`, overflowY: "auto",
-            background: "#1a1f24", border: "1px solid rgba(255,255,255,.14)", borderRadius: 20, padding: 18,
+            background: "#1a1f24", border: "1px solid rgba(255,255,255,.14)", borderRadius: 24, padding: 18,
             boxShadow: "0 20px 50px rgba(0,0,0,.55)", color: "#fff",
           }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 2 }}>

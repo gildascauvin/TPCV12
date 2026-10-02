@@ -11,7 +11,7 @@ export default function ProgramNotFound() {
         </div>
         <a
           href="/register"
-          style={{ display: "inline-block", padding: "13px 28px", borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 800, textDecoration: "none", fontSize: 15 }}
+          style={{ display: "inline-block", padding: "13px 28px", borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 800, textDecoration: "none", fontSize: 15 }}
         >
           Créer un compte →
         </a>

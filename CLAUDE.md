@@ -4633,3 +4633,20 @@ POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW (section "Check-in · s�
 - `OnboardingChecklist.tsx` : panneau 400px (plein écran moins 24px sur mobile), toujours ancré sous la pastille n/4, fond assombri + flouté (clic = fermer), défile si l'écran est court.
 - Table `WHY` (sportif/coach) : une phrase qui vend chaque étape, affichée tant qu'elle n'est pas faite ; pour « Débloque… », au-dessus du bouton orange.
 - Modale centrée testée dans le POC puis écartée : elle bloquerait le produit et couvrirait la 1re décision au moment où l'étape se coche. Ordre assumé à l'arrivée : check-in d'abord, checklist juste après (1re étape cochée).
+
+## Séance en direct + échelle d'arrondis (2026-10-02)
+
+POC : https://claude.ai/artifact/6aJZAyCz7c1gi5DVb4P5MF
+
+### Séance en direct (sportif)
+- **Chrono en base** (migration 029, appliquée en prod) : `sessions.started_at`, `paused_at`, `paused_ms`. En cours = `started_at && !done`. Durée = (paused_at ?? maintenant) − started_at − paused_ms. Survit au rechargement, à la fermeture de l'app, passe d'un appareil à l'autre. Une seule séance en cours à la fois (Démarrer rouvre celle qui tourne). Logique : `src/lib/liveSession.ts`.
+- **Cartes séance** (Accueil `TodaySessionCard`, Planning `WeekSessionCard` via `DraggableSessionCard`) : séance du jour à faire → « ▶ Démarrer la séance » seul en principal + lien discret « Déjà faite ? Noter le résultat » (ouvre CompleteModal). En cours → « Reprendre la séance » + badge « ● En cours · mm:ss ». Faite → « Résultat ». Sans check-in du jour, Démarrer ouvre d'abord le check-in (`pendingStartSession`).
+- **`LiveSessionHost`** (monté dans `(app)/layout.tsx`, sportif seulement) : barre pilule « En cours » au-dessus de la navigation sur toutes les pages (même largeur que la nav) ; écran plein avec chrono + pause, un exercice à la fois (ExerciseBlockEditor `focusIndex` : mêmes valeurs touchables, médias, commentaires, tests ; en mode focus, boutons visibles Vidéo / Commentaire / Test et petite corbeille en bas à droite avec confirmation, menu ⋯ masqué), bouton principal « Exercice suivant → » (« Terminer la séance » au dernier), « ■ Arrêter » → Terminer et enregistrer / Annuler la séance en cours (chrono effacé, séance redevient « Prévu », exercices modifiés gardés). Écran allumé (wake lock) si permis.
+- **Terminer** : CompleteModal propose « ⏱ Chrono · N min » présélectionné (pauses déduites), la montre reste proposée ; au-delà de 3 h, pas de pré-remplissage (oubli probable).
+- Pas fait : « En cours » côté coach, Démarrer en sandbox et sur Coach Control.
+
+### Échelle d'arrondis
+- `RADIUS` (theme.ts) : 999 pilule, 24 carte, 16 bloc, 12 contrôle, 8 petit. Toute l'app normalisée (65 fichiers) ; cercles (`50%`) et barres 2-3 px inchangés ; l'image OG de partage garde ses arrondis. Règle : deux éléments empilés ou côte à côte prennent le même rayon (« + Ajouter une séance » = rayon de la carte au-dessus ; barre « En cours » = pilule comme la nav).
+
+### Divers
+- Fond des pages de l'app sombre (`#070a0d` sur html/body dans `(app)/layout.tsx`) : plus de bande grise au rebond du scroll.

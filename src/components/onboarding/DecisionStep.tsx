@@ -204,12 +204,12 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
   );
 
   const backBtn = onBack && (
-    <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}>←</button>
+    <button onClick={onBack} aria-label="Retour" style={{ width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#171b1f" }}>←</button>
   );
   const nextBtn = (
     <button
       onClick={onNext}
-      style={{ flex: 1, height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+      style={{ flex: 1, height: 52, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
     >
       Continuer →
     </button>

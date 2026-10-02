@@ -67,6 +67,10 @@ export interface Session {
   created_at: string;
   program_assignment_id?: string | null;
   exercise_media?: Record<string, ExerciseAttachments> | null;
+  /* Séance en direct (2026-10-02, migration 029) : en cours = started_at && !done. */
+  started_at?: string | null;
+  paused_at?: string | null;
+  paused_ms?: number | null;
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
 }

@@ -205,7 +205,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
      sticky est trop grande"). N'est plus fixé en permanence au-dessus du calendrier (Topbar + onglets
      restent seuls fixes) — défile avec les jours plutôt que de leur manger de la hauteur d'écran. */
   const autoregBanner = (
-    <div style={{ margin: "10px 16px 14px", background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 18, padding: "14px 16px", color: "#fff", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+    <div style={{ margin: "10px 16px 14px", background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 16, padding: "14px 16px", color: "#fff", position: "relative", overflow: "hidden", flexShrink: 0 }}>
       <div style={{ position: "absolute", right: -40, top: -40, width: 130, height: 130, borderRadius: "50%", background: "rgba(212,64,0,.16)", filter: "blur(24px)", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "stretch", gap: isMd ? 20 : 14 }}>
 
@@ -222,7 +222,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
 
         {/* Simulateur — encadré (comme le POC), ring + vrai vocabulaire de zone (Fatigué/
             Équilibré/Frais), titre à gauche / score à droite (hiérarchie du POC Grok). */}
-        <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "13px 14px" }}>
+        <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: "13px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               Simule ta forme
@@ -237,7 +237,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             type="range" min={0} max={100} value={simScore}
             onChange={e => handleSliderChange(parseInt(e.target.value, 10))}
             className="tpc-autoreg-slider"
-            style={{ width: "100%", height: 7, borderRadius: 4, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }}
+            style={{ width: "100%", height: 7, borderRadius: 8, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }}
           />
           <style>{`
             .tpc-autoreg-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
@@ -287,7 +287,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             onClick={handleCopyLink}
             style={{
               display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-              padding: "7px 12px", borderRadius: 10, cursor: "pointer",
+              padding: "7px 12px", borderRadius: 12, cursor: "pointer",
               border: `1.5px solid ${linkCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
               background: linkCopied ? "rgba(212,64,0,0.06)" : "#fff",
               color: linkCopied ? "#d44000" : "#8a8f94", fontSize: 13, fontWeight: 700,
@@ -367,7 +367,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
           const { suggestion, targetSession } = daySuggestions[dayIdx];
           const severityColor = suggestion ? suggestionSeverityColor(suggestion) : null;
           return (
-            <div key={day} style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
+            <div key={day} style={{ background: "#fff", borderRadius: 24, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>{day}</div>
               </div>
@@ -396,7 +396,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {daySessions.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
                     Repos / libre
                   </div>
                 )}
@@ -462,7 +462,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
 
       {isLocked && (
         <div style={{ position: "absolute", inset: 0, background: "rgba(241,240,238,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 22, padding: "22px 26px", maxWidth: 300, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.14)", border: "1px solid rgba(0,0,0,.06)" }}>
+          <div style={{ background: "#fff", borderRadius: 24, padding: "22px 26px", maxWidth: 300, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.14)", border: "1px solid rgba(0,0,0,.06)" }}>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
               Obtenir le programme complet et le personnaliser
             </div>

@@ -362,7 +362,7 @@ export default function CalendarHeader({
               style={{
                 position: "fixed", top: popupPos.top, left: popupPos.left, transform: "translateX(-50%)",
                 zIndex: 2147483100, width: 340, background: "#1c1c1e", border: "1px solid #3a3a3c",
-                borderRadius: 18, padding: 18, boxShadow: "0 16px 48px rgba(0,0,0,.55)",
+                borderRadius: 16, padding: 18, boxShadow: "0 16px 48px rgba(0,0,0,.55)",
               }}
             >
               <div className="flex items-center justify-between mb-2">
@@ -415,7 +415,7 @@ export default function CalendarHeader({
             <button
               onClick={goToday}
               style={{
-                height: 32, paddingLeft: 12, paddingRight: 12, borderRadius: 10,
+                height: 32, paddingLeft: 12, paddingRight: 12, borderRadius: 12,
                 background: "rgba(212,64,0,.22)", border: "1px solid rgba(212,64,0,.4)",
                 color: "#ff8a55", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap",
               }}

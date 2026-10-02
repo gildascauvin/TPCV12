@@ -271,7 +271,7 @@ export default function SparkLineClient({
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
     border: "1px solid rgba(255,255,255,0.13)",
-    borderRadius: 10,
+    borderRadius: 12,
     padding: "7px 12px",
     whiteSpace: "nowrap",
     boxShadow: "0 8px 24px rgba(0,0,0,0.5)",

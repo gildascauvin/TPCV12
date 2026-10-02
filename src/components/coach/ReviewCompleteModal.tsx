@@ -10,7 +10,7 @@ export default function ReviewCompleteModal({ onClose }: Props) {
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", borderRadius: 30, padding: 32, width: "100%", maxWidth: 400, textAlign: "center", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: 32, width: "100%", maxWidth: 400, textAlign: "center", boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
         <div style={{
           width: 72, height: 72, borderRadius: "50%",
           background: "linear-gradient(135deg,#eef8f1,#d4f0dc)",

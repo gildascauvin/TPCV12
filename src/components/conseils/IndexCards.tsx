@@ -159,7 +159,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             background: "rgba(255,255,255,.055)",
             border: "1px solid rgba(255,255,255,.10)",
             borderLeft: c.accent ? `3px solid ${c.accent}` : "1px solid rgba(255,255,255,.10)",
-            borderRadius: 13, borderBottomLeftRadius: isOpen ? 0 : 13, borderBottomRightRadius: isOpen ? 0 : 13,
+            borderRadius: 12, borderBottomLeftRadius: isOpen ? 0 : 13, borderBottomRightRadius: isOpen ? 0 : 13,
             padding: "13px 15px", color: "#fff", font: "inherit",
           }}
         >
@@ -189,7 +189,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         </button>
 
         {isOpen && (
-          <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.10)", borderTop: 0, borderRadius: "0 0 13px 13px", padding: "14px 15px 10px", marginTop: -1, overflowX: "hidden", overflowY: "visible" as const }}>
+          <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.10)", borderTop: 0, borderRadius: "0 0 12px 12px", padding: "14px 15px 10px", marginTop: -1, overflowX: "hidden", overflowY: "visible" as const }}>
             {body}
           </div>
         )}

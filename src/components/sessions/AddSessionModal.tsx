@@ -162,7 +162,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
       <div style={{
         background: "#fff", color: "#171b1f",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: topOffset ? `calc(100dvh - ${topOffset}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -258,14 +258,14 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
               {!confirmDelete ? (
                 <button
                   onClick={() => setConfirmDelete(true)}
-                  style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
+                  style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 16, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
                 >
                   🗑
                 </button>
               ) : (
                 <button
                   onClick={handleDelete} disabled={deleting}
-                  style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
+                  style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 16, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
                 >
                   {deleting ? "..." : "Confirmer 🗑"}
                 </button>

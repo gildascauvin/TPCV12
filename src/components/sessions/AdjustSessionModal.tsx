@@ -77,7 +77,7 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
         background: "#fff", color: "#171b1f",
         border: "1px solid rgba(0,0,0,.10)",
         boxShadow: "0 42px 120px rgba(0,0,0,.34)",
-        borderRadius: 30, width: "100%", maxWidth: 480,
+        borderRadius: 24, width: "100%", maxWidth: 480,
         maxHeight: "calc(100vh - 34px)", display: "flex", flexDirection: "column", overflow: "hidden",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -94,7 +94,7 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 0" }}>
@@ -170,7 +170,7 @@ export default function AdjustSessionModal({ session, dir, reco, wellnessScore, 
               {changedCount} modifié{changedCount > 1 ? "s" : ""}
             </span>
           </div>
-          <div style={{ marginBottom: 20, borderRadius: 14, overflow: "hidden", border: "1px solid rgba(0,0,0,.06)" }}>
+          <div style={{ marginBottom: 20, borderRadius: 16, overflow: "hidden", border: "1px solid rgba(0,0,0,.06)" }}>
             {rendered.length === 0 && <div style={{ fontSize: 12, color: "#bbb", fontStyle: "italic", padding: 12, textAlign: "center" }}>Aucun exercice</div>}
             {rendered.map(({ line, after }, i) => {
               const changed = after !== line;

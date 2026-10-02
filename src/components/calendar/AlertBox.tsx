@@ -88,7 +88,7 @@ export default function AlertBox({ alert, actions, variant = "light", centered =
     const { bg, border } = darkColors(alert.glow);
     return (
       <div style={{
-        position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
+        position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 16,
         // Sans bordure en mode `centered` (carte avec ligne Phase, 2026-09-29, demande de Gildas).
         background: bg, border: centered ? "none" : `1.5px solid ${border}`,
         fontSize: 13, lineHeight: 1.4, color: "#fff", fontWeight: 600,
@@ -106,7 +106,7 @@ export default function AlertBox({ alert, actions, variant = "light", centered =
 
   return (
     <div style={{
-      position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 18,
+      position: "relative", overflow: "hidden", margin: "0 0 12px", padding: "12px 16px", borderRadius: 16,
       background: DARK_CARD_BG, border: `1.5px solid ${alert.border}`,
       fontSize: 13, lineHeight: 1.4, color: "#fff", fontWeight: 600,
       boxShadow: "0 10px 24px rgba(0,0,0,.18)",

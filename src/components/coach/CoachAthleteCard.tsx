@@ -329,7 +329,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       position: "relative", overflow: "hidden", minWidth: 0,
       background: "rgba(255,255,255,.055)",
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
-      borderRadius: 26, padding: 18,
+      borderRadius: 24, padding: 18,
       boxShadow: "0 14px 36px rgba(0,0,0,.28)",
       transition: "border 0.3s ease, box-shadow 0.3s ease",
       color: "#fff",
@@ -372,7 +372,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       {/* Freemium (2026-09-30) : jauge, badges et carte décision floutés ensemble — même la zone,
          côté coach (un coach sait s'ajuster dès qu'il voit "au-dessus de la zone"). Le prénom et
          la séance du jour restent lisibles. */}
-      <LockedBlur locked={!!locked} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={20}>
+      <LockedBlur locked={!!locked} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
       <div style={{ textAlign: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {/* Jauge d'ajustement À LA PLACE du ring de récupération (2026-09-30, Gildas) : la carte
@@ -460,7 +460,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               data-tour={tourId ? "decider-btn" : undefined}
               onClick={onDecide}
               style={{
-                height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, flexShrink: 0,
+                height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 12, flexShrink: 0,
                 background: showReviewed
                   ? "linear-gradient(180deg,#2f9e44,#166534)"
                   : "linear-gradient(180deg,#f04a08,#d44000)",
@@ -500,7 +500,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             )
           )}
           {topSession.notes && (
-            <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
+            <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
               {topSession.notes.split("\n").filter(Boolean).map((ex, i) => {
                 const modified = effectivePreviewPct != null ? parseAndApply(ex, effectivePreviewPct) : ex;
                 const changed = modified !== ex;
@@ -526,13 +526,13 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           {topSession.done && (topSession.duration || topSession.rpe) && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 7 }}>
               {topSession.duration != null && (
-                <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
+                <div style={{ background: "#f7f8f9", borderRadius: 12, padding: "6px 6px", textAlign: "center" }}>
                   <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{topSession.duration}</div>
                   <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>MIN</div>
                 </div>
               )}
               {topSession.rpe != null && (
-                <div style={{ background: "#f7f8f9", borderRadius: 10, padding: "6px 6px", textAlign: "center" }}>
+                <div style={{ background: "#f7f8f9", borderRadius: 12, padding: "6px 6px", textAlign: "center" }}>
                   <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{topSession.rpe}</div>
                   <div style={{ fontSize: 8, fontWeight: 900, letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginTop: 2 }}>DIFF.</div>
                 </div>
@@ -554,7 +554,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           onClick={e => { e.stopPropagation(); onAddSession(); }}
           style={{
             border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-            borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11,
+            borderRadius: 16, padding: "9px 8px", textAlign: "center", fontSize: 11,
             cursor: "pointer", fontWeight: 700, marginTop: topSession ? 8 : 12,
           }}
         >

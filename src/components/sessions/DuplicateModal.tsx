@@ -81,14 +81,14 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
       <div style={{
         background: "#fff", color: "#171b1f",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Dupliquer</div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 20px" }}>
@@ -117,7 +117,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
                 style={{
                   border: `2px solid ${mode === m.key ? "#d44000" : "#eee"}`,
                   background: mode === m.key ? "rgba(212,64,0,.05)" : "#fff",
-                  borderRadius: 14, padding: "12px 8px", textAlign: "center", cursor: "pointer",
+                  borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer",
                 }}
               >
                 <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
@@ -173,13 +173,13 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
                         display: "flex", alignItems: "center", gap: 10,
                         background: checked ? "#fff5f0" : "#fff",
                         border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
-                        borderRadius: 14, padding: "10px 12px",
+                        borderRadius: 16, padding: "10px 12px",
                         cursor: "pointer", textAlign: "left",
                         transition: "all 0.15s ease",
                       }}
                     >
                       <div style={{
-                        width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                        width: 20, height: 20, borderRadius: 8, flexShrink: 0,
                         background: checked ? "#d44000" : "#f0efed",
                         border: checked ? "none" : "1.5px solid rgba(0,0,0,.14)",
                         display: "flex", alignItems: "center", justifyContent: "center",

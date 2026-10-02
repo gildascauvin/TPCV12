@@ -23,3 +23,15 @@ export const COACH_PAGE_BG =
   "radial-gradient(ellipse 90% 50% at 50% -5%, rgba(249,115,22,0.14) 0%, rgba(249,115,22,0.04) 40%, transparent 70%), " +
   "radial-gradient(ellipse 50% 30% at 90% 10%, rgba(249,115,22,0.06) 0%, transparent 50%), " +
   "#f4f4f5";
+
+/* Échelle d'arrondis (2026-10-02) : 5 valeurs seulement, appliquées à toute l'app. Règle : deux
+   éléments posés côte à côte ou l'un sur l'autre prennent le même rayon (ex. « + Ajouter une séance »
+   = rayon de la carte séance juste au-dessus ; barre « En cours » = pilule comme la navigation).
+   Les cercles gardent "50%". Ne pas réintroduire d'autres valeurs. */
+export const RADIUS = {
+  pill: 999, // navigation, barre « En cours », badges, puces, onglets
+  card: 24,  // grandes cartes, carte décision, tiroirs, modales
+  block: 16, // blocs dans une carte, boutons pleine largeur, bandeaux
+  control: 12, // boutons compacts, champs, petites tuiles
+  chip: 8,   // valeurs dans une ligne d'exercice, mini-éléments
+} as const;

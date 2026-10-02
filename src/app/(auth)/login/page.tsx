@@ -165,7 +165,7 @@ export default function LoginPage() {
           <div style={{ fontSize: 14, color: "rgba(255,255,255,.60)", marginTop: 4 }}>Ton espace d'entraînement intelligent</div>
         </div>
 
-        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 30, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
+        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
 
           {/* ── Vue : lien envoyé (magic) ── */}
           {view === "magic-sent" && (

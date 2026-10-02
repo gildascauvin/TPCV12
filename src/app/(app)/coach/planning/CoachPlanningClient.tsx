@@ -592,7 +592,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           <div style={{ fontSize: 40, marginBottom: 12 }}>📅</div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 16 }}>Aucun sportif encore</div>
           <button onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes" : "/coach/athletes")}
-            style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
+            style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
             Ajouter un sportif →
           </button>
         </div>
@@ -639,7 +639,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 <div key={dstr} className="week-col-width" style={{
                   position: "relative", background: "#fff",
                   border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
-                  borderRadius: 26, padding: 16,
+                  borderRadius: 24, padding: 16,
                   boxShadow: isToday ? "0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
                   scrollSnapAlign: "start",
                 }}>
@@ -658,7 +658,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {daySessions.length === 0 ? (
-                      <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                      <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
                         Repos / libre
                       </div>
                     ) : daySessions.map(s => {
@@ -675,7 +675,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                           style={{
                             textAlign: "left", width: "100%",
                             border: s.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
-                            background: "#fff", borderRadius: 10, padding: "8px 10px",
+                            background: "#fff", borderRadius: 12, padding: "8px 10px",
                             cursor: a ? "pointer" : "default",
                           }}
                         >
@@ -805,7 +805,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               <div style={{
                 textAlign: "center", padding: "28px 20px",
                 border: "0.5px dashed rgba(212,64,0,.28)",
-                borderRadius: 20, background: "#fff",
+                borderRadius: 24, background: "#fff",
               }}>
                 <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
@@ -817,7 +817,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 <button
                   onClick={() => navigatePeriod("next")}
                   style={{
-                    width: "100%", height: 48, borderRadius: 14,
+                    width: "100%", height: 48, borderRadius: 16,
                     background: "linear-gradient(180deg,#f04a08,#d44000)",
                     color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
                     cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
@@ -909,7 +909,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                       style={{
                         background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
                         border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
-                        borderRadius: isMd ? 14 : 10,
+                        borderRadius: isMd ? 16 : 12,
                         padding: isMd ? "8px 8px 6px" : "6px 5px 6px",
                         minHeight: isMd ? 100 : 90,
                         opacity: inMonth ? 1 : 0.4,
@@ -980,7 +980,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                           {inMonth && (
                             <div
                               onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
-                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 11, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
+                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 8, textAlign: "center", fontSize: 11, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
                             >
                               +
                             </div>

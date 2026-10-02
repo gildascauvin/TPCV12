@@ -306,3 +306,6 @@ select:focus {
 .autoreg-slot:empty { display: none; }
 /* Le conteneur d'actions d'AlertBox (marge haute) disparaît aussi quand il ne porte qu'un slot vide. */
 div:has(> .autoreg-slot:only-child:empty) { display: none; }
+
+/* Séance en direct (2026-10-02) : point "En cours" de la barre persistante. */
+@keyframes livePulse { 50% { opacity: .25; } }

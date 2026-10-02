@@ -61,7 +61,7 @@ export function ShareExerciseList({ exercises, max, fontSize = 13.5, rowPadding 
   const more = exercises.length - shown.length;
   if (!shown.length) return null;
   return (
-    <div style={{ display: "flex", flexDirection: "column", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden" }}>
       {shown.map((ex, i) => (
         <div key={i} style={{ display: "flex", padding: rowPadding, borderTop: i > 0 ? "1px solid rgba(0,0,0,.06)" : "none", fontSize, lineHeight: 1.45, color: "#2c3236", fontWeight: 650, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {ex}

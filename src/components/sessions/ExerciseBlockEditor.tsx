@@ -169,7 +169,7 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
           <span style={{ fontSize: 15, width: 20, textAlign: "center", flexShrink: 0 }}>{s.icon}</span>
           <span style={{ fontSize: 14, fontWeight: 600, flex: 1, color: "#171b1f", minWidth: 0 }}>{s.label}</span>
           <span style={{ fontSize: 11, color: "#bbb", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120 }}>{s.meta}</span>
-          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", padding: "2px 7px", borderRadius: 4, flexShrink: 0, ...AC_BADGE_STYLE[s.type] }}>{AC_BADGE_LABEL[s.type]}</span>
+          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", padding: "2px 7px", borderRadius: 8, flexShrink: 0, ...AC_BADGE_STYLE[s.type] }}>{AC_BADGE_LABEL[s.type]}</span>
         </div>
       ))}
     </div>
@@ -181,7 +181,7 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
     <>
       {valueRow && (
         <div style={{ padding: "10px 14px", borderBottom: (suggestions.length > 0 || valueRow) ? "1px solid #eee" : "none", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f5f5f5", borderRadius: 9, padding: "8px 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#f5f5f5", borderRadius: 8, padding: "8px 10px" }}>
             <input
               ref={valueRow.inputRef}
               value={valueRow.value}
@@ -237,7 +237,7 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
       position: "fixed", left, width: panelWidth,
       top: showBelow ? rect.bottom + 6 : undefined, bottom: showBelow ? undefined : vpH - rect.top + 6,
       maxHeight: Math.max(160, showBelow ? spaceBelow : spaceAbove),
-      background: "#fff", border: "1px solid #e8e8e8", borderRadius: 14, boxShadow: "0 10px 32px rgba(0,0,0,.18)",
+      background: "#fff", border: "1px solid #e8e8e8", borderRadius: 16, boxShadow: "0 10px 32px rgba(0,0,0,.18)",
       zIndex: 2147483200, display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
       {content}
@@ -450,8 +450,9 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
    getClickToken pour ce chemin, cf. ExerciseCard). Le token cliqué en cours d'édition (mode click,
    voir ExerciseCard) est mis en évidence différemment (fond plein plutôt que teinté) pour montrer
    clairement quel token le panneau de suggestions est en train de modifier. */
-function Tokenized({ text, onTokenClick, activeSpan }: {
+function Tokenized({ text, onTokenClick, activeSpan, large = false }: {
   text: string;
+  large?: boolean;
   onTokenClick?: (start: number, end: number, rect: DOMRect) => void;
   activeSpan?: { start: number; end: number } | null;
 }) {
@@ -498,7 +499,7 @@ function Tokenized({ text, onTokenClick, activeSpan }: {
             onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start, part.end, e.currentTarget.getBoundingClientRect()); } : undefined}
             style={{
               background: isActive ? baseColor : baseBg, color: isActive ? "#fff" : baseColor,
-              fontFamily: "var(--font-mono), monospace", fontWeight: 700, borderRadius: 6, padding: "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: 13.5,
+              fontFamily: "var(--font-mono), monospace", fontWeight: 700, borderRadius: large ? 8 : 8, padding: large ? "2px 9px" : "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: large ? 21 : 13.5, lineHeight: large ? 1.7 : undefined,
               cursor: onTokenClick ? "pointer" : undefined,
             }}
           >
@@ -645,12 +646,15 @@ interface CardProps {
   ownerId: string | null;
   testSubject: TestSubject | null;
   sessionDate: string;
+  /* Séance en direct (2026-10-02) : un seul exercice affiché en grand, sans poignée de drag. */
+  large?: boolean;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate }: CardProps) {
+function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate, large = false }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
   const [draftText, setDraftText] = useState(line.text);
@@ -1018,15 +1022,17 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
     <div
       ref={setNodeRef}
       style={{
-        background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12,
-        padding: "9px 10px", marginBottom: 6,
+        background: "#fff", border: large ? "none" : "1px solid rgba(0,0,0,.08)", borderRadius: 12,
+        padding: large ? "4px 0" : "9px 10px", marginBottom: large ? 0 : 6,
         transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        {!large && (
         <span {...attributes} {...listeners} style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", flexShrink: 0, display: "flex" }}>
           <GripIcon />
         </span>
+        )}
 
         {editing ? (
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1044,9 +1050,10 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
         ) : (
           <div
             onClick={() => { setDraftText(line.text); closeClickTok(); onStartEdit(); }}
-            style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 650, color: "#2c3236", cursor: "text", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+            style={{ flex: 1, minWidth: 0, fontSize: large ? 22 : 13.5, fontWeight: large ? 700 : 650, color: "#2c3236", cursor: "text", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: large ? 1.7 : undefined }}
           >
             <Tokenized
+              large={large}
               text={line.text}
               onTokenClick={(start, end, rect) => openTokenClick(start, end, rect)}
               activeSpan={clickTok ? { start: clickTok.start, end: clickTok.start + clickTok.value.length } : null}
@@ -1073,22 +1080,23 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
         )}
 
         {hasResult && !editing && (
-          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, color: "#d44000", background: "rgba(212,64,0,.1)", borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap" }}>🧪 Test</span>
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 800, color: "#d44000", background: "rgba(212,64,0,.1)", borderRadius: 8, padding: "2px 6px", whiteSpace: "nowrap" }}>🧪 Test</span>
         )}
 
-        <button
+        {!large && <button
           ref={moreRef}
           onClick={() => setMenuOpen(v => !v)}
           aria-label="Actions"
           style={{
-            width: 26, height: 26, borderRadius: 8, flexShrink: 0, border: "none", cursor: "pointer",
+            width: large ? 38 : 26, height: large ? 38 : 26, borderRadius: large ? 12 : 8, flexShrink: 0, border: "none", cursor: "pointer", alignSelf: large ? "flex-start" : undefined,
             background: (hasMedia || hasComments) ? "rgba(212,64,0,.1)" : "#f1f1f1",
             color: (hasMedia || hasComments) ? "#d44000" : "#9a9ea1",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
           <MoreIcon />
-        </button>
+        </button>}
+
         {menuOpen && moreRef.current && (
           <ActionMenu
             anchorRect={moreRef.current.getBoundingClientRect()}
@@ -1108,6 +1116,47 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
         )}
       </div>
 
+      {/* Séance en direct : les actions du menu ⋯ en boutons visibles, mêmes blocs ouverts. */}
+      {large && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8, marginTop: 14 }}>
+          {([
+            { key: "media", label: hasMedia ? "📷 Vidéo ✓" : "📷 Vidéo", on: open === "media" || hasMedia, act: () => setOpen(o => (o === "media" ? null : "media")) },
+            { key: "comments", label: commentCount > 0 ? `💬 ${commentCount}` : "💬 Commentaire", on: open === "comments" || commentCount > 0, act: () => setOpen(o => (o === "comments" ? null : "comments")) },
+            { key: "test", label: hasResult ? "🧪 Retirer le test" : "🧪 Test", on: hasResult, act: () => { if (hasResult) handleDeleteResult(); else handleMarkAsTest(); } },
+          ]).map(b => (
+            <button
+              key={b.key}
+              onClick={b.act}
+              style={{
+                padding: "11px 6px", borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+                border: b.on ? "1px solid rgba(212,64,0,.45)" : "1px dashed rgba(212,64,0,.35)",
+                background: b.on ? "rgba(212,64,0,.08)" : "#fff", color: "#d44000",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {large && (
+        /* Suppression volontairement discrète, avec confirmation (séance en direct). Vider le texte
+           de la ligne la supprime aussi, comme dans l'éditeur. */
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", alignItems: "center", minHeight: 30, fontSize: 12.5 }}>
+          {confirmDelete ? (
+            <span style={{ color: "#62686e" }}>
+              Supprimer cet exercice ?{" "}
+              <button onClick={() => { setConfirmDelete(false); onDelete(); }} style={{ border: "none", background: "none", padding: "0 4px", color: "#b42318", fontWeight: 800, cursor: "pointer", fontSize: 12.5 }}>Supprimer</button>
+              <button onClick={() => setConfirmDelete(false)} style={{ border: "none", background: "none", padding: "0 4px", color: "#62686e", fontWeight: 700, cursor: "pointer", fontSize: 12.5 }}>Annuler</button>
+            </span>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)} aria-label="Supprimer l'exercice" title="Supprimer l'exercice" style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: "#b0b4b8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+            </button>
+          )}
+        </div>
+      )}
+
       {hasResult && (
         <div style={{ marginTop: 8, marginLeft: 18 }}>
           {resultEditing ? (
@@ -1126,7 +1175,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                     {nameSuggestions.map(s => (
                       <button
                         key={s.toName} disabled={mergingSuggestion} onClick={() => handleSelectSuggestion(s.toName)}
-                        style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 20, padding: "3px 9px", cursor: mergingSuggestion ? "default" : "pointer", opacity: mergingSuggestion ? 0.5 : 1 }}
+                        style={{ fontSize: 10.5, fontWeight: 700, color: "#d44000", background: "#fff", border: "1px solid rgba(212,64,0,.3)", borderRadius: 24, padding: "3px 9px", cursor: mergingSuggestion ? "default" : "pointer", opacity: mergingSuggestion ? 0.5 : 1 }}
                       >
                         {mergingSuggestion ? "…" : s.label}
                       </button>
@@ -1145,7 +1194,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                   <button
                     key={m} type="button" onClick={() => setResultInputMode(m)}
                     style={{
-                      fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 20, cursor: "pointer",
+                      fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 24, cursor: "pointer",
                       border: resultInputMode === m ? "1px solid #171b1f" : "1px solid rgba(0,0,0,.10)",
                       background: resultInputMode === m ? "#171b1f" : "#fff", color: resultInputMode === m ? "#fff" : "#171b1f",
                     }}
@@ -1276,7 +1325,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
       {(hasComments || open === "comments") && (
         <div style={{
           marginTop: 8, marginLeft: 18, display: "flex", flexDirection: "column", gap: 6,
-          border: "1px solid rgba(0,0,0,.08)", borderRadius: 10, background: "#fafafa", padding: "8px 9px",
+          border: "1px solid rgba(0,0,0,.08)", borderRadius: 12, background: "#fafafa", padding: "8px 9px",
         }}>
           {attachments.comments.map(c => {
             const mine = c.author === authorRole;
@@ -1285,7 +1334,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
                 <div style={{
                   maxWidth: "80%",
                   background: editingCommentId === c.id ? "#ffe8dc" : mine ? "rgba(212,64,0,.1)" : "#f7f8f9",
-                  borderRadius: 10,
+                  borderRadius: 12,
                   borderBottomRightRadius: mine ? 2 : 10,
                   borderBottomLeftRadius: mine ? 10 : 2,
                   padding: "6px 9px",
@@ -1389,9 +1438,12 @@ interface Props {
   sessionDate: string;
   testSubject?: TestSubject;
   disableLiveTestSync?: boolean;
+  /* Séance en direct (2026-10-02) : n'affiche que l'exercice à cet index, en grand, sans en-tête
+     ni composeur — mêmes tokens, médias, commentaires et tests que l'éditeur complet. */
+  focusIndex?: number;
 }
 
-export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange, sessionDate, testSubject, disableLiveTestSync }: Props) {
+export default function ExerciseBlockEditor({ value, onChange, authorRole, authorName, initialMedia, onMediaChange, sessionDate, testSubject, disableLiveTestSync, focusIndex }: Props) {
   const [lines, setLines] = useState<Line[]>(() =>
     value.split("\n").filter(l => l.trim()).map(text => ({ id: crypto.randomUUID(), text }))
   );
@@ -1480,19 +1532,22 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
     }
   }
 
+  const focused = focusIndex !== undefined;
+  const shownLines = focused ? lines.filter((_, i) => i === focusIndex) : lines;
   return (
-    <div style={{ border: "1.5px solid rgba(0,0,0,.08)", borderRadius: 16, background: "#fff", overflow: "visible" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fafafa", borderBottom: "1px solid rgba(0,0,0,.06)", borderRadius: "16px 16px 0 0" }}>
+    <div style={{ border: focused ? "none" : "1.5px solid rgba(0,0,0,.08)", borderRadius: 16, background: "#fff", overflow: "visible" }}>
+      {!focused && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fafafa", borderBottom: "1px solid rgba(0,0,0,.06)", borderRadius: "16px 16px 0 0" }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#202428" }}>Exercices de la séance</span>
         <span style={{ fontSize: 11, color: "#8a8f94" }}>{lines.length} exercice{lines.length !== 1 ? "s" : ""}</span>
-      </div>
+      </div>}
 
-      <div style={{ padding: 11 }}>
+      <div style={{ padding: focused ? 0 : 11 }}>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={lines.map(l => l.id)} strategy={verticalListSortingStrategy}>
-            {lines.map(l => (
+            {shownLines.map(l => (
               <ExerciseCard
                 key={l.id}
+                large={focused}
                 line={l}
                 editing={editingId === l.id}
                 onStartEdit={() => setEditingId(l.id)}
@@ -1521,7 +1576,7 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
           </SortableContext>
         </DndContext>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 8px" }}>
+        {!focused && <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 8px" }}>
           <span style={{ color: "#d7d7d7", flexShrink: 0 }}><GripIcon /></span>
           <div style={{ flex: 1 }}>
             <TokenInput
@@ -1536,7 +1591,7 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
               }}
             />
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Backdrop invisible, même mécanisme que celui d'ActionMenu (clic hors du panneau = ferme).

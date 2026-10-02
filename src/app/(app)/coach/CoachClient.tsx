@@ -707,7 +707,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               position: "relative", overflow: "hidden",
               background: "linear-gradient(135deg,#111 0%,#303030 70%,#151515 100%)",
               border: "1px solid rgba(255,255,255,.12)",
-              borderRadius: 22, padding: 24,
+              borderRadius: 24, padding: 24,
               boxShadow: "0 18px 44px rgba(0,0,0,.20)",
               marginBottom: 14,
             }}>
@@ -723,21 +723,21 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               </div>
             </div>
 
-            <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 22, padding: 24, boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
+            <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 24, boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 12 }}>Email du sportif</div>
               <input
                 type="email"
                 value={inviteEmail}
                 onChange={e => { setInviteEmail(e.target.value); setInviteError(""); setInviteStatus("idle"); }}
                 placeholder="athlete@email.com"
-                style={{ width: "100%", height: 48, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", padding: "0 16px", fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
+                style={{ width: "100%", height: 48, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", padding: "0 16px", fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 10 }}
               />
               <button
                 data-tour="invite-btn"
                 onClick={handleEmptyInvite}
                 disabled={inviteStatus === "loading" || !inviteEmail.trim()}
                 style={{
-                  width: "100%", height: 48, borderRadius: 14,
+                  width: "100%", height: 48, borderRadius: 16,
                   background: "linear-gradient(180deg,#f04a08,#d44000)",
                   color: "#fff", border: "none", fontSize: 15, fontWeight: 800,
                   cursor: inviteStatus === "loading" || !inviteEmail.trim() ? "not-allowed" : "pointer",
@@ -797,7 +797,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                           key={dim}
                           onClick={() => setMetricFilter(active ? null : dim)}
                           style={{
-                            textAlign: "left", cursor: "pointer", borderRadius: 14, padding: "10px 11px",
+                            textAlign: "left", cursor: "pointer", borderRadius: 16, padding: "10px 11px",
                             background: active ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.055)",
                             border: active ? "1.5px solid #d44000" : "1.5px solid rgba(255,255,255,.10)",
                           }}
@@ -876,7 +876,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                       <button
                         onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes?quickadd=invite" : "/coach/athletes?quickadd=invite")}
                         style={{
-                          width: "100%", height: "100%", minHeight: 220, borderRadius: 22, cursor: "pointer", fontFamily: "inherit",
+                          width: "100%", height: "100%", minHeight: 220, borderRadius: 24, cursor: "pointer", fontFamily: "inherit",
                           background: "rgba(255,255,255,.035)", border: "1.5px dashed rgba(255,255,255,.22)", color: "#fff",
                           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 20,
                         }}

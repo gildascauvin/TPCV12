@@ -346,7 +346,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
             <button
               data-tour="invite-btn"
               onClick={() => setShowInvite(true)}
-              style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
+              style={{ height: 46, paddingLeft: 24, paddingRight: 24, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}
             >
               Inviter un sportif →
             </button>
@@ -412,7 +412,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                     <button
                       onClick={e => { e.stopPropagation(); setMenuOpenId(prev => (prev === a.id ? null : a.id)); }}
                       aria-label="Options"
-                      style={{ width: 34, height: 34, borderRadius: 10, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}
+                      style={{ width: 34, height: 34, borderRadius: 12, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}
                     >
                       ⋯
                     </button>

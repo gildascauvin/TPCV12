@@ -41,7 +41,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
   return (
     <div ref={cardRef} onClick={onClick} style={{
       cursor: onClick ? "pointer" : "default",
-      border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14,
+      border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16,
       padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
       transition: "transform .2s ease, box-shadow .2s ease",
       ...cardStyle,
@@ -64,7 +64,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
       </div>
       {gaugeSlot ?? (gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null)}
       {exercises.length > 0 && (
-        <div style={{ marginTop: 7, borderRadius: 10, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
+        <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
             <div key={i}>{renderExerciseLine(ex, i)}</div>
           ) : (

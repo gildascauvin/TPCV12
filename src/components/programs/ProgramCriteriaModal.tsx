@@ -357,7 +357,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -462,7 +462,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
               {(customSport?.status === "matched" || customSport?.status === "generated") && (
                 <div style={{
                   display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: 20,
+                  padding: "7px 14px", borderRadius: 24,
                   border: "2px solid #2f9e44", background: "rgba(47,158,68,0.10)",
                   color: "#2f9e44", fontWeight: 700, fontSize: 13,
                 }}>
@@ -495,7 +495,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
                 onClick={analyzeSport}
                 disabled={!sportDescription.trim() || analyzing}
                 style={{
-                  padding: "9px 16px", borderRadius: 10, border: "none",
+                  padding: "9px 16px", borderRadius: 12, border: "none",
                   cursor: sportDescription.trim() && !analyzing ? "pointer" : "not-allowed",
                   background: sportDescription.trim() && !analyzing ? "#171b1f" : "#e8e4df",
                   color: sportDescription.trim() && !analyzing ? "#fff" : "#aaa",
@@ -545,7 +545,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
                   key={d}
                   onClick={() => toggleDay(d)}
                   style={{
-                    flex: 1, padding: "8px 0", borderRadius: 10, cursor: "pointer",
+                    flex: 1, padding: "8px 0", borderRadius: 12, cursor: "pointer",
                     border: days.includes(d) ? "2px solid #d44000" : "2px solid rgba(0,0,0,0.08)",
                     background: days.includes(d) ? "#d44000" : "#fff",
                     color: days.includes(d) ? "#fff" : "#8a8f94",
@@ -582,7 +582,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
             onClick={importMode ? handleImportAnalyze : handleGenerate}
             disabled={importMode ? (!canSubmitImport || importAnalyzing) : (!canSubmit || loading)}
             style={{
-              width: "100%", padding: "15px", borderRadius: 14, border: "none",
+              width: "100%", padding: "15px", borderRadius: 16, border: "none",
               cursor: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "pointer" : "not-allowed",
               background: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
               color: (importMode ? canSubmitImport && !importAnalyzing : canSubmit && !loading) ? "#fff" : "#aaa",
@@ -600,7 +600,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 18, padding: 20, marginBottom: 10, border: "1px solid rgba(0,0,0,0.08)" }}>
+    <div style={{ background: "#fff", borderRadius: 16, padding: 20, marginBottom: 10, border: "1px solid rgba(0,0,0,0.08)" }}>
       <div style={{ fontSize: 12, fontWeight: 900, marginBottom: 12, display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".05em" }}>
         {label}
       </div>
@@ -615,7 +615,7 @@ function Pill({ active, onClick, title, children }: { active: boolean; onClick: 
       onClick={onClick}
       title={title}
       style={{
-        padding: "7px 14px", borderRadius: 20, cursor: "pointer",
+        padding: "7px 14px", borderRadius: 24, cursor: "pointer",
         border: active ? "2px solid #d44000" : "2px solid rgba(0,0,0,0.08)",
         background: active ? "rgba(212,64,0,0.10)" : "#fff",
         color: active ? "#d44000" : "#8a8f94",
@@ -633,7 +633,7 @@ function FocusCard({ active, icon, label, onClick }: { active: boolean; icon: st
       onClick={onClick}
       style={{
         display: "flex", alignItems: "center", gap: 10, textAlign: "left",
-        padding: "12px 14px", borderRadius: 14, cursor: "pointer",
+        padding: "12px 14px", borderRadius: 16, cursor: "pointer",
         border: active ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.10)",
         background: active ? "rgba(212,64,0,.05)" : "#fff",
       }}

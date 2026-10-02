@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
 import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
+import LiveSessionHost from "@/components/sessions/LiveSessionHost";
 
 /* Verrouillage de page entière (.locked, coin cadenas sur les CTA premium) retiré le 2026-08-19
    (chantier "gating save") : un compte gratuit navigue et interagit librement partout désormais,
@@ -17,17 +18,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("mode")
+    .select("mode, name")
     .eq("user_id", user.id)
     .maybeSingle();
 
   const role = (profile?.mode as "athlete" | "coach") ?? "athlete";
 
   return (
-    <div className="min-h-screen bg-bg pb-[132px]">
+    <div className="min-h-screen pb-[132px]" style={{ background: "#070a0d" }}>
+      {/* Toutes les pages de l'app sont sur fond sombre (DARK_CARD_BG) : le fond de la page
+          elle-même aussi, sinon le gris clair réapparaît en bas quand on tire au-delà du contenu
+          (rebond du scroll) et sous la barre de navigation. */}
+      <style>{"html,body{background:#070a0d}"}</style>
       {children}
       <BottomNav role={role} />
       <HealthSyncOnOpen userId={user.id} />
+      {role === "athlete" && <LiveSessionHost userId={user.id} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );
 }

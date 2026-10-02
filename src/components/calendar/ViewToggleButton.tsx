@@ -11,7 +11,7 @@ export default function ViewToggleButton({ mode, onChange }: { mode: "week" | "m
       onClick={() => onChange(mode === "week" ? "month" : "week")}
       style={{
         display: "flex", alignItems: "center", gap: 6,
-        height: 32, paddingLeft: 10, paddingRight: 12, borderRadius: 10,
+        height: 32, paddingLeft: 10, paddingRight: 12, borderRadius: 12,
         background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)",
         color: "#fff", fontSize: 11, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap",
       }}

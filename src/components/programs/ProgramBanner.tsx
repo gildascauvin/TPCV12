@@ -80,7 +80,7 @@ export default function ProgramBanner({
       return (
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 10,
+          background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 12,
           padding: "5px 8px",
         }}>
           {editingLabel ? (
@@ -103,7 +103,7 @@ export default function ProgramBanner({
           {onReconduire && (
             <button
               onClick={onReconduire} title="Reconduire la semaine"
-              style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, border: "1px solid rgba(0,0,0,.12)", background: "#fff", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
+              style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 8, border: "1px solid rgba(0,0,0,.12)", background: "#fff", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}
             >
               ↻
             </button>
@@ -148,7 +148,7 @@ export default function ProgramBanner({
 
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
           {onReconduire && (
-            <button onClick={onReconduire} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
+            <button onClick={onReconduire} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
               {reconduireLabel}
               <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 12a9 9 0 1 1 2.6 6.36" />
@@ -157,7 +157,7 @@ export default function ProgramBanner({
             </button>
           )}
           {!onReconduire && onLibrary && (
-            <button onClick={onLibrary} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
+            <button onClick={onLibrary} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 13px", borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11, whiteSpace: "nowrap" }}>
               Programmes →
             </button>
           )}
@@ -174,7 +174,7 @@ export default function ProgramBanner({
     return (
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        background: "#fff", border: "1px solid rgba(212,64,0,.18)", borderRadius: 10,
+        background: "#fff", border: "1px solid rgba(212,64,0,.18)", borderRadius: 12,
         padding: "5px 8px",
       }}>
         <span style={{ flexShrink: 0, fontSize: 12 }}>{programSportEmoji(program!.sport)}</span>
@@ -189,7 +189,7 @@ export default function ProgramBanner({
   return (
     <div style={{ padding: flush ? "4px 0 12px" : "10px 18px", display: "flex", alignItems: "center", gap: 12 }}>
       {/* Sport icon */}
-      <div style={{ width: 38, height: 38, borderRadius: 11, background: dark ? "rgba(255,255,255,.08)" : "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+      <div style={{ width: 38, height: 38, borderRadius: 12, background: dark ? "rgba(255,255,255,.08)" : "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
         {programSportEmoji(program!.sport)}
       </div>
 

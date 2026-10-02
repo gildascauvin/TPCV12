@@ -20,7 +20,7 @@ export default function WelcomeModal({ mode, onClose }: Props) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}>
-      <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
         {mode === "athlete" ? (
           <>
             <div style={{ fontSize: 36, textAlign: "center", marginBottom: 10 }}>🎯</div>
@@ -48,7 +48,7 @@ export default function WelcomeModal({ mode, onClose }: Props) {
         )}
         <button
           onClick={handleClose}
-          style={{ width: "100%", height: 50, borderRadius: 14, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+          style={{ width: "100%", height: 50, borderRadius: 16, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
         >
           C&apos;est parti →
         </button>

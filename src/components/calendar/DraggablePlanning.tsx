@@ -13,15 +13,17 @@ import { parseAndApply } from "@/lib/loadAdjust";
 export function DroppableDay({ dstr, children }: { dstr: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: dstr, data: { type: "day" } });
   return (
-    <div ref={setNodeRef} style={{ borderRadius: 26, outline: isOver ? "2px dashed rgba(212,64,0,.55)" : "2px dashed transparent", outlineOffset: 4, transition: "outline-color .15s" }}>
+    <div ref={setNodeRef} style={{ borderRadius: 24, outline: isOver ? "2px dashed rgba(212,64,0,.55)" : "2px dashed transparent", outlineOffset: 4, transition: "outline-color .15s" }}>
       {children}
     </div>
   );
 }
 
-export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole, decisionGauge, previewPct }: {
+export function DraggableSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, viewerRole, decisionGauge, previewPct, onStart, liveLabel }: {
   session: T;
   onComplete: (s: T) => void;
+  onStart?: (s: T) => void;
+  liveLabel?: string | null;
   onEdit: (s: T) => void;
   onDuplicate: (s: T) => void;
   /* "coach" sur /coach/planning, "athlete" sur /week — pilote le point de notification (voir
@@ -61,6 +63,8 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
     <WeekSessionCard
       session={session}
       onComplete={onComplete}
+      onStart={onStart}
+      liveLabel={liveLabel}
       onEdit={onEdit}
       onDuplicate={onDuplicate}
       dragHandleProps={{ ...attributes, ...listeners }}

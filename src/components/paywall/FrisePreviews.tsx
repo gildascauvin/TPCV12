@@ -92,8 +92,8 @@ const DEFAULT_SESSIONS: SessionPreview[] = [
 function SessionMiniCard({ preview, width }: { preview: SessionPreview; width?: number }) {
   return (
     <div style={width
-      ? { flexShrink: 0, width, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }
-      : { flex: 1, minWidth: 0, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 14, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}>
+      ? { flexShrink: 0, width, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }
+      : { flex: 1, minWidth: 0, border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16, padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)" }}>
       <div style={{ fontSize: 11.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 8 }}>{preview.name}</div>
       <div style={{ marginBottom: 8 }}>
         <DiffGauge value={preview.diff} height={9} />
@@ -167,7 +167,7 @@ export function WellnessCardPreview({ score = 45, behaviors = ["alcohol", "late_
 
   return (
     <div style={{
-      width: "100%", background: DARK_CARD_BG, borderRadius: 20, padding: 16,
+      width: "100%", background: DARK_CARD_BG, borderRadius: 24, padding: 16,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
@@ -234,7 +234,7 @@ export function CoachControlPreview({ name, score = 88, plannedDiff = 3, behavio
 
   return (
     <div style={{
-      width: "100%", position: "relative", background: DARK_CARD_BG, borderRadius: 20, padding: 16,
+      width: "100%", position: "relative", background: DARK_CARD_BG, borderRadius: 24, padding: 16,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       {showPreviewBadge && (
@@ -337,7 +337,7 @@ export function FullWellnessAdvicePreview() {
   return (
     <div style={{
       width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
-      background: DARK_CARD_BG, borderRadius: 20, padding: 18,
+      background: DARK_CARD_BG, borderRadius: 24, padding: 18,
       color: "#fff", boxShadow: "0 14px 36px rgba(0,0,0,.24)", pointerEvents: "none",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
@@ -364,7 +364,7 @@ export function FullWellnessAdvicePreview() {
         <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a55", marginBottom: 9 }}>
           ✦ Conseils
         </div>
-        <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ fontSize: 13 }}>⚡</span>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -406,7 +406,7 @@ export function CoachAthleteRowsPreview() {
         const status = athleteStatus(row.recovery);
         const chargeInfo = sigDimInfo("load", row.acwr, "coach");
         return (
-          <div key={row.name} style={{ background: "#fff", border: "1px solid rgba(47,158,68,.20)", borderRadius: 26, padding: 18, boxShadow: "0 8px 24px rgba(47,158,68,.07)" }}>
+          <div key={row.name} style={{ background: "#fff", border: "1px solid rgba(47,158,68,.20)", borderRadius: 24, padding: 18, boxShadow: "0 8px 24px rgba(47,158,68,.07)" }}>
             <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <AthleteRing score={row.recovery} />
               <div style={{ flex: 1, minWidth: 140 }}>
@@ -668,7 +668,7 @@ export function CombinedInsightPreview({ perspective }: { perspective: "athlete"
   return (
     <div style={{
       width: "100%", maxWidth: isMd ? 460 : undefined, margin: isMd ? "0 auto" : undefined,
-      background: DARK_CARD_BG, borderRadius: 20, padding: "14px 16px 16px",
+      background: DARK_CARD_BG, borderRadius: 24, padding: "14px 16px 16px",
       boxShadow: "0 14px 36px rgba(0,0,0,.24)",
     }}>
       <TrendInsight perspective={perspective} />

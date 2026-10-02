@@ -205,7 +205,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         background: "#fff",
         color: "#171b1f",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -407,7 +407,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     key={b.key}
                     onClick={() => toggleBehavior(b.key)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 10,
+                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
                       border: checked ? "1px solid rgba(200,30,30,0.40)" : "1px solid rgba(0,0,0,0.10)",
                       background: checked ? "rgba(200,30,30,0.08)" : "#fff",
                       color: checked ? "#c81e1e" : "#7b7f82",
@@ -432,7 +432,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     key={b.key}
                     onClick={() => toggleBehavior(b.key)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 10,
+                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
                       border: checked ? "1px solid rgba(47,158,68,0.40)" : "1px solid rgba(0,0,0,0.10)",
                       background: checked ? "rgba(47,158,68,0.08)" : "#fff",
                       color: checked ? "#2f9e44" : "#7b7f82",
@@ -477,14 +477,14 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           {step > 0 ? (
             <button
               onClick={goBack}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#172018", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#172018", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               ← Retour
             </button>
           ) : (
             <button
               onClick={onClose}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               {cancelLabel}
             </button>
@@ -492,7 +492,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           <button
             onClick={goNext}
             disabled={saving || (q === -1 && !plannedIntensity)}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: q === -1 && !plannedIntensity ? 0.45 : 1 }}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: q === -1 && !plannedIntensity ? 0.45 : 1 }}
           >
             {saving ? "..." : step === total - 1 ? "Valider ✓" : "Suivant →"}
           </button>

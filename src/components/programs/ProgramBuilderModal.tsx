@@ -32,7 +32,7 @@ const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 function DroppableProgramDay({ day, children }: { day: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: `day:${day}`, data: { type: "day", day } });
   return (
-    <div ref={setNodeRef} style={{ borderRadius: 26, outline: isOver ? "2px dashed rgba(212,64,0,.55)" : "2px dashed transparent", outlineOffset: 4, transition: "outline-color .15s" }}>
+    <div ref={setNodeRef} style={{ borderRadius: 24, outline: isOver ? "2px dashed rgba(212,64,0,.55)" : "2px dashed transparent", outlineOffset: 4, transition: "outline-color .15s" }}>
       {children}
     </div>
   );
@@ -170,14 +170,14 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
       <div style={{
         background: "#fff", color: "#171b1f",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden",
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Dupliquer</div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 20px" }}>
@@ -196,7 +196,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
               </select>
             </div>
           ) : (
-            <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.07)", borderRadius: 14, padding: "10px 13px", marginBottom: 18, fontSize: 14, fontWeight: 700, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
+            <div style={{ background: "#f7f8f9", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, padding: "10px 13px", marginBottom: 18, fontSize: 14, fontWeight: 700, color: "#171b1f", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>
               {session.name}
             </div>
           )}
@@ -235,7 +235,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
                 style={{
                   border: `2px solid ${mode === m.key ? "#d44000" : "#eee"}`,
                   background: mode === m.key ? "rgba(212,64,0,.05)" : "#fff",
-                  borderRadius: 14, padding: "12px 8px", textAlign: "center", cursor: "pointer",
+                  borderRadius: 16, padding: "12px 8px", textAlign: "center", cursor: "pointer",
                 }}
               >
                 <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
@@ -630,7 +630,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
     );
 
   const autoregBanner = !showAutoregSimulator ? null : (
-    <div style={{ margin: "10px 16px 14px", background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 18, padding: "14px 16px", color: "#fff", position: "relative", overflow: "hidden", flexShrink: 0 }}>
+    <div style={{ margin: "10px 16px 14px", background: "linear-gradient(135deg,#161616,#282828 64%,#111)", borderRadius: 16, padding: "14px 16px", color: "#fff", position: "relative", overflow: "hidden", flexShrink: 0 }}>
       <div style={{ position: "absolute", right: -40, top: -40, width: 130, height: 130, borderRadius: "50%", background: "rgba(212,64,0,.16)", filter: "blur(24px)", pointerEvents: "none" }} />
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: isMd ? "row" : "column", alignItems: isMd ? "center" : "stretch", gap: isMd ? 20 : 14 }}>
 
@@ -648,7 +648,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
         </div>
 
         {/* Simulateur — même encadré que PublicProgramView.tsx (/p/[id]). */}
-        <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 14, padding: "13px 14px" }}>
+        <div style={{ flex: isMd ? "1 1 50%" : undefined, minWidth: 0, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: "13px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               {role === "coach" ? "Simule leur forme" : "Simule ta forme"}
@@ -663,7 +663,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             type="range" min={0} max={100} value={simScore}
             onChange={e => setSimScore(Number(e.target.value))}
             className="tpc-autoreg-slider"
-            style={{ width: "100%", height: 7, borderRadius: 4, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }}
+            style={{ width: "100%", height: 7, borderRadius: 8, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }}
           />
           <style>{`
             .tpc-autoreg-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
@@ -697,7 +697,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
             disabled={sharing}
             style={{
               display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-              padding: "7px 12px", borderRadius: 10, whiteSpace: "nowrap",
+              padding: "7px 12px", borderRadius: 12, whiteSpace: "nowrap",
               border: `1.5px solid ${shareCopied ? "#d44000" : "rgba(0,0,0,.10)"}`,
               background: shareCopied ? "rgba(212,64,0,0.06)" : "#fff",
               color: shareCopied ? "#d44000" : "#8a8f94",
@@ -735,7 +735,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
         <button
           onClick={() => setShowReconduire(true)}
           style={{
-            margin: "0 0 12px", padding: "6px 13px", borderRadius: 10, border: "1px solid rgba(0,0,0,.12)",
+            margin: "0 0 12px", padding: "6px 13px", borderRadius: 12, border: "1px solid rgba(0,0,0,.12)",
             cursor: "pointer", background: "#fff", color: "#62686e", fontWeight: 700, fontSize: 11,
             display: "flex", alignItems: "center", flexShrink: 0, whiteSpace: "nowrap",
           }}
@@ -785,7 +785,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
           return (
             <div key={day}>
             <DroppableProgramDay day={day}>
-            <div style={{ background: "#fff", borderRadius: 26, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
+            <div style={{ background: "#fff", borderRadius: 24, border: "1px solid rgba(0,0,0,.08)", padding: 16, boxShadow: "0 6px 18px rgba(0,0,0,0.05)", scrollSnapAlign: "start" }}>
               <div style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 10, fontWeight: 1000, letterSpacing: "0.12em", color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>{day}</div>
               </div>
@@ -815,7 +815,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
 
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {daySessions.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+                  <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
                     Repos / libre
                   </div>
                 )}
@@ -834,7 +834,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 <div style={{ display: "flex", gap: 5 }}>
                   <div
                     onClick={() => addSession(day)}
-                    style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
+                    style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
                   >
                     + Ajouter une séance
                   </div>
@@ -842,7 +842,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                     <button
                       onClick={() => setDuplicateDay({ weekIdx, day })}
                       title="Dupliquer"
-                      style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                     >⎘</button>
                   )}
                 </div>
@@ -857,7 +857,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
       </DndContext>
       {weekLocked && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(241,240,238,.55)" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
+          <div style={{ background: "#fff", borderRadius: 24, padding: "20px 22px", maxWidth: 300, textAlign: "center", boxShadow: "0 14px 34px rgba(0,0,0,.14)" }}>
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, letterSpacing: "-0.02em", marginBottom: 6, color: "#171b1f" }}>Débloque les semaines suivantes</div>
             <div style={{ fontSize: 12, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>Visualise et personnalise l&apos;intégralité du programme généré, pas seulement la première semaine.</div>
             <button onClick={() => onUnlockClick ? onUnlockClick() : gate(() => {})} style={{ width: "100%", height: 40, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer" }}>

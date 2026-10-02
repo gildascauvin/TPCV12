@@ -29,7 +29,7 @@ export default function AutosaveFooterButton({ state, onClick, idleLabel = "Ferm
     <button
       onClick={onClick}
       style={{
-        height: 46, borderRadius: 14, border: `1px solid ${s.border}`, background: s.background, color: s.color,
+        height: 46, borderRadius: 16, border: `1px solid ${s.border}`, background: s.background, color: s.color,
         fontSize: 14, fontWeight: 700, cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
         transition: "background .15s ease, border-color .15s ease, color .15s ease",

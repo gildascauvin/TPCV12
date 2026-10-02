@@ -84,7 +84,7 @@ export default function ResetPasswordPage() {
           />
         </div>
 
-        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 30, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
+        <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
           {done ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
               <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>

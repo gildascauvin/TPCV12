@@ -150,7 +150,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -205,12 +205,12 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
                     onClick={() => selectProgram(p)}
                     style={{
                       width: "100%", display: "flex", alignItems: "center", gap: 14,
-                      padding: "16px", borderRadius: 18, border: "1px solid rgba(0,0,0,.08)",
+                      padding: "16px", borderRadius: 16, border: "1px solid rgba(0,0,0,.08)",
                       background: "#fff", boxShadow: "0 2px 10px rgba(0,0,0,.03)",
                       cursor: "pointer", textAlign: "left", boxSizing: "border-box" as const,
                     }}
                   >
-                    <div style={{ width: 46, height: 46, borderRadius: 13, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
+                    <div style={{ width: 46, height: 46, borderRadius: 12, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>
                       {icon}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -223,7 +223,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
                       onClick={e => copyLink(e, p.id)}
                       style={{
                         display: "flex", alignItems: "center", gap: 5, flexShrink: 0, whiteSpace: "nowrap",
-                        padding: "7px 11px", borderRadius: 10,
+                        padding: "7px 11px", borderRadius: 12,
                         border: `1.5px solid ${linkCopied[p.id] ? "#d44000" : "rgba(0,0,0,.10)"}`,
                         background: linkCopied[p.id] ? "rgba(212,64,0,0.06)" : "#fff",
                         color: linkCopied[p.id] ? "#d44000" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer",

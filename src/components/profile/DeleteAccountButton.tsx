@@ -59,11 +59,11 @@ export default function DeleteAccountButton({ hasStripeSub }: { hasStripeSub: bo
             {error && <div style={{ fontSize: 13, color: "#b42318", marginTop: 10 }}>{error}</div>}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
               <button type="button" onClick={() => setOpen(false)} disabled={busy}
-                style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#3a3f44", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#3a3f44", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Annuler
               </button>
               <button type="button" onClick={confirmDelete} disabled={busy}
-                style={{ flex: 1, height: 46, borderRadius: 14, border: "none", background: busy ? "#ccc" : "#b42318", color: "#fff", fontSize: 14, fontWeight: 800, cursor: busy ? "default" : "pointer" }}>
+                style={{ flex: 1, height: 46, borderRadius: 16, border: "none", background: busy ? "#ccc" : "#b42318", color: "#fff", fontSize: 14, fontWeight: 800, cursor: busy ? "default" : "pointer" }}>
                 {busy ? "Suppression..." : "Supprimer définitivement"}
               </button>
             </div>

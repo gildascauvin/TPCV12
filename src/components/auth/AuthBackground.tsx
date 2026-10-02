@@ -33,7 +33,7 @@ export default function AuthBackground({ children }: { children: React.ReactNode
         <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
           {/* Wellness card */}
           <div style={{
-            borderRadius: 22, padding: 18,
+            borderRadius: 24, padding: 18,
             background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
             display: "flex", alignItems: "center", gap: 16,
           }}>
@@ -72,7 +72,7 @@ export default function AuthBackground({ children }: { children: React.ReactNode
           ].map((s, i) => (
             <div key={i} style={{
               background: s.done ? "#f7f8f9" : "#fff",
-              border: "1px solid rgba(0,0,0,.08)", borderRadius: 18, padding: "14px 16px",
+              border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "14px 16px",
               display: "flex", alignItems: "center", justifyContent: "space-between",
               opacity: s.done ? 0.65 : 1,
             }}>
@@ -85,7 +85,7 @@ export default function AuthBackground({ children }: { children: React.ReactNode
                   <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, background: s.tagBg, color: s.tagColor, borderRadius: 999, padding: "2px 7px", fontWeight: 700 }}>{s.tag}</span>
                 </div>
               </div>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.done ? "#eef8f1" : "linear-gradient(180deg,#f04a08,#d44000)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{ width: 34, height: 34, borderRadius: 12, background: s.done ? "#eef8f1" : "linear-gradient(180deg,#f04a08,#d44000)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {s.done
                   ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2f9e44" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
                   : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>

@@ -38,7 +38,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
     <button
       onClick={onBack} aria-label="Retour"
       style={{
-        width: 52, height: 52, borderRadius: 14, flexShrink: 0, cursor: "pointer", fontSize: 17,
+        width: 52, height: 52, borderRadius: 16, flexShrink: 0, cursor: "pointer", fontSize: 17,
         border: isDark ? "1.5px solid rgba(255,255,255,.18)" : "1.5px solid rgba(0,0,0,.10)",
         background: isDark ? "rgba(255,255,255,.06)" : "#fff",
         color: isDark ? "#fff" : "#171b1f",
@@ -50,7 +50,7 @@ export default function Actions({ variant = "light", onNext, nextLabel, nextDisa
     <button
       onClick={() => { if (!nextDisabled) onNext(); }}
       disabled={nextDisabled}
-      style={{ width: "100%", height: 52, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
+      style={{ width: "100%", height: 52, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 900, cursor: nextDisabled ? "default" : "pointer", opacity: nextDisabled ? 0.45 : 1, boxShadow: "0 8px 20px rgba(212,64,0,.26)" }}
     >
       {nextLabel}
     </button>

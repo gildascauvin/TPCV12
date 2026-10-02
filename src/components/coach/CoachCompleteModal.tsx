@@ -31,7 +31,7 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", borderRadius: 30, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f", marginBottom: 4 }}>
           Résultat de la séance
         </div>
@@ -64,10 +64,10 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 24 }}>
-          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 14, background: "#f0efed", color: "#62686e", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={onClose} style={{ flex: 1, height: 50, borderRadius: 16, background: "#f0efed", color: "#62686e", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             Annuler
           </button>
-          <button onClick={handleSave} disabled={saving} style={{ flex: 2, height: 50, borderRadius: 14, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
+          <button onClick={handleSave} disabled={saving} style={{ flex: 2, height: 50, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.24)" }}>
             {saving ? "..." : "Valider ✓"}
           </button>
         </div>

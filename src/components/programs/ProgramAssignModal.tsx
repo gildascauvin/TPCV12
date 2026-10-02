@@ -172,7 +172,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -235,7 +235,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                             {a.sport && <div style={{ fontSize: 11, color: "#8a8f94" }}>{a.sport}</div>}
                           </div>
                           <div style={{
-                            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                            width: 20, height: 20, borderRadius: 8, flexShrink: 0,
                             border: checked ? "none" : "2px solid #d8d3cc",
                             background: checked ? "#d44000" : "transparent",
                             display: "flex", alignItems: "center", justifyContent: "center",
@@ -270,7 +270,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
                       key={opt.value}
                       onClick={() => setStartDate(opt.value)}
                       style={{
-                        flex: "1 1 auto", minWidth: 90, padding: "7px 6px", borderRadius: 10, cursor: "pointer", fontSize: 10.5, fontWeight: 600,
+                        flex: "1 1 auto", minWidth: 90, padding: "7px 6px", borderRadius: 12, cursor: "pointer", fontSize: 10.5, fontWeight: 600,
                         border: startDate === opt.value ? "2px solid #d44000" : "2px solid #e8e4df",
                         background: startDate === opt.value ? "#fff4f0" : "#faf9f7",
                         color: startDate === opt.value ? "#d44000" : "#555",
@@ -305,7 +305,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
               onClick={handleAssign}
               disabled={(!isSelfMode && selectedAthleteIds.length === 0) || !startDate || loading}
               style={{
-                width: "100%", padding: "14px", borderRadius: 26, border: "none",
+                width: "100%", padding: "14px", borderRadius: 24, border: "none",
                 cursor: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "pointer" : "not-allowed",
                 background: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "linear-gradient(180deg,#f04a08,#d44000)" : "#e8e4df",
                 color: (isSelfMode || selectedAthleteIds.length > 0) && !loading ? "#fff" : "#aaa",

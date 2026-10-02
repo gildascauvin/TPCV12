@@ -49,13 +49,13 @@ export default function SessionCard({
       {session.done && (session.duration || session.rpe) && (
         <div className="grid grid-cols-2 gap-1 mb-2">
           {session.duration && (
-            <div className="bg-[#f5f5f5] rounded-[7px] p-[5px] text-center">
+            <div className="bg-[#f5f5f5] rounded-[8px] p-[5px] text-center">
               <div className="text-[12px] font-bold text-accent">{session.duration}</div>
               <div className="text-[7px] text-muted tracking-[0.05em] uppercase mt-[2px]">min</div>
             </div>
           )}
           {session.rpe && (
-            <div className="bg-[#f5f5f5] rounded-[7px] p-[5px] text-center">
+            <div className="bg-[#f5f5f5] rounded-[8px] p-[5px] text-center">
               <div className="text-[12px] font-bold text-accent">{session.rpe}/10</div>
               <div className="text-[7px] text-muted tracking-[0.05em] uppercase mt-[2px]">RPE</div>
             </div>
@@ -67,7 +67,7 @@ export default function SessionCard({
         {!session.done && onComplete && (
           <button
             onClick={() => onComplete(session)}
-            className="btn-primary text-[11px] px-3 py-[6px] rounded-[10px]"
+            className="btn-primary text-[11px] px-3 py-[6px] rounded-[12px]"
           >
             Terminer ✓
           </button>
@@ -75,7 +75,7 @@ export default function SessionCard({
         {onEdit && (
           <button
             onClick={() => onEdit(session)}
-            className="btn-secondary text-[11px] px-3 py-[6px] rounded-[10px]"
+            className="btn-secondary text-[11px] px-3 py-[6px] rounded-[12px]"
           >
             Modifier
           </button>
@@ -83,7 +83,7 @@ export default function SessionCard({
         {onDelete && (
           <button
             onClick={() => onDelete(session)}
-            className="text-[11px] px-3 py-[5px] rounded-[10px] border"
+            className="text-[11px] px-3 py-[5px] rounded-[12px] border"
             style={{ background: "#fff", color: "#c81e1e", borderColor: "rgba(200,30,30,0.28)" }}
           >
             Suppr.

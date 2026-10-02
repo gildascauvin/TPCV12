@@ -49,9 +49,13 @@ export interface SessionLike {
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
    à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge }: {
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge, onStart, liveLabel }: {
   session: T;
   onComplete: (s: T) => void;
+  /* Séance en direct (2026-10-02) : Démarrer / Reprendre (séance du jour à faire, côté sportif). */
+  onStart?: (s: T) => void;
+  /* « En cours · mm:ss » quand la séance tourne (calculé par l'appelant). */
+  liveLabel?: string | null;
   onEdit: (s: T) => void;
   onDuplicate: (s: T) => void;
   /* Optionnelles — branchées par WeekClient.tsx/CoachPlanningClient.tsx pour le drag & drop entre
@@ -83,7 +87,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       ref={cardRef}
       style={{
         border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
-        background: "#fff", borderRadius: 14, padding: "10px 11px",
+        background: "#fff", borderRadius: 16, padding: "10px 11px",
         cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
         transition: "transform .2s ease, box-shadow .2s ease",
         ...cardStyle,
@@ -107,7 +111,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           background: session.done ? "rgba(47,158,68,.12)" : "rgba(212,64,0,0.10)",
           color: session.done ? "#2f9e44" : "#d44000",
         }}>
-          {session.done ? "Terminé" : "Prévu"}
+          {session.done ? "Terminé" : liveLabel ? `● ${liveLabel}` : "Prévu"}
         </span>
       </div>
 
@@ -144,11 +148,19 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       {/* 4. Actions */}
       {!hideActions && (
         <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+          {!session.done && onStart ? (
+            <button
+              onClick={() => onStart(session)}
+              style={{ flex: 1, height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+            >
+              {liveLabel ? "Reprendre la séance" : "▶ Démarrer"}
+            </button>
+          ) : (
           <button
             data-tour="terminer-btn"
             onClick={() => onComplete(session)}
             style={{
-              flex: 1, height: 32, borderRadius: 9, fontSize: 11, fontWeight: 800, cursor: "pointer",
+              flex: 1, height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer",
               background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
               color: session.done ? "#171b1f" : "#fff",
               border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
@@ -157,10 +169,18 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           >
             {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
           </button>
+          )}
           <button
             onClick={() => onDuplicate(session)} title="Dupliquer"
-            style={{ width: 32, height: 32, borderRadius: 9, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
           >⎘</button>
+        </div>
+      )}
+      {!hideActions && !session.done && onStart && !liveLabel && (
+        <div style={{ textAlign: "center", marginTop: 6 }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
+            Déjà faite ? Noter le résultat
+          </button>
         </div>
       )}
     </div>
@@ -212,7 +232,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
       position: "relative",
       background: "#fff",
       border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,0.08)",
-      borderRadius: 26, padding: 16,
+      borderRadius: 24, padding: 16,
       boxShadow: isToday ? "0 0 0 0 transparent, 0 8px 24px rgba(212,64,0,.08)" : "0 6px 18px rgba(0,0,0,0.05)",
       scrollSnapAlign: "start",
       transition: "transform 0.22s ease, box-shadow 0.22s ease",
@@ -279,7 +299,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
           <EmptyDayCard inline perspective={emptyPerspective} onAddFree={() => onAddSession(dstr)} />
         )}
         {sessions.length === 0 && !showEmptyToday && (
-          <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 10, padding: "11px 4px" }}>
+          <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
             Repos / libre
           </div>
         )}
@@ -290,7 +310,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
           <div
             data-tour="add-session-btn"
             onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
-            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
+            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 16, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
           >
             + Ajouter une séance
           </div>

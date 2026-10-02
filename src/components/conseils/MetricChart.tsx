@@ -235,7 +235,7 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
         })}
 
         {hover !== null && vals[hover] !== null && (
-          <div style={{ position: "absolute", left: `${pctX(hover)}%`, top: `${pctY(vals[hover] as number)}%`, transform: "translate(-50%, calc(-100% - 10px))", background: "rgba(18,18,18,.92)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.13)", borderRadius: 10, padding: "7px 11px", whiteSpace: "nowrap" as const, boxShadow: "0 8px 24px rgba(0,0,0,.5)", zIndex: 20 }}>
+          <div style={{ position: "absolute", left: `${pctX(hover)}%`, top: `${pctY(vals[hover] as number)}%`, transform: "translate(-50%, calc(-100% - 10px))", background: "rgba(18,18,18,.92)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.13)", borderRadius: 12, padding: "7px 11px", whiteSpace: "nowrap" as const, boxShadow: "0 8px 24px rgba(0,0,0,.5)", zIndex: 20 }}>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "rgba(255,255,255,.5)" }}>{formatDateFr(dates[hover])}</div>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: colorAt(vals[hover] as number) }}>{fmt(vals[hover] as number)}</div>
             {spec.tooltipExtra?.(hover) && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", marginTop: 2 }}>{spec.tooltipExtra(hover)}</div>}
@@ -263,7 +263,7 @@ export function ExampleNote({ text, top = "44%", compact = false }: { text?: str
   return (
     <div style={{
       position: "absolute", left: "50%", top, transform: "translate(-50%, -50%)", zIndex: 5, pointerEvents: "none",
-      textAlign: "center", maxWidth: "86%", border: "1px solid rgba(125,211,252,.35)", borderRadius: 14,
+      textAlign: "center", maxWidth: "86%", border: "1px solid rgba(125,211,252,.35)", borderRadius: 16,
       padding: "8px 13px", background: "rgba(7,10,13,.78)", boxShadow: "0 8px 22px rgba(0,0,0,.35)",
     }}>
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "#7dd3fc", textTransform: "uppercase" }}>🔎 Exemple</div>

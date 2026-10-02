@@ -14,7 +14,7 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
     <div style={{
       textAlign: "center", padding: "28px 20px",
       border: "0.5px dashed rgba(212,64,0,.28)",
-      borderRadius: 20, background: "#fff",
+      borderRadius: 24, background: "#fff",
       marginBottom: 10,
     }}>
       <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
@@ -27,7 +27,7 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
       <button
         onClick={() => onAdd(suggested)}
         style={{
-          width: "100%", height: 48, borderRadius: 14,
+          width: "100%", height: 48, borderRadius: 16,
           background: "linear-gradient(180deg,#f04a08,#d44000)",
           color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
           cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
@@ -43,7 +43,7 @@ export default function EmptySessionState({ sport, label, onAdd }: Props) {
         style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           marginTop: 12, padding: "12px 14px",
-          background: "#f7f8f9", borderRadius: 14,
+          background: "#f7f8f9", borderRadius: 16,
           border: "1px solid rgba(0,0,0,.08)", textDecoration: "none",
           transition: "background .14s",
         }}

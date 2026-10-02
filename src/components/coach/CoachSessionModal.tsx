@@ -264,7 +264,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
       <div style={{
         background: "#fff",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
@@ -297,7 +297,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                 })()}
               />
             )}
-            <button onClick={flushAndClose} style={{ width: 34, height: 34, borderRadius: 10, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
+            <button onClick={flushAndClose} style={{ width: 34, height: 34, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 16, color: "#62686e" }}>✕</button>
           </div>
         </div>
         <input
@@ -430,13 +430,13 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                       display: "flex", alignItems: "center", gap: 10,
                       background: checked ? "#fff5f0" : "#fff",
                       border: checked ? "1.5px solid rgba(212,64,0,.35)" : "1.5px solid rgba(0,0,0,.09)",
-                      borderRadius: 14, padding: "10px 12px",
+                      borderRadius: 16, padding: "10px 12px",
                       cursor: locked ? "default" : "pointer", textAlign: "left",
                       transition: "all 0.15s ease",
                     }}
                   >
                     <div style={{
-                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                      width: 20, height: 20, borderRadius: 8, flexShrink: 0,
                       background: checked ? (locked ? "#a0a0a0" : "#d44000") : "#f0efed",
                       border: checked ? "none" : "1.5px solid rgba(0,0,0,.14)",
                       display: "flex", alignItems: "center", justifyContent: "center",
@@ -473,14 +473,14 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                 {!confirmDelete ? (
                   <button
                     onClick={() => setConfirmDelete(true)}
-                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
+                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 16, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
                   >
                     🗑
                   </button>
                 ) : (
                   <button
                     onClick={handleDelete} disabled={deleting}
-                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
+                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 16, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
                   >
                     {deleting ? "..." : "Confirmer 🗑"}
                   </button>
@@ -491,7 +491,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             {extraRecipients.length > 0 && (
               <button
                 onClick={handleDuplicateExtras} disabled={duplicatingExtras}
-                style={{ flex: 1, height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+                style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
               >
                 {duplicatingExtras ? "..." : `Dupliquer (${extraRecipients.length}) →`}
               </button>
@@ -512,14 +512,14 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                 {!confirmDelete ? (
                   <button
                     onClick={() => setConfirmDelete(true)}
-                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 14, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
+                    style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 16, border: "1px solid rgba(200,30,30,.22)", background: "#fff8f8", color: "#c81e1e", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" as const, display: "flex", alignItems: "center", gap: 5 }}
                   >
                     🗑
                   </button>
                 ) : (
                   <button
                     onClick={handleDelete} disabled={deleting}
-                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 14, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
+                    style={{ height: 46, paddingLeft: 10, paddingRight: 10, borderRadius: 16, border: "1px solid rgba(200,30,30,.36)", background: "#fee2e2", color: "#c81e1e", fontSize: 12, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5, minWidth: 104 }}
                   >
                     {deleting ? "..." : "Confirmer 🗑"}
                   </button>
@@ -528,13 +528,13 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
             )}
             <button
               onClick={onClose}
-              style={{ height: 46, borderRadius: 14, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              style={{ height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               Annuler
             </button>
             <button
               onClick={handleSave} disabled={saving || !canSave}
-              style={{ height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !canSave ? 0.6 : 1 }}
+              style={{ height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !canSave ? 0.6 : 1 }}
             >
               {saveLabel}
             </button>

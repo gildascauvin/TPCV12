@@ -197,7 +197,7 @@ export function CheckoutForm({
         />
 
         {error && (
-          <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 10 }}>
+          <div style={{ color: "#d10000", fontSize: 12, marginTop: 10, padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 12 }}>
             {error}
           </div>
         )}
@@ -220,7 +220,7 @@ export function CheckoutForm({
             form="checkout-form"
             disabled={!stripe || !elementReady || loading}
             style={{
-              width: "100%", height: 50, borderRadius: 14, border: "none",
+              width: "100%", height: 50, borderRadius: 16, border: "none",
               background: loading ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
               color: "#fff", fontSize: 14, fontWeight: 900, cursor: loading ? "default" : "pointer",
               letterSpacing: "-0.01em",
@@ -305,7 +305,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
             <div style={{ fontSize: 11, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.4)", marginBottom: 10 }}>
               Ce que disent des {mode === "coach" ? "coachs" : "sportifs"} comme vous
             </div>
-            <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+            <div style={{ background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.9)", lineHeight: 1.6, fontStyle: "italic", marginBottom: 10 }}>
                 &ldquo;{testimonial.quote}&rdquo;
               </div>
@@ -343,7 +343,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
         position: "relative",
         background: "#f1f0ee",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "28px 0 0 28px" : 0,
+        borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",

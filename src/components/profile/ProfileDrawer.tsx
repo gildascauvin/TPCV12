@@ -147,7 +147,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
         <div style={{
           background: "#fff", color: "#171b1f",
           boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-          borderRadius: isMd ? "28px 0 0 28px" : 0,
+          borderRadius: isMd ? "24px 0 0 24px" : 0,
           width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
           height: "100dvh",
           display: "flex", flexDirection: "column", overflow: "hidden",
@@ -244,7 +244,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 <button
                   onClick={handleSave}
                   disabled={saving || !name.trim()}
-                  style={{ width: "100%", height: 46, borderRadius: 14, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !name.trim() ? 0.6 : 1, marginBottom: 24 }}
+                  style={{ width: "100%", height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: !name.trim() ? 0.6 : 1, marginBottom: 24 }}
                 >
                   {saving ? "..." : "Enregistrer ✓"}
                 </button>
@@ -253,7 +253,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 {coachName && (
                   <>
                     <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Coach</div>
-                    <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 24, fontSize: 14, color: "#171b1f" }}>
+                    <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: "16px 16px", marginBottom: 24, fontSize: 14, color: "#171b1f" }}>
                       Coaché par <strong>{coachName}</strong>
                     </div>
                   </>
@@ -261,10 +261,10 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
 
                 {/* Abonnement */}
                 <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 10 }}>Abonnement</div>
-                <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, padding: "16px 16px", marginBottom: 14 }}>
+                <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: "16px 16px", marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, color: subColor, background: subBg }}>
+                      <span style={{ fontFamily: "var(--font-mono), monospace", display: "inline-block", padding: "4px 12px", borderRadius: 24, fontSize: 12, fontWeight: 700, color: subColor, background: subBg }}>
                         {subText}
                       </span>
                       {subActive && <span style={{ fontSize: 12, color: "#62686e" }}>Plan actif</span>}
@@ -275,14 +275,14 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                       <button
                         onClick={handlePortal}
                         disabled={portalLoading}
-                        style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                        style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
                       >
                         {portalLoading ? "..." : "Gérer"}
                       </button>
                     ) : (
                       <button
                         onClick={() => (sandboxMode ? setSandboxGateOpen(true) : setPaywallOpen(true))}
-                        style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 10, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
+                        style={{ height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}
                       >
                         S'abonner
                       </button>

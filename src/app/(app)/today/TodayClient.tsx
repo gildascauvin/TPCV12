@@ -50,6 +50,7 @@ import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 import { PLANNED_RPE, PLANNED_LABEL, type PlannedIntensity } from "@/lib/plannedIntensity";
+import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -80,9 +81,11 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, hideGauge }: {
+function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, hideGauge, onStart }: {
   session: Session;
   onComplete: (s: Session) => void;
+  /* Séance en direct (2026-10-02) : Démarrer / Reprendre, seulement pour une séance du jour à faire. */
+  onStart?: (s: Session) => void;
   onEdit: (s: Session) => void;
   /* Remplace l'ancien bouton "🗑 Supprimer" à côté du CTA Terminer/Résultat — exactement le même
      bouton "⎘ Dupliquer" que WeekSessionCard (/week, /coach/planning). La suppression reste
@@ -104,6 +107,13 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
      affiche son RPE réel) gardent la leur. */
   hideGauge?: boolean;
 }) {
+  const live = isLive(session);
+  const [, setLiveTick] = useState(0);
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => setLiveTick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [live]);
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
   const exerciseSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -152,7 +162,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
             background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
             color: session.done ? "#2f9e44" : "#d44000",
           }}>
-            {session.done ? "Terminé" : "Prévu"}
+            {session.done ? "Terminé" : live ? `● En cours · ${formatChrono(liveElapsedMs(session))}` : "Prévu"}
           </span>
           <ShareButton
             resourceType="session"
@@ -196,13 +206,13 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
       {session.done && (session.duration || session.rpe) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
           {session.duration && (
-            <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "9px 8px", textAlign: "center" }}>
+            <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>
               <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MIN</div>
             </div>
           )}
           {session.rpe && (
-            <div style={{ background: "#f7f8f9", borderRadius: 14, padding: "9px 8px", textAlign: "center" }}>
+            <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.rpe}</div>
               <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
             </div>
@@ -212,11 +222,24 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
 
       {/* 5. Actions */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
+        {/* Séance en direct (2026-10-02) : Démarrer seul en principal ; une séance déjà faite (sans
+            téléphone, montre) se note via le lien discret sous la carte. En cours : Reprendre seul. */}
+        {!session.done && onStart ? (
+          <button
+            onClick={() => onStart(session)}
+            style={{
+              flex: 1, height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
+              background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
+            }}
+          >
+            {live ? "Reprendre la séance" : "▶ Démarrer la séance"}
+          </button>
+        ) : (
         <button
           data-tour="terminer-btn"
           onClick={() => onComplete(session)}
           style={{
-            flex: 1, height: 46, borderRadius: 14, fontSize: 14, fontWeight: 800, cursor: "pointer",
+            flex: 1, height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer",
             background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
             color: session.done ? "#171b1f" : "#fff",
             border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
@@ -225,11 +248,12 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
         >
           {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
         </button>
+        )}
         <button
           onClick={() => onDuplicate(session)}
           title="Dupliquer"
           style={{
-            width: 46, height: 46, borderRadius: 14, flexShrink: 0,
+            width: 46, height: 46, borderRadius: 16, flexShrink: 0,
             background: "rgba(0,0,0,0.04)", color: "#8a8f94",
             border: "1px solid rgba(0,0,0,.08)", cursor: "pointer",
             fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
@@ -238,6 +262,13 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
           ⎘
         </button>
       </div>
+      {!session.done && onStart && !live && (
+        <div style={{ textAlign: "center", marginTop: 10 }} onClick={e => e.stopPropagation()}>
+          <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
+            Déjà faite ? Noter le résultat
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -385,6 +416,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [addSessionInitialName, setAddSessionInitialName] = useState<string | undefined>(undefined);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
+  /* Séance en direct : Démarrer sans check-in du jour ouvre d'abord le check-in, puis démarre. */
+  const [pendingStartSession, setPendingStartSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
   /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
@@ -634,6 +667,22 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }
 
 
+  async function handleStart(session: Session) {
+    if (isLive(session)) { openLiveSession(session.id); return; }
+    if (!wellnessFilledToday) { setPendingStartSession(session); setShowWellness(true); return; }
+    const started = await startLiveSession(supabase, session);
+    if (started) { setAllSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
+  }
+  // La séance en direct est modifiée ailleurs (écran plein, Terminer) : on relit les séances du jour.
+  useEffect(() => {
+    const onChanged = async () => {
+      const { data } = await supabase.from("sessions").select("*").eq("user_id", userId).eq("date", initialDate);
+      if (data) setAllSessions(prev => [...prev.filter(x => x.date !== initialDate), ...(data as Session[])]);
+    };
+    window.addEventListener(LIVE_SESSION_CHANGED, onChanged);
+    return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
+  }, [supabase, userId, initialDate]);
+
   function handleTerminer(session: Session) {
     if (!wellnessFilledToday) {
       setPendingCompleteSession(session);
@@ -686,13 +735,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       } catch (e) { console.error("[checkin] séance prévue non créée", e); }
     }
     setShowWellness(false);
+    if (pendingStartSession) {
+      const toStart = pendingStartSession;
+      setPendingStartSession(null);
+      const started = await startLiveSession(supabase, toStart);
+      if (started) { setAllSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
+    }
     if (pendingCompleteSession) {
       const pending = pendingCompleteSession;
       setPendingCompleteSession(null);
       setCompleting(pending);
     }
     router.refresh();
-  }, [supabase, userId, selectedDate, router, pendingCompleteSession, saveSession]);
+  }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     notifyOnboardingProgressSoon();
@@ -901,7 +956,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 onUnlock={unlock}
                 title={autoregTargetTop ? "Ta décision du jour est prête" : "Ton analyse du jour est prête"}
                 sub={lockedSub}
-                radius={18}
+                radius={16}
               >
               {decisionGaugeSlot && (
                 <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
@@ -1014,6 +1069,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     key={s.id}
                     session={s}
                     onComplete={(s) => handleTerminer(s)}
+                    onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => setEditing(s)}
                     onDuplicate={(s) => setDuplicating(s)}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
@@ -1032,7 +1088,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
                     style={{
                       border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-                      borderRadius: 10, padding: "9px 8px", textAlign: "center", fontSize: 11,
+                      borderRadius: 24, padding: "9px 8px", textAlign: "center", fontSize: 11,
                       cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
                       transition: "all .15s",
                     }}
@@ -1071,7 +1127,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       {/* Modals — ouverture et enregistrement libres depuis le freemium (2026-09-30) : ce sont des
           entrées. gateInput() ne bloque plus que la sandbox (visiteur sans compte). */}
       {showWellness && (
-        <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (
         <AddSessionModal date={selectedDate} initialName={addSessionInitialName} userName={profile.name ?? "Toi"} onSave={(data, id) => gateInput(() => saveSession(data, id))} onClose={() => { setShowAddSession(false); setAddSessionInitialName(undefined); router.refresh(); }} />

@@ -42,7 +42,7 @@ export function DemoDataChip() {
 export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate, demoAthlete = false }: { perspective?: Perspective; free?: boolean; onActivate?: () => void; /** Sportif de démo du coach (2026-10-01) : ses données sont un exemple, quel que soit leur volume. */ demoAthlete?: boolean }) {
   const coach = perspective === "coach";
   return (
-    <div style={{ background: "rgba(125,211,252,.08)", border: "1px solid rgba(125,211,252,.28)", borderRadius: 14, padding: "12px 14px", marginBottom: 14, display: "grid", gap: 8 }}>
+    <div style={{ background: "rgba(125,211,252,.08)", border: "1px solid rgba(125,211,252,.28)", borderRadius: 16, padding: "12px 14px", marginBottom: 14, display: "grid", gap: 8 }}>
       <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#7dd3fc" }}>🔎 Exemple</div>
       <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
         {demoAthlete
@@ -158,10 +158,10 @@ function BehaviorGauge({ c, maxAbs }: { c: BehaviorCorrelation; maxAbs: number }
   const width = Math.min(50, Math.abs(c.impact) / maxAbs * 50);
   return (
     <div style={{ marginTop: 6 }}>
-      <div style={{ position: "relative" as const, height: 12, background: "rgba(255,255,255,.10)", borderRadius: 6 }}>
+      <div style={{ position: "relative" as const, height: 12, background: "rgba(255,255,255,.10)", borderRadius: 8 }}>
         <div style={{ position: "absolute" as const, left: "50%", top: -3, bottom: -3, width: 2, background: "rgba(255,255,255,.4)", transform: "translateX(-1px)" }} />
         {!isNeutral && (
-          <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 6, background: color, ...(isPositive ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }) }} />
+          <div style={{ position: "absolute" as const, top: 0, height: "100%", borderRadius: 8, background: color, ...(isPositive ? { left: "50%", width: `${width}%` } : { right: "50%", width: `${width}%` }) }} />
         )}
       </div>
       <div style={{ marginTop: 6, textAlign: "center" as const, fontSize: 10.5, color: "rgba(255,255,255,.45)" }}>
@@ -516,7 +516,7 @@ export function BehaviorImpactCard({ correlations, filledDays, embedded = false 
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             {["🧘 Stretching", "🧊 Douche froide", "📖 Lecture", "💧 Hydratation", "🍷 Alcool", "📱 Écran tard"].map(b => (
-              <div key={b} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 20, padding: "5px 11px", fontSize: 13, color: "rgba(255,255,255,.50)" }}>{b}</div>
+              <div key={b} style={{ background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: "5px 11px", fontSize: 13, color: "rgba(255,255,255,.50)" }}>{b}</div>
             ))}
           </div>
           <div style={{ marginTop: 14, height: 4, background: "rgba(255,255,255,.08)", borderRadius: 2, overflow: "hidden" }}>
@@ -572,11 +572,11 @@ export function BehaviorImpactCard({ correlations, filledDays, embedded = false 
             const showDominant = dd && Math.abs(dd.impact) >= 0.3;
             return (
               <div key={c.key} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-                <div style={{ width: 32, height: 32, borderRadius: 9, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{c.emoji}</div>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{c.emoji}</div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 800, color: "#fff", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{c.label}</div>
-                    <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 20, flexShrink: 0, whiteSpace: "nowrap" as const, color, background: `${color}26` }}>
+                    <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, padding: "4px 9px", borderRadius: 24, flexShrink: 0, whiteSpace: "nowrap" as const, color, background: `${color}26` }}>
                       {statusLabel} {impactStr}
                     </span>
                   </div>

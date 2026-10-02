@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
@@ -121,6 +122,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
+  const [pendingStartSession, setPendingStartSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   const [showWellness, setShowWellness] = useState(false);
@@ -463,12 +465,43 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
       .select().single();
     if (saved) setWellnessList(prev => { const w = prev.filter(x => x.date !== today); return [...w, saved as WellnessDaily]; });
     setShowWellness(false);
+    if (pendingStartSession) {
+      const toStart = pendingStartSession;
+      setPendingStartSession(null);
+      const started = await startLiveSession(supabase, toStart);
+      if (started) { setSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
+    }
     if (pendingCompleteSession) {
       const pending = pendingCompleteSession;
       setPendingCompleteSession(null);
       setCompleting(pending);
     }
-  }, [supabase, userId, pendingCompleteSession]);
+  }, [supabase, userId, pendingCompleteSession, pendingStartSession]);
+
+  /* Séance en direct (2026-10-02) : Démarrer sans check-in du jour ouvre d'abord le check-in. */
+  async function handleStart(session: Session) {
+    if (isLive(session)) { openLiveSession(session.id); return; }
+    const wellnessTodayFilled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
+    if (!wellnessTodayFilled) { setPendingStartSession(session); setShowWellness(true); return; }
+    const started = await startLiveSession(supabase, session);
+    if (started) { setSessions(prev => prev.map(x => x.id === started.id ? started : x)); openLiveSession(started.id); }
+  }
+  // Chrono des cartes "En cours" + relecture quand la séance en direct change ailleurs.
+  const [, setLiveTick] = useState(0);
+  const hasLive = sessions.some(x => isLive(x));
+  useEffect(() => {
+    if (!hasLive) return;
+    const t = setInterval(() => setLiveTick(x => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [hasLive]);
+  useEffect(() => {
+    const onChanged = async () => {
+      const { data } = await supabase.from("sessions").select("*").eq("user_id", userId).eq("date", todayStr);
+      if (data) setSessions(prev => [...prev.filter(x => x.date !== todayStr), ...(data as Session[])]);
+    };
+    window.addEventListener(LIVE_SESSION_CHANGED, onChanged);
+    return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
+  }, [supabase, userId, todayStr]);
 
   function handleTerminer(session: Session) {
     const wellnessTodayFilled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
@@ -582,7 +615,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
           <div style={{
             textAlign: "center", padding: "28px 20px",
             border: "0.5px dashed rgba(212,64,0,.28)",
-            borderRadius: 20, background: "#fff",
+            borderRadius: 24, background: "#fff",
           }}>
             <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
@@ -594,7 +627,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
             <button
               onClick={() => navigatePeriod("next")}
               style={{
-                width: "100%", height: 48, borderRadius: 14,
+                width: "100%", height: 48, borderRadius: 16,
                 background: "linear-gradient(180deg,#f04a08,#d44000)",
                 color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
                 cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
@@ -762,6 +795,8 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                     session={s}
                     viewerRole="athlete"
                     onComplete={(sess) => handleTerminer(sess)}
+                    onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
+                    liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
                     onEdit={(sess) => setEditing(sess)}
                     onDuplicate={(sess) => setDuplicating(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
@@ -844,7 +879,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                       style={{
                         background: inMonth ? "#fff" : "rgba(255,255,255,.45)",
                         border: isToday ? "1.5px solid #d44000" : "1px solid rgba(0,0,0,.08)",
-                        borderRadius: isMd ? 14 : 10,
+                        borderRadius: isMd ? 16 : 12,
                         padding: isMd ? "8px 8px 6px" : "6px 5px 6px",
                         minHeight: isMd ? 100 : 90,
                         opacity: inMonth ? 1 : 0.4,
@@ -917,7 +952,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
                           {inMonth && (
                             <div
                               onClick={e => { e.stopPropagation(); setAddingDate(dstr); }}
-                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 7, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
+                              style={{ marginTop: "auto", border: "0.5px dashed rgba(212,64,0,.28)", borderRadius: 8, textAlign: "center", fontSize: 10, color: "#d44000", cursor: "pointer", fontWeight: 700, padding: "4px 2px" }}
                             >
                               +
                             </div>
@@ -981,7 +1016,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
         <DuplicateModal session={duplicating} onDuplicate={(date, _targetAthleteIds, pct) => gateInput(() => duplicateSession(date, pct))} onClose={() => setDuplicating(null)} />
       )}
       {showWellness && (
-        <WellnessModal date={todayStr} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); }} />
+        <WellnessModal date={todayStr} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showLibrary && (
         <ProgramLibraryPage
