@@ -4693,3 +4693,10 @@ POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW. Règle précisée par G
 - Supprimés : `analyticsDemo`/`examplePhase` (/today), phase d'exemple de `CoachAthleteCard`, usages de `demoConseilsData` dans l'app (reste dans `src/lib/demoAnalytics.ts`). Le sportif démo du coach (Thomas) garde sa mention « Exemple ».
 - Non traité : anneaux de récupération du sélecteur de dates et du Planning, nets en gratuit (cohérent avec « mesures gratuites »).
 - **Libellés de l'onglet Aujourd'hui et anneaux (suite 02/10)** : jour de repos = « Repos », sans zone circulaire, gratuit ET Premium (grand anneau : « Jour de repos »). Séance faite : gratuit = « Séance légère/modérée/dure » sans zone ; Premium inchangé (« Dans la zone » / sous / au-dessus, zone visible). `DecisionRingState.done`/`rest`, `DoneDecisionRing` prop `hideZone`.
+
+## Priming et paiement : charte sombre, parcours Gratuit → Premium (2026-10-02)
+
+- `PrimingJourneyModal` / `PaywallModal` / `NativeCheckout` passent sur la charte de l'app : fond `DARK_CARD_BG`, cartes translucides, bouton plein `#D44000`, fermeture sombre ; formulaire Stripe en thème `night` (`colorPrimary #D44000`, `colorBackground #12171c`).
+- `PricingPrimingContent` : le bloc prix n'a plus d'encadré (badge « 14 jours offerts » recalé en haut à droite). Les 3 étapes Enregistre/Cible/Progresse et le tableau Gratuit/Premium sont remplacés par `PlanJourney` : 6 étapes, un job par étape, section « Gratuit » (construire l'entraînement, renseigner sa forme, faire ses séances) puis « Avec Premium » (ajuster chaque séance, 1re offerte ; comprendre ce qui fait bouger sa forme ; mesurer ses progrès). Version coach en miroir (1re décision par sportif).
+- Bas fixe du priming : bouton principal + lien « Continuer gratuitement » ; plus de mention « Annulation en 1 clic » (reste dans la FAQ et l'écran de paiement).
+- CTA (`PAYWALL_CTA_LABEL`) : « Essayer 14 jours offerts » (sportif et coach), au lieu de « Débloquer mon programme / espace coach », le programme n'étant plus verrouillé.

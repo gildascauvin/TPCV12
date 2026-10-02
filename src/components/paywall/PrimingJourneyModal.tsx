@@ -4,7 +4,7 @@ import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect } from "react";
 import posthog from "posthog-js";
-import { PricingPrimingContent, PricingPrimingValue, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { PricingPrimingContent, PricingPrimingValue } from "./PricingPriming";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -51,9 +51,8 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
   const ctaBtn: React.CSSProperties = {
     width: "100%", height: 50, borderRadius: 16, border: "none",
-    background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff",
-    fontSize: 14, fontWeight: 900, cursor: "pointer",
-    boxShadow: "0 8px 20px rgba(212,64,0,.26)", marginBottom: 10,
+    background: "#D44000", color: "#fff",
+    fontSize: 14, fontWeight: 900, cursor: "pointer", marginBottom: 10,
   };
 
   /* Premier jet (2026-09-16, demande explicite de Gildas) : split gauche (dark, la valeur —
@@ -84,7 +83,9 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       )}
       <div style={{
         position: "relative",
-        background: "#f1f0ee",
+        /* Charte de l'app (2026-10-02) : fond sombre cyan, cartes translucides, bouton #D44000. */
+        background: DARK_CARD_BG, color: "#fff",
+        borderLeft: isMd ? "1px solid rgba(255,255,255,.08)" : "none",
         boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
         borderRadius: isMd ? "24px 0 0 24px" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
@@ -93,7 +94,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         {allowDismiss && (
-          <button onClick={onDismiss} style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 20, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,.08)" }}>×</button>
+          <button onClick={onDismiss} style={{ position: "absolute", top: 16, right: 16, width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 20, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
         )}
 
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -102,14 +103,14 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
                 sur desktop, elle vit déjà dans le panneau de gauche ci-dessus. */}
             {!heroOnLeft && (
               <div style={{ marginBottom: 28 }}>
-                <PricingPrimingValue role={mode} headline={headline} sub={sub} dark={false} />
+                <PricingPrimingValue role={mode} headline={headline} sub={sub} />
               </div>
             )}
             <PricingPrimingContent role={mode} billing={billing} setBilling={setBilling} sessionCount={sessionCount} weaknessLabels={weaknessLabels} name={name} athleteSelfId={athleteSelfId} />
           </div>
         </div>
 
-        <div style={{ flexShrink: 0, background: "#f1f0ee", borderTop: "1px solid rgba(0,0,0,.06)", padding: "16px 20px 20px" }}>
+        <div style={{ flexShrink: 0, background: "rgba(7,10,13,.85)", borderTop: "1px solid rgba(255,255,255,.08)", padding: "16px 20px 20px" }}>
           <div style={{ maxWidth: 640, margin: "0 auto" }}>
             {isNativeApp() ? (
               <NativePurchasePanel
@@ -123,9 +124,13 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
                 <button onClick={() => { posthog.capture("paywall_priming_value_next", { plan: mode }); onContinue(); }} style={ctaBtn}>
                   {PAYWALL_CTA_LABEL[mode]}
                 </button>
-                <div style={{ textAlign: "center", fontSize: 11.5, color: "#8a8f94", fontWeight: 600 }}>
-                  {PRICING_PRIMING_GUARANTEE_CAPTION}
-                </div>
+                {/* Sortie explicite (2026-10-02) : le gratuit reste une vraie option, le tableau
+                    au-dessus dit ce qu'il garde. */}
+                {allowDismiss && (
+                  <button onClick={onDismiss} style={{ display: "block", margin: "10px auto 0", border: "none", background: "none", color: "rgba(255,255,255,.75)", fontSize: 13, fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}>
+                    Continuer gratuitement
+                  </button>
+                )}
               </>
             )}
           </div>

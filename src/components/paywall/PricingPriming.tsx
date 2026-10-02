@@ -30,28 +30,11 @@ export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans
 
 /* Sous-titre par défaut du panneau de valeur (PricingPrimingValue) quand l'appelant n'en fournit
    pas (cas générique, pas de programme claimé) — remplace l'ancien bloc "UNLOCK_LINE" en gras
-   dans la carte prix, retiré de là le 2026-09-16 (voir STEPS ci-dessous, "comme le POC" de Grok :
-   mécanisme en 3 étapes plutôt qu'une ligne de synthèse + une liste de bullets séparée). */
+   dans la carte prix, retiré de là le 2026-09-16 ; le parcours Gratuit → Premium (PlanJourney, plus bas) porte
+   désormais le mécanisme. */
 const UNLOCK_LINE: Record<"athlete" | "coach", string> = {
   athlete: "Ton programme est déjà prêt. Débloque-le et laisse ThePerfClub ajuster chaque séance.",
   coach: "Ton système de suivi est prêt. Débloque-le et laisse ThePerfClub t'aider à prendre les bonnes décisions pour chaque sportif, à chaque séance.",
-};
-
-/* Mécanisme en 3 étapes fusionné dans la carte prix (2026-09-16) — 3e itération, retour explicite
-   de Gildas : titres redevenus juste "Enregistre/Cible/Progresse" (sans le préfixe "Aujourd'hui —
-   /Pendant 14 jours —/Ensuite —" de la 2e itération), texte final donné verbatim par Gildas. Coach
-   = même structure, wording en miroir. */
-const STEPS: Record<"athlete" | "coach", { title: string; text: string }[]> = {
-  athlete: [
-    { title: "Enregistre", text: "Enregistre tes séances et ton ressenti et identifie ce qui joue sur tes performances." },
-    { title: "Cible", text: "Cible les comportements qui pèsent le plus et les faiblesses qui te freinent." },
-    { title: "Progresse", text: "Ta charge s'ajuste automatiquement à ta vraie récupération." },
-  ],
-  coach: [
-    { title: "Enregistre", text: "Enregistre les séances et le ressenti de tes sportifs et identifie ce qui joue sur leurs performances." },
-    { title: "Cible", text: "Cible les comportements qui pèsent le plus et les faiblesses qui les freinent." },
-    { title: "Progresse", text: "Leur charge s'ajuste automatiquement à leur vraie récupération." },
-  ],
 };
 
 function faqItems(role: "athlete" | "coach") {
@@ -140,17 +123,16 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
   const isMonthly = billing === "monthly";
   const annualSavings = p.monthly * 12 - p.annual;
   const annualSavingsPct = Math.round((annualSavings / (p.monthly * 12)) * 100);
-  const steps = STEPS[role];
 
   return (
     <div>
       <div style={{
         position: "relative", overflow: "hidden",
-        background: "radial-gradient(circle at 87% 5%,rgba(212,64,0,.32),transparent 30%), linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)",
-        border: "1px solid rgba(255,255,255,.13)", borderRadius: 16, padding: "18px 18px 16px",
-        marginBottom: 22, boxShadow: "0 20px 48px rgba(0,0,0,.22)",
+        /* Sans encadré (2026-10-02, Gildas) : le prix se pose directement sur le fond. */
+        padding: "4px 0 6px",
+        marginBottom: 14,
       }}>
-        <div style={{ position: "absolute", top: 16, right: 16, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
+        <div style={{ position: "absolute", top: 4, right: 0, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
           ✓ {TRIAL_DAYS} jours offerts
         </div>
         <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
@@ -162,34 +144,10 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
             : `Puis ${p.annual}€/an (${p.annualMonthly.toFixed(2).replace(".", ",")}€/mois) après tes ${TRIAL_DAYS} jours offerts.`}
         </div>
         <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
-          <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#d44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
+          <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#D44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
             Annuel<span style={{ fontFamily: "var(--font-mono), monospace", marginLeft: 5, fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
           </button>
-          <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#d44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
-        </div>
-
-        {/* Mécanisme en 3 étapes (2026-09-16, "comme le POC" — voir STEPS ci-dessus) : remplace
-            l'ancienne liste de bullets + la ligne UNLOCK_LINE en gras. */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16, marginBottom: 4 }}>
-          {steps.map((s, i) => (
-            <div key={s.title} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              {/* Numéro neutre pour les 3 étapes (2026-09-16, retour explicite de Gildas — "je
-                  veux pas que le 1,2,3 soit coloré en fond rouge") : plus de mise en avant du
-                  step 1. */}
-              <div style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0, marginTop: 1,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700,
-                background: "rgba(255,255,255,.12)", color: "rgba(255,255,255,.7)",
-              }}>
-                {i + 1}
-              </div>
-              <div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "#fff", marginBottom: 1 }}>{s.title}</div>
-                <div style={{ fontSize: 12, color: "rgba(255,255,255,.65)", lineHeight: 1.4 }}>{s.text}</div>
-              </div>
-            </div>
-          ))}
+          <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#D44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
         </div>
 
         {/* CTA secondaire sur une seule ligne (2026-09-16, retour explicite de Gildas — "ca
@@ -224,20 +182,24 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
         )}
       </div>
 
+      {/* Parcours (2026-10-02, remplace les 3 étapes et le tableau Gratuit/Premium) : un job par
+          étape, les gratuites d'abord puis « Avec Premium ». */}
+      <PlanJourney role={role} />
+
       <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.5)", marginBottom: 12 }}>
           Les experts en parlent
         </div>
         <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
           {INTERVIEWS.filter(v => v.personas.includes(role === "coach" ? "coach" : "athlete")).map(v => (
-            <div key={v.slug} style={{ flex: "0 0 240px", background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden", boxShadow: "0 4px 14px rgba(0,0,0,.05)" }}>
+            <div key={v.slug} style={{ flex: "0 0 240px", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, overflow: "hidden" }}>
               <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
                 <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                 <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 8, letterSpacing: "0.02em" }}>▶ YouTube</div>
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
-                <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#1f2428" }}>{v.name}</div>
-                <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2, lineHeight: 1.35 }}>{v.role}</div>
+                <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#fff" }}>{v.name}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginTop: 2, lineHeight: 1.35 }}>{v.role}</div>
               </div>
             </div>
           ))}
@@ -250,24 +212,81 @@ export function PricingPrimingContent({ role, billing, setBilling, name, athlete
           experts en parlent", ci-dessus) et la FAQ (ci-dessous). */}
 
       <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "#8a8f94", marginBottom: 4 }}>
+        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.5)", marginBottom: 8 }}>
           Questions fréquentes
         </div>
         {/* Accordéon natif <details>/<summary> (2026-09-16, "comme le POC" — retour explicite de
             Gildas), remplace l'ancien affichage question+réponse toujours dépliées. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {faqItems(role).map((item, i) => (
-            <details key={i} style={{ background: "#fff", border: "1px solid rgba(0,0,0,.07)", borderRadius: 12 }}>
-              <summary style={{ fontFamily: "var(--font-display)", padding: "13px 16px", fontSize: 13.5, fontWeight: 700, color: "#1f2428", cursor: "pointer", listStyle: "revert" }}>
+            <details key={i} style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12 }}>
+              <summary style={{ fontFamily: "var(--font-display)", padding: "13px 16px", fontSize: 13.5, fontWeight: 700, color: "#fff", cursor: "pointer", listStyle: "revert" }}>
                 {item.q}
               </summary>
-              <div style={{ padding: "0 16px 13px", fontSize: 13, color: "#62686e", lineHeight: 1.55 }}>
+              <div style={{ padding: "0 16px 13px", fontSize: 13, color: "rgba(255,255,255,.65)", lineHeight: 1.55 }}>
                 {item.a}
               </div>
             </details>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* Parcours Gratuit → Premium (2026-10-02, wording validé par Gildas) — la règle du freemium v2 :
+   ce qu'on saisit et ses mesures sont gratuits, ce qui aide à décider est Premium. */
+const JOURNEY: Record<"athlete" | "coach", { title: string; text: string; tag?: string; premium: boolean }[]> = {
+  athlete: [
+    { title: "Construis ton entraînement", text: "Un programme sur mesure, importé, ou un modèle.", premium: false },
+    { title: "Renseigne ta forme", text: "Ton ressenti en 30 secondes, ta montre synchronisée.", premium: false },
+    { title: "Fais tes séances", text: "Chrono, charges, difficulté ressentie.", premium: false },
+    { title: "Ajuste chaque séance à ta forme", text: "Alléger, maintenir ou pousser, pour plus de progrès et moins de blessures.", tag: "1re offerte", premium: true },
+    { title: "Comprends ce qui fait bouger ta forme", text: "Récupération, charge et comportements, expliqués.", premium: true },
+    { title: "Mesure tes progrès", text: "Tes tests analysés : forces, faiblesses et quoi travailler.", premium: true },
+  ],
+  coach: [
+    { title: "Programme tes sportifs", text: "Sur mesure, importé ou modèle, assigné en un geste.", premium: false },
+    { title: "Invite-les", text: "Ils renseignent leur forme et leurs séances.", premium: false },
+    { title: "Suis leurs check-ins", text: "Les scores de chacun, sans relance.", premium: false },
+    { title: "Sais chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge.", tag: "1re par sportif", premium: true },
+    { title: "Comprends pourquoi un sportif décroche", text: "Avant qu'il se blesse ou stagne.", premium: true },
+    { title: "Mesure leurs progrès", text: "Leurs tests analysés.", premium: true },
+  ],
+};
+
+export function PlanJourney({ role }: { role: "athlete" | "coach" }) {
+  const steps = JOURNEY[role];
+  const row = (st: typeof steps[number], i: number) => (
+    <div key={st.title} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 0" }}>
+      <div style={{
+        width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700,
+        background: st.premium ? "rgba(212,64,0,.22)" : "rgba(255,255,255,.12)",
+        color: st.premium ? "#ffb08a" : "rgba(255,255,255,.75)",
+      }}>{i + 1}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff" }}>{st.title}</span>
+          {st.tag && <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.18)", borderRadius: 999, padding: "2px 7px" }}>{st.tag}</span>}
+        </div>
+        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.62)", lineHeight: 1.45, marginTop: 2 }}>{st.text}</div>
+      </div>
+    </div>
+  );
+  const label = (text: string, color: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 2px" }}>
+      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color }}>{text}</span>
+      <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,.10)" }} />
+    </div>
+  );
+  return (
+    <div style={{ marginBottom: 22, background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "12px 16px" }}>
+      {label("Gratuit", "rgba(255,255,255,.55)")}
+      {steps.filter(st => !st.premium).map((st, i) => row(st, i))}
+      {label("Avec Premium", "#ff8a55")}
+      {steps.filter(st => st.premium).map((st, i) => row(st, i + steps.filter(x => !x.premium).length))}
     </div>
   );
 }

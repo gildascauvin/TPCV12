@@ -105,19 +105,19 @@ export function NativePurchasePanel({
   return (
     <div>
       {loadError && (
-        <div style={{ color: "#d10000", fontSize: 12, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>{loadError}</div>
+        <div style={{ color: "#ff8a8a", fontSize: 12, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>{loadError}</div>
       )}
       {!loadError && !product && (
-        <div style={{ textAlign: "center", margin: "0 0 10px", color: "#8a8f94", fontSize: 12 }}>Chargement de l&apos;offre...</div>
+        <div style={{ textAlign: "center", margin: "0 0 10px", color: "rgba(255,255,255,.5)", fontSize: 12 }}>Chargement de l&apos;offre...</div>
       )}
       {error && (
-        <div style={{ color: "#d10000", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.06)", borderRadius: 12 }}>{error}</div>
+        <div style={{ color: "#ff8a8a", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.14)", borderRadius: 12 }}>{error}</div>
       )}
       {info && (
-        <div style={{ color: "#3a3f44", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(0,0,0,.04)", borderRadius: 12 }}>{info}</div>
+        <div style={{ color: "rgba(255,255,255,.8)", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(255,255,255,.06)", borderRadius: 12 }}>{info}</div>
       )}
       {legal && (
-        <div style={{ fontSize: 11, color: "#8a8f94", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>{legal}</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", textAlign: "center", margin: "0 0 10px", lineHeight: 1.5 }}>{legal}</div>
       )}
       <button
         type="button"
@@ -125,20 +125,20 @@ export function NativePurchasePanel({
         disabled={!product || busy !== null}
         style={{
           width: "100%", height: 50, borderRadius: 16, border: "none",
-          background: !product || busy ? "#ccc" : "linear-gradient(180deg,#f04a08,#d44000)",
+          background: !product || busy ? "#3a3f44" : "#D44000",
           color: "#fff", fontSize: 14, fontWeight: 900, cursor: !product || busy ? "default" : "pointer",
           letterSpacing: "-0.01em",
         }}
       >
         {busy === "buy" ? "Traitement..." : ctaLabel}
       </button>
-      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12, fontSize: 11, color: "#8a8f94" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12, fontSize: 11, color: "rgba(255,255,255,.5)" }}>
         <button type="button" onClick={restore} disabled={!userId || busy !== null}
-          style={{ background: "none", border: "none", padding: 0, color: "#8a8f94", fontSize: 11, textDecoration: "underline", cursor: "pointer" }}>
+          style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,.5)", fontSize: 11, textDecoration: "underline", cursor: "pointer" }}>
           {busy === "restore" ? "..." : "Restaurer mes achats"}
         </button>
-        <a href={TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Conditions</a>
-        <a href={PRIVACY_URL} target="_blank" rel="noreferrer" style={{ color: "#8a8f94" }}>Confidentialité</a>
+        <a href={TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,.5)" }}>Conditions</a>
+        <a href={PRIVACY_URL} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,.5)" }}>Confidentialité</a>
       </div>
     </div>
   );
@@ -158,7 +158,7 @@ export default function NativeCheckout({
 }) {
   if (!footerPortalNode) return null;
   return createPortal(
-    <div style={{ padding: "20px 28px 20px", background: "#fff" }}>
+    <div style={{ padding: "20px 28px 20px", background: "rgba(7,10,13,.85)", borderTop: "1px solid rgba(255,255,255,.08)" }}>
       <NativePurchasePanel mode={mode} billing={billing} onSuccess={onSuccess} abVariant={abVariant} ctaLabel={ctaLabel} />
     </div>,
     footerPortalNode
