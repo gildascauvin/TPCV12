@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.32.1",
     "@capacitor/core": "^8.5.2",
     "@capacitor/ios": "^8.5.2",
+    "@capacitor/preferences": "^8.0.1",
     "@capgo/capacitor-health": "^8.11.4",
     "@capgo/capacitor-social-login": "^8.5.11",
     "@dnd-kit/core": "^6.3.1",

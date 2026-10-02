@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070a0d">
+<title>ThePerfClub · Hors ligne</title>
+<!--
+  Mode hors ligne (2026-10-02). Page autonome, sans dépendance au site :
+  - web : servie par le service worker (public/sw.js) quand une page ne peut pas se charger ;
+  - app iOS : recopiée dans capacitor-www/offline.html, affichée par Capacitor (server.errorPath)
+    quand go.theperfclub.com ne répond pas.
+  Lit l'instantané enregistré par src/lib/offlineStore.ts (localStorage sur le web, Capacitor
+  Preferences dans l'app) et met en file d'attente "Terminer" et le check-in du matin, envoyés au
+  retour du réseau (/api/offline/flush). Format : src/lib/offlineTypes.ts (version 1).
+  Après modification : recopier ce fichier dans capacitor-www/offline.html (puis nouveau build iOS).
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #070a0d; color: #f2f3f4; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px); max-width: 640px; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #fdba74; background: rgba(253,186,116,.12); border-radius: 999px; padding: 4px 10px; }
+  .sub { color: #9aa0a6; font-size: 13px; margin: 0 0 16px; }
+  button { font: inherit; cursor: pointer; }
+  .retry { background: #fff; color: #111; border: none; border-radius: 12px; padding: 9px 14px; font-weight: 700; font-size: 13px; }
+  .banner { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 10px 12px; font-size: 13px; color: #d4d7da; margin-bottom: 14px; }
+  .card { background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.1); border-radius: 18px; padding: 14px; margin-bottom: 10px; }
+  .day { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #8a8f94; margin: 20px 0 8px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .name { font-weight: 800; font-size: 16px; }
+  .ath { font-size: 12px; color: #9aa0a6; font-weight: 700; margin-bottom: 2px; }
+  .diff { font-size: 12px; font-weight: 700; color: #fdba74; white-space: nowrap; }
+  .ex { margin: 10px 0 0; padding: 0; list-style: none; }
+  .ex li { padding: 6px 0; border-top: 1px solid rgba(255,255,255,.07); font-size: 14px; color: #e4e6e8; }
+  .ex li:first-child { border-top: 0; }
+  .done { font-size: 12px; font-weight: 700; color: #4cc071; }
+  .pending { font-size: 12px; font-weight: 700; color: #fdba74; }
+  .go { background: linear-gradient(180deg,#f04a08,#d44000); color: #fff; border: none; border-radius: 12px; padding: 10px 14px; font-weight: 800; font-size: 14px; margin-top: 12px; width: 100%; }
+  .ghost { background: transparent; color: #c8ccd0; border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 10px 14px; font-weight: 700; font-size: 14px; }
+  label { display: block; font-size: 12px; font-weight: 700; color: #9aa0a6; margin: 12px 0 4px; }
+  .slider { display: flex; align-items: center; gap: 10px; }
+  .slider input { flex: 1; accent-color: #d44000; }
+  .slider b { width: 28px; text-align: right; }
+  select, input[type=number] { width: 100%; background: #12161a; color: #f2f3f4; border: 1px solid rgba(255,255,255,.15); border-radius: 10px; padding: 9px 10px; font: inherit; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: rgba(255,255,255,.06); color: #d4d7da; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; padding: 5px 10px; font-size: 13px; }
+  .chip.on { background: rgba(212,64,0,.22); border-color: #d44000; color: #fff; }
+  .two { display: flex; gap: 8px; margin-top: 12px; }
+  .two > * { flex: 1; }
+  .empty { color: #9aa0a6; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>Mes séances</h1>
+  <button class="retry" id="retry">Réessayer la connexion</button>
+</div>
+<p class="sub"><span class="pill">● Hors ligne</span> <span id="saved"></span></p>
+<div id="pending"></div>
+<div id="app"></div>
+
+<script>
+(function () {
+  var SNAP_KEY = "tpc_offline_snapshot", QUEUE_KEY = "tpc_offline_queue";
+  var SITE = "https://go.theperfclub.com";
+  var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+  /* Stockage : Capacitor Preferences dans l'app iOS (commun avec le site), localStorage sur le web. */
+  function prefs() { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; }
+  function getItem(key) {
+    if (native && prefs()) return prefs().get({ key: key }).then(function (r) { return r.value; });
+    try { return Promise.resolve(localStorage.getItem(key)); } catch (e) { return Promise.resolve(null); }
+  }
+  function setItem(key, value) {
+    if (native && prefs()) return prefs().set({ key: key, value: value });
+    try { localStorage.setItem(key, value); } catch (e) {}
+    return Promise.resolve();
+  }
+  function uid() { return (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+  var snap = null, queue = [];
+  var openForm = null; // id de la séance dont le formulaire "Terminer" est ouvert, ou "checkin"
+
+  var DAYS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  // Vraie date du téléphone (l'instantané peut dater de la veille).
+  var now = new Date();
+  var realToday = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+  var tmr = new Date(now.getTime() + 864e5);
+  var realTomorrow = tmr.getFullYear() + "-" + String(tmr.getMonth() + 1).padStart(2, "0") + "-" + String(tmr.getDate()).padStart(2, "0");
+  function dayLabel(date) {
+    if (date === realToday) return "Aujourd'hui";
+    if (date === realTomorrow) return "Demain";
+    var d = new Date(date + "T12:00:00");
+    return DAYS[d.getDay()] + " " + String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+  var NEG = [["alcohol","🍷 Alcool"],["late_sleep","🌙 Couché tardif"],["tobacco","🚬 Tabac"],["screen_late","📱 Écran tard"],["heavy_meal","🍔 Repas lourd"],["caffeine_late","☕ Caféine tard"],["social_out","🎉 Sortie sociale"],["travel","✈️ Voyage"]];
+  var POS = [["stretching","🧘 Stretching"],["cold_shower","🧊 Douche froide"],["reading","📖 Lecture"],["meditation","🧘‍♂️ Méditation"],["hydration","💧 Bonne hydratation"],["walk","🚶 Marche détente"]];
+  var BED = [["before22","Avant 22h"],["22to23","22h–23h"],["23to00","23h–minuit"],["00to01","Minuit–1h"],["after01","Après 1h"]];
+
+  function pendingFor(id) { return queue.some(function (a) { return a.type === "complete" && a.sessionId === id; }); }
+  function checkinPending() { return queue.some(function (a) { return a.type === "wellness" && a.date === realToday; }); }
+  // Check-in déjà fait : seulement si l'instantané date d'aujourd'hui et le dit.
+  function checkinDoneToday() { return snap && snap.today === realToday && snap.checkinDone; }
+
+  function render() {
+    var app = document.getElementById("app");
+    document.getElementById("pending").innerHTML = queue.length
+      ? '<div class="banner">' + queue.length + " action" + (queue.length > 1 ? "s" : "") + " en attente : elles seront envoyées automatiquement au retour du réseau, à la prochaine ouverture de l'app.</div>"
+      : "";
+    if (!snap) {
+      document.getElementById("saved").textContent = "";
+      app.innerHTML = '<div class="card empty">Aucune séance enregistrée sur cet appareil. Ouvre ThePerfClub une fois avec du réseau : tes séances de la semaine seront ensuite disponibles hors ligne.</div>';
+      return;
+    }
+    var s = new Date(snap.savedAt);
+    document.getElementById("saved").textContent = "Données du " + String(s.getDate()).padStart(2, "0") + "/" + String(s.getMonth() + 1).padStart(2, "0") +
+      " à " + String(s.getHours()).padStart(2, "0") + "h" + String(s.getMinutes()).padStart(2, "0");
+
+    var html = "";
+    if (snap.role === "athlete" && !checkinDoneToday()) {
+      if (checkinPending()) {
+        html += '<div class="card"><div class="row"><span class="name">Check-in du jour</span><span class="pending">En attente d\'envoi</span></div></div>';
+      } else if (openForm === "checkin") {
+        html += checkinForm();
+      } else {
+        html += '<div class="card"><div class="name">Check-in du jour</div><div class="sub" style="margin:4px 0 0">Ton ressenti du matin, envoyé dès le retour du réseau.</div><button class="go" data-act="open-checkin">Faire mon check-in</button></div>';
+      }
+    }
+    var days = snap.days.filter(function (d) { return d.date >= realToday; });
+    if (!days.length) html += '<div class="card empty">Ces données sont trop anciennes. Reconnecte-toi pour mettre à jour tes séances.</div>';
+    days.forEach(function (day) {
+      html += '<div class="day">' + dayLabel(day.date) + "</div>";
+      if (!day.items.length) { html += '<div class="card empty">' + (snap.role === "coach" ? "Aucune séance prévue pour tes sportifs." : "Repos ou séance libre.") + "</div>"; return; }
+      day.items.forEach(function (it) { html += sessionCard(it, day.date === realToday); });
+    });
+    app.innerHTML = html;
+  }
+
+  function sessionCard(it, isToday) {
+    var lines = (it.notes || "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean);
+    var status = it.done ? (pendingFor(it.id) ? '<span class="pending">Terminée · en attente d\'envoi</span>' : '<span class="done">✓ Terminée</span>')
+      : (it.target_difficulty ? '<span class="diff">' + it.target_difficulty + "/10</span>" : "");
+    var h = '<div class="card">' + (it.athleteName ? '<div class="ath">' + esc(it.athleteName) + "</div>" : "") +
+      '<div class="row"><span class="name">' + esc(it.name) + "</span>" + status + "</div>";
+    if (lines.length) h += '<ul class="ex">' + lines.map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("") + "</ul>";
+    if (it.done && it.rpe) h += '<div class="sub" style="margin:8px 0 0">RPE ' + it.rpe + (it.duration ? " · " + it.duration + " min" : "") + "</div>";
+    if (!it.done && isToday) {
+      if (openForm === it.id) {
+        h += '<label>Difficulté ressentie (RPE)</label><div class="slider"><input type="range" min="1" max="10" value="' + (it.target_difficulty || 6) + '" id="rpe"><b id="rpeVal">' + (it.target_difficulty || 6) + "</b></div>" +
+          '<label>Durée (minutes)</label><input type="number" min="5" max="600" value="' + (it.duration || 60) + '" id="dur" inputmode="numeric">' +
+          '<div class="two"><button class="ghost" data-act="cancel">Annuler</button><button class="go" style="margin:0" data-act="save-complete" data-id="' + it.id + '">Enregistrer</button></div>';
+      } else {
+        h += '<button class="go" data-act="open-complete" data-id="' + it.id + '">Terminer la séance</button>';
+      }
+    }
+    return h + "</div>";
+  }
+
+  var ck = { sleep: 7, bedtime: "23to00", stress: 5, recovery: 7, motivation: 8, behaviors: [] };
+  function slider(key, label) {
+    return "<label>" + label + '</label><div class="slider"><input type="range" min="1" max="10" value="' + ck[key] + '" data-ck="' + key + '"><b>' + ck[key] + "</b></div>";
+  }
+  function checkinForm() {
+    var chips = function (list) { return '<div class="chips">' + list.map(function (b) { return '<button class="chip' + (ck.behaviors.indexOf(b[0]) >= 0 ? " on" : "") + '" data-act="chip" data-key="' + b[0] + '">' + b[1] + "</button>"; }).join("") + "</div>"; };
+    return '<div class="card"><div class="name">Check-in du jour</div>' +
+      slider("sleep", "Qualité du sommeil") +
+      '<label>Heure de coucher</label><select data-ck="bedtime">' + BED.map(function (b) { return '<option value="' + b[0] + '"' + (ck.bedtime === b[0] ? " selected" : "") + ">" + b[1] + "</option>"; }).join("") + "</select>" +
+      slider("stress", "Stress") + slider("recovery", "État physique") +
+      "<label>Comportements d'hier</label>" + chips(NEG) + '<div style="height:6px"></div>' + chips(POS) +
+      slider("motivation", "Motivation") +
+      '<div class="two"><button class="ghost" data-act="cancel">Annuler</button><button class="go" style="margin:0" data-act="save-checkin">Enregistrer</button></div></div>';
+  }
+
+  function persist() { return Promise.all([setItem(SNAP_KEY, JSON.stringify(snap)), setItem(QUEUE_KEY, JSON.stringify(queue))]); }
+  function findItem(id) { var f = null; snap.days.forEach(function (d) { d.items.forEach(function (it) { if (it.id === id) f = it; }); }); return f; }
+
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.id === "rpe") document.getElementById("rpeVal").textContent = t.value;
+    if (t.dataset && t.dataset.ck) {
+      ck[t.dataset.ck] = t.dataset.ck === "bedtime" ? t.value : Number(t.value);
+      if (t.nextElementSibling) t.nextElementSibling.textContent = t.value;
+    }
+  });
+  document.addEventListener("change", function (e) { var t = e.target; if (t.dataset && t.dataset.ck === "bedtime") ck.bedtime = t.value; });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]");
+    if (!b) return;
+    var act = b.dataset.act;
+    if (act === "open-complete") { openForm = b.dataset.id; render(); }
+    else if (act === "open-checkin") { openForm = "checkin"; render(); }
+    else if (act === "cancel") { openForm = null; render(); }
+    else if (act === "chip") {
+      var k = b.dataset.key, i = ck.behaviors.indexOf(k);
+      if (i >= 0) ck.behaviors.splice(i, 1); else ck.behaviors.push(k);
+      b.classList.toggle("on");
+    }
+    else if (act === "save-complete") {
+      var it = findItem(b.dataset.id);
+      if (!it) return;
+      var rpe = Number(document.getElementById("rpe").value), dur = Number(document.getElementById("dur").value) || 60;
+      queue.push({ id: uid(), type: "complete", at: new Date().toISOString(), table: it.table, sessionId: it.id, athleteId: it.athleteId, rpe: rpe, duration: dur });
+      it.done = true; it.rpe = rpe; it.duration = dur;
+      openForm = null; persist().then(render);
+    }
+    else if (act === "save-checkin") {
+      queue.push({ id: uid(), type: "wellness", at: new Date().toISOString(), date: realToday,
+        sleep: ck.sleep, bedtime: ck.bedtime, stress: ck.stress, recovery: ck.recovery, motivation: ck.motivation, behaviors: ck.behaviors.slice() });
+      openForm = null; persist().then(render);
+    }
+  });
+
+  document.getElementById("retry").addEventListener("click", function () {
+    var path = snap && snap.role === "coach" ? "/coach" : "/today";
+    window.location.href = native ? SITE + path : path;
+  });
+  // Web : retour automatique dès que le réseau revient.
+  if (!native) window.addEventListener("online", function () { document.getElementById("retry").click(); });
+
+  Promise.all([getItem(SNAP_KEY), getItem(QUEUE_KEY)]).then(function (r) {
+    try { snap = r[0] ? JSON.parse(r[0]) : null; } catch (e) { snap = null; }
+    try { queue = r[1] ? JSON.parse(r[1]) : []; } catch (e) { queue = []; }
+    render();
+  }).catch(function () { render(); });
+})();
+</script>
+</body>
+</html>

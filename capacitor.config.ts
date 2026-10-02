@@ -12,6 +12,9 @@ const config: CapacitorConfig = {
   server: {
     url: serverUrl,
     cleartext: serverUrl.startsWith("http://"),
+    // Mode hors ligne (2026-10-02) : page locale (capacitor-www/offline.html, copie de
+    // public/offline.html) affichée quand le site ne répond pas.
+    errorPath: "offline.html",
   },
   /* "always" : iOS décale la page sous la barre d'état et au-dessus de la barre d'accueil, sans
      avoir à gérer les safe areas dans chaque page de l'app web. Fond assorti au fond sombre de

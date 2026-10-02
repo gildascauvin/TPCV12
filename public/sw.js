@@ -1,5 +1,7 @@
-const CACHE = "theperfclub-v2";
-const PRECACHE_URLS = ["/today", "/week", "/offline"];
+const CACHE = "theperfclub-v3";
+/* Mode hors ligne (2026-10-02) : /offline.html est la page affichée quand une page ne peut pas
+   se charger sans réseau (séances de la semaine + file d'attente, voir public/offline.html). */
+const PRECACHE_URLS = ["/offline.html"];
 const STATIC_ASSET_RE = /^\/_next\/static\/|\.(png|jpg|jpeg|svg|webp|gif|ico|woff2?)$/;
 
 self.addEventListener("install", (event) => {
@@ -52,6 +54,13 @@ self.addEventListener("fetch", (event) => {
      que de secours hors-ligne. Un cache-first ici servait indéfiniment une page/réponse figée
      dès qu'elle avait été visitée une fois, même après déploiement (bug réel constaté en
      usage quotidien, pas seulement en dev). */
+  /* Navigation (ouverture d'une page) : sans réseau, toujours la page hors ligne — une ancienne
+     version en cache d'une page de l'app ne fonctionnerait pas sans serveur. */
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {
@@ -61,7 +70,7 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/offline")))
+      .catch(() => caches.match(event.request))
   );
 });
 

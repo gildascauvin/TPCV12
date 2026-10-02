@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
 import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
+import OfflineSync from "@/components/layout/OfflineSync";
 import LiveSessionHost from "@/components/sessions/LiveSessionHost";
 
 /* Verrouillage de page entière (.locked, coin cadenas sur les CTA premium) retiré le 2026-08-19
@@ -33,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {children}
       <BottomNav role={role} />
       <HealthSyncOnOpen userId={user.id} />
+      <OfflineSync />
       {role === "athlete" && <LiveSessionHost userId={user.id} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );
