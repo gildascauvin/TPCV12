@@ -41,6 +41,9 @@ interface Props {
      que les autosaves suivants mettent à jour cette même ligne au lieu d'en recréer une. */
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, athleteIds: string[], id?: string) => Promise<{ id: string } | void>;
   onDelete?: () => Promise<void>;
+  /* Dupliquer (2026-10-02) : déplacé des cartes vers le bas du tiroir, entre Supprimer et Fermer.
+     Reçoit l'état courant du tiroir (déjà enregistré) pour que la copie parte de ce qui est affiché. */
+  onDuplicate?: (draft: { name: string; notes: string; date: string; target_difficulty: number }) => void;
   onClose: () => void;
   /* Marque la séance vue par le coach (fait disparaître le point de notification côté sportif) —
      passe par le parent car ça écrit sur la ligne `sessions` d'un vrai sportif, RLS bloque
@@ -90,7 +93,7 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
 // Dégradé séquentiel bleu (wellnessColor) — voir SparkLineClient.tsx pour la doc complète du choix.
 function scoreColor(s: number) { return wellnessColor(s); }
 
-export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onClose, onMarkViewed }: Props) {
+export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onDuplicate, onClose, onMarkViewed }: Props) {
   const { isMd } = useBreakpoint();
 
   useEffect(() => {
@@ -205,6 +208,16 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
     return () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autosaveEnabled, autosaveTargetId, name, sessionDate, difficulty, exercisesText, exerciseMedia]);
+
+  // Dupliquer : on enregistre d'abord ce qui est en cours, puis le parent ferme le tiroir et ouvre
+  // la duplication avec l'état affiché.
+  async function handleDuplicate() {
+    if (!onDuplicate) return;
+    if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
+    await persist();
+    const { name: n, notes, date: d, target_difficulty } = buildPayload();
+    onDuplicate({ name: n, notes, date: d, target_difficulty });
+  }
 
   function flushAndClose() {
     if (autosaveEnabled && autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
@@ -504,6 +517,14 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
                   </button>
                 )}
               </div>
+            )}
+            {isEdit && onDuplicate && (
+              <button
+                onClick={handleDuplicate}
+                style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#f7f8f9", color: "#30363b", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" as const }}
+              >
+                ⎘ Dupliquer
+              </button>
             )}
             <AutosaveFooterButton state={footerState} onClick={handleFooterClick} style={{ flex: 1 }} />
             {extraRecipients.length > 0 && (

@@ -795,7 +795,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                     onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
                     liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
                     onEdit={(sess) => setEditing(sess)}
-                    onDuplicate={(sess) => setDuplicating(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   />
@@ -805,7 +804,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                 emptyToday
                 onComplete={(s) => handleTerminer(s)}
                 onEdit={(s) => setEditing(s)}
-                onDuplicate={(s) => setDuplicating(s)}
                 onWellness={() => setShowWellness(true)}
               />
               </DroppableDay>
@@ -1007,6 +1005,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
           date={editing.date} session={editing} userId={userId} userName={userName ?? "Toi"} sport={userSport}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(() => deleteSession(editing))}
+          onDuplicate={draft => { setDuplicating({ ...editing, ...draft }); setEditing(null); }}
           onClose={() => { setEditing(null); router.refresh(); }}
         />
       )}

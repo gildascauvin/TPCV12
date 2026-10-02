@@ -27,6 +27,9 @@ interface AddSessionModalProps {
      autosaves suivants mettent à jour cette même ligne au lieu d'en recréer une à chaque frappe. */
   onSave: (data: { name: string; notes: string; date: string; target_difficulty: number; exercise_media: Record<string, ExerciseAttachments> }, id?: string) => Promise<{ id: string } | void>;
   onDelete?: () => Promise<void>;
+  /* Dupliquer (2026-10-02) : déplacé des cartes vers le bas du tiroir, entre Supprimer et Fermer.
+     Reçoit l'état courant du tiroir (déjà enregistré) pour que la copie parte de ce qui est affiché. */
+  onDuplicate?: (draft: { name: string; notes: string; date: string; target_difficulty: number }) => void;
   onClose: () => void;
   /* Wizard onboarding (2026-09-06) : ProgramBuilderModal ouvre cette modale par-dessus sa propre
      bannière fixe (UnsavedBanner, WIZARD_BANNER_H) — sans ce décalage, l'écran plein-page de
@@ -38,7 +41,7 @@ interface AddSessionModalProps {
   sport?: string | null;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onClose, topOffset, sport }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
 
   useEffect(() => {
@@ -139,6 +142,17 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   function flushAndClose() {
     if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
     onClose();
+  }
+
+
+  // Dupliquer : on enregistre d'abord ce qui est en cours, puis le parent ferme le tiroir et ouvre
+  // la duplication avec l'état affiché.
+  async function handleDuplicate() {
+    if (!onDuplicate) return;
+    if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); autosaveTimer.current = null; }
+    await persist();
+    const { name: n, notes, date: d, target_difficulty } = buildPayload();
+    onDuplicate({ name: n, notes, date: d, target_difficulty });
   }
 
   // Bouton unique du footer : en erreur, un clic relance l'enregistrement plutôt que de fermer —
@@ -265,7 +279,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         <div style={{
           flexShrink: 0,
           display: "grid",
-          gridTemplateColumns: isEdit && onDelete ? "auto 1fr" : "1fr",
+          gridTemplateColumns: `${isEdit && onDelete ? "auto " : ""}${isEdit && onDuplicate ? "auto " : ""}1fr`,
           gap: 8, alignItems: "center",
           padding: "20px 28px 20px",
           background: "#fff",
@@ -289,6 +303,14 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
                 </button>
               )}
             </div>
+          )}
+          {isEdit && onDuplicate && (
+            <button
+            onClick={handleDuplicate}
+            style={{ height: 46, paddingLeft: 14, paddingRight: 14, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#f7f8f9", color: "#30363b", fontSize: 13, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" as const }}
+          >
+            ⎘ Dupliquer
+          </button>
           )}
           <AutosaveFooterButton state={footerState} onClick={handleFooterClick} />
         </div>

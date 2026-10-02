@@ -1016,6 +1016,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           athletes={[]}
           initialAthleteId={reviewAthlete.id}
           onSave={(data, athleteIds, id) => gateInput(() => handleSaveReview(data, athleteIds, id))}
+          onDuplicate={reviewSession ? (draft => { const a = reviewAthlete; const s = reviewSession; handleCloseReview(); setReconduire({ athlete: a, session: { ...s, ...draft } }); }) : undefined}
           onClose={handleCloseReview}
           onMarkViewed={() => {
             if (!reviewSession) return;

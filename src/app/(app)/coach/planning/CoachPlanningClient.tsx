@@ -1159,7 +1159,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     viewerRole="coach"
                     onComplete={(sess) => setCompleting(sess)}
                     onEdit={(sess) => setEditingSession(sess)}
-                    onDuplicate={(sess) => setDuplicating(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   />
@@ -1169,7 +1168,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 emptyPerspective="coach"
                 onComplete={(s) => setCompleting(s)}
                 onEdit={(s) => setEditingSession(s)}
-                onDuplicate={(s) => setDuplicating(s)}
                 onWellness={() => {}}
               />
               </DroppableDay>
@@ -1204,6 +1202,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           initialAthleteId={athlete.id}
           onSave={(data, athleteIds, id) => gateInput(() => saveSession(data, athleteIds, id))}
           onDelete={editingSession ? (() => gateInput(() => deleteSession())) : undefined}
+          onDuplicate={editingSession ? (draft => { setDuplicating({ ...editingSession, ...draft }); setEditingSession(null); setAddingDate(null); }) : undefined}
           onClose={() => { setAddingDate(null); setEditingSession(null); }}
           onMarkViewed={() => {
             if (!editingSession) return;

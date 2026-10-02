@@ -25,7 +25,7 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
   onStart?: (s: T) => void;
   liveLabel?: string | null;
   onEdit: (s: T) => void;
-  onDuplicate: (s: T) => void;
+  onDuplicate?: (s: T) => void;
   /* "coach" sur /coach/planning, "athlete" sur /week — pilote le point de notification (voir
      UnseenDot.tsx) : visible quand la dernière modif d'une ligne vient de l'autre rôle et n'a pas
      encore été vue par celui-ci. */

@@ -78,17 +78,12 @@ function DiffGauge({ value, height = 12 }: { value: number | null; height?: numb
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct, onReorderExercises, authorName, hideGauge, onStart }: {
+function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart }: {
   session: Session;
   onComplete: (s: Session) => void;
   /* Séance en direct (2026-10-02) : Démarrer / Reprendre, seulement pour une séance du jour à faire. */
   onStart?: (s: Session) => void;
   onEdit: (s: Session) => void;
-  /* Remplace l'ancien bouton "🗑 Supprimer" à côté du CTA Terminer/Résultat — exactement le même
-     bouton "⎘ Dupliquer" que WeekSessionCard (/week, /coach/planning). La suppression reste
-     accessible via le clic sur la carte (ouvre AddSessionModal en édition, qui a son propre
-     bouton Supprimer), donc rien n'est retiré, juste déplacé derrière un clic supplémentaire. */
-  onDuplicate: (s: Session) => void;
   authorName: string;
   /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
      orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
@@ -105,6 +100,7 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
   hideGauge?: boolean;
 }) {
   const live = isLive(session);
+  const isFuture = session.date > format(new Date(), "yyyy-MM-dd");
   const [, setLiveTick] = useState(0);
   useEffect(() => {
     if (!live) return;
@@ -199,71 +195,57 @@ function TodaySessionCard({ session, onComplete, onEdit, onDuplicate, previewPct
         </div>
       )}
 
-      {/* 4. Stats grid (MIN + DIFF.) — only when done */}
-      {session.done && (session.duration || session.rpe) && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-          {session.duration && (
+      {/* 4. Résultat (séance faite) : durée et difficulté réelle, sans bouton — un tap dessus rouvre
+          la saisie du résultat pour le corriger (2026-10-02). */}
+      {session.done && (session.duration || session.rpe) ? (
+        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, cursor: "pointer" }}>
+          {session.duration ? (
             <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>
               <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MIN</div>
             </div>
-          )}
-          {session.rpe && (
+          ) : <div />}
+          {session.rpe ? (
             <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.rpe}</div>
               <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
             </div>
-          )}
+          ) : <div />}
         </div>
-      )}
-
-      {/* 5. Actions */}
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-        {/* Séance en direct (2026-10-02) : Démarrer seul en principal ; une séance déjà faite (sans
-            téléphone, montre) se note via le lien discret sous la carte. En cours : Reprendre seul. */}
-        {!session.done && onStart ? (
-          <button
-            onClick={() => onStart(session)}
-            style={{
-              flex: 1, height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
-              background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
-            }}
-          >
-            {live ? "Reprendre la séance" : "▶ Démarrer la séance"}
-          </button>
-        ) : (
-        <button
-          data-tour="terminer-btn"
-          onClick={() => onComplete(session)}
-          style={{
-            flex: 1, height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer",
-            background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
-            color: session.done ? "#171b1f" : "#fff",
-            border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
-            boxShadow: session.done ? "none" : "0 8px 20px rgba(212,64,0,.22)",
-          }}
-        >
-          {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
-        </button>
-        )}
-        <button
-          onClick={() => onDuplicate(session)}
-          title="Dupliquer"
-          style={{
-            width: 46, height: 46, borderRadius: 16, flexShrink: 0,
-            background: "rgba(0,0,0,0.04)", color: "#8a8f94",
-            border: "1px solid rgba(0,0,0,.08)", cursor: "pointer",
-            fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          ⎘
-        </button>
-      </div>
-      {!session.done && onStart && !live && (
-        <div style={{ textAlign: "center", marginTop: 10 }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
-            Déjà faite ? Noter le résultat
-          </button>
+      ) : session.done ? null : isFuture ? null : (
+        /* 5. Actions — aujourd'hui : Démarrer (+ « Déjà faite ? ») ; jour passé : Terminer. Jamais
+           sur un jour futur (on ne termine pas une séance qui n'a pas eu lieu). Dupliquer vit
+           désormais dans le tiroir d'édition (2026-10-02). */
+        <div onClick={e => e.stopPropagation()}>
+          {onStart ? (
+            <button
+              onClick={() => onStart(session)}
+              style={{
+                width: "100%", height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
+                background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
+              }}
+            >
+              {live ? "Reprendre la séance" : "▶ Démarrer la séance"}
+            </button>
+          ) : (
+            <button
+              data-tour="terminer-btn"
+              onClick={() => onComplete(session)}
+              style={{
+                width: "100%", height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
+                background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
+              }}
+            >
+              Terminer<span className="tour-lock">🔒</span>
+            </button>
+          )}
+          {onStart && !live && (
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
+                Déjà faite ? Noter le résultat
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -763,7 +745,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [supabase, router]);
 
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
-  // surcharge), déclenchée depuis le bouton "⎘" de TodaySessionCard.
+  // surcharge), déclenchée depuis "⎘ Dupliquer" du tiroir de séance.
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   // "↻ Reconduire" du bandeau programme : même modale, date par défaut = même jour la semaine suivante.
   const [duplicateDefaultDate, setDuplicateDefaultDate] = useState<string | undefined>(undefined);
@@ -1069,7 +1051,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onComplete={(s) => handleTerminer(s)}
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => setEditing(s)}
-                    onDuplicate={(s) => setDuplicating(s)}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
@@ -1141,6 +1122,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           userName={profile.name ?? "Toi"}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}
+          onDuplicate={draft => { setDuplicating({ ...editing, ...draft }); setEditing(null); }}
           onClose={() => { setEditing(null); router.refresh(); }}
         />
       )}

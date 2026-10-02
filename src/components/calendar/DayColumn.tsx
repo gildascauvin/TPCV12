@@ -49,7 +49,7 @@ export interface SessionLike {
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
    à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, onDuplicate, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge, onStart, liveLabel }: {
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge, onStart, liveLabel }: {
   session: T;
   onComplete: (s: T) => void;
   /* Séance en direct (2026-10-02) : Démarrer / Reprendre (séance du jour à faire, côté sportif). */
@@ -57,7 +57,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   /* « En cours · mm:ss » quand la séance tourne (calculé par l'appelant). */
   liveLabel?: string | null;
   onEdit: (s: T) => void;
-  onDuplicate: (s: T) => void;
+  onDuplicate?: (s: T) => void;
   /* Optionnelles — branchées par WeekClient.tsx/CoachPlanningClient.tsx pour le drag & drop entre
      jours (dnd-kit). `undefined` par défaut : zéro impact sur l'aperçu onboarding (WeekPreviewStep.tsx),
      qui ne les passe jamais. */
@@ -79,6 +79,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   decisionGauge?: React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
+  const isFuture = session.date > format(new Date(), "yyyy-MM-dd");
   // Single gauge: rpe if done, target_difficulty if planned
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
 
@@ -145,42 +146,44 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
         </div>
       )}
 
-      {/* 4. Actions */}
-      {!hideActions && (
-        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-          {!session.done && onStart ? (
+      {/* 4. Résultat ou actions (2026-10-02) : une séance faite montre sa durée et sa difficulté
+          réelles (tap = corriger), plus de bouton Résultat. Jour futur : aucune action (on ne
+          termine pas une séance qui n'a pas eu lieu). Aujourd'hui : Démarrer + « Déjà faite ? ».
+          Jour passé : Terminer. Dupliquer vit désormais dans le tiroir d'édition. */}
+      {!hideActions && session.done && (session.duration || session.rpe) ? (
+        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, cursor: "pointer" }}>
+          {[{ v: session.duration, l: "MIN" }, { v: session.rpe, l: "DIFF." }].map(t => t.v ? (
+            <div key={t.l} style={{ background: "#f7f8f9", borderRadius: 8, padding: "5px 4px", textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#d44000", lineHeight: 1 }}>{t.v}</div>
+              <div style={{ fontSize: 8.5, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", color: "#8a8f94", marginTop: 3 }}>{t.l}</div>
+            </div>
+          ) : <div key={t.l} />)}
+        </div>
+      ) : !hideActions && !session.done && !isFuture && (
+        <div onClick={e => e.stopPropagation()}>
+          {onStart ? (
             <button
               onClick={() => onStart(session)}
-              style={{ flex: 1, height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+              style={{ width: "100%", height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
               {liveLabel ? "Reprendre la séance" : "▶ Démarrer"}
             </button>
           ) : (
-          <button
-            data-tour="terminer-btn"
-            onClick={() => onComplete(session)}
-            style={{
-              flex: 1, height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer",
-              background: session.done ? "#fff" : "linear-gradient(180deg,#f04a08,#d44000)",
-              color: session.done ? "#171b1f" : "#fff",
-              border: session.done ? "1px solid rgba(0,0,0,.10)" : "none",
-              boxShadow: session.done ? "none" : "0 4px 12px rgba(212,64,0,.20)",
-            }}
-          >
-            {session.done ? "Résultat" : "Terminer"}<span className="tour-lock">🔒</span>
-          </button>
+            <button
+              data-tour="terminer-btn"
+              onClick={() => onComplete(session)}
+              style={{ width: "100%", height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+            >
+              Terminer<span className="tour-lock">🔒</span>
+            </button>
           )}
-          <button
-            onClick={() => onDuplicate(session)} title="Dupliquer"
-            style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-          >⎘</button>
-        </div>
-      )}
-      {!hideActions && !session.done && onStart && !liveLabel && (
-        <div style={{ textAlign: "center", marginTop: 6 }} onClick={e => e.stopPropagation()}>
-          <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
-            Déjà faite ? Noter le résultat
-          </button>
+          {onStart && !liveLabel && (
+            <div style={{ textAlign: "center", marginTop: 6 }}>
+              <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 10.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
+                Déjà faite ? Noter le résultat
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -196,7 +199,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
   onProgram?: () => void;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
-  onDuplicate: (s: T) => void; onWellness: () => void;
+  onDuplicate?: (s: T) => void; onWellness: () => void;
   /* Props optionnelles réservées à l'aperçu programme de l'onboarding (WeekPreviewStep.tsx) —
      `false`/`undefined` par défaut, donc zéro impact sur /week et /coach/planning. */
   hideDayNumber?: boolean;
