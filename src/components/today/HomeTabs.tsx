@@ -59,12 +59,22 @@ function statusOf(key: HomeTab, previews?: HomeTabPreviews): { label: string; co
   return band ? { label: band.label, color: band.color } : null;
 }
 
-export default function HomeTabs({ active, onChange, dark = true, previews }: {
+export default function HomeTabs({ active, onChange, dark = true, previews, locked = false, lockedTabs }: {
   active: HomeTab;
   onChange: (t: HomeTab) => void;
   dark?: boolean;
   previews?: HomeTabPreviews;
+  /* Freemium (2026-10-02, aucun score en gratuit) : miniatures et statuts restent à leur place mais
+     floutés, la structure des onglets ne change pas. */
+  locked?: boolean;
+  /* Onglets concernés par `locked` (défaut : tous). Les mesures (Charge, Récup) restent lisibles en
+     gratuit ; seule la miniature de la décision (Aujourd'hui) trahit ce qui est payant. */
+  lockedTabs?: HomeTab[];
 }) {
+  const isLocked = (k: HomeTab) => locked && (!lockedTabs || lockedTabs.includes(k));
+  /* Aujourd'hui en gratuit (2026-10-02) : pas de flou, la jauge RPE sans zone et la difficulté
+     prévue, comme le grand anneau. Les autres onglets verrouillés restent floutés. */
+  const blurFor = (k: HomeTab): React.CSSProperties => isLocked(k) && k !== "today" ? { filter: "blur(4px)", userSelect: "none" } : {};
   const { isMd } = useBreakpoint();
   return (
     /* Onglets espacés (22px) sur écran large. Sur téléphone (2026-09-30, Gildas : "ça scroll
@@ -79,12 +89,16 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
            dégradé, même zone, même curseur. Charge/Récup = miniature de leur jauge agrégée. */
         let mini: React.ReactNode = null;
         if (t.key === "today") {
-          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={isMd ? MINI_W : 44} />;
+          if (previews?.today) mini = <DecisionRingMini state={previews.today} size={isMd ? MINI_W : 44} hideZone={isLocked("today") && !!previews.today.planned} />;
         } else {
           const axis = previews?.[t.key] ?? null;
           if (axis) mini = <AggregateGauge bare size={isMd ? MINI_W : 44} pos={axis.pos} band={axis.band} bands={AGG_BANDS[GROUP_OF[t.key]]} />;
         }
-        const status = statusOf(t.key, previews);
+        const plannedOnly = t.key === "today" && isLocked("today") && previews?.today?.planned;
+        const pv = previews?.today ? Math.round(previews.today.value) : 0;
+        const status = plannedOnly
+          ? { label: `Séance ${pv >= 8 ? "dure" : pv >= 5 ? "modérée" : "légère"} prévue`, color: "rgba(255,255,255,.62)" }
+          : statusOf(t.key, previews);
         return (
           <button
             key={t.key}
@@ -101,11 +115,11 @@ export default function HomeTabs({ active, onChange, dark = true, previews }: {
             }}
           >
             {/* Miniature À GAUCHE du libellé (2026-09-30, Gildas). */}
-            {mini}
+            {mini && <span style={{ ...blurFor(t.key), display: "inline-flex" }}>{mini}</span>}
             <span style={{ display: "flex", flexDirection: "column" as const, alignItems: isMd ? "flex-start" : "center", gap: 2, minWidth: 0 }}>
               {t.label}
               {status && (
-                <span style={{ fontSize: isMd ? 11 : 10.5, fontWeight: 700, lineHeight: 1.15, color: status.color }}>{status.label}</span>
+                <span style={{ fontSize: isMd ? 11 : 10.5, fontWeight: 700, lineHeight: 1.15, color: status.color, ...blurFor(t.key) }}>{status.label}</span>
               )}
             </span>
           </button>

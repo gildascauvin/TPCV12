@@ -255,15 +255,17 @@ function sectionFor(metric: Metric, data: ConseilsData): { title: string; order:
    chaque athlète (calculé une fois côté CoachClient.tsx, jamais recalculé ici) — ce composant ne
    fait que trier/regrouper/afficher, aucune nouvelle donnée fabriquée (contrairement au POC, dont
    les scores/insights sont des exemples fictifs). */
-export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, showExamples = true }: {
+export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, showExamples = true, onUnlock }: {
   rows: { athlete: CoachAthlete; data: ConseilsData }[];
   metric: Metric;
   onSelect: (athleteId: string) => void;
-  /* Freemium (2026-09-30) : le constat (jauge, statut · valeur) reste lisible ; insight, aperçu
-     d'historique et tendance sont floutés. */
+  /* Freemium (2026-10-02) : jauge et statut · valeur lisibles ; aperçu, tendance et insight floutés,
+     une pancarte sur le 1er insight. */
   locked?: boolean;
   /** Mention "Exemple" sur les sportifs de démo — désactivée en sandbox, où tout est démo (2026-10-01). */
   showExamples?: boolean;
+  /* Freemium (2026-10-02) : la pancarte se pose sur la 1re ligne floutée, une seule par écran. */
+  onUnlock?: () => void;
 }) {
   const blur: React.CSSProperties = locked ? { filter: "blur(6px)", userSelect: "none" } : {};
   const { isMd } = useBreakpoint();
@@ -315,6 +317,8 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
     buckets.get(title)!.rows.push(row);
   }
   const orderedBuckets = Array.from(buckets.entries()).sort((a, b) => a[1].order - b[1].order);
+  // Une seule pancarte (2026-10-02) : sur l'insight de la 1re ligne floutée, dans l'ordre affiché.
+  const firstLockedId = locked ? orderedBuckets.flatMap(([, b]) => b.rows).find(r => !(showExamples && !r.athlete.user_id && !r.athlete.invite_email))?.athlete.id ?? null : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column" as const, gap: 18 }}>
@@ -434,9 +438,20 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
                 );
               }
 
+              const pancarte = a.id === firstLockedId && onUnlock ? (
+                <div style={{ position: "absolute", inset: "-4px 0", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center", padding: "0 12px" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.25, textShadow: "0 2px 12px rgba(0,0,0,.6)" }}>
+                    {metric === "charge" ? "Leur analyse de charge est prête" : "Leur analyse de récupération est prête"}
+                  </div>
+                  {/* span : la pancarte vit dans le bouton de la ligne, pas de bouton imbriqué. */}
+                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); onUnlock(); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onUnlock(); } }} style={{ cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
+                    Activer le Coach Control
+                  </span>
+                </div>
+              ) : null;
               return (
+                <div key={a.id}>
                 <button
-                  key={a.id}
                   onClick={() => onSelect(a.id)}
                   style={{
                     display: "block", padding: "13px 15px",
@@ -455,9 +470,11 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
                         récupération sur l'onglet Charge. Libellé masqué : à cette taille il
                         tomberait sous 4px, la couleur et le liseré de la ligne suffisent.
                         Onglet Comportements : pas d'agrégat défini, on garde la ring. */}
+                    <div style={{ flexShrink: 0 }}>
                     {rowAgg
                       ? <AggregateGauge pos={rowAgg.pos} band={rowAgg.band} bands={AGG_BANDS[rowAgg.group]} size={58} showLabel={false} />
                       : <AthleteRing score={recoveryScore} />}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" as const, gap: 2 }}>
                       {/* Le nom porte l'identité de la ligne : en petit, gris et en capitales
                           mono (le gabarit d'eyebrow des cartes d'indice, où il ne portait qu'un nom
@@ -469,7 +486,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
                         {a.name}
                       </span>
                       {mainLine}
-                      {isMd && insightBox && <div style={rowBlur}>{insightBox}</div>}
+                      {isMd && insightBox && <div style={{ position: "relative", minHeight: pancarte ? 96 : undefined }}><div style={rowBlur}>{insightBox}</div>{pancarte}</div>}
                     </div>
                     {sparklinePoints && (
                       <div style={{ position: "relative", display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, flexShrink: 0, ...rowBlur }}>
@@ -483,8 +500,9 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
                   </div>
                   {/* Même règle qu'en mobile côté sportif : sous une centaine de pixels de large,
                       l'insight coincé à côté de l'aperçu tombe sur cinq lignes. */}
-                  {!isMd && insightBox && <div style={rowBlur}>{insightBox}</div>}
+                  {!isMd && insightBox && <div style={{ position: "relative", minHeight: pancarte ? 96 : undefined }}><div style={rowBlur}>{insightBox}</div>{pancarte}</div>}
                 </button>
+                </div>
               );
             })}
           </div>

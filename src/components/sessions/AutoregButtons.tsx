@@ -107,9 +107,15 @@ interface Props {
   actionsSlot?: HTMLElement | null;
   /* Taille de l'anneau (shape="ring"), défaut 188 sur fond sombre / 150 sur fond clair. */
   ringSize?: number;
+  /* Gratuit (2026-10-02) : réglage MANUEL de la difficulté, une entrée — jauge sans zone ni
+     recommandation, bouton Appliquer seulement après un déplacement. Ce n'est pas une décision :
+     pas de « 1re décision » ni de priming déclenchés. */
+  free?: boolean;
+  /* Gratuit : enregistre la seule difficulté prévue (aucun exercice modifié). */
+  onSetDifficulty?: (newDifficulty: number) => Promise<void>;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -131,7 +137,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
-    const decision = getAutoregDecision(sessionId);
+    const decision = free ? null : getAutoregDecision(sessionId);
     if (decision) {
       setMode("decided");
       setDecidedPct(decision.pct);
@@ -183,11 +189,28 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   // ni "Alléger/Surcharger" ne s'affichent dans ce cas (avant : seul Maintenir restait) : s'il n'y a
   // rien à ajuster, il n'y a rien à décider non plus, la jauge seule (déjà en zone) suffit. Dès que
   // l'utilisateur drague (selectedPct!==0), les CTA réapparaissent normalement, in-zone ou non.
-  const nothingToDecide = selectedPct === 0 && inZone;
+  const nothingToDecide = free || (selectedPct === 0 && inZone);
+
+  /* Gratuit (2026-10-02, Gildas : « pas de Appliquer, ça doit se mettre à jour en direct ») : le
+     réglage s'enregistre tout seul, 500 ms après le dernier déplacement, et ne change QUE le RPE
+     prévu de la séance (jamais les exercices). Le curseur repart ensuite de la valeur enregistrée.
+     Pas de décision, pas de retour arrière. */
+  useEffect(() => {
+    if (!free || selectedPct === 0 || !onSetDifficulty) return;
+    const t = setTimeout(async () => {
+      setApplying(true);
+      try { await onSetDifficulty(Math.round(diffFromPct(plannedDifficulty, selectedPct))); } catch { /* rien d'écrit */ }
+      setApplying(false);
+      setSelectedPct(0);
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [free, selectedPct]);
 
   function selectChip(v: number) {
     setSelectedPct(v);
-    onPreviewChange?.(v);
+    // Gratuit : seul le RPE prévu change, jamais les exercices — donc pas d'aperçu barré.
+    if (!free) onPreviewChange?.(v);
   }
 
   async function maintenir() {
@@ -250,7 +273,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     setDecidedPlannedDiff(original?.target_difficulty ?? null);
     // Plus de barré une fois validé — voir le commentaire de l'effet de montage ci-dessus.
     onPreviewChange?.(null);
-    markFirstAdjustment();
+    if (!free) markFirstAdjustment();
   }
 
   async function undo() {
@@ -314,6 +337,9 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
                 recoDir={dir}
                 light={light}
                 size={ringSize ?? (light ? 150 : 188)}
+                hideZone={free}
+                centerLabel={free ? { arrow: String(roundedCurrent), verb: "RPE" } : undefined}
+                hint={free ? (applying ? "Enregistrement…" : `Séance ${roundedCurrent >= 8 ? "dure" : roundedCurrent >= 5 ? "modérée" : "légère"} prévue`) : undefined}
                 plannedMarker={plannedDifficulty}
                 zoneLow={zoneLow}
                 zoneHigh={zoneHigh}
@@ -337,16 +363,16 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
             /* En anneau (/today), boutons à leur largeur naturelle et centrés sous la jauge
                (2026-09-30, Gildas) ; la barre garde ses boutons pleine largeur (flex 1/2). */
             <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
-              <button
+              {!free && <button
                 onClick={maintenir}
                 style={light
                   ? { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(0,0,0,.14)", background: "rgba(255,255,255,.6)", color: tint, borderRadius: 12, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }
                   : { flex: shape === "ring" ? "none" : 1, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.12)", color: "#fff", borderRadius: 12, padding: shape === "ring" ? "9px 16px" : 9, fontSize: 12, fontWeight: 900, cursor: "pointer" }}
               >
                 → Maintenir
-              </button>
+              </button>}
               <button onClick={apply} disabled={applying} style={{ flex: shape === "ring" ? "none" : 2, background: severityColor ?? "#E8571A", color: "#fff", border: "none", borderRadius: 12, padding: shape === "ring" ? "9px 18px" : 9, fontSize: 12, fontWeight: 900, cursor: applying ? "default" : "pointer", opacity: applying ? 0.7 : 1 }}>
-                {applying ? "..." : inZone ? "Appliquer →" : autoregCtaLabel(cursorDir)}
+                {applying ? "..." : inZone || free ? "Appliquer →" : autoregCtaLabel(cursorDir)}
               </button>
             </div>
           )}
@@ -373,6 +399,8 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
                   size={ringSize ?? (light ? 150 : 188)}
                   zoneLow={appliedZone.zoneLow}
                   zoneHigh={appliedZone.zoneHigh}
+                  hideZone={free}
+                  centerLabel={free ? { arrow: String(appliedDiff), verb: "Ajustée" } : undefined}
                   value={plannedDifficulty}
                   plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
                   readOnly

@@ -21,7 +21,8 @@ import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { decisionRingState } from "@/components/sessions/DecisionRing";
 import { aggregateFor } from "@/lib/metricCards";
-import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
+import { analyticsReady } from "@/lib/demoAnalytics";
+import AnalyticsCollecting, { progressFromRaw } from "@/components/conseils/AnalyticsCollecting";
 import { ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
@@ -112,6 +113,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     return !first || first === today;
   };
   const coachFreeMode = !isActive && !sandboxMode;
+  /* Collecte d'un sportif (2026-10-02) : progression vers ses premières analyses, à partir des
+     séances avec charge et des jours de ressenti déjà en mémoire. */
+  const collectFor = (a: CoachAthlete) => progressFromRaw(
+    (recentSessions[a.id] ?? []).filter(x => x.done && (x.rpe ?? 0) > 0 && (x.duration ?? 0) > 0).map(x => x.date),
+    a.user_id ? (wellnessBaselineHistory[a.user_id] ?? []).map(w => w.date) : [],
+    today,
+  );
   const unlock = () => setPaywallStep("priming");
   const [sessions, setSessions] = useState<CoachViewSession[]>(todaySessions);
   const [athletes, setAthletes] = useState(initialAthletes);
@@ -190,6 +198,10 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
      la boucle sur tout le roster ci-dessus, qui reste gardée par l'onglet. En mode "Tous" (aucun
      sportif sélectionné) il n'y a pas de miniature à montrer : un agrégat unique n'y voudrait rien
      dire, c'est la liste elle-même qui porte l'information par sportif. */
+  const selectedTabLocked = (() => {
+    const a = athletes.find(x => x.id === selectedAthleteId);
+    return !!a && !canDecideFor(a) && !(!sandboxMode && !a.user_id && !a.invite_email);
+  })();
   const selectedTabData = (() => {
     if (!selectedAthleteId) return undefined;
     if (athleteConseilsData[selectedAthleteId]) return athleteConseilsData[selectedAthleteId];
@@ -458,6 +470,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
      carrousel horizontal pour atterrir en bas d'une grille, et donne l'impression d'avoir disparu. */
   const sortedStable = [...stable].sort((a, b) => Number(reviewedIds.has(b.id)) - Number(reviewedIds.has(a.id)));
   const displayedStable = (selectedAthleteId ? sortedStable.filter(a => a.id === selectedAthleteId) : sortedStable).filter(metricOk);
+  // Une seule pancarte par écran (2026-10-02) : sur la 1re carte floutée.
+  const firstLockedCardId = [...displayedPriority, ...displayedStable].find(a => !canDecideFor(a))?.id ?? null;
 
   function getTopSession(athleteId: string): CoachViewSession | null {
     return sessions
@@ -465,6 +479,11 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   }
 
+  /* Gratuit (2026-10-02) : la jauge sans zone ne change que le RPE prévu, jamais les exercices. */
+  async function setSessionDifficulty(athleteId: string, session: CoachViewSession, target_difficulty: number) {
+    const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: { target_difficulty } });
+    if (result.ok) setSessions(prev => prev.map(s => s.id === session.id ? { ...s, target_difficulty } : s));
+  }
   async function applyAutoregAdjust(athleteId: string, session: CoachViewSession, pct: number) {
     const notes = session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
     const target_difficulty = applyAutoregDifficulty(session.target_difficulty ?? 6, pct);
@@ -677,10 +696,12 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     if (!a) return null;
                     return decisionRingState(sessions.filter(s => s.athlete_id === a.id), cardSuggestion(a));
                   })(),
-                  charge: aggregateFor("charge", analyticsReady(selectedTabData, "charge") ? selectedTabData : demoConseilsData(selectedDate, "coach")),
-                  recuperation: aggregateFor("recup", analyticsReady(selectedTabData, "recup") ? selectedTabData : demoConseilsData(selectedDate, "coach")),
+                  charge: analyticsReady(selectedTabData, "charge") ? aggregateFor("charge", selectedTabData) : null,
+                  recuperation: analyticsReady(selectedTabData, "recup") ? aggregateFor("recup", selectedTabData) : null,
                 }
               : undefined}
+            locked={selectedTabLocked}
+            lockedTabs={["today"]}
           />
         </div>
       )}
@@ -858,6 +879,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                         coachName={coachName ?? "Coach"}
                         isActive={canDecideFor(a)}
                         locked={!canDecideFor(a)}
+                        lockedBare={a.id !== firstLockedCardId}
+                        collect={collectFor(a)}
+                        onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
                         onUnlock={unlock}
                         onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
@@ -918,6 +942,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                     coachName={coachName ?? "Coach"}
                     isActive={canDecideFor(a)}
                     locked={!canDecideFor(a)}
+                    lockedBare={a.id !== firstLockedCardId}
+                    collect={collectFor(a)}
+                    onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
                     onUnlock={unlock}
                     onDecide={() => openEditor(a)}
                     onAddSession={() => openCreator(a)}
@@ -954,20 +981,23 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           if (!a || !data) return null;
           // Pas de mention en sandbox : tout y est démo par principe (2026-10-01).
           const demoAthlete = !sandboxMode && !a.user_id && !a.invite_email;
+          /* Freemium v2 (2026-10-02) : mesures nettes, insights floutés comme la décision du sportif
+             (sauf le jour de sa 1re décision, et le sportif démo) ; sans historique, la collecte. */
+          const tabLocked = !canDecideFor(a) && !demoAthlete;
           return (
             <>
               {/* Données d'exemple (2026-10-01) : mention sur chaque chart, pas de bandeau en haut —
                  historique insuffisant, ou sportif de démo (historique fictif). */}
               {/* Pas assez d'historique → exemple en clair et étiqueté, comme côté sportif (freemium 2026-09-30). */}
-              {homeTab === "charge" && (!analyticsReady(data, "charge") ? <>
-                <ChargeSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example />
-              </> : <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={coachFreeMode && !demoAthlete ? { onUnlock: unlock } : null} />)}
+              {homeTab === "charge" && (analyticsReady(data, "charge")
+                ? <ChargeSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={tabLocked ? { onUnlock: unlock } : null} />
+                : <AnalyticsCollecting data={data} group="charge" perspective="coach" />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : dernier item du rapport de
                  récupération, dont il est un déterminant. Même changement que sur /today. */}
               {homeTab === "recuperation" && <>
-                {!analyticsReady(data, "recup") ? <>
-                  <RecuperationSection data={demoConseilsData(selectedDate, "coach")} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example />
-                </> : <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={coachFreeMode && !demoAthlete ? { onUnlock: unlock } : null} />}
+                {analyticsReady(data, "recup")
+                  ? <RecuperationSection data={data} rangeMode={rangeMode} onRangeModeChange={setRangeMode} perspective="coach" example={demoAthlete} lockedHistory={tabLocked ? { onUnlock: unlock } : null} />
+                  : <AnalyticsCollecting data={data} group="recup" perspective="coach" />}
               </>}
             </>
           );
@@ -984,6 +1014,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
             onSelect={selectAthleteFilter}
             locked={coachFreeMode}
             showExamples={!sandboxMode}
+            onUnlock={unlock}
           />
         )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
@@ -12,7 +12,8 @@ import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useFirstDecision } from "@/hooks/useFirstDecision";
 import LockedBlur from "@/components/paywall/LockedBlur";
-import { analyticsReady, demoConseilsData } from "@/lib/demoAnalytics";
+import AnalyticsCollecting, { PhaseCollecting, phaseProgress } from "@/components/conseils/AnalyticsCollecting";
+import { analyticsReady } from "@/lib/demoAnalytics";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
@@ -544,27 +545,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       ? `Comme ${when}, elle croise ton ressenti et ta charge récente pour ajuster ta séance. Active l'ajustement pour la lire.`
       : `Comme ${when}, elle croise ton ressenti et ta charge récente. Active l'ajustement pour la lire.`;
   })();
-  // Historique (28/90 j, comportements) : réservé aux abonnés, jour 1 compris — la 1re décision est l'aha, pas l'analyse.
-  const historyLocked = !isActive && !sandboxMode;
-  /* Pas assez d'historique (gratuit ou payant) → exemple en clair, étiqueté, plutôt que des indices
-     vides. Calculé seulement quand un des deux onglets n'est pas prêt. */
-  const analyticsDemo = useMemo(
-    () => analyticsData && !sandboxMode && (!analyticsReady(analyticsData, "charge") || !analyticsReady(analyticsData, "recup"))
-      ? demoConseilsData(selectedDate) : null,
-    [analyticsData, sandboxMode, selectedDate],
-  );
-  /* Phase d'exemple (2026-10-01) : même condition que les onglets Charge/Récup. Sans assez
-     d'historique, la vraie phase tombe sur un neutre sans rien derrière ; on montre celle de
-     l'exemple, en clair (jamais floutée, même jour 2+ en gratuit) et étiquetée. */
-  const examplePhase: NonNullable<typeof decision.phase> | null =
-    analyticsDemo && decision.phase && analyticsDemo.trendText
-      ? {
-          title: analyticsDemo.trendAction,
-          text: analyticsDemo.trendText,
-          severity: analyticsDemo.trendEmoji === "🔴" ? "alert" : analyticsDemo.trendEmoji === "🟡" ? "watch" : "good",
-          lockedText: null,
-        }
-      : null;
+  /* Freemium v2 (2026-10-02, POC GBoj2wydy4kK8N8skjTAwW) : le jour de la 1re décision, un gratuit voit
+     exactement l'écran Premium ; ensuite les analyses sont floutées comme la décision. */
+  const historyLocked = decisionLocked && !sandboxMode;
+  const chargeReady = !analyticsData || analyticsReady(analyticsData, "charge");
+  const recupReady = !analyticsData || analyticsReady(analyticsData, "recup");
+  /* Sans assez d'historique (gratuit ou Premium) : la collecte. Les mesures étant gratuites, elles se
+     débloquent vraiment au bout, pour tout le monde ; jamais de données d'exemple. */
+
   /* Jauge de décision — 3e itération (2026-09-29, POC charge-variantes.html) : l'action SORT de la
      carte séance et passe EN TÊTE de l'onglet Aujourd'hui, au-dessus de l'encart insight. C'est la
      décision du jour, pas une propriété de la carte séance ; la carte séance qui suit n'a donc plus
@@ -577,16 +565,23 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const decisionGaugeSlot: React.ReactNode = autoregTargetTop ? (
     <AutoregButtons
       sessionId={autoregTargetTop.id}
-      dir={decision.suggestion?.dir}
-      reco={decision.suggestion?.reco}
+      /* Gratuit (2026-10-02) : réglage manuel sans zone ni reco, CTA sous l'anneau (la carte décision
+         est floutée) ; c'est une entrée, donc enregistrée. */
+      free={decisionLocked}
+      onSetDifficulty={async (target_difficulty) => {
+        const { data: saved } = await supabase.from("sessions").update({ target_difficulty }).eq("id", autoregTargetTop.id).select().single();
+        if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+      }}
+      dir={decisionLocked ? undefined : decision.suggestion?.dir}
+      reco={decisionLocked ? undefined : decision.suggestion?.reco}
       advice=""
       plannedDifficulty={autoregTargetTop.target_difficulty ?? 6}
       sessionLabel={autoregTargetTop.name}
       variant="dark"
       shape="ring"
-      actionsSlot={autoregActionsSlot}
-      severityColor={decision.suggestion ? decisionColor : undefined}
-      isActive={canDecide}
+      actionsSlot={decisionLocked ? undefined : autoregActionsSlot}
+      severityColor={decision.suggestion && !decisionLocked ? decisionColor : undefined}
+      isActive={canDecide || decisionLocked}
       onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTargetTop.id, pct } : null)}
       onApply={async (pct) => {
         /* Aperçu (onPreviewChange) reste libre — seule la persistance de la décision
@@ -876,9 +871,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null),
             /* Onglet en mode exemple → miniature de l'exemple (2026-09-30, Gildas : elle incite au clic,
                et le bandeau "Exemple" de l'onglet dit ensuite ce que c'est). */
-            charge: analyticsData ? aggregateFor("charge", analyticsDemo && !analyticsReady(analyticsData, "charge") ? analyticsDemo : analyticsData) : null,
-            recuperation: analyticsData ? aggregateFor("recup", analyticsDemo && !analyticsReady(analyticsData, "recup") ? analyticsDemo : analyticsData) : null,
+            charge: analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null,
+            recuperation: analyticsData && recupReady ? aggregateFor("recup", analyticsData) : null,
           }}
+          locked={historyLocked}
+          lockedTabs={["today"]}
         />
 
         {homeTab === "today" && (
@@ -929,6 +926,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                  la barre reste celle des cartes séance de Coach Control et du Planning. */}
               {/* Freemium (2026-09-30) : jauge + carte décision floutées ensemble pour un compte gratuit
                  après son jour 1 (le CTA Maintenir/Appliquer, porté dans la carte, l'est avec). */}
+              {/* Freemium (2026-10-02) : les mesures sont gratuites, la décision payante. L'anneau
+                  reste net (difficulté prévue seule, sans zone ni sens ; repos et séance faite tels
+                  quels), seule la carte décision est floutée. */}
+              {decisionGaugeSlot && decisionLocked && (
+                <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
+                  {decisionGaugeSlot}
+                </div>
+              )}
               <LockedBlur
                 locked={decisionLocked}
                 surface="today_decision"
@@ -937,7 +942,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 sub={lockedSub}
                 radius={16}
               >
-              {decisionGaugeSlot && (
+              {decisionGaugeSlot && !decisionLocked && (
                 <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
                   {decisionGaugeSlot}
                 </div>
@@ -953,12 +958,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   centered
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
                   /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
-                  actions={(autoregTargetTop || (decision.phase && !(examplePhase && decisionLocked))) ? (
+                  actions={(autoregTargetTop || decision.phase) ? (
                     <div style={{ display: "grid", gap: 12 }}>
                       {autoregTargetTop && <div ref={setAutoregActionsSlot} className="autoreg-slot" />}
-                      {examplePhase && !decisionLocked ? (
-                        <PhaseLine phase={examplePhase} example />
-                      ) : decision.phase && !examplePhase && (
+                      {/* Pas assez d'historique : phase d'exemple derrière le flou (gratuit), ou
+                          collecte (Premium / jour 1). Jamais de mention « Exemple ». */}
+                      {decision.phase && analyticsData && (!chargeReady || !recupReady) ? (
+                        <PhaseCollecting p={phaseProgress(analyticsData)} />
+                      ) : decision.phase && (
                         <PhaseLine
                           phase={decision.phase}
                           onUnlock={() => setShowWellness(true)}
@@ -970,10 +977,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 />
               </div>
               </LockedBlur>
-              {examplePhase && decisionLocked && (
-                /* Exemple en clair même quand la décision réelle est floutée : ce n'est pas une sortie. */
-                <div style={{ marginTop: 12 }}><PhaseLine phase={examplePhase} example /></div>
-              )}
               {decisionLocked && (
                 /* Le ressenti reste modifiable (c'est une entrée) ; aucun indice de la décision ne passe. */
                 <div style={{ textAlign: "center", marginTop: 10 }}>
@@ -1085,15 +1088,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         {homeTab !== "today" && (
           analyticsData ? (
             <>
-              {homeTab === "charge" && (analyticsDemo && !analyticsReady(analyticsData, "charge") ? <>
-                <ChargeSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} example />
-              </> : <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />)}
+              {homeTab === "charge" && (chargeReady
+                ? <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />
+                : <AnalyticsCollecting data={analyticsData} group="charge" />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
-                {analyticsDemo && !analyticsReady(analyticsData, "recup") ? <>
-                  <RecuperationSection data={analyticsDemo} rangeMode={rangeMode} onRangeModeChange={setRangeMode} example />
-                </> : <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />}
+                {recupReady
+                  ? <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />
+                  : <AnalyticsCollecting data={analyticsData} group="recup" />}
               </>}
             </>
           ) : (

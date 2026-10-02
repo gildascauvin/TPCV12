@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
@@ -15,7 +15,7 @@ import { parseAndApply } from "@/lib/loadAdjust";
 import type { AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
-import { demoConseilsData } from "@/lib/demoAnalytics";
+import { PhaseCollecting, type CollectProgress } from "@/components/conseils/AnalyticsCollecting";
 import {
   Z_SWC, Z_MODERATE, relativeZoneLabel,
   type WellnessBaselineResult, type Perspective as BaselinePerspective,
@@ -169,7 +169,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -217,6 +217,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      n'a en réalité rien écrit (compte non actif, requireSubscription a juste déclenché le
      paywall/signup). `undefined`/absent = toujours considéré actif (usages onboarding/aperçus,
      jamais réellement gatés — voir AutoregButtons.tsx). */
+  /* Freemium (2026-10-02) : une seule pancarte par écran — les cartes floutées suivantes n'ont pas de bouton. */
+  lockedBare?: boolean;
+  /* Collecte (2026-10-02) : sportif sans assez d'historique, carte lisible → progression à la place de la phase. */
+  collect?: CollectProgress | null;
+  /* Gratuit : change le seul RPE prévu de la séance (jauge sans zone). */
+  onSetDifficulty?: (session: CoachViewSession, difficulty: number) => Promise<void>;
   isActive?: boolean;
   /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du sportif — calculée par le parent
      (historique multi-jours réel pour un vrai sportif, historique synthétique déterministe via
@@ -292,21 +298,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     perspective,
     subject: selfView ? undefined : firstName,
   });
-  /* Phase d'exemple (2026-10-01) : même règle que /today et les onglets Charge/Récup. Sans assez
-     d'historique pour ce sportif, la phase de l'exemple, en clair et étiquetée. */
-  const exampleDate = todaySessions[0]?.date ?? new Date().toISOString().slice(0, 10);
-  const examplePhase = useMemo(() => {
-    if (!decision.phase?.insufficient) return null;
-    const d = demoConseilsData(exampleDate, perspective);
-    if (!d.trendText) return null;
-    return {
-      title: d.trendAction, text: d.trendText, lockedText: null,
-      severity: (d.trendEmoji === "🔴" ? "alert" : d.trendEmoji === "🟡" ? "watch" : "good") as "alert" | "watch" | "good",
-    };
-  }, [decision.phase?.insufficient, exampleDate, perspective]);
-  const phaseEl = examplePhase ? <PhaseLine phase={examplePhase} example coach={!selfView} /> : decision.phase ? <PhaseLine phase={decision.phase} /> : null;
-  // Exemple en clair même quand la carte est floutée (gratuit) : ce n'est pas une sortie.
-  const phaseInside = examplePhase && locked ? null : phaseEl;
+  /* Pas assez d'historique (2026-10-02) : gratuit → phase d'exemple derrière le flou, sans mention ;
+     lisible → collecte. Jamais d'exemple en clair. */
+  const phaseInside = decision.phase?.insufficient
+    ? (collect ? <PhaseCollecting p={collect} perspective={selfView ? "athlete" : "coach"} /> : null)
+    : decision.phase ? <PhaseLine phase={decision.phase} /> : null;
   const [previewPct, setPreviewPct] = useState<number | null>(null);
   /* Nœud des CTA d'ajustement dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
@@ -372,9 +368,34 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       {/* Freemium (2026-09-30) : jauge, badges et carte décision floutés ensemble — même la zone,
          côté coach (un coach sait s'ajuster dès qu'il voit "au-dessus de la zone"). Le prénom et
          la séance du jour restent lisibles. */}
-      <LockedBlur locked={!!locked} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
-      <div style={{ textAlign: "center", marginBottom: 12 }}>
+      {/* Freemium (2026-10-02) : mesures gratuites, décision payante. L'anneau reste net (difficulté
+         prévue seule, sans zone ni sens ; repos et séance faite tels quels), le reste est flouté. */}
+      {locked && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+          {adjustable ? (
+            /* Réglage manuel (entrée) : jauge sans zone ni reco, Appliquer après un déplacement. */
+            <div onClick={e => e.stopPropagation()}>
+              <AutoregButtons
+                free
+                sessionId={topSession!.id}
+                advice=""
+                plannedDifficulty={topSession!.target_difficulty ?? 6}
+                sessionLabel={topSession!.name}
+                variant="dark"
+                shape="ring"
+                ringSize={150}
+                onSetDifficulty={async d => { await onSetDifficulty?.(topSession!, d); }}
+                isActive
+              />
+            </div>
+          )
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={150} />
+            : <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />}
+        </div>
+      )}
+      <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
+      <div style={{ textAlign: "center", marginBottom: 12 }}>
+        {!locked && <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {/* Jauge d'ajustement À LA PLACE du ring de récupération (2026-09-30, Gildas) : la carte
              décision juste en dessous explique déjà la forme ; le ring ne reste que sans séance
              ajustable (repos, séance déjà faite). */}
@@ -414,7 +435,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           ) : (
             <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />
           )}
-        </div>
+        </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (
           <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             {!!athlete.invite_email && (
@@ -456,29 +477,14 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           ) : (
             <div style={{ display: "grid", gap: 10, justifyItems: decision.phase ? "center" : undefined }}>
             {phaseInside}
-            <button
-              data-tour={tourId ? "decider-btn" : undefined}
-              onClick={onDecide}
-              style={{
-                height: 34, paddingLeft: 14, paddingRight: 14, borderRadius: 12, flexShrink: 0,
-                background: showReviewed
-                  ? "linear-gradient(180deg,#2f9e44,#166534)"
-                  : "linear-gradient(180deg,#f04a08,#d44000)",
-                color: "#fff", border: "none", fontSize: 12, fontWeight: 800,
-                cursor: "pointer",
-                boxShadow: showReviewed ? "0 6px 16px rgba(47,158,68,.22)" : "0 6px 16px rgba(212,64,0,.22)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {isPriority ? (showReviewed ? "Revoir" : "Décider") : "Voir"} →<span className="tour-lock">🔒</span>
-            </button>
+            {/* Plus de bouton Voir/Décider (2026-10-02, Gildas) : sans séance ajustable il n'y avait
+                rien à ouvrir, et la carte séance dessous est déjà cliquable quand elle existe. */}
             </div>
           )}
         />
       </div>
 
       </LockedBlur>
-      {examplePhase && locked && <div style={{ marginTop: 12 }}>{phaseEl}</div>}
 
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct

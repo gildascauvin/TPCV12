@@ -309,3 +309,13 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 
 /* Séance en direct (2026-10-02) : point "En cours" de la barre persistante. */
 @keyframes livePulse { 50% { opacity: .25; } }
+
+/* Collecte des analyses (2026-10-02, AnalyticsCollecting.tsx) : squelettes et faux graphes gris qui
+   se dessinent en boucle, sans aucune fausse donnée. */
+.tpc-skel{display:block;border-radius:99px;background:linear-gradient(90deg,rgba(255,255,255,.07) 0%,rgba(255,255,255,.14) 50%,rgba(255,255,255,.07) 100%);background-size:200% 100%;animation:tpcShim 1.6s ease-in-out infinite}
+.tpc-mock-line{fill:none;stroke:rgba(255,255,255,.28);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:420;stroke-dashoffset:420;animation:tpcDraw 2.8s ease-in-out infinite}
+.tpc-mock-bar{fill:rgba(255,255,255,.18);transform-box:fill-box;transform-origin:bottom;animation:tpcGrow 2.8s ease-in-out infinite}
+@keyframes tpcShim{0%{background-position:100% 0}100%{background-position:-100% 0}}
+@keyframes tpcDraw{0%{stroke-dashoffset:420}55%,80%{stroke-dashoffset:0}100%{stroke-dashoffset:-420}}
+@keyframes tpcGrow{0%{transform:scaleY(.08)}50%,80%{transform:scaleY(1)}100%{transform:scaleY(.08)}}
+@media (prefers-reduced-motion:reduce){.tpc-skel,.tpc-mock-bar{animation:none}.tpc-mock-line{animation:none;stroke-dashoffset:0}}

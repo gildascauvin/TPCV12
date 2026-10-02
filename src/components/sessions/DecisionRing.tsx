@@ -58,7 +58,8 @@ function sectorPath(cx: number, cy: number, rIn: number, rOut: number, a0: numbe
 /* État d'une jauge de décision (valeur du curseur + zone conseillée), calculé comme la vraie jauge
    (AutoregButtons.tsx) — sert à la miniature de l'onglet Aujourd'hui (HomeTabs.tsx), pour qu'elle
    montre exactement la même chose que la grande (2026-09-30, Gildas : "fidèle"). */
-export type DecisionRingState = { value: number; zoneLow: number; zoneHigh: number };
+/* `planned` : séance encore à faire (la zone est alors une décision, masquée en gratuit). */
+export type DecisionRingState = { value: number; zoneLow: number; zoneHigh: number; planned?: boolean };
 export function decisionRingState(
   sessions: { done: boolean; rpe?: number | null; target_difficulty?: number | null }[],
   suggestion: { dir: AutoregDir; reco: number } | null | undefined,
@@ -72,7 +73,7 @@ export function decisionRingState(
       ? zoneRange(Math.round(planned + pctToPoints(suggestion.reco)), suggestion.dir)
       : zoneRange(Math.round(planned), "low");
     const value = Math.max(MIN, Math.min(MAX, planned + (previewPct ? pctToPoints(previewPct) : 0)));
-    return { value, ...zone };
+    return { value, ...zone, planned: true };
   }
   const done = byDiff[0];
   if (!done) return { value: 1, zoneLow: 1, zoneHigh: 2 };   // repos
@@ -82,14 +83,14 @@ export function decisionRingState(
 
 /* Miniature de la jauge de décision (onglet Aujourd'hui) : même dégradé, même zone pointillée, même
    curseur que la grande, sans texte — géométrie des miniatures Charge/Récup (AggregateGauge bare). */
-export function DecisionRingMini({ state, size = 40 }: { state: DecisionRingState; size?: number }) {
+export function DecisionRingMini({ state, size = 40, hideZone = false }: { state: DecisionRingState; size?: number; hideZone?: boolean }) {
   const { value, zoneLow, zoneHigh } = state;
   const r = size * 0.36, sw = Math.max(3, Math.round(size * 0.17));
   const rOut = r + sw * 0.75, rIn = r - sw * 0.75;
   const cx = size / 2, cy = rOut + 2;
   const h = Math.round(cy + rOut * 0.5 + 2);
   const rounded = Math.round(value);
-  const inZone = rounded >= zoneLow && rounded <= zoneHigh;
+  const inZone = !hideZone && rounded >= zoneLow && rounded <= zoneHigh;
   const [c0, c1] = DIFF_STOPS[rounded >= 8 ? "hard" : rounded >= 5 ? "moderate" : "easy"];
   const end = ang(value);
   const SEGS = 16;
@@ -103,8 +104,8 @@ export function DecisionRingMini({ state, size = 40 }: { state: DecisionRingStat
       ))}
       <circle cx={sx} cy={sy} r={sw / 2} fill={c0} />
       {value > MIN && <circle cx={ex} cy={ey} r={sw / 2} fill={c1} />}
-      <path d={sectorPath(cx, cy, rIn, rOut, ang(Math.max(MIN, zoneLow - 0.35)), ang(Math.min(MAX, zoneHigh + 0.35)))}
-        fill="none" stroke="rgba(255,255,255,.75)" strokeWidth={1.1} strokeDasharray="2 1.5" />
+      {!hideZone && <path d={sectorPath(cx, cy, rIn, rOut, ang(Math.max(MIN, zoneLow - 0.35)), ang(Math.min(MAX, zoneHigh + 0.35)))}
+        fill="none" stroke="rgba(255,255,255,.75)" strokeWidth={1.1} strokeDasharray="2 1.5" />}
       <circle cx={ex} cy={ey} r={sw * 0.62} fill={inZone ? "#2a8045" : "#18181b"} stroke="#fff" strokeWidth={1.1} />
     </svg>
   );
@@ -144,9 +145,26 @@ export function DoneDecisionRing({ rpe, planned, size, light }: { rpe: number | 
   );
 }
 
+/* Difficulté prévue seule (freemium 2026-10-02, « les mesures sont gratuites, les décisions
+   payantes ») : la séance planifiée est une entrée, elle reste lisible ; la zone conseillée et le
+   sens sont la décision, absents ici. */
+export function PlannedDecisionRing({ planned, size, light }: { planned: number; size?: number; light?: boolean }) {
+  const v = Math.round(planned);
+  return (
+    <DecisionRing
+      zoneLow={v} zoneHigh={v} value={planned} readOnly hideZone onChange={() => {}}
+      size={size} light={light}
+      centerLabel={{ arrow: String(v), verb: "Prévue" }}
+      hint={`Séance ${v >= 8 ? "dure" : v >= 5 ? "modérée" : "légère"} prévue`}
+    />
+  );
+}
+
 export default function DecisionRing({
-  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size = 188, light, centerLabel,
+  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size = 188, light, centerLabel, hideZone = false,
 }: {
+  /* Pas de zone conseillée (difficulté prévue seule, gratuit). */
+  hideZone?: boolean;
   zoneLow: number;
   zoneHigh: number;
   /* Sens de la RECO, pas du curseur : c'est lui que porte le centre. Absent = Maintenir. */
@@ -172,7 +190,7 @@ export default function DecisionRing({
   const h = Math.round(cy + rOut * 0.5 + sw / 2 + 3);
 
   const roundedValue = Math.round(value);
-  const inZone = roundedValue >= zoneLow && roundedValue <= zoneHigh;
+  const inZone = !hideZone && roundedValue >= zoneLow && roundedValue <= zoneHigh;
 
   /* Angle du pointeur -> RPE entier. Dans l'ouverture du bas (|angle| > 120°), on colle à
      l'extrémité la plus proche plutôt que de sauter d'un bout à l'autre. */
@@ -250,7 +268,7 @@ export default function DecisionRing({
             const [bx, by] = polar(cx, cy, r + sw * 0.8, ang(plannedMarker!));
             return <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#fff" strokeWidth={3} strokeLinecap="round" />;
           })()}
-          <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="none" stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2} strokeDasharray="3 3" />
+          {!hideZone && <path d={sectorPath(cx, cy, rIn, rOut, zoneA0, zoneA1)} fill="none" stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2} strokeDasharray="3 3" />}
           {/* Même curseur que la jauge horizontale du Planning (DecisionGauge.tsx) : 19px, sombre,
               vert dans la zone, halo doux et poignée à 3 traits. Liseré blanc sur fond sombre
               seulement, sinon le curseur sombre se perd sur le track sombre. */}

@@ -143,7 +143,13 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const exampleText = perspective === "coach"
     ? "Ses analyses arrivent après ~1 semaine de check-ins et de séances."
     : "Tes analyses arrivent après ~1 semaine de check-ins et de séances.";
-  const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode) => {
+  /* Freemium (2026-10-02) : « les mesures sont gratuites, les décisions payantes ». Statut et valeur
+     d'un indice restent nets ; aperçu, tendance et séries des charts sont floutés comme en prod
+     (sinon on donne tout). L'impact écrit (ce qu'il faut en
+     faire) et l'insight de section sont floutés. La carte Comportements est une analyse : floutée. */
+  const renderCard = (key: string, c: Omit<ExtraIndexCard, "key" | "body">, body: React.ReactNode, analysis = false) => {
+    const statusBlur = analysis ? blur : {};
+    const previewBlur = blur;
     const isOpen = open === key;
     return (
       /* minWidth 0 : sans lui, la rangée de filtres de la carte Récupération dépliée (nowrap, jusqu'à 7
@@ -167,7 +173,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#fff" }}>
               {c.label}
             </span>
-            <span style={{ fontSize: 17.5, fontWeight: 800, color: c.statusColor, letterSpacing: "-.01em", lineHeight: 1.25 }}>
+            <span style={{ fontSize: 17.5, fontWeight: 800, color: c.statusColor, letterSpacing: "-.01em", lineHeight: 1.25, ...statusBlur }}>
               {c.status}
               {c.value && (
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "rgba(255,255,255,.55)" }}>{` · ${c.value}`}</span>
@@ -176,7 +182,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             {isMd && <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)", lineHeight: 1.4, marginTop: 4, ...blur }}>{c.impact}</span>}
           </span>
 
-          <span style={{ position: "relative", display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto", ...blur }}>
+          <span style={{ position: "relative", display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 5, flex: "0 0 auto", ...previewBlur }}>
             {example && !locked && <ExampleNote compact top="40%" />}
             <span style={{ width: 118 }}>{c.preview}</span>
             <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 600, color: "rgba(255,255,255,.55)", textAlign: "right" as const, letterSpacing: "0.01em" }}>
@@ -225,23 +231,24 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
             légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
             plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}
-        <div style={{ position: "relative", maxWidth: 460, minHeight: locked ? 120 : undefined, display: "flex", alignItems: "center" }}>
+        <div style={{ position: "relative", maxWidth: 460, display: "flex", alignItems: "center", minHeight: locked ? 112 : undefined }}>
+        {/* Freemium (2026-10-02) : la pancarte se pose sur le 1er flou de l'écran (l'insight) ;
+            les flous suivants (cartes, charts) n'ont plus aucun bouton. */}
+        {locked && (
+          <div style={{ position: "absolute", inset: "-6px 0", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center", padding: "0 8px" }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.25, textShadow: "0 2px 12px rgba(0,0,0,.6)" }}>{lockedCopy.title}</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 300 }}>{lockedCopy.sub}</div>
+            <button onClick={() => lockedHistory?.onUnlock()} style={{ marginTop: 2, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
+              Activer l'ajustement
+            </button>
+          </div>
+        )}
+
           <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", ...blur }}>
             {insight}
           </div>
           {/* Données d'exemple : la mention couvre l'insight, jamais la jauge et son score. */}
           {example && !locked && <ExampleNote text={exampleText} top="50%" />}
-          {/* Freemium : accroche + action posées sur l'insight flouté, comme la décision et les
-              tests (2026-10-01) — le bouton seul ne disait pas ce qu'on débloque. */}
-          {locked && (
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center", padding: "0 8px" }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.25 }}>{lockedCopy.title}</div>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 300 }}>{lockedCopy.sub}</div>
-              <button onClick={() => lockedHistory?.onUnlock()} style={{ marginTop: 2, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.35)" }}>
-                Activer l'ajustement
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -322,18 +329,18 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       : metric === "recovery" && subDim && subDim !== "rhr" && subDim !== "hrv"
                       ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
-                    weekLabels={days > 7} locked={locked} onUnlock={() => lockedHistory?.onUnlock()} height={200}
+                    weekLabels={days > 7} locked={locked} height={200}
                     exampleNote={example ? exampleText : undefined}
                   />
                             </>
           ));
         })}
-        {extraCards.map(c => renderCard(c.key, c, (
+        {extraCards.map(c => renderCard(c.key, { ...c }, (
           <div style={{ position: "relative" }}>
             <div style={blurChart}>{c.body}</div>
             {example && !locked && <ExampleNote text={exampleText} top="50%" />}
           </div>
-        )))}
+        ), true))}
       </div>
     </div>
   );
