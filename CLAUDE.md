@@ -4670,3 +4670,11 @@ POC : https://claude.ai/artifact/6aJZAyCz7c1gi5DVb4P5MF (section « Créer une s
   - Tracking : `session_quick_fill_opened`, `session_quick_fill` (`source`).
 - **Carte du jour vide** (`EmptyDayCard`, sportif et coach) : un seul bouton principal « + Ajouter une séance » (raccourcis retirés de la carte, demande de Gildas : moins de bruit). Côté sportif, lien discret « Ou démarre un programme pour toutes tes semaines ».
 - **Jauge de difficulté dans les tiroirs d'édition** : `DecisionGauge` gagne `noZone` (même barre/remplissage/curseur que le Planning, sans zone, en-tête ni repère) ; remplace le `<input type="range">` du tiroir sportif, coach et de l'éditeur de programme.
+
+## Cartes séance : Terminer, résultat, Dupliquer (2026-10-02, suite)
+
+- **Pas de Terminer dans le futur** : sur un jour futur, la carte séance (Accueil `TodaySessionCard`, Planning `WeekSessionCard`) n'a plus aucune action (ni Terminer, ni « Déjà faite ? »). Aujourd'hui : Démarrer + « Déjà faite ? Noter le résultat ». Jour passé : Terminer.
+- **Séance faite** : plus de bouton « Résultat ». Tuiles « N MIN » / « N DIFF. » (durée et RPE réels, radius 16 sur /today, 8 sur le Planning), un tap rouvre CompleteModal pour corriger. Séance faite sans durée ni RPE : rien sur la carte (correction via le tiroir).
+- **Dupliquer** quitte les cartes (⎘ retiré de /today, /week, /coach/planning) pour le bas du tiroir de séance : 🗑 Supprimer · ⎘ Dupliquer · Fermer, dans `AddSessionModal` et `CoachSessionModal` (prop `onDuplicate(draft)`, édition seulement). Le clic enregistre d'abord (flush de l'autosave), le parent ferme le tiroir et ouvre `DuplicateModal` avec l'état affiché. Coach Control réutilise sa modale Reconduire (date proposée J+7). L'éditeur de programme garde son Dupliquer par jour.
+
+Déployé le 2026-10-02, commit `0ef758b`.
