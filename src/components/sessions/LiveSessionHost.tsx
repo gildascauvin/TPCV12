@@ -139,7 +139,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
           onClick={() => { setIdx(0); setOpen(true); }}
           style={{
             position: "fixed", left: "50%", transform: "translateX(-50%)", zIndex: 2147482990,
-            bottom: "calc(108px + env(safe-area-inset-bottom,0px))", width: isMd ? "min(640px,calc(100vw - 28px))" : "min(440px,calc(100vw - 24px))",
+            bottom: "calc(124px + env(safe-area-inset-bottom,0px))", width: isMd ? "min(640px,calc(100vw - 28px))" : "min(440px,calc(100vw - 24px))",
             display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderRadius: 999, border: "none", cursor: "pointer",
             background: "#fff", color: "#171b1f", boxShadow: "0 12px 30px rgba(0,0,0,.35)", textAlign: "left", fontFamily: "inherit",
           }}

@@ -24,11 +24,8 @@ import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
-import { loadRule, ruleTagColors } from "@/lib/loadRule";
-import { dailyLoad } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
-import { maxDiffToday } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import LockedBlur from "@/components/paywall/LockedBlur";
@@ -37,7 +34,7 @@ import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
-import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZByDate, relativeWellnessByDate } from "@/lib/wellnessBaseline";
 
 /* Modales/drawers ouverts sur demande — même traitement next/dynamic que WeekClient.tsx
    (2026-09-17) : leur JS (CoachSessionModal → ExerciseBlockEditor, ProgramLibraryPage →
@@ -99,7 +96,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isMd, isLg } = useBreakpoint();
+  const { isMd } = useBreakpoint();
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus);
   const sandboxPaywall = useSandboxGate("coach");
@@ -165,7 +162,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [profileOpen, setProfileOpen] = useState(false);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
-  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
   // Tous les assignments actifs de l'athlète (il peut en enchaîner plusieurs dans le futur) —
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation).
@@ -253,13 +249,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       if (picked?.programs) {
         const prog = (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) as Program;
         setActiveProgram(prog);
-        setActiveAssignmentId(picked.id);
-        setActiveProgramStartDate(picked.start_date);
+          setActiveProgramStartDate(picked.start_date);
         const diffMs = Date.now() - new Date(picked.start_date + "T12:00:00").getTime();
         const weekIdx = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
         setActiveProgramWeek(weekIdx >= 0 && weekIdx < prog.weeks_count ? weekIdx : -1);
       } else {
-        setActiveProgram(null); setActiveProgramWeek(-1); setActiveAssignmentId(null); setActiveProgramStartDate(null);
+        setActiveProgram(null); setActiveProgramWeek(-1); setActiveProgramStartDate(null);
       }
     }
     fetchAthleteProgram();

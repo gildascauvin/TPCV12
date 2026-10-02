@@ -40,7 +40,8 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#d44000",
+  // Barre du navigateur / sous l'heure sur mobile : fond sombre de l'app (2026-10-02).
+  themeColor: "#070a0d",
 };
 
 export default function RootLayout({

@@ -12,7 +12,7 @@ import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
 import { ExampleNote } from "@/components/conseils/MetricChart";
 import { guessSportChip } from "@/lib/sportCategories";
 import {
-  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, splitByStrength, groupInsightsByMetric, METRIC_DISPLAY, suggestCanonicalNames, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
+  computeAllInsights, computeCrossFamilyInsights, computeAllFamiliesInsights, canonicalMetricKey, buildVerdict, groupInsightsByMetric, METRIC_DISPLAY, heightFromFlightTime, dropJumpProfile, formatDropJumpHeightCm, formatDropJumpContactMs, ftctRatio, vo2maxFromCooperDistance, vmaFromDemiCooperDistance,
   type MetricKey, type CardInsight, type CardStatus, type Sexe,
 } from "@/lib/testNorms";
 import { TEST_BATTERIES, BATTERY_TEST_METRICS, type BatteryTest, sharesEnoughWords, buildMergeSuggestions } from "@/lib/testBattery";
@@ -120,8 +120,6 @@ function findMatchingRawTest(testName: string, candidates: MergedTest[]): Merged
   return candidates.find(m => sharesEnoughWords(testName, m.name));
 }
 
-const TIME_UNITS = new Set(["s", "min"]);
-
 /* Relecture cm/ms (2026-09) — le stockage reste m/s (voir formatDropJumpHeightCm/formatDropJumpContactMs,
    testNorms.ts), seule la présentation change pour ces 2 métriques précises. Le drop jump se lit
    toujours à 2 valeurs : quand `secondaryByDate` (le temps de contact, par date) est fourni et qu'un
@@ -134,14 +132,6 @@ function formatRawValue(metric: MetricKey | undefined, value: number, unit: stri
   }
   if (metric === "dropJumpContact") return formatDropJumpContactMs(value);
   return `${value} ${unit}`;
-}
-function trendInfo(prevRaw: number, lastRaw: number, unit: string): { deltaPct: number | null; improved: boolean | null } {
-  const prev = Number(prevRaw), last = Number(lastRaw);
-  if (prev === last) return { deltaPct: 0, improved: null };
-  if (prev === 0) return { deltaPct: null, improved: null };
-  const deltaPct = Math.round(((last - prev) / prev) * 100);
-  const wentUp = last > prev;
-  return { deltaPct, improved: TIME_UNITS.has(unit) ? !wentUp : wentUp };
 }
 
 /* Un exercice peut être comparé à plusieurs références (un autre lift, le poids de corps) — chacune
@@ -594,8 +584,6 @@ function TestCard({ title, unit, results, comparisons, onAdd, onAddNew, onAddPai
   const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
 
   const last = results[results.length - 1];
-  const prev = results[results.length - 2];
-  const trend = last && prev ? trendInfo(prev.value, last.value, last.unit) : null;
   async function handleSave() {
     const raw = parseResultValue(value);
     if (raw === null || !date) return;
@@ -1311,7 +1299,6 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // `allInsights` (comportement historique, famille de profil uniquement).
   const qualityFilteredInsights = activeQuality ? filteredCardInsights : allInsights;
   const verdict = buildVerdict(qualityFilteredInsights);
-  const { weak, strong } = splitByStrength(qualityFilteredInsights);
   // Profil de vitesse et endurance de force dans Recommandations, pas des cartes à part (2026-09,
   // suite) — ce sont de vrais verdicts (point fort/axe de travail), au même titre que les CardInsight
   // ci-dessus, juste construits sur un mécanisme réel-vs-attendu plutôt qu'une norme de population.

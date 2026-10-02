@@ -100,6 +100,17 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
   );
 }
 
+/* Les 4 façons de créer un programme, sans le tiroir autour (2026-10-02) : réutilisées telles quelles
+   par l'état vide de la page Programmes, pour ne pas obliger à passer par « + Nouveau ». */
+export function ProgramCreateOptions({ onGenerate, onImport, onTemplate, onBlank }: Pick<Props, "onGenerate" | "onImport" | "onTemplate" | "onBlank">) {
+  const handlers = { generate: onGenerate, import: onImport, template: onTemplate, blank: onBlank };
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      {OPTIONS.map(o => <CreateOptionCard key={o.key} icon={o.icon} label={o.label} sub={o.sub} onClick={handlers[o.key]} />)}
+    </div>
+  );
+}
+
 function CreateOptionCard({ icon, label, sub, onClick }: { icon: string; label: string; sub: string; onClick: () => void }) {
   return (
     <button

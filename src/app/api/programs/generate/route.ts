@@ -2539,9 +2539,6 @@ function selectBmx(n: number): Archetype[] {
 // simulation de course. "Renfo Stations" classé "volume" (pas "intensite", travail de stations à
 // effort géré, pas un 1RM) pour éviter que Cardio Machines et Renfo soient tous les deux au
 // palier dur et adjacents dans la rotation.
-const HYROX_CARDIO_COURSE: Archetype = { name: "Cardio Course", type: "volume", exercises: [
-  "Endurance fondamentale course — 40 min", "Fractionné 1km allure course — 5×1km (récup 3 min)",
-]};
 // Révisé pour matcher exactement les 4 séances décrites sur la page WordPress du programme
 // ("endurance fonctionnelle, force et conditioning, simulation de stations, et run long") —
 // remplace l'ancien découpage "Cardio Course/Cardio Machines/Renfo Stations/Simulation" qui

@@ -9,7 +9,7 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
 import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { parseAndApply } from "@/lib/loadAdjust";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { WELLNESS_RAMP } from "@/lib/wellness";

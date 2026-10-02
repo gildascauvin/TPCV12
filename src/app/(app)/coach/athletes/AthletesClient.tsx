@@ -6,7 +6,6 @@ import { buildAthleteFixture, buildTestFixture } from "@/lib/sandboxFixtures";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
-import { format, addDays, subDays } from "date-fns";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
@@ -152,8 +151,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [signatures, setSignatures] = useState(initialSignatures);
-  const [trends, setTrends] = useState(initialTrends);
-  const [trendInsights, setTrendInsights] = useState(initialTrendInsights);
   const [lastTests] = useState(initialLastTests);
   /* Tests d'exemple côté coach (2026-10-01, même règle que /conseils) : un sportif sans aucun test
      affiche l'exemple tant que le coach n'a pas choisi d'ajouter son 1er test. Jamais en sandbox. */
@@ -201,10 +198,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     if (sandboxMode) return;
     const res = await fetch(`/api/coach/athletes?date=${date}`);
     if (res.ok) {
-      const { signatures: s, trends: t, trendInsights: ti } = await res.json();
+      const { signatures: s } = await res.json();
       setSignatures(s);
-      setTrends(t);
-      setTrendInsights(ti);
     }
   }
 

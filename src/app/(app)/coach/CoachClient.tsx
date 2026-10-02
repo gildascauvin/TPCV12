@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import posthog from "posthog-js";
-import { format, addDays, subDays, startOfWeek } from "date-fns";
+import { format, addDays, startOfWeek } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView } from "@/lib/coachSessions";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
@@ -147,7 +147,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const [inviteError, setInviteError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const [inviteCode, setInviteCode] = useState<string | null>(initialInviteCode);
 
   // Barre de filtre sportifs persistante (2026-09-24, redesign) — hydratée après montage (localStorage,
   // même précaution SSR que reviewedIds ci-dessus) plutôt qu'au useState initial. Écrite/lue via la

@@ -7,12 +7,10 @@
    plutôt que de dupliquer la logique de rendu. Comportement/formules 100% inchangés, seul
    l'emplacement dans l'UI change. */
 
-import { useState } from "react";
-import ShareButton from "@/components/sessions/ShareButton";
 import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import IndexCards, { type ExtraIndexCard } from "@/components/conseils/IndexCards";
 import { ExampleNote } from "@/components/conseils/MetricChart";
-import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
+import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
 import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_BANDS, aggregateFor, type MetricKey, type MetricGroup } from "@/lib/metricCards";
 import AggregateGauge from "@/components/conseils/AggregateGauge";

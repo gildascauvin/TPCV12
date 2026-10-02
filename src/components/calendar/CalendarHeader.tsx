@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   format, addDays, startOfWeek, subDays, addMonths, subMonths,
-  startOfMonth, endOfMonth,
+  startOfMonth,
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useBreakpoint } from "@/hooks/useBreakpoint";

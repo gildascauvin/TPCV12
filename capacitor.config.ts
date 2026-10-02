@@ -14,9 +14,9 @@ const config: CapacitorConfig = {
     cleartext: serverUrl.startsWith("http://"),
   },
   /* "always" : iOS décale la page sous la barre d'état et au-dessus de la barre d'accueil, sans
-     avoir à gérer les safe areas dans chaque page de l'app web. Fond assorti à la page (#f1f0ee)
-     pour que la bande sous l'heure ne se voie pas. */
-  backgroundColor: "#f1f0ee",
+     avoir à gérer les safe areas dans chaque page de l'app web. Fond assorti au fond sombre de
+     l'app (#070a0d, 2026-10-02) pour que la bande sous l'heure ne se voie pas. */
+  backgroundColor: "#070a0d",
   ios: {
     contentInset: "always",
   },

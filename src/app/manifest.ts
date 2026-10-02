@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Ton espace d'entraînement intelligent",
     start_url: "/today",
     display: "standalone",
-    background_color: "#f1f0ee",
-    theme_color: "#d44000",
+    background_color: "#070a0d",
+    theme_color: "#070a0d",
     orientation: "portrait",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },

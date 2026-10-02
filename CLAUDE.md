@@ -4650,3 +4650,10 @@ POC : https://claude.ai/artifact/6aJZAyCz7c1gi5DVb4P5MF
 
 ### Divers
 - Fond des pages de l'app sombre (`#070a0d` sur html/body dans `(app)/layout.tsx`) : plus de bande grise au rebond du scroll.
+
+## Nettoyage, fond sombre système, état vide Programmes (2026-10-02, suite)
+
+- **Code mort retiré** (~730 lignes, 22 fichiers) : fichiers orphelins `ViewToggleButton`, `ReviewCompleteModal`, `AdjustSessionModal`, `SessionCard`, `SectionTabs` ; dans `OnboardingFlow.tsx`, les étapes `wizard_*` et `paywall_*` (plus aucun parcours n'y passe depuis la checklist), leurs états/effets/fonctions, `WEAKNESSES_BY_SPORT`, `WizardHero` ; `COACH_PAGE_BG` ; imports/variables inutilisés partout (`tsc --noUnusedLocals` propre hors image OG). Reste volontairement : le prop `wizardHero` des composants création/import/bibliothèque, plus jamais passé (inoffensif).
+- **Fond sombre sous l'heure** : `themeColor` et manifest en `#070a0d` ; app iOS : `backgroundColor` Capacitor `#070a0d` + texte de barre d'état blanc (`UIStatusBarStyleLightContent`, `UIViewControllerBasedStatusBarAppearance=false`). Build iOS 1.0 (5).
+- **Programmes sans programme** : la page montre directement les 4 façons de créer (`ProgramCreateOptions`, extrait de `ProgramCreatePicker`). Fond clair de la page étendu sous la marge de la nav (seule page restée claire).
+- **RPE dans la carte séance** : pas de 2e jauge sur la séance qui porte la décision (/today, Coach Control) ; la jauge de décision démarre sur le prévu. Même règle qu'au Planning.

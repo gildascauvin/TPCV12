@@ -143,9 +143,6 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     if (step > 0) setStep((s) => s - 1);
   }
 
-  const negativeCount = behaviors.filter(b => NEGATIVE_BEHAVIORS.some(n => n.key === b)).length;
-  const positiveCount = behaviors.filter(b => POSITIVE_BEHAVIORS.some(p => p.key === b)).length;
-  const penalty = Math.min(negativeCount * 3, 15);
 
   /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
      ProgramCriteriaModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx — "tout le wizard doit

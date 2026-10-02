@@ -91,7 +91,7 @@ export function DraggableExerciseLine({ sessionId, index, text, originalText, un
   originalText?: string;
 }) {
   const dragId = `ex:${sessionId}:${index}`;
-  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", sessionId, index } });
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", sessionId, index } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", sessionId, index } });
   const changed = originalText !== undefined && originalText !== text;
   return (

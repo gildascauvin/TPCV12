@@ -23,7 +23,7 @@ import type { LoadContext } from "@/lib/loadRule";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
-import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -77,7 +77,7 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isMd, isLg } = useBreakpoint();
+  const { isMd } = useBreakpoint();
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
@@ -142,7 +142,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
-  const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
   const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
   // Tous les assignments actifs du sportif (il peut en enchaîner plusieurs dans le futur) —
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation),
@@ -178,7 +177,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     if (picked?.programs) {
       const prog = (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) as Program;
       setActiveProgram(prog);
-      setActiveAssignmentId(picked.id);
       setActiveProgramStartDate(picked.start_date);
       const startDate = new Date(picked.start_date + "T12:00:00");
       const diffMs = Date.now() - startDate.getTime();
@@ -187,7 +185,6 @@ export default function WeekClient({ userId, userName, initialSessions, initialW
     } else {
       setActiveProgram(null);
       setActiveProgramWeek(-1);
-      setActiveAssignmentId(null);
       setActiveProgramStartDate(null);
     }
   }

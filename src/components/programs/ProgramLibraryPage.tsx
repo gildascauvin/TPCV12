@@ -4,17 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Program, CoachAthlete, ProgramAssignment } from "@/types";
 import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
-import ProgramCreatePicker from "./ProgramCreatePicker";
+import ProgramCreatePicker, { ProgramCreateOptions } from "./ProgramCreatePicker";
 import ProgramLibraryBrowser from "./ProgramLibraryBrowser";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
 import { programSportEmoji } from "@/lib/sportCategories";
 
-const FOCUS_LABELS: Record<string, string> = {
-  mixte: "Mixte", technique: "Technique", volume: "Volume", intensite: "Intensité",
-  competition: "Compétition", combat: "Combat", autre: "Autre",
-};
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 function weekAvgRpes(program: Program): number[] {
@@ -380,7 +376,9 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   /* ─── Library list (pleine page) ─── */
   return (
     <div style={standalone
-      ? { background: "#f1f0ee" }
+      /* Fond clair étendu sous la marge réservée à la navigation (même procédé que les autres pages),
+         sinon le fond sombre de l'app apparaît en bas. */
+      ? { background: "#f1f0ee", minHeight: "100vh", marginBottom: -132, paddingBottom: 132 }
       : { position: "fixed", inset: 0, background: "#f1f0ee", zIndex: 2147483100, display: "flex", flexDirection: "column" }
     }>
       {/* Topbar — sticky (pas fixed) en standalone pour rester dans le flux normal de la page,
@@ -415,10 +413,16 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>
         ) : programs.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>📚</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>Aucun programme</div>
-            <div style={{ fontSize: 13, color: "#8a8f94" }}>Crée ton premier programme avec le bouton "+ Nouveau".</div>
+          /* Aucun programme : les 4 façons d'en créer un, directement (2026-10-02). */
+          <div style={{ maxWidth: 520, margin: "8px auto 0" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 4 }}>Crée ton premier programme</div>
+            <div style={{ fontSize: 13.5, color: "#62686e", marginBottom: 16 }}>Choisis comment tu veux démarrer.</div>
+            <ProgramCreateOptions
+              onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
+              onImport={() => setStep({ type: "criteria", mode: "import" })}
+              onTemplate={() => setStep({ type: "library" })}
+              onBlank={() => createBlankProgram()}
+            />
           </div>
         ) : (
           <>

@@ -43,7 +43,6 @@ export async function POST(req: Request) {
 
   if (action === "update" || action === "complete") {
     const updateData = action === "complete" ? { done: true, ...data } : data;
-    const table = isReal ? "sessions" : "coach_sessions";
 
     // For real athletes, verify the session belongs to this athlete
     if (isReal) {

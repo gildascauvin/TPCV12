@@ -230,7 +230,6 @@ export function computeDecisionCard(params: {
   deviceNote?: string | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
-  const coach = params.perspective === "coach";
 
   /* Signal chronique — ACWR/monotonie/contrainte (Foster, 7j) + tendance Fitness/Forme (EWMA 42j) —
      100% dérivé de l'historique de séances, ZÉRO recouvrement avec le wellness du jour (déjà géré

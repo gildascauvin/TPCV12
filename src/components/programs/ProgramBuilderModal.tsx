@@ -85,7 +85,7 @@ function DraggableProgramSession({ day, sIdx, session, onClick, badgeOverride, g
 
 function DraggableProgramExercise({ day, sIdx, exIdx, text, adjustedText }: { day: string; sIdx: number; exIdx: number; text: string; adjustedText?: string }) {
   const dragId = `ex:${day}:${sIdx}:${exIdx}`;
-  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
   const changed = adjustedText !== undefined && adjustedText !== text;
   return (
