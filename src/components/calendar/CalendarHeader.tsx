@@ -10,6 +10,7 @@ import { fr } from "date-fns/locale";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
+import ActivityPill from "@/components/layout/ActivityPill";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 export type ViewMode = "week" | "month";
@@ -150,9 +151,28 @@ export default function CalendarHeader({
   const triggerWrapRef = useRef<HTMLDivElement>(null);
   const triggerBtnRef = useRef<HTMLButtonElement>(null);
   const popupNodeRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Largeur laissée de chaque côté de la date centrée : la pilule d'activité s'y adapte (texte
+  // tronqué, puis badge seul) plutôt que de passer sous la date.
+  const [sideRoom, setSideRoom] = useState<number | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current, date = triggerWrapRef.current;
+    if (!row || !date) return;
+    const measure = () => {
+      const cs = getComputedStyle(row);
+      const inner = row.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      setSideRoom(Math.floor((inner - date.offsetWidth) / 2) - 10);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    ro.observe(date);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     setCurrentDate(new Date(selectedDate + "T12:00:00"));
@@ -253,7 +273,8 @@ export default function CalendarHeader({
   const label = mode === "title"
     ? title ?? ""
     : mode === "day"
-    ? cap(format(currentDate, "EEE d MMM", { locale: fr }))
+    // Sans le mois sur mobile (2026-10-03) : laisse la place à la pilule d'activité complète.
+    ? cap(format(currentDate, isMd ? "EEE d MMM" : "EEE d", { locale: fr }))
     : viewMode === "month"
     ? cap(format(currentDate, "MMM", { locale: fr }))
     : weekRangeLabel(weekStart);
@@ -331,6 +352,7 @@ export default function CalendarHeader({
         paddingTop: 8,
       }}>
       <div
+        ref={rowRef}
         className="relative flex items-center px-4 pb-3 pt-[14px] gap-2"
         style={{ maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined }}
       >
@@ -343,15 +365,25 @@ export default function CalendarHeader({
             display: "flex", alignItems: "center", gap: 8,
           }}
         >
+          {/* Capsule compacte (2026-10-03, POC poc-element-activation-v5.html) : flèches et date dans
+              une seule pilule, pour laisser la place au profil à gauche et à la pilule d'activité à
+              droite sans décentrer la date. */}
+          <div style={{
+            display: "flex", alignItems: "center", height: 36, borderRadius: 999,
+            background: mode === "title" ? "transparent" : "rgba(255,255,255,.08)",
+            border: mode === "title" ? "none" : "1px solid rgba(255,255,255,.14)",
+          }}>
           {mode !== "title" && (
-            <button onClick={prevPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>‹</button>
+            <button onClick={prevPeriod} aria-label="Précédent" style={{ width: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 17, cursor: "pointer" }}>‹</button>
           )}
           <button
             ref={triggerBtnRef}
             onClick={toggleCalendar}
             disabled={!hasPopup}
-            className="text-[16px] font-black tracking-[0.02em] text-white px-2 h-[32px] rounded-[8px]"
-            style={{ background: hasPopup ? "#1a1a1a" : "transparent", cursor: hasPopup ? "pointer" : "default", whiteSpace: "nowrap" }}
+            style={{
+              fontFamily: "var(--font-mono), monospace", fontSize: mode === "title" ? 16 : 13, fontWeight: 800, color: "#fff",
+              padding: "0 4px", height: "100%", background: "transparent", cursor: hasPopup ? "pointer" : "default", whiteSpace: "nowrap",
+            }}
           >
             {label}
           </button>
@@ -409,8 +441,9 @@ export default function CalendarHeader({
             document.body
           )}
           {mode !== "title" && (
-            <button onClick={nextPeriod} className="w-[32px] h-[32px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#202020" }}>›</button>
+            <button onClick={nextPeriod} aria-label="Suivant" style={{ width: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,.6)", fontSize: 17, cursor: "pointer" }}>›</button>
           )}
+          </div>
           {showTodayBtn && (
             <button
               onClick={goToday}
@@ -425,10 +458,9 @@ export default function CalendarHeader({
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, width: "100%" }}>
-          {/* Checklist d'onboarding (2026-10-01) : à gauche, jusqu'à ce que tout soit fait. */}
-          <div style={{ marginRight: "auto", display: "flex" }}><OnboardingChecklist /></div>
-          {extraControls}
+        {/* Profil + checklist à gauche, pilule d'activité à droite (2026-10-03). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 40 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
           {onProfileClick && (
             <button
               onClick={onProfileClick}
@@ -448,6 +480,13 @@ export default function CalendarHeader({
               </svg>
             </button>
           )}
+          {/* Checklist d'onboarding à côté du profil (2026-10-03), jusqu'à ce que tout soit fait. */}
+          <OnboardingChecklist />
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
+            {extraControls}
+            <ActivityPill room={sideRoom} />
+          </div>
         </div>
       </div>
     </header>

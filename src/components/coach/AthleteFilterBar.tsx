@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import type { CoachAthlete } from "@/types";
 
 /* Barre de filtre sportifs — persistante entre les onglets coach (2026-09-24, redesign inspiré du
@@ -10,6 +11,8 @@ import type { CoachAthlete } from "@/types";
    des 2 pages n'est montée en même temps, un contexte global n'aurait rien à partager). */
 
 export const COACH_ATHLETE_FILTER_KEY = "coach_athlete_filter";
+/** Émis à chaque changement de sélection : la pilule d'activité du header suit le sportif filtré. */
+export const COACH_ATHLETE_FILTER_EVENT = "tpc:coach-athlete-filter";
 
 export function useCoachAthleteFilterStorage() {
   function read(): string | null {
@@ -21,6 +24,7 @@ export function useCoachAthleteFilterStorage() {
       if (id) localStorage.setItem(COACH_ATHLETE_FILTER_KEY, id);
       else localStorage.removeItem(COACH_ATHLETE_FILTER_KEY);
     } catch {}
+    window.dispatchEvent(new Event(COACH_ATHLETE_FILTER_EVENT));
   }
   return { read, write };
 }
@@ -37,7 +41,13 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
      identique sur CalendarHeader.tsx pour le pourquoi. */
   contentMaxWidth?: number;
 }) {
+  const pathname = usePathname() ?? "";
+  const router = useRouter();
   if (athletes.length === 0) return null;
+  // Inviter toujours visible à droite (2026-10-03) : le geste d'acquisition côté coach, qui n'a plus
+  // le "+" de la nav. Ouvre l'invitation sur la page Sportifs (?quickadd=invite), sandbox comprise.
+  const sandboxBase = pathname.match(/^\/sandbox\/coach/)?.[0];
+  const inviteHref = `${sandboxBase ? `${sandboxBase}/athletes` : "/coach/athletes"}?quickadd=invite`;
 
   /* Toujours la liste complète (2026-09-24, retour explicite de Gildas : "plutôt qu'avoir un bouton
      'équipe' quand on a un sportif sélectionné, je veux que la liste soit toujours visible, c'est
@@ -61,8 +71,9 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
       borderBottom: "1px solid rgba(255,255,255,.08)",
       padding: "12px 16px",
     }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined }}>
       <div style={{
-        display: "flex", gap: 8, overflowX: "auto", maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined,
+        display: "flex", gap: 8, overflowX: "auto", flex: 1, minWidth: 0,
         scrollbarWidth: "none" as const,
       }}>
         <button
@@ -105,6 +116,17 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
             </button>
           );
         })}
+      </div>
+      <button
+        onClick={() => router.push(inviteHref)}
+        style={{
+          flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6,
+          padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 800, fontFamily: "inherit",
+          background: "transparent", color: "#ff8a55", border: "1.5px dashed rgba(255,138,85,.6)",
+        }}
+      >
+        + Inviter
+      </button>
       </div>
     </div>
   );

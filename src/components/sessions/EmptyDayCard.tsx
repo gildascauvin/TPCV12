@@ -29,13 +29,13 @@ export default function EmptyDayCard({ onAddFree, perspective = "athlete", inlin
       </div>
       <div style={{ fontSize: inline ? 11 : 12, color: "#62686e", marginBottom: 12, lineHeight: 1.45 }}>{hint}</div>
       <button type="button" onClick={e => { e.stopPropagation(); onAddFree(); }}
-        style={{ width: "100%", height: inline ? 32 : 46, borderRadius: inline ? 8 : 16, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: inline ? 12 : 14, fontWeight: 800, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+        style={{ width: "100%", height: inline ? 32 : 46, borderRadius: 12, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: inline ? 12 : 14, fontWeight: 800, color: "#fff", background: "linear-gradient(180deg,#f04a08,#d44000)", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
         + Ajouter une séance
       </button>
       {onProgram && (
         <div style={{ textAlign: "center", marginTop: 10 }}>
           <button type="button" onClick={e => { e.stopPropagation(); onProgram(); }} style={{ border: "none", background: "none", cursor: "pointer", color: "#8a8f94", fontSize: inline ? 10.5 : 12, fontWeight: 700, textDecoration: "underline", fontFamily: "inherit" }}>
-            Ou démarre un programme pour toutes tes semaines
+            Ou démarrer un programme
           </button>
         </div>
       )}

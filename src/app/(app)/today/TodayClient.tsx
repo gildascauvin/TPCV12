@@ -236,7 +236,7 @@ function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderEx
             <button
               onClick={() => onStart(session)}
               style={{
-                width: "100%", height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
+                width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
                 background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
               }}
             >
@@ -247,7 +247,7 @@ function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderEx
               data-tour="terminer-btn"
               onClick={() => onComplete(session)}
               style={{
-                width: "100%", height: 46, borderRadius: 16, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
+                width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
                 background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
               }}
             >
@@ -1133,7 +1133,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
                     style={{
                       border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-                      borderRadius: 24, padding: "9px 8px", textAlign: "center", fontSize: 11,
+                      borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
                       cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
                       transition: "all .15s",
                     }}

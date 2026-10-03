@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
-import { OPEN_QUICKADD } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import QuickAddSheet from "./QuickAddSheet";
 
 const athleteTabs = [
   {
@@ -49,6 +46,8 @@ const athleteTabs = [
     ),
   },
   {
+    // Remis le 2026-10-03 (retour de Gildas) : sans lui, les programmes n'étaient plus accessibles
+    // que depuis le tiroir de la pilule d'activité.
     href: "/programmes",
     label: "Programmes",
     shortLabel: "Prog.",
@@ -142,43 +141,13 @@ function sandboxHref(href: string, basePath: string) {
   return basePath + href.replace("/coach", "");
 }
 
-/* Bouton "+" central (2026-08-31) : ouvre un petit bottom sheet de routage rapide (Séance /
-   Programme, + Inviter un sportif côté coach). Chaque option navigue vers la page réelle avec
-   ?quickadd=session|program|invite, lue au montage par WeekClient.tsx/CoachPlanningClient.tsx
-   (séance/programme) et AthletesClient.tsx (invitation) pour ouvrir directement la bonne
-   modale — pas de state partagé entre BottomNav (layout) et ces pages, uniquement du routage.
-   "Inviter un sportif" a rejoint ce menu le 2026-09-26 (demande de Gildas), en remplacement des
-   CTA "+ Inviter des sportifs" qui vivaient en bas de /coach et /coach/athletes — ce commentaire
-   disait jusque-là l'inverse ("jamais 'Ajouter un sportif' ici, volontairement"). */
-function quickAddOptions(role: "athlete" | "coach", basePath?: string) {
-  const hrefFor = (target: string, quickAdd: string) =>
-    `${basePath ? sandboxHref(target, basePath) : target}?quickadd=${quickAdd}`;
-  const planningHref = role === "coach" ? "/coach/planning" : "/week";
-  const options = [
-    { label: "Ajouter une séance", icon: "📝", href: hrefFor(planningHref, "session") },
-    /* "Programmes" (2026-10-01, onboarding in-app) : ouvre la page Programmes elle-même (section
-       "Prêt à démarrer", programmes suivis, "+ Nouveau") plutôt que le seul picker de création. */
-    { label: "Programmes", icon: "📚", href: basePath ? sandboxHref(role === "coach" ? "/coach/programmes" : "/programmes", basePath) : (role === "coach" ? "/coach/programmes" : "/programmes") },
-  ];
-  if (role === "coach") {
-    options.push({ label: "Inviter un sportif", icon: "👥", href: hrefFor("/coach/athletes", "invite") });
-  }
-  return options;
-}
-
+/* Plus de "+" central ni d'onglet Programmes (2026-10-03, POC poc-element-activation-v5.html) : la
+   pilule d'activité du header (ActivityPill) porte désormais "Ajouter une séance" et l'accès aux
+   programmes. */
 export default function BottomNav({ role = "athlete", basePath }: Props) {
   const pathname = usePathname();
   const { isMd } = useBreakpoint();
   const tabs = role === "coach" ? coachTabs : athleteTabs;
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  // Étape "Construis ton entraînement" de la checklist d'onboarding : ouvre ce même menu.
-  useEffect(() => {
-    const open = () => setQuickAddOpen(true);
-    window.addEventListener(OPEN_QUICKADD, open);
-    return () => window.removeEventListener(OPEN_QUICKADD, open);
-  }, []);
-  const leftTabs = tabs.slice(0, 2);
-  const rightTabs = tabs.slice(2);
 
   function renderTab(tab: (typeof tabs)[number]) {
     const href = basePath ? sandboxHref(tab.href, basePath) : tab.href;
@@ -194,8 +163,7 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
       ? (tab.matchExact ? pathname === href : pathname.startsWith(href))
       : (pathname === href || pathname.startsWith(href + "/"));
     const tourId = "tourId" in tab ? tab.tourId : undefined;
-    // Libellé plus court sur mobile pour ne jamais tronquer (ex. "Programmes" → "Prog.") — absent
-    // pour les tabs qui n'en ont pas besoin (leur label tient déjà en entier sur mobile).
+        // Libellé court sur mobile pour ne jamais tronquer ("Programmes" → "Prog.").
     const label = !isMd && "shortLabel" in tab && tab.shortLabel ? tab.shortLabel : tab.label;
     return (
       <Link
@@ -207,110 +175,65 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          // minWidth:0 nécessaire pour que la colonne 1fr respecte réellement 1/4 de l'espace —
-          // sans ça, la grille CSS refuse par défaut de réduire une piste sous le min-content de
-          // son contenu (le libellé le plus long ferait grossir SA colonne au-delà des 3 autres,
-          // recassant la symétrie/le centrage du "+" que cette grille égale doit garantir).
+          // minWidth:0 : une piste 1fr ne descend pas sous le min-content de son contenu sinon.
           minWidth: 0,
           gap: isMd ? 5 : 4,
-          padding: isMd ? "11px 8px" : "9px 3px",
-          color: active ? "#f04a08" : "#fff",
+          padding: isMd ? "10px 8px 7px" : "9px 3px 6px",
+          borderRadius: 999,
+          // Icône et texte toujours blancs ; l'onglet actif se repère à sa pastille orange translucide.
+          background: active ? "rgba(255,138,85,.12)" : "transparent",
+          color: "#fff",
           textDecoration: "none",
-          transition: "color 0.18s ease, opacity 0.18s ease",
-          opacity: active ? 1 : 0.68,
+          transition: "color 0.18s ease, background 0.18s ease",
         }}
       >
         {tab.icon(active)}
         <span style={{
-          fontSize: isMd ? 10 : 9,
-          fontWeight: 1000,
-          letterSpacing: isMd ? "0.08em" : "0.02em",
+          fontFamily: "var(--font-mono), monospace",
+          fontSize: isMd ? 10 : 9.5,
+          fontWeight: 700,
+          letterSpacing: "0.06em",
           textTransform: "uppercase",
           whiteSpace: "nowrap",
           lineHeight: 1,
         }}>
           {label}
         </span>
-        <span style={{
-          width: 16,
-          height: 2.5,
-          borderRadius: 2,
-          background: active ? "#f04a08" : "transparent",
-        }} />
       </Link>
     );
   }
 
   return (
-    <>
-      <div style={{
-        position: "fixed",
-        left: "50%",
-        bottom: "calc(18px + env(safe-area-inset-bottom,0px))",
-        transform: "translateX(-50%)",
-        /* Grille symétrique (2026-09-01, retour sur la version flex "content-sized" — cassait le
-           centrage du "+" et l'espacement égal entre icônes dès que les 2 tabs de gauche
-           n'avaient pas la même largeur cumulée que les 2 de droite, ex. "Aujourd'hui" contre
-           "Analyses"). 4 colonnes ÉGALES (1fr) pour les vrais tabs + une colonne fixe pour le "+"
-           : les 2 côtés font toujours la même largeur totale, donc le "+" reste géométriquement
-           centré et l'espacement entre icônes reste identique partout. Largeur responsive : 440
-           max sur mobile (assez pour loger "Aujourd'hui" sans tronquer), 640 sur desktop (largeur
-           historique de prod, redemandée explicitement — le mobile seul avait besoin d'être revu). */
-        width: isMd ? "min(640px,calc(100vw - 28px))" : "min(440px,calc(100vw - 24px))",
-        zIndex: 2147483000,
-        pointerEvents: "none",
+    <div style={{
+      position: "fixed",
+      left: "50%",
+      bottom: "calc(18px + env(safe-area-inset-bottom,0px))",
+      transform: "translateX(-50%)",
+      /* 4 onglets (2026-10-03) : la checklist d'onboarding vit à côté du profil, dans le header. */
+      width: isMd ? "min(560px,calc(100vw - 28px))" : "min(400px,calc(100vw - 24px))",
+      zIndex: 2147483000,
+      pointerEvents: "none",
+    }}>
+      <nav style={{
+        position: "relative",
+        width: "100%",
+        pointerEvents: "auto",
+        display: "grid",
+        gridAutoFlow: "column",
+        gridAutoColumns: "minmax(0, 1fr)",
+        gap: isMd ? 6 : 3,
+        borderRadius: 999,
+        padding: isMd ? "8px 14px" : "7px 8px",
+        // Charte de l'app (2026-10-03) : surface sombre translucide posée sur le fond cyan, comme
+        // les cartes (au lieu du dégradé gris neutre d'origine).
+        background: "rgba(13,18,23,.82)",
+        border: "1px solid rgba(255,255,255,.10)",
+        boxShadow: "0 18px 44px rgba(0,0,0,.40), inset 0 1px 0 rgba(255,255,255,.05)",
+        backdropFilter: "blur(18px)",
+        WebkitBackdropFilter: "blur(18px)",
       }}>
-        <nav style={{
-          position: "relative",
-          width: "100%",
-          pointerEvents: "auto",
-          display: "grid",
-          // Colonne du "+" en 1fr comme les 4 autres (était fixée à 58px, 2026-09-01) : même
-          // largeur allouée que les vrais tabs — le cercle (58px) restant plus petit que sa
-          // colonne, ça lui donne mécaniquement plus d'air à gauche/droite, demandé explicitement.
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: isMd ? 6 : 3,
-          borderRadius: 999,
-          padding: isMd ? "9px 16px" : "9px 10px",
-          background: "linear-gradient(180deg,#232323,#101010)",
-          border: "1px solid rgba(255,255,255,.10)",
-          boxShadow: "0 20px 50px rgba(0,0,0,.30)",
-          backdropFilter: "blur(18px)",
-          WebkitBackdropFilter: "blur(18px)",
-        }}>
-          {leftTabs.map(renderTab)}
-          <div aria-hidden="true" />
-          {rightTabs.map(renderTab)}
-          <button
-            type="button"
-            onClick={() => setQuickAddOpen(true)}
-            aria-label="Ajouter"
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%,-50%)",
-              width: 58,
-              height: 58,
-              borderRadius: "50%",
-              background: "linear-gradient(180deg,#f04a08,#d44000)",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </nav>
-      </div>
-      {quickAddOpen && (
-        <QuickAddSheet options={quickAddOptions(role, basePath)} onClose={() => setQuickAddOpen(false)} />
-      )}
-    </>
+        {tabs.map(renderTab)}
+      </nav>
+    </div>
   );
 }

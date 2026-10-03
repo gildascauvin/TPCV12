@@ -201,6 +201,8 @@ export function buildTestFixture(now: Date = new Date()): { merged: MergedTest[]
 interface AthleteSeed {
   name: string; sport: string; wellness: number; todayName: string; todayNotes: string; todayDiff: number;
   routineName: string; routineNotes: string; routineDiff: number;
+  /** Aucune séance à partir d'aujourd'hui (état "rien de prévu"). */
+  noUpcoming?: boolean;
 }
 
 // Wellness/difficulté du jour choisis pour garantir les 3 issues (Alléger/Maintenir/Surcharger),
@@ -223,7 +225,9 @@ const COACH_ATHLETE_SEEDS: AthleteSeed[] = [
     routineName: "WOD — Metcon", routineNotes: "Wall balls — 3×15@9kg\nWOD — Metcon — AMRAP 20 min\nÉchauffement — 10 min", routineDiff: 7,
   },
   {
-    name: "Thomas Morel", sport: "Football", wellness: 65,
+    // Sans séance à venir (2026-10-03) : montre l'état "rien de prévu" (pilule "Ajouter", carte du
+    // jour vide) dans la sandbox. Son historique reste, pour les graphes.
+    name: "Thomas Morel", sport: "Football", wellness: 65, noUpcoming: true,
     todayName: "Match amical", todayNotes: "Échauffement collectif — 15 min\nMatch amical — 90 min\nRetour au calme — 10 min", todayDiff: 6,
     routineName: "Séance technique", routineNotes: "Passes courtes — 20 min\nAteliers de finition — 20 min\nRondo — 15 min", routineDiff: 5,
   },
@@ -328,7 +332,7 @@ export function buildCoachFixture(now: Date = new Date()): CoachFixture {
     const dateStr = dstr(now, offset);
     const done = offset < 0;
 
-    const daySessions = COACH_ATHLETE_SEEDS.map((seed, i) => ({
+    const daySessions = COACH_ATHLETE_SEEDS.map((seed, i) => (offset >= 0 && seed.noUpcoming ? null : {
       id: sid("csession"), coach_id: coachId, athlete_id: athletes[i].id, date: dateStr,
       name: isToday ? seed.todayName : seed.routineName,
       notes: isToday ? seed.todayNotes : seed.routineNotes,
@@ -336,12 +340,12 @@ export function buildCoachFixture(now: Date = new Date()): CoachFixture {
       duration: done ? 55 : null,
       target_difficulty: isToday ? seed.todayDiff : seed.routineDiff,
       created_at: new Date().toISOString(),
-    }));
+    })).filter((x): x is NonNullable<typeof x> => x !== null);
 
     if (offset >= -14) sessionsByDate[dateStr] = daySessions;
 
-    daySessions.forEach((s, i) => {
-      const athleteId = athletes[i].id;
+    daySessions.forEach(s => {
+      const athleteId = s.athlete_id;
       sessionsHistoryByAthlete[athleteId].push({
         id: s.id, user_id: athleteId, date: s.date, name: s.name, notes: s.notes,
         duration: s.duration, rpe: s.rpe, done: s.done, target_difficulty: s.target_difficulty,

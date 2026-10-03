@@ -87,7 +87,15 @@ export default function OnboardingChecklist() {
     const key: OnboardingStepKey = step.key;
     if (key === "account") return;
     if (key === "form") go("/today?checkin=1");
-    else if (key === "build") window.dispatchEvent(new Event(OPEN_QUICKADD));
+    else if (key === "build") {
+      // Ouvre le tiroir "Planifier" de la pilule d'activité (header). Sur une page sans header
+      // (/programmes), on va sur l'accueil et la pilule s'ouvre à son montage.
+      if ((window as unknown as { __tpcActivityPill?: number }).__tpcActivityPill) window.dispatchEvent(new Event(OPEN_QUICKADD));
+      else {
+        try { sessionStorage.setItem("tpc_open_activity_pill", "1"); } catch { /* stockage indisponible */ }
+        go(role === "coach" ? "/coach" : "/today");
+      }
+    }
     else if (key === "adjust") go(role === "coach" ? "/coach?today=1" : "/today?today=1");
     else if (key === "invite") go("/coach/athletes?quickadd=invite");
     else if (key === "unlock") window.dispatchEvent(new CustomEvent(OPEN_PRIMING, { detail: { source: "checklist" } }));
@@ -95,23 +103,23 @@ export default function OnboardingChecklist() {
 
   return (
     <>
-      <button
-        ref={chipRef}
-        onClick={() => { setOpen(o => !o); posthog.capture("onboarding_checklist_toggled", { role, open: !open }); }}
-        aria-expanded={open}
-        style={{
-          display: "flex", alignItems: "center", gap: 6, height: 32, padding: "0 10px", borderRadius: 999,
-          background: "rgba(255,138,85,.14)", border: "1px solid rgba(255,138,85,.45)", color: "#ffb08a",
-          fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
-        }}
-      >
-        <svg width="18" height="18" viewBox="0 0 36 36" aria-hidden="true">
-          <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="5" />
-          <circle cx="18" cy="18" r="14" fill="none" stroke="#ff8a55" strokeWidth="5" strokeLinecap="round"
-            strokeDasharray={`${(doneCount / total) * 88} 88`} transform="rotate(-90 18 18)" />
-        </svg>
-        {doneCount}/{total}
-      </button>
+        <button
+          ref={chipRef}
+          onClick={() => { setOpen(o => !o); posthog.capture("onboarding_checklist_toggled", { role, open: !open }); }}
+          aria-expanded={open}
+          aria-label={`Démarrage ${doneCount}/${total}`}
+          style={{
+            position: "relative", width: 40, height: 40, borderRadius: "50%", flexShrink: 0, padding: 0, cursor: "pointer",
+            background: "rgba(255,138,85,.14)", border: "1px solid rgba(255,138,85,.45)", color: "#ffb08a",
+          }}
+        >
+          <svg width="38" height="38" viewBox="0 0 36 36" aria-hidden="true" style={{ position: "absolute", inset: 0 }}>
+            <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(255,255,255,.14)" strokeWidth="3" />
+            <circle cx="18" cy="18" r="14" fill="none" stroke="#ff8a55" strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={`${(doneCount / total) * 88} 88`} transform="rotate(-90 18 18)" />
+          </svg>
+          <span style={{ position: "relative", fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700 }}>{doneCount}/{total}</span>
+        </button>
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 2147483090, background: "rgba(4,6,8,.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }} />

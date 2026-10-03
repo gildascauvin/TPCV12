@@ -560,7 +560,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           onClick={e => { e.stopPropagation(); onAddSession(); }}
           style={{
             border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-            borderRadius: 16, padding: "9px 8px", textAlign: "center", fontSize: 11,
+            borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
             cursor: "pointer", fontWeight: 700, marginTop: topSession ? 8 : 12,
           }}
         >

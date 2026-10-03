@@ -164,7 +164,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           {onStart ? (
             <button
               onClick={() => onStart(session)}
-              style={{ width: "100%", height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+              style={{ width: "100%", height: 32, borderRadius: 12, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
               {liveLabel ? "Reprendre la séance" : "▶ Démarrer"}
             </button>
@@ -172,7 +172,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
             <button
               data-tour="terminer-btn"
               onClick={() => onComplete(session)}
-              style={{ width: "100%", height: 32, borderRadius: 8, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
+              style={{ width: "100%", height: 32, borderRadius: 12, fontSize: 11, fontWeight: 800, cursor: "pointer", border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
             >
               Terminer<span className="tour-lock">🔒</span>
             </button>
@@ -315,7 +315,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
           <div
             data-tour="add-session-btn"
             onClick={e => { e.stopPropagation(); onAddSession(dstr); }}
-            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 16, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
+            style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
           >
             + Ajouter une séance
           </div>

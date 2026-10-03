@@ -12,7 +12,7 @@ export interface OnboardingStep { key: OnboardingStepKey; label: string; done: b
 export interface OnboardingProgress { userId?: string; role: "athlete" | "coach"; steps: OnboardingStep[]; complete: boolean }
 
 export const ONBOARDING_REFRESH = "tpc:onboarding-refresh";
-/** Ouvre le "+" de la nav (étape "Construis ton entraînement"). */
+/** Ouvre le tiroir "Planifier" de la pilule d'activité du header (étape "Construis ton entraînement"). */
 export const OPEN_QUICKADD = "tpc:open-quickadd";
 /** Ouvre le priming de la page courante (étape "Débloque…", 1re décision). */
 export const OPEN_PRIMING = "tpc:open-priming";

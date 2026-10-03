@@ -4721,3 +4721,30 @@ POC : https://claude.ai/artifact/RdwmSKtebsstSN4P1bwNzK. `SportPicker.tsx` (comp
 - **Couche 2** : recherche instantanée dès 2 lettres (`searchSports`, nom puis synonymes, correspondance exacte d'abord), suggestions en flux sous le champ (rien de rogné dans un tiroir) ; dernière ligne « ✨ Analyser « … » avec l'IA ». Entrée = 1re suggestion. En séance, un sport de profil libre pré-remplit la recherche.
 - **Couche 3** : « + Plus de sports » ouvre le catalogue par famille (panneau du bas en mobile, fenêtre centrée en desktop) ; Rééducation et Concours ouvrent un 2e choix (zone, concours).
 - Points à travailler : `weaknessKeyFor()` = menu du sport s'il existe, sinon celui de la famille la plus proche (`guessSportChip`), sinon le générique.
+
+## Pilule d'activité dans le header (le programme comme "dispositif connecté") (2026-10-03)
+
+POC : `~/Downloads/poc-element-activation-v5.html` (itéré v1→v5 avec Gildas). Remplace le « + » central de la bottom nav. Commit de ce chantier.
+
+### Header (`CalendarHeader.tsx`)
+- Profil + checklist d'onboarding à gauche (checklist en rond compact 40 px, progression dans l'anneau), date compacte au centre (capsule unique ‹ date ›), **pilule d'activité** à droite.
+- La place de chaque côté de la date centrée est mesurée (`sideRoom`, ResizeObserver) : la pilule passe en version compacte puis, en dernier recours (< 72 px), en badge seul — la date ne se décentre jamais. En mobile, la date du jour perd le mois (« Ven. 3 »).
+
+### Pilule (`ActivityPill.tsx`)
+- **Actif = au moins une séance prévue à venir** (aujourd'hui compris, pas faite), programme ou pas — même design dans les 2 cas. Actif : emoji du sport + libellé court + « S3/8 » (programme) ou « 2/4 séances » + **voyant vert qui clignote** (`@keyframes activityLed`). Rien de prévu : pointillés + « Ajouter ».
+- Coach : vue Tous = « Équipe · N/M actifs » ; filtré sur un sportif (`COACH_ATHLETE_FILTER_EVENT`, émis par `useCoachAthleteFilterStorage().write`) = sa pilule.
+- **Emojis partout, pas de photos** (Gildas : photos illisibles à 40 px). Pas d'anneau.
+- Tiroir au style des tiroirs clairs (`ProgramCreatePicker`) : docké à droite 50vw / plein écran mobile, cartes blanches. Rien de prévu → « Ajouter une séance » (`/week?quickadd=session`, coach `/coach/planning?athlete=…&quickadd=session`) + « Choisir/Assigner un programme ». Actif → semaines du programme, Ajouter, Voir le planning, Voir le programme. Équipe → liste des sportifs (Ajouter/Voir), Inviter, Assigner.
+- L'étape « Construis ton entraînement » de la checklist ouvre ce tiroir (`OPEN_QUICKADD`) ; depuis une page sans header, passe par l'accueil (`sessionStorage tpc_open_activity_pill`).
+- PostHog : `activity_pill_opened {role, state}`, `activity_pill_action {action}`.
+
+### Données
+- `GET /api/activity/status?today=` → `ActivityStatus` (`src/lib/activityStatus.ts`, cache module, relu sur `ONBOARDING_REFRESH`, retour sur l'onglet, et changement de page seulement si > 30 s). Calcul pur partagé `buildActivitySubject()` (`src/lib/activitySubject.ts`). Coach : fusion `sessions` (inscrit) + `coach_sessions`, assignations par `athlete_id` ou `user_id`.
+- Libellés courts : `sportShortLabel()` (`src/lib/sportShortLabel.ts`), règles regex couvrant les valeurs réelles en base, validées par Gildas (« Force & puissance » gardé en entier, tronqué en « … »).
+- Sandbox : `src/lib/activitySandbox.ts` (import dynamique), mêmes fixtures que les pages sandbox ; le sportif suit « CrossFit — Base 8 Semaines » (S3/8) ; Thomas Morel (coach) n'a plus de séance à venir (`AthleteSeed.noUpcoming`) pour montrer l'état « Ajouter ».
+
+### Nav et autres
+- Bottom nav : Accueil · Planning · Performance · Programmes (plus de « + », `QuickAddSheet` supprimé), charte de l'app (surface sombre translucide, libellés mono, icônes et textes blancs, onglet actif = pastille orange translucide).
+- Coach : « + Inviter » toujours visible à droite de `AthleteFilterBar` (→ `/coach/athletes?quickadd=invite`).
+- Boutons des cartes séance (Démarrer, Terminer, « + Ajouter une séance », carte du jour vide) : rayon 12 partout. Carte du jour vide : « Ou démarrer un programme ».
+- `ProgramBanner` gardée pour l'instant (doublon assumé avec la pilule, à retirer si ses boutons ne servent pas).
