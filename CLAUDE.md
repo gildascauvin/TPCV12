@@ -4712,3 +4712,12 @@ Premières briques du chantier post-signup (POC https://claude.ai/artifact/GBoj2
 - **Titre du signup** (`account`) : pour un programme claimé, `sessionsComplement(sport)` (`sportCategories.ts`) nomme le sport : « Connecte tes séances de sprint à ThePerfClub » / « Connecte les séances de rugby de tes sportifs à ThePerfClub ». Vérifié sur les 61 libellés `programs.sport` officiels : familles regroupées (powerlifting, haltérophilie, course à pied, musculation, rééducation), tous les concours = « de prépa concours ». Sport non reconnu ou pas de claim : titre générique.
 
 Pas testé au clic par Claude (Gildas fait la QA) ; l'import et l'analyse de sport ne marchent qu'en prod (clé IA vide en local).
+
+## Sélecteur de sport partagé : 8 cartes, recherche, catalogue par famille (2026-10-03)
+
+POC : https://claude.ai/artifact/RdwmSKtebsstSN4P1bwNzK. `SportPicker.tsx` (components/programs) remplace les cartes + champ libre dans « Générer une séance » (`SessionQuickFill`) et « Générer un programme » (`ProgramCriteriaModal`). Le composant ne fait aucun appel : il remonte une valeur du catalogue (`onSelect`) ou un texte à analyser (`onAnalyze`, chaque parent garde son appel à `/api/sports/custom`).
+- **`src/lib/sportCatalog.ts`** : 41 entrées, une par contenu réellement différent du générateur ; `value` envoyée telle quelle à `/api/programs/generate`, vérifiée par script contre `getSportCategory()` (chaque entrée tombe sur son curriculum). Synonymes en `aka` (foot/rugby/basket… → Sports collectifs, boxe/MMA/judo → Arts martiaux & combat). Pas de Tennis/Padel (aucun contenu dédié, ils passent par l'IA).
+- **Couche 1** : 8 cartes (`TOP_SPORTS`), le sport du profil en tête s'il est hors de ces 8 (`findCatalogEntry`). « Endurance » s'affiche « Course à pied » partout (value inchangée).
+- **Couche 2** : recherche instantanée dès 2 lettres (`searchSports`, nom puis synonymes, correspondance exacte d'abord), suggestions en flux sous le champ (rien de rogné dans un tiroir) ; dernière ligne « ✨ Analyser « … » avec l'IA ». Entrée = 1re suggestion. En séance, un sport de profil libre pré-remplit la recherche.
+- **Couche 3** : « + Plus de sports » ouvre le catalogue par famille (panneau du bas en mobile, fenêtre centrée en desktop) ; Rééducation et Concours ouvrent un 2e choix (zone, concours).
+- Points à travailler : `weaknessKeyFor()` = menu du sport s'il existe, sinon celui de la famille la plus proche (`guessSportChip`), sinon le générique.

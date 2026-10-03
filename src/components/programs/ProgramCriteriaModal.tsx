@@ -1,5 +1,7 @@
 "use client";
 
+import SportPicker from "@/components/programs/SportPicker";
+import { weaknessKeyFor } from "@/lib/sportCatalog";
 import { useState, useRef } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -24,30 +26,6 @@ function fileToBase64(file: File): Promise<{ data: string; mediaType: string }> 
   });
 }
 
-// Wording/icônes repris du POC (theperfclub_poc_onboarding_program_fields_v1.html, SPORT_META) —
-// "Musculation / Force" du POC reste ici volontairement splitté en 2 cartes (Powerlifting +
-// Musculation/Hypertrophie) plutôt que fusionné à l'identique : la fusion du POC route TOUJOURS
-// vers powerlifting côté backend (getSportCategory() vérifie "hypertroph" AVANT "power"/"force",
-// mais "Musculation / Force" ne contient pas "hypertroph") — fusionner ferait perdre l'accès au
-// curriculum musculation (split Jambes/Dos/Pectoraux/Épaules/Bras) depuis cet écran, une
-// régression sur un fix explicite fait plus tôt dans ce même chantier (le curriculum musculation
-// était "invisible/impossible à tester depuis l'UI in-app" avant d'avoir sa propre entrée ici).
-const SPORT_META: { value: string; icon: string; label: string; sub: string }[] = [
-  { value: "Haltérophilie", icon: "🏋️", label: "Haltérophilie", sub: "Arraché, épaulé-jeté" },
-  { value: "Powerlifting", icon: "🦍", label: "Powerlifting", sub: "Squat, développé couché, soulevé de terre" },
-  { value: "Musculation / Hypertrophie", icon: "💪", label: "Musculation / Hypertrophie", sub: "Prise de masse, split par groupe musculaire" },
-  { value: "Fitness / CrossFit", icon: "🔥", label: "Fitness / CrossFit", sub: "Conditionnement croisé" },
-  { value: "Athlétisme & vitesse", icon: "🏃", label: "Athlétisme & vitesse", sub: "Sprint, demi-fond…" },
-  { value: "Sports collectifs", icon: "⚽", label: "Sports collectifs", sub: "Foot, rugby, hand…" },
-  // Libellé uniquement — `value` reste "Endurance" en interne (clé WEAKNESSES_BY_SPORT,
-  // référence de guessSportChip() pour aviron/natation/vélo/trail tapés en texte libre,
-  // compatible getSportCategory() côté serveur). Renommé car le contenu réel de cette
-  // catégorie est 100% course à pied (banque d'exercices vérifiée) — l'ancien sous-texte
-  // "Course, trail, natation, vélo…" promettait une couverture qu'un clic ne livre jamais.
-  // Natation/vélo/trail restent accessibles en texte libre (banques dédiées réelles).
-  { value: "Endurance", icon: "👟", label: "Course à pied", sub: "Fond, fractionné, sortie longue" },
-  { value: "Arts martiaux & combat", icon: "🥋", label: "Arts martiaux & combat", sub: "MMA, boxe, judo…" },
-];
 
 
 // Wording/icônes repris du POC (FOCUS_META) — pilote réellement ProgramFocus (shapeForCycle),
@@ -174,8 +152,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
   }
 
   function selectSport(s: string) {
-    const next = s === sport ? "" : s;
-    setSport(next);
+    setSport(s);
     setWeaknesses([]); // les clés de faiblesses sont spécifiques au sport précédent, plus valides
     setSportDescription("");
     setCustomSport(null);
@@ -184,8 +161,9 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
   // Retourne le résultat (pas seulement un effet de bord setState) : handleGenerate() doit pouvoir
   // l'utiliser immédiatement après l'avoir attendu, sans dépendre d'un re-render pour lire
   // customSport à jour (setState est asynchrone/batché).
-  async function analyzeSport(): Promise<CustomSportState> {
-    const description = sportDescription.trim();
+  async function analyzeSport(text?: string): Promise<CustomSportState> {
+    const description = (text ?? sportDescription).trim();
+    if (text !== undefined) { setSportDescription(text); setSport(""); }
     if (!description) { const r: CustomSportState = { status: "failed" }; setCustomSport(r); return r; }
     setAnalyzing(true);
     setWeaknesses([]);
@@ -234,7 +212,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
   // pertinent, sans changer `sport` lui-même (la génération réelle repose sur sportLabel, déjà
   // exacte via getSportCategory() côté serveur).
   const matchedChip = customSport?.status === "matched" ? guessSportChip(customSport.sportLabel) : null;
-  const activeWeaknessSport = sport || matchedChip || "";
+  const activeWeaknessSport = sport ? weaknessKeyFor(sport) : matchedChip || "";
 
   async function handleGenerate() {
     if (!canSubmit) return;
@@ -382,67 +360,14 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
               </div>
             ) : (
             <>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SPORT_META.map(s => (
-                <Pill key={s.value} active={sport === s.value} onClick={() => selectSport(s.value)} title={s.sub}>
-                  {s.icon} {s.label}
-                </Pill>
-              ))}
-              {/* Sport libre reconnu/généré — chip à part entière dans la même rangée que les 8
-                  cartes, jamais fusionné visuellement avec la carte générique la plus proche
-                  (matchedChip ne sert plus qu'au menu de faiblesses ci-dessous) : "Natation" doit
-                  se lire comme "Natation", pas comme "Endurance" (retour direct de Gildas — sinon
-                  ça ne fait pas personnalisé). Non cliquable : ce n'est pas un choix parmi d'autres,
-                  c'est le reflet du texte déjà tapé plus bas. */}
-              {(customSport?.status === "matched" || customSport?.status === "generated") && (
-                <div style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 14px", borderRadius: 24,
-                  border: "2px solid #2f9e44", background: "rgba(47,158,68,0.10)",
-                  color: "#2f9e44", fontWeight: 700, fontSize: 13,
-                }}>
-                  ✓ {customSport.sportLabel}
-                </div>
-              )}
-            </div>
-
-            {/* Champ libre toujours visible (2026-08-06, plus de badge "Autre" séparé à cliquer
-                pour le révéler — décision explicite de Gildas). Alternative aux cartes ci-dessus,
-                mutuellement exclusive (taper efface la carte sélectionnée et vice-versa via
-                selectSport). Le bouton "Analyser mon sport →" reste explicite ici (contrairement à
-                l'onboarding) : sport et faiblesses sont sur le même écran dans ce modal, la section
-                Faiblesses ci-dessous doit refléter les options spécifiques AVANT que l'utilisateur
-                les sélectionne — plier l'analyse dans "Générer le programme →" les laisserait
-                choisir des faiblesses génériques puis changer sous eux au clic final. */}
-            <div style={{ marginTop: 12 }}>
-              <textarea
-                value={sportDescription}
-                onChange={e => {
-                  setSportDescription(e.target.value);
-                  setCustomSport(null);
-                  if (sport) setSport("");
-                }}
-                placeholder="Ou décris ton sport (ex. escalade en salle, kite-surf, cirque…)"
-                rows={2}
-                style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", fontFamily: "inherit", fontSize: 13, resize: "vertical", marginBottom: 8, outline: "none" }}
-              />
-              <button
-                onClick={analyzeSport}
-                disabled={!sportDescription.trim() || analyzing}
-                style={{
-                  padding: "9px 16px", borderRadius: 12, border: "none",
-                  cursor: sportDescription.trim() && !analyzing ? "pointer" : "not-allowed",
-                  background: sportDescription.trim() && !analyzing ? "#171b1f" : "#e8e4df",
-                  color: sportDescription.trim() && !analyzing ? "#fff" : "#aaa",
-                  fontWeight: 800, fontSize: 12.5,
-                }}
-              >
-                {analyzing ? "Analyse en cours…" : "Analyser mon sport →"}
-              </button>
-              {customSport?.status === "failed" && (
-                <p style={{ fontSize: 11, color: "#c81e1e", marginTop: 6 }}>Analyse indisponible — contenu générique utilisé à la place.</p>
-              )}
-            </div>
+            <SportPicker
+              value={sport}
+              customLabel={customSport?.status === "matched" || customSport?.status === "generated" ? customSport.sportLabel : null}
+              analyzing={analyzing}
+              analysisFailed={customSport?.status === "failed" && !!sportDescription.trim()}
+              onSelect={selectSport}
+              onAnalyze={t => { analyzeSport(t); }}
+            />
             </>
             )}
           </Section>
