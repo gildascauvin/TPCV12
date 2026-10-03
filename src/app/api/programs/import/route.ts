@@ -7,39 +7,36 @@ const client = new Anthropic();
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"] as const;
 const SESSION_TYPES: SessionType[] = ["technique", "volume", "intensite", "recuperation", "test"];
 
-// Import d'un programme existant (photo ou texte collé) — 1re brique du chantier "import de
-// programme" (voir historique de conversation). Volontairement une SEULE semaine en sortie, même
-// si le document source en contient plusieurs : reconstruire fidèlement une périodisation multi-
-// semaines inconnue (durée réelle, progression voulue par son auteur) est jugé trop risqué —
-// décision explicite de Gildas. Une semaine suffit, "Reconduire" (déjà construit) gère la
-// projection sur les semaines suivantes. Mêmes 2 raisons pour lesquelles ce choix sert aussi de
-// test pour l'onboarding plus tard : week_preview n'a jamais eu besoin de plus d'une semaine.
+// Import d'un programme existant (photo ou texte collé). Transcrit exactement ce que le document
+// contient : une semaine s'il n'en décrit qu'une, plusieurs s'il en décrit plusieurs (décision de
+// Gildas 2026-10-03, remplace l'ancienne règle « une seule semaine »). Jamais de semaine inventée :
+// prolonger un programme d'une semaine reste le rôle de Reconduire.
 //
 // Tool-use plutôt que "réponds en JSON" en prose — même choix et même raison que
-// /api/sports/custom (2026-08-06) : le tool-use fait porter la conformité du schéma par l'API
-// elle-même, pas par un parsing regex sur du texte libre. Haiku (pas Sonnet) — tâche de
-// transcription fidèle, pas de raisonnement complexe, même arbitrage déjà tranché sur
-// /api/sports/custom.
+// /api/sports/custom (2026-08-06). Haiku : tâche de transcription, pas de raisonnement.
+const MAX_WEEKS = 16;
+
 const IMPORT_TOOL = {
   name: "soumettre_programme",
-  description: "Soumet UNE semaine de séances transcrites fidèlement depuis le document/texte fourni.",
+  description: "Soumet les séances transcrites fidèlement depuis le document/texte fourni, chacune rattachée à sa semaine.",
   input_schema: {
     type: "object" as const,
     properties: {
       sessions: {
         type: "array" as const,
         minItems: 1,
-        maxItems: 7,
+        maxItems: 7 * MAX_WEEKS,
         items: {
           type: "object" as const,
           properties: {
+            week: { type: "integer" as const, minimum: 1, maximum: MAX_WEEKS, description: "Numéro de la semaine du document où figure la séance (1 si le document ne décrit qu'une semaine)" },
             day: { type: "string" as const, enum: DAYS, description: "Jour de la semaine" },
             name: { type: "string" as const, description: "Nom de la séance tel qu'il apparaît dans le document (ex. \"Squat\", \"Push day\", \"Séance 1\")" },
             type: { type: "string" as const, enum: SESSION_TYPES, description: "Nature dominante de la séance" },
             target_difficulty: { type: "integer" as const, minimum: 1, maximum: 10, description: "Difficulté perçue estimée de la séance, sur 10" },
             notes: { type: "string" as const, description: "Exercices de la séance, une ligne par exercice séparée par des \\n, format \"Nom — SxR\" ou \"Nom — Sx R @ poids\" — reprend tel quel ce qui est écrit dans le document (noms, séries, reps, charges), jamais inventé ou complété" },
           },
-          required: ["day", "name", "type", "target_difficulty", "notes"],
+          required: ["week", "day", "name", "type", "target_difficulty", "notes"],
         },
       },
     },
@@ -51,7 +48,7 @@ const SYSTEM = `Tu es l'assistant d'import de programme de ThePerfClub. Un utili
 
 Règles strictes :
 - Ne transcris JAMAIS d'exercice, de série, de répétition ou de charge qui n'est pas explicitement présent dans le document. Un doute sur un chiffre illisible → laisse la ligne sans ce chiffre plutôt que de l'inventer.
-- Le document peut couvrir plusieurs semaines : choisis UNE SEULE semaine représentative (la première semaine complète et lisible) — ne fusionne jamais le contenu de plusieurs semaines dans une seule sortie.
+- Le document peut couvrir plusieurs semaines : transcris CHAQUE semaine qu'il décrit, avec son numéro (\"week\" = 1, 2, 3...), sans fusionner deux semaines. S'il ne décrit qu'une semaine, tout est en semaine 1. N'invente jamais de semaine : si le document dit seulement \"à répéter 6 semaines\" sans écrire les semaines suivantes, transcris uniquement la semaine écrite.
 - Si le document ne précise pas de jours explicites (ex. "Séance 1/2/3" sans date), répartis les séances sur la semaine en espaçant les jours d'entraînement (jamais deux séances d'affilée sans raison, sauf si le document le précise explicitement) — commence un lundi.
 - "target_difficulty" est ton estimation de la difficulté perçue de la séance (volume × intensité), pas une donnée du document sauf si elle y figure explicitement (RPE, %1RM élevé...).
 - "type" reflète la nature réelle de la séance (ex. une séance de repos actif/mobilité → "recuperation", un test de charge maximale → "test", le reste selon dominante technique/volume/intensité).`;
@@ -85,7 +82,7 @@ export async function POST(req: Request) {
   try {
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
+      max_tokens: 16000,
       system: SYSTEM,
       messages: [{ role: "user", content }],
       tools: [IMPORT_TOOL],
@@ -98,8 +95,8 @@ export async function POST(req: Request) {
     const input = toolUse.input as { sessions?: unknown[] };
     if (!Array.isArray(input.sessions) || !input.sessions.length) throw new Error("Aucune séance reconnue dans le document");
 
-    const week: WeekTemplate = {};
-    DAYS.forEach(d => { week[d] = []; });
+    const emptyWeek = (): WeekTemplate => { const w: WeekTemplate = {}; DAYS.forEach(d => { w[d] = []; }); return w; };
+    const weeks: WeekTemplate[] = [];
 
     for (const raw of input.sessions) {
       if (!raw || typeof raw !== "object") continue;
@@ -107,16 +104,21 @@ export async function POST(req: Request) {
       const day = typeof s.day === "string" && (DAYS as readonly string[]).includes(s.day) ? s.day : null;
       const name = typeof s.name === "string" ? s.name.trim() : "";
       if (!day || !name) continue;
+      const weekNo = typeof s.week === "number" ? Math.max(1, Math.min(MAX_WEEKS, Math.round(s.week))) : 1;
       const type: SessionType = typeof s.type === "string" && SESSION_TYPES.includes(s.type as SessionType) ? s.type as SessionType : "volume";
       const diff = typeof s.target_difficulty === "number" ? Math.max(1, Math.min(10, Math.round(s.target_difficulty))) : 5;
       const notes = typeof s.notes === "string" ? s.notes.trim() : "";
+      while (weeks.length < weekNo) weeks.push(emptyWeek());
       const session: SessionTemplate = { name, notes: notes || null, target_difficulty: diff, load: 2, type };
-      week[day].push(session);
+      weeks[weekNo - 1][day].push(session);
     }
 
-    if (!Object.values(week).some(arr => arr.length)) throw new Error("Reconstruction vide — aucune séance valide dans la sortie de l'outil");
+    // Une semaine sans aucune séance au milieu (numérotation sautée par le modèle) est retirée :
+    // on garde la suite des semaines réellement transcrites.
+    const filled = weeks.filter(w => Object.values(w).some(arr => arr.length));
+    if (!filled.length) throw new Error("Reconstruction vide — aucune séance valide dans la sortie de l'outil");
 
-    const template: ProgramTemplate = { weeks: [week] };
+    const template: ProgramTemplate = { weeks: filled };
     return NextResponse.json({ ok: true, template });
   } catch (err) {
     // Repli explicite — jamais d'écran cassé sur un échec Claude (timeout, refus d'appeler

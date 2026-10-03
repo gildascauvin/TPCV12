@@ -162,8 +162,9 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
         return;
       }
       const template = data.template as ProgramTemplate;
-      const days = IMPORT_DAYS.filter(d => (template.weeks[0]?.[d] ?? []).length > 0);
-      const meta: ProgramMeta = { sport: "Programme importé", level: NEUTRAL_LEVEL, focus: "mixte", days, duration: 4 };
+      const days = IMPORT_DAYS.filter(d => template.weeks.some(w => (w[d] ?? []).length > 0));
+      // duration = vraie longueur de l'import (ProgramLibraryPage enregistre weeks_count depuis le template).
+      const meta: ProgramMeta = { sport: "Programme importé", level: NEUTRAL_LEVEL, focus: "mixte", days, duration: template.weeks.length as ProgramMeta["duration"] };
       onGenerate(template, meta);
     } catch {
       setImportError("On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");

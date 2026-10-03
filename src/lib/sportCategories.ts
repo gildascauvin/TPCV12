@@ -189,3 +189,56 @@ export const WEAKNESSES_BY_SPORT: Record<string, { key: string; label: string }[
     { key: "recuperation", label: "Récupération" },
   ],
 };
+
+/* Complément « de <sport> » pour les phrases du type « tes séances de sprint » (titre du signup,
+   2026-10-03). Écrit pour les libellés `programs.sport` réels de la bibliothèque officielle, dans
+   l'ordre : le 1er motif qui matche gagne (les spécialisations avant leur famille). null = phrase
+   générique, jamais un complément deviné. */
+const SESSIONS_COMPLEMENT: [RegExp, string][] = [
+  [/sauts?/i, "de saut"],
+  [/sprint/i, "de sprint"],
+  [/trail/i, "de trail"],
+  [/course|marathon|10k|running/i, "de course à pied"],
+  [/triathlon/i, "de triathlon"],
+  [/halt[ée]ro/i, "d'haltérophilie"],
+  [/powerlifting/i, "de powerlifting"],
+  [/hyrox/i, "d'Hyrox"],
+  [/crossfit/i, "de CrossFit"],
+  [/cross-?training/i, "de cross-training"],
+  [/calisthenics/i, "de calisthenics"],
+  [/pliom/i, "de pliométrie"],
+  [/mobilit/i, "de mobilité"],
+  [/puissance|explosiv/i, "de musculation"],
+  [/muscu|hypertroph/i, "de musculation"],
+  [/football|foot\b/i, "de football"],
+  [/rugby/i, "de rugby"],
+  [/basket/i, "de basket"],
+  [/handball/i, "de handball"],
+  [/volley/i, "de volley"],
+  [/hockey/i, "de hockey"],
+  [/baseball/i, "de baseball"],
+  [/sport collectif/i, "de sport collectif"],
+  [/boxe/i, "de boxe"],
+  [/mma/i, "de MMA"],
+  [/judo/i, "de judo"],
+  [/combat/i, "de sport de combat"],
+  [/natation/i, "de natation"],
+  [/v[ée]lo|cyclisme/i, "de vélo"],
+  [/aviron/i, "d'aviron"],
+  [/ski/i, "de ski"],
+  [/voile/i, "de voile"],
+  [/golf/i, "de golf"],
+  [/padel/i, "de padel"],
+  [/tennis/i, "de tennis"],
+  [/[ée]quitation/i, "d'équitation"],
+  [/escalade/i, "d'escalade"],
+  [/bmx/i, "de BMX"],
+  [/gymnastique/i, "de gymnastique"],
+  [/gign|police|gendarmerie|pompier|arm[ée]e|tap\b|concours/i, "de prépa concours"],
+  [/r[ée][ée]ducation|prevention|pr[ée]vention/i, "de rééducation"],
+];
+
+export function sessionsComplement(sport: string | null | undefined): string | null {
+  if (!sport?.trim()) return null;
+  return SESSIONS_COMPLEMENT.find(([re]) => re.test(sport))?.[1] ?? null;
+}

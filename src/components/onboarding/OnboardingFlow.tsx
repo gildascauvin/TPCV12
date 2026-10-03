@@ -1,5 +1,7 @@
 "use client";
 
+import { programCover, DEFAULT_ONBOARDING_COVER } from "@/lib/programCovers";
+import { sessionsComplement } from "@/lib/sportCategories";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef } from "react";
 import posthog from "posthog-js";
@@ -354,6 +356,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [roleChosen, setRoleChosen] = useState(!!pendingData?.role);
   const [newUserId, setNewUserId] = useState<string | null>(null);
   const [claimedProgramName, setClaimedProgramName] = useState<string | null>(null);
+  // Couverture du programme claimé (page WP) pour le fond de value_intro ; null = image par défaut.
+  const [claimedCover, setClaimedCover] = useState<string | null>(null);
   /* Sportif→coach (2026-09-14, voir CLAUDE.md — remplace une 1re version "comme un programme
      claimé" du 13/09, simplifiée le lendemain pour ne plus dépendre d'un programme existant).
      Posés directement depuis ?athleteId=/&athleteName= dans l'URL (lien /register partagé par le
@@ -534,6 +538,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const claimed = !!claimId;
     setHasClaimedProgram(claimed);
     if (claimed) {
+      setClaimedCover(programCover(claimId));
       posthog.setPersonProperties({ onboarding_source: "program", claimed_program_id: claimId });
       posthog.capture("program_onboarding_start", { program_id: claimId });
       fetch(`/api/programs/${claimId}`)
@@ -551,6 +556,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                Bug trouvé en conditions réelles par Gildas, confirmé en base : la ligne `programs`
                correspondante n'existe tout simplement pas. */
             localStorage.removeItem("claim_program_id");
+            setClaimedCover(null);
             setHasClaimedProgram(false);
             return;
           }
@@ -565,6 +571,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         })
         .catch(() => {
           localStorage.removeItem("claim_program_id");
+          setClaimedCover(null);
           setHasClaimedProgram(false);
         });
     }
@@ -1269,7 +1276,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const content = (
       <>
         <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center" }}>
-          {role === "coach" ? "Connecte les séances de tes sportifs à ThePerfClub" : "Connecte tes séances à ThePerfClub"}
+          {(() => {
+            // Programme claimé : le sport est connu (fetch du claim), on le nomme. Sinon titre générique.
+            const comp = hasClaimedProgram ? sessionsComplement(sport) : null;
+            const of = comp ? ` ${comp}` : "";
+            return role === "coach" ? `Connecte les séances${of} de tes sportifs à ThePerfClub` : `Connecte tes séances${of} à ThePerfClub`;
+          })()}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "14px 16px", background: "#fff7f2", border: "1px solid rgba(212,64,0,.14)", borderRadius: 16 }}>
@@ -1500,12 +1512,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                     comportement `fetchPriority="high"`/`loading="eager"` d'origine (élément LCP
                     de cet écran, le 1er de l'onboarding). */}
                 <Image
-                  src="https://www.theperfclub.com/wp-content/uploads/2026/07/value-intro-BG.jpeg"
+                  src={claimedCover ?? DEFAULT_ONBOARDING_COVER}
                   alt=""
                   fill
                   priority
                   sizes="100vw"
-                  style={{ objectFit: "cover", objectPosition: "center 35%" }}
+                  style={{ objectFit: "cover", objectPosition: claimedCover ? "center" : "center 35%" }}
                 />
                 <div style={{ position: "absolute", left: 0, right: 0, top: colIsMd ? 72 : 56, padding: "0 20px", display: "flex", pointerEvents: "none" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", display: "flex", justifyContent: "flex-end" }}>

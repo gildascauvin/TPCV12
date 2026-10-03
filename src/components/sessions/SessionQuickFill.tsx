@@ -11,7 +11,9 @@ import { getSessionTemplates } from "@/lib/sessionTemplates";
    atterrit dans l'éditeur normal (nom, exercices, difficulté), tout reste modifiable.
    - Modèle : les séances des programmes de la bibliothèque officielle (/api/programs/library).
    - Importer : texte ou photo, même import que les programmes (/api/programs/import).
-   - Générer : la banque de séances du générateur (getSessionTemplates), par sport et intensité. */
+   - Générer : la banque de séances du générateur (getSessionTemplates), par sport et intensité.
+     Sport libre (2026-10-03) : un sport hors des 8 cartes s'écrit en texte et passe par
+     /api/sports/custom, exactement comme dans « Générer un programme » (ProgramCriteriaModal). */
 
 export type QuickMode = "model" | "import" | "generate";
 export type QuickFillResult = { name: string; notes: string; target_difficulty: number; source: QuickMode };
@@ -223,18 +225,48 @@ function ImportSession({ onPick }: { onPick: (r: QuickFillResult) => void }) {
 const DURATIONS = [{ k: "30 min", lines: 3 }, { k: "45 min", lines: 4 }, { k: "60 min", lines: 5 }, { k: "90 min", lines: 99 }];
 const INTENSITIES = [{ k: "Légère", diff: 3 }, { k: "Modérée", diff: 6 }, { k: "Dure", diff: 8 }];
 
+// Même état que ProgramCriteriaModal : "matched" = le texte tombe sur un curriculum existant,
+// "generated" = Claude a fourni exercices + points à travailler, "failed" = repli générique.
+type CustomSportState =
+  | { status: "matched"; sportLabel: string }
+  | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }>; sessionLabels?: Record<string, string> }
+  | { status: "failed" };
+
 /* Générer (2026-10-02) : passe par le VRAI générateur de programmes (même moteur, même biais par
    point à travailler que les programmes) sur un seul jour et 4 semaines — chaque semaine donne une
    séance de difficulté différente (MEV → surcharge → MRV → décharge) et porte la ligne ciblant le
    point choisi. On garde celle dont la difficulté est la plus proche de l'intensité demandée. Repli
    sur la banque de séances si l'appel échoue. */
 function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFillResult) => void }) {
-  const [sportId, setSportId] = useState<string | null>(guessSportChip(sport) ?? null);
+  const profileChip = guessSportChip(sport) ?? null;
+  // Sport du profil écrit en texte libre (hors des 8 cartes) : pré-rempli, jamais analysé d'office.
+  const profileFree = !profileChip && sport.trim() ? sport.replace(/^Autre\s*-\s*/i, "").trim() : "";
+  const [sportId, setSportId] = useState<string | null>(profileChip);
+  const [freeSport, setFreeSport] = useState(profileFree.toLowerCase() === "autre" ? "" : profileFree);
+  const [custom, setCustom] = useState<CustomSportState | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [dur, setDur] = useState("45 min");
   const [intensity, setIntensity] = useState("Modérée");
   const [weaknesses, setWeaknesses] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const options = WEAKNESSES_BY_SPORT[sportId ?? ""] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+  const matchedChip = custom?.status === "matched" ? guessSportChip(custom.sportLabel) : null;
+  const options = custom?.status === "generated" ? custom.weaknessOptions
+    : WEAKNESSES_BY_SPORT[sportId ?? matchedChip ?? ""] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+
+  async function analyze(): Promise<CustomSportState> {
+    const description = freeSport.trim();
+    if (!description) { const r: CustomSportState = { status: "failed" }; setCustom(r); return r; }
+    setAnalyzing(true); setWeaknesses([]);
+    let result: CustomSportState = { status: "failed" };
+    try {
+      const res = await fetch("/api/sports/custom", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ description }) });
+      const data = res.ok ? await res.json() : null;
+      if (data?.matched) result = { status: "matched", sportLabel: data.sportLabel };
+      else if (data?.exercises) result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta, sessionLabels: data.sessionLabels ?? undefined };
+    } catch { /* repli générique */ } finally { setAnalyzing(false); }
+    setCustom(result);
+    return result;
+  }
 
   function trim(notes: string, keepLast: boolean) {
     const lines = notes.split("\n").filter(Boolean);
@@ -245,13 +277,18 @@ function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFi
   async function run() {
     const target = INTENSITIES.find(i => i.k === intensity)!.diff;
     setBusy(true);
+    // Texte saisi mais pas encore analysé : on l'analyse avant de générer (filet, le bouton
+    // « Analyser » reste le chemin normal pour voir ses points à travailler).
+    const c = !sportId && freeSport.trim() ? (custom ?? await analyze()) : null;
+    const sportValue = sportId || (c && c.status !== "failed" ? c.sportLabel : freeSport.trim()) || sport || "";
     try {
       const res = await fetch("/api/programs/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sport: sportId ?? sport ?? "", level: "intermediaire", days: ["Mer"], duration: 4,
+          sport: sportValue, level: "intermediaire", days: ["Mer"], duration: 4,
           focus: intensity === "Dure" ? "intensite" : intensity === "Légère" ? "volume" : "mixte",
           weaknesses,
+          ...(c?.status === "generated" ? { customExercises: c.exercises, customWeaknessMeta: c.weaknessMeta, customSessionLabels: c.sessionLabels } : {}),
         }),
       });
       const data = res.ok ? await res.json() : null;
@@ -263,7 +300,7 @@ function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFi
         return;
       }
     } catch { /* repli ci-dessous */ } finally { setBusy(false); }
-    const bank = getSessionTemplates(sportId ?? sport ?? "");
+    const bank = getSessionTemplates(sportValue);
     const b = [...bank].sort((x, y) => Math.abs(x[2] - target) - Math.abs(y[2] - target))[0];
     onPick({ name: b[0], notes: trim(b[1], false).join("\n"), target_difficulty: target, source: "generate" });
   }
@@ -271,7 +308,17 @@ function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFi
     <div>
       <div style={label}>Sport</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-        {SPORT_CATEGORIES.map(c => <button key={c.id} onClick={() => { setSportId(c.id); setWeaknesses([]); }} style={chip(sportId === c.id)}>{c.icon} {c.id}</button>)}
+        {SPORT_CATEGORIES.map(c => <button key={c.id} onClick={() => { setSportId(c.id); setWeaknesses([]); setFreeSport(""); setCustom(null); }} style={chip(sportId === c.id)}>{c.icon} {c.id}</button>)}
+        {custom && custom.status !== "failed" && !sportId && <span style={chip(true)}>✓ {custom.sportLabel}</span>}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: -4, marginBottom: 12 }}>
+        <input value={freeSport} placeholder="Ou écris ton sport (ex. kitesurf)"
+          onChange={e => { setFreeSport(e.target.value); setCustom(null); setWeaknesses([]); if (e.target.value) setSportId(null); }}
+          onKeyDown={e => { if (e.key === "Enter" && freeSport.trim()) analyze(); }}
+          style={{ flex: 1, minWidth: 0, fontSize: 16, border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "9px 12px", fontFamily: "inherit", background: "#fff" }} />
+        {freeSport.trim() && !custom && (
+          <button onClick={analyze} disabled={analyzing} style={{ ...chip(false), opacity: analyzing ? 0.6 : 1, whiteSpace: "nowrap" }}>{analyzing ? "Analyse…" : "Analyser"}</button>
+        )}
       </div>
       <div style={label}>🎯 Points à travailler en priorité · 2 max</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
@@ -292,7 +339,7 @@ function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFi
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
         {INTENSITIES.map(i => <button key={i.k} onClick={() => setIntensity(i.k)} style={chip(intensity === i.k)}>{i.k}</button>)}
       </div>
-      <button onClick={run} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Génération…" : "Générer ma séance"}</button>
+      <button onClick={run} disabled={busy || analyzing} style={{ ...primary, opacity: busy || analyzing ? 0.6 : 1 }}>{busy ? "Génération…" : "Générer ma séance"}</button>
     </div>
   );
 }

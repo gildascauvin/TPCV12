@@ -137,7 +137,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     const res = await fetch("/api/programs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sport: meta.sport || null, level: meta.level, focus: meta.focus, weeks_count: meta.duration, sessions_per_week: meta.days.length, template }),
+      body: JSON.stringify({ name, sport: meta.sport || null, level: meta.level, focus: meta.focus, weeks_count: template.weeks.length, sessions_per_week: meta.days.length, template }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
