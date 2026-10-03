@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { hapticTick } from "@/lib/native";
 import type { AutoregDir } from "@/lib/autoregulation";
 
 const MIN = 1, MAX = 10;
@@ -63,15 +64,21 @@ export default function DecisionGauge({
     return Math.round(leftToDiff(left));
   }
 
+  // Vibration à chaque cran franchi, plus marquée en entrant dans la zone conseillée.
+  function pick(d: number) {
+    const enters = !noZone && d >= zoneLow && d <= zoneHigh && !inZone;
+    hapticTick(roundedValue, d, enters);
+    onChange(d);
+  }
   function handlePointerDown(e: React.PointerEvent) {
     if (readOnly) return;
     trackRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
-    onChange(diffFromClientX(e.clientX));
+    pick(diffFromClientX(e.clientX));
   }
   function handlePointerMove(e: React.PointerEvent) {
     if (readOnly || !dragging) return;
-    onChange(diffFromClientX(e.clientX));
+    pick(diffFromClientX(e.clientX));
   }
   function endDrag() { setDragging(false); }
 

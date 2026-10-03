@@ -1,5 +1,6 @@
 "use client";
 
+import { hapticTick } from "@/lib/native";
 import { useState } from "react";
 import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
 import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBaseline";
@@ -309,7 +310,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
               <input type="range" min={1} max={10} value={sleep} step={1}
-                onChange={(e) => setSleep(Number(e.target.value))}
+                onChange={(e) => { const n = Number(e.target.value); hapticTick(sleep, n); setSleep(n); }}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {sleep}
@@ -347,7 +348,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
               <input type="range" min={1} max={10} value={stress} step={1}
-                onChange={(e) => setStress(Number(e.target.value))}
+                onChange={(e) => { const n = Number(e.target.value); hapticTick(stress, n); setStress(n); }}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {stress}
@@ -370,7 +371,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
               <input type="range" min={1} max={10} value={recovery} step={1}
-                onChange={(e) => setRecovery(Number(e.target.value))}
+                onChange={(e) => { const n = Number(e.target.value); hapticTick(recovery, n); setRecovery(n); }}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {recovery}
@@ -455,7 +456,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
               <input type="range" min={1} max={10} value={motivation} step={1}
-                onChange={(e) => setMotivation(Number(e.target.value))}
+                onChange={(e) => { const n = Number(e.target.value); hapticTick(motivation, n); setMotivation(n); }}
                 style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
                 {motivation}

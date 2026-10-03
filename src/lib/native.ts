@@ -22,3 +22,11 @@ export function hideSplash() {
   if (!Capacitor.isNativePlatform()) return;
   import("@capacitor/splash-screen").then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 250 })).catch(() => {});
 }
+
+/* Cran d'une jauge ou d'un curseur (2026-10-03, Gildas : "des vibrations sur toutes les actions sur
+   les jauges") : une vibration légère à chaque changement de valeur entière, plus marquée en entrant
+   dans la zone conseillée. Rien si la valeur n'a pas changé (le pointeur bouge sans franchir de cran). */
+export function hapticTick(prev: number, next: number, enteredZone = false) {
+  if (Math.round(prev) === Math.round(next)) return;
+  haptic(enteredZone ? "medium" : "light");
+}

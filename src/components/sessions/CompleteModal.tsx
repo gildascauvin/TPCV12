@@ -1,5 +1,6 @@
 "use client";
 
+import { hapticTick } from "@/lib/native";
 import { useEffect, useState } from "react";
 import type { Session } from "@/types";
 import { computeFatigueImpact } from "@/lib/wellness";
@@ -140,7 +141,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           </div>
           <input
             type="range" min={1} max={10} step={1} value={rpe}
-            onChange={e => setRpe(Number(e.target.value))}
+            onChange={(e) => { const n = Number(e.target.value); hapticTick(rpe, n); setRpe(n); }}
             style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { hapticTick } from "@/lib/native";
 import { useState } from "react";
 import type { CoachSession } from "@/types";
 
@@ -43,7 +44,7 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
               <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle (RPE)</div>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 28, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpe}/10</div>
             </div>
-            <input type="range" min={1} max={10} value={rpe} onChange={e => setRpe(Number(e.target.value))}
+            <input type="range" min={1} max={10} value={rpe} onChange={(e) => { const n = Number(e.target.value); hapticTick(rpe, n); setRpe(n); }}
               style={{ width: "100%", accentColor: rpeColor }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
               <span>Très facile</span><span>Maximum</span>

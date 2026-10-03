@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { hapticTick } from "@/lib/native";
 import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
 
 /* Jauge de décision en ANNEAU (2026-09-30, variante R2 du POC "Onglet Charge, version retenue" :
@@ -210,15 +211,21 @@ export default function DecisionRing({
     deg = Math.max(A0, Math.min(A1, deg));
     return Math.round(MIN + ((deg - A0) / (A1 - A0)) * (MAX - MIN));
   }
+  // Vibration à chaque cran franchi, plus marquée en entrant dans la zone conseillée.
+  function pick(d: number) {
+    const enters = !hideZone && d >= zoneLow && d <= zoneHigh && !inZone;
+    hapticTick(roundedValue, d, enters);
+    onChange(d);
+  }
   function handlePointerDown(e: React.PointerEvent) {
     if (readOnly) return;
     svgRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
-    onChange(diffFromPointer(e));
+    pick(diffFromPointer(e));
   }
   function handlePointerMove(e: React.PointerEvent) {
     if (readOnly || !dragging) return;
-    onChange(diffFromPointer(e));
+    pick(diffFromPointer(e));
   }
   const endDrag = () => setDragging(false);
 
