@@ -50,13 +50,15 @@ function darkColors(glow: string) {
    comportement identique quel que soit le nombre de lignes.
    Taille de police PAR variante, jamais une seule taille pour les deux, titres agrandis (2026-09) :
    - "light" (Planning, carte blanche) : titre 14/900, détail 11.
-   - "darkColor"/"dark" (Coach Control, /today) : titre 15, détail 13 (taille déjà utilisée avant
-     l'agrandissement du titre). */
+   - "darkColor"/"dark" (Coach Control, /today) : titre 15, détail 14 — même échelle que les
+     insights Charge/Récup et la ligne Phase (2026-10-03). */
 function AlertText({ text, size }: { text: string; size?: number }) {
   const lines = text.split("\n");
   const headline = lines[0];
   const rest = lines.slice(1);
-  const headlineSize = size ? size + 2 : 14;
+  // Échelle unique des insights (2026-10-03) : titre 15, texte 14 sur fond sombre (carte de
+  // décision, insights Charge/Récup, ligne Phase).
+  const headlineSize = size ? 15 : 14;
   const detailSize = size ?? 11;
   return (
     <>
@@ -98,7 +100,7 @@ export default function AlertBox({ alert, actions, variant = "light", centered =
         textAlign: centered ? "center" : undefined,
       }}>
         <PulseDot color={alert.glow} />
-        <div style={centered ? { paddingInline: 16 } : { paddingRight: 16 }}><AlertText text={alert.text} size={13} /></div>
+        <div style={centered ? { paddingInline: 16 } : { paddingRight: 16 }}><AlertText text={alert.text} size={14} /></div>
         {actions && <div style={{ marginTop: 10 }} onClick={e => e.stopPropagation()}>{actions}</div>}
       </div>
     );

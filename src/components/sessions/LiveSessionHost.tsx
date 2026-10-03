@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
@@ -102,6 +103,7 @@ export default function LiveSessionHost({ userId, userName }: { userId: string; 
     if (s) setLive(s);
   }
   async function finish(data: { rpe: number; duration: number }) {
+    haptic("success");
     notifyOnboardingProgressSoon();
     if (notesTimer.current) clearTimeout(notesTimer.current);
     const saved = await updateOwnSession(supabase, live!, { done: true, ...data, notes: live!.notes, paused_at: null });

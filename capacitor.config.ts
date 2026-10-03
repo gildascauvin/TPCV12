@@ -22,12 +22,17 @@ const config: CapacitorConfig = {
   backgroundColor: "#070a0d",
   ios: {
     contentInset: "always",
+    // Pas d'aperçu de lien à l'appui long (réflexe "page web", 2026-10-03).
+    allowsLinkPreview: false,
     /* Mode hors ligne (2026-10-02) : nécessaire pour que le service worker fonctionne dans l'app
        (Accueil rouvert hors ligne). Domaines listés dans WKAppBoundDomains (Info.plist). */
     limitsNavigationsToAppBoundDomains: true,
   },
   plugins: {
     // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.
+    /* Écran de lancement (2026-10-03) : fond de l'app + logo, gardé jusqu'à ce que la page soit
+       affichée (NativeShell → hideSplash), au lieu d'un flash blanc puis d'un écran vide. */
+    SplashScreen: { launchAutoHide: false, backgroundColor: "#070a0d", showSpinner: false },
     SocialLogin: { providers: { google: true, apple: true, facebook: false, twitter: false } },
   },
 };

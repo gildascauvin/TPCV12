@@ -13,7 +13,8 @@ import {
   sessionQualifier, sessionReference, seriesOf, statusDisplayColor, trendFor, TREND_STATUS_LABEL,
   type MetricGroup, type MetricKey,
 } from "@/lib/metricCards";
-import AggregateGauge from "@/components/conseils/AggregateGauge";
+import AggregateGauge, { aggregateGaugeCenterY } from "@/components/conseils/AggregateGauge";
+import { decisionRingCenterY } from "@/components/sessions/DecisionRing";
 import type { ConseilsData } from "@/lib/conseilsData";
 
 /* Cartes d'indice de l'Accueil (2026-09-28) — variante E1 du POC `charge-variantes.html`, retenue
@@ -215,7 +216,14 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         display: "flex", flexDirection: "column", alignItems: "center",
         textAlign: "center", marginBottom: 16, gap: 12,
       }}>
-        {agg && <AggregateGauge pos={agg.pos} band={agg.band} bands={AGG_BANDS[group]} />}
+        {/* Même hauteur que l'anneau de décision de l'onglet Aujourd'hui (2026-10-03) : passer d'un
+            onglet à l'autre ne fait plus sauter la jauge. Décalage = écart des centres des deux arcs
+            + la marge haute du bloc décision (TodayClient : 8px desktop, 4px mobile). */}
+        {agg && (
+          <div style={{ paddingTop: decisionRingCenterY() - aggregateGaugeCenterY() + (isMd ? 8 : 4) }}>
+            <AggregateGauge pos={agg.pos} band={agg.band} bands={AGG_BANDS[group]} />
+          </div>
+        )}
         {/* Analyses avant 2 semaines (2026-10-01) : on dit qu'elles sont partielles plutôt que
             d'attendre ou de montrer l'exemple. */}
         {!example && group === "recup" && lastB?.provisional && (
@@ -228,9 +236,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             Charge habituelle disponible après 14 jours
           </div>
         )}
-        {/* 17,5px : la même taille que la ligne "statut · valeur" des cartes, mais en graisse plus
-            légère. Centré et seul en haut de section, il domine sans crier — une graisse 800 en
-            plus de la taille entrerait en concurrence avec chaque carte au lieu de les coiffer. */}
+        {/* 14px (2026-10-03) : même échelle que la carte de décision de l'Accueil (texte 14) — avant
+            17,5px, plus gros que la décision du jour, qui doit pourtant se lire en premier. */}
         <div style={{ position: "relative", maxWidth: 460, display: "flex", alignItems: "center", minHeight: locked ? 112 : undefined }}>
         {/* Freemium (2026-10-02) : la pancarte se pose sur le 1er flou de l'écran (l'insight) ;
             les flous suivants (cartes, charts) n'ont plus aucun bouton. */}
@@ -244,7 +251,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           </div>
         )}
 
-          <div style={{ fontSize: 17.5, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.45, letterSpacing: "-.01em", ...blur }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,.92)", lineHeight: 1.5, ...blur }}>
             {insight}
           </div>
           {/* Données d'exemple : la mention couvre l'insight, jamais la jauge et son score. */}

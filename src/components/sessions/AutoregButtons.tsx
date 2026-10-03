@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/native";
 import { useEffect, useState } from "react";
 import { markFirstAdjustment } from "@/lib/onboardingProgress";
 import { createPortal } from "react-dom";
@@ -214,6 +215,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   }
 
   async function maintenir() {
+    haptic("light");
     // `cursorDir` plutôt que `dir` (absent en mode libre, voir plus haut) — sans effet visible pour
     // "Maintenir" (pct=null, aucun texte/couleur n'en dépend en mode "decided"), mais reste correct
     // dans les deux cas plutôt que de forcer une valeur arbitraire.
@@ -229,6 +231,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   }
 
   async function apply() {
+    haptic("medium");
     if (!onApply) return;
     // Hors zone, AVEC une vraie suggestion système : un clic sur le CTA-verbe fait à la fois sauter
     // le curseur ET applique — fidèle au POC, pas une étape de confirmation séparée. Cible le RPE le

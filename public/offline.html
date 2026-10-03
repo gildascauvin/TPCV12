@@ -67,6 +67,8 @@
   var SNAP_KEY = "tpc_offline_snapshot", QUEUE_KEY = "tpc_offline_queue";
   var SITE = "https://go.theperfclub.com";
   var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  // App iOS : l'écran de lancement est gardé jusqu'à l'affichage d'une page (2026-10-03).
+  try { if (native && window.Capacitor.Plugins.SplashScreen) window.Capacitor.Plugins.SplashScreen.hide(); } catch (e) {}
 
   /* Stockage : Capacitor Preferences dans l'app iOS (commun avec le site), localStorage sur le web. */
   function prefs() { return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences; }

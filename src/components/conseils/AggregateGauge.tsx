@@ -30,6 +30,13 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
+/* Position verticale du centre de l'arc dans le SVG (même calcul que ci-dessous, taille normale). */
+export function aggregateGaugeCenterY(size = 188) {
+  const r = Math.round(size * 0.36);
+  const sw = Math.max(4, Math.round(size * 0.075));
+  return r + sw / 2 + 2;
+}
+
 export default function AggregateGauge({
   pos, band, bands, size = 188, showLabel = true, bare = false,
 }: {

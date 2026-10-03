@@ -113,6 +113,13 @@ export function DecisionRingMini({ state, size = 40, hideZone = false }: { state
 
 /* Jour de repos (2026-09-30, Gildas : "même en jour de repos je veux afficher cette ring, comme
    étant dans la zone puisque c'est repos") — lecture seule, curseur au plancher dans sa zone. */
+/* Position verticale du centre de l'arc dans le SVG (même calcul que DecisionRing ci-dessous).
+   Sert à aligner la jauge des onglets Charge/Récup sur cet anneau (IndexCards). */
+export function decisionRingCenterY(size = 188) {
+  const r = Math.round(size * 0.36), sw = Math.round(size * 0.085);
+  return Math.round(r + sw * 0.95 + sw / 2 + 3);
+}
+
 export function RestDecisionRing({ size, light }: { size?: number; light?: boolean }) {
   return (
     <DecisionRing

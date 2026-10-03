@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/native";
 import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -680,6 +681,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
 
   async function handleStart(session: Session) {
+    haptic("medium");
     if (isLive(session)) { openLiveSession(session.id); return; }
     if (!wellnessFilledToday) { setPendingStartSession(session); setShowWellness(true); return; }
     const started = await startLiveSession(supabase, session);
@@ -730,6 +732,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     plannedIntensity?: PlannedIntensity | null;
   }) => {
     notifyOnboardingProgressSoon();
+    haptic("success");
     const { plannedIntensity, ...wellnessData } = data;
     data = wellnessData;
     /* Hors ligne : check-in mis en attente (score recalculé par le serveur à l'envoi, montre
@@ -783,6 +786,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
+    haptic("success");
     notifyOnboardingProgressSoon();
     if (!completing) return;
     // Hors ligne : mis en attente et affiché tout de suite (updateOwnSession).

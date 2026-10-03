@@ -319,3 +319,8 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 @keyframes tpcDraw{0%{stroke-dashoffset:420}55%,80%{stroke-dashoffset:0}100%{stroke-dashoffset:-420}}
 @keyframes tpcGrow{0%{transform:scaleY(.08)}50%,80%{transform:scaleY(1)}100%{transform:scaleY(.08)}}
 @media (prefers-reduced-motion:reduce){.tpc-skel,.tpc-mock-bar{animation:none}.tpc-mock-line{animation:none;stroke-dashoffset:0}}
+
+/* App iOS (2026-10-03, NativeShell) : pas de sélection de texte ni de menu "copier / ouvrir le lien"
+   à l'appui long, comme dans une app native. Les champs de saisie restent sélectionnables. */
+html.native body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+html.native input, html.native textarea, html.native [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }

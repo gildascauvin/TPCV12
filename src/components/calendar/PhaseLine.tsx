@@ -45,10 +45,10 @@ export default function PhaseLine({ phase, onUnlock, onEdit, example = false, co
           )}
         </div>
       )}
-      <div style={{ fontSize: 13, lineHeight: 1.5, fontWeight: 600, color: "rgba(255,255,255,.92)", minHeight: example ? 64 : undefined }}>{phase.text}</div>
+      <div style={{ fontSize: 14, lineHeight: 1.5, fontWeight: 600, color: "rgba(255,255,255,.92)", minHeight: example ? 64 : undefined }}>{phase.text}</div>
       {phase.lockedText && onUnlock && (
         <div style={{ position: "relative", marginTop: 8, borderRadius: 12, overflow: "hidden" }}>
-          <div aria-hidden="true" style={{ filter: "blur(5px)", userSelect: "none", fontSize: 13, fontWeight: 600, lineHeight: 1.5, color: "rgba(255,255,255,.85)", padding: "4px 2px" }}>
+          <div aria-hidden="true" style={{ filter: "blur(5px)", userSelect: "none", fontSize: 14, fontWeight: 600, lineHeight: 1.5, color: "rgba(255,255,255,.85)", padding: "4px 2px" }}>
             {phase.lockedText}
           </div>
           <div style={{ position: "absolute", inset: 0, display: "grid", placeContent: "center", background: "rgba(7,10,13,.35)" }}>

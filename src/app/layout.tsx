@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import NativeShell from "@/components/NativeShell";
 import { PHProvider } from "@/providers/PostHogProvider";
 import { PostHogPageview } from "@/components/PostHogPageview";
 
@@ -65,6 +66,7 @@ export default function RootLayout({
           {children}
         </PHProvider>
         <ServiceWorkerRegister />
+        <NativeShell />
       </body>
     </html>
   );
