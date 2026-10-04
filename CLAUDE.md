@@ -4748,3 +4748,29 @@ POC : `~/Downloads/poc-element-activation-v5.html` (itéré v1→v5 avec Gildas)
 - Coach : « + Inviter » toujours visible à droite de `AthleteFilterBar` (→ `/coach/athletes?quickadd=invite`).
 - Boutons des cartes séance (Démarrer, Terminer, « + Ajouter une séance », carte du jour vide) : rayon 12 partout. Carte du jour vide : « Ou démarrer un programme ».
 - `ProgramBanner` gardée pour l'instant (doublon assumé avec la pilule, à retirer si ses boutons ne servent pas).
+
+## Page Programmes façon boutique + fiche modèle + fantômes de chargement (2026-10-03 → 10-04)
+
+POC : `~/Downloads/poc-programme-header-v3.html` (section boutique).
+
+### Page Programmes (`ProgramLibraryPage.tsx` liste + `ProgramStoreSections.tsx`)
+- Ordre : titre « Programmes » → **3 tuiles « Crée le tien »** (Générer, Importer, Programme vierge ; remplacent « + Nouveau ») → **« Mes programmes »** en carrousel → **« Pour toi · {sport} »** (modèles du même libellé de sport, sinon de la même famille ; masqué si sport inconnu, prop `userSport` lue dans `profiles.sport`) → **« Tous les modèles »** (recherche, filtres par famille, grille 4 colonnes desktop / 2 mobile).
+- Cartes « Mes programmes » : mêmes actions qu'avant (Assigner, Modifier, Partager, ⋯, suivi des sportifs), bandeau visuel, badge « En cours · S3/8 » (sportif) ou « N sportifs » (coach), en cours d'abord, même hauteur. Menus ⋯ en `position: fixed` (sinon rognés par le carrousel).
+- `Carousel` partagé : cartes alignées sur les bords du contenu, flèches (‹ desktop, › partout), points cliquables. `Cover` : photo WordPress via `next/image` (redimensionnée, WebP, lazy), sinon dégradé de la famille + emoji.
+- Retour depuis un écran de création → la page (plus le tiroir `ProgramCreatePicker`, qui reste pour la modale et le wizard).
+- Aucun prix nulle part.
+
+### Fiche d'un modèle (`ProgramTemplateDetail.tsx`, step `detail`)
+- Un clic sur un modèle ouvre sa fiche (plus l'éditeur direct) : photo, puces durée / j par sem. / niveau, résumé chiffré, **intro de la page WordPress** en entier, « Ce que ça change », périodisation réelle (difficulté moyenne par semaine du modèle), séance type (la plus dure de S1), partage du lien `/p/[id]`.
+- CTA fixe : « Démarrer ce programme » / « Assigner à des sportifs » = copie dans la bibliothèque puis `ProgramAssignModal` ; « Personnaliser avant de démarrer » = éditeur. Sandbox : porte d'inscription.
+- Intros : `src/lib/programIntros.ts` (63 programmes, premiers paragraphes de l'article avant le 1er CTA, extraits via l'API WP `/wp-json/wp/v2/posts?slug=…` le 2026-10-04, slugs dans les commentaires de `programCovers.ts`). Figées : à ré-extraire si une page WP change. Chargées seulement à l'ouverture d'une fiche.
+
+### Perf
+- `/api/programs/library` sans `template` (430 Ko → 16 Ko), `revalidate = 300`. Contenu d'un modèle à la demande : `fetchLibraryTemplate(id)` (`ProgramLibraryBrowser.tsx`, cache par session, GET `/api/programs/[id]`). Liste gardée en mémoire (`loadLibrary`).
+- Photos ~1,9 Mo → ~14 Ko via `next/image` (optimisation d'images Vercel, facturée au volume).
+- `/conseils` (tests) : profil, tests, résultats et séries lus en parallèle côté serveur et passés à `TestsPanel` (`initialData`) ; seuls les tests du coach sont chargés côté client. `TestsPanel` importé directement (plus de `next/dynamic`) sur cette page.
+
+### Fantômes de chargement
+- `src/components/ui/Skeleton.tsx` : `Skel`, `SkelLines`, `PageSkeleton` (variantes today / week / list / tests / programmes). Classes CSS : `.tpc-skel` (sombre, existante) et `.tpc-skel-light` (clair).
+- `loading.tsx` sur /today, /week, /conseils, /coach, /coach/planning, /coach/athletes, /programmes, /coach/programmes : silhouette affichée dès la navigation pendant que le serveur prépare la page.
+- Textes « Chargement… » remplacés par des fantômes : Accueil (onglets), tests, profil, formulaire de paiement, offre native, modèles de séance, bibliothèque, page Programmes.

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import NativeCheckout from "@/components/paywall/NativeCheckout";
 import { useEffect, useState } from "react";
@@ -385,8 +386,8 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
               cet écran — voir le useState plus haut, `setBilling` n'a plus d'appelant. */}
 
           {loadingIntent && (
-            <div style={{ textAlign: "center", padding: "20px 0", color: "rgba(255,255,255,.5)", fontSize: 13 }}>
-              Chargement du formulaire...
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 0" }}>
+              <Skel dark h={46} r={12} /><div style={{ display: "flex", gap: 10 }}><Skel dark h={46} r={12} /><Skel dark h={46} r={12} /></div><Skel dark h={46} r={12} />
             </div>
           )}
 

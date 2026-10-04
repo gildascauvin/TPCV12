@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import type { Profile, SubscriptionStatus } from "@/types";
 import ConseilsClient from "./ConseilsClient";
+import type { TestRow, TestResultRow, StrengthRepRow } from "@/lib/testResults";
 import { buildTestFixture, buildAthleteFixture } from "@/lib/sandboxFixtures";
 
 /* Cette page ("Performance" dans la bottom nav) ne porte plus que le suivi de tests physiques
@@ -14,7 +15,14 @@ export default async function ConseilsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: profileRow } = await supabase.from("profiles").select("*").eq("user_id", user!.id).single();
+  /* Perf (2026-10-04) : profil, tests, résultats et séries lus en parallèle, et passés à TestsPanel
+     (initialData) pour un affichage immédiat, au lieu d'attendre le composant puis ses requêtes. */
+  const [{ data: profileRow }, { data: ownTests }, { data: ownResults }, { data: strengthReps }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
+    supabase.from("tests").select("id,name,name_key,unit,qualities").eq("owner_id", user!.id).order("name"),
+    supabase.from("test_results").select("id,test_id,date,value,unit,video_url").eq("subject_user_id", user!.id).order("date"),
+    supabase.from("strength_reps").select("id,test_id,date,reps,weight").eq("subject_user_id", user!.id).order("date"),
+  ]);
   const profile = profileRow as (Profile & { invited_by_coach_id?: string | null }) | null;
 
   const subscriptionStatus = (profile?.subscription_status ?? "free") as SubscriptionStatus;
@@ -23,7 +31,6 @@ export default async function ConseilsPage() {
 
   /* Tests d'exemple (onboarding in-app, 2026-10-01) : tant qu'aucun test n'est loggué, la page
      montre le même exemple que la sandbox, en lecture seule, plutôt qu'un panneau vide. */
-  const { data: ownTests } = await supabase.from("tests").select("id").eq("owner_id", user!.id).limit(1);
   /* Profil de l'exemple = celui de la sandbox (sport, sexe, poids) : c'est lui qui donne la famille de
      repères, donc les recommandations et les filtres par qualité. Le sport du compte peut être vide. */
   const exampleProfile = buildAthleteFixture().profile;
@@ -36,6 +43,7 @@ export default async function ConseilsPage() {
       subscriptionStatus={subscriptionStatus} hasActiveCoach={hasActiveCoach} userId={user!.id}
       sport={profile?.sport ?? null} sexe={profile?.sexe ?? null} poidsKg={profile?.poids_kg ?? null}
       exampleTests={exampleTests}
+      initialTests={{ ownTests: (ownTests ?? []) as TestRow[], ownResults: (ownResults ?? []) as TestResultRow[], strengthReps: (strengthReps ?? []) as StrengthRepRow[] }}
     />
   );
 }

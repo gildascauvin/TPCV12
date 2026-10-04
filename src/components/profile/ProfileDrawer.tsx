@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel, SkelLines } from "@/components/ui/Skeleton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -167,7 +168,9 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
             </div>
 
             {loading ? (
-              <div style={{ fontSize: 13, color: "#8a8f94", padding: "20px 0" }}>Chargement…</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
+                <Skel w={64} h={64} r="50%" /><SkelLines lines={3} /><Skel h={44} r={12} /><Skel h={44} r={12} />
+              </div>
             ) : !profile ? (
               <div style={{ fontSize: 13, color: "#8a8f94", padding: "20px 0" }}>Impossible de charger le profil.</div>
             ) : (

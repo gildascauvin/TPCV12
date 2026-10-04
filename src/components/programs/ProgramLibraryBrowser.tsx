@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import type { ProgramTemplate, ProgramLevel, ProgramFocus } from "@/types";
 import type { ProgramMeta } from "./ProgramCriteriaModal";
@@ -27,7 +28,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
    plus jamais `null`, chaque programme a toujours un chip auquel se rattacher. Un champ de recherche
    (nom + sport) complète les chips, plus rapide pour un programme précis noyé dans "Autres sports". */
 
-interface LibraryProgram {
+export interface LibraryProgram {
   id: string;
   name: string;
   sport: string | null;
@@ -35,7 +36,22 @@ interface LibraryProgram {
   focus: ProgramFocus | null;
   weeks_count: number;
   sessions_per_week: number;
-  template: ProgramTemplate;
+  /* Absent de la liste (perf) : chargé à la demande par fetchLibraryTemplate. */
+  template?: ProgramTemplate;
+}
+
+const templateCache = new Map<string, Promise<ProgramTemplate>>();
+/** Contenu d'un modèle officiel (GET /api/programs/[id], public), mis en cache par session. */
+export function fetchLibraryTemplate(id: string): Promise<ProgramTemplate> {
+  let p = templateCache.get(id);
+  if (!p) {
+    p = fetch(`/api/programs/${id}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error("Modèle introuvable"))))
+      .then((d: { template: ProgramTemplate }) => d.template);
+    p.catch(() => templateCache.delete(id));
+    templateCache.set(id, p);
+  }
+  return p;
 }
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -47,7 +63,7 @@ const LEVEL_LABELS: Record<string, string> = {
 
 // Ne renvoie jamais null — repli sur OTHER_CATEGORY si rien ne matche, pour que chaque programme
 // ait toujours un chip (voir doc en tête de fichier).
-function categoryFor(sport: string | null): { id: string; icon: string } {
+export function categoryFor(sport: string | null): { id: string; icon: string } {
   if (!sport) return OTHER_CATEGORY;
   const known = guessSportChip(sport);
   if (known) {
@@ -116,7 +132,9 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
     });
   }, [programs, filter, query]);
 
-  function selectProgram(p: LibraryProgram) {
+  async function selectProgram(p: LibraryProgram) {
+    const template = p.template ?? await fetchLibraryTemplate(p.id).catch(() => null);
+    if (!template) { setError(true); return; }
     const meta: ProgramMeta = {
       sport: p.sport ?? "",
       level: p.level ?? "intermediaire",
@@ -124,7 +142,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
       days: ["Lun", "Mer", "Ven"], // placeholder, non réutilisé après le chargement dans le builder — même convention que "Modifier" dans ProgramLibraryPage.tsx
       duration: p.weeks_count as ProgramMeta["duration"],
     };
-    onSelect(p.template, meta, p.name);
+    onSelect(template, meta, p.name);
   }
 
   return (
@@ -186,7 +204,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
           )}
 
           {programs === null ? (
-            <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{[0, 1, 2, 3, 4].map(i => <Skel key={i} h={72} r={16} />)}</div>
           ) : error ? (
             <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>
               Impossible de charger la bibliothèque. Réessaie dans un instant.

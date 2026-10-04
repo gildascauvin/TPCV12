@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
@@ -108,7 +109,7 @@ export function NativePurchasePanel({
         <div style={{ color: "#ff8a8a", fontSize: 12, textAlign: "center", margin: "0 0 10px", lineHeight: 1.45 }}>{loadError}</div>
       )}
       {!loadError && !product && (
-        <div style={{ textAlign: "center", margin: "0 0 10px", color: "rgba(255,255,255,.5)", fontSize: 12 }}>Chargement de l&apos;offre...</div>
+        <Skel dark h={14} w="60%" style={{ margin: "0 auto 10px" }} />
       )}
       {error && (
         <div style={{ color: "#ff8a8a", fontSize: 12, margin: "0 0 10px", padding: "8px 12px", background: "rgba(209,0,0,.14)", borderRadius: 12 }}>{error}</div>

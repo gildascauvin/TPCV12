@@ -1,12 +1,13 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import LockedBlur from "@/components/paywall/LockedBlur";
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import {
   listTests, listOwnResults, fetchAthleteOwnTests, fetchCoachTestsForAthlete, mergeTests,
   upsertTestResult, parseResultValue, mergeTestInto, deleteTestIfEmpty, deleteTestResult, deleteTestCompletely, TEST_UNITS,
   listOwnStrengthReps, upsertStrengthRep, deleteStrengthRep,
-  type TestResultRow, type TestSubject, type MergedTest, type StrengthRepRow,
+  type TestResultRow, type TestSubject, type MergedTest, type StrengthRepRow, type TestRow,
 } from "@/lib/testResults";
 import TestEvolutionChart from "@/components/tests/TestEvolutionChart";
 import { ExampleNote } from "@/components/conseils/MetricChart";
@@ -1046,7 +1047,7 @@ function unifiedRowFromRaw(key: string, name: string, emoji: string, metric: Met
   };
 }
 
-export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false, examplePerspective = "athlete" }: {
+export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach, emptyHint, sport, sexe, poidsKg, onEditProfile, fixture, onDarkPage = false, lockedAnalysis = null, example = false, examplePerspective = "athlete", initialData }: {
   ownerId: string;
   subject: TestSubject;
   linkedUserId?: string | null;
@@ -1081,10 +1082,15 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   /* Freemium (2026-09-30) : saisie libre (c'est une entrée), analyse floutée — verdict, profil de
      vitesse, signaux de force et jauges de chaque test. Absent = tout lisible. */
   lockedAnalysis?: { onUnlock: () => void } | null;
+  /* Perf (2026-10-04) : tests, résultats et séries du sujet déjà lus côté serveur (/conseils) —
+     affichés tout de suite, sans attendre le chargement du composant puis ses requêtes. Seuls les
+     tests du coach (fusion) restent chargés côté client. Les écritures refont un chargement complet. */
+  initialData?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] };
 }) {
   const isCoachView = "subjectCoachAthleteId" in subject;
-  const [merged, setMerged] = useState<MergedTest[] | null>(fixture ? fixture.merged : null);
-  const [ownResults, setOwnResults] = useState<TestResultRow[]>(fixture ? fixture.results : []);
+  const initialRef = useRef(initialData);
+  const [merged, setMerged] = useState<MergedTest[] | null>(fixture ? fixture.merged : initialData ? (isCoachView ? mergeTests(initialData.ownTests, []) : mergeTests([], initialData.ownTests)) : null);
+  const [ownResults, setOwnResults] = useState<TestResultRow[]>(fixture ? fixture.results : initialData?.ownResults ?? []);
   const [otherResults, setOtherResults] = useState<TestResultRow[]>([]);
   // Filtre par qualité physique (2026-09, suite — le seul filtre restant sur les tests recommandés
   // depuis le retrait complet du filtrage par sport de profil, voir `recommendedTestsForView`) : ne
@@ -1129,6 +1135,19 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   useEffect(() => {
     if (fixture) return; // sandbox/démo : données déjà seedées au montage, jamais de fetch réseau
     let cancelled = false;
+    // 1er passage avec des données serveur : ne charge que la partie coach (fusion), si besoin.
+    const initial = initialRef.current;
+    if (initial) {
+      initialRef.current = undefined;
+      if (!isCoachView && mergeCoach) {
+        fetchCoachTestsForAthlete().then(other => {
+          if (cancelled || (!other.tests.length && !other.results.length)) return;
+          setOtherResults(other.results);
+          setMerged(mergeTests(other.tests, initial.ownTests));
+        });
+      }
+      return () => { cancelled = true; };
+    }
     fetchAll().then(({ ownRes, otherRes, merged: m }) => {
       if (cancelled) return;
       setOwnResults(ownRes);
@@ -1142,13 +1161,15 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   // Séries reps×poids (2026-09, strength_reps) — fetch séparé de fetchAll ci-dessus (portée réduite,
   // pas de fusion croisée coach/sportif pour l'instant, voir listOwnStrengthReps). Rechargé après
   // chaque écriture via refetchStrengthReps, même principe que fetchAll pour le reste.
-  const [strengthReps, setStrengthReps] = useState<StrengthRepRow[]>([]);
+  const [strengthReps, setStrengthReps] = useState<StrengthRepRow[]>(initialData?.strengthReps ?? []);
+  const skipFirstRepsFetch = useRef(!!initialData);
   async function refetchStrengthReps() {
     if (fixture) return;
     setStrengthReps(await listOwnStrengthReps(subject));
   }
   useEffect(() => {
     if (fixture) return;
+    if (skipFirstRepsFetch.current) { skipFirstRepsFetch.current = false; return; }
     let cancelled = false;
     listOwnStrengthReps(subject).then(rows => { if (!cancelled) setStrengthReps(rows); });
     return () => { cancelled = true; };
@@ -1261,7 +1282,11 @@ export default function TestsPanel({ ownerId, subject, linkedUserId, mergeCoach,
   }
 
   if (merged === null) {
-    return <div style={{ fontSize: 13, color: "#8a8f94", padding: "8px 2px" }}>Chargement…</div>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {[0, 1, 2, 3].map(i => <Skel key={i} dark={onDarkPage} h={i === 0 ? 96 : 64} r={20} />)}
+      </div>
+    );
   }
 
   const sportFamily = sport ? guessSportChip(sport) : null;

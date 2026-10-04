@@ -22,13 +22,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
    donc Next.js la traite comme un Route Handler statique par défaut — mise en cache côté build/CDN,
    jamais revalidée après une écriture en base. Cette liste doit refléter l'état réel à chaque
    requête (créations/suppressions de programmes publics fréquentes), jamais une snapshot figée. */
-export const dynamic = "force-dynamic";
+/* Perf (2026-10-04) : la liste ne renvoie plus `template` (430 Ko pour 65 programmes → quelques Ko).
+   Le contenu d'un modèle se charge à l'ouverture de sa fiche ou au clic (GET /api/programs/[id],
+   fetchLibraryTemplate). Revalidée toutes les 5 min au lieu de chaque requête : la bibliothèque
+   officielle change rarement, et une suppression y apparaît au plus 5 min plus tard (le bug du
+   2026-09-07 venait d'un cache JAMAIS revalidé). */
+export const revalidate = 300;
 
 export async function GET() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("programs")
-    .select("id, name, sport, level, focus, weeks_count, sessions_per_week, template, created_at")
+    .select("id, name, sport, level, focus, weeks_count, sessions_per_week, created_at")
     .eq("is_official_template", true)
     .order("name", { ascending: true });
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { haptic } from "@/lib/native";
 import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
@@ -1163,7 +1164,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               </>}
             </>
           ) : (
-            <div style={{ color: "rgba(255,255,255,.5)", fontSize: 13, padding: "24px 0" }}>Chargement…</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
+              <div style={{ display: "flex", justifyContent: "center" }}><Skel dark w={150} h={150} r="50%" /></div>
+              {[0, 1, 2].map(i => <Skel key={i} dark h={78} r={20} />)}
+            </div>
           )
         )}
       </div>

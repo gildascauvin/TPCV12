@@ -10,7 +10,7 @@ export default async function ProgrammesPage({ searchParams }: { searchParams?: 
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("subscription_status, invited_by_coach_id")
+    .select("subscription_status, invited_by_coach_id, sport")
     .eq("user_id", user!.id)
     .single();
 
@@ -25,6 +25,7 @@ export default async function ProgrammesPage({ searchParams }: { searchParams?: 
       hasActiveCoach={hasActiveCoach}
       backHref="/week"
       focusProgramId={searchParams?.focus}
+      userSport={(profile as { sport?: string | null } | null)?.sport ?? null}
       initialStep={searchParams?.step === "import" ? "import" : searchParams?.step === "new" ? "new" : undefined}
     />
   );

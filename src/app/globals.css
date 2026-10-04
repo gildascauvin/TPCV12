@@ -320,9 +320,15 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 @keyframes tpcShim{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @keyframes tpcDraw{0%{stroke-dashoffset:420}55%,80%{stroke-dashoffset:0}100%{stroke-dashoffset:-420}}
 @keyframes tpcGrow{0%{transform:scaleY(.08)}50%,80%{transform:scaleY(1)}100%{transform:scaleY(.08)}}
-@media (prefers-reduced-motion:reduce){.tpc-skel,.tpc-mock-bar{animation:none}.tpc-mock-line{animation:none;stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.tpc-skel,.tpc-skel-light,.tpc-mock-bar{animation:none}.tpc-mock-line{animation:none;stroke-dashoffset:0}}
 
 /* App iOS (2026-10-03, NativeShell) : pas de sélection de texte ni de menu "copier / ouvrir le lien"
    à l'appui long, comme dans une app native. Les champs de saisie restent sélectionnables. */
 html.native body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 html.native input, html.native textarea, html.native [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+
+/* Page Programmes (2026-10-04) : cartes qui se soulèvent au survol, squelette de chargement. */
+.tpc-lift { transition: transform .18s ease, box-shadow .18s ease; }
+@media (hover: hover) { .tpc-lift:hover { transform: translateY(-3px); } }
+/* Fantôme clair (pages claires) ; le fantôme sombre est .tpc-skel, défini plus haut (AnalyticsCollecting). */
+.tpc-skel-light { background: linear-gradient(90deg, rgba(0,0,0,.06) 0%, rgba(0,0,0,.11) 50%, rgba(0,0,0,.06) 100%); background-size: 200% 100%; animation: tpcShim 1.4s linear infinite; }

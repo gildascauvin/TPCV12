@@ -8,7 +8,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import type { MergedTest, TestResultRow } from "@/lib/testResults";
+import type { MergedTest, TestResultRow, TestRow, StrengthRepRow } from "@/lib/testResults";
 import type { SubscriptionStatus } from "@/types";
 
 /* Cette page ("Performance" dans la bottom nav) ne porte plus que le suivi de tests physiques
@@ -16,13 +16,15 @@ import type { SubscriptionStatus } from "@/types";
    Comportements ont déménagé dans les onglets de l'Accueil (/today, voir HomeAnalyticsSections.tsx +
    TodayClient.tsx), qui en sont désormais l'unique source de rendu. Pas de re-navigation de date
    propre à cette page — TestsPanel affiche l'historique complet des tests, pas une vue par jour. */
-const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
+// Import direct (2026-10-04) : c'est le contenu principal de la page, le charger à part ajoutait une
+// étape d'attente avant même de pouvoir afficher les tests.
+import TestsPanel from "@/components/tests/TestsPanel";
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 
-export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null } }) {
+export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, userId, sandboxMode = false, sport = null, sexe = null, poidsKg = null, testsFixture, exampleTests, initialTests }: { subscriptionStatus: SubscriptionStatus; hasActiveCoach: boolean; userId?: string; sandboxMode?: boolean; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null; testsFixture?: { merged: MergedTest[]; results: TestResultRow[] }; exampleTests?: { merged: MergedTest[]; results: TestResultRow[]; sport?: string | null; sexe?: "homme" | "femme" | null; poidsKg?: number | null }; initialTests?: { ownTests: TestRow[]; ownResults: TestResultRow[]; strengthReps: StrengthRepRow[] } }) {
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   // Exemple affiché tant qu'aucun test n'est loggué ; "Ajouter mon 1er test" bascule sur le vrai panneau.
@@ -77,6 +79,7 @@ export default function ConseilsClient({ subscriptionStatus, hasActiveCoach, use
         ) : userId ? (
           <TestsPanel
             ownerId={userId} subject={{ subjectUserId: userId }} mergeCoach
+            initialData={initialTests}
             sport={sport} sexe={sexe} poidsKg={poidsKg}
             onEditProfile={() => setProfileOpen(true)}
             onDarkPage

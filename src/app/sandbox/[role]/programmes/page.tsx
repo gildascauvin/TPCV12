@@ -16,6 +16,7 @@ export default function SandboxProgrammesPage({ params, searchParams }: { params
         sandboxMode
         initialStep={initialStep}
         focusProgramId={searchParams?.focus}
+        userSport={profile.sport}
       />
     );
   }

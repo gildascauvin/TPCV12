@@ -10,7 +10,7 @@ export default async function CoachProgrammesPage({ searchParams }: { searchPara
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status").eq("user_id", user.id).maybeSingle();
+  const { data: profile } = await supabase.from("profiles").select("mode, subscription_status, sport").eq("user_id", user.id).maybeSingle();
   if (!profile || profile.mode !== "coach") redirect("/today");
 
   const { data: rawAthletes } = await supabase
@@ -27,6 +27,7 @@ export default async function CoachProgrammesPage({ searchParams }: { searchPara
       athletes={(rawAthletes || []) as CoachAthlete[]}
       backHref="/coach/planning"
       focusProgramId={searchParams?.focus}
+      userSport={profile.sport ?? null}
       initialStep={searchParams?.step === "import" ? "import" : searchParams?.step === "new" ? "new" : undefined}
     />
   );

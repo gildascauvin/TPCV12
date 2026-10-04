@@ -1,11 +1,16 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { Program, CoachAthlete, ProgramAssignment } from "@/types";
 import ProgramCriteriaModal, { type ProgramMeta } from "./ProgramCriteriaModal";
-import ProgramCreatePicker, { ProgramCreateOptions } from "./ProgramCreatePicker";
-import ProgramLibraryBrowser from "./ProgramLibraryBrowser";
+import ProgramCreatePicker from "./ProgramCreatePicker";
+import ProgramLibraryBrowser, { type LibraryProgram, fetchLibraryTemplate } from "./ProgramLibraryBrowser";
+import { CreateTiles, TemplateSections, Cover, Carousel, SectionHeader } from "./ProgramStoreSections";
+import { useBreakpoint } from "@/hooks/useBreakpoint";
+import ProgramTemplateDetail from "./ProgramTemplateDetail";
+import { programWeekIndex } from "@/lib/programAssignment";
 import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
@@ -67,6 +72,8 @@ interface Props {
      à cet endroit. Absent/false = comportement modal historique inchangé (usage WeekClient.tsx/
      CoachPlanningClient.tsx via le "+" central, flèche retour + plein écran). */
   standalone?: boolean;
+  /* Sport de l'utilisateur (profil) : section "Pour toi" des modèles, masquée s'il est inconnu. */
+  userSport?: string | null;
 }
 
 type UIStep =
@@ -74,6 +81,7 @@ type UIStep =
   | { type: "new" }
   | { type: "criteria"; mode: "criteria" | "import" }
   | { type: "library" }
+  | { type: "detail"; program: LibraryProgram }
   | { type: "builder"; template: ProgramTemplate; meta: ProgramMeta; programId?: string; programName?: string; assignmentCount?: number }
   | { type: "assign"; programId: string; programName: string };
 
@@ -82,15 +90,24 @@ const NEUTRAL_LEVEL = "intermediaire" as const;
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
-export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, standalone = false }: Props) {
+export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, standalone = false, userSport }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
+  const { isMd } = useBreakpoint();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<UIStep>(initialStep === "new" ? { type: "new" } : initialStep === "import" ? { type: "criteria", mode: "import" } : { type: "list" });
   const [linkCopied, setLinkCopied] = useState<Record<string, boolean>>({});
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  /* Menus "⋯" en position fixe (2026-10-04) : la liste "Mes programmes" est un carrousel qui défile
+     horizontalement, ce qui rognerait un menu en position absolue. Position = coin du bouton. */
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number; up: boolean } | null>(null);
+  function placeMenu(e: React.MouseEvent) {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const up = r.bottom > window.innerHeight - 140;
+    setMenuPos({ top: up ? r.top - 6 : r.bottom + 6, right: window.innerWidth - r.right, up });
+  }
   // Choix après enregistrement d'un programme suivi : mettre à jour les séances à venir ou non.
   const [resyncPrompt, setResyncPrompt] = useState<{ programId: string; names: string[] } | null>(null);
   const [resyncBusy, setResyncBusy] = useState(false);
@@ -108,6 +125,9 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
      le montrer non-fixed ici s'empilerait sous le contenu réel de /week) — fermer doit donc
      rendre la main à la page d'origine (onClose), jamais retomber sur "list". */
   const closeOrList = () => { if (standalone) setStep({ type: "list" }); else onClose(); };
+  // Retour depuis un écran de création : sur la page, les tuiles "Crée le tien" remplacent le
+  // tiroir "Créer un programme" → retour à la page ; en modale, retour au tiroir comme avant.
+  const backToCreate = () => setStep(standalone ? { type: "list" } : { type: "new" });
 
   function createBlankProgram() {
     const week: Record<string, never[]> = {};
@@ -130,7 +150,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   useEffect(() => { fetchPrograms(); }, []);
   useEffect(() => {
     if (loading || !focusProgramId) return;
-    document.getElementById(`program-${focusProgramId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById(`program-${focusProgramId}`)?.scrollIntoView({ behavior: "smooth", block: "center", inline: "start" });
   }, [loading, focusProgramId]);
 
   async function saveProgram(name: string, template: ProgramTemplate, meta: ProgramMeta): Promise<string | null> {
@@ -237,6 +257,26 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     if (res.ok) fetchPrograms();
   }
 
+  async function openTemplate(p: LibraryProgram) {
+    const template = p.template ?? await fetchLibraryTemplate(p.id);
+    const meta: ProgramMeta = {
+      sport: p.sport ?? "", level: p.level ?? "intermediaire", focus: p.focus ?? "mixte",
+      days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"],
+    };
+    setStep({ type: "builder", template, meta, programName: p.name });
+  }
+
+  /* Programme suivi par le sportif lui-même, en cours : badge "En cours · S3/8" sur sa carte. */
+  function selfProgress(p: Program): string | null {
+    if (!selfUserId) return null;
+    const a = assignments.find(x => x.program_id === p.id && x.status === "active" && x.user_id === selfUserId);
+    if (!a) return null;
+    const idx = programWeekIndex(a.start_date, todayStr);
+    if (idx < 0) return "Démarre bientôt";
+    if (idx >= p.weeks_count) return null;
+    return `En cours · S${idx + 1}/${p.weeks_count}`;
+  }
+
   const coachSide = !selfUserId;
   const resyncModal = resyncPrompt && (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 2147483300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -286,8 +326,31 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     return (
       <ProgramLibraryBrowser
         onClose={closeOrList}
-        onBack={() => setStep({ type: "new" })}
+        onBack={backToCreate}
         onSelect={(template, meta, name) => setStep({ type: "builder", template, meta, programName: name })}
+      />
+    );
+  }
+
+  /* ─── Fiche d'un modèle (2026-10-03, V2) : démarrer/assigner = copie dans la bibliothèque puis
+       assignation ; personnaliser = éditeur. Sandbox : la porte d'inscription. ─── */
+  if (step.type === "detail") {
+    const p = step.program;
+    return (
+      <ProgramTemplateDetail
+        program={p}
+        role={coachSide ? "coach" : "athlete"}
+        onBack={() => setStep({ type: "list" })}
+        onCustomize={() => openTemplate(p)}
+        onStart={async () => {
+          if (sandboxMode) { gate(() => {}); return; }
+          const meta: ProgramMeta = { sport: p.sport ?? "", level: p.level ?? "intermediaire", focus: p.focus ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"] };
+          const template = p.template ?? await fetchLibraryTemplate(p.id);
+          const id = await saveProgram(p.name, template, meta);
+          if (!id) throw new Error("Impossible d'enregistrer ce programme");
+          await fetchPrograms();
+          setStep({ type: "assign", programId: id, programName: p.name });
+        }}
       />
     );
   }
@@ -299,7 +362,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
       <ProgramCriteriaModal
         mode={mode}
         onClose={closeOrList}
-        onBack={() => setStep({ type: "new" })}
+        onBack={backToCreate}
         onGenerate={(template, meta) => {
           const defaultName = mode === "import" ? "Programme importé" : (meta.sport ? `Programme ${meta.sport}` : "Mon programme");
           setStep({ type: "builder", template, meta, programName: defaultName });
@@ -320,7 +383,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         assignmentCount={step.assignmentCount ?? 0}
         requireSubscription={requireSubscription}
         isActive={isActive}
-        onBack={() => setStep(isEdit ? { type: "list" } : { type: "new" })}
+        onBack={() => (isEdit ? setStep({ type: "list" }) : backToCreate())}
         onSaveToLibrary={async (name, template) => {
           if (isEdit) await updateProgram(step.programId!, name, template);
           else await saveProgram(name, template, step.meta);
@@ -373,7 +436,9 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     );
   }
 
-  /* ─── Library list (pleine page) ─── */
+  /* ─── Liste (pleine page) — boutique (2026-10-03) : créer en premier, mes programmes, puis
+       "Pour toi" et tous les modèles (ProgramStoreSections.tsx). ─── */
+  const sortedPrograms = [...programs].sort((x, y) => Number(!!selfProgress(y)) - Number(!!selfProgress(x)));
   return (
     <div style={standalone
       /* Fond clair étendu sous la marge réservée à la navigation (même procédé que les autres pages),
@@ -381,54 +446,39 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
       ? { background: "#f1f0ee", minHeight: "100vh", marginBottom: -132, paddingBottom: 132 }
       : { position: "fixed", inset: 0, background: "#f1f0ee", zIndex: 2147483100, display: "flex", flexDirection: "column" }
     }>
-      {/* Topbar — sticky (pas fixed) en standalone pour rester dans le flux normal de la page,
-          laissant la bottom nav du layout visible en dessous plutôt que recouverte. */}
-      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, ...(standalone ? { position: "sticky" as const, top: 0, zIndex: 5 } : {}) }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {/* Flèche retour absente en standalone : /programmes est une vraie page atteinte via la
-              bottom nav, pas une modale — rien à quoi "revenir" depuis ce titre. */}
+      <div style={standalone ? { padding: "20px 20px 24px", maxWidth: 1100, margin: "0 auto" } : { flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          {/* Flèche retour seulement en modale : /programmes est une vraie page (bottom nav). */}
           {!standalone && (
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>←</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0" }}>←</button>
           )}
-          <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Librairie de programmes</span>
+          <div>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 30 : 26, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.03em", margin: 0 }}>Programmes</h1>
+            <div style={{ fontSize: 13, color: "#8a8f94", marginTop: 2 }}>Chaque séance s&apos;ajuste à la forme du jour.</div>
+          </div>
         </div>
-        {/* Générer/visualiser/modifier un programme reste libre (voir spec gating save,
-            2026-08-19) — seuls "Enregistrer en librairie"/"Assigner" dans ProgramBuilderModal
-            sont gatés (gate() y est déjà câblé). Ouvrir le générateur ne doit jamais bloquer,
-            sinon un free ne voit jamais la valeur du générateur. */}
-        {/* Ouvre le picker "+ Nouveau" (ProgramCreatePicker.tsx, drawer à 4 cartes à plat) —
-            remplace un ancien menu ancré (dropdown), moins confortable au pouce sur mobile pour
-            un même nombre de clics (1 pour ouvrir, 1 pour choisir) — retour explicite de Gildas. */}
-        <button
-          onClick={() => setStep({ type: "new" })}
-          style={{ padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.25)" }}
-        >
-          + Nouveau
-        </button>
-      </div>
 
-      {/* Body */}
-      <div style={standalone ? { padding: "16px 20px 24px" } : { flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
+        <CreateTiles
+          onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
+          onImport={() => setStep({ type: "criteria", mode: "import" })}
+          onBlank={() => createBlankProgram()}
+        />
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: "60px 0", color: "#8a8f94", fontSize: 13 }}>Chargement…</div>
-        ) : programs.length === 0 ? (
-          /* Aucun programme : les 4 façons d'en créer un, directement (2026-10-02). */
-          <div style={{ maxWidth: 520, margin: "8px auto 0" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", marginBottom: 4 }}>Crée ton premier programme</div>
-            <div style={{ fontSize: 13.5, color: "#62686e", marginBottom: 16 }}>Choisis comment tu veux démarrer.</div>
-            <ProgramCreateOptions
-              onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
-              onImport={() => setStep({ type: "criteria", mode: "import" })}
-              onTemplate={() => setStep({ type: "library" })}
-              onBlank={() => createBlankProgram()}
-            />
+          <div style={{ marginTop: 32 }}>
+            <Skel w={170} h={18} style={{ marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 14, overflow: "hidden" }}>{[0, 1, 2].map(i => <Skel key={i} w={isMd ? "calc((100% - 28px) / 3)" : "86%"} h={300} r={16} />)}</div>
           </div>
-        ) : (
+        ) : programs.length === 0 ? null : (
           <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
-            {programs.map(p => {
+          <div style={{ marginTop: 32 }}>
+            <SectionHeader title="Mes programmes" sub={coachSide ? "Tes programmes et les sportifs qui les suivent" : "Tes programmes enregistrés"} count={programs.length} />
+          </div>
+          {/* Carrousel horizontal (2026-10-04) : flèche + points, cartes de même hauteur alignées sur le contenu. */}
+          <Carousel itemWidth={isMd ? "calc((100% - 28px) / 3)" : "86%"}>
+            {sortedPrograms.map(p => {
               const bars = weekAvgRpes(p);
+              const progress = selfProgress(p);
               const maxBar = Math.max(...bars, 1);
               const emoji = programSportEmoji(p.sport);
               const programAssignments = assignments.filter(a => {
@@ -441,7 +491,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
               });
 
               return (
-                <div key={p.id} id={`program-${p.id}`} style={{ position: "relative", background: "#fff", borderRadius: 16, padding: "18px 18px 14px", border: p.id === focusProgramId ? "2px solid #d44000" : "1px solid rgba(0,0,0,.07)", boxShadow: p.id === focusProgramId ? "0 8px 24px rgba(212,64,0,.12)" : "0 2px 12px rgba(0,0,0,.04)" }}>
+                <div key={p.id} id={`program-${p.id}`} style={{ width: "100%", display: "flex", flexDirection: "column", position: "relative", overflow: "visible", background: "#fff", borderRadius: 16, padding: "18px 18px 14px", border: p.id === focusProgramId ? "2px solid #d44000" : "1px solid rgba(0,0,0,.07)", boxShadow: p.id === focusProgramId ? "0 8px 24px rgba(212,64,0,.12)" : "0 2px 12px rgba(0,0,0,.04)" }}>
                   {/* Partager — haut à droite de la carte (2026-09-05, demande explicite de
                       Gildas) — reste ici plutôt que dans la ligne d'actions du bas, qui ne garde
                       que les 2 CTA principaux + le menu "⋯" (Dupliquer/Supprimer). Style piloté
@@ -452,19 +502,24 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                     title="Copier le lien de partage"
                     style={{
                       position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-                      padding: "6px 10px", borderRadius: 8,
-                      border: `1.5px solid ${linkCopied[p.id] ? "#d44000" : "rgba(0,0,0,.10)"}`,
-                      background: linkCopied[p.id] ? "rgba(212,64,0,0.06)" : "#fff",
-                      color: linkCopied[p.id] ? "#d44000" : "#8a8f94", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      padding: "6px 10px", borderRadius: 999,
+                      zIndex: 2, border: "none",
+                      background: linkCopied[p.id] ? "#d44000" : "rgba(255,255,255,.92)",
+                      color: linkCopied[p.id] ? "#fff" : "#171b1f", fontSize: 12, fontWeight: 700, cursor: "pointer",
                     }}
                   >
                     {linkCopied[p.id] ? "✓ Copié" : "🔗 Partager"}
                   </button>
 
-                  {/* Sport icon */}
-                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 10 }}>
-                    {emoji}
-                  </div>
+                  {/* Bandeau visuel : photo du programme officiel, sinon dégradé de la famille + emoji. */}
+                  <Cover id={p.id} sport={p.sport} sizes="(min-width: 640px) 360px, 86vw" emojiSize={40} style={{ height: 110, margin: "-18px -18px 14px", borderRadius: "16px 16px 0 0" }}>
+                    <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 40%, rgba(0,0,0,.35))" }} />
+                    {(progress || (coachSide && programAssignments.length > 0)) && (
+                      <div style={{ position: "absolute", left: 12, top: 12, fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, color: "#fff", background: progress ? "rgba(47,158,68,.92)" : "rgba(23,27,31,.75)", padding: "4px 9px", borderRadius: 999 }}>
+                        {progress ?? `${programAssignments.length} sportif${programAssignments.length > 1 ? "s" : ""}`}
+                      </div>
+                    )}
+                  </Cover>
 
                   {/* Name */}
                   <div style={{ fontSize: 17, fontWeight: 800, color: "#171b1f", letterSpacing: "-0.03em", marginBottom: 4, lineHeight: 1.2 }}>
@@ -512,14 +567,14 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                                 <span style={{ fontSize: 11, color: "#8a8f94" }}>{a.start_date > todayStr ? "Démarre" : "Démarré"} {fmtDate(a.start_date)}</span>
                                 <div style={{ position: "relative" }}>
                                   <button
-                                    onClick={() => setRowMenuId(id => id === a.id ? null : a.id)}
+                                    onClick={e => { placeMenu(e); setRowMenuId(id => id === a.id ? null : a.id); }}
                                     aria-label="Actions"
                                     style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "#f1f0ee", color: "#8a8f94", fontSize: 14, cursor: "pointer", lineHeight: 1 }}
                                   >⋯</button>
                                   {rowMenuId === a.id && (
                                     <>
                                       <div onClick={() => setRowMenuId(null)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
-                                      <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 210, overflow: "hidden" }}>
+                                      <div style={{ position: "fixed", top: menuPos?.top, right: menuPos?.right, transform: menuPos?.up ? "translateY(-100%)" : undefined, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 210, overflow: "hidden" }}>
                                         <button
                                           onClick={() => { setRowMenuId(null); setDateEdit({ assignmentId: a.id, date: todayStr }); }}
                                           style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#171b1f" }}
@@ -553,7 +608,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                   )}
 
                   {/* Actions */}
-                  <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ marginTop: "auto", borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
                     <button
                       onClick={() => gate(() => setStep({ type: "assign", programId: p.id, programName: p.name }))}
                       style={{ flex: 1, padding: "9px 0", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
@@ -574,13 +629,13 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                         — seuls Assigner/Modifier restent des CTA visibles en permanence. */}
                     <div style={{ position: "relative" }}>
                       <button
-                        onClick={() => setMenuOpenId(id => id === p.id ? null : p.id)}
+                        onClick={e => { placeMenu(e); setMenuOpenId(id => id === p.id ? null : p.id); }}
                         style={{ padding: "9px 10px", borderRadius: 12, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", fontSize: 14, cursor: "pointer", color: "#8a8f94" }}
                       >⋯</button>
                       {menuOpenId === p.id && (
                         <>
                           <div onClick={() => setMenuOpenId(null)} style={{ position: "fixed", inset: 0, zIndex: 19 }} />
-                          <div style={{ position: "absolute", bottom: "calc(100% + 6px)", right: 0, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
+                          <div style={{ position: "fixed", top: menuPos?.top, right: menuPos?.right, transform: menuPos?.up ? "translateY(-100%)" : undefined, background: "#fff", borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 8px 24px rgba(0,0,0,.14)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
                             <button
                               onClick={() => { setMenuOpenId(null); gate(() => duplicateProgram(p)); }}
                               style={{ width: "100%", textAlign: "left", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#171b1f" }}
@@ -597,9 +652,11 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                 </div>
               );
             })}
-          </div>
+          </Carousel>
           </>
         )}
+
+        <TemplateSections userSport={userSport} onSelect={p => setStep({ type: "detail", program: p })} />
       </div>
       {resyncModal}
     </div>

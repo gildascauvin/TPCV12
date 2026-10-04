@@ -1,5 +1,6 @@
 "use client";
 
+import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import posthog from "posthog-js";
 import type { ProgramTemplate, SessionTemplate } from "@/types";
@@ -139,7 +140,7 @@ function ModelPicker({ userChip, onPick }: { userChip: string | null; onPick: (r
     (!q.trim() || `${i.s.name} ${i.program} ${i.s.notes}`.toLowerCase().includes(q.trim().toLowerCase())),
   ).slice(0, 40);
 
-  if (!items) return <div style={{ fontSize: 13, color: "#8a8f94", padding: "12px 0" }}>Chargement des modèles…</div>;
+  if (!items) return <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 0" }}>{[0, 1, 2, 3].map(i => <Skel key={i} h={56} r={12} />)}</div>;
   return (
     <div>
       <input value={q} onChange={e => setQ(e.target.value)} placeholder="Chercher : squat, fractionné, mobilité…"
