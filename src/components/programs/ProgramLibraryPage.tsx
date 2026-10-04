@@ -9,6 +9,7 @@ import ProgramCreatePicker from "./ProgramCreatePicker";
 import ProgramLibraryBrowser, { type LibraryProgram, fetchLibraryTemplate } from "./ProgramLibraryBrowser";
 import { CreateTiles, TemplateSections, Cover, Carousel, SectionHeader } from "./ProgramStoreSections";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 import ProgramTemplateDetail from "./ProgramTemplateDetail";
 import { programWeekIndex } from "@/lib/programAssignment";
 import ProgramBuilderModal from "./ProgramBuilderModal";
@@ -446,23 +447,29 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
       ? { background: "#f1f0ee", minHeight: "100vh", marginBottom: -132, paddingBottom: 132 }
       : { position: "fixed", inset: 0, background: "#f1f0ee", zIndex: 2147483100, display: "flex", flexDirection: "column" }
     }>
-      <div style={standalone ? { padding: "20px 20px 24px", maxWidth: 1100, margin: "0 auto" } : { flex: 1, overflowY: "auto", padding: "16px 20px 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          {/* Flèche retour seulement en modale : /programmes est une vraie page (bottom nav). */}
-          {!standalone && (
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "4px 8px 4px 0" }}>←</button>
-          )}
-          <div>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 30 : 26, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.03em", margin: 0 }}>Programmes</h1>
-            <div style={{ fontSize: 13, color: "#8a8f94", marginTop: 2 }}>Chaque séance s&apos;ajuste à la forme du jour.</div>
+      <div style={standalone ? undefined : { flex: 1, overflowY: "auto" }}>
+      {/* En-tête sur le fond sombre de l'app (2026-10-04, demande de Gildas), le reste reste clair. */}
+      <div style={{ background: DARK_CARD_BG }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: standalone ? "22px 20px 26px" : "16px 20px 24px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            {/* Flèche retour seulement en modale : /programmes est une vraie page (bottom nav). */}
+            {!standalone && (
+              <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.7)", fontSize: 18, padding: "4px 8px 4px 0" }}>←</button>
+            )}
+            <div>
+              <h1 style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 30 : 26, fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0 }}>Programmes</h1>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 2 }}>Chaque séance s&apos;ajuste à la forme du jour.</div>
+            </div>
           </div>
+          <CreateTiles
+            dark
+            onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
+            onImport={() => setStep({ type: "criteria", mode: "import" })}
+            onBlank={() => createBlankProgram()}
+          />
         </div>
-
-        <CreateTiles
-          onGenerate={() => setStep({ type: "criteria", mode: "criteria" })}
-          onImport={() => setStep({ type: "criteria", mode: "import" })}
-          onBlank={() => createBlankProgram()}
-        />
+      </div>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 20px 24px" }}>
 
         {loading ? (
           <div style={{ marginTop: 32 }}>
@@ -512,7 +519,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                   </button>
 
                   {/* Bandeau visuel : photo du programme officiel, sinon dégradé de la famille + emoji. */}
-                  <Cover id={p.id} sport={p.sport} sizes="(min-width: 640px) 360px, 86vw" emojiSize={40} style={{ height: 110, margin: "-18px -18px 14px", borderRadius: "16px 16px 0 0" }}>
+                  <Cover id={p.id} sport={p.sport} sizes="(min-width: 640px) 360px, 86vw" emojiSize={40} emojiAt="bottom-left" style={{ height: 110, margin: "-18px -18px 14px", borderRadius: "16px 16px 0 0" }}>
                     <div style={{ position: "absolute", inset: 0, background: "linear-gradient(transparent 40%, rgba(0,0,0,.35))" }} />
                     {(progress || (coachSide && programAssignments.length > 0)) && (
                       <div style={{ position: "absolute", left: 12, top: 12, fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, color: "#fff", background: progress ? "rgba(47,158,68,.92)" : "rgba(23,27,31,.75)", padding: "4px 9px", borderRadius: 999 }}>
@@ -657,6 +664,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         )}
 
         <TemplateSections userSport={userSport} onSelect={p => setStep({ type: "detail", program: p })} />
+      </div>
       </div>
       {resyncModal}
     </div>

@@ -4754,6 +4754,7 @@ POC : `~/Downloads/poc-element-activation-v5.html` (itéré v1→v5 avec Gildas)
 POC : `~/Downloads/poc-programme-header-v3.html` (section boutique).
 
 ### Page Programmes (`ProgramLibraryPage.tsx` liste + `ProgramStoreSections.tsx`)
+- En-tête (titre, accroche, tuiles) sur le fond sombre de l'app (`DARK_CARD_BG`, `CreateTiles dark`), le reste en clair. Sur les cartes « Mes programmes » sans photo, l'emoji est en bas à gauche (`Cover emojiAt="bottom-left"`), le haut-droit portant « Partager ».
 - Ordre : titre « Programmes » → **3 tuiles « Crée le tien »** (Générer, Importer, Programme vierge ; remplacent « + Nouveau ») → **« Mes programmes »** en carrousel → **« Pour toi · {sport} »** (modèles du même libellé de sport, sinon de la même famille ; masqué si sport inconnu, prop `userSport` lue dans `profiles.sport`) → **« Tous les modèles »** (recherche, filtres par famille, grille 4 colonnes desktop / 2 mobile).
 - Cartes « Mes programmes » : mêmes actions qu'avant (Assigner, Modifier, Partager, ⋯, suivi des sportifs), bandeau visuel, badge « En cours · S3/8 » (sportif) ou « N sportifs » (coach), en cours d'abord, même hauteur. Menus ⋯ en `position: fixed` (sinon rognés par le carrousel).
 - `Carousel` partagé : cartes alignées sur les bords du contenu, flèches (‹ desktop, › partout), points cliquables. `Cover` : photo WordPress via `next/image` (redimensionnée, WebP, lazy), sinon dégradé de la famille + emoji.

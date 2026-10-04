@@ -50,11 +50,16 @@ export function PageSkeleton({ variant }: { variant: PageSkeletonVariant }) {
   if (variant === "programmes") {
     return (
       <div style={wrap} aria-busy="true" aria-label="Chargement">
-        <div style={{ ...col, maxWidth: 1100, padding: "20px 20px 24px" }}>
-          <Skel w={190} h={30} />
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
-            {[0, 1, 2].map(i => <Skel key={i} h={104} r={16} />)}
+        {/* En-tête sombre, comme la vraie page (titre + 3 tuiles de création). */}
+        <div style={{ background: DARK_CARD_BG }}>
+          <div style={{ ...col, maxWidth: 1100, padding: "22px 20px 26px" }}>
+            <Skel dark w={190} h={30} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
+              {[0, 1, 2].map(i => <Skel key={i} dark h={104} r={16} />)}
+            </div>
           </div>
+        </div>
+        <div style={{ ...col, maxWidth: 1100, padding: "0 20px 24px" }}>
           <Skel w={160} h={18} style={{ marginTop: 18 }} />
           <div style={{ display: "flex", gap: 14, overflow: "hidden" }}>
             {[0, 1, 2].map(i => <Skel key={i} w="min(320px, 86%)" h={280} r={16} />)}

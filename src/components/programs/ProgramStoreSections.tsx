@@ -49,8 +49,10 @@ function familyGradient(sport: string | null): string {
 }
 
 /** Visuel d'un programme : photo WordPress optimisée, sinon dégradé de la famille + emoji. */
-export function Cover({ id, sport, sizes, emojiSize = 48, priority, style, children }: {
+export function Cover({ id, sport, sizes, emojiSize = 48, emojiAt = "top-right", priority, style, children }: {
   id: string | null; sport: string | null; sizes: string; emojiSize?: number; priority?: boolean;
+  /** "bottom-left" quand le coin haut-droit porte déjà un bouton (Partager des cartes "Mes programmes"). */
+  emojiAt?: "top-right" | "bottom-left";
   style?: React.CSSProperties; children?: React.ReactNode;
 }) {
   const photo = id ? programCover(id) : null;
@@ -58,7 +60,7 @@ export function Cover({ id, sport, sizes, emojiSize = 48, priority, style, child
     <div style={{ position: "relative", overflow: "hidden", background: photo ? "#d9d6d0" : familyGradient(sport), ...style }}>
       {photo
         ? <Image src={photo} alt="" fill sizes={sizes} priority={priority} style={{ objectFit: "cover" }} />
-        : <span aria-hidden="true" style={{ position: "absolute", top: "10%", right: "8%", fontSize: emojiSize, lineHeight: 1 }}>{programSportEmoji(sport)}</span>}
+        : <span aria-hidden="true" style={{ position: "absolute", ...(emojiAt === "bottom-left" ? { bottom: "10%", left: 16 } : { top: "10%", right: "8%" }), fontSize: emojiSize, lineHeight: 1, zIndex: 1 }}>{programSportEmoji(sport)}</span>}
       {children}
     </div>
   );
@@ -135,7 +137,7 @@ export function Carousel({ itemWidth, gap = 14, children }: { itemWidth: string;
 }
 
 /* ─── Créer le sien : 3 tuiles ─── */
-export function CreateTiles({ onGenerate, onImport, onBlank }: { onGenerate: () => void; onImport: () => void; onBlank: () => void }) {
+export function CreateTiles({ onGenerate, onImport, onBlank, dark = false }: { onGenerate: () => void; onImport: () => void; onBlank: () => void; dark?: boolean }) {
   const tiles = [
     { icon: "🎯", label: "Générer", sub: "Sport, objectif, jours", onClick: onGenerate },
     { icon: "📷", label: "Importer", sub: "Photo ou texte", onClick: onImport },
@@ -145,12 +147,12 @@ export function CreateTiles({ onGenerate, onImport, onBlank }: { onGenerate: () 
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
       {tiles.map(t => (
         <button key={t.label} onClick={t.onClick} className="tpc-lift" style={{
-          background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "14px 8px",
-          boxShadow: "0 2px 10px rgba(0,0,0,.03)", cursor: "pointer", textAlign: "center", fontFamily: "inherit",
+          background: dark ? "rgba(255,255,255,.055)" : "#fff", border: `1px solid ${dark ? "rgba(255,255,255,.10)" : "rgba(0,0,0,.08)"}`, borderRadius: 16, padding: "14px 8px",
+          boxShadow: dark ? "none" : "0 2px 10px rgba(0,0,0,.03)", cursor: "pointer", textAlign: "center", fontFamily: "inherit",
         }}>
-          <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, margin: "0 auto 8px" }}>{t.icon}</div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 13.5, fontWeight: 700, color: "#171b1f", lineHeight: 1.2 }}>{t.label}</div>
-          <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 3, lineHeight: 1.25 }}>{t.sub}</div>
+          <div style={{ width: 42, height: 42, borderRadius: 12, background: dark ? "rgba(255,255,255,.08)" : "#f1f0ee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, margin: "0 auto 8px" }}>{t.icon}</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 13.5, fontWeight: 700, color: dark ? "#fff" : "#171b1f", lineHeight: 1.2 }}>{t.label}</div>
+          <div style={{ fontSize: 11, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94", marginTop: 3, lineHeight: 1.25 }}>{t.sub}</div>
         </button>
       ))}
     </div>
