@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 import { useSearchParams, useRouter } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
@@ -1098,7 +1099,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               const doneTop = [...daySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
               const decisionDay: DecisionDay = daySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
                 : daySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
+                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
               const decision = computeDecisionCard({
                 day: decisionDay,
                 wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
@@ -1128,6 +1129,8 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    storedDecision={validDecision(autoregTarget)}
+                    viewer={{ role: "coach", subjectName: athlete.name }}
                     actionsSlot={autoregActionsSlot}
                     dir={decision.suggestion?.dir}
                     reco={decision.suggestion?.reco}

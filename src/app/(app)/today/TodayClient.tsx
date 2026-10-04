@@ -19,6 +19,7 @@ import { analyticsReady } from "@/lib/demoAnalytics";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
@@ -353,7 +354,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     ? { kind: "rest", tomorrowDifficulty }
     : autoregTargetTop
     ? { kind: "planned", tomorrowDifficulty }
-    : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
+    : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
   const decision = computeDecisionCard({
     day: decisionDay,
     wellnessScore: displayScore,
@@ -409,6 +410,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const decisionGaugeSlot: React.ReactNode = autoregTargetTop ? (
     <AutoregButtons
       sessionId={autoregTargetTop.id}
+      storedDecision={decisionLocked ? null : validDecision(autoregTargetTop)}
       /* Gratuit (2026-10-02) : réglage manuel sans zone ni reco, CTA sous l'anneau (la carte décision
          est floutée) ; c'est une entrée, donc enregistrée. */
       free={decisionLocked}
@@ -453,7 +455,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} /></div>;
+    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} zone={decision.doneZone} /></div>;
   })();
 
   useEffect(() => {
@@ -744,7 +746,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           active={homeTab}
           onChange={setHomeTab}
           previews={{
-            today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null),
+            today: decisionRingState(todaySessions, decision.suggestion, autoregPreview && autoregTargetTop && autoregPreview.sessionId === autoregTargetTop.id ? autoregPreview.pct : null, decision.doneZone),
             /* Onglet en mode exemple → miniature de l'exemple (2026-09-30, Gildas : elle incite au clic,
                et le bandeau "Exemple" de l'onglet dit ensuite ce que c'est). */
             charge: analyticsData && chargeReady ? aggregateFor("charge", analyticsData) : null,

@@ -65,6 +65,7 @@ export function decisionRingState(
   sessions: { done: boolean; rpe?: number | null; target_difficulty?: number | null }[],
   suggestion: { dir: AutoregDir; reco: number } | null | undefined,
   previewPct?: number | null,
+  doneZone?: { low: number; high: number } | null,
 ): DecisionRingState {
   const byDiff = [...sessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0));
   const undone = byDiff.find(s => !s.done);
@@ -79,7 +80,7 @@ export function decisionRingState(
   const done = byDiff[0];
   if (!done) return { value: 1, zoneLow: 1, zoneHigh: 2, rest: true };   // repos
   const target = Math.round(done.target_difficulty ?? done.rpe ?? 5);
-  return { value: done.rpe ?? target, zoneLow: target, zoneHigh: target, done: true };
+  return { value: done.rpe ?? target, zoneLow: doneZone ? doneZone.low : target, zoneHigh: doneZone ? doneZone.high : target, done: true };
 }
 
 /* Miniature de la jauge de décision (onglet Aujourd'hui) : même dégradé, même zone pointillée, même
@@ -135,7 +136,10 @@ export function RestDecisionRing({ size, light }: { size?: number; light?: boole
 /* Séance déjà faite (2026-09-30, Gildas : "dans le passé, je veux voir la jauge qu'il y ait une
    séance de faite ou non") — lecture seule, curseur sur le RPE réellement ressenti, repère blanc sur
    le prévu, zone = la difficulté prévue. Sans RPE noté, le curseur reste sur le prévu. */
-export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean }) {
+export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, zone }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean;
+  /* Zone proposée ce jour-là (decisionCard.doneZone, 2026-10-04) : le RPE réel se lit par rapport à
+     elle, plus seulement par rapport au plan. */
+  zone?: { low: number; high: number } | null }) {
   const target = planned ?? rpe ?? 5;
   const value = rpe ?? target;
   const hint = rpe === null ? "Séance faite · RPE non noté"
@@ -144,7 +148,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false }
     : `Séance faite · RPE ${rpe} pour ${planned} prévu`;
   return (
     <DecisionRing
-      zoneLow={Math.round(target)} zoneHigh={Math.round(target)} value={value} readOnly hideZone={hideZone} onChange={() => {}}
+      zoneLow={zone ? zone.low : Math.round(target)} zoneHigh={zone ? zone.high : Math.round(target)} value={value} readOnly hideZone={hideZone} onChange={() => {}}
       plannedMarker={planned}
       size={size} light={light}
       centerLabel={{ arrow: "✓", verb: "Faite" }}

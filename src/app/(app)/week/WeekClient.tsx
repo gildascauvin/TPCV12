@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { useDeviceNote } from "@/hooks/useDeviceNote";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -703,7 +704,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
               const decisionDay: DecisionDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
                 : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
+                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
               const decision = computeDecisionCard({
                 day: decisionDay,
                 wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
@@ -730,6 +731,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    storedDecision={validDecision(autoregTarget)}
+                    viewer={{ role: "athlete" }}
                     actionsSlot={autoregActionsSlot}
                     dir={decision.suggestion?.dir}
                     reco={decision.suggestion?.reco}

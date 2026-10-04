@@ -4807,3 +4807,15 @@ POC : `~/Downloads/poc-element-activation-v5.html` (v14, itéré avec Gildas). R
 - **Accueil** : en-tête et bandeau en pleine largeur comme le Planning ; espace bas réduit à 100 px (halo orange retiré, marges supprimées).
 - Perdu : le bouton « Hey coach » de partage du programme (reste « Inviter mon coach » dans le priming). Les bannières programme des cartes Coach Control en vue Groupe sont gardées.
 - Piège rencontré : le service worker servait d'anciens chunks après de nombreux changements à chaud (erreur « reading 'call' ») ; le vider avant de tester.
+
+## Décision d'autorégulation enregistrée sur la séance (2026-10-04)
+
+Cas réel de Gildas : « Surcharge » proposée (zone 7-8), maintenue à 5, RPE réel 6 → la carte disait « plus dure que prévu (6 pour 5) » alors que la reco allait dans son sens. La décision ne vivait qu'en localStorage du jour.
+
+- **Migration 030** (appliquée en prod) : `autoreg_decision jsonb` sur `sessions` et `coach_sessions` : `proposed` (sens ou null), `zoneLow/zoneHigh`, `original_difficulty`, `applied_difficulty`, `original` (notes + difficulté, pour le retour arrière), et côté serveur `by` (athlete/coach), `by_name`, `date`, `decided_at`.
+- **`POST /api/sessions/decision`** : écrit/efface ; déduit qui décide (propriétaire = sportif, coach lié ou propriétaire de la `coach_session` = coach), jamais pris du client.
+- **`src/lib/autoregDecisionRecord.ts`** : `validDecision(session)` (ignorée si `decision.date ≠ session.date` : une séance déplacée repart de zéro), `saveDecisionRecord` (fire-and-forget), `decisionSummary`, `feltLine`.
+- **`AutoregButtons`** (point unique) : enregistre à Maintenir/Appliquer, efface à « ↩ Séance prévue » ; props `storedDecision` (rend l'état décidé sur un autre appareil / côté coach) et `viewer`. Bandeau décidé sans chiffre : « Surcharge proposée, tu as maintenu. » / « Léa l'a appliquée » / « ton coach a maintenu » / « Ton plan était cohérent, tu as allégé. ». Reco figée au moment de la décision. Le réglage gratuit de l'anneau n'est pas une décision.
+- **Séance faite** (`decisionCard.ts`, `DecisionDay.decision`) : résumé de la décision + RPE réel vs zone proposée (« dans la zone proposée », « sous… : tu avais de la marge », « au-dessus… : plus dure que prévu ») ; sans décision enregistrée, reco recalculée depuis le check-in du matin ; sans reco, comparaison au plan, sans chiffre. `DecisionCard.doneZone` alimente `DoneDecisionRing zone` et la miniature de l'onglet Aujourd'hui.
+- **Coach Control** : un sportif dont la séance du jour porte une décision enregistrée (prise ailleurs ou par le sportif) part en « Plan cohérent » (`isReviewed`).
+- Décisions prises avant ce déploiement : localStorage seul, texte de repli « Ajustement appliqué. » / « Séance prévue maintenue. ».

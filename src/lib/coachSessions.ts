@@ -17,6 +17,7 @@ export function realToView(s: Session, athletes: CoachAthlete[]): CoachViewSessi
     exercise_media: s.exercise_media,
     viewed_by_athlete_at: s.viewed_by_athlete_at,
     viewed_by_coach_at: s.viewed_by_coach_at,
+    autoreg_decision: (s as { autoreg_decision?: CoachViewSession["autoreg_decision"] }).autoreg_decision ?? null,
   };
 }
 
@@ -36,6 +37,7 @@ export function demoToView(s: CoachSession): CoachViewSession {
     exercise_media: s.exercise_media,
     viewed_by_athlete_at: s.viewed_by_athlete_at,
     viewed_by_coach_at: s.viewed_by_coach_at,
+    autoreg_decision: (s as { autoreg_decision?: CoachViewSession["autoreg_decision"] }).autoreg_decision ?? null,
   };
 }
 

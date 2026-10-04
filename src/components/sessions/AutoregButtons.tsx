@@ -5,11 +5,12 @@ import { useEffect, useState } from "react";
 import { markFirstAdjustment } from "@/lib/onboardingProgress";
 import { createPortal } from "react-dom";
 import {
-  type AutoregDir, type AutoregOriginal, formatAutoregPoints, autoregCtaLabel, zoneRange,
+  type AutoregDir, type AutoregOriginal, autoregCtaLabel, zoneRange,
   pointsToPct, pctToPoints,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
 } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
+import { saveDecisionRecord, decisionSummary, type AutoregDecisionRecord, type DecisionViewer } from "@/lib/autoregDecisionRecord";
 import DecisionRing from "@/components/sessions/DecisionRing";
 
 // pct <-> difficulté (1-10) — vue/entrée de la jauge, jamais un nouvel axe de calcul : `selectedPct`
@@ -114,9 +115,14 @@ interface Props {
   free?: boolean;
   /* Gratuit : enregistre la seule difficulté prévue (aucun exercice modifié). */
   onSetDifficulty?: (newDifficulty: number) => Promise<void>;
+  /* Décision persistée sur la séance (migration 030, `validDecision(session)`) : rend l'état décidé
+     sur un autre appareil ou côté coach, là où le localStorage du jour est vide. */
+  storedDecision?: AutoregDecisionRecord | null;
+  /* Qui regarde, pour le texte "Surcharge proposée, tu as maintenu / Léa a maintenu". */
+  viewer?: DecisionViewer;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessionLabel, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" } }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -135,6 +141,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
      nulle part ailleurs. */
   const [decidedPlannedDiff, setDecidedPlannedDiff] = useState<number | null>(null);
   const [applying, setApplying] = useState(false);
+  const [record, setRecord] = useState<AutoregDecisionRecord | null>(null);
   const [undoing, setUndoing] = useState(false);
 
   useEffect(() => {
@@ -149,6 +156,16 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
          ajustées — l'ajustement était donc appliqué deux fois à l'affichage (@150kg -> DB @120kg ->
          affiché "@120kg barré -> @96kg"), et ça survivait au rechargement puisque cet effet relit la
          décision au montage. */
+      onPreviewChange?.(null);
+      if (storedDecision) setRecord(storedDecision);
+      return;
+    }
+    if (!free && storedDecision) {
+      const o = storedDecision.original_difficulty, a = storedDecision.applied_difficulty;
+      setMode("decided");
+      setDecidedPct(Math.round(a) === Math.round(o) ? null : pointsToPct(Math.round(a - o)));
+      setDecidedPlannedDiff(Math.round(a) === Math.round(o) ? null : o);
+      setRecord(storedDecision);
       onPreviewChange?.(null);
       return;
     }
@@ -214,12 +231,27 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     if (!free) onPreviewChange?.(v);
   }
 
+  function recordFor(applied: number, original?: AutoregOriginal | null): AutoregDecisionRecord {
+    return {
+      proposed: hasSuggestion ? dir! : null,
+      zoneLow: hasSuggestion ? zoneLow : null,
+      zoneHigh: hasSuggestion ? zoneHigh : null,
+      original_difficulty: plannedDifficulty,
+      applied_difficulty: applied,
+      original: original ?? null,
+      by: viewer.role,
+    };
+  }
+
   async function maintenir() {
     haptic("light");
     // `cursorDir` plutôt que `dir` (absent en mode libre, voir plus haut) — sans effet visible pour
     // "Maintenir" (pct=null, aucun texte/couleur n'en dépend en mode "decided"), mais reste correct
     // dans les deux cas plutôt que de forcer une valeur arbitraire.
     setAutoregDecision(sessionId, cursorDir, null);
+    const rec = recordFor(plannedDifficulty);
+    setRecord(rec);
+    saveDecisionRecord(sessionId, rec);
     setMode("decided");
     setDecidedPct(null);
     setDecidedPlannedDiff(null);
@@ -271,6 +303,9 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     // prop isActive plus haut). La jauge reste ouverte, prête à réessayer après connexion.
     if (isActive === false) { clearAutoregDecision(sessionId); return; }
     setAutoregDecision(sessionId, cursorDir, pctToApply, original ?? undefined);
+    const rec = recordFor(Math.round(diffFromPct(plannedDifficulty, pctToApply)), original || null);
+    setRecord(rec);
+    saveDecisionRecord(sessionId, rec);
     setMode("decided");
     setDecidedPct(pctToApply);
     setDecidedPlannedDiff(original?.target_difficulty ?? null);
@@ -282,7 +317,9 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
   async function undo() {
     const decision = getAutoregDecision(sessionId);
     setUndoing(true);
-    await onUndo?.(decision?.original);
+    await onUndo?.(decision?.original ?? record?.original ?? undefined);
+    saveDecisionRecord(sessionId, null);
+    setRecord(null);
     setUndoing(false);
     clearAutoregDecision(sessionId);
     setMode("active");
@@ -299,7 +336,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, sessi
     <div style={{ display: "flex", alignItems: "center", gap: 8, background: light ? "rgba(0,0,0,.04)" : "rgba(255,255,255,.08)", border: `1px solid ${light ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.12)"}`, borderRadius: 12, padding: "8px 11px" }}>
       <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2a8045", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 900, flexShrink: 0 }}>✓</div>
       <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: light ? "rgba(0,0,0,.75)" : "rgba(255,255,255,.9)", minWidth: 0 }}>
-        {decidedPct !== null ? `${formatAutoregPoints(decidedPct)} appliqué · ${sessionLabel}` : `Maintenu · ${sessionLabel}`}
+        {(record && decisionSummary(record, viewer)) || (decidedPct !== null ? "Ajustement appliqué." : "Séance prévue maintenue.")}
       </div>
       <button onClick={undo} disabled={undoing} style={{ background: "none", border: "none", color: light ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.5)", fontSize: 11, fontWeight: 700, cursor: undoing ? "default" : "pointer", opacity: undoing ? 0.6 : 1, flexShrink: 0, whiteSpace: "nowrap" }}>
         {undoing ? "..." : "↩ Séance prévue"}

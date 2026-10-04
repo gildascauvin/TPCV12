@@ -6,6 +6,7 @@ import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import { RestDecisionRing, DoneDecisionRing } from "@/components/sessions/DecisionRing";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 import LockedBlur from "@/components/paywall/LockedBlur";
 import AlertBox from "@/components/calendar/AlertBox";
 import ShareButton from "@/components/sessions/ShareButton";
@@ -291,7 +292,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
     phaseDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
       : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-      : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty };
+      : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
   }
   const decision = computeDecisionCard({
     day: phaseDay,
@@ -410,6 +411,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
             <div onClick={e => e.stopPropagation()}>
               <AutoregButtons
                 sessionId={topSession!.id}
+                storedDecision={validDecision(topSession)}
+                viewer={selfView ? { role: "athlete" } : { role: "coach", subjectName: athlete.name }}
                 dir={decision.suggestion?.dir}
                 reco={decision.suggestion?.reco}
                 advice=""
@@ -440,7 +443,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           ) : todaySessions.length === 0 || !topSession ? (
             <RestDecisionRing size={ringSz} />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} />
           )}
         </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (

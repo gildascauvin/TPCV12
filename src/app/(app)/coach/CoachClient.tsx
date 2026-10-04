@@ -1,4 +1,5 @@
 "use client";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -443,8 +444,12 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const { monotonyVal, strainVal } = msFor(a.id);
     return hasSessions && (attention(a, maxDiffToday(a.id, sessions), trends[a.id], baselines[a.id], monotonyVal, strainVal) || hasCardSuggestion(a));
   };
-  const priority = athletes.filter(a => needsDecision(a) && !reviewedIds.has(a.id));
-  const stable = athletes.filter(a => !needsDecision(a) || reviewedIds.has(a.id));
+  /* Décision prise aujourd'hui, ici (reviewedIds) ou ailleurs (enregistrée sur la séance, migration
+     030 : autre appareil, ou décidée par le sportif lui-même). */
+  const isReviewed = (a: CoachAthlete) => reviewedIds.has(a.id)
+    || (selectedDate === today && sessions.some(s => s.athlete_id === a.id && !s.done && s.date === today && !!validDecision(s)));
+  const priority = athletes.filter(a => needsDecision(a) && !isReviewed(a));
+  const stable = athletes.filter(a => !needsDecision(a) || isReviewed(a));
   const sortedPriority = [...priority].sort((a, b) => {
     const msA = msFor(a.id), msB = msFor(b.id);
     return riskScore(b, maxDiffToday(b.id, sessions), trends[b.id], baselines[b.id], msB.monotonyVal, msB.strainVal)
@@ -466,7 +471,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const displayedPriority = (selectedAthleteId ? sortedPriority.filter(a => a.id === selectedAthleteId) : sortedPriority).filter(metricOk);
   /* Les sportifs qu'on vient de traiter en TÊTE de "Plan cohérent" — sans ça, la carte quitte un
      carrousel horizontal pour atterrir en bas d'une grille, et donne l'impression d'avoir disparu. */
-  const sortedStable = [...stable].sort((a, b) => Number(reviewedIds.has(b.id)) - Number(reviewedIds.has(a.id)));
+  const sortedStable = [...stable].sort((a, b) => Number(isReviewed(b)) - Number(isReviewed(a)));
   const displayedStable = (selectedAthleteId ? sortedStable.filter(a => a.id === selectedAthleteId) : sortedStable).filter(metricOk);
   // Une seule pancarte par écran (2026-10-02) : sur la 1re carte floutée.
   const firstLockedCardId = [...displayedPriority, ...displayedStable].find(a => !canDecideFor(a))?.id ?? null;
@@ -504,6 +509,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   function unmarkAutoregDecided(athleteId: string) {
     setReviewedIds(prev => { const s = new Set(Array.from(prev)); s.delete(athleteId); return s; });
+    // La décision enregistrée en base est effacée par AutoregButtons ; on l'oublie aussi localement.
+    setSessions(prev => prev.map(s => s.athlete_id === athleteId ? { ...s, autoreg_decision: null } : s));
   }
 
   /* Ouvre le drawer d'édition libre (CoachSessionModal) pour cet athlète — remplace l'ancien
@@ -628,7 +635,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
   // Nombre de décisions réellement prises aujourd'hui — sert au wording de l'état vide ci-dessous
   // (distinguer "rien à décider" de "tu as tout traité").
-  const decidedTodayCount = athletes.filter(a => reviewedIds.has(a.id)).length;
+  const decidedTodayCount = athletes.filter(a => isReviewed(a)).length;
 
   // Rings + points de séance dans le calendrier popup (2026-09-24) — réservés au contexte "un seul
   // sportif" (Gildas : "quand on est... filtré sur un [athlète]"), jamais sur "Tous" (pas de score

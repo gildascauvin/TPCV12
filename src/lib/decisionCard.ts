@@ -3,7 +3,8 @@ import { daysAgoStr, dailyLoad, partialChargeReady, monotony, strain, acwr, form
 import { sigDimInfo, trendDimInfo, crossTrendInsight, type Severity as PhaseSeverity } from "@/lib/fatigueSignature";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, qualitativeDifficulty, absoluteFeel, type AutoregSuggestion } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, qualitativeDifficulty, absoluteFeel, zoneRange, pctToPoints, type AutoregSuggestion } from "@/lib/autoregulation";
+import { decisionSummary, feltLine, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 
 /* Carte décision unifiée /today + Coach Control + Planning (2026-09, 2e itération — remplace la
    compétition todaySug/chargeRecupSug de la 1re itération) : UN SEUL calcul, toujours contre la
@@ -129,6 +130,9 @@ export interface DecisionCard {
        rempli mais pas encore de norme personnelle. L'appelant montre alors la phase de l'exemple, comme
        les onglets Charge/Récup (demoAnalytics). */
     insufficient?: boolean };
+  /* Séance faite (2026-10-04) : zone proposée ce jour-là (décision enregistrée, sinon reco recalculée
+     depuis le check-in), pour que l'anneau "Faite" situe le RPE réel par rapport à elle. */
+  doneZone?: { low: number; high: number } | null;
 }
 
 /* État de la journée vu par la carte (2026-09-29). `planned` = une séance reste à faire ;
@@ -137,7 +141,7 @@ export interface DecisionCard {
    (on ne parle alors pas de demain). */
 export type DecisionDay =
   | { kind: "planned"; tomorrowDifficulty?: number | null }
-  | { kind: "done"; rpe: number | null; planned: number | null; tomorrowDifficulty?: number | null }
+  | { kind: "done"; rpe: number | null; planned: number | null; tomorrowDifficulty?: number | null; decision?: AutoregDecisionRecord | null }
   | { kind: "rest"; tomorrowDifficulty?: number | null };
 
 type Voice = { coach: boolean; subject?: string };
@@ -369,14 +373,23 @@ function withPhase(
     return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${tomorrowLine}`, phase };
   }
   if (day.kind === "done") {
-    const gap = day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null;
-    const felt = day.rpe === null
-      ? v(voice, "Pense à noter ton RPE.", "RPE pas encore noté.")
-      : gap === null ? `RPE ${day.rpe}.`
-      : gap >= 1 ? `Ressentie plus dure que prévu (${day.rpe} pour ${day.planned}).`
-      : gap <= -1 ? `Ressentie plus facile que prévu (${day.rpe} pour ${day.planned}).`
-      : "Ressentie comme prévu.";
-    return { suggestion: null, icon: "🟢", text: `Séance faite\n${felt}`, phase };
+    /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
+       reco était 7-8), pas seulement le plan. Décision enregistrée d'abord ; sans elle (séance faite
+       sans passer par la carte), reco recalculée depuis le check-in du matin. */
+    const rec = day.decision ?? null;
+    let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null
+      ? { low: rec.zoneLow, high: rec.zoneHigh } : null;
+    if (!rec && params.wellnessFilledToday && day.planned !== null) {
+      const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty);
+      if (sug) {
+        const z = zoneRange(Math.round(day.planned + pctToPoints(sug.reco)), sug.dir);
+        zone = { low: z.zoneLow, high: z.zoneHigh };
+      }
+    }
+    const coachVoice = voice.coach || !!voice.subject;
+    const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
+    const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
+    return { suggestion: null, icon: "🟢", text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
   }
 
   const planned = params.plannedDifficulty ?? 6;

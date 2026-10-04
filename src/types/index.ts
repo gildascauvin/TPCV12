@@ -73,6 +73,8 @@ export interface Session {
   paused_ms?: number | null;
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
+  /* Décision d'autorégulation (migration 030), voir autoregDecisionRecord.ts. */
+  autoreg_decision?: import("@/lib/autoregDecisionRecord").AutoregDecisionRecord | null;
 }
 
 export interface CoachAthlete {
@@ -165,6 +167,7 @@ export interface CoachViewSession {
   exercise_media?: Record<string, ExerciseAttachments> | null;
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
+  autoreg_decision?: import("@/lib/autoregDecisionRecord").AutoregDecisionRecord | null;
 }
 
 export interface FatigueLog {
