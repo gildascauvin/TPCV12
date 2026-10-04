@@ -34,7 +34,8 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import ShareButton from "@/components/sessions/ShareButton";
+import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
+import { ACTIVITY_RECONDUIRE, ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 
 /* Modales/drawers ouverts sur demande (état local, jamais montés au premier rendu) — next/dynamic
    déplace leur JS (dont AddSessionModal → ExerciseBlockEditor 1500+ lignes + dnd-kit d'autocomplete,
@@ -163,6 +164,37 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     const params = new URLSearchParams(searchParams.toString());
     params.delete("quickadd");
     router.replace(params.toString() ? `/week?${params.toString()}` : "/week");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  /* ↻ du bandeau d'activité (2026-10-04) : reconduit la semaine affichée. Sur cette page, la modale
+     s'ouvre directement ; depuis une autre page, le bandeau arrive ici avec ?reconduire=<lundi>. */
+  useEffect(() => {
+    const onReconduire = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; handled: boolean }>).detail;
+      d.handled = true;
+      if (d.monday !== format(dates[0], "yyyy-MM-dd")) handleDateChange(d.monday);
+      setShowReconduire(true);
+    };
+    window.addEventListener(ACTIVITY_RECONDUIRE, onReconduire);
+    return () => window.removeEventListener(ACTIVITY_RECONDUIRE, onReconduire);
+  });
+  useEffect(() => {
+    const onLabel = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; label: string | null }>).detail;
+      setFreeLabels(prev => { const n = { ...prev }; if (d.label) n[d.monday] = d.label; else delete n[d.monday]; return n; });
+    };
+    window.addEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+    return () => window.removeEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+  }, []);
+  useEffect(() => {
+    const monday = searchParams.get("reconduire");
+    if (!monday || !/^\d{4}-\d{2}-\d{2}$/.test(monday)) return;
+    if (monday !== format(dates[0], "yyyy-MM-dd")) handleDateChange(monday);
+    setShowReconduire(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("reconduire");
+    router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -320,7 +352,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     if (viewMode !== "week") return;
     const idx = dates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
     if (idx >= 0) {
-      dayRefs.current[idx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      scrollIntoViewX(dayRefs.current[idx]);
     }
   }, [weekBase, selectedDate, viewMode]);
 
@@ -510,12 +542,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     }
   }
 
-  // Programme + semaine correspondant à la semaine actuellement affichée (navigation) —
-  // un sportif pouvant enchaîner plusieurs programmes actifs, celui pertinent pour la
-  // semaine affichée n'est pas forcément `activeProgram` (qui reste "pertinent aujourd'hui").
-  const viewedMatch = findProgramForWeek(activeAssignments, format(dates[0], "yyyy-MM-dd"));
-  const viewedProgram = viewedMatch?.program ?? null;
-  const viewedProgramWeek = viewedMatch?.week ?? -1;
   const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
   // Plus de flou S2+ (freemium 2026-09-30) : la programmation est une entrée, tout le planning est lisible.
   const weekLocked = false;
@@ -577,33 +603,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
-      <ProgramBanner
-        dark
-        program={viewedProgram}
-        currentWeek={viewedProgramWeek}
-        onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/athlete/programmes" : "/programmes") : undefined}
-        onReconduire={() => setShowReconduire(true)}
-        freeLabel={freeLabels[format(dates[0], "yyyy-MM-dd")] ?? null}
-        onEditFreeLabel={label => setFreeLabelForWeek(format(dates[0], "yyyy-MM-dd"), label)}
-        /* Sportif→coach "comme un programme claimé" (2026-09-13, voir CLAUDE.md) — absent en
-           sandbox (aucun vrai programme à rendre public). getShareUrl garantit is_public=true
-           avant de renvoyer /p/[id], même logique que shareProgram() dans ProgramLibraryPage.tsx. */
-        inviteCoachAction={!sandboxMode && viewedProgram ? (
-          <ShareButton
-            title="Hey coach, regarde le programme que j'ai fait avec ThePerfClub, viens me l'ajuster !"
-            getShareUrl={async () => {
-              if (!viewedProgram.is_public) {
-                await fetch(`/api/programs/${viewedProgram.id}`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ is_public: true }),
-                });
-              }
-              return `${window.location.origin}/p/${viewedProgram.id}`;
-            }}
-          />
-        ) : undefined}
-      />
+      {/* Bannière programme fusionnée dans le bandeau d'activité du header (2026-10-04). */}
 
       {activeProgram && activeProgramWeek === -1 && activeProgramStartDate
         && new Date(activeProgramStartDate + "T12:00:00").getTime() > Date.now()

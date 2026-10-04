@@ -27,16 +27,14 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
-import ProgramBanner from "@/components/programs/ProgramBanner";
-import { programWeekIndex } from "@/lib/programAssignment";
 import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
-import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
-import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
+import TodaySessionCard from "@/components/sessions/TodaySessionCard";
+import { findProgramForWeek } from "@/lib/programAssignment";
+import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
+import { programSportEmoji } from "@/lib/sportCategories";
 import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
-import ShareButton from "@/components/sessions/ShareButton";
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -50,7 +48,7 @@ import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 import { PLANNED_RPE, PLANNED_LABEL, type PlannedIntensity } from "@/lib/plannedIntensity";
-import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
+import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
@@ -71,202 +69,8 @@ function localWellness(d: { sleep: number; stress: number; recovery: number; mot
   };
 }
 
-function DiffGauge({ value, height = 12 }: { value: number | null; height?: number }) {
-  if (!value) return null;
-  const cls = value >= 8 ? "hard" : value >= 5 ? "moderate" : "easy";
-  const bg: Record<string, string> = {
-    hard: "linear-gradient(90deg,#ffb5a7,#d44000)",
-    moderate: "linear-gradient(90deg,#ffe0a0,#f28a00)",
-    easy: "linear-gradient(90deg,#bfeec8,#2f9e44)",
-  };
-  const w = Math.max(22, Math.min(100, Math.round(value * 10)));
-  return (
-    <div style={{ width: "100%", height, borderRadius: 999, background: "#e7e4df", overflow: "hidden" }}>
-      <div style={{ height: "100%", borderRadius: 999, width: `${w}%`, background: bg[cls], transition: "width .22s ease" }} />
-    </div>
-  );
-}
 
-/* ─── Today session card — reste CLAIRE (2026-09-24, redesign "bg dark, plus de card" — voir POC
-   `poc-coach-context_4.html`) : le "plus de card" ne s'applique qu'à l'en-tête ring/décision (voir
-   plus bas, devenu flush sur le fond sombre de la page) — la carte séance, elle, reste un vrai bloc
-   blanc posé SUR ce fond sombre, exactement comme le `.session`/`.ath-session` du POC (jamais
-   retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
-   actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
-   background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart }: {
-  session: Session;
-  onComplete: (s: Session) => void;
-  /* Séance en direct (2026-10-02) : Démarrer / Reprendre, seulement pour une séance du jour à faire. */
-  onStart?: (s: Session) => void;
-  onEdit: (s: Session) => void;
-  authorName: string;
-  /* Décharge/surcharge en cours de sélection ou déjà appliquée (autorégulation) — surligne en
-     orange les lignes réellement modifiées, undefined/null partout ailleurs (comportement inchangé). */
-  previewPct?: number | null;
-  /* Drag & drop des exercices — même composant/geste que /week et /coach/planning
-     (DraggableExerciseLine, DraggablePlanning.tsx). DndContext scopé à cette carte (une seule
-     séance ici, contrairement au Planning qui en gère plusieurs sur une grille de jours). */
-  onReorderExercises: (sessionId: string, fromIdx: number, toIdx: number) => void;
-  /* Vrai pour la SEULE séance dont la jauge a été promue en tête de l'onglet (3e itération
-     2026-09-29) : son curseur y affiche déjà la difficulté prévue, une DiffGauge ici serait la
-     deuxième jauge de la même séance — exactement ce que "la jauge de décision EST la jauge de la
-     séance, pas 2 jauges" écartait. Les autres séances du jour (et toute séance terminée, qui
-     affiche son RPE réel) gardent la leur. */
-  hideGauge?: boolean;
-}) {
-  const live = isLive(session);
-  const isFuture = session.date > format(new Date(), "yyyy-MM-dd");
-  const [, setLiveTick] = useState(0);
-  useEffect(() => {
-    if (!live) return;
-    const t = setInterval(() => setLiveTick(x => x + 1), 1000);
-    return () => clearInterval(t);
-  }, [live]);
-  const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
-  const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
-  const exerciseSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  function handleExerciseDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over) return;
-    const activeData = active.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
-    const overData = over.data.current as { type?: string; sessionId?: string; index?: number } | undefined;
-    if (activeData?.type !== "exercise" || overData?.type !== "exercise" || overData.sessionId !== activeData.sessionId) return;
-    onReorderExercises(activeData.sessionId!, activeData.index!, overData.index!);
-  }
-  const [justDone, setJustDone] = useState(false);
-  const prevDoneRef = useRef(session.done);
-  useEffect(() => {
-    if (!prevDoneRef.current && session.done) {
-      setJustDone(true);
-      const t = setTimeout(() => setJustDone(false), 700);
-      return () => clearTimeout(t);
-    }
-    prevDoneRef.current = session.done;
-  }, [session.done]);
-
-  return (
-    <div
-      data-tour="session-card"
-      className="mb-2 cursor-pointer"
-      style={{
-        background: "#fff",
-        border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
-        boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
-        padding: 18, borderRadius: 24,
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
-        animation: justDone ? "sessionDone 0.7s ease" : undefined,
-      }}
-      onClick={() => onEdit(session)}
-    >
-      {/* 1. Name + badge */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-        <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
-          {session.name}
-        </span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          <span style={{
-            fontFamily: "var(--font-mono), monospace",
-            fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap",
-            background: session.done ? "rgba(47,158,68,.13)" : "rgba(212,64,0,0.10)",
-            color: session.done ? "#2f9e44" : "#d44000",
-          }}>
-            {session.done ? "Terminé" : live ? `● En cours · ${formatChrono(liveElapsedMs(session))}` : "Prévu"}
-          </span>
-          <ShareButton
-            resourceType="session"
-            buildSnapshot={() => ({
-              name: session.name,
-              done: session.done,
-              difficulty: gaugeValue,
-              exercises,
-              authorName,
-            })}
-            title={session.name}
-            text={exercises.length ? `${exercises.length} exercice${exercises.length > 1 ? "s" : ""}` : undefined}
-          />
-        </div>
-      </div>
-
-      {/* 2. Single difficulty gauge (no label) — masquée pour la séance dont la jauge de décision a
-         été promue en tête de l'onglet, voir `hideGauge`. */}
-      {!hideGauge && gaugeValue && (
-        <div style={{ marginBottom: 12 }}>
-          <DiffGauge value={gaugeValue} height={12} />
-        </div>
-      )}
-
-      {/* 3. Exercise display list — drag & drop, même composant que /week et /coach/planning */}
-      {exercises.length > 0 && (
-        <div style={{ marginBottom: 12, border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
-          <DndContext sensors={exerciseSensors} onDragEnd={handleExerciseDragEnd}>
-            {exercises.map((ex, i) => {
-              const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
-              const unseen = hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
-              return (
-                <DraggableExerciseLine key={i} sessionId={session.id} index={i} text={modified} originalText={ex} unseen={unseen} />
-              );
-            })}
-          </DndContext>
-        </div>
-      )}
-
-      {/* 4. Résultat (séance faite) : durée et difficulté réelle, sans bouton — un tap dessus rouvre
-          la saisie du résultat pour le corriger (2026-10-02). */}
-      {session.done && (session.duration || session.rpe) ? (
-        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, cursor: "pointer" }}>
-          {session.duration ? (
-            <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>
-              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MIN</div>
-            </div>
-          ) : <div />}
-          {session.rpe ? (
-            <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.rpe}</div>
-              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
-            </div>
-          ) : <div />}
-        </div>
-      ) : session.done ? null : isFuture ? null : (
-        /* 5. Actions — aujourd'hui : Démarrer (+ « Déjà faite ? ») ; jour passé : Terminer. Jamais
-           sur un jour futur (on ne termine pas une séance qui n'a pas eu lieu). Dupliquer vit
-           désormais dans le tiroir d'édition (2026-10-02). */
-        <div onClick={e => e.stopPropagation()}>
-          {onStart ? (
-            <button
-              onClick={() => onStart(session)}
-              style={{
-                width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
-                background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
-              }}
-            >
-              {live ? "Reprendre la séance" : "▶ Démarrer la séance"}
-            </button>
-          ) : (
-            <button
-              data-tour="terminer-btn"
-              onClick={() => onComplete(session)}
-              style={{
-                width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none",
-                background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)",
-              }}
-            >
-              Terminer<span className="tour-lock">🔒</span>
-            </button>
-          )}
-          {onStart && !live && (
-            <div style={{ textAlign: "center", marginTop: 10 }}>
-              <button onClick={() => onComplete(session)} style={{ border: "none", background: "none", color: "#8a8f94", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
-                Déjà faite ? Noter le résultat
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// TodaySessionCard déplacée dans src/components/sessions/TodaySessionCard.tsx (2026-10-04, partagée avec Coach Control).
 
 /* ─── Main component ─── */
 interface Props {
@@ -805,20 +609,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
   // surcharge), déclenchée depuis "⎘ Dupliquer" du tiroir de séance.
+  // Thèmes de semaine (calendrier) : mis à jour sans recharger quand on les modifie depuis le bandeau.
+  const [weekLabels, setWeekLabels] = useState<Record<string, string>>((profile.free_training_label as Record<string, string> | null) ?? {});
+  useEffect(() => {
+    const onLabel = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; label: string | null }>).detail;
+      setWeekLabels(prev => { const n = { ...prev }; if (d.label) n[d.monday] = d.label; else delete n[d.monday]; return n; });
+    };
+    window.addEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+    return () => window.removeEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+  }, []);
   const [duplicating, setDuplicating] = useState<Session | null>(null);
   // "↻ Reconduire" du bandeau programme : même modale, date par défaut = même jour la semaine suivante.
   const [duplicateDefaultDate, setDuplicateDefaultDate] = useState<string | undefined>(undefined);
-  // Libellé "Séances libres" par semaine (clé = lundi), même stockage que /week.
-  const [freeLabels, setFreeLabels] = useState<Record<string, string>>((profile.free_training_label as Record<string, string> | null) ?? {});
-  async function setFreeLabelForWeek(mondayStr: string, label: string) {
-    const value = label.trim();
-    const next = { ...freeLabels };
-    if (value) next[mondayStr] = value; else delete next[mondayStr];
-    setFreeLabels(next);
-    if (sandboxMode) return;
-    const { error } = await supabase.from("profiles").update({ free_training_label: next }).eq("user_id", userId);
-    if (error) console.error("[today] free_training_label update error:", error);
-  }
   const duplicateSession = useCallback(async (newDate: string, pct: number = 0) => {
     notifyOnboardingProgressSoon();
     if (!duplicating) return;
@@ -858,9 +661,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // séparé en dessous, plus d'eyebrow "Score & conseils" au-dessus) : le ring redevient le seul
   // readout de ce bloc, il peut/doit prendre plus de place — même principe que CoachCard, à une
   const pad = isLg ? 32 : isMd ? 24 : 16;
-  // Même largeur que le contenu ci-dessous — alignement CalendarHeader/
-  // contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav... et les contenus").
-  const contentMaxWidth = isLg ? 1000 : isMd ? 720 : undefined;
 
   // Rings + points de séance dans le calendrier popup (2026-09-24, POC datepicker) — /today est
   // toujours un contexte "un seul sportif" (soi-même), showRings reste donc vrai en permanence ici
@@ -918,15 +718,27 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         // ce padding laisse une bande de fond clair (bg-bg hérité) visible juste au-dessus de la
         // bottom nav flottante. Étend ce fond sombre pour couvrir cette zone au lieu de la laisser
         // apparaître nue.
-        marginBottom: -132, paddingBottom: 132,
+        // Juste de quoi voir le dernier bouton au-dessus de la navigation (2026-10-04).
+        marginBottom: -132, paddingBottom: 100,
+        // Hauteur mini padding compris (2026-10-04) : sans ça, 100vh + 132px de marge faisaient
+        // défiler une page même courte, avec un grand vide en bas.
+        boxSizing: "border-box",
       }}>
       <CalendarHeader
-        mode="day" contentMaxWidth={contentMaxWidth} seamless
+        /* Pleine largeur comme le Planning (2026-10-04) : même grille d'en-tête et de bandeau. */
+        mode="day" seamless
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        /* Programme ou nom de semaine au-dessus de chaque semaine du calendrier (2026-10-04, comme le Planning). */
+        weekTitleFor={mondayIso => {
+          const p = activeProgram?.program;
+          const match = activeProgram && p ? findProgramForWeek([{ start_date: activeProgram.start_date, programs: p }], mondayIso) : null;
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          return weekLabels[mondayIso] || null;
+        }}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
-      <div style={{ padding: `14px ${pad}px 18px`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
+      <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
         <HomeTabs
           active={homeTab}
@@ -957,11 +769,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           data-tour="wellness-card"
           style={{
             position: "relative",
-            padding: isMd ? "8px 0 22px" : "4px 0 18px", marginBottom: 4,
+            padding: isMd ? "8px 0 0" : "4px 0 0",
             color: "#fff",
           }}
         >
-          <div style={{ position: "absolute", right: "-12%", bottom: "-42%", width: 300, height: 220, borderRadius: "50%", background: "rgba(212,64,0,0.18)", filter: "blur(32px)", pointerEvents: "none" }} />
 
           {/* Bouton de partage retiré de ce bloc (2026-09-30, Gildas : "ça gêne") — il flottait en
              absolu au-dessus du score, qui n'existe plus ici de toute façon. Le partage du ressenti
@@ -1054,36 +865,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             {/* ── Séance(s) du jour — imbriquée dans la même carte, TOUJOURS en dessous ── */}
             <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
               <div id="day-sessions-container">
-                {(() => {
-                  /* Bandeau programme (onboarding in-app, 2026-10-01) — le même ProgramBanner que le
-                     Planning, libellé "Séances libres" éditable par semaine. Programme actif →
-                     "Modifier" (Programmes, sur ce programme) ; sinon séance du jour → "Reconduire" ;
-                     sinon "Programmes →". */
-                  const ap = activeProgram;
-                  const prefix = sandboxMode ? "/sandbox/athlete" : "";
-                  const monday = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
-                  return (
-                    <div>
-                      <ProgramBanner
-                        dark
-                        flush
-                        hideBars
-                        program={ap?.program ?? null}
-                        currentWeek={ap ? programWeekIndex(ap.start_date, selectedDate) : -1}
-                        onEdit={ap?.program ? () => router.push(`${prefix}/programmes?focus=${ap.program!.id}`) : undefined}
-                        reconduireLabel="Reconduire"
-                        onReconduire={!ap && todaySessions.length > 0 ? () => {
-                          const d = new Date(selectedDate + "T12:00:00"); d.setDate(d.getDate() + 7);
-                          setDuplicateDefaultDate(format(d, "yyyy-MM-dd"));
-                          setDuplicating(todaySessions[0]);
-                        } : undefined}
-                        onLibrary={() => router.push(`${prefix}/programmes`)}
-                        freeLabel={freeLabels[monday] ?? null}
-                        onEditFreeLabel={label => setFreeLabelForWeek(monday, label)}
-                      />
-                    </div>
-                  );
-                })()}
+                {/* Bandeau programme fusionné dans le bandeau d'activité du header (2026-10-04). */}
                 {/* Jour sans séance (onboarding in-app, 2026-10-01) : programme en attente (départ
                    futur, rien cette semaine) → encart d'attente ; sinon carte blanche "Aucune séance
                    aujourd'hui" avec Importer / Séance libre. Plus de séance démo. */}

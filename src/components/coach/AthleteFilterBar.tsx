@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import type { CoachAthlete } from "@/types";
+import { useDisplayedPeriod } from "@/lib/activityStatus";
+import { ActivityStripBar, ActivityStripSkeleton, OPEN_ACTIVITY_DRAWER, useActivityData } from "@/components/layout/ActivityPill";
 
 /* Barre de filtre sportifs — persistante entre les onglets coach (2026-09-24, redesign inspiré du
    POC `poc-coach-context_4.html`, `.athlete-chips`/`.crumb`). Composant purement contrôlé : l'état
@@ -43,13 +45,21 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
 }) {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  // Bandeau d'activité fusionné dans cette barre (2026-10-04) : voyant par sportif sur la période
+  // affichée en vue Groupe, bandeau du sportif quand il est sélectionné.
+  const period = useDisplayedPeriod();
+  const { status, loading, basePath } = useActivityData(period, selectedId);
   if (athletes.length === 0) return null;
+  const subjectOf = (id: string) => status?.athletes.find(x => x.id === id) ?? null;
+  const selected = selectedId ? athletes.find(a => a.id === selectedId) ?? null : null;
   // Inviter toujours visible à droite (2026-10-03) : le geste d'acquisition côté coach, qui n'a plus
   // le "+" de la nav. Ouvre l'invitation sur la page Sportifs (?quickadd=invite), sandbox comprise.
   const sandboxBase = pathname.match(/^\/sandbox\/coach/)?.[0];
   const inviteHref = `${sandboxBase ? `${sandboxBase}/athletes` : "/coach/athletes"}?quickadd=invite`;
 
-  /* Toujours la liste complète (2026-09-24, retour explicite de Gildas : "plutôt qu'avoir un bouton
+  /* Vue Groupe uniquement depuis le 2026-10-04 : un sportif sélectionné remplace la liste par
+     "‹ Groupe" + son bandeau d'activité (voir plus haut).
+     Historique — toujours la liste complète (2026-09-24, retour explicite de Gildas : "plutôt qu'avoir un bouton
      'équipe' quand on a un sportif sélectionné, je veux que la liste soit toujours visible, c'est
      plus facile de passer de l'un à l'autre") — remplace l'ancien mode "breadcrumb" (qui masquait
      la liste dès qu'un sportif était sélectionné, un "← Équipe" fallait recliquer pour en changer).
@@ -64,6 +74,46 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
      translucide laisse le dégradé de la page transparaître sous la barre sticky plutôt que d'en
      empiler un second. Puces recalibrées en conséquence (contour blanc translucide au lieu du
      contour noir, invisible sur fond sombre). */
+  if (selected) {
+    const subj = subjectOf(selected.id);
+    const active = !!subj?.periodActive || loading;
+    const backBtn = (
+              <button
+                onClick={e => { e.stopPropagation(); onSelect(null); }}
+                aria-label="Retour au groupe"
+                style={{
+                  flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap", height: 34, padding: "0 13px",
+                  borderRadius: 999, fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                  background: "rgba(255,255,255,.07)", color: "rgba(255,255,255,.88)",
+                  border: "1.5px solid rgba(255,255,255,.12)",
+                }}
+              >
+                ‹ Groupe
+              </button>
+    );
+    return (
+      <div style={{
+        position: "sticky", top: 0, zIndex: 40,
+        background: "rgba(10,14,18,.72)", backdropFilter: "blur(12px)",
+        borderBottom: active ? "1px solid rgba(255,255,255,.08)" : "1px dashed rgba(255,255,255,.22)",
+        padding: "6px 16px",
+      }}>
+        <div style={{ maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined }}>
+          {loading && !subj ? <ActivityStripSkeleton prefix={backBtn} /> : <ActivityStripBar
+            subject={subj}
+            period={period}
+            athleteId={selected.id}
+            who={selected.name}
+            basePath={basePath}
+            role="coach"
+            onOpen={() => window.dispatchEvent(new Event(OPEN_ACTIVITY_DRAWER))}
+            prefix={backBtn}
+          />}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       position: "sticky", top: 0, zIndex: 40,
@@ -105,12 +155,20 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
               }}
             >
               <span style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                position: "relative", width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
                 background: "linear-gradient(135deg,#f04a08,#fb923c)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, color: "#fff",
               }}>
                 {initials(a.name)}
+                {status && (
+                  <span aria-hidden="true" style={{
+                    position: "absolute", right: -3, bottom: -3, width: 9, height: 9, borderRadius: "50%",
+                    background: subjectOf(a.id)?.periodActive ? "#3ddc84" : "#5b6168",
+                    border: "2px solid #0d1217",
+                    animation: subjectOf(a.id)?.periodActive ? "activityLed 1.8s ease-in-out infinite" : "none",
+                  }} />
+                )}
               </span>
               {a.name.split(" ")[0]}
             </button>

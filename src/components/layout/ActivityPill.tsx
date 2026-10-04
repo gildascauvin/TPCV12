@@ -6,20 +6,34 @@ import { usePathname, useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import posthog from "posthog-js";
-import { useActivityStatus, refreshActivityStatusIfStale, type ActivityStatus, type ActivitySubject } from "@/lib/activityStatus";
+import {
+  useActivityStatus, refreshActivityStatus, refreshActivityStatusIfStale, useDisplayedPeriod,
+  type ActivityPeriod, type ActivityStatus, type ActivitySubject,
+} from "@/lib/activityStatus";
+import { createClient } from "@/lib/supabase/client";
 import { OPEN_QUICKADD } from "@/lib/onboardingProgress";
 import { COACH_ATHLETE_FILTER_EVENT, useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
-/* Pilule d'activité du header (2026-10-03, POC poc-element-activation-v5.html) : remplace le "+" et
-   l'onglet Programmes de la nav. Analogie de l'objet connecté portée par le visuel seulement
-   (pointillés = rien de prévu, anneau + illustration = actif), jamais par les mots.
-   - Actif = au moins une séance prévue à venir, programme ou pas (même design dans les 2 cas).
-   - Illustration : couverture du programme officiel, sinon emoji du sport (programme, puis profil).
-   - Anneau : séances faites / prévues cette semaine.
-   - Coach : vue "Tous" = équipe (sportifs actifs / total) ; sportif filtré = sa pilule. */
+/* Bandeau d'activité (2026-10-04, POC poc-element-activation-v5.html v14) : pilule du header et
+   bannière du Planning fusionnées en un bandeau pleine largeur, tout en haut de l'écran, identique
+   sur toutes les pages. Analogie "autorégulation active / en pause sur le programme" portée par le
+   voyant vert seulement, jamais par les mots.
+   - Il décrit la PÉRIODE AFFICHÉE : le jour sur l'Accueil, la semaine sur le Planning (même règle
+     partout, posée par CalendarHeader). Actif = une séance prévue à venir dans cette période ; une
+     période passée est donc en pause.
+   - Programme : nom + barres de charge des semaines (la semaine affichée cerclée).
+   - Sans programme : thème de la semaine (modifiable) + 7 jours (faite / prévue / rien).
+   - Actions en icône seule (✏️ / ↻ / +), le reste de la barre ouvre le tiroir ci-dessous.
+   - Coach : le bandeau vit dans la barre des sportifs (AthleteFilterBar), pas dans le header. */
 
 export const PILL_OPEN_KEY = "tpc_open_activity_pill";
+/** Ouvre le tiroir depuis un bandeau rendu hors du header (barre des sportifs, côté coach). */
+export const OPEN_ACTIVITY_DRAWER = "tpc:open-activity-drawer";
+/** Reconduire la semaine affichée : la page qui sait le faire répond (`detail.handled = true`). */
+export const ACTIVITY_RECONDUIRE = "tpc:activity-reconduire";
+/** Thème de semaine modifié depuis le bandeau : les pages mettent à jour leur calendrier sans recharger. */
+export const ACTIVITY_LABEL_CHANGED = "tpc:activity-label-changed";
 const GREEN = "#3ddc84";
 
 function sandboxHref(path: string, basePath?: string) {
@@ -125,50 +139,329 @@ function initials(name: string) {
   return name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
-/** `room` = largeur disponible à droite de la date centrée (mesurée par CalendarHeader). La pilule
-    passe en version compacte quand la place manque, sans jamais passer sous la date. */
-export default function ActivityPill({ room }: { room?: number | null }) {
+/* Données du bandeau : API en vrai, données d'exemple en sandbox (import dynamique). Partagé par
+   le header (sportif) et la barre des sportifs (coach). */
+export function useActivityData(period: ActivityPeriod, subject: string | null = null) {
   const pathname = usePathname() ?? "";
-  const router = useRouter();
   const sandboxMatch = pathname.match(/^\/sandbox\/(athlete|coach)/);
-  const basePath = sandboxMatch ? `/sandbox/${sandboxMatch[1]}` : undefined;
-  const liveStatus = useActivityStatus(!basePath);
-  // Sandbox : données d'exemple (même calcul que l'API), chargées seulement ici.
-  const [sandboxStatus, setSandboxStatus] = useState<ActivityStatus | null>(null);
   const sandboxRole = sandboxMatch?.[1] as "athlete" | "coach" | undefined;
+  const basePath = sandboxRole ? `/sandbox/${sandboxRole}` : undefined;
+  const live = useActivityStatus(!basePath, period, subject);
+  const [sandboxStatus, setSandboxStatus] = useState<ActivityStatus | null>(null);
   useEffect(() => {
     if (!sandboxRole) return;
     let cancelled = false;
-    import("@/lib/activitySandbox").then(m => { if (!cancelled) setSandboxStatus(m.sandboxActivityStatus(sandboxRole)); });
+    import("@/lib/activitySandbox").then(m => { if (!cancelled) setSandboxStatus(m.sandboxActivityStatus(sandboxRole, period)); });
     return () => { cancelled = true; };
-  }, [sandboxRole]);
-  const status = basePath ? sandboxStatus : liveStatus;
-  const role: "athlete" | "coach" = status?.role ?? (pathname.startsWith("/coach") || sandboxMatch?.[1] === "coach" ? "coach" : "athlete");
-  const filterStorage = useCoachAthleteFilterStorage();
+  }, [sandboxRole, period.from, period.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const status = basePath ? sandboxStatus : live.status;
+  const loading = basePath ? !sandboxStatus : live.loading;
+  const role: "athlete" | "coach" = status?.role ?? (pathname.startsWith("/coach") || sandboxRole === "coach" ? "coach" : "athlete");
+  return { status, loading, role, basePath, pathname };
+}
+
+/** Fantôme du bandeau pendant le chargement d'une autre semaine (jamais l'ancienne affichée). */
+export function ActivityStripSkeleton({ prefix }: { prefix?: React.ReactNode }) {
+  return (
+    <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 48, width: "100%" }}>
+      {prefix}
+      <span className="tpc-skel" style={{ width: 34, height: 34, borderRadius: "50%", flexShrink: 0 }} />
+      <span className="tpc-skel" style={{ width: 140, height: 12, flexShrink: 1 }} />
+      <span style={{ flex: 1 }} />
+      <span className="tpc-skel" style={{ width: 54, height: 18, flexShrink: 0 }} />
+    </div>
+  );
+}
+
+function loadColor(avg: number): string {
+  if (avg <= 4) return "#2f9e44";
+  if (avg <= 7) return "#f28a00";
+  return "#d44000";
+}
+
+const DAY_LETTERS = ["L", "M", "M", "J", "V", "S", "D"];
+
+function IconBtn({ label, onClick, orange, children }: { label: string; onClick: () => void; orange?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      onClick={e => { e.stopPropagation(); onClick(); }}
+      style={{
+        width: 32, height: 32, borderRadius: "50%", flexShrink: 0, cursor: "pointer", padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit",
+        fontSize: orange ? 18 : 14, fontWeight: 800, color: "#fff",
+        background: orange ? "linear-gradient(180deg,#f04a08,#d44000)" : "transparent",
+        border: orange ? "none" : "1px solid rgba(255,255,255,.2)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Nom (thème) d'une semaine sans programme : profil du sportif, ou via la route coach. */
+async function saveWeekLabel(o: { role: "athlete" | "coach"; athleteId?: string | null; monday: string; value: string | null; period: ActivityPeriod; basePath?: string }) {
+  window.dispatchEvent(new CustomEvent(ACTIVITY_LABEL_CHANGED, { detail: { monday: o.monday, label: o.value, athleteId: o.athleteId ?? null } }));
+  if (o.basePath) return;
+  try {
+    if (o.role === "coach" && o.athleteId) {
+      await fetch("/api/coach/free-label", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: o.athleteId, monday: o.monday, label: o.value ?? "" }),
+      });
+    } else {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: row } = await supabase.from("profiles").select("free_training_label").eq("user_id", user.id).single();
+      const next = { ...((row?.free_training_label as Record<string, string> | null) ?? {}) };
+      if (o.value) next[o.monday] = o.value; else delete next[o.monday];
+      const { error } = await supabase.from("profiles").update({ free_training_label: next }).eq("user_id", user.id);
+      if (error) console.error("[activity] free_training_label update error:", error);
+    }
+  } finally {
+    refreshActivityStatus(o.period, o.role === "coach" ? o.athleteId ?? null : null);
+  }
+}
+
+/** Dans le tiroir : nommer la semaine affichée (séances sans programme). */
+function WeekThemeRow({ subject, role, period, basePath }: { subject: ActivitySubject; role: "athlete" | "coach"; period: ActivityPeriod; basePath?: string }) {
+  const [value, setValue] = useState(subject.freeLabel ?? "");
+  useEffect(() => { setValue(subject.freeLabel ?? ""); }, [subject.freeLabel, subject.weekMonday]);
+  const save = () => {
+    const v = value.trim() || null;
+    if ((v ?? "") === (subject.freeLabel ?? "")) return;
+    posthog.capture("activity_strip_action", { role, action: "name_week" });
+    saveWeekLabel({ role, athleteId: role === "coach" ? subject.id : null, monday: subject.weekMonday, value: v, period, basePath });
+  };
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#8a8f94", marginBottom: 6 }}>Nom de la semaine</div>
+      <input
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        placeholder="Séances libres"
+        style={{
+          width: "100%", height: 46, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", padding: "0 14px",
+          fontSize: 16, fontFamily: "var(--font-mono), monospace", fontWeight: 700, color: "#171b1f", outline: "none", boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
+
+/** Bandeau d'un sujet (sportif ou sportif sélectionné côté coach), sur la période affichée. */
+export function ActivityStripBar({ subject, period, athleteId, who, prefix, onOpen, basePath, role }: {
+  subject: ActivitySubject | null;
+  period: ActivityPeriod;
+  /** Côté coach : le sportif concerné (écriture du thème, liens). */
+  athleteId?: string;
+  /** Côté coach : prénom du sportif, affiché au-dessus du titre. */
+  who?: string;
+  /** Rendu avant le badge (bouton "‹ Groupe" côté coach). */
+  prefix?: React.ReactNode;
+  onOpen: () => void;
+  basePath?: string;
+  role: "athlete" | "coach";
+}) {
+  const router = useRouter();
   const { isMd } = useBreakpoint();
+  const [labelOverride, setLabelOverride] = useState<{ monday: string; value: string | null } | null>(null);
+  // Nom de semaine modifié dans le tiroir : affiché aussitôt, avant la relecture.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; label: string | null; athleteId: string | null }>).detail;
+      if (role === "coach" && d.athleteId !== athleteId) return;
+      setLabelOverride({ monday: d.monday, value: d.label });
+    };
+    window.addEventListener(ACTIVITY_LABEL_CHANGED, on);
+    return () => window.removeEventListener(ACTIVITY_LABEL_CHANGED, on);
+  }, [role, athleteId]);
+
+  const active = !!subject?.periodActive;
+  const prog = subject?.periodProgram ?? null;
+  const monday = subject?.weekMonday ?? period.from;
+  const label = labelOverride && labelOverride.monday === monday ? labelOverride.value : subject?.freeLabel ?? null;
+  const title = prog ? prog.name : (label || "Séances libres");
+  const athleteQ = role === "coach" && athleteId ? `athlete=${athleteId}&` : "";
+  const planningPath = role === "coach" ? "/coach/planning" : "/week";
+  const go = (path: string, action: string) => {
+    posthog.capture("activity_strip_action", { role, action, active, program: !!prog });
+    router.push(sandboxHref(path, basePath));
+  };
+  // Jour affiché (Accueil) : cerclé dans la semaine.
+  const dayIdx = period.from === period.to
+    ? Math.round((new Date(period.from + "T12:00:00").getTime() - new Date(monday + "T12:00:00").getTime()) / 86400000)
+    : -1;
+
+  function reconduire() {
+    const detail = { monday, athleteId: athleteId ?? null, handled: false };
+    window.dispatchEvent(new CustomEvent(ACTIVITY_RECONDUIRE, { detail }));
+    if (!detail.handled) go(`${planningPath}?${athleteQ}reconduire=${monday}`, "reconduire");
+    else posthog.capture("activity_strip_action", { role, action: "reconduire", active, program: !!prog });
+  }
+
+  let viz: React.ReactNode = null;
+  if (prog && prog.loads.length) {
+    const max = Math.max(...prog.loads, 1);
+    viz = (
+      <span aria-hidden="true" style={{ display: "flex", alignItems: "flex-end", gap: isMd ? 3 : 2.5, height: 22, flexShrink: 0 }}>
+        {prog.loads.map((v, i) => (
+          <i key={i} style={{
+            display: "block", width: isMd ? 6 : 5, borderRadius: 1.5,
+            height: `${Math.max(22, Math.round((v / max) * 100))}%`,
+            background: i < prog.week ? `${loadColor(v)}88` : i === prog.week ? loadColor(v) : "rgba(255,255,255,.2)",
+            boxShadow: i === prog.week ? "0 0 0 1px #fff" : "none",
+            filter: active ? "none" : "grayscale(1)", opacity: active ? 1 : 0.6,
+          }} />
+        ))}
+      </span>
+    );
+  } else if (!prog && active) {
+    const d = isMd ? 13 : 9;
+    viz = (
+      <span aria-hidden="true" style={{ display: "flex", gap: isMd ? 3 : 2.5, flexShrink: 0 }}>
+        {(subject?.weekDays ?? []).map((st, i) => (
+          <span key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+            <i style={{
+              width: d, height: d, borderRadius: "50%", boxSizing: "border-box", fontStyle: "normal",
+              display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMd ? 8 : 0, color: "#fff",
+              background: st === 2 ? "#2f9e44" : st === 1 ? "transparent" : "rgba(255,255,255,.14)",
+              border: st === 1 ? "1.5px solid #ff8a55" : "none",
+              outline: i === dayIdx ? "1.5px solid rgba(255,255,255,.85)" : "none", outlineOffset: 1,
+            }}>{st === 2 ? "✓" : ""}</i>
+            {isMd && <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8, fontWeight: 700, color: "rgba(255,255,255,.45)" }}>{DAY_LETTERS[i]}</span>}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  let actions: React.ReactNode;
+  if (prog) {
+    // Le programme s'ouvre dans le tiroir (semaines, ajouter, voir le programme), pas de redirection.
+    actions = <IconBtn label="Ouvrir" onClick={() => { posthog.capture("activity_strip_action", { role, action: "edit_program", active, program: true }); onOpen(); }}>✏️</IconBtn>;
+  } else if (active) {
+    actions = (
+      <>
+        <IconBtn label="Ouvrir" onClick={() => { posthog.capture("activity_strip_action", { role, action: "open", active, program: false }); onOpen(); }}>✏️</IconBtn>
+        <IconBtn label="Reconduire la semaine" onClick={reconduire}>↻</IconBtn>
+      </>
+    );
+  } else {
+    // Même bouton que l'ancienne pilule "Ajouter" : ouvre le tiroir (séance ou programme).
+    actions = (
+      <button
+        onClick={e => { e.stopPropagation(); posthog.capture("activity_strip_action", { role, action: "add", active, program: false }); onOpen(); }}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, height: 40, padding: "0 12px 0 4px", flexShrink: 0,
+          borderRadius: 999, background: "transparent", border: "1.5px dashed rgba(255,255,255,.38)",
+          color: "#fff", cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <span style={{
+          width: 30, height: 30, borderRadius: "50%", border: "1.5px dashed rgba(255,255,255,.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <PlusIcon size={15} color="rgba(255,255,255,.8)" />
+        </span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>Ajouter</span>
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => { if (e.key === "Enter") onOpen(); }}
+      className="activity-strip-bar"
+      style={{
+        display: "flex", alignItems: "center", gap: 10, minHeight: 48, width: "100%", cursor: "pointer", color: "#fff",
+        borderRadius: 12, padding: "0 6px", margin: "0 -6px",
+      }}
+    >
+      {prefix}
+      <span style={{ position: "relative", width: 34, height: 34, flexShrink: 0 }}>
+        <span style={{
+          position: "absolute", inset: 0, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+          border: active ? "1px solid rgba(255,255,255,.18)" : "1.5px dashed rgba(255,255,255,.35)",
+          fontSize: 18, filter: active ? "none" : "grayscale(1)", opacity: active ? 1 : 0.7,
+        }}>{subject?.periodEmoji}</span>
+        {active
+          ? <Led size={34} />
+          : <span aria-hidden="true" style={{ position: "absolute", right: -1, bottom: -1, width: 9, height: 9, borderRadius: "50%", background: "#5b6168", border: "2px solid #070a0d" }} />}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
+        {who && (
+          <span style={{ fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,.6)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{who}</span>
+        )}
+          <span style={{
+            display: "flex", alignItems: "center", gap: 5, minWidth: 0,
+            fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700,
+          }}>
+            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</span>
+          </span>
+      </span>
+      {viz}
+      {actions}
+    </div>
+  );
+}
+
+/** Bande pleine largeur (fond + filet) autour d'un bandeau. */
+export function ActivityStripBand({ active, contentMaxWidth, children }: { active: boolean; contentMaxWidth?: number; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: active ? "rgba(255,255,255,.06)" : "transparent",
+      borderBottom: active ? "1px solid rgba(255,255,255,.10)" : "1px dashed rgba(255,255,255,.22)",
+    }}>
+      <div style={{ maxWidth: contentMaxWidth, margin: contentMaxWidth ? "0 auto" : undefined, padding: "0 16px" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** Header : bandeau du sportif + tiroir (toujours monté, aussi côté coach, pour la checklist). */
+export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: number }) {
+  const router = useRouter();
+  const period = useDisplayedPeriod();
+  const filterStorage = useCoachAthleteFilterStorage();
   const [filterId, setFilterId] = useState<string | null>(null);
+  // Côté coach, même entrée de cache que la barre des sportifs (sujet = sportif sélectionné).
+  const pn = usePathname() ?? "";
+  const coachPath = pn.startsWith("/coach") || pn.startsWith("/sandbox/coach");
+  const { status, loading, role, basePath, pathname } = useActivityData(period, coachPath ? filterId : null);
+  const { isMd } = useBreakpoint();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
   // Changement de page : relu seulement si la dernière lecture date de plus de 30 s (les écritures
   // de séance déclenchent déjà un rafraîchissement immédiat via ONBOARDING_REFRESH).
-  useEffect(() => { if (!basePath) refreshActivityStatusIfStale(30_000); }, [pathname, basePath]);
+  useEffect(() => { if (!basePath) refreshActivityStatusIfStale(30_000, period, role === "coach" ? filterId : null); }, [pathname, basePath]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const sync = () => setFilterId(filterStorage.read());
     sync();
     window.addEventListener(COACH_ATHLETE_FILTER_EVENT, sync);
     return () => window.removeEventListener(COACH_ATHLETE_FILTER_EVENT, sync);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Étape "Construis ton entraînement" de la checklist : ouvre ce tiroir (était le "+" de la nav).
+  // Étape "Construis ton entraînement" de la checklist et bandeau coach : ouvrent ce tiroir.
   useEffect(() => {
     const show = () => setOpen(true);
     window.addEventListener(OPEN_QUICKADD, show);
+    window.addEventListener(OPEN_ACTIVITY_DRAWER, show);
     (window as unknown as { __tpcActivityPill?: number }).__tpcActivityPill = ((window as unknown as { __tpcActivityPill?: number }).__tpcActivityPill ?? 0) + 1;
     // Demande arrivée d'une page sans header (checklist sur /programmes…) : ouverte au montage.
     try { if (sessionStorage.getItem(PILL_OPEN_KEY) === "1") { sessionStorage.removeItem(PILL_OPEN_KEY); setOpen(true); } } catch { /* stockage indisponible */ }
     return () => {
       window.removeEventListener(OPEN_QUICKADD, show);
+      window.removeEventListener(OPEN_ACTIVITY_DRAWER, show);
       (window as unknown as { __tpcActivityPill?: number }).__tpcActivityPill = Math.max(0, ((window as unknown as { __tpcActivityPill?: number }).__tpcActivityPill ?? 1) - 1);
     };
   }, []);
@@ -196,53 +489,14 @@ export default function ActivityPill({ room }: { room?: number | null }) {
   const programsPath = role === "coach" ? "/coach/programmes" : "/programmes";
   const athleteQ = role === "coach" && focused ? `athlete=${focused.id}&` : "";
 
-  // Badge complet partout (mobile compris) : version compacte sous 132 px de place, badge seul
-  // seulement en dernier recours (moins de 72 px, ne devrait pas arriver).
-  const badgeOnly = room != null && room < 72;
-  const compact = room != null && room < 132;
-  const badgeSize = compact ? 34 : 40;
-  const pillStyle: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: compact ? 6 : 8, height: compact ? 40 : 46, minWidth: 0, maxWidth: room != null ? Math.max(room, 40) : 140,
-    padding: compact ? "0 9px 0 3px" : "0 12px 0 3px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", color: "#fff",
-    background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)",
-  };
-  const titleStyle: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: compact ? 11 : 12.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-  const subStyle: React.CSSProperties = { fontSize: compact ? 9.5 : 10.5, fontWeight: 800, color: GREEN, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
-
-  if (badgeOnly) { pillStyle.padding = 3; pillStyle.gap = 0; }
-  let pill: React.ReactNode;
-  if (isTeam) {
-    pill = (
-      <button onClick={toggle} aria-label="Activité de l'équipe" style={pillStyle}>
-        <Badge size={badgeSize} team={team} />
-        {!badgeOnly && (
-          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, minWidth: 0, textAlign: "left" }}>
-            <span style={titleStyle}>Équipe</span>
-            <span style={subStyle}>{team.active}/{team.total} actifs</span>
-          </span>
-        )}
-      </button>
-    );
-  } else if (focused?.active) {
-    pill = (
-      <button onClick={toggle} aria-label={focused.program?.name ?? "Séances prévues"} style={pillStyle}>
-        <Badge size={badgeSize} subject={focused} />
-        {!badgeOnly && (
-          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.15, minWidth: 0, textAlign: "left" }}>
-            <span style={titleStyle}>{focused.label}</span>
-            <span style={subStyle}>{secondLine(focused)}</span>
-          </span>
-        )}
-      </button>
-    );
-  } else {
-    pill = (
-      <button onClick={toggle} aria-label="Ajouter" style={{ ...pillStyle, background: "transparent", border: badgeOnly ? "none" : "1.5px dashed rgba(255,255,255,.38)", padding: badgeOnly ? 3 : "0 12px 0 5px" }}>
-        <Badge size={compact ? 30 : 34} subject={null} />
-        {!badgeOnly && <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>Ajouter</span>}
-      </button>
-    );
-  }
+  // Côté coach, le bandeau vit dans la barre des sportifs : le header ne garde que le tiroir.
+  const strip = role !== "athlete" ? null : status?.self && !loading ? (
+    <ActivityStripBand active={!!status.self.periodActive} contentMaxWidth={contentMaxWidth}>
+      <ActivityStripBar subject={status.self} period={period} onOpen={toggle} basePath={basePath} role="athlete" />
+    </ActivityStripBand>
+  ) : loading ? (
+    <ActivityStripBand active contentMaxWidth={contentMaxWidth}><ActivityStripSkeleton /></ActivityStripBand>
+  ) : null;
 
   const who = role === "coach" && focused ? focused.name.split(" ")[0] : null;
   const planRow = (
@@ -313,6 +567,7 @@ export default function ActivityPill({ room }: { room?: number | null }) {
     sheet = (
       <>
         {header("Ajouter", who ? `Une séance prévue pour ${who} s'ajuste à sa forme du jour` : "Une séance prévue s'ajuste à ta forme du jour")}
+        {focused && !focused.periodProgram && <WeekThemeRow subject={focused} role={role} period={period} basePath={basePath} />}
         {rows(<>{planRow}{programRow}</>)}
       </>
     );
@@ -327,6 +582,7 @@ export default function ActivityPill({ room }: { room?: number | null }) {
             {s.next && <> · prochaine : {nextLabel(s.next.date)}, {s.next.name}</>}
           </>,
           <Badge size={52} subject={s} light />)}
+        {!s.periodProgram && <WeekThemeRow subject={s} role={role} period={period} basePath={basePath} />}
         {s.program && (
           <div style={{ marginBottom: 22 }}>
             <div style={{ display: "flex", gap: 4 }}>
@@ -353,7 +609,7 @@ export default function ActivityPill({ room }: { room?: number | null }) {
 
   return (
     <>
-      {pill}
+      {strip}
       {/* Drawer (2026-10-03, retour de Gildas : le bottom sheet était le seul de l'app) : même
           convention que les autres tiroirs — docké à droite en desktop, plein écran en mobile. */}
       {mounted && open && createPortal(

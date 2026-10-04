@@ -38,7 +38,9 @@ const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer")
 const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import { programWeekIndex, type AthleteActiveProgram } from "@/lib/programAssignment";
+import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram } from "@/lib/programAssignment";
+import { programSportEmoji } from "@/lib/sportCategories";
+import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
@@ -88,10 +90,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const router = useRouter();
   const supabase = createClient();
   const { isMd, isLg } = useBreakpoint();
-  // Même largeur que le contenu de la page (voir plus bas) — alignement CalendarHeader/sélecteur de
-  // sportif/contenu (2026-09-24, "tout n'est pas bien aligné entre la top nav, le sélecteur... et
-  // les contenus").
-  const coachContentMaxWidth = isLg ? 1180 : isMd ? 720 : 600;
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus);
   const sandboxPaywall = useSandboxGate("coach");
@@ -553,6 +551,22 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     });
   }
 
+  // Thème de semaine modifié depuis le bandeau d'activité : calendrier et cartes à jour sans recharger.
+  useEffect(() => {
+    const onLabel = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; label: string | null; athleteId: string | null }>).detail;
+      const a = athletes.find(x => x.id === d.athleteId);
+      if (!a) return;
+      setFreeLabelOverrides(prev => {
+        const n = { ...freeLabelsFor(a), ...(prev[a.id] ?? {}) };
+        if (d.label) n[d.monday] = d.label; else delete n[d.monday];
+        return { ...prev, [a.id]: n };
+      });
+    };
+    window.addEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+    return () => window.removeEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+  });
+
   /* Bandeau programme de chaque carte (onboarding in-app, 2026-10-01) — le même ProgramBanner que
      le Planning : programme actif → "Modifier", sinon séance du jour → "Reconduire", sinon
      "Programmes →". */
@@ -665,11 +679,18 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       {/* Sélecteur de sportif TOUT EN HAUT, au-dessus du header de date (2026-09-26, demande de
          Gildas) — "qui" est la première décision d'un coach, "quand" ne vient qu'après ; c'est aussi
          la seule barre sticky de la page, donc celle qui doit rester accrochée au bord haut. */}
-      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} contentMaxWidth={coachContentMaxWidth} />
+      <AthleteFilterBar athletes={athletes} selectedId={selectedAthleteId} onSelect={selectAthleteFilter} />
       <CalendarHeader
-        mode="day" contentMaxWidth={coachContentMaxWidth} seamless
+        mode="day" seamless
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings={!!selectedAthleteForRings} dotMap={headerDotMap} wellnessMap={headerWellnessMap}
+        /* Programme ou nom de semaine au-dessus de chaque semaine du calendrier (2026-10-04, comme le Planning). */
+        weekTitleFor={selectedAthleteForRings ? (mondayIso => {
+          const ap = activePrograms[selectedAthleteForRings.id];
+          const match = ap ? findProgramForWeek([{ start_date: ap.start_date, programs: ap.program }], mondayIso) : null;
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          return freeLabelsFor(selectedAthleteForRings)[mondayIso] || null;
+        }) : undefined}
       />
       {reconduire && (
         <DuplicateModal
@@ -715,11 +736,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         {/* ── Welcome overlay handled below ── */}
 
 
+        {!selectedAthleteId && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: isMd ? 17 : 15, fontWeight: 600, color: "#fff" }}>
             {greeting()} {coachName ?? ""} 👋
           </div>
         </div>
+        )}
 
         {athletes.length === 0 ? (
           <>
@@ -787,7 +810,34 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               </div>
             </div>
           </>
-        ) : (
+        ) : selectedAthleteId && athletes.some(x => x.id === selectedAthleteId) ? (() => {
+          /* Sportif sélectionné (2026-10-04) : même vue que l'Accueil du sportif — pas de sections
+             « À décider / Plan cohérent », une seule carte en pleine page. */
+          const a = athletes.find(x => x.id === selectedAthleteId)!;
+          return (
+            <div style={{ maxWidth: 600, margin: "0 auto", paddingTop: 4 }}>
+              <CoachCard showPhase page athlete={a} sessions={sessions} isPriority={false}
+                isReviewed={false}
+                trend={trends[a.id]}
+                trendInput={trendInputs[a.id]}
+                baseline={baselines[a.id]}
+                recentSessions={recentSessions[a.id]}
+                coachName={coachName ?? "Coach"}
+                isActive={canDecideFor(a)}
+                locked={!canDecideFor(a)}
+                collect={collectFor(a)}
+                onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
+                onUnlock={unlock}
+                onDecide={() => openEditor(a)}
+                onEditSession={sess => { setReviewAthlete(a); setReviewSession(sess); }}
+                onAddSession={() => openCreator(a)}
+                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                onAutoregDecided={() => markAutoregDecided(a.id)}
+                onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
+            </div>
+          );
+        })() : (
           <>
             {/* Filtre par métrique (2026-09-24, POC poc-coach-context_4.html, recapHtml()/filterBar()) —
                réservé au mode "Tous" (selectedAthleteId===null, comme dans le POC : mOK/filterBar n'ont

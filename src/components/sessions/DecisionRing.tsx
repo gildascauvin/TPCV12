@@ -219,6 +219,14 @@ export default function DecisionRing({
   }
   function handlePointerDown(e: React.PointerEvent) {
     if (readOnly) return;
+    // Seul l'anneau se saisit (2026-10-04) : un doigt posé au centre ou hors de l'arc fait défiler
+    // la page normalement au lieu de bloquer le défilement et de déplacer le curseur.
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (rect) {
+      const dx = (e.clientX - rect.left) * (size / rect.width) - cx;
+      const dy = (e.clientY - rect.top) * (h / rect.height) - cy;
+      if (Math.abs(Math.hypot(dx, dy) - r) > sw * 1.6) return;
+    }
     svgRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
     pick(diffFromPointer(e));
@@ -260,7 +268,7 @@ export default function DecisionRing({
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          style={{ display: "block", cursor: readOnly ? "default" : "pointer", touchAction: "none" }}
+          style={{ display: "block", cursor: readOnly ? "default" : "pointer", touchAction: readOnly ? "auto" : "pan-y" }}
         >
           <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="#1d2226" strokeWidth={sw} strokeLinecap="round" />
           {fills.map((f, i) => <path key={i} d={f.d} fill="none" stroke={f.color} strokeWidth={sw} strokeLinecap="butt" />)}
@@ -291,6 +299,8 @@ export default function DecisionRing({
             <circle r={9.5} fill={inZone ? "#2a8045" : "#18181b"} stroke={light ? "none" : "rgba(255,255,255,.9)"} strokeWidth={1.5} />
             {[-3, 0, 3].map(dy => <line key={dy} x1={-3.5} x2={3.5} y1={dy} y2={dy} stroke="#fff" strokeWidth={2} strokeLinecap="round" />)}
           </g>
+          {/* Zone de saisie, au-dessus de tout : seul l'anneau bloque le défilement au toucher. */}
+          {!readOnly && <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="transparent" strokeWidth={sw * 3.2} strokeLinecap="round" style={{ touchAction: "none" }} />}
         </svg>
         {/* Arc ouvert en bas : le centre du cercle n'est pas celui de la boîte, on ancre sur cy.
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}

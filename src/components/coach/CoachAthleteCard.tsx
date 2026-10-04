@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
@@ -169,7 +170,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -219,6 +220,11 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      jamais réellement gatés — voir AutoregButtons.tsx). */
   /* Freemium (2026-10-02) : une seule pancarte par écran — les cartes floutées suivantes n'ont pas de bouton. */
   lockedBare?: boolean;
+  /* Pleine page (2026-10-04) : sportif sélectionné sur l'Accueil coach — même vue que l'Accueil du
+     sportif (pas de cadre, grand anneau, toutes les séances du jour en cartes blanches). */
+  page?: boolean;
+  /* Pleine page : ouvrir une séance précise (sinon onDecide, qui ouvre la séance principale). */
+  onEditSession?: (s: CoachViewSession) => void;
   /* Collecte (2026-10-02) : sportif sans assez d'historique, carte lisible → progression à la place de la phase. */
   collect?: CollectProgress | null;
   /* Gratuit : change le seul RPE prévu de la séance (jauge sans zone). */
@@ -241,6 +247,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   onUnlock?: () => void;
 }) {
   const todaySessions = sessions.filter(s => s.athlete_id === athlete.id);
+  const ringSz = page ? 188 : 150;
   const topSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   const extraSessions = todaySessions.length - (topSession ? 1 : 0);
   const perspective: BaselinePerspective = selfView ? "athlete" : "coach";
@@ -321,7 +328,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
      sa taille). Un voile blanc translucide la fait au contraire lire comme un panneau posé
      au-dessus, quel que soit le fond sombre derrière (dashboard coach ET aperçus onboarding). */
   return (
-    <div data-tour={tourId} style={{
+    <div data-tour={tourId} style={page ? { position: "relative", minWidth: 0, color: "#fff" } : {
       position: "relative", overflow: "hidden", minWidth: 0,
       background: "rgba(255,255,255,.055)",
       border: showReviewed ? "1.5px solid rgba(47,158,68,.30)" : "1px solid rgba(255,255,255,.10)",
@@ -330,7 +337,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       transition: "border 0.3s ease, box-shadow 0.3s ease",
       color: "#fff",
     }}>
-      <div style={{ position: "absolute", top: 12, right: 14, zIndex: 2 }} onClick={e => e.stopPropagation()}>
+      {!page && <div style={{ position: "absolute", top: 12, right: 14, zIndex: 2 }} onClick={e => e.stopPropagation()}>
         <ShareButton
           resourceType="coach_athlete"
           variant="dark"
@@ -353,18 +360,18 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           title={selfView ? zoneText : `${firstName} — ${zoneText}`}
           text={decision.text.split("\n")[1] ?? decision.text.split("\n")[0]}
         />
-      </div>
+      </div>}
 
       {/* Nom + ring + badges + comportements — empilé et CENTRÉ (2026-09-24, delta layout POC
          `cardTop()` : `.dc-name` centré au-dessus du `.ring-wrap` centré, pas de colonne texte à
          côté du ring). La zone ("Fatigué"/"Équilibré"/"Frais") vit désormais DANS le ring (prop
          `label` de WellnessRing, coloré comme le score — POC `.ring .state`), remplace l'ancienne
          eyebrow orange séparée. */}
-      <div style={{ textAlign: "center" }}>
+      {!page && <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.55)", marginBottom: 10 }}>
           {selfView ? "Ta forme" : firstName}
         </div>
-      </div>
+      </div>}
       {/* Freemium (2026-09-30) : jauge, badges et carte décision floutés ensemble — même la zone,
          côté coach (un coach sait s'ajuster dès qu'il voit "au-dessus de la zone"). Le prénom et
          la séance du jour restent lisibles. */}
@@ -383,14 +390,14 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 sessionLabel={topSession!.name}
                 variant="dark"
                 shape="ring"
-                ringSize={150}
+                ringSize={ringSz}
                 onSetDifficulty={async d => { await onSetDifficulty?.(topSession!, d); }}
                 isActive
               />
             </div>
           )
-            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={150} />
-            : <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone />}
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} />
+            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone />}
         </div>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
@@ -410,7 +417,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 sessionLabel={topSession!.name}
                 variant="dark"
                 shape="ring"
-                ringSize={150}
+                ringSize={ringSz}
                 actionsSlot={actionsSlot}
                 severityColor={decision.suggestion ? badgeColor : undefined}
                 onPreviewChange={setPreviewPct}
@@ -431,9 +438,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={150} />
+            <RestDecisionRing size={ringSz} />
           ) : (
-            <DoneDecisionRing size={150} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} />
           )}
         </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (
@@ -489,8 +496,37 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct
          interne, ou externalPreviewPct si le parent le pilote — voir sa doc plus haut). */}
-      {programPill && <div style={{ marginTop: 12 }}>{programPill}</div>}
-      {topSession && (
+      {page && (
+        <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
+          {programPill && <div style={{ marginBottom: 12 }}>{programPill}</div>}
+          {todaySessions.length === 0 && onAddSession && <EmptyDayCard perspective="coach" onAddFree={onAddSession} />}
+          {[...todaySessions].sort((a, b) => (a.id === topSession?.id ? -1 : b.id === topSession?.id ? 1 : 0)).map(s => (
+            <TodaySessionCard
+              key={s.id}
+              session={s as unknown as Session}
+              viewer="coach"
+              onEdit={() => (onEditSession ? onEditSession(s) : onDecide())}
+              previewPct={s.id === topSession?.id ? effectivePreviewPct : null}
+              authorName={coachName ?? "Coach"}
+              hideGauge={s.id === topSession?.id && adjustable}
+            />
+          ))}
+          {todaySessions.length > 0 && onAddSession && (
+            <div
+              onClick={e => { e.stopPropagation(); onAddSession(); }}
+              style={{
+                border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
+                borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
+                cursor: "pointer", fontWeight: 700, marginTop: 6,
+              }}
+            >
+              + Ajouter une séance
+            </div>
+          )}
+        </div>
+      )}
+      {!page && programPill && <div style={{ marginTop: 12 }}>{programPill}</div>}
+      {!page && topSession && (
         <div onClick={onDecide} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
@@ -550,12 +586,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           )}
         </div>
       )}
-      {!topSession && onAddSession && (
+      {!page && !topSession && onAddSession && (
         <div style={{ marginTop: programPill ? 0 : 12 }}>
           <EmptyDayCard perspective="coach" onAddFree={onAddSession} />
         </div>
       )}
-      {onAddSession && topSession && (
+      {!page && onAddSession && topSession && (
         <div
           onClick={e => { e.stopPropagation(); onAddSession(); }}
           style={{

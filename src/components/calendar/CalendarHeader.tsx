@@ -11,6 +11,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
 import ActivityPill from "@/components/layout/ActivityPill";
+import { setDisplayedPeriod, refreshActivitySoon } from "@/lib/activityStatus";
 import OnboardingChecklist from "@/components/onboarding/OnboardingChecklist";
 
 export type ViewMode = "week" | "month";
@@ -258,6 +259,19 @@ export default function CalendarHeader({
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Période affichée, lue par le bandeau d'activité (2026-10-04) : le jour sur l'Accueil et Coach
+  // Control, la semaine sur le Planning, aujourd'hui sur les pages à titre fixe.
+  const periodFrom = mode === "period" ? format(weekStart, "yyyy-MM-dd") : mode === "day" ? format(currentDate, "yyyy-MM-dd") : today;
+  const periodTo = mode === "period" ? format(addDays(weekStart, 6), "yyyy-MM-dd") : periodFrom;
+  useEffect(() => { setDisplayedPeriod({ from: periodFrom, to: periodTo }); }, [periodFrom, periodTo]);
+  // Une séance ajoutée, déplacée, faite ou supprimée change les points du calendrier : le bandeau
+  // d'activité se relit alors aussitôt, sans rechargement (2026-10-04). Le premier rendu ne compte pas.
+  const dotSig = dotMap ? Object.keys(dotMap).sort().map(k => `${k}:${dotMap[k]}`).join(",") : "";
+  const lastDotSig = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastDotSig.current !== null && lastDotSig.current !== dotSig) refreshActivitySoon();
+    lastDotSig.current = dotSig;
+  }, [dotSig]);
 
   const isOnCurrentPeriod = mode === "day"
     ? format(currentDate, "yyyy-MM-dd") === today
@@ -349,8 +363,10 @@ export default function CalendarHeader({
         background: seamless ? "transparent" : DARK_CARD_BG,
         boxShadow: seamless ? "none" : "0 16px 38px rgba(0,0,0,.18)",
         color: "#fff",
-        paddingTop: 8,
       }}>
+      {/* Bandeau d'activité tout en haut (2026-10-04) : sportif seulement, côté coach il vit dans la
+          barre des sportifs. Toujours monté pour le tiroir et la checklist. */}
+      <ActivityPill contentMaxWidth={contentMaxWidth} />
       <div
         ref={rowRef}
         className="relative flex items-center px-4 pb-3 pt-[14px] gap-2"
@@ -458,9 +474,14 @@ export default function CalendarHeader({
           )}
         </div>
 
-        {/* Profil + checklist à gauche, pilule d'activité à droite (2026-10-03). */}
+        {/* Checklist à gauche, date au centre, profil à droite (2026-10-04, le bandeau d'activité
+            a pris la place de la pilule tout en haut). */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 40 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
+            <OnboardingChecklist />
+          </div>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
+            {extraControls}
           {onProfileClick && (
             <button
               onClick={onProfileClick}
@@ -480,12 +501,6 @@ export default function CalendarHeader({
               </svg>
             </button>
           )}
-          {/* Checklist d'onboarding à côté du profil (2026-10-03), jusqu'à ce que tout soit fait. */}
-          <OnboardingChecklist />
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
-            {extraControls}
-            <ActivityPill room={sideRoom} />
           </div>
         </div>
       </div>

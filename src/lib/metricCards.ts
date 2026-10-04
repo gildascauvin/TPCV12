@@ -101,7 +101,7 @@ export const METRICS: Record<MetricKey, MetricMeta> = {
     ],
   },
   recovery: {
-    key: "recovery", label: "Récupération", group: "recup", kind: "area", lo: 0, hi: 100,
+    key: "recovery", label: "Récupération", group: "recup", kind: "line", lo: 0, hi: 100,
     fmt: v => `${Math.round(v)}/100`,
     pick: p => p.recovery,
     /* Mêmes bornes 42/58 que relativeZoneLabel() : Φ(±Z_SWC)×100 ≈ 42/58, et FORM_ZONES coupe
@@ -391,17 +391,6 @@ export type ChartSpec = {
   tooltipExtra?: (i: number) => string | null;
 };
 
-const rampAt = (t: number) => {
-  const c = Math.max(0, Math.min(1, t));
-  let loStop = WELLNESS_RAMP[0], hiStop = WELLNESS_RAMP[WELLNESS_RAMP.length - 1];
-  for (let i = 0; i < WELLNESS_RAMP.length - 1; i++) {
-    if (c >= WELLNESS_RAMP[i].stop && c <= WELLNESS_RAMP[i + 1].stop) { loStop = WELLNESS_RAMP[i]; hiStop = WELLNESS_RAMP[i + 1]; break; }
-  }
-  const k = (c - loStop.stop) / (hiStop.stop - loStop.stop || 1);
-  const rgb = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-  const [r1, g1, b1] = rgb(loStop.hex), [r2, g2, b2] = rgb(hiStop.hex);
-  return "#" + [r1 + (r2 - r1) * k, g1 + (g2 - g1) * k, b1 + (b2 - b1) * k].map(x => Math.round(x).toString(16).padStart(2, "0")).join("");
-};
 
 const zoneColorOf = (zones: ZoneBand[] | undefined, v: number, fallback: string) =>
   zones?.find(z => v >= z.from && v < z.to)?.color ?? zones?.[0]?.color ?? fallback;
@@ -412,6 +401,8 @@ const BAND_ZONES: Partial<Record<MetricKey, string[]>> = {
   monotony: ["ÉLEVÉE", "CRITIQUE"],
   strain: ["FATIGUE", "BLESSURE"],
   form: ["FRAIS", "ÉQUILIBRÉ", "FATIGUÉ"],
+  // Même style que la Forme (2026-10-04) : ligne avec points, zones en fond.
+  recovery: ["FRAIS", "ÉQUILIBRÉ", "FATIGUÉ"],
 };
 
 export function chartSpecFor(
@@ -459,13 +450,6 @@ export function chartSpecFor(
           const v = series[i]?.load;
           return v ? sessionQualifier(v, opts.sessionRef).label : "Repos";
         },
-      };
-    case "recovery":
-      return {
-        ...base,
-        boundaryLines: [42, 58],
-        colorAt: v => rampAt(v / 100),
-        gradient: [...WELLNESS_RAMP].reverse().map(r => ({ offset: Math.round((1 - r.stop) * 100), color: r.hex })),
       };
     case "fitness":
       return { ...base, colorAt: () => "#8fbdf0" };
@@ -516,9 +500,10 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
       { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: zoneLabels.mid },
       { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: zoneLabels.low },
     ],
-    boundaryLines: [0],
+    // Même style que la Forme (2026-10-04) : ligne avec points, zones en fond.
+    bandZones: [zoneLabels.high, zoneLabels.mid, zoneLabels.low],
     fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
-    colorAt: v => rampAt(0.5 + v / 5),
+    colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
     tooltipExtra: i => {
       const r = raws[i];
       if (r === null || r === undefined) return null;
@@ -545,9 +530,9 @@ export function rhrSpec(baseline: (WellnessBaselineResult | null)[], dates: stri
       { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
       { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "FC PLUS HAUTE" },
     ],
-    boundaryLines: [0],
+    bandZones: ["FC PLUS BASSE", "DANS MA NORME", "FC PLUS HAUTE"],
     fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
-    colorAt: v => rampAt(0.5 + v / 5),
+    colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
     tooltipExtra: i => {
       const r = baseline[i]?.rhr;
       return r ? `${Math.round(r.bpm)} bpm · norme ${Math.round(r.norm)}` : null;
@@ -680,9 +665,9 @@ export function hrvSpec(baseline: (WellnessBaselineResult | null)[], dates: stri
       { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
       { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "EN DESSOUS" },
     ],
-    boundaryLines: [0],
+    bandZones: ["AU-DESSUS", "DANS MA NORME", "EN DESSOUS"],
     fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
-    colorAt: v => rampAt(0.5 + v / 5),
+    colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
     tooltipExtra: i => {
       const h = baseline[i]?.hrv;
       return h ? `${Math.round(h.ms)} ms · norme ${Math.round(h.norm)}` : null;

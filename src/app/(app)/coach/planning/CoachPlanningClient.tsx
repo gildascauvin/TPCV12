@@ -23,6 +23,8 @@ import DayColumn from "@/components/calendar/DayColumn";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramBanner from "@/components/programs/ProgramBanner";
+import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
+import { ACTIVITY_RECONDUIRE, ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, Program, ExerciseAttachments, WellnessDaily } from "@/types";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
@@ -314,6 +316,44 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const weekStart = startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 });
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
+  /* ↻ du bandeau d'activité (2026-10-04) : reconduit la semaine affichée du sportif sélectionné ;
+     depuis une autre page, le bandeau arrive ici avec ?athlete=…&reconduire=<lundi>. */
+  useEffect(() => {
+    const onReconduire = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; athleteId: string | null; handled: boolean }>).detail;
+      if (!athlete || (d.athleteId && d.athleteId !== athlete.id)) return;
+      d.handled = true;
+      if (d.monday !== format(weekDates[0], "yyyy-MM-dd")) handleDateChange(d.monday);
+      setShowReconduire(true);
+    };
+    window.addEventListener(ACTIVITY_RECONDUIRE, onReconduire);
+    return () => window.removeEventListener(ACTIVITY_RECONDUIRE, onReconduire);
+  });
+  useEffect(() => {
+    const onLabel = (e: Event) => {
+      const d = (e as CustomEvent<{ monday: string; label: string | null; athleteId: string | null }>).detail;
+      const a = athletes.find(x => x.id === d.athleteId);
+      if (!a) return;
+      setFreeLabelOverrides(prev => {
+        const n = { ...freeLabelsFor(a), ...(prev[a.id] ?? {}) };
+        if (d.label) n[d.monday] = d.label; else delete n[d.monday];
+        return { ...prev, [a.id]: n };
+      });
+    };
+    window.addEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+    return () => window.removeEventListener(ACTIVITY_LABEL_CHANGED, onLabel);
+  });
+  useEffect(() => {
+    const monday = searchParams.get("reconduire");
+    if (!monday || !/^\d{4}-\d{2}-\d{2}$/.test(monday) || !athlete) return;
+    if (monday !== format(weekDates[0], "yyyy-MM-dd")) handleDateChange(monday);
+    setShowReconduire(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("reconduire");
+    router.replace(params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, athlete?.id]);
+
   async function handleDateChange(date: string) {
     setSelectedDate(date);
     // Sandbox : le fixture initial couvre déjà -14/+14 jours (voir sandboxFixtures.ts) — un
@@ -551,7 +591,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (viewMode !== "week") return;
     const idx = weekDates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
     if (idx >= 0) {
-      dayRefs.current[idx]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      scrollIntoViewX(dayRefs.current[idx]);
     }
   }, [selectedDate, viewMode]);
 
@@ -695,10 +735,6 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // `weekStart` tombe à minuit heure locale — findProgramForWeek reparse en "T12:00:00" en
   // interne, cohérent avec les dates de démarrage des programmes (convention anti-DST déjà
   // utilisée partout ailleurs dans ce fichier).
-  const viewedMondayStr = format(weekStart, "yyyy-MM-dd");
-  const viewedMatch = findProgramForWeek(activeAssignments, viewedMondayStr);
-  const viewedProgram = viewedMatch?.program ?? null;
-  const viewedWeek = viewedMatch?.week ?? -1;
   // S1 visible pour tout le monde, S2+ flouté tant que non abonné — même principe que /week
   // (WeekClient.tsx) et ProgramBuilderModal.tsx : assigner n'est plus le gate, voir/utiliser
   // le planning complet au quotidien l'est.
@@ -772,22 +808,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
 
-      {/* Programme banner — full width. Un athlète peut enchaîner plusieurs programmes actifs :
-          on cherche celui qui couvre la semaine réellement affichée, pas juste `activeProgram`
-          (qui reste "le programme pertinent aujourd'hui"). */}
-      {athlete && (() => {
-        return (
-          <ProgramBanner
-            dark
-            program={viewedProgram}
-            currentWeek={viewedWeek}
-            onEdit={viewedProgram ? () => router.push(sandboxMode ? "/sandbox/coach/programmes" : "/coach/programmes") : undefined}
-            onReconduire={() => setShowReconduire(true)}
-            freeLabel={freeLabelsFor(athlete)[viewedMondayStr] ?? null}
-            onEditFreeLabel={label => setFreeLabelForWeek(athlete, viewedMondayStr, label)}
-          />
-        );
-      })()}
+      {/* Bannière programme fusionnée dans le bandeau d'activité de la barre des sportifs (2026-10-04). */}
 
       {(() => {
         const isViewingCurrentWeek = weekDates.some(d => format(d, "yyyy-MM-dd") === todayStr);

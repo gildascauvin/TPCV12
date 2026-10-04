@@ -4775,3 +4775,35 @@ POC : `~/Downloads/poc-programme-header-v3.html` (section boutique).
 - `src/components/ui/Skeleton.tsx` : `Skel`, `SkelLines`, `PageSkeleton` (variantes today / week / list / tests / programmes). Classes CSS : `.tpc-skel` (sombre, existante) et `.tpc-skel-light` (clair).
 - `loading.tsx` sur /today, /week, /conseils, /coach, /coach/planning, /coach/athletes, /programmes, /coach/programmes : silhouette affichée dès la navigation pendant que le serveur prépare la page.
 - Textes « Chargement… » remplacés par des fantômes : Accueil (onglets), tests, profil, formulaire de paiement, offre native, modèles de séance, bibliothèque, page Programmes.
+
+## Bandeau d'activité fusionné (pilule + bannière Planning) (2026-10-04)
+
+POC : `~/Downloads/poc-element-activation-v5.html` (v14, itéré avec Gildas). Remplace la pilule d'activité du header (2026-10-03) et la bannière programme (`ProgramBanner`) du Planning, de l'Accueil et du Planning coach. Analogie « autorégulation active / en pause » portée par le voyant de prod (`activityLed`, respiration) seulement, jamais par les mots.
+
+### Règles
+- **Un seul bandeau pleine largeur tout en haut**, identique sur toutes les pages sportif (`ActivityPill.tsx`, rendu par `CalendarHeader`). En dessous : checklist à gauche, date au centre, profil à droite.
+- **Le contenu suit la période affichée** (posée par `CalendarHeader` via `setDisplayedPeriod`) : le jour sur l'Accueil et Coach Control, la semaine sur le Planning, aujourd'hui sur les pages à titre fixe.
+  - Programme qui couvre la semaine : nom + barres de charge par semaine (semaine affichée cerclée).
+  - Sans programme : nom de la semaine (défaut « Séances libres ») + 7 jours (vert = faite, cercle orange = prévue, gris = rien ; jour affiché cerclé sur l'Accueil).
+- **Le voyant suit la règle de base** : une séance prévue dans le futur, pas encore faite (à partir de la période affichée si elle est à venir). Une semaine passée peut donc s'afficher voyant allumé.
+- **Actions** : programme → ✏️ (ouvre le tiroir) ; sans programme actif → ✏️ (tiroir) + ↻ Reconduire ; sans programme inactif → bouton « Ajouter » en pointillés (tiroir). Le reste de la barre ouvre aussi le tiroir (survol visible, `.activity-strip-bar`). Pas de sous-titre (« S3/8 », « 2/4 faites », « Rien de prévu » retirés).
+- **Nom de la semaine** : se modifie dans le tiroir (champ « Nom de la semaine », sauvegarde au blur/Entrée, `saveWeekLabel`) ; même stockage `free_training_label` (profil, ou `/api/coach/free-label`). Event `ACTIVITY_LABEL_CHANGED` : calendriers et bandeau à jour sans recharger.
+- **↻ Reconduire** : event `ACTIVITY_RECONDUIRE` ; `/week` et `/coach/planning` ouvrent la vraie `ReconduireModal` sur la semaine affichée ; ailleurs, redirection vers le Planning `?reconduire=<lundi>`.
+- **Coach** : le bandeau vit dans `AthleteFilterBar`. Vue Groupe = chips avec un voyant par sportif ; sportif sélectionné = « ‹ Groupe » + bandeau du sportif (nom au-dessus du titre). Remplace la liste toujours visible du 24/09.
+
+### Données et perf (`activityStatus.ts`, `/api/activity/status`)
+- Requête par **semaine** + ancre du voyant (`from`, `to`, `anchor = max(aujourd'hui, jour affiché)`) : Accueil et Planning de la même semaine partagent l'entrée de cache.
+- `template` des programmes chargé pour **un seul sujet** (`subject` = sportif du bandeau ; toujours le sportif côté sportif), jamais pour la vue Groupe.
+- Fantôme (`ActivityStripSkeleton`) pendant le chargement d'une autre semaine, jamais l'ancienne affichée.
+- Rafraîchi sans rechargement : `refreshActivitySoon()` (regroupé 400 ms) sur `ONBOARDING_REFRESH` et dès que les points du calendrier (`dotMap`) changent ; seules les périodes affichées sont relues (`inUse`).
+- Calcul pur partagé `buildActivitySubject(..., period, freeLabels)` (API + sandbox).
+
+### Autres changements du même chantier
+- **Coach, sportif sélectionné sur l'Accueil** : même vue que l'Accueil du sportif (`CoachCard page`) : pas de cadre, anneau 188, toutes les séances du jour en cartes blanches (`TodaySessionCard`, extrait de `TodayClient` dans `components/sessions/TodaySessionCard.tsx`, `viewer="coach"` sans Démarrer/Terminer), « + Ajouter une séance ».
+- **Calendrier de l'Accueil** (sportif, et coach avec un sportif sélectionné) : programme ou nom de semaine au-dessus de chaque semaine (`weekTitleFor`), comme le Planning.
+- **Charts Récupération + sous-indicateurs** (sommeil, stress, état physique, motivation, FC repos, VFC) : style de la Forme, ligne avec points + 3 zones en fond (`bandZones`), plus de dégradé.
+- **Planning** : le jour sélectionné est centré par défilement horizontal seulement (`scrollIntoViewX`), plus de saut vertical vers les séances.
+- **Anneau de décision** : seul l'arc se saisit (`touch-action: none` sur un trait invisible), le centre laisse défiler la page.
+- **Accueil** : en-tête et bandeau en pleine largeur comme le Planning ; espace bas réduit à 100 px (halo orange retiré, marges supprimées).
+- Perdu : le bouton « Hey coach » de partage du programme (reste « Inviter mon coach » dans le priming). Les bannières programme des cartes Coach Control en vue Groupe sont gardées.
+- Piège rencontré : le service worker servait d'anciens chunks après de nombreux changements à chaud (erreur « reading 'call' ») ; le vider avant de tester.
