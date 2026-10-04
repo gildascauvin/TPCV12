@@ -148,7 +148,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [signatures, setSignatures] = useState(initialSignatures);
   const [lastTests] = useState(initialLastTests);
@@ -160,7 +159,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     return { ...buildTestFixture(), sport: p.sport, sexe: p.sexe, poidsKg: p.poids_kg };
   }, []);
   const [testVerdicts] = useState(initialTestVerdicts);
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   // Sélecteur de sportif commun à tous les onglets/tabs (2026-09-24, "point 1", partie coach) —
   // même clé localStorage que /coach et /coach/planning. Cette page ("Performance" dans la bottom
@@ -241,23 +239,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* Freemium (2026-09-30) : gérer son roster est une entrée, libre ; l'analyse des tests est floutée. */
-  const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
+  /* Freemium (2026-09-30) : l'analyse des tests est floutée. */
   const analysisLocked = !isActive && !sandboxMode;
-  async function handleDelete(athlete: CoachAthlete) {
-    await gateInput(async () => {
-      const label = athlete.user_id ? "Retirer ce sportif de ton espace ?" : "Supprimer ce sportif ?";
-      if (!confirm(label)) return;
-      setDeleting(athlete.id);
-      await fetch("/api/athlete/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coachAthleteId: athlete.id }),
-      });
-      setAthletes(prev => prev.filter(a => a.id !== athlete.id));
-      setDeleting(null);
-    });
-  }
 
   return (
     <>
@@ -403,30 +386,8 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   {!isPending && (
                     <span style={{ color: "rgba(255,255,255,.45)", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
                   )}
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <button
-                      onClick={e => { e.stopPropagation(); setMenuOpenId(prev => (prev === a.id ? null : a.id)); }}
-                      aria-label="Options"
-                      style={{ width: 34, height: 34, borderRadius: 12, border: "1px solid rgba(255,255,255,.14)", background: "rgba(255,255,255,.08)", cursor: "pointer", fontSize: 18, fontWeight: 900, color: "rgba(255,255,255,.7)", display: "flex", alignItems: "center", justifyContent: "center" }}
-                    >
-                      ⋯
-                    </button>
-                    {menuOpenId === a.id && (
-                      <>
-                        <div onClick={e => { e.stopPropagation(); setMenuOpenId(null); }} style={{ position: "fixed", inset: 0, zIndex: 10 }} />
-                        <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: 40, right: 0, background: "#1c1c1e", border: "1px solid rgba(255,255,255,.14)", borderRadius: 12, boxShadow: "0 16px 40px rgba(0,0,0,.5)", zIndex: 20, minWidth: 150, overflow: "hidden" }}>
-                          <button
-                            data-tour="supprimer-btn"
-                            onClick={() => { setMenuOpenId(null); handleDelete(a); }}
-                            disabled={deleting === a.id}
-                            style={{ width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#ff6b6b", opacity: deleting === a.id ? 0.5 : 1 }}
-                          >
-                            {a.user_id ? "Retirer" : isPending ? "Annuler" : "Supprimer"}<span className="tour-lock">🔒</span>
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  {/* Menu ⋯ (Retirer/Annuler/Supprimer) retiré le 2026-10-04 : on retire un sportif
+                     depuis le tiroir profil, onglet "Mes sportifs" (CoachAthletesManager). */}
                 </div>
 
                 {/* Insight = uniquement celui des TESTS (verdict forces/faiblesses), jamais l'insight

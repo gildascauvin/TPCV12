@@ -4821,3 +4821,12 @@ Cas réel de Gildas : « Surcharge » proposée (zone 7-8), maintenue à 5, RPE 
 - Décisions prises avant ce déploiement : localStorage seul, texte de repli « Ajustement appliqué. » / « Séance prévue maintenue. ».
 
 - Wording (2026-10-04, Gildas) : « Difficulté » au lieu de « Ressentie », « recommandée » au lieu de « proposée ».
+
+## Retirer un sportif : tiroir profil, onglet « Mes sportifs » (2026-10-04)
+
+POC : https://claude.ai/artifact/LJKJb4nx5xuvPSFGUcCcP8 (variante A, onglets).
+- `ProfileDrawer.tsx` : côté coach uniquement, 2 onglets « Mon profil » (contenu inchangé) / « Mes sportifs » (`CoachAthletesManager.tsx`, nouveau). Liste `coach_athletes` du coach (client normal, RLS), statut Compte actif / Invitation envoyée · email / Profil sans compte, ⋯ → Retirer de mon groupe / Annuler l'invitation / Supprimer le profil, confirmation dans la ligne (plus de `confirm()`), même route `/api/athlete/delete`. Sandbox : la liste de la fixture, l'action ouvre la porte d'inscription.
+- Les pages coach gardent leurs sportifs en state : si un sportif a été retiré, fermer le tiroir recharge la page.
+- `/coach/athletes` (Performance) : menu ⋯ supprimé, avec `handleDelete`/`menuOpenId`/`deleting`/`gateInput`.
+- `/api/athlete/delete` vérifie désormais `.error` sur ses 3 écritures (500 au lieu d'un faux succès).
+- « + Inviter » (barre des sportifs) inchangé : il n'ouvre pas cet onglet.

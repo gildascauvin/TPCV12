@@ -9,6 +9,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import NotificationToggle from "./NotificationToggle";
 import LogoutButton from "@/components/auth/LogoutButton";
 import DeleteAccountButton from "./DeleteAccountButton";
+import CoachAthletesManager from "./CoachAthletesManager";
 import PaywallModal from "@/components/paywall/PaywallModal";
 import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
 import SandboxGateModal from "@/components/paywall/SandboxGateModal";
@@ -68,6 +69,14 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [nativeBilling, setNativeBilling] = useState<"monthly" | "annual">("annual");
   const [sandboxGateOpen, setSandboxGateOpen] = useState(false);
+  /* Coach : onglets "Mon profil" / "Mes sportifs" (2026-10-04). Un sportif retiré ici disparaît
+     aussi des pages coach, qui gardent leur liste en state : on recharge à la fermeture. */
+  const [tab, setTab] = useState<"profile" | "athletes">("profile");
+  const [removedAthlete, setRemovedAthlete] = useState(false);
+  function close() {
+    if (removedAthlete) window.location.reload();
+    else onClose();
+  }
 
   useEffect(() => {
     if (sandboxMode) return;
@@ -133,6 +142,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   const subText = subLabel === "athlete" ? "Sportif" : subLabel === "coach" ? "Coach" : subLabel === "expired" ? "Expiré" : "Gratuit";
   const subColor = subActive ? "#2f9e44" : subLabel === "expired" ? "#d10000" : "#8a8f94";
   const subBg = subActive ? "rgba(47,158,68,.1)" : subLabel === "expired" ? "rgba(209,0,0,.08)" : "rgba(0,0,0,.05)";
+  /* Mode connu tout de suite en sandbox ; sinon dès que /api/profile répond. */
+  const isCoach = (profile?.mode ?? (sandboxMode ? sandboxRole : null)) === "coach";
 
   return (
     <>
@@ -143,7 +154,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
           display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
           zIndex: 2147483100, overflow: "hidden",
         }}
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        onClick={e => { if (e.target === e.currentTarget) close(); }}
       >
         <div style={{
           background: "#fff", color: "#171b1f",
@@ -158,16 +169,40 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.13em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#8a8f94", marginBottom: 4 }}>Mon compte</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>Profil</div>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", color: "#171b1f" }}>{isCoach && tab === "athletes" ? "Mes sportifs" : "Profil"}</div>
               </div>
               <button
-                onClick={onClose}
+                onClick={close}
                 aria-label="Fermer"
                 style={{ width: 36, height: 36, borderRadius: "50%", background: "#f7f8f9", border: "1px solid rgba(0,0,0,.08)", cursor: "pointer", fontSize: 18, color: "#62686e", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
               >×</button>
             </div>
 
-            {loading ? (
+            {isCoach && (
+              <div role="tablist" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", background: "#f1f2f4", borderRadius: 14, padding: 4, marginBottom: 22 }}>
+                {([["profile", "Mon profil"], ["athletes", "Mes sportifs"]] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    role="tab"
+                    aria-selected={tab === k}
+                    onClick={() => setTab(k)}
+                    style={{
+                      border: "none", borderRadius: 11, padding: 9, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      background: tab === k ? "#fff" : "transparent", color: tab === k ? "#171b1f" : "#62686e",
+                      boxShadow: tab === k ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                    }}
+                  >{label}</button>
+                ))}
+              </div>
+            )}
+
+            {isCoach && tab === "athletes" ? (
+              <CoachAthletesManager
+                sandboxMode={sandboxMode}
+                onSandboxGate={() => setSandboxGateOpen(true)}
+                onRemoved={() => setRemovedAthlete(true)}
+              />
+            ) : loading ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
                 <Skel w={64} h={64} r="50%" /><SkelLines lines={3} /><Skel h={44} r={12} /><Skel h={44} r={12} />
               </div>

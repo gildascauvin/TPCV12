@@ -22,20 +22,23 @@ export async function POST(req: Request) {
 
   // Si vrai sportif : délier le profil
   if (record.user_id) {
-    await admin.from("profiles").update({ invited_by_coach_id: null }).eq("user_id", record.user_id);
+    const { error: unlinkErr } = await admin.from("profiles").update({ invited_by_coach_id: null }).eq("user_id", record.user_id);
+    if (unlinkErr) return Response.json({ error: unlinkErr.message }, { status: 500 });
   }
 
   // Si invitation pending : annuler l'invite pour éviter la re-création du placeholder
   if (record.invite_email) {
-    await admin.from("coach_invites")
+    const { error: inviteErr } = await admin.from("coach_invites")
       .delete()
       .eq("coach_id", user.id)
       .eq("email", record.invite_email)
       .eq("status", "pending");
+    if (inviteErr) return Response.json({ error: inviteErr.message }, { status: 500 });
   }
 
   // Supprimer le record coach_athletes (cascade supprime les coach_sessions)
-  await supabase.from("coach_athletes").delete().eq("id", coachAthleteId);
+  const { error: deleteErr } = await supabase.from("coach_athletes").delete().eq("id", coachAthleteId);
+  if (deleteErr) return Response.json({ error: deleteErr.message }, { status: 500 });
 
   return Response.json({ ok: true });
 }
