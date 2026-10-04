@@ -4829,4 +4829,6 @@ POC : https://claude.ai/artifact/LJKJb4nx5xuvPSFGUcCcP8 (variante A, onglets).
 - Les pages coach gardent leurs sportifs en state : si un sportif a été retiré, fermer le tiroir recharge la page.
 - `/coach/athletes` (Performance) : menu ⋯ supprimé, avec `handleDelete`/`menuOpenId`/`deleting`/`gateInput`.
 - `/api/athlete/delete` vérifie désormais `.error` sur ses 3 écritures (500 au lieu d'un faux succès).
-- « + Inviter » (barre des sportifs) inchangé : il n'ouvre pas cet onglet.
+- « + Inviter » (barre des sportifs, `AthleteFilterBar`) ouvre `InviteModal` sur place au lieu de rediriger vers `/coach/athletes?quickadd=invite` (code d'invitation lu dans `profiles` à l'ouverture ; fermer après une invitation recharge la page, via le nouveau prop `onSent`). Il n'ouvre pas l'onglet « Mes sportifs ».
+- Email affiché pour chaque sportif (inscrit : lu dans `auth.users` par `GET /api/coach/roster`, admin après vérification de propriété ; invité : `invite_email` ; profil démo : aucun).
+- Menu ⋯ : « Voir sa journée » (pose la sélection de la barre des sportifs puis ouvre `/coach`), « Renvoyer l'invitation » (invités seulement, `POST /api/invite/resend`, renvoie l'email Resend), puis l'action de retrait.

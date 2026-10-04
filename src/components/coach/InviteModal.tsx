@@ -22,6 +22,8 @@ const PREVIEW_SCORES = [35, 62, 85];
 interface Props {
   onClose: () => void;
   onLinked: () => void;
+  /* Au moins une invitation créée (liée ou en attente) — pour rafraîchir la page appelante. */
+  onSent?: () => void;
   inviteCode?: string | null;
   /* Sandbox uniquement (2026-08-19) : aucun compte coach réel n'existe encore, donc aucune ligne
      coach_invites/coach_athletes ne peut être créée — POST /api/sandbox/invite envoie juste un
@@ -45,7 +47,7 @@ interface InviteRow {
   email: string;
 }
 
-export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
+export default function InviteModal({ onClose, onLinked, onSent, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   // Prénom + email ensemble, une ligne = un sportif — plus deux blocs déconnectés (un pour
@@ -84,6 +86,7 @@ export default function InviteModal({ onClose, onLinked, inviteCode, sandboxMode
     setSentCount(sent.length);
     notifyOnboardingProgressSoon(0);
     if (sent.length) {
+      onSent?.();
       setResult(sent.some(r => r.linked) ? "linked" : "pending");
       if (sent.some(r => r.linked)) onLinked();
     }

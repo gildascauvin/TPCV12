@@ -1,9 +1,13 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import type { CoachAthlete } from "@/types";
 import { useDisplayedPeriod } from "@/lib/activityStatus";
 import { ActivityStripBar, ActivityStripSkeleton, OPEN_ACTIVITY_DRAWER, useActivityData } from "@/components/layout/ActivityPill";
+const InviteModal = dynamic(() => import("@/components/coach/InviteModal"));
 
 /* Barre de filtre sportifs — persistante entre les onglets coach (2026-09-24, redesign inspiré du
    POC `poc-coach-context_4.html`, `.athlete-chips`/`.crumb`). Composant purement contrôlé : l'état
@@ -44,18 +48,39 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
   contentMaxWidth?: number;
 }) {
   const pathname = usePathname() ?? "";
-  const router = useRouter();
   // Bandeau d'activité fusionné dans cette barre (2026-10-04) : voyant par sportif sur la période
   // affichée en vue Groupe, bandeau du sportif quand il est sélectionné.
   const period = useDisplayedPeriod();
   const { status, loading, basePath } = useActivityData(period, selectedId);
+  /* "+ Inviter" ouvre l'invitation sur place (2026-10-04), sans aller sur /coach/athletes. Les pages
+     gardent leurs sportifs en state : après une invitation, fermer recharge la page. */
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [inviteSent, setInviteSent] = useState(false);
+  async function openInvite() {
+    setInviteOpen(true);
+    if (inviteCode || pathname.startsWith("/sandbox")) return;
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase.from("profiles").select("invite_code").eq("user_id", user.id).maybeSingle();
+    setInviteCode(data?.invite_code ?? null);
+  }
   if (athletes.length === 0) return null;
   const subjectOf = (id: string) => status?.athletes.find(x => x.id === id) ?? null;
   const selected = selectedId ? athletes.find(a => a.id === selectedId) ?? null : null;
   // Inviter toujours visible à droite (2026-10-03) : le geste d'acquisition côté coach, qui n'a plus
   // le "+" de la nav. Ouvre l'invitation sur la page Sportifs (?quickadd=invite), sandbox comprise.
   const sandboxBase = pathname.match(/^\/sandbox\/coach/)?.[0];
-  const inviteHref = `${sandboxBase ? `${sandboxBase}/athletes` : "/coach/athletes"}?quickadd=invite`;
+  const inviteModal = inviteOpen ? (
+    <InviteModal
+      inviteCode={inviteCode}
+      sandboxMode={!!sandboxBase}
+      onSent={() => setInviteSent(true)}
+      onLinked={() => setInviteSent(true)}
+      onClose={() => { if (inviteSent) window.location.reload(); else setInviteOpen(false); }}
+    />
+  ) : null;
 
   /* Vue Groupe uniquement depuis le 2026-10-04 : un sportif sélectionné remplace la liste par
      "‹ Groupe" + son bandeau d'activité (voir plus haut).
@@ -115,6 +140,7 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
   }
 
   return (
+    <>
     <div style={{
       position: "sticky", top: 0, zIndex: 40,
       background: "rgba(10,14,18,.72)", backdropFilter: "blur(12px)",
@@ -176,7 +202,7 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
         })}
       </div>
       <button
-        onClick={() => router.push(inviteHref)}
+        onClick={openInvite}
         style={{
           flexShrink: 0, cursor: "pointer", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6,
           padding: "8px 14px", borderRadius: 999, fontSize: 13, fontWeight: 800, fontFamily: "inherit",
@@ -187,5 +213,7 @@ export default function AthleteFilterBar({ athletes, selectedId, onSelect, conte
       </button>
       </div>
     </div>
+    {inviteModal}
+    </>
   );
 }
