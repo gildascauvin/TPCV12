@@ -73,7 +73,7 @@ export function decisionSummary(d: AutoregDecisionRecord, viewer: DecisionViewer
     const plan = viewer.role === "coach" ? (self ? "Son plan" : "Le plan") : "Ton plan";
     return `${plan} était cohérent, ${actor} ${has} ${movedVerb}.`;
   }
-  const head = up(d.proposed) ? "Surcharge proposée" : "Allègement proposé";
+  const head = up(d.proposed) ? "Surcharge recommandée" : "Allègement recommandé";
   const pp = up(d.proposed) ? "appliquée" : "appliqué";
   const verb = up(d.proposed) ? "surchargé" : "allégé";
   const tail = {
@@ -91,13 +91,13 @@ export function feltLine(rpe: number | null, planned: number | null, zone: { low
   if (rpe === null) return coach ? "RPE pas encore noté." : "Pense à noter ton RPE.";
   const r = Math.round(rpe);
   if (zone) {
-    if (r < zone.low) return coach ? "Ressentie sous la zone proposée : il restait de la marge." : "Ressentie sous la zone proposée : tu avais de la marge.";
-    if (r > zone.high) return "Ressentie au-dessus de la zone proposée : plus dure que prévu.";
-    return "Ressentie dans la zone proposée.";
+    if (r < zone.low) return coach ? "Difficulté sous la zone recommandée : il restait de la marge." : "Difficulté sous la zone recommandée : tu avais de la marge.";
+    if (r > zone.high) return "Difficulté au-dessus de la zone recommandée : plus dure que prévu.";
+    return "Difficulté dans la zone recommandée.";
   }
   if (planned === null) return "Séance faite.";
   const gap = r - Math.round(planned);
-  if (gap >= 1) return "Ressentie plus dure que prévu.";
-  if (gap <= -1) return "Ressentie plus facile que prévu.";
-  return "Ressentie comme prévu.";
+  if (gap >= 1) return "Difficulté plus élevée que prévu.";
+  if (gap <= -1) return "Difficulté plus basse que prévu.";
+  return "Difficulté comme prévu.";
 }
