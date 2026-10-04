@@ -1,4 +1,5 @@
 "use client";
+import { openInvite } from "@/components/coach/InviteHost";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -954,7 +955,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                   {!selectedAthleteId && (
                     <div style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", minWidth: 0, scrollSnapAlign: "start" }}>
                       <button
-                        onClick={() => router.push(sandboxMode ? "/sandbox/coach/athletes?quickadd=invite" : "/coach/athletes?quickadd=invite")}
+                        onClick={openInvite}
                         style={{
                           width: "100%", height: "100%", minHeight: 220, borderRadius: 24, cursor: "pointer", fontFamily: "inherit",
                           background: "rgba(255,255,255,.035)", border: "1.5px dashed rgba(255,255,255,.22)", color: "#fff",

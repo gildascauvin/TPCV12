@@ -1,5 +1,6 @@
 "use client";
 
+import { openInvite } from "@/components/coach/InviteHost";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
@@ -97,7 +98,7 @@ export default function OnboardingChecklist() {
       }
     }
     else if (key === "adjust") go(role === "coach" ? "/coach?today=1" : "/today?today=1");
-    else if (key === "invite") go("/coach/athletes?quickadd=invite");
+    else if (key === "invite") openInvite();
     else if (key === "unlock") window.dispatchEvent(new CustomEvent(OPEN_PRIMING, { detail: { source: "checklist" } }));
   }
 

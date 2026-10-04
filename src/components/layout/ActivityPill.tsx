@@ -1,5 +1,6 @@
 "use client";
 
+import { openInvite } from "@/components/coach/InviteHost";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
@@ -558,7 +559,7 @@ export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: nu
           ))}
         </div>
         {rows(<>
-          <SheetRow icon="👥" title="Inviter un sportif" sub="Lien, WhatsApp ou email" onClick={() => go("invite", "/coach/athletes?quickadd=invite")} />
+          <SheetRow icon="👥" title="Inviter un sportif" sub="Lien, WhatsApp ou email" onClick={() => { posthog.capture("activity_pill_action", { role, state, action: "invite" }); setOpen(false); openInvite(); }} />
           {programRow}
         </>)}
       </>

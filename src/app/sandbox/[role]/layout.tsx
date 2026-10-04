@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
+import InviteHost from "@/components/coach/InviteHost";
 
 /* Sandbox non authentifiée (2026-08-19) — même shell visuel que (app)/layout.tsx (fond+BottomNav)
    mais AUCUN check auth (contrairement à (app)/layout.tsx qui redirect("/login") sans session) :
@@ -14,6 +15,7 @@ export default function SandboxLayout({ children, params }: { children: React.Re
     <div className="min-h-screen bg-bg pb-[132px]">
       {children}
       <BottomNav role={params.role} basePath={basePath} />
+      {params.role === "coach" && <InviteHost sandboxMode />}
     </div>
   );
 }
