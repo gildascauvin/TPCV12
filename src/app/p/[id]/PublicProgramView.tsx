@@ -193,7 +193,10 @@ export default function PublicProgramView({ program, coachName }: Props) {
     const ro = new ResizeObserver(post);
     Array.from(el.children).forEach(c => ro.observe(c));
     ro.observe(el);
-    return () => ro.disconnect();
+    // La page parente peut demander la hauteur (son script peut s'abonner après notre 1er envoi).
+    const onAsk = (e: MessageEvent) => { if ((e.data as { type?: string })?.type === "tpc-program-height-request") post(); };
+    window.addEventListener("message", onAsk);
+    return () => { ro.disconnect(); window.removeEventListener("message", onAsk); };
   }, [inApp, isEmbedded, weekIdx, program.id]);
   const isLocked = weekIdx > 0 && (userMode === null || forceLock);
 
