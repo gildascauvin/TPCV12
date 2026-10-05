@@ -1,5 +1,7 @@
 "use client";
 
+import { isThePerfClubProgram, revealLabel, NOT_STARTED_LABEL } from "@/lib/programReveal";
+import { effectiveAnchor, addDaysStr } from "@/lib/programSchedule";
 import { Skel } from "@/components/ui/Skeleton";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -91,6 +93,8 @@ const NEUTRAL_LEVEL = "intermediaire" as const;
 
 const AVATAR_COLORS = ["#d44000", "#2f9e44", "#1d6fdb", "#7c3aed", "#b96500"];
 
+const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+
 export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram, activeProgramWeek, requireSubscription, isActive, onClose, sandboxMode = false, initialStep, focusProgramId, standalone = false, userSport }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
@@ -134,7 +138,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     const week: Record<string, never[]> = {};
     BLANK_PROGRAM_DAYS.forEach(d => { week[d] = []; });
     const template: ProgramTemplate = { weeks: [week] };
-    const meta: ProgramMeta = { sport: "Programme vierge", level: NEUTRAL_LEVEL, focus: "mixte", days: [], duration: 4 };
+    const meta: ProgramMeta = { sport: "Programme vierge", level: NEUTRAL_LEVEL, focus: "mixte", days: [], duration: 4, origin: "blank" };
     setStep({ type: "builder", template, meta, programName: "Programme vierge" });
   }
 
@@ -158,7 +162,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     const res = await fetch("/api/programs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sport: meta.sport || null, level: meta.level, focus: meta.focus, weeks_count: template.weeks.length, sessions_per_week: meta.days.length, template }),
+      body: JSON.stringify({ name, sport: meta.sport || null, level: meta.level, focus: meta.focus, weeks_count: template.weeks.length, sessions_per_week: meta.days.length, template, origin: meta.origin ?? null }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -262,7 +266,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     const template = p.template ?? await fetchLibraryTemplate(p.id);
     const meta: ProgramMeta = {
       sport: p.sport ?? "", level: p.level ?? "intermediaire", focus: p.focus ?? "mixte",
-      days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"],
+      days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"], origin: "template",
     };
     setStep({ type: "builder", template, meta, programName: p.name });
   }
@@ -345,7 +349,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         onCustomize={() => openTemplate(p)}
         onStart={async () => {
           if (sandboxMode) { gate(() => {}); return; }
-          const meta: ProgramMeta = { sport: p.sport ?? "", level: p.level ?? "intermediaire", focus: p.focus ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"] };
+          const meta: ProgramMeta = { sport: p.sport ?? "", level: p.level ?? "intermediaire", focus: p.focus ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"], origin: "template" };
           const template = p.template ?? await fetchLibraryTemplate(p.id);
           const id = await saveProgram(p.name, template, meta);
           if (!id) throw new Error("Impossible d'enregistrer ce programme");
@@ -373,12 +377,27 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   }
 
   /* ─── Builder ─── */
+  /* Programmes ThePerfClub côté sportif (programReveal.ts) : avant de le démarrer, semaine 1 en
+     clair ; démarré, chaque séance se dévoile à J-7 de sa date. Coach et programmes importés ou
+     vierges : tout en clair. */
+  function concealFor(origin: ProgramMeta["origin"] | null | undefined, programId?: string): ((weekIdx: number, day: string) => string | null) | undefined {
+    if (coachSide || sandboxMode || !isThePerfClubProgram(origin)) return undefined;
+    const a = programId ? assignments.find(x => x.program_id === programId && x.status === "active" && x.user_id === selfUserId) : undefined;
+    if (!a) return weekIdx => weekIdx > 0 ? NOT_STARTED_LABEL : null;
+    const anchor = effectiveAnchor(a.start_date, (a as { day_anchor?: string | null }).day_anchor);
+    return (weekIdx, day) => {
+      const offset = (WEEK_DAYS.indexOf(day) - WEEK_DAYS.indexOf(anchor) + 7) % 7;
+      return revealLabel(addDaysStr(a.start_date, weekIdx * 7 + offset), todayStr);
+    };
+  }
+
   if (step.type === "builder") {
     const isEdit = !!step.programId;
     return (
       <>
       {resyncModal}
       <ProgramBuilderModal
+        concealFrom={concealFor(step.meta.origin, step.programId)}
         programName={step.programName ?? (step.meta.sport ? `Programme ${step.meta.sport}` : "Mon programme")}
         template={step.template}
         assignmentCount={step.assignmentCount ?? 0}
@@ -624,7 +643,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
                     </button>
                     <button
                       onClick={() => {
-                        const fakeMeta: ProgramMeta = { sport: p.sport ?? "", level: (p.level as ProgramMeta["level"]) ?? "intermediaire", focus: (p.focus as ProgramMeta["focus"]) ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"] };
+                        const fakeMeta: ProgramMeta = { sport: p.sport ?? "", level: (p.level as ProgramMeta["level"]) ?? "intermediaire", focus: (p.focus as ProgramMeta["focus"]) ?? "mixte", days: ["Lun", "Mer", "Ven"], duration: p.weeks_count as ProgramMeta["duration"], origin: p.origin ?? undefined };
                         const activeCount = assignments.filter(a => a.program_id === p.id && a.status === "active").length;
                         setStep({ type: "builder", template: p.template, meta: fakeMeta, programId: p.id, programName: p.name, assignmentCount: activeCount });
                       }}

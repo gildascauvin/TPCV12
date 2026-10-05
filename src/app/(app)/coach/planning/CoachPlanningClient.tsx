@@ -163,9 +163,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   // jamais affichée depuis cette modale, seule /coach/programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [activeProgram, setActiveProgram] = useState<Program | null>(null);
-  const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
-  const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
+  const [, setActiveProgram] = useState<Program | null>(null);
+  const [, setActiveProgramWeek] = useState<number>(-1);
+  const [, setActiveProgramStartDate] = useState<string | null>(null);
   // Tous les assignments actifs de l'athlète (il peut en enchaîner plusieurs dans le futur) —
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation).
   const [activeAssignments, setActiveAssignments] = useState<{ id: string; start_date: string; programs: Program | Program[] | null }[]>([]);
@@ -812,41 +812,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {/* Bannière programme fusionnée dans le bandeau d'activité de la barre des sportifs (2026-10-04). */}
 
       {(() => {
-        const isViewingCurrentWeek = weekDates.some(d => format(d, "yyyy-MM-dd") === todayStr);
-        const programPending = !!activeProgram && activeProgramWeek === -1 && !!activeProgramStartDate
-          && new Date(activeProgramStartDate + "T12:00:00").getTime() > Date.now()
-          && isViewingCurrentWeek;
-        if (viewMode === "week" && athlete && programPending) {
-          return (
-            <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
-              <div style={{
-                textAlign: "center", padding: "28px 20px",
-                border: "0.5px dashed rgba(212,64,0,.28)",
-                borderRadius: 24, background: "#fff",
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
-                <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
-                  La semaine 1 de {athlete.name.split(" ")[0]} démarre lundi
-                </div>
-                <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
-                  {activeProgram!.name} l&apos;attend.
-                </div>
-                <button
-                  onClick={() => navigatePeriod("next")}
-                  style={{
-                    width: "100%", height: 48, borderRadius: 16,
-                    background: "linear-gradient(180deg,#f04a08,#d44000)",
-                    color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
-                    cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
-                  }}
-                >
-                  Voir la semaine 1 →
-                </button>
-              </div>
-            </div>
-          );
-        }
-        if (viewMode === "week" && athlete && !programPending && sessions.filter(s => s.athlete_id === athlete.id).length === 0) {
+        if (viewMode === "week" && athlete && sessions.filter(s => s.athlete_id === athlete.id).length === 0) {
           return (
             <div style={{ padding: isMd ? "0 24px 4px" : "0 16px 4px" }}>
               <EmptySessionState

@@ -26,6 +26,7 @@ import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate } from "@/lib/wellnessBaseline";
 import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
+import { isThePerfClubProgram, revealLabel } from "@/lib/programReveal";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
@@ -144,7 +145,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
   const [activeProgram, setActiveProgram] = useState<Program | null>(null);
   const [activeProgramWeek, setActiveProgramWeek] = useState<number>(-1);
-  const [activeProgramStartDate, setActiveProgramStartDate] = useState<string | null>(null);
+  const [, setActiveProgramStartDate] = useState<string | null>(null);
   // Tous les assignments actifs du sportif (il peut en enchaîner plusieurs dans le futur) —
   // sert à trouver quel programme couvre la semaine réellement affichée (navigation),
   // distinct de `activeProgram` ci-dessus qui reste "le programme pertinent aujourd'hui".
@@ -543,7 +544,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     }
   }
 
-  const isViewingCurrentWeek = dates.some(d => format(d, "yyyy-MM-dd") === todayStr);
   // Plus de flou S2+ (freemium 2026-09-30) : la programmation est une entrée, tout le planning est lisible.
   const weekLocked = false;
 
@@ -567,6 +567,15 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return map;
   }, {});
   const headerWellnessMap = relativeWellnessByDate(popupWellnessHistory, 400);
+  /* Programmes ThePerfClub dévoilés à J+7 (programReveal.ts) : séances au-delà floutées. */
+  const revealAssignmentIds = new Set(activeAssignments
+    .filter(a => { const p = Array.isArray(a.programs) ? a.programs[0] : a.programs; return isThePerfClubProgram(p?.origin); })
+    .map(a => a.id));
+  function withReveal<S extends { date: string; program_assignment_id?: string | null }>(list: S[]): (S & { concealed?: string | null })[] {
+    if (sandboxMode || !revealAssignmentIds.size) return list;
+    return list.map(s => s.program_assignment_id && revealAssignmentIds.has(s.program_assignment_id)
+      ? { ...s, concealed: revealLabel(s.date, todayStr) } : s);
+  }
   function weekTitleForPopup(mondayIso: string): string | null {
     const match = findProgramForWeek(activeAssignments, mondayIso);
     if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
@@ -605,37 +614,6 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       {/* Bannière programme fusionnée dans le bandeau d'activité du header (2026-10-04). */}
-
-      {activeProgram && activeProgramWeek === -1 && activeProgramStartDate
-        && new Date(activeProgramStartDate + "T12:00:00").getTime() > Date.now()
-        && isViewingCurrentWeek && (
-        <div style={{ margin: isMd ? "14px 20px 0" : "14px 14px 0" }}>
-          <div style={{
-            textAlign: "center", padding: "28px 20px",
-            border: "0.5px dashed rgba(212,64,0,.28)",
-            borderRadius: 24, background: "#fff",
-          }}>
-            <div style={{ fontSize: 32, marginBottom: 10 }}>📅</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f", marginBottom: 4, letterSpacing: "-0.02em" }}>
-              Ta semaine 1 démarre lundi
-            </div>
-            <div style={{ fontSize: 12, color: "#8a8f94", marginBottom: 16 }}>
-              {activeProgram.name} t&apos;attend.
-            </div>
-            <button
-              onClick={() => navigatePeriod("next")}
-              style={{
-                width: "100%", height: 48, borderRadius: 16,
-                background: "linear-gradient(180deg,#f04a08,#d44000)",
-                color: "#fff", border: "none", fontSize: 14, fontWeight: 900,
-                cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.26)",
-              }}
-            >
-              Voir la semaine 1 →
-            </button>
-          </div>
-        </div>
-      )}
 
       <div ref={weekGridRef} data-tour="week-sessions">
         <div key={`cal-${navKey}`} style={{
@@ -783,7 +761,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               <DroppableDay dstr={dstr}>
               <DayColumn
                 date={date}
-                sessions={sessions.filter(s => s.date === dstr)}
+                sessions={withReveal(sessions.filter(s => s.date === dstr))}
                 wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
                 todayStr={todayStr}
                 ctx={ctx}

@@ -319,6 +319,9 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
 interface EditingTarget { weekIdx: number; day: string; sessionIdx: number }
 
 interface Props {
+  /* Programmes ThePerfClub côté sportif (programReveal.ts, 2026-10-05) : renvoie le libellé de
+     dévoilement d'une séance pas encore visible (semaine, jour), null sinon. Absent = tout en clair. */
+  concealFrom?: (weekIdx: number, day: string) => string | null;
   programName: string;
   template: ProgramTemplate;
   assignmentCount?: number;
@@ -377,7 +380,7 @@ interface Props {
   role?: "athlete" | "coach";
 }
 
-export default function ProgramBuilderModal({ programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset, showAutoregSimulator = false, role = "athlete" }: Props) {
+export default function ProgramBuilderModal({ concealFrom, programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset, showAutoregSimulator = false, role = "athlete" }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const { isMd } = useBreakpoint();
   const [name, setName] = useState(initialName || "Mon programme");
@@ -821,6 +824,9 @@ export default function ProgramBuilderModal({ programName: initialName, template
                 )}
                 {daySessions.map((s, sIdx) => {
                   const isTarget = !!suggestion && s === targetSession;
+                  // Programme ThePerfClub côté sportif : séance pas encore dévoilée (programReveal.ts).
+                  const lock = concealFrom?.(weekIdx, day) ?? null;
+                  if (lock) return <SessionTemplateCard key={sIdx} session={s} concealed={lock} />;
                   return (
                     <DraggableProgramSession
                       key={sIdx} day={day} sIdx={sIdx} session={s}
@@ -831,7 +837,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                     />
                   );
                 })}
-                <div style={{ display: "flex", gap: 5 }}>
+                {!concealFrom?.(weekIdx, day) && <div style={{ display: "flex", gap: 5 }}>
                   <div
                     onClick={() => addSession(day)}
                     style={{ flex: 1, border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700 }}
@@ -845,7 +851,7 @@ export default function ProgramBuilderModal({ programName: initialName, template
                       style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid rgba(0,0,0,.09)", background: "#f7f8f9", color: "#8a8f94", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                     >⎘</button>
                   )}
-                </div>
+                </div>}
               </div>
             </div>
             </DroppableProgramDay>

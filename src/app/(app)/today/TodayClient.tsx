@@ -33,6 +33,7 @@ import DuplicateModal from "@/components/sessions/DuplicateModal";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
+import { revealLabel } from "@/lib/programReveal";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
@@ -87,6 +88,8 @@ interface Props {
      réel désormais (voir src/lib/access.ts, 2026-08-19). */
   hasActiveCoach?: boolean;
   activeProgram?: { start_date: string; acclimatation?: boolean; name: string; program?: Program } | null;
+  /* Assignments de programmes ThePerfClub : séances floutées au-delà de J+7 (programReveal.ts). */
+  revealAssignmentIds?: string[];
   /* Sandbox uniquement (2026-08-19) : quand true, remplace usePaywall par useSandboxGate (même
      interface, destination = signup au lieu de priming/paywall) et neutralise les effets qui
      rafraîchiraient les données via Supabase (le fixture initial couvre déjà toute la fenêtre
@@ -109,7 +112,7 @@ interface Props {
   initialAnalyticsData?: ConseilsData;
 }
 
-export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [], initialAnalyticsData }: Props) {
+export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, revealAssignmentIds = [], sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [], initialAnalyticsData }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -290,9 +293,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const todaySessions = allSessions.filter((s) => s.date === selectedDate);
-  const weekStart = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const weekEnd = format(addDays(new Date(weekStart + "T12:00:00"), 6), "yyyy-MM-dd");
-  const weekSessions = allSessions.filter(s => s.date >= weekStart && s.date <= weekEnd);
   // `base_score` en priorité (jamais `score`, qui inclut le bonus/malus comportements) — voir
   // wellnessSignal() dans wellnessBaseline.ts pour le pourquoi. Nécessaire pour que ce "score du
   // jour" reste comparable à l'historique déjà bâti sur base_score dans wellnessBaseline plus bas.
@@ -872,28 +872,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                    futur, rien cette semaine) → encart d'attente ; sinon carte blanche "Aucune séance
                    aujourd'hui" avec Importer / Séance libre. Plus de séance démo. */}
                 {todaySessions.length === 0 && (
-                  weekSessions.length === 0 && activeProgram && activeProgram.start_date > initialDate ? (
-                    <div style={{ background: "#f8faf3", border: "1px solid rgba(47,158,68,.18)", borderRadius: 16, padding: "18px 16px", marginBottom: 12 }}>
-                      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#2f9e44", marginBottom: 4 }}>
-                        Programme en attente
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: "#171b1f", marginBottom: 6 }}>
-                        {activeProgram.name}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#62686e", lineHeight: 1.5 }}>
-                        {(() => {
-                          const [, m, d] = activeProgram.start_date.split("-").map(Number);
-                          const MONTHS = ["jan.","fév.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
-                          return `Tes séances arrivent le ${d} ${MONTHS[m - 1]}. Retrouve ton planning dans l'onglet Planning.`;
-                        })()}
-                      </div>
-                    </div>
-                  ) : (
                     <EmptyDayCard
                       onAddFree={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
                       onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
                     />
-                  )
                 )}
                 {todaySessions.map((s) => (
                   <TodaySessionCard
@@ -903,6 +885,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => setEditing(s)}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                    concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
                     hideGauge={s.id === autoregTargetTop?.id}

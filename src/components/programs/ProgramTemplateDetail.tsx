@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fetchLibraryTemplate, type LibraryProgram } from "./ProgramLibraryBrowser";
-import type { ProgramTemplate, SessionTemplate } from "@/types";
+import type { ProgramTemplate } from "@/types";
 import { Cover } from "./ProgramStoreSections";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import DiffGauge from "@/components/calendar/DiffGauge";
 
 /* Fiche d'un modèle de programme (2026-10-03, V2 de la page Programmes, POC
    poc-programme-header-v3.html) : comme une page produit — photo, ce que ça change, la
@@ -17,11 +16,6 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const LEVEL_LABELS: Record<string, string> = { debutant: "Débutant", intermediaire: "Intermédiaire", avance: "Avancé", elite: "Élite" };
 
-function loadBarColor(avg: number): string {
-  if (avg <= 4) return "#2f9e44";
-  if (avg <= 7) return "#f28a00";
-  return "#d44000";
-}
 
 interface Props {
   program: LibraryProgram;
@@ -47,21 +41,21 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
     return () => { cancelled = true; };
   }, [p.id, p.template]);
   const coach = role === "coach";
+  // Hauteur du cadre /p/ : envoyée par la page insérée (voir PublicProgramView, ?inapp=1).
+  const [frameHeight, setFrameHeight] = useState<number | null>(null);
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data as { type?: string; id?: string; height?: number };
+      if (d?.type === "tpc-program-height" && d.id === p.id && typeof d.height === "number") setFrameHeight(Math.ceil(d.height) + 4);
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [p.id]);
 
   const weeks = useMemo(() => template?.weeks ?? [], [template]);
-  const weekAvgs = useMemo(() => weeks.map(w => {
-    const s = DAYS.flatMap(d => (w[d] ?? []) as SessionTemplate[]);
-    return s.length ? s.reduce((t, x) => t + (x.target_difficulty ?? 5), 0) / s.length : 0;
-  }), [weeks]);
   const totalSessions = useMemo(() => weeks.reduce((t, w) => t + DAYS.reduce((u, d) => u + (w[d]?.length ?? 0), 0), 0), [weeks]);
-  // Séance type : la plus représentative de la semaine 1 = la plus dure (c'est elle qui montre le contenu).
-  const sample = useMemo(() => {
-    const w1 = weeks[0] ?? {};
-    const all = DAYS.flatMap(d => (w1[d] ?? []).map(s => ({ day: d, s })));
-    return all.sort((a, b) => (b.s.target_difficulty ?? 0) - (a.s.target_difficulty ?? 0))[0] ?? null;
-  }, [weeks]);
   const trainingDays = useMemo(() => DAYS.filter(d => (weeks[0]?.[d]?.length ?? 0) > 0), [weeks]);
-  const maxAvg = Math.max(...weekAvgs, 1);
   const level = p.level ? LEVEL_LABELS[p.level] : null;
 
   async function start() {
@@ -138,38 +132,21 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
             ))}
           </div>
 
-          {weeks.length > 1 && (
+          {/* Le bloc de /p/ inséré tel quel (2026-10-05, ?inapp=1 : sans sa barre du haut ni son CTA).
+              Côté sportif, &lock=1 floute les exercices des semaines 2+ (programme pas encore démarré). */}
+          {(
             <>
-              <h2 style={h2}>La périodisation</h2>
-              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "14px 14px 10px" }}>
-                <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 76 }}>
-                  {weekAvgs.map((v, i) => (
-                    <div key={i} title={`S${i + 1} · difficulté moyenne ${v.toFixed(1)}/10`} style={{ flex: 1, height: `${Math.max(8, (v / maxAvg) * 100)}%`, borderRadius: "6px 6px 3px 3px", background: loadBarColor(v) }} />
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
-                  {weekAvgs.map((_, i) => (
-                    <div key={i} style={{ flex: 1, textAlign: "center", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: "#8a8f94" }}>S{i + 1}</div>
-                  ))}
-                </div>
-                <div style={{ fontSize: 11.5, color: "#8a8f94", marginTop: 8 }}>Difficulté moyenne prévue par semaine.</div>
-              </div>
-            </>
-          )}
-
-          {sample && (
-            <>
-              <h2 style={h2}>Une séance type</h2>
-              <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "#171b1f" }}>{sample.s.name}</div>
-                  <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, color: "#8a8f94", flexShrink: 0 }}>S1 · {sample.day.toUpperCase()}</div>
-                </div>
-                <DiffGauge value={sample.s.target_difficulty} />
-                {(sample.s.notes ?? "").split("\n").filter(Boolean).map((line, i) => (
-                  <div key={i} style={{ fontSize: 13, color: "#2b3036", padding: "8px 0", borderTop: i === 0 ? "none" : "1px solid rgba(0,0,0,.06)", marginTop: i === 0 ? 10 : 0 }}>{line}</div>
-                ))}
-              </div>
+              <h2 style={h2}>Le programme</h2>
+              {/* Plus large que la colonne en desktop (jusqu'à 1180 px, centré sur l'écran) ; hauteur
+                  envoyée par /p/ (postMessage) pour ne jamais défiler dans le cadre. */}
+              <iframe
+                title={`Aperçu ${p.name}`}
+                src={`/p/${p.id}?inapp=1${coach ? "" : "&lock=1"}`}
+                scrolling="no"
+                style={isMd
+                  ? { display: "block", position: "relative", left: "50%", transform: "translateX(-50%)", width: "min(1180px, calc(100vw - 32px))", height: frameHeight ?? 700, border: 0, borderRadius: 16, background: "#f1f0ee" }
+                  : { display: "block", width: "calc(100% + 40px)", margin: "0 -20px", height: frameHeight ?? 700, border: 0, background: "#f1f0ee" }}
+              />
             </>
           )}
         </div>

@@ -16,7 +16,7 @@ export function loadBarColor(avg: number): string {
   return "#d44000";
 }
 
-export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride, gaugeSlot }: {
+export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride, gaugeSlot, concealed }: {
   session: SessionTemplate;
   onClick?: () => void;
   dragHandleProps?: Record<string, unknown>;
@@ -35,19 +35,23 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
      et le repère de la difficulté prévue, là où DiffGauge ne sait afficher qu'une valeur unique.
      Additif : absent = DiffGauge, comportement 100% inchangé pour le program builder. */
   gaugeSlot?: React.ReactNode;
+  /* Séance pas encore dévoilée (programmes ThePerfClub, J+7, 2026-10-05) : nom, badge et jauge
+     restent visibles, les exercices sont floutés et la carte ne s'ouvre pas. Valeur = libellé de
+     dévoilement (« Se dévoile le jeu. 15 oct. »). */
+  concealed?: string | null;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const gaugeValue = gaugeOverride ?? session.target_difficulty ?? null;
   return (
-    <div ref={cardRef} onClick={onClick} style={{
-      cursor: onClick ? "pointer" : "default",
+    <div ref={cardRef} onClick={concealed ? undefined : onClick} style={{
+      cursor: onClick && !concealed ? "pointer" : "default",
       border: "1px solid rgba(212,64,0,0.16)", background: "#fff", borderRadius: 16,
       padding: "10px 11px", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
       transition: "transform .2s ease, box-shadow .2s ease",
       ...cardStyle,
     }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
-        {dragHandleProps && (
+        {dragHandleProps && !concealed && (
           <span
             {...dragHandleProps}
             onClick={e => e.stopPropagation()}
@@ -63,7 +67,18 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
         </span>
       </div>
       {gaugeSlot ?? (gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null)}
-      {exercises.length > 0 && (
+      {concealed ? (
+        <div style={{ marginTop: 7 }}>
+          {exercises.length > 0 && (
+            <div aria-hidden style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              {exercises.map((ex, i) => (
+                <div key={i} style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
+        </div>
+      ) : exercises.length > 0 && (
         <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
             <div key={i}>{renderExerciseLine(ex, i)}</div>

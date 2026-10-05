@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { data: source } = await admin
     .from("programs")
-    .select("name, sport, level, focus, weeks_count, sessions_per_week, template")
+    .select("name, sport, level, focus, weeks_count, sessions_per_week, template, origin, is_official_template")
     .eq("id", programId)
     .eq("is_public", true)
     .maybeSingle();
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
       weeks_count: source.weeks_count,
       sessions_per_week: source.sessions_per_week,
       template: source.template,
+      origin: source.is_official_template ? "template" : source.origin ?? null,
     })
     .select("id")
     .single();

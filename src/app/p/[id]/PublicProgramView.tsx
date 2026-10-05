@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import type { Program, SessionTemplate, WeekTemplate } from "@/types";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
+import { NOT_STARTED_LABEL } from "@/lib/programReveal";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
 import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
@@ -168,7 +169,31 @@ export default function PublicProgramView({ program, coachName }: Props) {
   const weekAvgLoads = program.template.weeks.map(w => avgWeekRpe(w as WeekTemplate));
   const maxAvgLoad = Math.max(...weekAvgLoads, 0.01);
   const week = program.template.weeks[weekIdx] ?? {};
-  const isLocked = weekIdx > 0 && userMode === null;
+  /* Inséré dans la fiche d'un programme de l'app (2026-10-05) : `?inapp=1` retire la barre du haut et
+     le CTA du bas (la fiche a les siens), `&lock=1` applique le dévoilement des semaines 2+ même
+     pour un utilisateur connecté (sportif, programme ThePerfClub pas encore démarré). Lu côté client
+     pour garder la page en cache (ISR). */
+  const [inApp, setInApp] = useState(false);
+  const [forceLock, setForceLock] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    setInApp(q.get("inapp") === "1");
+    setForceLock(q.get("lock") === "1");
+  }, []);
+  /* Inséré dans l'app : envoie la hauteur réelle du contenu (onglets + semaine affichée) pour que le
+     cadre parent s'ajuste et qu'on n'ait jamais à défiler dedans. */
+  const scrollAreaRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!inApp || !scrollAreaRef.current) return;
+    const el = scrollAreaRef.current;
+    const post = () => window.parent?.postMessage({ type: "tpc-program-height", id: program.id, height: el.scrollHeight + 56 }, window.location.origin);
+    post();
+    const ro = new ResizeObserver(post);
+    Array.from(el.children).forEach(c => ro.observe(c));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [inApp, weekIdx, program.id]);
+  const isLocked = weekIdx > 0 && (userMode === null || forceLock);
 
   /* Baseline synthétique (2026-09) — même fonction que TOUTES les autres surfaces démo/fictives de
      l'app (sandbox, sportifs démo coach, onboarding) : construit un historique de 42 jours
@@ -270,7 +295,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
     <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", display: "flex", flexDirection: "column" }}>
 
       {/* Topbar */}
-      <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      {!inApp && <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {!isEmbedded && <a href="/" style={{ color: "#8a8f94", fontSize: 20, textDecoration: "none", padding: "4px 6px" }}>←</a>}
           <div>
@@ -314,7 +339,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             </div>
           )}
         </div>
-      </div>
+      </div>}
 
       {/* Week tabs */}
       <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", padding: "0 18px", display: "flex", alignItems: "flex-end", height: 56, gap: 0, overflowX: "auto", flexShrink: 0 }}>
@@ -339,8 +364,19 @@ export default function PublicProgramView({ program, coachName }: Props) {
           même wrapper vertical scrollable (le bandeau défile avec le contenu, seule la grille elle-
           même scrolle horizontalement pour les 7 colonnes). */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-      <div style={{ height: "100%", overflowY: "auto", scrollbarWidth: "thin" }}>
+      <div ref={scrollAreaRef} style={{ height: "100%", overflowY: "auto", scrollbarWidth: "thin" }}>
       {autoregBanner}
+      {isLocked && (
+        <div style={{ margin: "0 16px 12px", padding: "12px 14px", borderRadius: 16, background: "#fff", border: "1px solid rgba(0,0,0,.08)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 180, fontSize: 13, color: "#4a5057", lineHeight: 1.45 }}>
+            <b style={{ display: "block", color: "#171b1f" }}>🔒 Les exercices se dévoilent semaine après semaine</b>
+            {inApp ? "Démarre ce programme pour découvrir chaque séance au fil des semaines." : "Personnalise ce programme pour le démarrer et découvrir chaque séance."}
+          </div>
+          {!inApp && <button onClick={() => handleClaimGuest()} style={{ padding: "11px 16px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+            Personnaliser ce programme →
+          </button>}
+        </div>
+      )}
       <div style={{
         display: "grid",
         gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
@@ -350,9 +386,6 @@ export default function PublicProgramView({ program, coachName }: Props) {
         padding: "0 16px 18px",
         scrollSnapType: "x proximity",
         scrollbarWidth: "thin",
-        filter: isLocked ? "blur(7px)" : "none",
-        pointerEvents: isLocked ? "none" : "auto",
-        userSelect: isLocked ? "none" : "auto",
       }}>
         {DAYS.map((day, dayIdx) => {
           const daySessions = (week[day] ?? []) as SessionTemplate[];
@@ -406,6 +439,9 @@ export default function PublicProgramView({ program, coachName }: Props) {
                     <SessionTemplateCard
                       key={sIdx}
                       session={s}
+                      /* Semaines 2+ pour un visiteur (2026-10-05, aligné sur les programmes de l'app) :
+                         nom, jauge et charge visibles, exercices floutés. */
+                      concealed={isLocked ? NOT_STARTED_LABEL : undefined}
                       gaugeOverride={isTarget ? applyAutoregDifficulty(s.target_difficulty ?? 6, suggestion.reco) : undefined}
                       /* Jauge de décision en lecture seule (2026-09-29) — même composant et même
                          comportement qu'en app (/today, Coach Control) : le curseur reste sur la
@@ -460,27 +496,10 @@ export default function PublicProgramView({ program, coachName }: Props) {
       </div>
       </div>
 
-      {isLocked && (
-        <div style={{ position: "absolute", inset: 0, background: "rgba(241,240,238,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 24, padding: "22px 26px", maxWidth: 300, textAlign: "center", boxShadow: "0 12px 32px rgba(0,0,0,.14)", border: "1px solid rgba(0,0,0,.06)" }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.3, marginBottom: 16 }}>
-              Obtenir le programme complet et le personnaliser
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                onClick={() => handleClaimGuest()}
-                style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 12px rgba(212,64,0,.20)" }}
-              >
-                Personnaliser ce programme →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       </div>
 
       {/* Bottom CTA */}
-      <div style={{ background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)", padding: "12px 18px 20px", display: "flex", justifyContent: "center", gap: 10, flexShrink: 0 }}>
+      {!inApp && <div style={{ background: "#fff", borderTop: "1px solid rgba(0,0,0,.08)", padding: "12px 18px 20px", display: "flex", justifyContent: "center", gap: 10, flexShrink: 0 }}>
         {claimed ? (
           <div style={{ fontFamily: "var(--font-display)", flex: 1, textAlign: "center", padding: "14px 0", fontSize: 15, fontWeight: 700, color: "#2f9e44" }}>
             ✓ Programme ajouté à ta bibliothèque !
@@ -507,7 +526,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

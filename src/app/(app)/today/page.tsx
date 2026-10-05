@@ -1,3 +1,4 @@
+import { isThePerfClubProgram } from "@/lib/programReveal";
 import { createClient } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
@@ -31,7 +32,7 @@ export default async function TodayPage() {
     supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).eq("date", today).maybeSingle(),
     supabase.from("sessions").select("*").eq("user_id", user!.id).order("date").order("created_at"),
-    supabase.from("program_assignments").select("start_date, acclimatation, programs(*)").eq("user_id", user!.id).eq("status", "active"),
+    supabase.from("program_assignments").select("id, start_date, acclimatation, programs(*)").eq("user_id", user!.id).eq("status", "active"),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).gte("date", sinceBaseline).lt("date", today),
   ]);
 
@@ -51,6 +52,11 @@ export default async function TodayPage() {
     ? { start_date: pickedAssignment.start_date, acclimatation: !!(pickedAssignment as { acclimatation?: boolean }).acclimatation, name: prog?.name ?? "", program: prog ?? undefined }
     : null;
 
+  // Programmes ThePerfClub (modèle ou généré) : leurs séances au-delà de J+7 sont floutées (programReveal.ts).
+  const revealAssignmentIds = (activeAssignments ?? [])
+    .filter(a => { const pr = (Array.isArray(a.programs) ? a.programs[0] : a.programs) as { origin?: string | null } | null; return isThePerfClubProgram(pr?.origin); })
+    .map(a => (a as { id: string }).id);
+
   return (
     <TodayClient
       userId={user!.id}
@@ -62,6 +68,7 @@ export default async function TodayPage() {
       hasCoach={hasCoach}
       hasActiveCoach={hasActiveCoach}
       activeProgram={activeProgram}
+      revealAssignmentIds={revealAssignmentIds}
       initialWellnessHistory={wellnessHistory ?? []}
     />
   );

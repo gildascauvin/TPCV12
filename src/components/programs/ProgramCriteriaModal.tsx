@@ -54,6 +54,8 @@ export interface ProgramMeta {
   focus: ProgramFocus;
   days: string[];
   duration: 4 | 8 | 12;
+  /* Origine enregistrée avec le programme (programReveal.ts). */
+  origin?: "template" | "generated" | "imported" | "blank";
 }
 
 // Sport libre non couvert par les 9 cartes ci-dessus (2026-08-06, carte "Autre") — /api/sports/custom
@@ -142,7 +144,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       const template = data.template as ProgramTemplate;
       const days = IMPORT_DAYS.filter(d => template.weeks.some(w => (w[d] ?? []).length > 0));
       // duration = vraie longueur de l'import (ProgramLibraryPage enregistre weeks_count depuis le template).
-      const meta: ProgramMeta = { sport: "Programme importé", level: NEUTRAL_LEVEL, focus: "mixte", days, duration: template.weeks.length as ProgramMeta["duration"] };
+      const meta: ProgramMeta = { sport: "Programme importé", level: NEUTRAL_LEVEL, focus: "mixte", days, duration: template.weeks.length as ProgramMeta["duration"], origin: "imported" };
       onGenerate(template, meta);
     } catch {
       setImportError("On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
@@ -238,7 +240,7 @@ export default function ProgramCriteriaModal({ mode, onClose, onBack, onGenerate
       });
       if (!res.ok) return;
       const { template } = await res.json();
-      const meta: ProgramMeta = { sport: effectiveSport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration };
+      const meta: ProgramMeta = { sport: effectiveSport, level: NEUTRAL_LEVEL, focus: focus as ProgramFocus, days, duration, origin: "generated" };
       onGenerate(template, meta);
     } finally {
       setLoading(false);

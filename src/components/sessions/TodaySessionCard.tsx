@@ -18,7 +18,9 @@ import type { Session } from "@/types";
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete" }: {
+export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed }: {
+  /* Séance d'un programme ThePerfClub au-delà de J+7 (programReveal.ts) : exercices floutés, pas d'ouverture. */
+  concealed?: string | null;
   session: Session;
   /* Absent (coach) : pas de Démarrer / Terminer / saisie du résultat. */
   onComplete?: (s: Session) => void;
@@ -84,7 +86,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
         transition: "transform 0.2s ease, box-shadow 0.2s ease",
         animation: justDone ? "sessionDone 0.7s ease" : undefined,
       }}
-      onClick={() => onEdit(session)}
+      onClick={() => { if (!concealed) onEdit(session); }}
     >
       {/* 1. Name + badge */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
@@ -100,7 +102,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
           }}>
             {session.done ? "Terminé" : live ? `● En cours · ${formatChrono(liveElapsedMs(session))}` : "Prévu"}
           </span>
-          <ShareButton
+          {!concealed && <ShareButton
             resourceType="session"
             buildSnapshot={() => ({
               name: session.name,
@@ -111,7 +113,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
             })}
             title={session.name}
             text={exercises.length ? `${exercises.length} exercice${exercises.length > 1 ? "s" : ""}` : undefined}
-          />
+          />}
         </div>
       </div>
 
@@ -124,7 +126,18 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       )}
 
       {/* 3. Exercise display list — drag & drop, même composant que /week et /coach/planning */}
-      {exercises.length > 0 && (
+      {concealed ? (
+        <div style={{ marginBottom: 12 }}>
+          {exercises.length > 0 && (
+            <div aria-hidden style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              {exercises.map((ex, i) => (
+                <div key={i} style={{ padding: "9px 12px", fontSize: 13, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
+        </div>
+      ) : exercises.length > 0 && (
         <div style={{ marginBottom: 12, border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
           <DndContext sensors={exerciseSensors} onDragEnd={handleExerciseDragEnd}>
             {exercises.map((ex, i) => {

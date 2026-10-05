@@ -943,10 +943,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
   /* Programme à créer en fin d'onboarding : claimé, importé ou généré. null = pas de programme
      (question passée, ou génération en échec : on n'empêche jamais d'entrer). */
-  async function obBuildProgram(): Promise<{ template: ProgramTemplate; name: string; sport: string; focus: ProgramFocus } | null> {
-    if (hasClaimedProgram && wizardTemplate) return { template: wizardTemplate, name: wizardProgramName, sport: sport || "Autre", focus: "mixte" };
+  async function obBuildProgram(): Promise<{ template: ProgramTemplate; name: string; sport: string; focus: ProgramFocus; origin: "template" | "generated" | "imported" } | null> {
+    if (hasClaimedProgram && wizardTemplate) return { template: wizardTemplate, name: wizardProgramName, sport: sport || "Autre", focus: "mixte", origin: "template" };
     const label = obSportLabel();
-    if (obHas === "import" && obImportTemplate) return { template: obImportTemplate, name: label ? `Mon programme ${label}` : "Mon programme", sport: obChosenSport() || "Programme importé", focus: "mixte" };
+    if (obHas === "import" && obImportTemplate) return { template: obImportTemplate, name: label ? `Mon programme ${label}` : "Mon programme", sport: obChosenSport() || "Programme importé", focus: "mixte", origin: "imported" };
     if (obHas !== "generate") return null;
     const focus: ProgramFocus = obGoal ?? "mixte";
     try {
@@ -961,7 +961,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       });
       const data = res.ok ? await res.json() : null;
       if (!data?.template) return null;
-      return { template: data.template as ProgramTemplate, name: label ? `Programme ${label}` : "Mon programme", sport: obChosenSport() || "Autre", focus };
+      return { template: data.template as ProgramTemplate, name: label ? `Programme ${label}` : "Mon programme", sport: obChosenSport() || "Autre", focus, origin: "generated" };
     } catch { return null; }
   }
 
@@ -988,7 +988,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             name: built.name, sport: built.sport, level: "intermediaire", focus: built.focus,
             weeks_count: built.template.weeks.length,
             sessions_per_week: Object.values(week1).filter(x => (x as unknown[]).length > 0).length,
-            template: built.template,
+            template: built.template, origin: built.origin,
           }),
         });
         const programId: string | undefined = res.ok ? (await res.json()).program?.id : undefined;
@@ -1094,7 +1094,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name, sport: sport || "Autre", level: LEVEL_TO_DB[level], focus: GOAL_TO_FOCUS[goal] ?? "mixte",
-        weeks_count: template.weeks.length, sessions_per_week: sessionsPerWeek, template,
+        weeks_count: template.weeks.length, sessions_per_week: sessionsPerWeek, template, origin: "template",
       }),
     });
     if (!res.ok) throw new Error("Erreur lors de l'enregistrement du programme.");
@@ -1131,7 +1131,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const created = await fetch("/api/programs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Programme démo", sport: sportValue || null, level: "intermediaire", focus: "mixte", weeks_count: 4, sessions_per_week: days.length, template }),
+        body: JSON.stringify({ name: "Programme démo", sport: sportValue || null, level: "intermediaire", focus: "mixte", weeks_count: 4, sessions_per_week: days.length, template, origin: "generated" }),
       });
       if (!created.ok) return false;
       const programId = (await created.json()).program?.id;

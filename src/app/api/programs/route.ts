@@ -21,12 +21,13 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { name, sport, level, focus, weeks_count, sessions_per_week, template } = body;
+  const origin = ["template", "generated", "imported", "blank"].includes(body.origin) ? body.origin : null;
 
   if (!name || !template) return Response.json({ error: "Champs manquants" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("programs")
-    .insert({ owner_id: user.id, name, sport, level, focus, weeks_count, sessions_per_week, template })
+    .insert({ owner_id: user.id, name, sport, level, focus, weeks_count, sessions_per_week, template, origin })
     .select()
     .single();
 

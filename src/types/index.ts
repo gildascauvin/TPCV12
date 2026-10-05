@@ -211,6 +211,9 @@ export interface Program {
   sessions_per_week: number;
   template: ProgramTemplate;
   is_public: boolean;
+  /* Qui a fait le programme (2026-10-05) : modèle de la bibliothèque, généré, importé, vierge.
+     null = antérieur à la colonne. Modèle/généré = « fait par ThePerfClub », dévoilé à J+7. */
+  origin?: "template" | "generated" | "imported" | "blank" | null;
   created_at: string;
   updated_at: string;
 }

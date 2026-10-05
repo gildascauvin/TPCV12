@@ -45,6 +45,9 @@ export interface SessionLike {
   exercise_media?: Record<string, ExerciseAttachments> | null;
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
+  /* Calculé côté affichage (jamais en base) : séance d'un programme ThePerfClub au-delà de J+7,
+     libellé de dévoilement. */
+  concealed?: string | null;
 }
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
@@ -80,6 +83,8 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const isFuture = session.date > format(new Date(), "yyyy-MM-dd");
+  // Séance d'un programme ThePerfClub au-delà de J+7 (2026-10-05) : exercices floutés, pas d'ouverture.
+  const concealed = session.concealed ?? null;
   // Single gauge: rpe if done, target_difficulty if planned
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
 
@@ -89,15 +94,15 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       style={{
         border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
         background: "#fff", borderRadius: 16, padding: "10px 11px",
-        cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
+        cursor: concealed ? "default" : "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
         transition: "transform .2s ease, box-shadow .2s ease",
         ...cardStyle,
       }}
-      onClick={() => onEdit(session)}
+      onClick={() => { if (!concealed) onEdit(session); }}
     >
       {/* 1. Name + badge */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
-        {dragHandleProps && (
+        {dragHandleProps && !concealed && (
           <span
             {...dragHandleProps}
             title="Glisser vers un autre jour"
@@ -129,7 +134,18 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       )}
 
       {/* 3. Exercise display list (v50 — no numbers) */}
-      {exercises.length > 0 && (
+      {concealed ? (
+        <div style={{ marginBottom: 8 }}>
+          {exercises.length > 0 && (
+            <div aria-hidden style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              {exercises.map((ex, i) => (
+                <div key={i} style={{ padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
+        </div>
+      ) : exercises.length > 0 && (
         <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
             <div key={i}>{renderExerciseLine(ex, i)}</div>
