@@ -1,0 +1,73 @@
+<script>
+/* ThePerfClub — iframes de programme + images de la bibliothèque (2026-10-05).
+   1. Iframes go.theperfclub.com/p/ : pleine largeur d'écran et hauteur au contenu (la page /p/
+      envoie sa hauteur par postMessage). N'agit que sur les iframes de programme, rien d'autre.
+   2. Cartes avec data-bg (bibliothèque) : le script de chargement différé n'est servi qu'aux admins
+      connectés, on pose donc l'image nous-mêmes pour les visiteurs.
+   Aucun double et-commercial dans ce script : WordPress le corrompt. */
+(function () {
+  var APP = "https://go.theperfclub.com";
+
+  function programFrames() {
+    return document.querySelectorAll('iframe[src*="go.theperfclub.com/p/"], iframe[data-src*="go.theperfclub.com/p/"]');
+  }
+
+  function stretch(f) {
+    var parent = f.parentElement;
+    if (!parent) return;
+    var pageW = document.documentElement.clientWidth;
+    var left = parent.getBoundingClientRect().left;
+    f.style.display = "block";
+    f.style.maxWidth = "none";
+    f.style.width = pageW + "px";
+    f.style.marginLeft = (-left) + "px";
+    f.style.borderRadius = "0";
+  }
+
+  function ask(f) {
+    try {
+      if (f.contentWindow) f.contentWindow.postMessage({ type: "tpc-program-height-request" }, APP);
+    } catch (e) {}
+  }
+
+  function setup() {
+    var frames = programFrames();
+    for (var i = 0; i < frames.length; i++) {
+      var f = frames[i];
+      stretch(f);
+      if (!f.getAttribute("data-tpc-watched")) {
+        f.setAttribute("data-tpc-watched", "1");
+        f.addEventListener("load", (function (fr) { return function () { ask(fr); }; })(f));
+      }
+      ask(f);
+    }
+  }
+
+  window.addEventListener("message", function (e) {
+    if (e.origin !== APP) return;
+    var d = e.data;
+    if (!d || d.type !== "tpc-program-height" || !d.id) return;
+    var frames = programFrames();
+    for (var i = 0; i < frames.length; i++) {
+      var src = frames[i].getAttribute("src") || "";
+      if (src.indexOf("/p/" + d.id) !== -1) frames[i].style.height = Math.ceil(d.height) + "px";
+    }
+  });
+
+  function showLazyBackgrounds() {
+    var cards = document.querySelectorAll("[data-bg]");
+    for (var i = 0; i < cards.length; i++) {
+      var el = cards[i];
+      if (el.style.backgroundImage) continue;
+      el.style.background = el.getAttribute("data-bg") + " center/cover no-repeat";
+    }
+  }
+
+  function run() { setup(); showLazyBackgrounds(); }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run); else run();
+  window.addEventListener("load", run);
+  window.addEventListener("resize", setup);
+  // Les iframes Elementor se chargent en différé : on repasse quelques fois.
+  var n = 0, t = setInterval(function () { setup(); n++; if (n > 10) clearInterval(t); }, 1000);
+})();
+</script>
