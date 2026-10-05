@@ -42,7 +42,7 @@ interface Props {
   onBack?: () => void;
 }
 
-interface InviteRow {
+export interface InviteRow {
   name: string;
   email: string;
 }
@@ -59,7 +59,6 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
   const [result, setResult] = useState<"linked" | "pending" | null>(null);
   const [sentCount, setSentCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const firstEmail = invites[0]?.email ?? "";
   /* Aha réactif (2026-09-14, wizard uniquement — voir wizardHero ci-dessous) : un prénom tapé
      devient immédiatement une carte, avant même l'envoi de l'invitation. */
@@ -219,91 +218,7 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
               </div>
             </div>
 
-            {/* Lien d'invitation */}
-            {inviteCode && (
-              <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, marginBottom: 8 }}>
-                  Lien d'invitation
-                </div>
-                <div style={{ fontSize: 12, color: "#d44000", fontWeight: 700, wordBreak: "break-all" as const, marginBottom: 10 }}>
-                  go.theperfclub.com/join/{inviteCode}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
-                      setLinkCopied(true);
-                      setTimeout(() => setLinkCopied(false), 2500);
-                    }}
-                    style={{ flex: 1, height: 38, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}
-                  >
-                    {linkCopied ? "✓ Copié !" : "📋 Copier le lien"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
-                      window.open(`https://wa.me/?text=${msg}`, "_blank");
-                    }}
-                    style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}
-                  >
-                    📲
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
-              {sandboxMode
-                ? "Il recevra un email avec un lien pour créer son compte."
-                : "Ou invite par email — le sportif sera lié dès qu'il créera son compte."}
-            </div>
-
-            {error && (
-              <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
-                {error}
-              </div>
-            )}
-
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
-              Sportif à inviter
-            </div>
-
-            {invites.map((invite, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <input
-                  type="text"
-                  value={invite.name}
-                  onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, name: e.target.value } : v))}
-                  onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
-                  placeholder="Prénom"
-                  autoFocus={i === 0}
-                  style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
-                />
-                <input
-                  type="email"
-                  value={invite.email}
-                  onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, email: e.target.value } : v))}
-                  onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
-                  placeholder="sportif@exemple.com"
-                  style={{ flex: 1.4, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
-                />
-                {invites.length > 1 && (
-                  <button
-                    onClick={() => setInvites(arr => arr.filter((_, idx) => idx !== i))}
-                    style={{ width: 40, flexShrink: 0, borderRadius: 16, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-
-            <button
-              onClick={() => setInvites(arr => [...arr, { name: "", email: "" }])}
-              style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}
-            >
-              + Inviter un autre sportif
-            </button>
+            <InviteForm inviteCode={inviteCode} invites={invites} setInvites={setInvites} error={error} sandboxMode={sandboxMode} onSubmit={handleInvite} />
           </>
         )}
         </div>
@@ -329,5 +244,108 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
         )}
       </div>
     </div>
+  );
+}
+
+/* Contenu du formulaire d'invitation (lien + WhatsApp, prénom + email, « + Inviter un autre
+   sportif ») — partagé par cette modale et l'étape d'invitation de l'onboarding (2026-10-05). */
+export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode = false, onSubmit }: {
+  inviteCode?: string | null;
+  invites: InviteRow[];
+  setInvites: (fn: (arr: InviteRow[]) => InviteRow[]) => void;
+  error?: string | null;
+  sandboxMode?: boolean;
+  onSubmit?: () => void;
+}) {
+  const [linkCopied, setLinkCopied] = useState(false);
+  function handleInvite() { onSubmit?.(); }
+  return (
+    <>
+    {/* Lien d'invitation */}
+    {inviteCode && (
+      <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, marginBottom: 8 }}>
+          Lien d'invitation
+        </div>
+        <div style={{ fontSize: 12, color: "#d44000", fontWeight: 700, wordBreak: "break-all" as const, marginBottom: 10 }}>
+          go.theperfclub.com/join/{inviteCode}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`https://go.theperfclub.com/join/${inviteCode}`);
+              setLinkCopied(true);
+              setTimeout(() => setLinkCopied(false), 2500);
+            }}
+            style={{ flex: 1, height: 38, borderRadius: 12, background: linkCopied ? "linear-gradient(180deg,#2f9e44,#2a8a3c)" : "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", transition: "background .2s" }}
+          >
+            {linkCopied ? "✓ Copié !" : "📋 Copier le lien"}
+          </button>
+          <button
+            onClick={() => {
+              const msg = encodeURIComponent(`Salut ! Je viens de m'inscrire sur ThePerfClub pour suivre notre entraînement. Rejoins mon espace ici : https://go.theperfclub.com/join/${inviteCode}`);
+              window.open(`https://wa.me/?text=${msg}`, "_blank");
+            }}
+            style={{ height: 38, paddingLeft: 14, paddingRight: 14, borderRadius: 12, border: "1.5px solid rgba(0,0,0,.12)", background: "#fff", fontSize: 18, cursor: "pointer" }}
+          >
+            📲
+          </button>
+        </div>
+      </div>
+    )}
+
+    <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
+      {sandboxMode
+        ? "Il recevra un email avec un lien pour créer son compte."
+        : "Ou invite par email — le sportif sera lié dès qu'il créera son compte."}
+    </div>
+
+    {error && (
+      <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
+        {error}
+      </div>
+    )}
+
+    <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
+      Sportif à inviter
+    </div>
+
+    {invites.map((invite, i) => (
+      <div key={i} style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <input
+          type="text"
+          value={invite.name}
+          onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, name: e.target.value } : v))}
+          onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
+          placeholder="Prénom"
+          autoFocus={i === 0}
+          style={{ flex: 1, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+        />
+        <input
+          type="email"
+          value={invite.email}
+          onChange={e => setInvites(arr => arr.map((v, idx) => idx === i ? { ...v, email: e.target.value } : v))}
+          onKeyDown={e => e.key === "Enter" && invite.email.trim() && handleInvite()}
+          placeholder="sportif@exemple.com"
+          style={{ flex: 1.4, minWidth: 0, boxSizing: "border-box" as const, background: "#f7f8f9", border: "1px solid rgba(0,0,0,.10)", borderRadius: 16, padding: "13px 14px", fontSize: 15, fontFamily: "inherit", outline: "none" }}
+        />
+        {invites.length > 1 && (
+          <button
+            onClick={() => setInvites(arr => arr.filter((_, idx) => idx !== i))}
+            style={{ width: 40, flexShrink: 0, borderRadius: 16, border: "1.5px solid rgba(0,0,0,.10)", background: "#fff", color: "#8a8f94", fontSize: 16, cursor: "pointer" }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    ))}
+
+    <button
+      onClick={() => setInvites(arr => [...arr, { name: "", email: "" }])}
+      style={{ background: "none", border: "none", color: "#d44000", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}
+    >
+      + Inviter un autre sportif
+    </button>
+    </>
   );
 }

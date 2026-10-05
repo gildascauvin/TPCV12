@@ -40,7 +40,7 @@ const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer")
 const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import ProgramBanner from "@/components/programs/ProgramBanner";
-import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram } from "@/lib/programAssignment";
+import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
@@ -583,6 +583,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const ap = activePrograms[a.id];
     const mine = sessions.filter(s => s.athlete_id === a.id && s.date === selectedDate);
     const monday = format(startOfWeek(new Date(selectedDate + "T12:00:00"), { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const s0 = !!ap && findProgramForWeek([{ start_date: ap.start_date, acclimatation: ap.acclimatation, programs: ap.program }], monday)?.acclimatation === true;
     return (
       <ProgramBanner
         dark
@@ -590,6 +591,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         hideBars
         program={ap?.program ?? null}
         currentWeek={ap ? programWeekIndex(ap.start_date, selectedDate) : -1}
+        acclimatation={s0}
         onEdit={ap ? () => router.push(`${prefix}/programmes?focus=${ap.program.id}`) : undefined}
         reconduireLabel="Reconduire"
         onReconduire={!ap && mine.length ? () => setReconduire({ athlete: a, session: mine[0] }) : undefined}
@@ -695,8 +697,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         /* Programme ou nom de semaine au-dessus de chaque semaine du calendrier (2026-10-04, comme le Planning). */
         weekTitleFor={selectedAthleteForRings ? (mondayIso => {
           const ap = activePrograms[selectedAthleteForRings.id];
-          const match = ap ? findProgramForWeek([{ start_date: ap.start_date, programs: ap.program }], mondayIso) : null;
-          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          const match = ap ? findProgramForWeek([{ start_date: ap.start_date, acclimatation: ap.acclimatation, programs: ap.program }], mondayIso) : null;
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
           return freeLabelsFor(selectedAthleteForRings)[mondayIso] || null;
         }) : undefined}
       />

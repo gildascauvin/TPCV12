@@ -31,7 +31,7 @@ export default async function TodayPage() {
     supabase.from("profiles").select("*").eq("user_id", user!.id).single(),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).eq("date", today).maybeSingle(),
     supabase.from("sessions").select("*").eq("user_id", user!.id).order("date").order("created_at"),
-    supabase.from("program_assignments").select("start_date, programs(*)").eq("user_id", user!.id).eq("status", "active"),
+    supabase.from("program_assignments").select("start_date, acclimatation, programs(*)").eq("user_id", user!.id).eq("status", "active"),
     supabase.from("wellness_daily").select("*").eq("user_id", user!.id).gte("date", sinceBaseline).lt("date", today),
   ]);
 
@@ -41,14 +41,14 @@ export default async function TodayPage() {
   const hasCoach = !!invitedByCoachId;
   const hasActiveCoach = await coachIsPaying(invitedByCoachId);
 
-  type ActiveProgram = { start_date: string; name: string; program?: Program } | null;
+  type ActiveProgram = { start_date: string; acclimatation?: boolean; name: string; program?: Program } | null;
   // Un sportif peut avoir plusieurs programmes actifs enchaînés (futurs) — on prend
   // celui pertinent pour aujourd'hui, pas juste le premier trouvé.
   const pickedAssignment = pickRelevantAssignment(activeAssignments ?? []);
   const programsData = pickedAssignment?.programs;
   const prog = (Array.isArray(programsData) ? programsData[0] : programsData) as unknown as Program | null;
   const activeProgram: ActiveProgram = pickedAssignment
-    ? { start_date: pickedAssignment.start_date, name: prog?.name ?? "", program: prog ?? undefined }
+    ? { start_date: pickedAssignment.start_date, acclimatation: !!(pickedAssignment as { acclimatation?: boolean }).acclimatation, name: prog?.name ?? "", program: prog ?? undefined }
     : null;
 
   return (

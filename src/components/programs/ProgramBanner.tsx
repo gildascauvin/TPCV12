@@ -52,16 +52,18 @@ interface Props {
   flush?: boolean;
   /** Masque les barres de charge par semaine (bannière de la journée : /today, Coach Control). */
   hideBars?: boolean;
+  /** Semaine 0 d'acclimatation (onboarding, 2026-10-05) : la semaine qui précède le départ. */
+  acclimatation?: boolean;
 }
 
 export default function ProgramBanner({
   program, currentWeek, onEdit, onStop, onReconduire,
-  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction, dark = false, reconduireLabel = "Reconduire la semaine", onLibrary, flush = false, hideBars = false,
+  freeLabel, onEditFreeLabel, compact = false, inviteCoachAction, dark = false, reconduireLabel = "Reconduire la semaine", onLibrary, flush = false, hideBars = false, acclimatation = false,
 }: Props) {
   const [editingLabel, setEditingLabel] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const curWi = currentWeek ?? -1;
-  const isActiveWeek = !!program && curWi >= 0 && curWi < program.weeks_count;
+  const isActiveWeek = !!program && ((curWi >= 0 && curWi < program.weeks_count) || acclimatation);
 
   function startEditing() {
     if (!onEditFreeLabel) return;
@@ -168,7 +170,7 @@ export default function ProgramBanner({
 
   const bars = program!.template.weeks.map(w => avgWeekRpe(w as Record<string, { target_difficulty: number }[]>));
   const maxBar = Math.max(...bars, 1);
-  const focusLabel = `S${curWi + 1}/${program!.weeks_count}`;
+  const focusLabel = acclimatation ? "S0 · Acclimatation" : `S${curWi + 1}/${program!.weeks_count}`;
 
   if (compact) {
     return (

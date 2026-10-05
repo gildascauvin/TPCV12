@@ -32,7 +32,7 @@ import ProfileDrawer from "@/components/profile/ProfileDrawer";
 import DuplicateModal from "@/components/sessions/DuplicateModal";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
-import { findProgramForWeek } from "@/lib/programAssignment";
+import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/components/sessions/DecisionRing";
@@ -86,7 +86,7 @@ interface Props {
      plus bas) — hasActiveCoach = "ce coach paie", seule condition qui débloque un accès gratuit
      réel désormais (voir src/lib/access.ts, 2026-08-19). */
   hasActiveCoach?: boolean;
-  activeProgram?: { start_date: string; name: string; program?: Program } | null;
+  activeProgram?: { start_date: string; acclimatation?: boolean; name: string; program?: Program } | null;
   /* Sandbox uniquement (2026-08-19) : quand true, remplace usePaywall par useSandboxGate (même
      interface, destination = signup au lieu de priming/paywall) et neutralise les effets qui
      rafraîchiraient les données via Supabase (le fixture initial couvre déjà toute la fenêtre
@@ -734,8 +734,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         /* Programme ou nom de semaine au-dessus de chaque semaine du calendrier (2026-10-04, comme le Planning). */
         weekTitleFor={mondayIso => {
           const p = activeProgram?.program;
-          const match = activeProgram && p ? findProgramForWeek([{ start_date: activeProgram.start_date, programs: p }], mondayIso) : null;
-          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          const match = activeProgram && p ? findProgramForWeek([{ start_date: activeProgram.start_date, acclimatation: activeProgram.acclimatation, programs: p }], mondayIso) : null;
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
           return weekLabels[mondayIso] || null;
         }}
       />

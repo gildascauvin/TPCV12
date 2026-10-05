@@ -25,7 +25,7 @@ import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
 import { computeWellnessBaselineAt, relativeZoneLabel, relativeWellnessByDate, wellnessSignal, wellnessZByDate } from "@/lib/wellnessBaseline";
-import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
+import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
@@ -569,7 +569,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const headerWellnessMap = relativeWellnessByDate(popupWellnessHistory, 400);
   function weekTitleForPopup(mondayIso: string): string | null {
     const match = findProgramForWeek(activeAssignments, mondayIso);
-    if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+    if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
     return freeLabels[mondayIso] || null;
   }
 
@@ -844,7 +844,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
               return (
               <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
                 {weekMatch ? (
-                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} />
+                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} acclimatation={weekMatch.acclimatation} />
                 ) : (
                   <ProgramBanner
                     compact

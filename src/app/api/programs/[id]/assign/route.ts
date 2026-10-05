@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProgramTemplate } from "@/types";
-import { firstTrainingDay, scheduleSessions } from "@/lib/programSchedule";
+import { firstTrainingDay, scheduleSessions, addDaysStr } from "@/lib/programSchedule";
+import { parseAndApply } from "@/lib/loadAdjust";
+
+const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+// Allègement de la semaine 0 : difficulté −2, charges et volumes −20 %.
+const ACCLIMATATION_DIFF = -2;
+const ACCLIMATATION_LOAD_PCT = -20;
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
@@ -16,7 +22,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return Response.json({ error: "Non authentifié" }, { status: 401 });
 
-    const { athlete_id, user_id, start_date, wellnessAdjustment, align_first_session } = await req.json();
+    const body = await req.json();
+    const { athlete_id, user_id, wellnessAdjustment, align_first_session } = body;
+    let start_date: string = body.start_date;
+    /* Semaine 0 d'acclimatation (onboarding post-signup uniquement, 2026-10-05) : `start_date` reçu
+       = aujourd'hui (date locale du client). Un lundi, le programme démarre aujourd'hui, sans S0.
+       Sinon il démarre lundi prochain et les séances de S1 des jours restants de la semaine (dont
+       aujourd'hui) sont posées dès maintenant, allégées. */
+    const todayIdx = (new Date(`${start_date}T12:00:00`).getDay() + 6) % 7; // 0 = lundi
+    const acclimatation = body.acclimatation === true && todayIdx > 0;
+    const acclimatationToday = start_date;
+    if (acclimatation) start_date = addDaysStr(acclimatationToday, 7 - todayIdx);
     const admin = createAdminClient();
 
     const { data: program } = await admin
@@ -71,7 +87,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const { data: assignment, error: assignError } = await admin
       .from("program_assignments")
-      .insert({ program_id: id, coach_id: user.id, athlete_id: athlete_id ?? null, user_id: user_id ?? null, start_date, day_anchor: anchorDay })
+      .insert({ program_id: id, coach_id: user.id, athlete_id: athlete_id ?? null, user_id: user_id ?? null, start_date, day_anchor: anchorDay, acclimatation })
       .select()
       .single();
 
@@ -95,6 +111,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         coachSessionsToInsert.push({ ...base, coach_id: user.id, athlete_id, program_assignment_id: assignment.id });
       }
     });
+
+    if (acclimatation) {
+      const w0 = (template.weeks[0] ?? {}) as Record<string, ProgramTemplate["weeks"][number][string]>;
+      WEEK_DAYS.forEach((day, idx) => {
+        if (idx < todayIdx) return;
+        (w0[day] ?? []).forEach(s => {
+          const base = {
+            date: addDaysStr(acclimatationToday, idx - todayIdx),
+            name: `Acclimatation · ${s.name}`,
+            notes: s.notes ? parseAndApply(s.notes, ACCLIMATATION_LOAD_PCT) : s.notes,
+            target_difficulty: Math.max(1, s.target_difficulty + ACCLIMATATION_DIFF),
+            done: false,
+          };
+          if (user_id) sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
+          else if (athlete_id) coachSessionsToInsert.push({ ...base, coach_id: user.id, athlete_id, program_assignment_id: assignment.id });
+        });
+      });
+    }
 
     if (sessionsToInsert.length > 0) {
       const { error } = await admin.from("sessions").insert(sessionsToInsert);

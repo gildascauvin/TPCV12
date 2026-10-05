@@ -4832,3 +4832,25 @@ POC : https://claude.ai/artifact/LJKJb4nx5xuvPSFGUcCcP8 (variante A, onglets).
 - **Invitation sur place partout** : `InviteHost.tsx` (monté une fois dans `(app)/layout.tsx` côté coach et dans la sandbox coach) écoute `OPEN_INVITE` et affiche `InviteModal` (code d'invitation lu dans `profiles` à l'ouverture ; fermer après une invitation recharge la page, via le prop `onSent`). `openInvite()` est appelé par « + Inviter » (`AthleteFilterBar`), l'étape « Invite tes sportifs » de la checklist, le tiroir de l'activité et la carte d'invitation du Coach Control — plus aucune redirection vers `/coach/athletes?quickadd=invite` (le paramètre reste lu par la page, sans appelant). N'ouvre pas l'onglet « Mes sportifs ».
 - Email affiché pour chaque sportif (inscrit : lu dans `auth.users` par `GET /api/coach/roster`, admin après vérification de propriété ; invité : `invite_email` ; profil démo : aucun).
 - Menu ⋯ : « Voir sa journée » (pose la sélection de la barre des sportifs puis ouvre `/coach`), « Renvoyer l'invitation » (invités seulement, `POST /api/invite/resend`, renvoie l'email Resend), puis l'action de retrait.
+
+## Questions post-signup : la « configuration du device » (2026-10-05)
+
+POC : https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW#v2ob. Analogie : ThePerfClub est une app de device connecté sans device ; ces questions sont l'achat/la configuration du device, ici le programme. Après `account`, plus d'entrée directe dans l'app : quelques questions, puis le programme est créé et assigné, puis l'app (checklist inchangée).
+
+### Parcours (`getPath`, `OnboardingFlow.tsx`)
+- Sportif : `value_intro → decision_2a → account → ob_sport → ob_program → (ob_import | ob_goal → ob_weak → ob_days)`.
+- Coach : idem + `ob_invite` à la fin.
+- « Passer » sur `ob_program` (obHas = "later") retire les questions de programme : il entre en « Séances libres ». Passer un autre écran = réponse omise.
+- Programme claimé : aucune question (sportif), `ob_invite` seul (coach). Invité par un coach : inchangé (`INVITE_ATHLETE_PATH`).
+- Écrans : `PostSignupSteps.tsx` (`QuestionShell` thème clair, bandeau photo du sport choisi avec voile sombre et fondu, progression, retour, Passer). Sport = `SportPicker`, invitation = `InviteForm` (extrait d'`InviteModal`, partagé avec la modale de l'app). Côté coach, les questions parlent de « ton programme ».
+- Récap sur `ob_days` (et pendant « Préparation de ton programme… ») : « On crée ton programme Hyrox pour préparer ton échéance du 14 novembre, focus …, 4 jours par semaine. Il démarre aujourd'hui par une semaine d'acclimatation. » Sans échéance : « sur 8 semaines, modifiable ensuite ». Coach : pas de phrase de démarrage.
+- Fin (`finishOnboarding`) : `completeProfile` (profil, sportif démo côté coach) → programme claimé/importé/généré (`/api/programs/generate`, durée déduite de l'échéance, 8 sem. sinon) enregistré puis assigné **avec acclimatation** au sportif lui-même ou au sportif démo du coach (le coach qui passe garde le « Programme démo ») → invitations → `enterApp`. Google OAuth et reprise post-email atterrissent sur la 1re question ; `completeProfile` n'est plus appelé avant les questions.
+
+### Semaine 0 d'acclimatation
+- `POST /api/programs/[id]/assign` + `acclimatation: true` (onboarding seulement) : `start_date` reçu = aujourd'hui (local). Lundi : départ aujourd'hui, pas de S0. Sinon départ lundi prochain, et les séances de S1 des jours restants de la semaine (dont aujourd'hui) sont posées tout de suite, « Acclimatation · … », difficulté −2, charges/volumes −20 % (`parseAndApply`).
+- `program_assignments.acclimatation` (migration 031, appliquée en prod). `findProgramForWeek` renvoie `week: -1, acclimatation: true` pour la semaine qui précède le départ ; `programWeekTag()` → « S0 · Acclimatation » dans les titres de semaine (/today, /week, /coach, /coach/planning) ; `ProgramBanner` prop `acclimatation`.
+
+### Divers
+- `sportCover(value)` (`programCovers.ts`) : couverture d'un programme officiel pour chacune des 41 entrées du catalogue.
+- **Bug corrigé (`loadAdjust.ts`, touche aussi Alléger/Surcharger)** : « 6×800 m » était réduit deux fois (NxM puis distance), « 3×1 km » tombait à 0 km. NxM ignore désormais un 2e nombre suivi d'une unité, et les km < 10 s'arrondissent au 0,5.
+- PostHog : chaque écran émet `onboarding_ob_*_viewed` (convention générique `onboarding_step_viewed` + spécifique).

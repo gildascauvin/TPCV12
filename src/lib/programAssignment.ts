@@ -36,24 +36,34 @@ export function pickRelevantAssignment<T extends AssignmentLike>(assignments: T[
  * (pickRelevantAssignment) n'est pas forcément celui qui couvre la semaine consultée.
  */
 export function findProgramForWeek<P extends { weeks_count: number }>(
-  assignments: { start_date: string; programs: P | P[] | null }[],
+  assignments: { start_date: string; acclimatation?: boolean | null; programs: P | P[] | null }[],
   mondayStr: string
-): { program: P; week: number } | null {
+): { program: P; week: number; acclimatation?: boolean } | null {
   const weekStart = new Date(mondayStr + "T12:00:00").getTime();
+  const WEEK = 7 * 24 * 60 * 60 * 1000;
   for (const a of assignments) {
     const prog = Array.isArray(a.programs) ? a.programs[0] : a.programs;
     if (!prog) continue;
     const start = new Date(a.start_date + "T12:00:00").getTime();
-    const end = start + prog.weeks_count * 7 * 24 * 60 * 60 * 1000;
+    const end = start + prog.weeks_count * WEEK;
     if (weekStart >= start && weekStart < end) {
-      return { program: prog, week: Math.round((weekStart - start) / (7 * 24 * 60 * 60 * 1000)) };
+      return { program: prog, week: Math.round((weekStart - start) / WEEK) };
+    }
+    // Semaine 0 d'acclimatation (onboarding) : la semaine qui précède le départ.
+    if (a.acclimatation && Math.round((start - weekStart) / WEEK) === 1) {
+      return { program: prog, week: -1, acclimatation: true };
     }
   }
   return null;
 }
 
+/** « S3/8 », ou « S0 · Acclimatation » pour la semaine 0 d'onboarding. */
+export function programWeekTag(match: { program: { weeks_count: number }; week: number }): string {
+  return match.week < 0 ? "S0 · Acclimatation" : `S${match.week + 1}/${match.program.weeks_count}`;
+}
+
 /** Programme actif d'un sportif tel que transmis aux cartes Coach Control (bandeau programme). */
-export interface AthleteActiveProgram<P = import("@/types").Program> { program: P; start_date: string }
+export interface AthleteActiveProgram<P = import("@/types").Program> { program: P; start_date: string; acclimatation?: boolean }
 
 /** Index de semaine (0 = S1) du programme démarré le `startDate` qui couvre `date` ; -1 avant le départ. */
 export function programWeekIndex(startDate: string, date: string): number {

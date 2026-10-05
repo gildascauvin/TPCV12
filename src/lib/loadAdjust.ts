@@ -53,7 +53,9 @@ export function parseAndApply(text: string, pct: number): string {
   });
 
   // ── NxM : seules les reps (2e nombre) bougent, le nombre de séries reste fixe ──
-  result = result.replace(/\b(\d+)\s*([xX×])\s*(\d+)\b/g, (match, sets: string, sep: string, reps: string) => {
+  // Pas quand le 2e nombre porte une unité de distance/durée (« 6×800 m », « 4×30 s ») : c'est la
+  // passe distance/durée plus bas qui l'ajuste, sinon il était ajusté deux fois (2026-10-05).
+  result = result.replace(/\b(\d+)\s*([xX×])\s*(\d+)\b(?!\s*(?:km|m|min|h|sec(?:ondes?)?|s)\b)/g, (match, sets: string, sep: string, reps: string) => {
     return `${sets}${sep}${scaleInt(parseFloat(reps), factor)}`;
   });
 
@@ -66,7 +68,9 @@ export function parseAndApply(text: string, pct: number): string {
   result = result.replace(/\b(\d+(?:[.,]\d+)?)\s*(km|m)\b/gi, (match, num: string, unit: string) => {
     const val = parseFloat(num.replace(",", "."));
     if (isNaN(val)) return match;
-    const scaled = roundToStep(val * factor, 5);
+    // Au 5 près, sauf les petites distances en km (« 1 km » ne doit jamais tomber à 0).
+    const step = unit.toLowerCase() === "km" && val < 10 ? 0.5 : 5;
+    const scaled = Math.max(step, roundToStep(val * factor, step));
     const str = scaled % 1 === 0 ? String(scaled) : String(scaled).replace(".", ",");
     return `${str}${unit}`;
   });

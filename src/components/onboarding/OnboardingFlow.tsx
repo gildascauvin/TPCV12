@@ -1,6 +1,13 @@
 "use client";
 
-import { programCover, DEFAULT_ONBOARDING_COVER } from "@/lib/programCovers";
+import { programCover, sportCover, DEFAULT_ONBOARDING_COVER } from "@/lib/programCovers";
+import { catalogEntry, findCatalogEntry, weaknessKeyFor } from "@/lib/sportCatalog";
+import { WEAKNESSES_BY_SPORT } from "@/lib/sportCategories";
+import {
+  QuestionShell, OptionCard, ChoiceChip, SportStepBody, ImportStepBody, DeadlineField,
+  GOAL_OPTIONS, WEEK_DAY_LABELS, type ObHas, type ObGoal,
+} from "@/components/onboarding/PostSignupSteps";
+import { InviteForm, type InviteRow } from "@/components/coach/InviteModal";
 import { sessionsComplement } from "@/lib/sportCategories";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
 import { useState, useEffect, useRef } from "react";
@@ -24,7 +31,31 @@ type Level = "beginner" | "intermediate" | "elite";
 type StepId =
   | "value_intro"
   | "decision_2a" | "decision_2b"
-  | "account";
+  | "account"
+  // Questions post-signup (2026-10-05) : la configuration du « device » (le programme).
+  | "ob_sport" | "ob_program" | "ob_import" | "ob_goal" | "ob_weak" | "ob_days" | "ob_invite";
+
+type ObCustom =
+  | { status: "matched"; sportLabel: string }
+  | { status: "generated"; sportLabel: string; exercises: Record<string, string[]>; weaknessOptions: { key: string; label: string }[]; weaknessMeta: Record<string, { extraLine: string; typeHints: string[] }>; sessionLabels?: Record<string, string> }
+  | { status: "failed"; text: string };
+
+function localTodayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/* Durée du programme déduite de la date d'échéance (départ = lundi qui suit, S0 avant) : la plus
+   longue durée que le générateur accepte sans dépasser l'échéance. 8 semaines sans échéance. */
+function durationFromDeadline(deadline: string): 4 | 6 | 8 | 12 | 16 {
+  if (!deadline) return 8;
+  const today = new Date(`${localTodayStr()}T12:00:00`);
+  const dow = (today.getDay() + 6) % 7;
+  const start = new Date(today.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000);
+  const weeks = Math.floor((new Date(`${deadline}T12:00:00`).getTime() - start.getTime()) / (7 * 86400000));
+  const allowed = [16, 12, 8, 6, 4] as const;
+  return allowed.find(w => w <= weeks) ?? 4;
+}
 
 type PendingData = {
   role: Role; sport: string; sportPrecision: string; level: Level; weaknesses: string[];
@@ -396,6 +427,26 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [currentTool]             = useState(pendingData?.currentTool || "");
   const [trainingStyle]         = useState(pendingData?.trainingStyle || "");
 
+  /* Questions post-signup (2026-10-05). Indépendantes du questionnaire historique ci-dessus. */
+  const [obSport, setObSport] = useState("");
+  const [obCustom, setObCustom] = useState<ObCustom | null>(null);
+  const [obAnalyzing, setObAnalyzing] = useState(false);
+  const [obHas, setObHas] = useState<ObHas>(null);
+  const [obImportText, setObImportText] = useState("");
+  const [obImportFile, setObImportFile] = useState<File | null>(null);
+  const [obImportBusy, setObImportBusy] = useState(false);
+  const [obImportError, setObImportError] = useState<string | null>(null);
+  const [obImportTemplate, setObImportTemplate] = useState<ProgramTemplate | null>(null);
+  const [obGoal, setObGoal] = useState<ObGoal | null>(null);
+  const [obDeadline, setObDeadline] = useState("");
+  const [obWeak, setObWeak] = useState<string[]>([]);
+  const [obDays, setObDays] = useState<number[]>([0, 2, 4]); // 0 = lundi
+  const [obInvites, setObInvites] = useState<InviteRow[]>([{ name: "", email: "" }]);
+  const [obInviteCode, setObInviteCode] = useState<string | null>(null);
+  const [obFinishing, setObFinishing] = useState(false);
+  const [obError, setObError] = useState<string | null>(null);
+  const savedProgramIdRef = useRef<string | null>(null);
+
   /* Ancien fallback "coach → 4 jours par défaut, pas de sélecteur" (2026-08-14) supprimé le
      2026-08-19 : déjà mort en pratique depuis la 3e itération du 2026-08-17 (days_2a redemande de
      vrais jours aux deux rôles, voir sa doc plus bas — "ce choix réel le remplace"), mais inoffensif
@@ -471,10 +522,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      être visible ; la transition reste affichée au moins 2s côté succès, jamais côté erreur (l'user
      doit voir l'erreur/pouvoir retenter tout de suite, pas patienter sur un spinner inutile). */
 
-  const getPath = (r: Role): StepId[] => {
+  /* Après « account » : les questions post-signup. Claimé = programme déjà choisi, aucune question
+     (coach : invitation seule). « Passer » la question programme (obHas = "later") retire les
+     questions du programme. */
+  const getPath = (r: Role, has: ObHas = obHas): StepId[] => {
     if (hasCoachInvite && r === "athlete") return INVITE_ATHLETE_PATH;
-    if (hasClaimedProgram) return r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH;
-    return r === "coach" ? COACH_PATH : ATHLETE_PATH;
+    const base = hasClaimedProgram ? (r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH) : (r === "coach" ? COACH_PATH : ATHLETE_PATH);
+    const post: StepId[] = [];
+    if (!hasClaimedProgram) {
+      post.push("ob_sport", "ob_program");
+      if (has === "import") post.push("ob_import");
+      else if (has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
+    }
+    if (r === "coach") post.push("ob_invite");
+    return [...base, ...post];
   };
   const path         = getPath(role);
   // Tout parcours sauf INVITE_ATHLETE_PATH (sportif invité : ni profil généré ni sportif démo).
@@ -490,6 +551,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   useEffect(() => {
     if (stepIdx > path.length - 1) setStepIdx(path.length - 1);
   }, [path.length, stepIdx]);
+
+  // Étape d'invitation : le lien a besoin du code d'invitation du coach.
+  useEffect(() => {
+    const uid = userId || newUserId;
+    if (currentStep === "ob_invite" && !obInviteCode && uid) ensureInviteCode(uid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
 
 
@@ -737,18 +805,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     }, { onConflict: "user_id" });
   }
 
-  async function completeProfile(uid: string) {
+  async function completeProfile(uid: string, opts?: { skipDemoProgram?: boolean }): Promise<string | null> {
     if (await alreadyHasRealHistory(uid)) {
       console.error("[completeProfile] refusé : compte avec historique réel, écriture bloquée (profil + wellness + sessions)", uid);
-      return;
+      return null;
     }
-    const sportValue = !sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre";
+    const obSportValue = obChosenSport();
+    const sportValue = obSportValue || (!sport && sportPrecision.trim() ? `Autre - ${sportPrecision.trim()}` : sport || "Autre");
+    const obTrainingDays = obHas === "generate" ? obDays.map(d => (d + 1) % 7).sort((a, b) => a - b) : null;
     await supabase.from("profiles").upsert({
       user_id: uid,
       sport: sportValue, mode: role,
-      freq_target:        trainingDays.length || null,
-      training_days:      trainingDays.length ? trainingDays : null,
-      objective:          goal || null,
+      freq_target:        (obTrainingDays ?? trainingDays).length || null,
+      training_days:      (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
+      objective:          obGoal || goal || null,
       frustration:        role === "athlete" ? (frustration || null) : null,
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
     }, { onConflict: "user_id" });
@@ -758,10 +828,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        charge chronique, comportements, phase) et étaient affichées comme les données du sportif. Un
        compte neuf voit désormais l'exemple (bandeau "données d'exemple", demoAnalytics.ts) jusqu'à
        avoir ses propres données ; le score se lit sur l'échelle fixe tant que sa norme n'existe pas. */
+    let demoAthleteId: string | null = null;
     if (role === "coach") {
-      const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-      const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-      await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
+      // Code d'invitation : déjà créé à l'étape d'invitation s'il y est passé.
+      if (!obInviteCode) await ensureInviteCode(uid);
 
       // 1 seul profil démo (pas 3, 2026-09-03 — retour explicite de Gildas : "ça fait trop de bruit,
       // il doit les supprimer après"). Garde le cas Alléger (pas Maintenir/Surcharger) : un coach qui
@@ -781,11 +851,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           .select("id").single();
         if (athlete?.id) {
           demoAthleteIds.push(athlete.id);
+          demoAthleteId = athlete.id;
           /* Vrai programme assigné dès l'inscription (onboarding in-app, 2026-10-01) : Thomas a une
              séance aujourd'hui (1re séance alignée sur aujourd'hui) et la 1re décision est immédiate.
              Seul son historique passé reste synthétique (graphes Charge/Récupération). Repli sur les
              séances démo si la génération échoue. */
           await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase, true, "past"));
+          // Le coach a configuré son programme : c'est lui que suit Thomas (assigné en fin d'onboarding).
+          if (opts?.skipDemoProgram) continue;
           const assigned = await assignDemoProgram(athlete.id, sportValue);
           if (!assigned) await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, athlete.id, sportValue, demo.rpeBase, true, "upcoming"));
         }
@@ -807,6 +880,206 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         } catch { /* le coach garde quand même son compte + le programme pré-rempli du wizard */ }
       }
     }
+    return demoAthleteId;
+  }
+
+  /* ───────── Questions post-signup : helpers ───────── */
+  // Valeur envoyée au générateur : sport du catalogue, sinon sport libre analysé, sinon "".
+  function obChosenSport(): string {
+    if (obSport) return obSport;
+    if (obCustom) return obCustom.status === "failed" ? obCustom.text : obCustom.sportLabel;
+    return "";
+  }
+  function obSportLabel(): string {
+    const e = catalogEntry(obSport);
+    if (e) return e.label;
+    if (obCustom) return obCustom.status === "failed" ? obCustom.text : obCustom.sportLabel;
+    return "";
+  }
+
+  async function ensureInviteCode(uid: string): Promise<string | null> {
+    const { data: prof } = await supabase.from("profiles").select("invite_code").eq("user_id", uid).maybeSingle();
+    if (prof?.invite_code) { setObInviteCode(prof.invite_code); return prof.invite_code; }
+    const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const code = "tpc-" + Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const { error } = await supabase.from("profiles").update({ invite_code: code }).eq("user_id", uid);
+    if (error) { console.error("[ensureInviteCode] update error:", error); return null; }
+    setObInviteCode(code);
+    return code;
+  }
+
+  async function obAnalyzeSport(description: string) {
+    setObSport(""); setObAnalyzing(true); setObWeak([]);
+    let result: ObCustom = { status: "failed", text: description };
+    try {
+      const res = await fetch("/api/sports/custom", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ description }) });
+      const data = res.ok ? await res.json() : null;
+      if (data?.matched) result = { status: "matched", sportLabel: data.sportLabel };
+      else if (data?.exercises) result = { status: "generated", sportLabel: data.sportLabel, exercises: data.exercises, weaknessOptions: data.weaknessOptions, weaknessMeta: data.weaknessMeta, sessionLabels: data.sessionLabels ?? undefined };
+    } catch { /* repli générique */ } finally { setObAnalyzing(false); }
+    setObCustom(result);
+  }
+
+  async function obRunImport() {
+    if (obImportBusy) return;
+    setObImportBusy(true); setObImportError(null);
+    try {
+      const body: { text?: string; imageBase64?: string; imageMediaType?: string } = {};
+      if (obImportFile) {
+        const dataUrl: string = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result as string); r.onerror = reject; r.readAsDataURL(obImportFile); });
+        const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+        if (!m) throw new Error("Fichier illisible");
+        body.imageMediaType = m[1]; body.imageBase64 = m[2];
+      } else body.text = obImportText.trim();
+      const res = await fetch("/api/programs/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => null);
+      if (!data?.ok || !data?.template) { setObImportError(data?.error ?? "On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte."); return; }
+      setObImportTemplate(data.template as ProgramTemplate);
+      obAdvance();
+    } catch {
+      setObImportError("On n'a pas réussi à lire ce programme. Réessaie ou colle-le en texte.");
+    } finally { setObImportBusy(false); }
+  }
+
+  /* Programme à créer en fin d'onboarding : claimé, importé ou généré. null = pas de programme
+     (question passée, ou génération en échec : on n'empêche jamais d'entrer). */
+  async function obBuildProgram(): Promise<{ template: ProgramTemplate; name: string; sport: string; focus: ProgramFocus } | null> {
+    if (hasClaimedProgram && wizardTemplate) return { template: wizardTemplate, name: wizardProgramName, sport: sport || "Autre", focus: "mixte" };
+    const label = obSportLabel();
+    if (obHas === "import" && obImportTemplate) return { template: obImportTemplate, name: label ? `Mon programme ${label}` : "Mon programme", sport: obChosenSport() || "Programme importé", focus: "mixte" };
+    if (obHas !== "generate") return null;
+    const focus: ProgramFocus = obGoal ?? "mixte";
+    try {
+      const days = [...obDays].sort((a, b) => a - b).map(d => WEEK_DAY_LABELS[d]);
+      const res = await fetch("/api/programs/generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sport: obChosenSport() || "Autre", level: "intermediaire", days: days.length ? days : ["Lun", "Mer", "Ven"],
+          duration: durationFromDeadline(focus === "competition" ? obDeadline : ""), focus, weaknesses: obWeak,
+          ...(obCustom?.status === "generated" ? { customExercises: obCustom.exercises, customWeaknessMeta: obCustom.weaknessMeta, customSessionLabels: obCustom.sessionLabels } : {}),
+        }),
+      });
+      const data = res.ok ? await res.json() : null;
+      if (!data?.template) return null;
+      return { template: data.template as ProgramTemplate, name: label ? `Programme ${label}` : "Mon programme", sport: obChosenSport() || "Autre", focus };
+    } catch { return null; }
+  }
+
+  /* Fin de l'onboarding : profil (et sportif démo côté coach), programme enregistré puis assigné
+     en démarrant aujourd'hui avec sa semaine 0 d'acclimatation (au sportif lui-même, ou au sportif
+     démo du coach), invitations, puis l'app. */
+  const finishGuardRef2 = useRef(false);
+  async function finishOnboarding(uid: string) {
+    if (finishGuardRef2.current) return;
+    finishGuardRef2.current = true;
+    setObFinishing(true); setObError(null);
+    try {
+      const built = isFullPath ? await obBuildProgram() : null;
+      let demoAthleteId: string | null = null;
+      if (!profileCompleteGuardRef.current && isFullPath) {
+        profileCompleteGuardRef.current = true;
+        demoAthleteId = await completeProfile(uid, { skipDemoProgram: role === "coach" && !!built });
+      }
+      if (built) {
+        const week1 = built.template.weeks[0] ?? {};
+        const res = await fetch("/api/programs", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: built.name, sport: built.sport, level: "intermediaire", focus: built.focus,
+            weeks_count: built.template.weeks.length,
+            sessions_per_week: Object.values(week1).filter(x => (x as unknown[]).length > 0).length,
+            template: built.template,
+          }),
+        });
+        const programId: string | undefined = res.ok ? (await res.json()).program?.id : undefined;
+        if (programId) {
+          savedProgramIdRef.current = programId;
+          if (hasClaimedProgram) localStorage.removeItem("claim_program_id");
+          const target = role === "coach" ? (demoAthleteId ? { athlete_id: demoAthleteId } : null) : { user_id: uid };
+          if (target) {
+            const a = await fetch(`/api/programs/${programId}/assign`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...target, start_date: localTodayStr(), acclimatation: true }),
+            });
+            if (!a.ok) console.error("[finishOnboarding] assign error:", await a.text().catch(() => ""));
+            if (!a.ok && role === "coach" && demoAthleteId) {
+              await supabase.from("coach_sessions").insert(buildCoachDemoSessions(uid, demoAthleteId, built.sport, 9, true, "upcoming"));
+            }
+          }
+        } else {
+          console.error("[finishOnboarding] program save error");
+          if (role === "coach" && demoAthleteId) await assignDemoProgram(demoAthleteId, built.sport);
+        }
+      }
+      if (role === "coach") {
+        const rows = obInvites.filter(r => /\S+@\S+\.\S+/.test(r.email.trim()));
+        await Promise.all(rows.map(r => fetch("/api/invite/create", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ athleteEmail: r.email.trim(), athleteName: r.name.trim() || undefined }),
+        }).catch(() => null)));
+      }
+      await enterApp(uid);
+    } catch (e) {
+      console.error("[finishOnboarding]", e);
+      finishGuardRef2.current = false;
+      setObFinishing(false);
+      setObError("Impossible de préparer ton espace. Réessaie.");
+    }
+  }
+
+  // Après la création du compte : questions post-signup s'il en reste, sinon fin.
+  async function afterAccount(uid: string) {
+    const accountIdx = path.indexOf("account");
+    if (accountIdx >= 0 && accountIdx < path.length - 1) { setSaving(false); setStepIdx(accountIdx + 1); return; }
+    await finishOnboarding(uid);
+  }
+
+  /* Récap du programme qu'on va créer (2026-10-05) : reprend les réponses, se met à jour en direct
+     sur l'écran Jours et reste affiché pendant la préparation. Une réponse passée est omise. */
+  function obRecap(): React.ReactNode {
+    const label = obSportLabel();
+    const options = obCustom?.status === "generated" ? obCustom.weaknessOptions
+      : WEAKNESSES_BY_SPORT[weaknessKeyFor(obSport || (obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel)?.value : ""))] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+    const weak = obWeak.map(k => options.find(o => o.key === k)?.label).filter(Boolean).map(l => l!.toLowerCase());
+    const n = obDays.length;
+    const deadline = obGoal === "competition" && obDeadline ? obDeadline : "";
+    const dur = durationFromDeadline(deadline);
+    const monday = (new Date(`${localTodayStr()}T12:00:00`).getDay() + 6) % 7 === 0;
+    const b = (t: string) => <b style={{ color: "#171b1f" }}>{t}</b>;
+    const dateLabel = deadline ? new Date(`${deadline}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "";
+    return (
+      <>
+        On crée ton programme{label ? <> {b(label)}</> : null}
+        {/* Objectif : échéance (avec sa date), volume, intensité ; « un peu de tout » = équilibré. */}
+        {obGoal === "competition" ? (deadline ? <> pour préparer {b(`ton échéance du ${dateLabel}`)}</> : <> pour préparer {b("ton échéance")}</>)
+          : obGoal === "volume" ? <> pour {b("gagner en volume")}</>
+          : obGoal === "intensite" ? <> pour {b("monter en intensité")}</>
+          : obGoal === "mixte" ? <> {b("équilibré")}</> : null}
+        {weak.length ? <>, focus {b(weak[0])}{weak[1] ? <> et {b(weak[1])}</> : null}</> : null}
+        {n ? <>, {b(`${n} jour${n > 1 ? "s" : ""} par semaine`)}</> : null}
+        {deadline ? null : <>, sur {b(`${dur} semaines`)}, modifiable ensuite</>}.
+        {/* Côté coach, le programme n'est assigné qu'au sportif démo : pas de date de départ à annoncer. */}
+        {role === "coach" ? null : monday ? " Il démarre aujourd'hui." : " Il démarre aujourd'hui par une semaine d'acclimatation."}
+      </>
+    );
+  }
+  function obRecapCard(title: string) {
+    return (
+      <div style={{ marginTop: 20, padding: "14px 16px", borderRadius: 16, background: "rgba(212,64,0,.06)", border: "1px solid rgba(212,64,0,.22)", fontSize: 14, lineHeight: 1.55, color: "#3d4247", textAlign: "left" }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#d44000", marginBottom: 6 }}>{title}</div>
+        {obRecap()}
+      </div>
+    );
+  }
+
+  // Écran suivant du parcours post-signup (le parcours peut changer avec la réponse donnée).
+  function obAdvance(has?: ObHas) {
+    const p = getPath(role, has === undefined ? obHas : has);
+    let i = p.indexOf(currentStep);
+    if (i < 0) i = p.indexOf("ob_program");
+    if (i + 1 < p.length) { setStepIdx(i + 1); return; }
+    const uid = userId || newUserId;
+    if (uid) finishOnboarding(uid);
   }
 
   /* Cœur de la sauvegarde réelle (POST /api/programs) — extrait de handleWizardSaveToLibrary
@@ -884,7 +1157,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   async function enterApp(uid: string) {
     if (enterAppGuardRef.current) return;
     enterAppGuardRef.current = true;
-    if (hasClaimedProgram && wizardTemplate && !wizardProgramId) {
+    if (hasClaimedProgram && wizardTemplate && !wizardProgramId && !savedProgramIdRef.current) {
       try { await saveWizardProgram(wizardProgramName, wizardTemplate); }
       catch (e) { console.error("[enterApp] claimed program save error:", e); }
     }
@@ -974,21 +1247,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           setSaving(false);
           return;
         }
-        if (!profileCompleteGuardRef.current && isFullPath) {
-          profileCompleteGuardRef.current = true;
-          await completeProfile(uid);
-        }
         supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${location.origin}/auth/callback?type=recovery&first=1`,
         }).catch(() => {});
-        await enterApp(uid);
+        await afterAccount(uid);
       } else {
         await createAccount(userId!);
-        if (!profileCompleteGuardRef.current && isFullPath) {
-          profileCompleteGuardRef.current = true;
-          await completeProfile(userId!);
-        }
-        await enterApp(userId!);
+        await afterAccount(userId!);
       }
     } catch {
       setError("Une erreur est survenue. Réessaie.");
@@ -1154,19 +1419,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        à true qu'après la fin de init(), qui a déjà créé le compte). */
     if (userId && path.indexOf("account") === path.length - 1) {
       // "account" est la fin du parcours : profil complété puis entrée directe dans l'app.
-      (async () => {
-        if (!profileCompleteGuardRef.current && isFullPath) {
-          profileCompleteGuardRef.current = true;
-          await completeProfile(userId);
-        }
-        await enterApp(userId);
-      })();
+      finishOnboarding(userId);
       return;
     }
-    if (!profileCompleteGuardRef.current && userId && isFullPath) {
-      profileCompleteGuardRef.current = true;
-      completeProfile(userId);
-    }
+    // Sinon les questions post-signup suivent : profil complété à la fin (finishOnboarding).
     /* next() suppose un stepIdx figé à 0 et avance d'une seule position — ça atterrissait
        systématiquement sur "role" (juste après value_intro) depuis que "account" a été
        repositionné plus tôt dans le path (variantes A/B, voir refonte onboarding v2). On saute
@@ -1193,19 +1449,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   useEffect(() => {
     if (!resumeRoleApplied || !userId) return;
     if (path.indexOf("account") === path.length - 1) {
-      // Compte déjà créé qui reprend (ex. ancien parcours avec wizard) : directement dans l'app.
-      (async () => {
-        if (!profileCompleteGuardRef.current && isFullPath) {
-          profileCompleteGuardRef.current = true;
-          await completeProfile(userId);
-        }
-        await enterApp(userId);
-      })();
+      // Compte déjà créé qui reprend sans question à poser : directement dans l'app.
+      finishOnboarding(userId);
       return;
-    }
-    if (!profileCompleteGuardRef.current && isFullPath) {
-      profileCompleteGuardRef.current = true;
-      completeProfile(userId);
     }
     /* Même repli que googleInitDone ci-dessus (fusion decision/account, 2026-09-04) — juste après
        decision_2a/2b quand "account" n'est plus un step séparé du path résolu. */
@@ -1446,6 +1692,142 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         </div>
       </OnboardingBackground>
     );
+  }
+
+  /* ───────── Questions post-signup (2026-10-05) ───────── */
+  if (obFinishing) {
+    return (
+      <OnboardingBackground variant="light" center>
+        <div style={{ textAlign: "center", color: "#171b1f" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
+            {obHas === "later" && !hasClaimedProgram ? "Ouverture de ton espace…" : "Préparation de ton programme…"}
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
+          {obHas === "generate" && !hasClaimedProgram && <div style={{ maxWidth: 420, margin: "0 auto" }}>{obRecapCard("Ton programme")}</div>}
+        </div>
+      </OnboardingBackground>
+    );
+  }
+  if (currentStep.startsWith("ob_")) {
+    const coach = role === "coach";
+    const post = path.slice(path.indexOf("account") + 1);
+    const idx = Math.max(0, post.indexOf(currentStep));
+    const matched = obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel) : null;
+    const back = idx > 0 ? () => setStepIdx(path.indexOf(post[idx - 1])) : undefined;
+    // Bandeau photo : le sport choisi (ou reconnu), sinon le programme claimé, sinon l'image par défaut.
+    const cover = sportCover(obSport || matched?.value) ?? claimedCover ?? DEFAULT_ONBOARDING_COVER;
+    const common = { index: idx, total: post.length, cover, onBack: back };
+    const errorLine = obError ? <p style={{ fontSize: 13, color: "#fca5a5", marginTop: 12 }}>{obError}</p> : null;
+
+    if (currentStep === "ob_sport") {
+      const analyzed = obCustom && obCustom.status !== "failed";
+      return (
+        <QuestionShell {...common}
+          title={coach ? "Quel sport pour ton programme ?" : "Quel est ton sport ?"}
+          sub={coach ? "On personnalise ton programme selon le sport, les points forts et les faiblesses de tes sportifs." : "On personnalise tes séances selon ton sport, tes points forts et tes faiblesses."}
+          onSkip={() => { setObSport(""); setObCustom(null); obAdvance(); }}
+          cta={obCustom ? { label: "Continuer →", onClick: () => obAdvance(), busy: obAnalyzing } : undefined}>
+          <SportStepBody
+            value={obSport}
+            customLabel={analyzed ? obCustom.sportLabel : null}
+            analyzing={obAnalyzing}
+            analysisFailed={obCustom?.status === "failed"}
+            onSelect={v => { setObSport(v); setObCustom(null); setObWeak([]); obAdvance(); }}
+            onAnalyze={t => { obAnalyzeSport(t); }}
+          />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_program") {
+      return (
+        <QuestionShell {...common}
+          title="Tu as déjà un programme ?"
+          onSkip={() => { setObHas("later"); obAdvance("later"); }}>
+          <OptionCard icon="📷" label="Oui, je l'importe" hint="Une photo ou le texte suffit"
+            on={obHas === "import"} onClick={() => { setObHas("import"); obAdvance("import"); }} />
+          <OptionCard icon="✨" label="Non, crée-le moi" hint="Sur mesure, en 3 questions"
+            on={obHas === "generate"} onClick={() => { setObHas("generate"); obAdvance("generate"); }} />
+          {errorLine}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_import") {
+      return (
+        <QuestionShell {...common}
+          title="Importe ton programme"
+          sub="Colle le texte, ou prends-le en photo."
+          onSkip={() => { setObHas("later"); obAdvance("later"); }}
+          cta={{ label: "Importer →", onClick: obRunImport, disabled: !obImportText.trim() && !obImportFile, busy: obImportBusy }}>
+          <ImportStepBody text={obImportText} onText={setObImportText} file={obImportFile} onFile={setObImportFile} error={obImportError} />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_goal") {
+      const comp = obGoal === "competition";
+      return (
+        <QuestionShell {...common}
+          title={coach ? "L'objectif de ton programme ?" : "Ton objectif pour les prochaines semaines ?"}
+          onSkip={() => { setObGoal(null); obAdvance(); }}
+          cta={comp ? { label: "Continuer →", onClick: () => obAdvance(), disabled: !obDeadline } : undefined}>
+          {GOAL_OPTIONS.map(g => (
+            <div key={g.value}>
+              <OptionCard icon={g.icon} label={g.label} hint={g.hint} on={obGoal === g.value}
+                onClick={() => { setObGoal(g.value); if (g.value !== "competition") obAdvance(); }} />
+              {g.value === "competition" && comp && <DeadlineField value={obDeadline} onChange={setObDeadline} />}
+            </div>
+          ))}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_weak") {
+      const options = obCustom?.status === "generated" ? obCustom.weaknessOptions
+        : WEAKNESSES_BY_SPORT[weaknessKeyFor(obSport || matched?.value)] ?? WEAKNESSES_BY_SPORT["Autre"] ?? [];
+      return (
+        <QuestionShell {...common}
+          title={coach ? "Les points à travailler en priorité dans ton programme ?" : "Tes points à travailler en priorité ?"}
+          sub="2 maximum, on personnalise ton programme selon tes réponses."
+          onSkip={() => { setObWeak([]); obAdvance(); }}
+          cta={{ label: "Continuer →", onClick: () => obAdvance() }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {options.map(w => {
+              const on = obWeak.includes(w.key);
+              return <ChoiceChip key={w.key} on={on} onClick={() => setObWeak(prev => on ? prev.filter(k => k !== w.key) : prev.length >= 2 ? prev : [...prev, w.key])}>{w.label}</ChoiceChip>;
+            })}
+          </div>
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_days") {
+      return (
+        <QuestionShell {...common}
+          title={coach ? "Quels jours d'entraînement dans ton programme ?" : "Quels jours tu t'entraînes ?"}
+          sub={"Plusieurs choix possibles." + (obGoal === "competition" && obDeadline ? " La durée se cale sur ton échéance." : "")}
+          onSkip={() => obAdvance()}
+          cta={{ label: "Créer mon programme →", onClick: () => obAdvance(), disabled: !obDays.length }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {WEEK_DAY_LABELS.map((d, k) => {
+              const on = obDays.includes(k);
+              return <ChoiceChip key={d} on={on} onClick={() => setObDays(prev => on ? prev.filter(x => x !== k) : [...prev, k])}>{d}</ChoiceChip>;
+            })}
+          </div>
+          {obDays.length > 0 && obRecapCard("Ton programme")}
+          {errorLine}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_invite") {
+      const hasEmail = obInvites.some(r => r.email.trim());
+      return (
+        <QuestionShell {...common}
+          title="Invite tes sportifs"
+          sub="Tu peux leur créer des séances avant même qu'ils arrivent."
+          onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
+          cta={{ label: hasEmail ? "Envoyer les invitations →" : "Continuer →", onClick: () => obAdvance() }}>
+          <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} />
+        </QuestionShell>
+      );
+    }
   }
 
   const isDarkStep = DARK_STEPS.includes(currentStep);

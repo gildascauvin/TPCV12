@@ -73,3 +73,54 @@ export const DEFAULT_ONBOARDING_COVER = "https://www.theperfclub.com/wp-content/
 export function programCover(programId: string | null | undefined): string | null {
   return programId ? PROGRAM_COVERS[programId] ?? null : null;
 }
+
+/* Fond des questions post-signup selon le sport choisi (valeur du catalogue sportCatalog.ts) : la
+   couverture d'un programme officiel de ce sport. Rééducation et concours : le programme de la zone
+   ou du concours. Absent = image par défaut. */
+const SPORT_COVER_PROGRAM: Record<string, string> = {
+  "Haltérophilie": "bd0d3d0b-2240-4227-b84b-fb768459a6a8",
+  "Powerlifting": "55d6d90f-f35f-46e3-a81c-9b928a6f432c",
+  "Musculation / Hypertrophie": "9918f6ab-7251-47d4-b50b-6c8732279fb7",
+  "Calisthenics": "3b6323cb-f400-4c89-80e4-babd5f747478",
+  "Puissance & explosivité": "e0b3b169-0a85-4ddc-8e18-06687afecb42",
+  "Pliométrie": "f0ff1a31-910a-451c-9960-8eb368bfbf7d",
+  "Perte de poids": "2a98ef46-21bb-4702-9fef-751ac2ffcfdb",
+  "Fitness / CrossFit": "2027e936-1a07-4969-b111-a90e4ea39642",
+  "Hyrox": "2027e936-1a07-4969-b111-a90e4ea39642",
+  "Endurance": "1aecf396-0712-40b4-bed6-00359bac8839",
+  "Trail": "b650acf4-ff30-40c0-8896-619a9c06154b",
+  "Triathlon": "2fbc61c9-75dc-4e2d-88a0-ec9bc6ac056d",
+  "Vélo / Cyclisme": "dbb9fcf7-5557-4923-bbfa-d37e718bf413",
+  "Natation": "f45ea844-8ced-4698-98dc-12b22f9c551d",
+  "Aviron": "aa7d4465-f806-4294-a2cb-96057506daf2",
+  "Ski": "0f02a5f6-d538-4d59-8e02-f70cf7df3e07",
+  "Athlétisme & vitesse": "e1037e4f-6ee9-407b-b68f-751cc425a25f",
+  "Athlétisme — Sauts": "6d59c644-6964-4475-991d-f72c4f301cdb",
+  "Sports collectifs": "8df3e3d3-79e8-4cec-95e1-8afcd51330d8",
+  "Hockey sur glace": "27fe779d-3549-4804-8225-fa24134820fc",
+  "Baseball": "8eaeafc4-b06c-4f9a-a2c2-2a76da690163",
+  "Arts martiaux & combat": "445f233a-4e2c-4632-be76-76826e4d2e20",
+  "Escalade": "26f9aa29-47b3-4049-9392-b2ee05a69f40",
+  "Golf": "cdbb46b2-2aff-4293-ba1e-720f4bf30c14",
+  "Voile": "669fad89-1d7e-4c44-8a23-2b99d61fdf6f",
+  "BMX": "e36601b7-759d-4317-88b6-00427b0e50e2",
+  "Équitation": "dd2beb89-1ea8-48f8-b345-b90d2057198a",
+  "Gymnastique": "dc9bb6e1-9884-4b3b-8fc2-e34f71785b3a",
+  "Prevention/Reeducation — Cheville": "09f32cf0-a1ae-4ad6-a75a-3e83e829e8b5",
+  "Prevention/Reeducation — Genou": "ff91c31e-5ec2-4032-b39a-0e51d3354884",
+  "Prevention/Reeducation — Genou LCA": "ff91c31e-5ec2-4032-b39a-0e51d3354884",
+  "Prevention/Reeducation — Genou Rotulien": "e7a3fa3d-b963-416a-9461-798d49d5ef49",
+  "Prevention/Reeducation — Lombaire": "8318e4c4-4a69-4b36-9968-bbdbbe830af7",
+  "Prevention/Reeducation — Épaule": "852e152c-b119-4331-9c6f-15e6047e2db5",
+  "Prevention/Reeducation — Tendon Achille": "a69eb0e9-3239-4d2c-b33c-a3da8872f696",
+  "Prevention/Reeducation — Périostite": "315fc072-5736-446f-a498-3f274a1d3521",
+  "Police Nationale": "a7a01a22-5875-41bb-a649-c628cdbd678a",
+  "Gendarmerie": "c387814e-0122-4707-9b4e-3a11f1d8b5b6",
+  "Sapeur-Pompier": "23261348-c05a-4dd6-9dc4-bb90566b3c1d",
+  "GIGN": "ea957672-faec-4f2f-8aad-a18827eed028",
+  "Armée de Terre — TAP": "1df0afcc-6dfd-4c02-aa6e-c150800560f1",
+};
+
+export function sportCover(sportValue: string | null | undefined): string | null {
+  return sportValue ? programCover(SPORT_COVER_PROGRAM[sportValue]) : null;
+}

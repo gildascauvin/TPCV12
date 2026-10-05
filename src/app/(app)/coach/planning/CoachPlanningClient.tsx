@@ -32,7 +32,7 @@ import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import LockedBlur from "@/components/paywall/LockedBlur";
-import { pickRelevantAssignment, findProgramForWeek } from "@/lib/programAssignment";
+import { pickRelevantAssignment, findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
 import { programSportEmoji } from "@/lib/sportCategories";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { applyAutoregDifficulty } from "@/lib/autoregulation";
@@ -802,7 +802,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         weekTitleFor={mondayIso => {
           const match = findProgramForWeek(activeAssignments, mondayIso);
-          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · S${match.week + 1}/${match.program.weeks_count}`;
+          if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
           return freeLabelsFor(athlete)[mondayIso] || null;
         }}
         seamless
@@ -890,7 +890,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               return (
               <div key={weekMonday.toISOString()} style={{ marginBottom: isMd ? 6 : 4 }}>
                 {weekMatch ? (
-                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} />
+                  <ProgramBanner compact program={weekMatch.program} currentWeek={weekMatch.week} acclimatation={weekMatch.acclimatation} />
                 ) : (
                   <ProgramBanner
                     compact

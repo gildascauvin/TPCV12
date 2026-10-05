@@ -78,10 +78,10 @@ export default async function CoachPage() {
     // Bandeau programme des cartes Coach Control (onboarding in-app, 2026-10-01) : programmes
     // actifs assignés par le coach (athlete_id) ou par le sportif lui-même (user_id).
     allAthleteIds.length
-      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, programs(*)").eq("status", "active").in("athlete_id", allAthleteIds)
+      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, acclimatation, programs(*)").eq("status", "active").in("athlete_id", allAthleteIds)
       : Promise.resolve({ data: [] as AssignRow[] }),
     realUserIds.length
-      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, programs(*)").eq("status", "active").in("user_id", realUserIds)
+      ? admin.from("program_assignments").select("athlete_id, user_id, start_date, acclimatation, programs(*)").eq("status", "active").in("user_id", realUserIds)
       : Promise.resolve({ data: [] as AssignRow[] }),
   ]);
 
@@ -91,7 +91,7 @@ export default async function CoachPage() {
     const mine = allAssignments.filter(x => x.athlete_id === a.id || (!!a.user_id && x.user_id === a.user_id));
     const picked = pickRelevantAssignment(mine);
     const p = picked ? (Array.isArray(picked.programs) ? picked.programs[0] : picked.programs) : null;
-    if (picked && p) activePrograms[a.id] = { program: p, start_date: picked.start_date };
+    if (picked && p) activePrograms[a.id] = { program: p, start_date: picked.start_date, acclimatation: !!(picked as { acclimatation?: boolean }).acclimatation };
   }
 
   // base_score en priorité (jamais score, qui inclut le bonus/malus comportements) — voir
