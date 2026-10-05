@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthBackground from "@/components/auth/AuthBackground";
+import BrandLogoStacked from "@/components/brand/BrandLogo";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -75,13 +76,8 @@ export default function ResetPasswordPage() {
   return (
     <AuthBackground>
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icon-192.png"
-            alt="ThePerfClub"
-            style={{ width: 110, height: 110, borderRadius: 24, objectFit: "cover", boxShadow: "0 16px 40px rgba(0,0,0,.30)", display: "block", margin: "0 auto 14px" }}
-          />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+          <BrandLogoStacked size={104} theme="dark" />
         </div>
 
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>

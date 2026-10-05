@@ -1,66 +1,47 @@
-/* Logo ThePerfClub (2026-10-05) : la jauge de décision figée (géométrie et dégradé de DecisionRing,
-   zone conseillée 7-8 en pointillés, curseur noir à 7,5) + le nom. Variante « empilé » : jauge au-dessus
-   du nom. `theme` = couleur du fond sur lequel le logo est posé. */
+/* Logo ThePerfClub « Z1 épais » (2026-10-05) : la piste de la jauge de décision, la zone conseillée
+   en orange (dégradé de l'app) et le curseur noir à liseré blanc au milieu de la zone. Variante
+   « empilé » : symbole au-dessus du nom. `theme` = fond sur lequel le logo est posé : "dark" = logo
+   clair (nom blanc), "light" = logo foncé (nom noir). */
 
-const A0 = -120, A1 = 120, MIN = 1, MAX = 10;
-const VALUE = 7.5, ZLO = 7, ZHI = 8;
-const STOPS = ["#ffb5a7", "#d44000"] as const;
-const ang = (d: number) => A0 + ((d - MIN) / (MAX - MIN)) * (A1 - A0);
-function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
+import { useId } from "react";
+
+const R = 36, LO = 6.8, HI = 8.6, CUR = 7.7;
+const ang = (v: number) => -120 + ((v - 1) / 9) * 240;
+function P(r: number, deg: number): [number, number] {
   const a = ((deg - 90) * Math.PI) / 180;
-  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+  return [50 + r * Math.cos(a), 50 + r * Math.sin(a)];
 }
 const pt = (p: [number, number]) => `${p[0].toFixed(2)} ${p[1].toFixed(2)}`;
-const arc = (cx: number, cy: number, r: number, f: number, t: number) =>
-  `M ${pt(polar(cx, cy, r, f))} A ${r} ${r} 0 ${t - f > 180 ? 1 : 0} 1 ${pt(polar(cx, cy, r, t))}`;
-function sector(cx: number, cy: number, rIn: number, rOut: number, a0: number, a1: number) {
-  const rc = ((rOut - rIn) / 2).toFixed(2), big = a1 - a0 > 180 ? 1 : 0;
-  return `M ${pt(polar(cx, cy, rOut, a0))} A ${rOut} ${rOut} 0 ${big} 1 ${pt(polar(cx, cy, rOut, a1))}`
-    + ` A ${rc} ${rc} 0 0 1 ${pt(polar(cx, cy, rIn, a1))}`
-    + ` A ${rIn} ${rIn} 0 ${big} 0 ${pt(polar(cx, cy, rIn, a0))}`
-    + ` A ${rc} ${rc} 0 0 1 ${pt(polar(cx, cy, rOut, a0))} Z`;
-}
-function mix(a: string, b: string, t: number) {
-  const p = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
-  return "#" + [0, 1, 2].map(i => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t).toString(16).padStart(2, "0")).join("");
-}
+const arc = (r: number, a0: number, a1: number) =>
+  `M ${pt(P(r, a0))} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${pt(P(r, a1))}`;
 
-export function BrandMark({ size = 96, theme = "light" }: { size?: number; theme?: "light" | "dark" }) {
-  const r = size * 0.36, sw = size * 0.085, k = size / 188;
-  const rOut = r + sw * 0.95, rIn = r - sw * 0.95;
-  const cx = size / 2, cy = rOut + 2;
-  const h = Math.round(cy + r / 2 + sw / 2 + 2);
-  const end = ang(VALUE), SEGS = 32;
-  const [sx, sy] = polar(cx, cy, r, A0), [ex, ey] = polar(cx, cy, r, end);
-  const light = theme === "light";
+export function BrandMark({ size = 96, theme = "dark" }: { size?: number; theme?: "light" | "dark" }) {
+  const gid = `tpc-${useId().replace(/:/g, "")}`;
+  // Épaisseur optique : plus le logo est petit, plus le trait et le curseur grossissent.
+  const k = size >= 96 ? 1 : size >= 48 ? 1.15 : size >= 32 ? 1.3 : size >= 24 ? 1.45 : 1.6;
+  const sw = Math.min(14 * k, 19), kr = Math.min(7.6 * k, 11), kSw = Math.min(2.4 * k, 3.6);
+  const c = P(R, ang(CUR)), z0 = P(R, ang(LO)), z1 = P(R, ang(HI));
   return (
-    <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} role="img" aria-label="ThePerfClub" style={{ display: "block" }}>
-      <path d={arc(cx, cy, r, A0, A1)} fill="none" stroke={light ? "rgba(20,20,20,.1)" : "#1d2226"} strokeWidth={sw} strokeLinecap="round" />
-      <path d={arc(cx, cy, r, A0, end)} fill="none" stroke={mix(STOPS[0], STOPS[1], 0.5)} strokeWidth={sw * 0.98} />
-      {Array.from({ length: SEGS }, (_, i) => (
-        <path key={i} d={arc(cx, cy, r, A0 + ((end - A0) * i) / SEGS, Math.min(end, A0 + ((end - A0) * (i + 1.6)) / SEGS))}
-          fill="none" stroke={mix(STOPS[0], STOPS[1], (i + 0.5) / SEGS)} strokeWidth={sw} />
-      ))}
-      <circle cx={sx} cy={sy} r={sw / 2} fill={STOPS[0]} />
-      <circle cx={ex} cy={ey} r={sw / 2} fill={STOPS[1]} />
-      <path d={sector(cx, cy, rIn, rOut, ang(ZLO - 0.35), ang(ZHI + 0.35))} fill="none"
-        stroke={light ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)"} strokeWidth={2 * k} strokeDasharray={`${3 * k} ${3 * k}`} />
-      <g transform={`translate(${ex} ${ey}) scale(${k})`}>
-        <circle r={12.5} fill={light ? "rgba(24,24,27,.1)" : "rgba(255,255,255,.14)"} />
-        <circle r={9.5} fill="#18181b" stroke="rgba(255,255,255,.9)" strokeWidth={1.5} />
-        {[-3, 0, 3].map(dy => <line key={dy} x1={-3.5} x2={3.5} y1={dy} y2={dy} stroke="#fff" strokeWidth={2} strokeLinecap="round" />)}
-      </g>
+    <svg width={size} height={Math.round((size * 82) / 94)} viewBox="3 3 94 82" role="img" aria-label="ThePerfClub" style={{ display: "block" }}>
+      <defs>
+        <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1={z0[0]} y1={z0[1]} x2={z1[0]} y2={z1[1]}>
+          <stop offset="0" stopColor="#ffb5a7" />
+          <stop offset="1" stopColor="#d44000" />
+        </linearGradient>
+      </defs>
+      <path d={arc(R, -120, 120)} fill="none" stroke={theme === "dark" ? "rgba(255,255,255,.16)" : "rgba(20,20,20,.11)"} strokeWidth={sw} strokeLinecap="round" />
+      <path d={arc(R, ang(LO), ang(HI))} fill="none" stroke={`url(#${gid})`} strokeWidth={sw} strokeLinecap="round" />
+      <circle cx={c[0]} cy={c[1]} r={kr} fill="#18181b" stroke="#fff" strokeWidth={kSw} />
     </svg>
   );
 }
 
-/* Empilé : jauge au-dessus du nom. */
-export default function BrandLogoStacked({ size = 96, theme = "light" }: { size?: number; theme?: "light" | "dark" }) {
-  const ink = theme === "light" ? "#141414" : "#fff";
+/* Empilé : symbole au-dessus du nom. */
+export default function BrandLogoStacked({ size = 96, theme = "dark" }: { size?: number; theme?: "light" | "dark" }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: Math.round(size * 0.14) }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: Math.round(size * 0.12) }}>
       <BrandMark size={size} theme={theme} />
-      <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: Math.round(size * 0.27), letterSpacing: "-0.02em", lineHeight: 1, color: ink }}>
+      <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: Math.round(size * 0.27), letterSpacing: "-0.02em", lineHeight: 1, color: theme === "dark" ? "#fff" : "#141414" }}>
         The<span style={{ color: "#d44000" }}>Perf</span>Club
       </div>
     </div>

@@ -156,10 +156,8 @@ export default function LoginPage() {
     <AuthBackground>
       <div style={{ width: "100%", maxWidth: 400 }}>
         {/* Logo */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 24, padding: "22px 34px", boxShadow: "0 16px 40px rgba(0,0,0,.30)" }}>
-            <BrandLogoStacked size={104} theme="light" />
-          </div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
+          <BrandLogoStacked size={104} theme="dark" />
         </div>
 
         <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: 28, boxShadow: "0 28px 72px rgba(0,0,0,.10)" }}>
