@@ -210,6 +210,47 @@ function afterText(feel: Feel, rpeGap: number | null, tomorrow: number | null | 
     : ` Demain : séance ${q} prévue.`;
 }
 
+/* Pénalité chronique (charge récente, monotonie, contrainte, Forme négative) — extraite le
+   2026-10-05 pour que le radar du Coach Control place chaque sportif EXACTEMENT là où la reco le
+   voit (récupération effective = récupération − pénalité, voir recoveryAxisX/computeAutoregSuggestion). */
+export function chronicPenaltyFor(sessions: Pick<Session, "date" | "rpe" | "duration" | "done">[], anchor: Date = new Date(), perspective: TrendPerspective = "athlete") {
+  const { monotonyVal, strainVal } = monotonyStrainFor(sessions, anchor);
+  const load42 = lastNLoadPoints(sessions, anchor, 42);
+  const emptyZone = { label: "", color: "#8a8f94", text: "" };
+  const loadZone = acwr(load42);
+  const loadInfo = loadZone.value !== null ? sigDimInfo("load", loadZone.value, perspective) : emptyZone;
+  const monotonyInfo = monotonyVal !== null ? sigDimInfo("monotony", monotonyVal, perspective) : emptyZone;
+  const strainInfo = strainVal !== null ? sigDimInfo("strain", strainVal, perspective) : emptyZone;
+  const formSeries = formPercentSeries(load42);
+  const formValue = formSeries.length ? formSeries[formSeries.length - 1].value : null;
+  const formInfo = formValue !== null ? sigDimInfo("form", formValue, perspective) : emptyZone;
+
+  /* Tendance Fitness retirée des candidats (2026-09-29, bug trouvé par Gildas : "Alléger
+     recommandé" sur un wellness "Équilibré", déclenché par "Ta charge chronique est en baisse") :
+     son seul état non-vert est la BAISSE, un risque de perte de forme, donc l'inverse d'une fatigue.
+     La compter ici resserrait le seuil d'allègement précisément quand le sportif en fait moins.
+     Seuls restent les signaux orientés fatigue (ACWR haut, monotonie, contrainte, Forme négative) ;
+     la sous-charge ACWR (jaune) est déjà "good" pour severityOf, même logique. */
+  // Chaque candidat porte son propre objet `{text,...}` déjà écrit et directionnellement correct
+  // (mêmes objets que la carte ⚡ Charge de /conseils) — jamais juste un nom de métrique, pour que
+  // chronicContextLine() puisse réutiliser TEL QUEL le texte du candidat gagnant (voir plus bas).
+  const chronicCandidates: { info: { text: string }; sev: Severity }[] = [
+    { info: loadInfo, sev: severityOf(loadInfo.color) },
+    { info: monotonyInfo, sev: severityOf(monotonyInfo.color) },
+    { info: strainInfo, sev: severityOf(strainInfo.color) },
+    { info: formInfo, sev: severityOf(formInfo.color) },
+  ];
+  const chargeSeverity = worstOf(...chronicCandidates.map(c => c.sev));
+  const worstChronic = chronicCandidates
+    .filter(c => c.sev !== "good")
+    .sort((a, b) => (b.sev === "alert" ? 2 : 1) - (a.sev === "alert" ? 2 : 1))[0]?.info ?? null;
+
+  // -10/-20 points sur le score effectif AVANT le calcul du mismatch (voir autoregulation.ts) —
+  // même magnitude que le garde-fou watch/alert déjà en place ailleurs, pas une nouvelle échelle.
+  const chronicPenalty = chargeSeverity === "alert" ? -20 : chargeSeverity === "watch" ? -10 : 0;
+  return { chronicPenalty, worstChronic };
+}
+
 export function computeDecisionCard(params: {
   wellnessScore: number | null; // absolu (score composite du jour) — pour le garde-fou de computeAutoregSuggestion
   plannedDifficulty: number | null;
@@ -239,40 +280,7 @@ export function computeDecisionCard(params: {
      100% dérivé de l'historique de séances, ZÉRO recouvrement avec le wellness du jour (déjà géré
      directement par computeAutoregSuggestion via wellnessScore/baseline) : jamais un double comptage
      du même signal. */
-  const { monotonyVal, strainVal } = monotonyStrainFor(params.sessions, anchor);
-  const load42 = lastNLoadPoints(params.sessions, anchor, 42);
-  const emptyZone = { label: "", color: "#8a8f94", text: "" };
-  const loadZone = acwr(load42);
-  const loadInfo = loadZone.value !== null ? sigDimInfo("load", loadZone.value, params.perspective) : emptyZone;
-  const monotonyInfo = monotonyVal !== null ? sigDimInfo("monotony", monotonyVal, params.perspective) : emptyZone;
-  const strainInfo = strainVal !== null ? sigDimInfo("strain", strainVal, params.perspective) : emptyZone;
-  const formSeries = formPercentSeries(load42);
-  const formValue = formSeries.length ? formSeries[formSeries.length - 1].value : null;
-  const formInfo = formValue !== null ? sigDimInfo("form", formValue, params.perspective) : emptyZone;
-
-  /* Tendance Fitness retirée des candidats (2026-09-29, bug trouvé par Gildas : "Alléger
-     recommandé" sur un wellness "Équilibré", déclenché par "Ta charge chronique est en baisse") :
-     son seul état non-vert est la BAISSE, un risque de perte de forme, donc l'inverse d'une fatigue.
-     La compter ici resserrait le seuil d'allègement précisément quand le sportif en fait moins.
-     Seuls restent les signaux orientés fatigue (ACWR haut, monotonie, contrainte, Forme négative) ;
-     la sous-charge ACWR (jaune) est déjà "good" pour severityOf, même logique. */
-  // Chaque candidat porte son propre objet `{text,...}` déjà écrit et directionnellement correct
-  // (mêmes objets que la carte ⚡ Charge de /conseils) — jamais juste un nom de métrique, pour que
-  // chronicContextLine() puisse réutiliser TEL QUEL le texte du candidat gagnant (voir plus bas).
-  const chronicCandidates: { info: { text: string }; sev: Severity }[] = [
-    { info: loadInfo, sev: severityOf(loadInfo.color) },
-    { info: monotonyInfo, sev: severityOf(monotonyInfo.color) },
-    { info: strainInfo, sev: severityOf(strainInfo.color) },
-    { info: formInfo, sev: severityOf(formInfo.color) },
-  ];
-  const chargeSeverity = worstOf(...chronicCandidates.map(c => c.sev));
-  const worstChronic = chronicCandidates
-    .filter(c => c.sev !== "good")
-    .sort((a, b) => (b.sev === "alert" ? 2 : 1) - (a.sev === "alert" ? 2 : 1))[0]?.info ?? null;
-
-  // -10/-20 points sur le score effectif AVANT le calcul du mismatch (voir autoregulation.ts) —
-  // même magnitude que le garde-fou watch/alert déjà en place ailleurs, pas une nouvelle échelle.
-  const chronicPenalty = chargeSeverity === "alert" ? -20 : chargeSeverity === "watch" ? -10 : 0;
+  const { chronicPenalty, worstChronic } = chronicPenaltyFor(params.sessions, anchor, params.perspective);
 
   const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty);
   const ctxLine = chronicContextLine(worstChronic);

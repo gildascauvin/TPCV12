@@ -14,6 +14,7 @@ import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
+import { AthleteRing } from "@/components/coach/AthleteRing";
 
 /* Modales/drawers + TestsPanel (1800+ lignes, ne s'affiche que carte dépliée sur l'onglet
    Tests) ouverts sur demande — même traitement next/dynamic que les autres pages coach
@@ -63,25 +64,7 @@ function todayRecovery(athlete: CoachAthlete, signature: AthleteSignature): numb
 }
 
 // Exportée pour la même raison qu'athleteStatus ci-dessus.
-export function AthleteRing({ score }: { score: number | null }) {
-  const r = 20;
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const offset = score === null ? circ : +(circ * (1 - score / 100)).toFixed(1);
-  const color = score === null ? "rgba(255,255,255,0.28)" : wellnessColor(score);
-  return (
-    <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0, borderRadius: 999, background: "linear-gradient(145deg,#171717,#2f2f2f)", filter: "drop-shadow(0 6px 14px rgba(0,0,0,.14))" }}>
-      <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: "rotate(-90deg)", display: "block" }}>
-        <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-        <circle cx="26" cy="26" r={r} fill="none" stroke={color} strokeWidth="5"
-          strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.02em", color }}>{score !== null ? score : "—"}</span>
-        <span style={{ fontSize: 6.5, fontWeight: 1000, letterSpacing: "0.13em", color: "rgba(255,255,255,.56)", marginTop: 2, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" }}>well.</span>
-      </div>
-    </div>
-  );
-}
+export { AthleteRing };
 
 /* Badge "Dernier test" visible même carte repliée (principe POC : scan rapide sans ouvrir la
    carte) — nom du test + tendance ↑/↓/→, couleur dérivée de "amélioration" (tient déjà compte du

@@ -17,12 +17,16 @@ import { useSandboxGate } from "@/hooks/useSandboxGate";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import { CoachCard, maxDiffToday, attention, riskScore } from "@/components/coach/CoachAthleteCard";
 import AthleteFilterBar, { useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
-import { applyAutoregDifficulty } from "@/lib/autoregulation";
+import { chronicPenaltyFor } from "@/lib/decisionCard";
+import { applyAutoregDifficulty, suggestionSeverityColor, recoveryAxisX, effectiveRecoveryX } from "@/lib/autoregulation";
 import { monotonyStrainFor, computeDecisionCard } from "@/lib/decisionCard";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
-import { decisionRingState } from "@/components/sessions/DecisionRing";
-import { aggregateFor } from "@/lib/metricCards";
+import { decisionRingState, DecisionRingMini } from "@/components/sessions/DecisionRing";
+import AggregateGauge from "@/components/conseils/AggregateGauge";
+import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
+import type { DeckItem } from "@/components/coach/CoachDecisionDeck";
+import { aggregateFor, AGG_BANDS, bandFor, type AggBand } from "@/lib/metricCards";
 import { analyticsReady } from "@/lib/demoAnalytics";
 import AnalyticsCollecting, { progressFromRaw } from "@/components/conseils/AnalyticsCollecting";
 import { ChargeSection, RecuperationSection, TeamAnalyticsList } from "@/components/conseils/HomeAnalyticsSections";
@@ -38,6 +42,7 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
 const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
+const CoachDecisionDeck = dynamic(() => import("@/components/coach/CoachDecisionDeck"));
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram, programWeekTag } from "@/lib/programAssignment";
@@ -400,6 +405,22 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     dayRows[a.id] = dayRow;
   }
 
+  /* Vue Groupe du Coach Control (2026-10-05) : récupération du jour sur l'axe de la reco
+     (recoveryAxisX : percentile personnel, ou score absolu ramené sur la même échelle) — jauge des
+     lignes — et récupération EFFECTIVE (avec la pénalité chronique) — position sur le radar. Les
+     deux sortent des fonctions de autoregulation.ts, celles de computeAutoregSuggestion. */
+  const groupRecup: Record<string, { pos: number; band: AggBand } | null> = {};
+  const groupRadarX: Record<string, number | null> = {};
+  if (homeTab === "today" && !selectedAthleteId) {
+    for (const a of athletes) {
+      const abs = a.wellnessFilledToday === false ? null : a.wellness_score;
+      const x = recoveryAxisX(abs, baselines[a.id]);
+      groupRecup[a.id] = x === null ? null : { pos: x / 100, band: bandFor("recup", x / 100) };
+      groupRadarX[a.id] = effectiveRecoveryX(abs, baselines[a.id], chronicPenaltyFor(recentSessions[a.id] ?? []).chronicPenalty);
+    }
+  }
+
+
   // Monotonie/contrainte (Foster 1998) par sportif — même calcul que la carte décision elle-même
   // (decisionCard.ts), pour que le tri "À décider maintenant"/"Plan cohérent" ne contredise jamais
   // ce que la carte affiche (un sportif signalé seulement par sa monotonie doit être classé priorité).
@@ -476,6 +497,22 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const displayedStable = (selectedAthleteId ? sortedStable.filter(a => a.id === selectedAthleteId) : sortedStable).filter(metricOk);
   // Une seule pancarte par écran (2026-10-02) : sur la 1re carte floutée.
   const firstLockedCardId = [...displayedPriority, ...displayedStable].find(a => !canDecideFor(a))?.id ?? null;
+
+  /* Revue du jour en swipe (2026-10-05) : file = "À décider maintenant" figée à l'ouverture ;
+     un sportif hors de cette file s'ouvre seul (sa carte, sans geste à faire). */
+  const [deck, setDeck] = useState<{ items: DeckItem[]; startId: string | null; title: string } | null>(null);
+  function deckItemFor(a: CoachAthlete): DeckItem {
+    const sug = canDecideFor(a) ? cardSuggestion(a) : null;
+    return { id: a.id, name: a.name, verb: sug ? (sug.dir === "low" ? "Alléger" : "Surcharger") : null, color: sug ? suggestionSeverityColor(sug) : "#8a8f94" };
+  }
+  function openDeckFor(id: string | null) {
+    const inQueue = id === null || displayedPriority.some(a => a.id === id);
+    if (inQueue) setDeck({ items: displayedPriority.map(deckItemFor), startId: id, title: "Revue du jour" });
+    else {
+      const a = athletes.find(x => x.id === id);
+      if (a) setDeck({ items: [{ ...deckItemFor(a), verb: null }], startId: a.id, title: a.name });
+    }
+  }
 
   function getTopSession(athleteId: string): CoachViewSession | null {
     return sessions
@@ -713,6 +750,41 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         />
       )}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
+      {deck && (
+        <CoachDecisionDeck
+          items={deck.items}
+          startId={deck.startId}
+          title={deck.title}
+          isDecided={id => { const a = athletes.find(x => x.id === id); return !!a && isReviewed(a); }}
+          onClose={() => setDeck(null)}
+          renderCard={(id, action) => {
+            const a = athletes.find(x => x.id === id);
+            if (!a) return null;
+            return (
+              <CoachCard showPhase athlete={a} sessions={sessions} isPriority={needsDecision(a) && !isReviewed(a)}
+                isReviewed={false}
+                actionRequest={action}
+                trend={trends[a.id]}
+                trendInput={trendInputs[a.id]}
+                baseline={baselines[a.id]}
+                recentSessions={recentSessions[a.id]}
+                coachName={coachName ?? "Coach"}
+                isActive={canDecideFor(a)}
+                locked={!canDecideFor(a)}
+                collect={collectFor(a)}
+                onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
+                onUnlock={() => { setDeck(null); unlock(); }}
+                onDecide={() => { setDeck(null); openEditor(a); }}
+                onAddSession={() => { setDeck(null); openCreator(a); }}
+                programPill={programPillFor(a)}
+                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
+                onAutoregDecided={() => markAutoregDecided(a.id)}
+                onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
+            );
+          }}
+        />
+      )}
       {athletes.length > 0 && (
         <div style={{ maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto", padding: isLg ? "0 40px" : isMd ? "0 24px" : "0 16px" }}>
           <HomeTabs
@@ -739,7 +811,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
 
       {/* Layout élargi à 1180px (au lieu de 1000) — même largeur que `.shell` du POC, pour que le
          carrousel 3 colonnes ait la place de respirer. */}
-      <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: isLg ? 1180 : isMd ? 720 : 600, margin: "0 auto" }}>
+      {/* Vue Groupe du Coach Control en pleine largeur (2026-10-05, comme le Planning). */}
+      <div style={{ padding: isLg ? "20px 40px 100px" : isMd ? "18px 24px 100px" : "16px 16px 100px", maxWidth: (homeTab === "today" && !selectedAthleteId && athletes.length > 0) ? "none" : (isLg ? 1180 : isMd ? 720 : 600), margin: "0 auto" }}>
 
         {homeTab === "today" && (
         <>
@@ -849,177 +922,99 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           );
         })() : (
           <>
-            {/* Filtre par métrique (2026-09-24, POC poc-coach-context_4.html, recapHtml()/filterBar()) —
-               réservé au mode "Tous" (selectedAthleteId===null, comme dans le POC : mOK/filterBar n'ont
-               de sens que pour une vue équipe). Moyenne + "N sportifs bas" par dimension, calculées sur
-               les seuls sportifs avec une vraie ligne du jour (dayRows) — un sportif démo/sans check-in
-               n'entre dans aucune moyenne, plutôt que de fausser silencieusement le chiffre affiché. */}
-            {/* Light comme le POC (2026-09-25, retour de Gildas — `.mcard{background:#fff;
-               border:1.5px solid #e4e4e7;color:#18181b}`, actif `.on{border-color:orange;
-               background:#fff7ed}`, jamais une pastille filled). Remplace le 1er jet en gradient
-               dark, qui reprenait à tort la convention des cartes CoachCard plutôt que celle du
-               POC pour CE composant précis. */}
-            {selectedAthleteId === null && (() => {
-              const withData = athletes.filter(a => dayRows[a.id] !== null);
-              return (
-                <div style={{ margin: "13px 0 4px" }}>
-                  {/* Une colonne par dimension, plus rien d'autre : la carte "+ Inviter →" qui
-                     occupait la dernière colonne a été retirée le 2026-09-26 — l'invitation vit
-                     désormais dans le "+" de la bottom nav (voir BottomNav.tsx). */}
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${DIMENSION_KEYS.length}, 1fr)`, gap: 8, overflowX: "auto" }}>
-                    {DIMENSION_KEYS.map(dim => {
-                      const withDim = withData;
-                      const avg = withDim.length ? withDim.reduce((t, a) => t + dimensionRaw(dayRows[a.id]!, dim), 0) / withDim.length : null;
-                      const low = withDim.filter(a => dimensionRaw(dayRows[a.id]!, dim) < 5).length;
-                      const active = metricFilter === dim;
-                      return (
-                        <button
-                          key={dim}
-                          onClick={() => setMetricFilter(active ? null : dim)}
-                          style={{
-                            textAlign: "left", cursor: "pointer", borderRadius: 16, padding: "10px 11px",
-                            background: active ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.055)",
-                            border: active ? "1.5px solid #d44000" : "1.5px solid rgba(255,255,255,.10)",
-                          }}
-                        >
-                          <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.06em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)" }}>
-                            {DIMENSION_LABELS[dim]}
-                          </div>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", marginTop: 2 }}>
-                            {avg !== null ? avg.toFixed(1).replace(".", ",") : "—"}
-                            <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,.45)" }}>/10</span>
-                          </div>
-                          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, marginTop: 3, color: low > 0 ? "#ff6b6b" : "#4ade80" }}>
-                            {low > 0 ? `${low} sportif${low > 1 ? "s" : ""} bas` : "Tous OK"}
-                          </div>
-                        </button>
-                      );
-                    })}
+            {/* Coach Control v2 (2026-10-05, POC https://claude.ai/artifact/LJKJb4nx5xuvPSFGUcCcP8) :
+               radar + revue en swipe à gauche, lignes compactes à droite (récup + RPE prévu avec les
+               vraies jauges de l'app). Remplace le carrousel de cartes et la grille "Plan cohérent" :
+               les cartes ne s'ouvrent plus qu'une à la fois, dans la revue (CoachDecisionDeck). */}
+            {(() => {
+              const radarPoints: RadarPoint[] = athletes.filter(metricOk).map(a => {
+                const t = getTopSession(a.id);
+                const x = groupRadarX[a.id];
+                const sug = canDecideFor(a) ? cardSuggestion(a) : null;
+                return {
+                  id: a.id, name: a.name, score: x === null || x === undefined ? null : Math.round(x), diff: t?.target_difficulty ?? null,
+                  ring: t ? decisionRingState(sessions.filter(s => s.athlete_id === a.id), sug) : null, hideZone: !sug,
+                };
+              });
+              const decidedRows = displayedStable.filter(a => isReviewed(a));
+              const coherentRows = displayedStable.filter(a => !isReviewed(a));
+              const row = (a: CoachAthlete, kind: "todo" | "done" | "rest", idx: number) => {
+                const t = getTopSession(a.id);
+                const sug = canDecideFor(a) ? cardSuggestion(a) : null;
+                const pill = kind === "done"
+                  ? { txt: "✓ Décidé", bg: "rgba(47,158,68,.18)", col: "#8fe0b0" }
+                  : kind === "todo"
+                    ? sug
+                      ? { txt: sug.dir === "low" ? "⬇ Alléger" : "⬆ Surcharger", bg: sug.dir === "low" ? "#d44000" : "rgba(47,158,68,.18)", col: sug.dir === "low" ? "#fff" : "#8fe0b0" }
+                      : { txt: canDecideFor(a) ? "À vérifier" : "À décider", bg: "rgba(242,138,0,.18)", col: "#f5b45a" }
+                    : null;
+                return (
+                  <button key={a.id} type="button" onClick={() => openDeckFor(a.id)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, alignItems: "center", width: "100%",
+                      padding: "11px 16px", background: "none", border: "none", borderTop: idx ? "1px solid rgba(255,255,255,.08)" : "none",
+                      color: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                    }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 14, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                      <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.55)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t ? t.name : "Aucune séance aujourd'hui"}</span>
+                      {pill && <span style={{ display: "inline-block", marginTop: 6, fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 6, background: pill.bg, color: pill.col }}>{pill.txt}</span>}
+                    </span>
+                    <span style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}>
+                        <AggregateGauge pos={groupRecup[a.id]?.pos ?? null} band={groupRecup[a.id]?.band ?? null} bands={AGG_BANDS.recup} size={58} showLabel={false} />
+                        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8.5, letterSpacing: "0.08em", textTransform: "uppercase", color: groupRecup[a.id]?.band.color ?? "rgba(255,255,255,.4)", whiteSpace: "nowrap" }}>{groupRecup[a.id]?.band.label ?? "Récup —"}</span>
+                      </span>
+                      <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}>
+                        {t
+                          ? <DecisionRingMini state={decisionRingState(sessions.filter(s => s.athlete_id === a.id), sug)} hideZone={!sug} showValue thin size={58} />
+                          : <span style={{ height: 44, display: "grid", placeItems: "center", color: "rgba(255,255,255,.35)", fontFamily: "var(--font-mono), monospace" }}>—</span>}
+                        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 8.5, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,.4)", whiteSpace: "nowrap" }}>RPE prévu</span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              };
+              const section = (label: string, list: CoachAthlete[], kind: "todo" | "done" | "rest") => list.length > 0 && (
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", marginBottom: 9 }}>{label}</div>
+                  <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: "4px 0" }}>
+                    {list.map((a, k) => row(a, kind, k))}
                   </div>
-                  {metricFilter && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 12, color: "rgba(255,255,255,.55)" }}>
-                      Filtre : <b style={{ color: "#fff" }}>{DIMENSION_LABELS[metricFilter]} bas</b>
-                      <button
-                        onClick={() => setMetricFilter(null)}
-                        style={{ background: "rgba(255,255,255,.12)", border: "none", borderRadius: 999, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer" }}
-                      >
-                        Effacer ×
-                      </button>
+                </div>
+              );
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: isLg ? "minmax(0,1.15fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 20, alignItems: "start", margin: "13px 0" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+                    <div>
+                      <p style={{ margin: "0 0 12px", fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,.75)" }}>
+                        Chaque sportif est placé selon sa récupération du jour et la difficulté de sa séance prévue. La bande montre ce que sa récupération peut encaisser : au-dessus, on allège ; en dessous, on peut pousser.
+                      </p>
+                      <CoachRadar points={radarPoints} onSelect={openDeckFor} />
                     </div>
-                  )}
+                    {displayedPriority.length > 0 ? (
+                      <button type="button" onClick={() => openDeckFor(null)}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", border: "none", borderRadius: 16, padding: "16px 18px", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 28px rgba(212,64,0,.35)", fontFamily: "inherit" }}>
+                        Passer en revue · {displayedPriority.length} décision{displayedPriority.length > 1 ? "s" : ""}
+                      </button>
+                    ) : (
+                      <div style={{ borderRadius: 16, padding: 15, textAlign: "center", background: "rgba(47,158,68,.14)", color: "#8fe0b0", border: "1px solid rgba(47,158,68,.3)", fontWeight: 700, fontSize: 14 }}>
+                        {decidedTodayCount > 0 ? "✓ Toutes les décisions du jour sont prises" : "Aucune décision urgente. L'équipe peut suivre le plan."}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+                    {section("À décider maintenant", displayedPriority, "todo")}
+                    {section("Décidé aujourd'hui", decidedRows, "done")}
+                    {section("Plan cohérent", coherentRows, "rest")}
+                    <button type="button" onClick={openInvite}
+                      style={{ borderRadius: 16, padding: "14px 16px", cursor: "pointer", fontFamily: "inherit", background: "transparent", border: "1.5px dashed rgba(255,255,255,.22)", color: "#ff8a55", fontSize: 13, fontWeight: 800 }}>
+                      + Invite un sportif
+                    </button>
+                  </div>
                 </div>
               );
             })()}
-
-            <div style={{ margin: "13px 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
-                <div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>À décider maintenant</div>
-                </div>
-                {/* Compteur "N/M traités" retiré (2026-09-27) : structurellement toujours nul
-                   maintenant qu'un sportif traité quitte cette section. */}
-              </div>
-              {/* Carrousel horizontal — TOUJOURS, y compris sur desktop (2026-09-24, retour explicite
-                 de Gildas, "le carrousel coach control doit aussi être présent en desktop", fidèle au
-                 POC `.queue-carousel` : `@media(min-width:900px){.card{flex:0 0 calc((100% - 32px)/3)}}`
-                 — 3 cartes visibles à la fois sur desktop plutôt qu'une grille figée à 2, le scroll
-                 horizontal reste disponible au-delà). */}
-              {displayedPriority.length > 0 ? (
-                <div style={{ display: "flex", gap: 12, overflowX: "auto", scrollSnapType: "x mandatory", margin: "0 -16px", padding: "0 16px 4px", scrollbarWidth: "none" as const }}>
-                  {displayedPriority.map((a, idx) => (
-                    <div key={a.id} style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", minWidth: 0, scrollSnapAlign: "start" }}>
-                      {/* isReviewed toujours false ici : un sportif traité a quitté cette section. */}
-                      <CoachCard showPhase athlete={a} sessions={sessions} isPriority={true}
-                        isReviewed={false}
-                        tourId={idx === 0 ? "coach-card-alert" : undefined}
-                        trend={trends[a.id]}
-                        trendInput={trendInputs[a.id]}
-                        baseline={baselines[a.id]}
-                        recentSessions={recentSessions[a.id]}
-                        coachName={coachName ?? "Coach"}
-                        isActive={canDecideFor(a)}
-                        locked={!canDecideFor(a)}
-                        lockedBare={a.id !== firstLockedCardId}
-                        collect={collectFor(a)}
-                        onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
-                        onUnlock={unlock}
-                        onDecide={() => openEditor(a)}
-                    onAddSession={() => openCreator(a)}
-                    programPill={programPillFor(a)}
-                        onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
-                        onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
-                        onAutoregDecided={() => markAutoregDecided(a.id)}
-                        onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
-                    </div>
-                  ))}
-                  {/* Carte d'invitation en fin de carrousel (onboarding in-app, 2026-10-01) — un
-                     sportif invité arrive avec sa carte, prêt à recevoir un programme. */}
-                  {!selectedAthleteId && (
-                    <div style={{ flex: isLg ? "0 0 calc((100% - 32px)/3)" : "0 0 min(340px,85vw)", minWidth: 0, scrollSnapAlign: "start" }}>
-                      <button
-                        onClick={openInvite}
-                        style={{
-                          width: "100%", height: "100%", minHeight: 220, borderRadius: 24, cursor: "pointer", fontFamily: "inherit",
-                          background: "rgba(255,255,255,.035)", border: "1.5px dashed rgba(255,255,255,.22)", color: "#fff",
-                          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 20,
-                        }}
-                      >
-                        <span style={{ fontSize: 28 }}>👥</span>
-                        <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, letterSpacing: "-0.02em" }}>Invite un sportif</span>
-                        <span style={{ fontSize: 12.5, color: "rgba(255,255,255,.6)", lineHeight: 1.45, maxWidth: 240 }}>
-                          Il arrive avec sa carte ici. Tu peux déjà lui assigner un programme avant qu'il crée son compte.
-                        </span>
-                        <span style={{ marginTop: 4, fontSize: 13, fontWeight: 800, color: "#ff8a55" }}>Inviter →</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)" }}>
-                  {selectedAthleteId
-                    ? "Rien à décider pour ce sportif."
-                    : decidedTodayCount > 0
-                      ? "✓ Toutes les décisions du jour sont prises."
-                      : "Aucune décision urgente. L'équipe peut suivre le plan."}
-                </div>
-              )}
-            </div>
-
-            <div style={{ margin: "13px 0" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, marginBottom: 9 }}>
-                <div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>Plan cohérent</div>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: isLg ? "repeat(3, minmax(0,1fr))" : isMd ? "repeat(2, minmax(0,1fr))" : "minmax(0,1fr)", gap: 10 }}>
-                {displayedStable.length > 0 ? displayedStable.map(a => (
-                  <CoachCard showPhase key={a.id} athlete={a} sessions={sessions} isPriority={false}
-                    isReviewed={false}
-                    trend={trends[a.id]}
-                    trendInput={trendInputs[a.id]}
-                    baseline={baselines[a.id]}
-                    recentSessions={recentSessions[a.id]}
-                    coachName={coachName ?? "Coach"}
-                    isActive={canDecideFor(a)}
-                    locked={!canDecideFor(a)}
-                    lockedBare={a.id !== firstLockedCardId}
-                    collect={collectFor(a)}
-                    onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
-                    onUnlock={unlock}
-                    onDecide={() => openEditor(a)}
-                    onAddSession={() => openCreator(a)}
-                    programPill={programPillFor(a)}
-                    onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
-                    onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
-                    onAutoregDecided={() => markAutoregDecided(a.id)}
-                    onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
-                )) : (
-                  <div style={{ background: "#121214", border: "1px dashed rgba(255,255,255,.15)", borderRadius: 16, padding: "18px 16px", textAlign: "center", fontSize: 13, color: "rgba(255,255,255,.55)", gridColumn: isLg ? "1 / -1" : undefined }}>
-                    {selectedAthleteId ? "Ce sportif est dans la file « À décider »." : "Tous les sportifs nécessitent une attention aujourd'hui."}
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         )}
         </>

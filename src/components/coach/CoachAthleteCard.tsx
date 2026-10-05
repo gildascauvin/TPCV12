@@ -171,7 +171,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -195,6 +195,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   onAddSession?: () => void;
   /* Bandeau programme (ProgramBanner) posé juste au-dessus de la carte séance. */
   programPill?: React.ReactNode;
+  /* Revue en swipe (CoachDecisionDeck) : transmis tel quel à la jauge de décision. */
+  actionRequest?: { kind: "apply" | "maintain"; nonce: number } | null;
   tourId?: string;
   trend?: TrendCode | null;
   /* Input brut de la tendance (charge %/delta wellness/delta RPE) — nécessaire pour describeTrend()
@@ -410,6 +412,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           {adjustable ? (
             <div onClick={e => e.stopPropagation()}>
               <AutoregButtons
+                actionRequest={actionRequest}
                 sessionId={topSession!.id}
                 storedDecision={validDecision(topSession)}
                 viewer={selfView ? { role: "athlete" } : { role: "coach", subjectName: athlete.name }}

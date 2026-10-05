@@ -47,6 +47,10 @@ function pctFromDiff(plannedDifficulty: number, diff: number): number {
    pré-positionnée), pas seulement après un clic. */
 
 interface Props {
+  /* Action déclenchée de l'extérieur (2026-10-05, revue en swipe du Coach Control) : glisser une
+     carte à droite = "apply", à gauche = "maintain". Exécute EXACTEMENT les mêmes fonctions que les
+     boutons (apply()/maintenir()), à chaque nouveau `nonce`. Ignoré en gratuit et une fois décidé. */
+  actionRequest?: { kind: "apply" | "maintain"; nonce: number } | null;
   sessionId: string;
   /* `dir`/`reco` optionnels (2026-09-25, retour de Gildas — "même quand ya pas de reco, je veux
      pouvoir bouger la jauge et avoir le range") : absents = pas de suggestion système ("Plan
@@ -122,7 +126,7 @@ interface Props {
   viewer?: DecisionViewer;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" } }: Props) {
+export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -313,6 +317,12 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plann
     onPreviewChange?.(null);
     if (!free) markFirstAdjustment();
   }
+
+  useEffect(() => {
+    if (!actionRequest || free || mode !== "active") return;
+    if (actionRequest.kind === "apply") apply(); else maintenir();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actionRequest?.nonce]);
 
   async function undo() {
     const decision = getAutoregDecision(sessionId);

@@ -108,52 +108,49 @@ export function applyAutoregDifficulty(diff: number, pct: number): number {
   return Math.max(1, Math.min(10, Math.round(diff + pctToPoints(pct))));
 }
 
-/* Reco = écart de la forme du jour à la PROPRE NORME du sportif, jamais à la difficulté prévue
-   (2026-09-27, 3e itération — retour de Gildas : "ma récup était à l'équilibre et ça m'a recommandé
-   d'alléger, je trouve ça bizarre, j'ai toujours répété que je voulais un algo simple : en gros
-   équilibre → touche rien ou peu, au plus on est fatigué au plus ça reco d'alléger, au plus on est
-   en forme au plus ça reco de surcharger, tout en respectant la périodisation").
+/* Historique : 3e itération (2026-09-27, z-score par paliers Hopkins + exceptions par difficulté)
+   remplacée le 2026-10-05 par le modèle diagonal ci-dessous (voir CLAUDE.md). */
+/* ── Modèle diagonal (2026-10-05, demande de Gildas : le radar du Coach Control est LA référence
+   interne du calcul) ──────────────────────────────────────────────────────────────────────────────
+   Axe X = récupération effective, 0..100 : percentile personnel du jour (baseline.relativeScore)
+   dès que la norme existe, sinon le score absolu ramené sur la même échelle (60 → 42, 80 → 58,
+   bornes de la bande "Équilibré"). La pénalité chronique la décale vers la gauche, sauf pour un
+   sportif frais (> 58).
+   Bande "Maintenir" façon WHOOP mais arrondie (2026-10-05, Gildas : "les angles de WHOOP, mais un
+   arrondi") : un plateau bas pour les sportifs fatigués, une montée au milieu, un plateau haut pour
+   les sportifs frais, raccordés par une sigmoïde (pas d'angle) :
+     s(x)    = 1 / (1 + e^(−(x − 50) / 9))     (≈ 0 sous 20, 0,5 à 50, ≈ 1 au-dessus de 80)
+     haut(x) = 4,5 + 6·s(x)                    (4,5 fatigué · 7,5 équilibré · 10,5 frais)
+     bas(x)  = haut(x) − 6                     (−1,5 fatigué · 1,5 équilibré · 4,5 frais)
+   RPE prévu au-dessus du haut → Alléger de ⌈RPE − haut⌉ points ; sous le bas → Surcharger de
+   ⌈bas − RPE⌉ points ; plafond 2 points (3 en cas critique). Un fatigué sur une séance facile
+   garde sa séance, un sportif dans sa norme garde un point de marge sur une séance quasi maximale,
+   un sportif frais pousse ses séances légères. */
+export const AUTOREG_BAND_LOW = 4.5;
+export const AUTOREG_BAND_RISE = 6;
+export const AUTOREG_BAND_WIDTH = 6;
+const AUTOREG_BAND_MID = 50, AUTOREG_BAND_SOFTNESS = 9;
+export function autoregBand(x: number): { lo: number; hi: number } {
+  const sx = 1 / (1 + Math.exp(-(x - AUTOREG_BAND_MID) / AUTOREG_BAND_SOFTNESS));
+  const hi = AUTOREG_BAND_LOW + AUTOREG_BAND_RISE * sx;
+  return { lo: hi - AUTOREG_BAND_WIDTH, hi };
+}
+const RECOVERY_X_FATIGUE = 42, RECOVERY_X_FRESH = 58;
+/* Récupération du jour sur l'axe X (sans pénalité chronique). null = pas de ressenti. */
+export function recoveryAxisX(wellness: number | null, baseline?: WellnessBaselineResult | null): number | null {
+  if (wellness === null) return null;
+  if (baseline?.hasEnoughHistory && baseline.composite.z !== null) return baseline.relativeScore;
+  // Bande neutre absolue [70 − 10, 70 + 10] = [60, 80] posée sur [42, 58].
+  const mapped = RECOVERY_X_FATIGUE + (wellness - (ABSOLUTE_NEUTRAL_SCORE - ABSOLUTE_DEAD_ZONE)) * ((RECOVERY_X_FRESH - RECOVERY_X_FATIGUE) / (2 * ABSOLUTE_DEAD_ZONE));
+  return Math.max(0, Math.min(100, mapped));
+}
+/* Récupération EFFECTIVE (avec la pénalité chronique) : la position exacte utilisée par la reco. */
+export function effectiveRecoveryX(wellness: number | null, baseline: WellnessBaselineResult | null | undefined, chronicPenalty = 0): number | null {
+  const x = recoveryAxisX(wellness, baseline);
+  if (x === null) return null;
+  return x > RECOVERY_X_FRESH ? x : Math.max(0, x + chronicPenalty);
+}
 
-   Root cause du modèle précédent (`mismatch = plannedDifficulty × 10 − score`) : il ramenait la
-   difficulté et le score sur la même échelle, donc il exigeait implicitement un score de 80/100 pour
-   tolérer une séance à 8/10. Un sportif pile à SA norme (relativeScore = 50, zone "Équilibré")
-   déclenchait donc un "Alléger" sur n'importe quelle séance au-dessus de 5/10 — c'est-à-dire qu'il
-   COMBATTAIT la périodisation au lieu de la respecter (une séance dure est planifiée parce que le
-   bloc l'appelle, pas parce que le sportif est euphorique).
-
-   Nouveau modèle, 3 règles :
-     1. La zone morte EST la zone "Équilibré" déjà affichée (|z| < Z_SWC) — si le libellé dit
-        "Équilibré", il n'y a pas de reco. Plus aucune contradiction possible entre ce que la zone
-        annonce et ce que la carte propose.
-     2. Ampleur graduée sur l'échelle d'ampleur d'effet de Hopkins, déjà utilisée partout ailleurs
-        dans l'app : Z_SWC ≤ |z| < Z_MODERATE → 1 point de RPE, |z| ≥ Z_MODERATE → 2 points (le
-        plafond, inchangé). Aucun nouveau seuil inventé.
-     3. La difficulté prévue n'entre QUE dans les garde-fous (voir plus bas) — c'est le plan qui fixe
-        le niveau, la forme ne fait que le décaler de ±1 ou ±2 points. La périodisation est donc
-        respectée par construction.
-
-   Repli sans baseline personnelle (historique < 12j) : bande neutre absolue 60-80, qui reproduit
-   exactement l'heuristique d'origine de cette boucle (2026-08-13 : "Alléger si wellness < 60",
-   "Surcharger si wellness ≥ 80") — |écart à 70| < 10 → rien, 10-20 → 1 point, ≥20 → 2 points.
-
-   Garde-fous de périodisation :
-   - Le résultat est clampé dans [1,10] ; si l'ampleur tombe à 0 après clamp, pas de reco (surcharger
-     une séance déjà à 10/10 ne propose rien).
-   - Une séance à ≤3/10 (jour de récupération/deload réellement programmé — `recuperation` sort
-     toujours dans 1-3, voir generate/route.ts) ne se SURCHARGE jamais : transformer un jour de récup
-     en séance de travail casse l'intention du bloc, c'est le seul cas où elle est non ambiguë.
-     L'inverse reste vrai (une séance à 10/10 peut toujours s'alléger — c'est tout l'objet).
-
-   Escalade critique : côté Alléger seulement, un garde-fou absolu (score composite brut
-   < 40) ou z ≤ Z_SEVERE force 3 points (−10%, 2026-09-28) et l'icône 🚨. Ils n'inventent jamais un
-   déclenchement à eux seuls, ils n'escaladent qu'un Alléger déjà déclenché par l'écart à la norme.
-
-   `chronicPenalty` (points, 0/-10/-20 selon la zone chronique ACWR/monotonie/contrainte/Forme —
-   voir decisionCard.ts) : converti en décalage de z (÷50, soit -0.2/-0.4 = 1 à 2 SWC) et appliqué
-   AVANT le calcul, pour que le chronique MODULE le journalier sans le concurrencer. Garde-fou
-   conservé du fix 2026-09-25 ("pourquoi Thomas est en super forme et on lui recommande un RPE très
-   light ?") : jamais appliqué à un sportif réellement frais (z > Z_SWC) — il peut amplifier ou faire
-   basculer un jour neutre/fatigué, jamais inventer un Alléger sur un jour franchement bon. */
 export function computeAutoregSuggestion(
   wellness: number | null,
   plannedDifficulty: number | null,
@@ -161,76 +158,40 @@ export function computeAutoregSuggestion(
   chronicPenalty = 0,
 ): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
+  const x = effectiveRecoveryX(wellness, baseline, chronicPenalty)!;
+  const { lo, hi } = autoregBand(x);
+
+  let dir: AutoregDir;
+  let magnitude: number;
+  if (plannedDifficulty > hi) { dir = "low"; magnitude = Math.ceil(plannedDifficulty - hi - 1e-9); }
+  else if (plannedDifficulty < lo) { dir = "high"; magnitude = Math.ceil(lo - plannedDifficulty - 1e-9); }
+  else return null;
+  magnitude = Math.min(2, Math.max(1, magnitude));
 
   const useZ = baseline?.hasEnoughHistory && baseline.composite.z !== null;
-
-  /* Ampleur en points de RPE (0 = rien à proposer), signée : négatif = alléger, positif =
-     surcharger. Deux échelles, même forme (zone morte → 1 point → 2 points) : le z personnel dès
-     que l'historique le permet, sinon la bande absolue 60-80 de repli. */
-  let points: number;
-  if (useZ) {
-    const zShift = chronicPenalty / 50; // -10 → -0.2 (1 SWC), -20 → -0.4 (2 SWC)
-    const rawZ = baseline!.composite.z!;
-    const z = rawZ > Z_SWC ? rawZ : rawZ + zShift;
-    const absZ = Math.abs(z);
-    const magnitude = absZ < Z_SWC ? 0 : absZ < Z_MODERATE ? 1 : 2;
-    points = z < 0 ? -magnitude : magnitude;
-  } else {
-    const dev = (wellness - ABSOLUTE_NEUTRAL_SCORE) + (wellness <= ABSOLUTE_NEUTRAL_SCORE + ABSOLUTE_DEAD_ZONE ? chronicPenalty : 0);
-    const absDev = Math.abs(dev);
-    const magnitude = absDev < ABSOLUTE_DEAD_ZONE ? 0 : absDev < ABSOLUTE_DEAD_ZONE * 2 ? 1 : 2;
-    points = dev < 0 ? -magnitude : magnitude;
-  }
-  /* Règles par difficulté prévue (2026-09-29, Gildas — "un user à 79 de récup avec RPE cible à 9,
-     on lui recommande 10 : 9 suffit, 8 suffirait aussi") :
-     - séance dure (≥ HARD_MIN_DIFFICULTY) + récup dans la norme → −1 (garder un point de marge sur
-       une séance quasi maximale) ;
-     - séance dure + récup fraîche → rien : la séance est déjà dure, pas de surcharge ;
-     - séance légère (≤3) + récup fraîche → surcharge autorisée (+1 un peu frais,
-       +2 nettement frais) : 3 → 5 au plus, la séance reste sous le dur, la périodisation tient.
-       Remplace l'ancien blocage total des jours légers. */
-  let kind: AutoregSuggestion["kind"];
-  if (points === 0) {
-    if (plannedDifficulty < HARD_MIN_DIFFICULTY) return null;
-    points = -1;
-    kind = "norm_hard";
-  }
-  if (points > 0 && plannedDifficulty >= HARD_MIN_DIFFICULTY) return null;
-
-  const dir: AutoregDir = points < 0 ? "low" : "high";
-
   const guardRail = (baseline?.guardRailTriggered ?? false) || wellness < WELLNESS_ABSOLUTE_GUARD_SCORE;
-  const severe = useZ && baseline!.composite.z! <= Z_SEVERE;
+  const severe = !!useZ && baseline!.composite.z! <= Z_SEVERE;
   const critical = dir === "low" && (guardRail || severe);
+  if (critical) magnitude = Math.min(3, magnitude + 1);
 
-  // Critique = 3 points (2026-09-28, retour de Gildas) : avant, forcé à 2 comme "très fatigué", le 🚨
-  // ne changeait que la couleur. Asymétrique volontairement : la surcharge reste plafonnée à 2 points
-  // (z ≥ 0,6 ≈ 1 jour sur 4, +3 transformerait trop souvent une séance à 7 en 10/10).
-  // Clamp dans [1,10] : ce qui déborde réduit l'ampleur, jusqu'à annuler la reco s'il ne reste rien.
-  const magnitude = critical ? 3 : Math.abs(points);
   const target = Math.min(10, Math.max(1, plannedDifficulty + (dir === "low" ? -magnitude : magnitude)));
   const signedPoints = Math.round(target - plannedDifficulty);
   if (signedPoints === 0) return null;
 
   const icon = dir === "low" ? (critical ? "🚨" : "⚠️") : "🚀";
-  // % équivalent au delta en points réellement calculé, via la table FIXE pointsToPct() — reco garde
-  // son unité historique (API inchangée pour tous les consommateurs : chips manuels,
-  // formatAutoregPct, "decided" state…).
   const reco = pointsToPct(signedPoints);
+  /* "norm_hard" : on allège un sportif qui n'est PAS fatigué (récup dans sa norme ou au-dessus,
+     sans pénalité chronique) — c'est la séance qui est trop dure, pas lui qui va mal. */
+  const rawX = recoveryAxisX(wellness, baseline)!;
+  const kind: AutoregSuggestion["kind"] = dir === "low" && !critical && chronicPenalty === 0 && rawX >= RECOVERY_X_FATIGUE ? "norm_hard" : undefined;
 
-  // Filet de sécurité : si le RPE déjà prévu tombe dans la range conservatrice de la cible, il n'y a
-  // rien à décider. Ne peut plus se produire avec une ampleur entière ≥1 (voir zoneRange), gardé
-  // pour une `plannedDifficulty` fractionnaire (séance déjà ajustée par le passé).
-  // Zone NON glissée ici : aux bords, la zone affichée (zoneRange) s'étend vers le plan ("1-2" pour
-  // une séance à 2 allégée à 1) et absorberait à tort la suggestion.
   const t = Math.round(target);
   const zoneLow = dir === "high" ? t : t - 1;
   const zoneHigh = dir === "high" ? t + 1 : t;
   const roundedPlanned = Math.round(plannedDifficulty);
   if (roundedPlanned >= zoneLow && roundedPlanned <= zoneHigh) return null;
 
-  // Un garde-fou critique (score absolu < 40) prime : ce n'est plus "juste la séance dure".
-  return { dir, reco, icon, ...(kind && !critical ? { kind } : {}) };
+  return { dir, reco, icon, ...(kind ? { kind } : {}) };
 }
 
 /* Couleur de sévérité par palier réel de l'heuristique (🚨 critique / ⚠️ modéré / 🚀 surcharge),

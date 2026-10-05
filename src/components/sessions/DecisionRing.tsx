@@ -85,20 +85,32 @@ export function decisionRingState(
 
 /* Miniature de la jauge de décision (onglet Aujourd'hui) : même dégradé, même zone pointillée, même
    curseur que la grande, sans texte — géométrie des miniatures Charge/Récup (AggregateGauge bare). */
-export function DecisionRingMini({ state, size = 40, hideZone = false }: { state: DecisionRingState; size?: number; hideZone?: boolean }) {
+/* `showValue` (2026-10-05, lignes du Coach Control) : le RPE au centre de l'arc. */
+/* `thin` (2026-10-05) : même épaisseur d'arc que AggregateGauge (non bare), pour s'aligner sur la
+   jauge de récupération posée à côté dans les lignes du Coach Control. */
+/* Centre de l'arc d'une mini-jauge (pour aligner un point dessus, radar du Coach Control). */
+export function decisionRingMiniCenterY(size = 40, thin = false) {
+  const r = size * 0.36, sw = thin ? Math.max(4, Math.round(size * 0.075)) : Math.max(3, Math.round(size * 0.17));
+  return r + sw * (thin ? 1.05 : 0.75) + 2;
+}
+/* `disc` (2026-10-05) : disque de fond centré sur l'arc lui-même (pas sur la boîte, l'arc étant
+   ouvert en bas), pour poser la jauge sur un fond chargé sans qu'il dépasse. */
+export function DecisionRingMini({ state, size = 40, hideZone = false, showValue = false, thin = false, centerLabel, disc }: { state: DecisionRingState; size?: number; hideZone?: boolean; showValue?: boolean; thin?: boolean; centerLabel?: string; disc?: string }) {
   const { value, zoneLow, zoneHigh } = state;
-  const r = size * 0.36, sw = Math.max(3, Math.round(size * 0.17));
-  const rOut = r + sw * 0.75, rIn = r - sw * 0.75;
+  const r = size * 0.36, sw = thin ? Math.max(4, Math.round(size * 0.075)) : Math.max(3, Math.round(size * 0.17));
+  // Fin : cadre de zone un peu plus large que le trait, sinon le pointillé se confond avec l'arc.
+  const rOut = r + sw * (thin ? 1.05 : 0.75), rIn = r - sw * (thin ? 1.05 : 0.75);
   const cx = size / 2, cy = rOut + 2;
-  const h = Math.round(cy + rOut * 0.5 + 2);
+  const h = disc ? Math.ceil(cy + rOut + 2) : Math.round(cy + rOut * 0.5 + 2);
   const rounded = Math.round(value);
   const inZone = !hideZone && rounded >= zoneLow && rounded <= zoneHigh;
   const [c0, c1] = DIFF_STOPS[rounded >= 8 ? "hard" : rounded >= 5 ? "moderate" : "easy"];
   const end = ang(value);
   const SEGS = 16;
   const [sx, sy] = polar(cx, cy, r, A0), [ex, ey] = polar(cx, cy, r, end);
-  return (
-    <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+  const svg = (
+    <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`} aria-hidden="true" style={{ display: "block", flexShrink: 0, overflow: "visible" }}>
+      {disc && <circle cx={cx} cy={cy} r={rOut + 2} fill={disc} />}
       <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="rgba(255,255,255,.08)" strokeWidth={sw} strokeLinecap="round" />
       {value > MIN && Array.from({ length: SEGS }, (_, i) => (
         <path key={i} d={arcPath(cx, cy, r, A0 + ((end - A0) * i) / SEGS, A0 + ((end - A0) * (i + 1.02)) / SEGS)}
@@ -108,8 +120,15 @@ export function DecisionRingMini({ state, size = 40, hideZone = false }: { state
       {value > MIN && <circle cx={ex} cy={ey} r={sw / 2} fill={c1} />}
       {!hideZone && <path d={sectorPath(cx, cy, rIn, rOut, ang(Math.max(MIN, zoneLow - 0.35)), ang(Math.min(MAX, zoneHigh + 0.35)))}
         fill="none" stroke="rgba(255,255,255,.75)" strokeWidth={1.1} strokeDasharray="2 1.5" />}
-      <circle cx={ex} cy={ey} r={sw * 0.62} fill={inZone ? "#2a8045" : "#18181b"} stroke="#fff" strokeWidth={1.1} />
+      <circle cx={ex} cy={ey} r={thin ? Math.max(4.5, sw * 0.62) : sw * 0.62} fill={inZone ? "#2a8045" : "#18181b"} stroke="#fff" strokeWidth={1.1} />
     </svg>
+  );
+  if (!showValue && !centerLabel) return svg;
+  return (
+    <div style={{ position: "relative", width: size, height: h, flexShrink: 0 }}>
+      {svg}
+      <span style={{ position: "absolute", left: 0, right: 0, top: cy, transform: "translateY(-50%)", textAlign: "center", fontFamily: "var(--font-mono), monospace", fontSize: Math.round(size * (centerLabel ? 0.22 : 0.24)), fontWeight: 700, lineHeight: 1, color: "#fff" }}>{centerLabel ?? rounded}</span>
+    </div>
   );
 }
 
