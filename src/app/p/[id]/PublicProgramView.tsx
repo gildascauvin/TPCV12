@@ -180,19 +180,21 @@ export default function PublicProgramView({ program, coachName }: Props) {
     setInApp(q.get("inapp") === "1");
     setForceLock(q.get("lock") === "1");
   }, []);
-  /* Inséré dans l'app : envoie la hauteur réelle du contenu (onglets + semaine affichée) pour que le
-     cadre parent s'ajuste et qu'on n'ait jamais à défiler dedans. */
+  /* Intégré (app ou iframe WordPress) : envoie la hauteur totale du contenu (barre du haut, onglets,
+     semaine affichée, CTA du bas) pour que le cadre parent s'ajuste et qu'on ne défile jamais dedans.
+     La hauteur n'a rien de sensible : envoyée à toute origine (WordPress est sur theperfclub.com),
+     le parent vérifie lui-même d'où vient le message. */
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    if (!inApp || !scrollAreaRef.current) return;
+    if (!(inApp || isEmbedded) || !scrollAreaRef.current) return;
     const el = scrollAreaRef.current;
-    const post = () => window.parent?.postMessage({ type: "tpc-program-height", id: program.id, height: el.scrollHeight + 56 }, window.location.origin);
+    const post = () => window.parent?.postMessage({ type: "tpc-program-height", id: program.id, height: window.innerHeight - el.clientHeight + el.scrollHeight }, "*");
     post();
     const ro = new ResizeObserver(post);
     Array.from(el.children).forEach(c => ro.observe(c));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [inApp, weekIdx, program.id]);
+  }, [inApp, isEmbedded, weekIdx, program.id]);
   const isLocked = weekIdx > 0 && (userMode === null || forceLock);
 
   /* Baseline synthétique (2026-09) — même fonction que TOUTES les autres surfaces démo/fictives de

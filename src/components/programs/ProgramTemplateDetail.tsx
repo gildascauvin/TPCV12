@@ -83,7 +83,7 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto", overflowX: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
       <div style={{ maxWidth: 760, margin: "0 auto", paddingBottom: 130 }}>
         {/* Héros : photo WordPress du programme, sinon dégradé de la famille + emoji. */}
         <Cover id={p.id} sport={p.sport} sizes="(min-width: 760px) 760px, 100vw" emojiSize={120} priority style={{ height: isMd ? 360 : 300, borderRadius: isMd ? "0 0 28px 28px" : 0 }}>
@@ -137,14 +137,14 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
           {(
             <>
               <h2 style={h2}>Le programme</h2>
-              {/* Plus large que la colonne en desktop (jusqu'à 1180 px, centré sur l'écran) ; hauteur
+              {/* Pleine largeur d'écran en desktop (sort de la colonne) ; hauteur
                   envoyée par /p/ (postMessage) pour ne jamais défiler dans le cadre. */}
               <iframe
                 title={`Aperçu ${p.name}`}
                 src={`/p/${p.id}?inapp=1${coach ? "" : "&lock=1"}`}
                 scrolling="no"
                 style={isMd
-                  ? { display: "block", position: "relative", left: "50%", transform: "translateX(-50%)", width: "min(1180px, calc(100vw - 32px))", height: frameHeight ?? 700, border: 0, borderRadius: 16, background: "#f1f0ee" }
+                  ? { display: "block", position: "relative", left: "50%", transform: "translateX(-50%)", width: "100vw", height: frameHeight ?? 700, border: 0, background: "#f1f0ee" }
                   : { display: "block", width: "calc(100% + 40px)", margin: "0 -20px", height: frameHeight ?? 700, border: 0, background: "#f1f0ee" }}
               />
             </>
