@@ -57,9 +57,28 @@
     return document.querySelectorAll('iframe[src*="go.theperfclub.com/p/"], iframe[data-src*="go.theperfclub.com/p/"]');
   }
 
+  // Les encadrés autour de l'iframe (overflow hidden, bordure, coins arrondis) coupaient tout ce qui
+  // dépasse de la colonne : on les libère jusqu'au corps de page (html/body exclus).
+  function unclip(f) {
+    var el = f.parentElement, depth = 0;
+    while (el) {
+      if (el === document.body || el === document.documentElement) break;
+      var cs = window.getComputedStyle(el);
+      if (cs.overflowX !== "visible" || cs.overflowY !== "visible") el.style.overflow = "visible";
+      if (depth === 0) {
+        el.style.border = "none";
+        el.style.borderRadius = "0";
+        el.style.boxShadow = "none";
+      }
+      el = el.parentElement;
+      depth++;
+    }
+  }
+
   function stretch(f) {
     var parent = f.parentElement;
     if (!parent) return;
+    unclip(f);
     var pageW = document.documentElement.clientWidth;
     var left = parent.getBoundingClientRect().left;
     f.style.display = "block";

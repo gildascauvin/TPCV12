@@ -188,7 +188,16 @@ export default function PublicProgramView({ program, coachName }: Props) {
   useEffect(() => {
     if (!(inApp || isEmbedded) || !scrollAreaRef.current) return;
     const el = scrollAreaRef.current;
-    const post = () => window.parent?.postMessage({ type: "tpc-program-height", id: program.id, height: window.innerHeight - el.clientHeight + el.scrollHeight }, "*");
+    /* Hauteur du contenu réel (bas du dernier bloc), pas scrollHeight : scrollHeight ne descend
+       jamais sous la hauteur visible, donc l'iframe ne rétrécissait plus une fois élargie. */
+    const post = () => {
+      let content = 0;
+      Array.from(el.children).forEach(c => {
+        const h = c as HTMLElement;
+        content = Math.max(content, h.offsetTop + h.offsetHeight + (parseFloat(getComputedStyle(h).marginBottom) || 0));
+      });
+      window.parent?.postMessage({ type: "tpc-program-height", id: program.id, height: Math.ceil(window.innerHeight - el.clientHeight + content) }, "*");
+    };
     post();
     const ro = new ResizeObserver(post);
     Array.from(el.children).forEach(c => ro.observe(c));
@@ -384,7 +393,8 @@ export default function PublicProgramView({ program, coachName }: Props) {
       )}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
+        // Intégrée (WordPress, fiche programme) : les 7 jours tiennent dans la largeur quand il y a la place.
+        gridTemplateColumns: (inApp || isEmbedded) ? "repeat(7, minmax(180px, 1fr))" : "repeat(7, var(--wk-col, 240px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",
