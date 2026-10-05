@@ -211,7 +211,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
    l'onboarding (WeekPreviewStep.tsx, générique sur Session). ─── */
 export default function DayColumn<T extends SessionLike>({ date, sessions, wellness, todayStr, ctx, onAddSession, onComplete, onEdit, onDuplicate, onWellness, hideDayNumber, hideAddSession, emptyToday, emptyPerspective, recoveryAdvice, alert, alertActions, renderSession, columnRef, columnStyle, onProgram }: {
   date: Date; sessions: T[]; wellness: WellnessScoreLike | null;
-  /* Carte du jour vide : lien vers Programmes (2026-10-02). */
+  /* Jours vides : lien "Ou démarrer un programme" sous le CTA (2026-10-02, étendu à tous les jours vides le 2026-10-05). */
   onProgram?: () => void;
   todayStr: string; ctx?: LoadContext; onAddSession: (d: string) => void;
   onComplete: (s: T) => void; onEdit: (s: T) => void;
@@ -223,7 +223,7 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
      DecisionStep.tsx (FrisePreviews.tsx, `ProgramPreview3Days`), qui n'a aucun geste réel à offrir. */
   hideAddSession?: boolean;
   /* Jour d'aujourd'hui sans séance (2026-10-01) : activé par /week et /coach/planning, remplace
-     "Repos / libre" + "+ Ajouter une séance" par la carte "Aucune séance aujourd'hui" (EmptyDayCard). */
+     "+ Ajouter une séance" par la carte "Aucune séance aujourd'hui" (EmptyDayCard). */
   emptyToday?: boolean;
   emptyPerspective?: "athlete" | "coach";
   recoveryAdvice?: string;
@@ -319,11 +319,6 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
         {showEmptyToday && (
           <EmptyDayCard inline perspective={emptyPerspective} onAddFree={() => onAddSession(dstr)} onProgram={onProgram} />
         )}
-        {sessions.length === 0 && !showEmptyToday && (
-          <div style={{ fontSize: 10, color: "#8a8f94", textAlign: "center", border: "0.5px dashed rgba(0,0,0,0.12)", borderRadius: 12, padding: "11px 4px" }}>
-            Repos / libre
-          </div>
-        )}
         {sessions.map(s => renderSession ? renderSession(s) : (
           <WeekSessionCard key={s.id} session={s} onComplete={onComplete} onEdit={onEdit} onDuplicate={onDuplicate} />
         ))}
@@ -334,6 +329,15 @@ export default function DayColumn<T extends SessionLike>({ date, sessions, welln
             style={{ border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff", borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11, cursor: "pointer", fontWeight: 700, transition: "all .15s" }}
           >
             + Ajouter une séance
+          </div>
+        )}
+        {/* Jour vide hors aujourd'hui : même lien que EmptyDayCard ; "Repos / libre" retiré
+           (2026-10-05), la carte de charge au-dessus dit déjà que c'est un jour de repos. */}
+        {!hideAddSession && !showEmptyToday && sessions.length === 0 && onProgram && (
+          <div style={{ textAlign: "center", marginTop: 4 }}>
+            <button type="button" onClick={e => { e.stopPropagation(); onProgram(); }} style={{ border: "none", background: "none", cursor: "pointer", color: "#8a8f94", fontSize: 10.5, fontWeight: 700, textDecoration: "underline", fontFamily: "inherit" }}>
+              Ou démarrer un programme
+            </button>
           </div>
         )}
       </div>

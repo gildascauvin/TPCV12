@@ -776,6 +776,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onUnlock={() => { setDeck(null); unlock(); }}
                 onDecide={() => { setDeck(null); openEditor(a); }}
                 onAddSession={() => { setDeck(null); openCreator(a); }}
+                onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 programPill={programPillFor(a)}
                 onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
@@ -914,6 +915,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onDecide={() => openEditor(a)}
                 onEditSession={sess => { setReviewAthlete(a); setReviewSession(sess); }}
                 onAddSession={() => openCreator(a)}
+                onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                 onAutoregDecided={() => markAutoregDecided(a.id)}

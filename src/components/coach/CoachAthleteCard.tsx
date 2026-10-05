@@ -171,7 +171,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, onProgram, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -193,6 +193,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   /* "+ Ajouter une séance" en bas de la carte (2026-09-30, Gildas : "comme sur la partie sportif") —
      même bouton que /today et le Planning. Absent = pas de bouton (aperçus onboarding/paywall). */
   onAddSession?: () => void;
+  /* Lien "Ou démarrer un programme" sous "+ Ajouter une séance" quand pas de séance (2026-10-05). */
+  onProgram?: () => void;
   /* Bandeau programme (ProgramBanner) posé juste au-dessus de la carte séance. */
   programPill?: React.ReactNode;
   /* Revue en swipe (CoachDecisionDeck) : transmis tel quel à la jauge de décision. */
@@ -505,7 +507,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       {page && (
         <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
           {programPill && <div style={{ marginBottom: 12 }}>{programPill}</div>}
-          {todaySessions.length === 0 && onAddSession && <EmptyDayCard perspective="coach" onAddFree={onAddSession} />}
+          {todaySessions.length === 0 && onAddSession && <EmptyDayCard perspective="coach" onAddFree={onAddSession} onProgram={onProgram} />}
           {[...todaySessions].sort((a, b) => (a.id === topSession?.id ? -1 : b.id === topSession?.id ? 1 : 0)).map(s => (
             <TodaySessionCard
               key={s.id}
@@ -594,7 +596,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       )}
       {!page && !topSession && onAddSession && (
         <div style={{ marginTop: programPill ? 0 : 12 }}>
-          <EmptyDayCard perspective="coach" onAddFree={onAddSession} />
+          <EmptyDayCard perspective="coach" onAddFree={onAddSession} onProgram={onProgram} />
         </div>
       )}
       {!page && onAddSession && topSession && (

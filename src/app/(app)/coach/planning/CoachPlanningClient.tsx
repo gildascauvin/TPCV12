@@ -1156,6 +1156,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 onAddSession={(d) => setAddingDate(d)}
                 emptyToday
                 emptyPerspective="coach"
+                onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 onComplete={(s) => setCompleting(s)}
                 onEdit={(s) => setEditingSession(s)}
                 onWellness={() => {}}
