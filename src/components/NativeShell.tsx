@@ -11,6 +11,10 @@ export default function NativeShell() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     document.documentElement.classList.add("native");
+    /* Pas de zoom dans l'app (2026-10-06) : iOS zoome sur un champ dont le texte fait moins de 16px
+       et on ne pouvait plus dézoomer. Dans l'app seulement : le web garde le zoom (accessibilité). */
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp) vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
     hideSplash();
   }, []);
   return null;
