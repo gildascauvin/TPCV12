@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { brevoSportAttributes } from "@/lib/email/brevoSport";
 
 const BREVO_API = "https://api.brevo.com/v3";
 const API_KEY = () => process.env.BREVO_API_KEY!;
@@ -35,11 +36,13 @@ async function removeFromList(email: string, listId: number) {
 }
 
 export async function POST(request: Request) {
-  const { email, name, role, status } = await request.json() as {
+  const { email, name, role, status, sport, claimProgramId } = await request.json() as {
     email: string;
     name?: string;
     role?: string;
     status?: string;
+    sport?: string | null;
+    claimProgramId?: string | null;
   };
 
   if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
@@ -49,6 +52,8 @@ export async function POST(request: Request) {
   const attributes: Record<string, string> = { STATUS: (status ?? "free").toUpperCase() };
   if (name) attributes.PRENOM = name;
   if (role) attributes.ROLE = role.toUpperCase();
+  // Sport connu dès l'inscription (programme claimé) : l'email de bienvenue en profite.
+  if (sport || claimProgramId) Object.assign(attributes, brevoSportAttributes(sport, claimProgramId));
 
   try {
     if (status === "client") {

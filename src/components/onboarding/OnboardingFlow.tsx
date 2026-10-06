@@ -975,6 +975,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     setObFinishing(true); setObError(null);
     try {
       const built = isFullPath ? await obBuildProgram() : null;
+      const claimForBrevo = hasClaimedProgram ? localStorage.getItem("claim_program_id") : null;
       let demoAthleteId: string | null = null;
       if (!profileCompleteGuardRef.current && isFullPath) {
         profileCompleteGuardRef.current = true;
@@ -1018,6 +1019,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           body: JSON.stringify({ athleteEmail: r.email.trim(), athleteName: r.name.trim() || undefined }),
         }).catch(() => null)));
       }
+      // Sport connu maintenant (questions post-signup) : les emails suivants l'utilisent.
+      fetch("/api/brevo/sport", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimProgramId: claimForBrevo }),
+      }).catch(() => null);
       await enterApp(uid);
     } catch (e) {
       console.error("[finishOnboarding]", e);
@@ -1202,7 +1208,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free" }),
+          body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free", ...(hasClaimedProgram ? { sport, claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
         });
         await fetch("/api/invite/link", { method: "POST" });
         if (role === "athlete" && hasCoachInvite) {
@@ -1354,7 +1360,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free" }),
+          body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free", ...(localStorage.getItem("claim_program_id") ? { claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
         });
         await fetch("/api/invite/link", { method: "POST" });
 

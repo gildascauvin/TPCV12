@@ -1,5 +1,6 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runLifecycleEmails } from "@/lib/email/lifecycle";
 
 /* setVapidDetails() valide process.env.VAPID_SUBJECT immédiatement — un appel au niveau
    module s'exécute pendant la phase de build Next.js ("collect page data"), avant que les
@@ -120,8 +121,13 @@ async function handle(req: Request) {
 
   const sessionResult = job === "session" || !job ? await runSessionJob(admin) : { session: 0, wellness: 0 };
   const winbackSent = job === "winback" || !job ? await runWinbackJob(admin) : 0;
+  // Emails déclenchés par l'activité (analyses prêtes, lendemain de la 1re décision, relance check-in) :
+  // une fois par jour, sur le passage du matin. Jamais bloquant pour les notifications.
+  const lifecycleSent = job === "session" || !job
+    ? await runLifecycleEmails(admin).catch(err => { console.error("[lifecycle]", err); return null; })
+    : null;
 
-  return Response.json({ ok: true, sessionSent: sessionResult.session, wellnessSent: sessionResult.wellness, winbackSent });
+  return Response.json({ ok: true, sessionSent: sessionResult.session, wellnessSent: sessionResult.wellness, winbackSent, lifecycleSent });
 }
 
 export async function GET(req: Request) { return handle(req); }

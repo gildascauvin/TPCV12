@@ -22,7 +22,7 @@ const PROGRAM_COVERS: Record<string, string> = {
   "dc9bb6e1-9884-4b3b-8fc2-e34f71785b3a": "https://www.theperfclub.com/wp-content/uploads/2026/07/programme-physique-gymnastique-scaled.jpg", // programme-gymnastique-preparation-physique-6-semaines
   "aa7d4465-f806-4294-a2cb-96057506daf2": "https://www.theperfclub.com/wp-content/uploads/2026/07/programme-prepa-physique-aviron-scaled.jpg", // programme-aviron-preparation-physique-6-semaines
   "568c93ce-6cb8-4034-82c2-61ec0321361e": "https://www.theperfclub.com/wp-content/uploads/2022/05/handball-psg-scaled.jpg", // programme-handball-preparation-physique-8-semaines
-  "8fa44a76-3e5b-4d74-96cc-87f28193ab76": "https://www.theperfclub.com/wp-content/uploads/2021/09/gestion-charge-entraînement-équipe.png", // programme-basketball-preparation-physique-8-semaines
+  "8fa44a76-3e5b-4d74-96cc-87f28193ab76": "https://www.theperfclub.com/wp-content/uploads/2023/11/prevenir-les-blessures-dans-le-sport.jpg", // programme-basketball-preparation-physique-8-semaines
   "cf81950c-83bf-4c55-8458-60d31624f327": "https://www.theperfclub.com/wp-content/uploads/2026/07/programme-preparation-physique-MMA-scaled.jpg", // programme-mma-preparation-physique-8-semaines
   "8c0b672f-e27d-4510-b15f-6f036ee3336d": "https://www.theperfclub.com/wp-content/uploads/2026/07/programme-entrainement-judo-scaled.jpg", // programme-judo-preparation-physique-6-semaines
   "f45ea844-8ced-4698-98dc-12b22f9c551d": "https://www.theperfclub.com/wp-content/uploads/2026/07/programme-dentrainement-natation-nage-scaled.jpg", // programme-natation-preparation-physique-6-semaines
@@ -77,7 +77,7 @@ export function programCover(programId: string | null | undefined): string | nul
 /* Fond des questions post-signup selon le sport choisi (valeur du catalogue sportCatalog.ts) : la
    couverture d'un programme officiel de ce sport. Rééducation et concours : le programme de la zone
    ou du concours. Absent = image par défaut. */
-const SPORT_COVER_PROGRAM: Record<string, string> = {
+export const SPORT_COVER_PROGRAM: Record<string, string> = {
   "Haltérophilie": "bd0d3d0b-2240-4227-b84b-fb768459a6a8",
   "Powerlifting": "55d6d90f-f35f-46e3-a81c-9b928a6f432c",
   "Musculation / Hypertrophie": "9918f6ab-7251-47d4-b50b-6c8732279fb7",
