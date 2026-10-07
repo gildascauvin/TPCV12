@@ -13,7 +13,7 @@ import { getSessionTemplates } from "@/lib/sessionTemplates";
 /* Créer une séance en 30 secondes (2026-10-02, POC seance-live section « Créer une séance ») :
    au-dessus de l'éditeur vide, 3 raccourcis qui REMPLISSENT la séance, sans 2e éditeur — le résultat
    atterrit dans l'éditeur normal (nom, exercices, difficulté), tout reste modifiable.
-   - Modèle : les séances des programmes de la bibliothèque officielle (/api/programs/library).
+   - Modèle : les séances des programmes de la bibliothèque officielle (/api/programs/library/sessions, 1re semaine seulement).
    - Importer : texte ou photo, même import que les programmes (/api/programs/import).
    - Générer : la banque de séances du générateur (getSessionTemplates), par sport et intensité.
      Sport libre (2026-10-03) : un sport hors des 8 cartes s'écrit en texte et passe par
@@ -115,7 +115,7 @@ function ModelPicker({ userChip, onPick }: { userChip: string | null; onPick: (r
   const [q, setQ] = useState("");
   useEffect(() => {
     let alive = true;
-    fetch("/api/programs/library").then(r => r.json()).then(({ programs }) => {
+    fetch("/api/programs/library/sessions").then(r => r.json()).then(({ programs }) => {
       if (!alive) return;
       const seen = new Set<string>();
       const out: { program: string; sportChip: string | null; s: SessionTemplate }[] = [];
