@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
-import { FullWellnessAdvicePreview, CoachAthleteRowsPreview, ProgramPreview3Days, SingleSessionAdjustPreview, CombinedInsightPreview } from "@/components/paywall/FrisePreviews";
+import { AhaRecoveryPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaTeamChargePreview } from "@/components/onboarding/AhaPreviews";
 import type { SessionTemplate } from "@/types";
 
 /* Écran de décision — 9e itération (2026-09-02, dernière refonte de la journée) : garde le split
@@ -100,21 +100,21 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
       desc: coach
         ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
         : "Sommeil, stress, courbatures et comportements de la veille : ton score est calculé chaque matin.",
-      illustration: coach ? <CoachAthleteRowsPreview /> : <FullWellnessAdvicePreview />,
+      illustration: coach ? <AhaRadarPreview /> : <AhaRecoveryPreview />,
     },
     {
       title: coach ? "Ajuste les séances en un clic" : "Ajuste tes séances intelligemment",
       desc: coach
         ? "Surcharge ou allège les séances de tes sportifs pour optimiser leurs gains de performance et éviter les blessures."
         : "Surcharge ou allège tes séances pour optimiser tes gains de performance et éviter les blessures.",
-      illustration: coach ? <ProgramPreview3Days role={role} sport={sport} athleteName={athleteName} /> : <SingleSessionAdjustPreview sport={sport} />,
+      illustration: coach ? <AhaDecisionPreview name="Karim Haddad" /> : <AhaDecisionPreview />,
     },
     {
       title: coach ? "Anticipe les risques de ton équipe" : "Anticipe tes pics de forme",
       desc: coach
         ? "Sache ce qui freine ou aide la performance de tes sportifs, prédit leurs pics de forme et évite le sur-entraînement."
         : "Sache ce qui te freine et ce qui t'aide, prédit tes pics de forme et évite le sur-entraînement.",
-      illustration: <CombinedInsightPreview perspective={coach ? "coach" : "athlete"} />,
+      illustration: coach ? <AhaTeamChargePreview /> : <AhaFormPeakPreview />,
     },
   ];
   const active = items[activeIdx];
