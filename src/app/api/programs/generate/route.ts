@@ -2599,25 +2599,41 @@ function selectAviron(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => AVIRON_PRIORITY[i % AVIRON_PRIORITY.length]);
 }
 
-// ---- Triathlon : 3 disciplines + brick (vélo+course enchaînés), comme décrit sur la page
-// WordPress ("3 blocs : base sem1-4 / développement sem5-9 avec bricks / affûtage sem10-12").
-const TRI_NATATION: Archetype = { name: "Natation", type: "volume", exercises: [
-  "Nage continue 4 nages — 1500m", "Natation technique : catch-up crawl — 4×50m",
+// ---- Triathlon : séances focus d'abord, enchaînements ensuite — comme décrit sur la page
+// WordPress : "Phase 1 Base (S1-S4) : volume aérobie dans les 3 disciplines, sans intensité ni
+// bricks", "Phase 2 Développement (S5-S9) : seuil + bricks hebdomadaires dès la semaine 6",
+// "Phase 3 Affûtage (S10-S12)". Corrigé le 2026-10-07 : l'ancienne version plaçait un brick
+// dès la semaine 1 (retour d'un triathlète : en début de prépa on fait des séances focus par
+// discipline, le combiné vient après plusieurs semaines). L'ancien squelette alignait aussi
+// Natation/Vélo/Course tous en "volume" : deux jours consécutifs collisionnaient en Phase B et
+// le Vélo seul disparaissait du programme. Chaque liste alterne donc les paliers RPE
+// (dur/facile/modéré) pour que la Phase B n'efface plus de discipline, et les 2 natations de la
+// base ne tombent jamais sur la même paire de jours.
+// Renfo : ≤4 jours appendu à la séance de course, ≥5 jours séance dédiée (règle ≤3/≥4 des
+// sports d'endurance décalée d'un cran, 4 slots étant déjà occupés par les disciplines).
+const TRI_BASE_VELO_LONG: Archetype = { name: "Vélo — sortie longue", type: "intensite", exercises: [
+  "Sortie vélo longue endurance Z2 — 90 min",
 ]};
-const TRI_VELO: Archetype = { name: "Vélo", type: "volume", exercises: [
-  "Sortie vélo endurance Z2 — 60-90 min", "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)",
+const TRI_BASE_NAT_TECH: Archetype = { name: "Natation technique", type: "technique", exercises: [
+  "Éducatifs crawl : rattrapé + 3 temps — 8×50m", "Nage continue en respiration contrôlée — 800m",
 ]};
-// 2 versions de "Course à pied" : avec renfo appendu (≤4 jours — les 4 slots Natation/Vélo/Course/
-// Brick sont déjà tous pris par le squelette documenté sur la page WordPress, pas de place pour
-// un 5e archétype dédié sans sacrifier une discipline) et sans (≥5 jours, où un vrai jour Renfo
-// devient possible). Seuil différent de la règle générale (≤3/≥4) donnée par Gildas car le
-// triathlon a déjà 4 slots "core" occupés — adaptation délibérée, pas un oubli de la règle.
-const TRI_COURSE: Archetype = { name: "Course à pied", type: "volume", exercises: [
-  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+const TRI_BASE_COURSE: Archetype = { name: "Course à pied", type: "volume", exercises: [
+  "Sortie course endurance fondamentale — 45 min",
 ]};
-const TRI_COURSE_RENFO: Archetype = { name: "Course à pied", type: "volume", exercises: [
-  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
-  "Renforcement général : squat + gainage + tirage — 3×10",
+const TRI_BASE_COURSE_RENFO: Archetype = { name: "Course à pied", type: "volume", exercises: [
+  ...TRI_BASE_COURSE.exercises, "Renforcement général : squat + gainage + tirage — 3×10",
+]};
+const TRI_BASE_NAT_END: Archetype = { name: "Natation endurance", type: "volume", exercises: [
+  "Nage continue 4 nages — 1500m",
+]};
+const TRI_SEUIL_VELO: Archetype = { name: "Vélo — seuil", type: "intensite", exercises: [
+  "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)", "Sortie vélo endurance Z2 — 45 min",
+]};
+const TRI_SEUIL_COURSE: Archetype = { name: "Course — seuil", type: "intensite", exercises: [
+  "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+]};
+const TRI_DEV_NAT: Archetype = { name: "Natation", type: "technique", exercises: [
+  "Éducatifs crawl : rattrapé + 3 temps — 6×50m", "Fractionné natation : 10×100m (récup 20s)",
 ]};
 const TRI_BRICK: Archetype = { name: "Brick (vélo + course)", type: "intensite", exercises: [
   "Brick : vélo 30 min + course 15 min enchaînés",
@@ -2625,12 +2641,31 @@ const TRI_BRICK: Archetype = { name: "Brick (vélo + course)", type: "intensite"
 const TRI_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
   "Renforcement général : squat + gainage + tirage — 3×10", "Gainage complet — 3×40s",
 ]};
-const TRI_LOW_FREQ: Archetype[] = [TRI_NATATION, TRI_VELO, TRI_COURSE_RENFO, TRI_BRICK];
-const TRI_HIGH_FREQ: Archetype[] = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK, TRI_RENFO];
-function selectTriathlon(n: number): Archetype[] {
-  const list = n <= 4 ? TRI_LOW_FREQ : TRI_HIGH_FREQ;
+// Phase du triathlon pour une semaine donnée (index 0). 12/16/8 semaines : base S1-4, bricks dès
+// S6 (page WP). 6 semaines : base = premier MEV→MRV, bricks dès S5. 4 semaines : trop court pour
+// sortir de la base proprement → base S1-2, seuil S3-4, pas de brick.
+type TriPhase = "base" | "seuil" | "brick";
+function triathlonPhase(week: number, duration: number): TriPhase {
+  if (duration <= 4) return week < 2 ? "base" : "seuil";
+  if (duration === 6) return week < 3 ? "base" : week < 4 ? "seuil" : "brick";
+  return week < 4 ? "base" : week < 5 ? "seuil" : "brick";
+}
+function selectTriathlon(n: number, ctx?: CurriculumContext): Archetype[] {
+  const phase = ctx ? triathlonPhase(ctx.week, ctx.duration) : "brick";
+  const high = n >= 5;
+  const list: Archetype[] =
+    phase === "base"
+      ? n <= 3
+        ? [TRI_BASE_COURSE_RENFO, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH]
+        : [TRI_BASE_NAT_END, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_RENFO]
+      : [TRI_SEUIL_VELO, TRI_DEV_NAT, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO,
+         phase === "brick" ? TRI_BRICK : TRI_SEUIL_COURSE, TRI_RENFO];
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
+// Banque générique (jours corrigés par la Phase A2/B, test forcé de fin de MRV) : pas
+// d'enchaînement de disciplines avant la phase brick — sinon "Simulation triathlon" ou un brick
+// réapparaît en semaine 3 par la porte de derrière.
+const TRI_COMBINED_RE = /brick|simulation triathlon|transition/i;
 
 // ---- Calisthenics : 4 archétypes, correspondant exactement à la page WordPress — badge "4
 // séances/sem" + stat "4 Séances par semaine" EXPLICITES, en plus des 3 patterns fondamentaux
@@ -2861,7 +2896,10 @@ function selectReeducationPeriostite(n: number): Archetype[] {
   return Array.from({ length: n }, (_, i) => PERIOSTITE_PRIORITY[i % PERIOSTITE_PRIORITY.length]);
 }
 
-const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number) => Archetype[]>> = {
+// Contexte optionnel pour les curriculums qui changent de structure au fil du programme (triathlon :
+// séances focus en base, bricks ensuite). Les autres sélecteurs l'ignorent.
+interface CurriculumContext { week: number; duration: number }
+const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number, ctx?: CurriculumContext) => Archetype[]>> = {
   endurance: selectEndurance,
   sprint: selectSprint,
   halterophilie: selectHalterophilie,
@@ -3078,7 +3116,7 @@ export async function POST(req: Request) {
     // seulement la toute dernière séance du programme) — un jour forcé perd son éventuel
     // archétype/banque dédiée, retombe sur la banque générique "test" du sport.
     const curriculumSelector = SPORT_CURRICULUM[category];
-    const archetypes = curriculumSelector?.(sortedDays.length);
+    const archetypes = curriculumSelector?.(sortedDays.length, { week: w, duration });
     // "Autre" (sport libre sans curriculum) : ratio technique/prépa déterministe par nombre de
     // jours (selectAutreTypes), pas la rotation FOCUS_DIST générique partagée avec cyclisme/
     // natation/ski/trail/rééducation générale — ceux-là gardent FOCUS_DIST inchangé.
@@ -3288,6 +3326,8 @@ export async function POST(req: Request) {
         ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
         : customExercises
         ? buildNotesFromBank(customExercises[type], type, rotationAnchor, shape, prescriptionPhase)
+        : category === "triathlon" && triathlonPhase(w, duration) !== "brick"
+        ? buildNotesFromBank(EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l)), type, rotationAnchor, shape, prescriptionPhase)
         : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
       Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
         if (idx === dayIdx) notes += "\n" + (customWeaknessMeta?.[key]?.extraLine ?? WEAKNESS_META[key].extraLine);

@@ -24,10 +24,13 @@
 // Usage :
 //   node --env-file=.env.local scripts/regenerate-library-periodization.mjs            (dry-run)
 //   node --env-file=.env.local scripts/regenerate-library-periodization.mjs --apply     (écrit en base)
+//   ... --only=Triathlon                                                                 (un seul programme)
 
 import { writeFileSync } from "fs";
 
 const APPLY = process.argv.includes("--apply");
+// --only=<texte> : ne régénère que les programmes dont le nom contient ce texte (ex. --only=Triathlon).
+const ONLY = process.argv.find(a => a.startsWith("--only="))?.slice(7).toLowerCase();
 
 // ====================================================================================
 // Portage de src/app/api/programs/generate/route.ts — voir ce fichier pour les commentaires
@@ -775,20 +778,41 @@ function selectAviron(n) {
   return Array.from({ length: n }, (_, i) => AVIRON_PRIORITY[i % AVIRON_PRIORITY.length]);
 }
 
-// ---- Triathlon : 3 disciplines + brick (vélo+course enchaînés), comme décrit sur la page
-// WordPress ("3 blocs : base sem1-4 / développement sem5-9 avec bricks / affûtage sem10-12").
-const TRI_NATATION = { name: "Natation", type: "volume", exercises: [
-  "Nage continue 4 nages — 1500m", "Natation technique : catch-up crawl — 4×50m",
+// ---- Triathlon : séances focus d'abord, enchaînements ensuite — comme décrit sur la page
+// WordPress : "Phase 1 Base (S1-S4) : volume aérobie dans les 3 disciplines, sans intensité ni
+// bricks", "Phase 2 Développement (S5-S9) : seuil + bricks hebdomadaires dès la semaine 6",
+// "Phase 3 Affûtage (S10-S12)". Corrigé le 2026-10-07 : l'ancienne version plaçait un brick
+// dès la semaine 1 (retour d'un triathlète : en début de prépa on fait des séances focus par
+// discipline, le combiné vient après plusieurs semaines). L'ancien squelette alignait aussi
+// Natation/Vélo/Course tous en "volume" : deux jours consécutifs collisionnaient en Phase B et
+// le Vélo seul disparaissait du programme. Chaque liste alterne donc les paliers RPE
+// (dur/facile/modéré) pour que la Phase B n'efface plus de discipline, et les 2 natations de la
+// base ne tombent jamais sur la même paire de jours.
+// Renfo : ≤4 jours appendu à la séance de course, ≥5 jours séance dédiée (règle ≤3/≥4 des
+// sports d'endurance décalée d'un cran, 4 slots étant déjà occupés par les disciplines).
+const TRI_BASE_VELO_LONG = { name: "Vélo — sortie longue", type: "intensite", exercises: [
+  "Sortie vélo longue endurance Z2 — 90 min",
 ]};
-const TRI_VELO = { name: "Vélo", type: "volume", exercises: [
-  "Sortie vélo endurance Z2 — 60-90 min", "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)",
+const TRI_BASE_NAT_TECH = { name: "Natation technique", type: "technique", exercises: [
+  "Éducatifs crawl : rattrapé + 3 temps — 8×50m", "Nage continue en respiration contrôlée — 800m",
 ]};
-const TRI_COURSE = { name: "Course à pied", type: "volume", exercises: [
-  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+const TRI_BASE_COURSE = { name: "Course à pied", type: "volume", exercises: [
+  "Sortie course endurance fondamentale — 45 min",
 ]};
-const TRI_COURSE_RENFO = { name: "Course à pied", type: "volume", exercises: [
-  "Sortie course endurance fondamentale — 45 min", "Fractionné course : 6×1000m allure 10k (récup 2 min)",
-  "Renforcement général : squat + gainage + tirage — 3×10",
+const TRI_BASE_COURSE_RENFO = { name: "Course à pied", type: "volume", exercises: [
+  ...TRI_BASE_COURSE.exercises, "Renforcement général : squat + gainage + tirage — 3×10",
+]};
+const TRI_BASE_NAT_END = { name: "Natation endurance", type: "volume", exercises: [
+  "Nage continue 4 nages — 1500m",
+]};
+const TRI_SEUIL_VELO = { name: "Vélo — seuil", type: "intensite", exercises: [
+  "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)", "Sortie vélo endurance Z2 — 45 min",
+]};
+const TRI_SEUIL_COURSE = { name: "Course — seuil", type: "intensite", exercises: [
+  "Fractionné course : 6×1000m allure 10k (récup 2 min)",
+]};
+const TRI_DEV_NAT = { name: "Natation", type: "technique", exercises: [
+  "Éducatifs crawl : rattrapé + 3 temps — 6×50m", "Fractionné natation : 10×100m (récup 20s)",
 ]};
 const TRI_BRICK = { name: "Brick (vélo + course)", type: "intensite", exercises: [
   "Brick : vélo 30 min + course 15 min enchaînés",
@@ -796,12 +820,30 @@ const TRI_BRICK = { name: "Brick (vélo + course)", type: "intensite", exercises
 const TRI_RENFO = { name: "Renfo", type: "technique", exercises: [
   "Renforcement général : squat + gainage + tirage — 3×10", "Gainage complet — 3×40s",
 ]};
-const TRI_LOW_FREQ = [TRI_NATATION, TRI_VELO, TRI_COURSE_RENFO, TRI_BRICK];
-const TRI_HIGH_FREQ = [TRI_NATATION, TRI_VELO, TRI_COURSE, TRI_BRICK, TRI_RENFO];
-function selectTriathlon(n) {
-  const list = n <= 4 ? TRI_LOW_FREQ : TRI_HIGH_FREQ;
+// Phase du triathlon pour une semaine donnée (index 0). 12/16/8 semaines : base S1-4, bricks dès
+// S6 (page WP). 6 semaines : base = premier MEV→MRV, bricks dès S5. 4 semaines : trop court pour
+// sortir de la base proprement → base S1-2, seuil S3-4, pas de brick.
+function triathlonPhase(week, duration) {
+  if (duration <= 4) return week < 2 ? "base" : "seuil";
+  if (duration === 6) return week < 3 ? "base" : week < 4 ? "seuil" : "brick";
+  return week < 4 ? "base" : week < 5 ? "seuil" : "brick";
+}
+function selectTriathlon(n, ctx) {
+  const phase = ctx ? triathlonPhase(ctx.week, ctx.duration) : "brick";
+  const high = n >= 5;
+  const list =
+    phase === "base"
+      ? n <= 3
+        ? [TRI_BASE_COURSE_RENFO, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH]
+        : [TRI_BASE_NAT_END, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_RENFO]
+      : [TRI_SEUIL_VELO, TRI_DEV_NAT, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO,
+         phase === "brick" ? TRI_BRICK : TRI_SEUIL_COURSE, TRI_RENFO];
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
+// Banque générique (jours corrigés par la Phase A2/B, test forcé de fin de MRV) : pas
+// d'enchaînement de disciplines avant la phase brick — sinon "Simulation triathlon" ou un brick
+// réapparaît en semaine 3 par la porte de derrière.
+const TRI_COMBINED_RE = /brick|simulation triathlon|transition/i;
 
 // ---- Calisthenics : 4 archétypes — la page WP promet explicitement "4 séances/sem", pas
 // seulement les 3 patterns Pousser/Tirer/Porter cités dans le texte. Voir generate/route.ts pour
@@ -1144,7 +1186,7 @@ function generateTemplate({ sport, level, days, duration, weaknesses }) {
 
     // Phase A — curriculum sportif si dispo pour cette catégorie, sinon rotation FOCUS_DIST générique.
     const curriculumSelector = SPORT_CURRICULUM[category];
-    const archetypes = curriculumSelector?.(sortedDays.length);
+    const archetypes = curriculumSelector?.(sortedDays.length, { week: w, duration });
     const dayPlans = sortedDays.map((day, dayIdx) => {
       const isLastDayOfWeek = dayIdx === sortedDays.length - 1;
       const forced = isMrvWeek && isLastDayOfWeek;
@@ -1275,6 +1317,8 @@ function generateTemplate({ sport, level, days, duration, weaknesses }) {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
       let notes = exercises
         ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+        : category === "triathlon" && triathlonPhase(w, duration) !== "brick"
+        ? buildNotesFromBank(EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l)), type, rotationAnchor, shape, prescriptionPhase)
         : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
       Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
         if (idx === dayIdx) notes += "\n" + WEAKNESS_META[key].extraLine;
@@ -1312,7 +1356,9 @@ async function fetchEligiblePrograms() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/programs?is_public=eq.true&select=id,name,sport,level,weeks_count,template`, { headers: restHeaders });
   if (!res.ok) throw new Error(`Lecture échouée (${res.status}) : ${await res.text()}`);
   const all = await res.json();
-  return all.filter(p => p.weeks_count && (p.weeks_count === 6 || p.weeks_count % 4 === 0));
+  return all
+    .filter(p => p.weeks_count && (p.weeks_count === 6 || p.weeks_count % 4 === 0))
+    .filter(p => !ONLY || p.name.toLowerCase().includes(ONLY));
 }
 
 async function updateProgramTemplate(id, template) {
