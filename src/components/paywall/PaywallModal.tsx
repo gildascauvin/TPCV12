@@ -133,7 +133,7 @@ export function CheckoutForm({
     });
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const priceStr = billing === "annual" ? `${p.annual}€/an` : `${p.monthly}€/mois`;
+  const priceStr = billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
   const effectiveCtaLabel = ctaLabel ?? PAYWALL_CTA_LABEL[mode];
 
   async function handleSubmit(e: React.FormEvent) {
@@ -282,7 +282,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const testimonial = PAYWALL_TESTIMONIALS[mode];
   const p = PRICING[mode];
   const due = billing === "annual"
-    ? `${p.annual}€/an (${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois)`
+    ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
     : `${p.monthly}€/mois`;
   const endDate = (() => { const d = new Date(); d.setDate(d.getDate() + TRIAL_DAYS); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); })();
 

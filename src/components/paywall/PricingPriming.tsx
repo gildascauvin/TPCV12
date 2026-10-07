@@ -83,7 +83,7 @@ function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; e
   );
 }
 
-/* Prix réel en gros, « 78€/an (6,50€/mois) » en annuel (2026-10-07, plus de « 0€ » en tête : à côté de la carte Gratuit, deux 0€
+/* Prix réel en gros, « 6,50€/mois (78€/an) » en annuel (2026-10-07, équivalent mensuel en tête à la demande de Gildas ; plus de « 0€ » en tête : à côté de la carte Gratuit, deux 0€
    effaçaient le contraste entre les offres). Le 0€ d'aujourd'hui reste dit juste en dessous. */
 function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void }) {
   const p = PRICING[role];
@@ -97,9 +97,9 @@ function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontFamily: mono, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>
-        {isMonthly ? `${p.monthly}€` : `${p.annual}€`}
+        {isMonthly ? `${p.monthly}€` : perMonth.replace("/mois", "")}
         <span style={{ fontSize: 15, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>
-          {isMonthly ? "/mois" : `/an (${perMonth})`}
+          {isMonthly ? "/mois" : `/mois (${p.annual}€/an)`}
         </span>
       </div>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>
