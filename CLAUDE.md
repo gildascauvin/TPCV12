@@ -4934,3 +4934,13 @@ POC : https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5. Remplace le drawer dock
 - **CTA** (`PAYWALL_CTA_LABEL`) : « Débloquer Elite — 14 jours offerts » (tiret voulu par Gildas). L'offre s'appelle Elite partout.
 - **Titres par déclencheur** (`src/lib/primingSource.ts`) : `markPrimingSource()` posé juste avant l'ouverture par `LockedBlur` (surface → decision/progress/insight), les gates de décision (/today, /week, /coach/planning, Coach Control avec prénom du sportif), les charts floutés (`MetricChart`, `IndexCards`, liste de groupe), et `usePaywall` sur `OPEN_PRIMING` (first_decision → « first », checklist → générique). `peekPrimingSource` à l'ouverture, `clearPrimingSource` dans un effet (StrictMode). Contexte prénom / sport (`sessionsComplement`) / sportifs du coach (sans invitations en attente ni démo à son nom) préchargé par `usePaywall` (`loadPrimingContext`, cache module). La ligne Elite correspondant au déclencheur est surlignée (« Ce que tu voulais faire » / « Ce que tu viens d'essayer »). PostHog : `paywall_priming_viewed {plan, source}`.
 - Pour tester : un compte gratuit dont le coach ne paie pas (un sportif rattaché à un coach payant n'a ni l'étape « Débloque » ni aucun paywall).
+
+## Bouton « Installer l'app » (PWA) (2026-10-07)
+
+Contexte : 0 essai sur 43 comptes Android en 90 j (PostHog) ; une app Android native jugée prématurée, on pousse d'abord l'installation de la PWA.
+- `src/lib/pwaInstall.ts` : écoute `beforeinstallprompt` dès le chargement (importé par `NativeShell`, layout racine), `useInstallMode()` → `"prompt"` (Chrome Android/desktop), `"app_store"` (iOS, seulement si `APP_STORE_URL` est renseigné, vide tant que l'app n'est pas publiée) ou `null` (déjà installée, app native, navigateur sans installation). `runInstall(surface)` ouvre la fenêtre de Chrome.
+- Bouton dans la checklist du header (ligne hors n/4) et dans le profil (`InstallAppRow`, accès permanent).
+- iPhone : aucun navigateur iOS n'a cette fenêtre (moteur Safari imposé), le bouton reste masqué jusqu'au lien App Store.
+- Manifest : icônes `purpose: "any"` ajoutées (Chrome les exige, il n'y avait que des maskable).
+- PostHog : `pwa_install_cta_viewed`, `pwa_install_clicked`, `pwa_install_result {outcome}`, `pwa_installed` (propriété `surface`).
+- Testé par Gildas sur Chrome desktop (localhost). Déployé le 2026-10-07, commit `2d848bc`.
