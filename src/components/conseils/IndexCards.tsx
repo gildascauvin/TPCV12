@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { markPrimingSource } from "@/lib/primingSource";
 import MetricChart, { ExampleNote } from "@/components/conseils/MetricChart";
 import { dimensionBadgesSeries, DIMENSION_ARROW, dimensionBadgeColor, DIMENSION_KEYS, type DimensionKey, type Perspective } from "@/lib/wellnessBaseline";
 import RangeToggle, { type RangeMode } from "@/components/calendar/RangeToggle";
@@ -245,7 +246,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
           <div style={{ position: "absolute", inset: "-6px 0", zIndex: 3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, textAlign: "center", padding: "0 8px" }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.25, textShadow: "0 2px 12px rgba(0,0,0,.6)" }}>{lockedCopy.title}</div>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 300 }}>{lockedCopy.sub}</div>
-            <button onClick={() => lockedHistory?.onUnlock()} style={{ marginTop: 2, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
+            <button onClick={() => { markPrimingSource("insight", { ifEmpty: true }); lockedHistory?.onUnlock(); }} style={{ marginTop: 2, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
               Activer l'ajustement
             </button>
           </div>

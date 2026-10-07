@@ -1,5 +1,6 @@
 "use client";
 
+import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -1110,7 +1111,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
-                      if (!canDecide) { setPaywallStep("priming"); return; }
+                      if (!canDecide) { markPrimingSource("decision", { athleteName: athlete?.name?.split(" ")[0] }); setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                       const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);

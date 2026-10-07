@@ -1,5 +1,6 @@
 "use client";
 
+import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
@@ -724,7 +725,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                     onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
                     onMaintenir={() => setDecisionTick(t => t + 1)}
                     onApply={async (pct) => {
-                      if (!canDecideToday) { setPaywallStep("priming"); return; }
+                      if (!canDecideToday) { markPrimingSource("decision"); setPaywallStep("priming"); return; }
                       const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
                       const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
                       const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);

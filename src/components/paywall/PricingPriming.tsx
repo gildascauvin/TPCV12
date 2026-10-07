@@ -5,288 +5,233 @@ import type { Billing } from "./PaywallModal";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
 
-/* Contenu partagé entre PrimingJourneyModal.tsx (paywall in-app, gating free/expired) et l'étape
-   paywall_priming de l'onboarding (OnboardingFlow.tsx) — un seul point de vérité pour le badge,
-   le prix, le mécanisme en 3 étapes, la vidéo carousel et la FAQ.
-   Décision explicite de Gildas (2026-08-07) : ces deux écrans doivent être "exactement le même
-   composant" pour ne plus jamais diverger sur le wording. Le shell (modal dismissible vs page
-   pleine largeur) et le CTA final restent propres à chaque appelant — seul le contenu entre le
-   badge et le CTA vit ici.
+/* Offre Gratuit / Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5).
+   Partagé par PrimingJourneyModal.tsx (desktop : 2 colonnes côte à côte ; mobile : Elite puis
+   Gratuit empilés) — un seul point de vérité pour le prix, les fonctionnalités, les vidéos et la
+   FAQ. Le titre personnalisé vit dans src/lib/primingSource.ts.
 
-   2026-09-16 — split gauche (valeur, PricingPrimingValue)/droite (offre, PricingPrimingContent) :
-   témoignage + bande "+600" déplacés vers PaywallModal.tsx (le form de paiement, pas ici), voir
-   ce fichier pour le détail — "comme le POC" fourni par Gildas.
+   Essai : 14 jours, CB requise, 0€ aujourd'hui. Consigne de Gildas : ne jamais parler d'« essai
+   gratuit » ni d'un rappel avant facturation, seulement « 14 jours offerts » et l'annulation en
+   1 clic. */
+export const TRIAL_DAYS = 14;
 
-   2026-09-13 — retour de l'essai (14 jours, CB requise, 0€ dû aujourd'hui), remplace la garantie
-   remboursé 14 jours du 2026-08-07 — voir CLAUDE.md pour l'historique complet des deux décisions.
-   Consigne explicite de Gildas : ne jamais communiquer sur "essai gratuit" ni sur un rappel avant
-   facturation — le wording parle de "14 jours offerts" et d'annulation en 1 clic, jamais d'un
-   email de rappel à venir. */
-const TRIAL_DAYS = 14;
-
-/* Sous le CTA "Continuer →" de l'écran priming (pas dans la carte prix elle-même — retiré de là
-   le 2026-08-07 à la demande de Gildas), sur les deux surfaces (modal in-app + onboarding). */
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans engagement.";
 
-/* Sous-titre par défaut du panneau de valeur (PricingPrimingValue) quand l'appelant n'en fournit
-   pas (cas générique, pas de programme claimé) — remplace l'ancien bloc "UNLOCK_LINE" en gras
-   dans la carte prix, retiré de là le 2026-09-16 ; le parcours Gratuit → Premium (PlanJourney, plus bas) porte
-   désormais le mécanisme. */
-const UNLOCK_LINE: Record<"athlete" | "coach", string> = {
-  athlete: "Ton programme est déjà prêt. Débloque-le et laisse ThePerfClub ajuster chaque séance.",
-  coach: "Ton système de suivi est prêt. Débloque-le et laisse ThePerfClub t'aider à prendre les bonnes décisions pour chaque sportif, à chaque séance.",
-};
+type Feature = { title: string; text: string };
 
-function faqItems(role: "athlete" | "coach") {
-  return [
-    { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: "Oui, sauf annulation avant la fin des 14 jours — annulable en un clic depuis ton profil, sans engagement." },
-    { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
-    { q: "Puis-je changer de formule après ?", a: "Oui, tu peux basculer entre mensuel et annuel à tout moment depuis ton profil." },
-    role === "coach"
-      ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
-      : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté automatiquement selon ta récupération." },
-  ];
+/* Mesures gratuites, décisions payantes (freemium v2). `de` = « de trail », « d'Hyrox »… ou "". */
+export function planFeatures(role: "athlete" | "coach", sportDe: string | null): { free: Feature[]; elite: Feature[] } {
+  const de = sportDe ? ` ${sportDe}` : "";
+  return role === "athlete" ? {
+    free: [
+      { title: "Construis ton entraînement", text: `Un programme${de} sur mesure, importé, ou un modèle.` },
+      { title: "Renseigne ta forme", text: "Ton ressenti en 30 secondes, ta montre synchronisée." },
+      { title: "Fais tes séances", text: "Chrono, charges, difficulté ressentie." },
+    ],
+    elite: [
+      { title: "Ajuste chaque séance à ta forme", text: "Alléger, maintenir ou pousser, pour plus de progrès et moins de blessures." },
+      { title: "Comprends ce qui fait bouger ta forme", text: "Récupération, charge et comportements, expliqués." },
+      { title: "Sache où tu en es, test par test", text: `Chaque test${de} situé par rapport à sa cible : tes forces, tes faiblesses, quoi travailler en priorité.` },
+    ],
+  } : {
+    free: [
+      { title: "Programme tes sportifs", text: `Sur mesure, importé ou modèle${de}, assigné en un geste.` },
+      { title: "Invite-les", text: "Ils renseignent leur forme et leurs séances." },
+      { title: "Suis leurs check-ins", text: "Les scores de chacun, sans relance." },
+    ],
+    elite: [
+      { title: "Sais chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge." },
+      { title: "Comprends pourquoi un sportif décroche", text: "Avant qu'il se blesse ou stagne." },
+      { title: "Repère la priorité de chaque sportif", text: "Ses tests situés par rapport à leur cible : forces et faiblesses, sportif par sportif." },
+    ],
+  };
 }
 
-/* Labels du CTA final (soumission Stripe, écran suivant celui-ci) — vivent dans PaywallModal.tsx
-   avec PRICING (import direct depuis là, pas de ré-export ici, pour éviter tout import circulaire
-   entre les deux fichiers). */
+const mono = "var(--font-mono), monospace";
 
-export interface PricingPrimingProps {
-  role: "athlete" | "coach";
-  billing: Billing;
-  setBilling: (b: Billing) => void;
-  /** Titre affiché en tête — calculé par l'appelant (générique par rôle, ou "Ton programme {nom} t'attend" si programme claimé). */
-  headline: string;
-  /** Ligne secondaire optionnelle sous le titre (ex. programme claimé). */
-  sub?: string | null;
-  /** Sport réel de l'utilisateur — plus consommé ici depuis le retrait de la frise (2026-09-14),
-      gardé dans le contrat pour ne pas casser les appelants (PrimingJourneyModal.tsx/
-      OnboardingFlow.tsx) qui le passent encore. */
-  sport?: string;
-  /** Nombre réel de séances du programme généré (weeks × jours d'entraînement) — absent en gating in-app (pas de génération en cours), un bullet non chiffré prend le relais. */
-  sessionCount?: number;
-  /** Libellés réels des faiblesses choisies à level_2a — sportif uniquement (2026-08-17, 2e
-      itération). Côté coach, BULLETS.coach fait déjà 3 lignes sans ça ; côté sportif, sans ce
-      bullet il n'en restait que 2 (compteur de séances + 1 bullet statique) — retour de Gildas :
-      "je veux bien 3 check... comme ça coach et sportif ont 3 check en tout". Absent/vide → bullet
-      retiré (pas de filler générique), sportif retombe alors à 2. */
-  weaknessLabels?: string[];
-  /** Prénom réel de l'utilisateur — utilisé dans les illustrations de la frise (sportif démo côté
-      coach) pour rester personnel. Repli "Toi" si absent, même convention que coachFirstName dans
-      WeekPreviewStep.tsx. */
-  name?: string;
-  /** Sportif uniquement (2026-09-14, voir CLAUDE.md — simplifié le lendemain d'une 1re version
-      "comme un programme claimé" du 13/09 : plus de dépendance à un programme existant) — id du
-      compte sportif courant, pour "Inviter mon coach →" (construit /register?role=coach&
-      athleteId=...&athleteName=..., aucun appel réseau). Disponible dès la création du compte,
-      pas seulement après avoir construit un programme dans le wizard. */
-  athleteSelfId?: string;
-}
-
-/* Panneau "valeur" du split gauche (dark)/droite (actions) — même layout que le reste du wizard
-   (WizardHero + contenu à gauche, formulaire/actions à droite — ProgramCreatePicker.tsx/
-   ProgramCriteriaModal.tsx/WellnessModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx).
-
-   2026-09-16, 4e itération — retour explicite de Gildas : ni illustration (chart recup/fatigue,
-   déjà vu à decision_2a/2b) ni liste de bullets génériques ("Ton programme sur mesure, déjà
-   généré"/"Ajusté selon ta récupération") — l'effort de personnalisation doit porter sur le
-   headline/sub eux-mêmes (avec les vraies infos connues de l'onboarding : sport, wellness, noms
-   des sportifs), pas sur une liste à côté. Ce composant ne rend donc plus que headline+sub — voir
-   OnboardingFlow.tsx/PrimingJourneyModal.tsx pour les propositions de wording personnalisé (pas
-   encore câblées, en attente de validation du wording par Gildas). */
-export function PricingPrimingValue({ role, headline, sub, dark = true }: {
-  role: "athlete" | "coach"; headline: string; sub?: string | null;
-  /** Défaut true = panneau gauche desktop (fond DARK_CARD_BG). PrimingJourneyModal.tsx passe false pour
-      l'usage mobile (fond clair du drawer, #f1f0ee) — sans ça le titre/sous-titre blancs
-      deviennent invisibles (bug réel signalé par Gildas, 2026-09-16). */
-  dark?: boolean;
-}) {
-  /* Repli sur UNLOCK_LINE (2026-09-16, retour explicite de Gildas — "améliore tes performances
-     maintenant / ton programme est déjà prêt... comme le POC") quand l'appelant ne fournit pas de
-     sous-titre (cas générique, pas de programme claimé) — `sub === null` reste un moyen explicite
-     de le masquer si un appelant le veut un jour, `undefined` déclenche le repli. */
-  const subText = sub === null ? null : (sub ?? UNLOCK_LINE[role]);
+function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; elite: boolean; hitIndex?: number; hitLabel?: string }) {
   return (
-    <div style={{ width: "100%" }}>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 10, lineHeight: 1.2, color: dark ? "#fff" : "#171b1f" }}>{headline}</div>
-      {subText && <div style={{ fontSize: 14, color: dark ? "rgba(255,255,255,.6)" : "#8a8f94" }}>{subText}</div>}
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {items.map((f, i) => {
+        const hit = elite && i === hitIndex;
+        return (
+          <div key={f.title} style={{
+            display: "grid", gridTemplateColumns: "20px 1fr", gap: 10,
+            padding: hit ? "9px 10px" : "8px 0", margin: hit ? "2px -10px" : 0,
+            borderTop: i === 0 || hit || (elite && i - 1 === hitIndex) ? "1px solid transparent" : "1px solid rgba(255,255,255,.06)",
+            background: hit ? "rgba(255,138,85,.08)" : "transparent", borderRadius: hit ? 12 : 0,
+          }}>
+            <div style={{
+              width: 20, height: 20, borderRadius: "50%", marginTop: 1, fontSize: 11,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: elite ? "rgba(212,64,0,.28)" : "rgba(255,255,255,.10)",
+              color: elite ? "#ffb08a" : "rgba(255,255,255,.7)",
+            }}>{elite ? "★" : "✓"}</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, lineHeight: 1.3, color: elite ? "#fff" : "rgba(255,255,255,.82)" }}>
+                {f.title}
+                {hit && hitLabel && (
+                  <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#fff", background: "#D44000", borderRadius: 999, padding: "4px 7px" }}>{hitLabel}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.58)", lineHeight: 1.45, marginTop: 2 }}>{f.text}</div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-/* sessionCount/weaknessLabels ne sont plus consommés ici (2026-09-16) — restent dans
-   PricingPrimingProps (le contrat partagé) mais pas déstructurés, pour éviter une confusion
-   "acceptés mais ignorés". */
-export function PricingPrimingContent({ role, billing, setBilling, name, athleteSelfId }: Omit<PricingPrimingProps, "headline" | "sub">) {
+/* Prix réel en gros, « 78€/an (6,50€/mois) » en annuel (2026-10-07, plus de « 0€ » en tête : à côté de la carte Gratuit, deux 0€
+   effaçaient le contraste entre les offres). Le 0€ d'aujourd'hui reste dit juste en dessous. */
+function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void }) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
-  const annualSavings = p.monthly * 12 - p.annual;
-  const annualSavingsPct = Math.round((annualSavings / (p.monthly * 12)) * 100);
-
+  const pct = Math.round(((p.monthly * 12 - p.annual) / (p.monthly * 12)) * 100);
+  const perMonth = `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois`;
+  const toggleBtn = (active: boolean): React.CSSProperties => ({
+    border: "none", background: active ? "rgba(255,255,255,.92)" : "transparent", color: active ? "#0b0f13" : "rgba(255,255,255,.58)",
+    fontSize: 12.5, fontWeight: 800, padding: "6px 13px", borderRadius: 999, cursor: "pointer",
+  });
   return (
-    <div>
-      <div style={{
-        position: "relative", overflow: "hidden",
-        /* Sans encadré (2026-10-02, Gildas) : le prix se pose directement sur le fond. */
-        padding: "4px 0 6px",
-        marginBottom: 14,
-      }}>
-        <div style={{ position: "absolute", top: 4, right: 0, fontSize: 10.5, fontWeight: 900, letterSpacing: "0.04em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.20)", padding: "5px 10px", borderRadius: 999 }}>
-          ✓ {TRIAL_DAYS} jours offerts
-        </div>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1, marginTop: 24 }}>
-          0€<span style={{ fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>aujourd&apos;hui</span>
-        </div>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,.55)", marginTop: 9, lineHeight: 1.5 }}>
-          {isMonthly
-            ? `Puis ${p.monthly}€/mois après tes ${TRIAL_DAYS} jours offerts.`
-            : `Puis ${p.annual}€/an (${p.annualMonthly.toFixed(2).replace(".", ",")}€/mois) après tes ${TRIAL_DAYS} jours offerts.`}
-        </div>
-        <div style={{ display: "inline-flex", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3, marginTop: 12 }}>
-          <button type="button" onClick={() => setBilling("annual")} style={{ border: "none", background: !isMonthly ? "#D44000" : "transparent", color: !isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>
-            Annuel<span style={{ fontFamily: "var(--font-mono), monospace", marginLeft: 5, fontSize: 8, fontWeight: 700, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.18)", color: "#2f9e44" }}>-{annualSavingsPct}%</span>
-          </button>
-          <button type="button" onClick={() => setBilling("monthly")} style={{ border: "none", background: isMonthly ? "#D44000" : "transparent", color: isMonthly ? "#fff" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 800, padding: "7px 15px", borderRadius: 999, cursor: "pointer" }}>Mensuel</button>
-        </div>
-
-        {/* CTA secondaire sur une seule ligne (2026-09-16, retour explicite de Gildas — "ca
-            marcherait mieux sur une ligne" + "plutôt qu'un bouton un lien") : plus de bloc
-            bordé pleine largeur, un lien texte inline après le contexte. Coach : intro chaude
-            avant un funnel self-serve froid. Sportif : "gratuit avec un coach", lien /register
-            direct (id + prénom en clair dans l'URL, aucun programme requis — voir doc de
-            athleteSelfId ci-dessus). Absent si athleteSelfId inconnu (repli sûr, jamais un lien
-            qui pointerait vers personne). */}
-        {role === "coach" ? (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center", fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)" }}>
-            Une question ? →{" "}
-            <a
-              href="https://calendly.com/cauvingildas/30min" target="_blank" rel="noopener noreferrer"
-              style={{ color: "#ff8a55", fontWeight: 800, textDecoration: "underline" }}
-            >
-              Demander une démo
-            </a>
-          </div>
-        ) : athleteSelfId && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,.14)", textAlign: "center", fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.78)" }}>
-            Gratuit avec un coach →{" "}
-            <ShareButton
-              linkLabel="Inviter mon coach"
-              title="Hey coach, ThePerfClub m'aide à structurer mon entraînement — rejoins-moi pour me coacher dessus !"
-              variant="dark"
-              getShareUrl={async () =>
-                `${window.location.origin}/register?role=coach&athleteId=${encodeURIComponent(athleteSelfId)}&athleteName=${encodeURIComponent(name ?? "")}`
-              }
-            />
-          </div>
-        )}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontFamily: mono, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>
+        {isMonthly ? `${p.monthly}€` : `${p.annual}€`}
+        <span style={{ fontSize: 15, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>
+          {isMonthly ? "/mois" : `/an (${perMonth})`}
+        </span>
       </div>
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>
+        {isMonthly ? "Sans engagement. " : ""}0€ aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.
+      </div>
+      <div style={{ display: "inline-flex", alignSelf: "flex-start", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3 }}>
+        <button type="button" onClick={() => setBilling("annual")} style={toggleBtn(!isMonthly)}>
+          Annuel<span style={{ fontFamily: mono, marginLeft: 5, fontSize: 8.5, fontWeight: 700, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.22)", color: "#2f9e44" }}>-{pct}%</span>
+        </button>
+        <button type="button" onClick={() => setBilling("monthly")} style={toggleBtn(isMonthly)}>Mensuel</button>
+      </div>
+    </div>
+  );
+}
 
-      {/* Parcours (2026-10-02, remplace les 3 étapes et le tableau Gratuit/Premium) : un job par
-          étape, les gratuites d'abord puis « Avec Premium ». */}
-      <PlanJourney role={role} />
+/* Lien secondaire sous le CTA Elite : démo (coach) ou coach qui paie (sportif). */
+export function PricingSideLink({ role, athleteSelfId, name }: { role: "athlete" | "coach"; athleteSelfId?: string; name?: string }) {
+  const style: React.CSSProperties = { textAlign: "center", fontSize: 12.5, fontWeight: 700, color: "rgba(255,255,255,.72)" };
+  if (role === "coach") {
+    return (
+      <div style={style}>
+        Une question ? →{" "}
+        <a href="https://calendly.com/cauvingildas/30min" target="_blank" rel="noopener noreferrer" style={{ color: "#ff8a55", fontWeight: 800, textDecoration: "underline" }}>Demander une démo</a>
+      </div>
+    );
+  }
+  if (!athleteSelfId) return null;
+  return (
+    <div style={style}>
+      Gratuit avec un coach →{" "}
+      <ShareButton
+        linkLabel="Inviter mon coach"
+        title="Hey coach, ThePerfClub m'aide à structurer mon entraînement — rejoins-moi pour me coacher dessus !"
+        variant="dark"
+        getShareUrl={async () => `${window.location.origin}/register?role=coach&athleteId=${encodeURIComponent(athleteSelfId)}&athleteName=${encodeURIComponent(name ?? "")}`}
+      />
+    </div>
+  );
+}
 
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.5)", marginBottom: 12 }}>
-          Les experts en parlent
-        </div>
+const chip = (color: string, bg: string): React.CSSProperties => ({
+  fontFamily: mono, fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase",
+  color, background: bg, borderRadius: 999, padding: "5px 9px", whiteSpace: "nowrap",
+});
+
+/* Carte Gratuit : « Ton plan actuel », sans prix. `footer` = bouton « Continuer en Gratuit »
+   (desktop) ; absent en mobile (lien dans le bas fixe). */
+export function FreePlanCard({ role, sportDe, footer }: { role: "athlete" | "coach"; sportDe: string | null; footer?: React.ReactNode }) {
+  const f = planFeatures(role, sportDe);
+  return (
+    <div style={{ borderRadius: 20, padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0, background: "rgba(255,255,255,.035)", border: "1px solid rgba(255,255,255,.10)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.62)" }}>Gratuit</span>
+        <span style={chip("rgba(255,255,255,.62)", "rgba(255,255,255,.08)")}>Ton plan actuel</span>
+      </div>
+      <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>Tout ce que tu saisis et tes mesures, sans limite de durée.</div>
+      <FeatureList items={f.free} elite={false} />
+      {footer && <><div style={{ flex: 1 }} />{footer}</>}
+    </div>
+  );
+}
+
+/* Carte Elite, mise en avant. `cta` = bouton d'achat (absent en mobile : bas fixe). */
+export function ElitePlanCard({ role, billing, setBilling, sportDe, hitIndex, hitLabel, cta, sideLink }: {
+  role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void; sportDe: string | null;
+  hitIndex: number; hitLabel?: string; cta?: React.ReactNode; sideLink?: React.ReactNode;
+}) {
+  const f = planFeatures(role, sportDe);
+  return (
+    <div style={{
+      borderRadius: 20, padding: "20px 20px 18px", display: "flex", flexDirection: "column", gap: 14, minWidth: 0,
+      background: "linear-gradient(180deg, rgba(212,64,0,.16), rgba(212,64,0,.04) 45%, rgba(255,255,255,.03))",
+      border: "1px solid rgba(255,138,85,.45)", boxShadow: "0 0 0 1px rgba(212,64,0,.18), 0 24px 60px rgba(212,64,0,.14)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#ff8a55" }}>Elite</span>
+        <span style={chip("#7fdb8f", "rgba(47,158,68,.20)")}>✓ {TRIAL_DAYS} jours offerts</span>
+      </div>
+      <ElitePrice role={role} billing={billing} setBilling={setBilling} />
+      <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,138,85,.85)", margin: "4px 0 -6px" }}>Tout Gratuit, plus</div>
+      <FeatureList items={f.elite} elite hitIndex={hitIndex} hitLabel={hitLabel} />
+      {cta && <><div style={{ flex: 1 }} />{cta}</>}
+      {sideLink}
+    </div>
+  );
+}
+
+function faqItems(role: "athlete" | "coach") {
+  return [
+    { q: "Vais-je être facturé automatiquement à la fin des 14 jours offerts ?", a: "Oui, sauf annulation avant la fin des 14 jours, en un clic depuis ton profil, sans engagement." },
+    { q: "Puis-je annuler à tout moment ?", a: "Oui, en un clic depuis ton profil, sans justification ni délai de préavis." },
+    { q: "Je garde quoi si je reste en Gratuit ?", a: "Tout ce que tu as saisi : programmes, séances, forme et mesures. Seules les décisions et les analyses sont réservées à Elite." },
+    role === "coach"
+      ? { q: "Puis-je ajouter autant de sportifs que je veux ?", a: "Oui, sans surcoût, quel que soit le nombre de sportifs que tu coaches." }
+      : { q: "Le programme est-il vraiment personnalisé ?", a: "Oui : il est généré selon ton sport, ton niveau et ton objectif, puis ajusté selon ta récupération." },
+  ];
+}
+
+const sectionLabel: React.CSSProperties = { fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 10 };
+
+/* Sous les offres : vidéos puis FAQ, sur une seule colonne (desktop comme mobile). */
+export function PrimingExtras({ role }: { role: "athlete" | "coach" }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={sectionLabel}>Les experts en parlent</div>
         <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-          {INTERVIEWS.filter(v => v.personas.includes(role === "coach" ? "coach" : "athlete")).map(v => (
-            <div key={v.slug} style={{ flex: "0 0 240px", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, overflow: "hidden" }}>
+          {INTERVIEWS.filter(v => v.personas.includes(role)).map(v => (
+            <div key={v.slug} style={{ flex: "0 0 220px", background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, overflow: "hidden" }}>
               <div style={{ position: "relative", aspectRatio: "16/9", background: "#111" }}>
                 <img src={`/testimonials/${v.slug}.jpg`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <div style={{ fontFamily: "var(--font-mono), monospace", position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 8, letterSpacing: "0.02em" }}>▶ YouTube</div>
+                <div style={{ fontFamily: mono, position: "absolute", bottom: 8, right: 8, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,.55)", padding: "3px 8px", borderRadius: 8 }}>▶ YouTube</div>
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
-                <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: "#fff" }}>{v.name}</div>
+                <div style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: "#fff" }}>{v.name}</div>
                 <div style={{ fontSize: 11, color: "rgba(255,255,255,.55)", marginTop: 2, lineHeight: 1.35 }}>{v.role}</div>
               </div>
             </div>
           ))}
         </div>
       </div>
-
-      {/* Témoignage + bande "+600" déplacés vers le form de paiement (2026-09-16, retour explicite
-          de Gildas — "c'est censé être au form de paiement") : PaywallModal.tsx, panneau gauche
-          desktop / bas du formulaire mobile. Ne restent plus ici que la vidéo carousel ("Les
-          experts en parlent", ci-dessus) et la FAQ (ci-dessous). */}
-
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 900, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.06em", color: "rgba(255,255,255,.5)", marginBottom: 8 }}>
-          Questions fréquentes
-        </div>
-        {/* Accordéon natif <details>/<summary> (2026-09-16, "comme le POC" — retour explicite de
-            Gildas), remplace l'ancien affichage question+réponse toujours dépliées. */}
+      <div style={{ minWidth: 0 }}>
+        <div style={sectionLabel}>Questions fréquentes</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {faqItems(role).map((item, i) => (
-            <details key={i} style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12 }}>
-              <summary style={{ fontFamily: "var(--font-display)", padding: "13px 16px", fontSize: 13.5, fontWeight: 700, color: "#fff", cursor: "pointer", listStyle: "revert" }}>
-                {item.q}
-              </summary>
-              <div style={{ padding: "0 16px 13px", fontSize: 13, color: "rgba(255,255,255,.65)", lineHeight: 1.55 }}>
-                {item.a}
-              </div>
+          {faqItems(role).map(item => (
+            <details key={item.q} style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 12 }}>
+              <summary style={{ fontFamily: "var(--font-display)", padding: "13px 16px", fontSize: 13.5, fontWeight: 700, color: "#fff", cursor: "pointer", listStyle: "revert" }}>{item.q}</summary>
+              <div style={{ padding: "0 16px 13px", fontSize: 13, color: "rgba(255,255,255,.65)", lineHeight: 1.55 }}>{item.a}</div>
             </details>
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-/* Parcours Gratuit → Premium (2026-10-02, wording validé par Gildas) — la règle du freemium v2 :
-   ce qu'on saisit et ses mesures sont gratuits, ce qui aide à décider est Premium. */
-const JOURNEY: Record<"athlete" | "coach", { title: string; text: string; tag?: string; premium: boolean }[]> = {
-  athlete: [
-    { title: "Construis ton entraînement", text: "Un programme sur mesure, importé, ou un modèle.", premium: false },
-    { title: "Renseigne ta forme", text: "Ton ressenti en 30 secondes, ta montre synchronisée.", premium: false },
-    { title: "Fais tes séances", text: "Chrono, charges, difficulté ressentie.", premium: false },
-    { title: "Ajuste chaque séance à ta forme", text: "Alléger, maintenir ou pousser, pour plus de progrès et moins de blessures.", tag: "1re offerte", premium: true },
-    { title: "Comprends ce qui fait bouger ta forme", text: "Récupération, charge et comportements, expliqués.", premium: true },
-    { title: "Mesure tes progrès", text: "Tes tests analysés : forces, faiblesses et quoi travailler.", premium: true },
-  ],
-  coach: [
-    { title: "Programme tes sportifs", text: "Sur mesure, importé ou modèle, assigné en un geste.", premium: false },
-    { title: "Invite-les", text: "Ils renseignent leur forme et leurs séances.", premium: false },
-    { title: "Suis leurs check-ins", text: "Les scores de chacun, sans relance.", premium: false },
-    { title: "Sais chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge.", tag: "1re par sportif", premium: true },
-    { title: "Comprends pourquoi un sportif décroche", text: "Avant qu'il se blesse ou stagne.", premium: true },
-    { title: "Mesure leurs progrès", text: "Leurs tests analysés.", premium: true },
-  ],
-};
-
-export function PlanJourney({ role }: { role: "athlete" | "coach" }) {
-  const steps = JOURNEY[role];
-  const row = (st: typeof steps[number], i: number) => (
-    <div key={st.title} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 0" }}>
-      <div style={{
-        width: 24, height: 24, borderRadius: "50%", flexShrink: 0, marginTop: 1,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700,
-        background: st.premium ? "rgba(212,64,0,.22)" : "rgba(255,255,255,.12)",
-        color: st.premium ? "#ffb08a" : "rgba(255,255,255,.75)",
-      }}>{i + 1}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff" }}>{st.title}</span>
-          {st.tag && <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7fdb8f", background: "rgba(47,158,68,.18)", borderRadius: 999, padding: "2px 7px" }}>{st.tag}</span>}
-        </div>
-        <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.62)", lineHeight: 1.45, marginTop: 2 }}>{st.text}</div>
-      </div>
-    </div>
-  );
-  const label = (text: string, color: string) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "4px 0 2px" }}>
-      <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color }}>{text}</span>
-      <span style={{ flex: 1, height: 1, background: "rgba(255,255,255,.10)" }} />
-    </div>
-  );
-  return (
-    <div style={{ marginBottom: 22, background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "12px 16px" }}>
-      {label("Gratuit", "rgba(255,255,255,.55)")}
-      {steps.filter(st => !st.premium).map((st, i) => row(st, i))}
-      {label("Avec Premium", "#ff8a55")}
-      {steps.filter(st => st.premium).map((st, i) => row(st, i + steps.filter(x => !x.premium).length))}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useId } from "react";
 import type { ChartSpec } from "@/lib/metricCards";
+import { markPrimingSource } from "@/lib/primingSource";
 
 /* Chart générique d'UN indice (2026-09-28) — le détail qui se déplie sous une carte d'indice de
    l'Accueil. Les charts existants (ZoneSparkline, SparkLineClient) sont composites par
@@ -185,7 +186,7 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
         {!locked && exampleNote && <ExampleNote text={exampleNote} />}
         {locked && onUnlock && (
           <button
-            onClick={e => { e.stopPropagation(); onUnlock(); }}
+            onClick={e => { e.stopPropagation(); markPrimingSource("insight", { ifEmpty: true }); onUnlock(); }}
             style={{ position: "absolute", left: "50%", top: "44%", transform: "translate(-50%, -50%)", pointerEvents: "auto" as const, zIndex: 5, border: "1px solid rgba(255,255,255,.25)", cursor: "pointer", color: "#fff", fontSize: 12, fontWeight: 800, borderRadius: 999, padding: "7px 13px", background: "rgba(7,10,13,.7)", whiteSpace: "nowrap" as const }}
           >
             Activer l&apos;ajustement

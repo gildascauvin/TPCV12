@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { OPEN_PRIMING } from "@/lib/onboardingProgress";
+import { loadPrimingContext, markPrimingSource, sourceFromEvent } from "@/lib/primingSource";
 import type { SubscriptionStatus } from "@/types";
 
 export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = false) {
@@ -30,7 +31,12 @@ export function usePaywall(subscriptionStatus: SubscriptionStatus, hasCoach = fa
      2026-10-01) : un événement global ouvre le priming de la page courante, quelle qu'elle soit. */
   useEffect(() => {
     if (isActive) return;
-    const open = () => setPaywallStep("priming");
+    // Préchargé pour que le priming s'ouvre déjà personnalisé (prénom, sport, sportifs).
+    loadPrimingContext();
+    const open = (e: Event) => {
+      markPrimingSource(sourceFromEvent((e as CustomEvent).detail?.source), { ifEmpty: true });
+      setPaywallStep("priming");
+    };
     window.addEventListener(OPEN_PRIMING, open);
     return () => window.removeEventListener(OPEN_PRIMING, open);
   }, [isActive]);

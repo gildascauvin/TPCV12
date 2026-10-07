@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import posthog from "posthog-js";
+import { markPrimingSource, sourceFromSurface } from "@/lib/primingSource";
 
 /* Freemium "dispositif éteint" (2026-09-30, POC https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW) :
    ce qui entre (check-in, séances, programmes) est gratuit, ce qui sort (décision, analyses) est
@@ -51,7 +52,7 @@ export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta 
         {title && <div style={{ fontSize: 15, fontWeight: 800, color: light ? "#171b1f" : "#fff", lineHeight: 1.25, maxWidth: 280, textShadow: light ? undefined : "0 2px 12px rgba(0,0,0,.6)" }}>{title}</div>}
         {sub && <div style={{ fontSize: 12.5, fontWeight: 600, color: light ? "#62686e" : "rgba(255,255,255,.75)", lineHeight: 1.4, maxWidth: 260 }}>{sub}</div>}
         <button
-          onClick={e => { e.stopPropagation(); posthog.capture("unlock_click", { surface }); onUnlock(); }}
+          onClick={e => { e.stopPropagation(); posthog.capture("unlock_click", { surface }); markPrimingSource(sourceFromSurface(surface)); onUnlock(); }}
           style={compact
             ? { border: "1px solid rgba(255,255,255,.25)", cursor: "pointer", color: "#fff", fontSize: 12, fontWeight: 800, borderRadius: 999, padding: "7px 13px", background: "rgba(7,10,13,.6)" }
             : { border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}

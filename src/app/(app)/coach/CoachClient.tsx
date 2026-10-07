@@ -1,4 +1,5 @@
 "use client";
+import { markPrimingSource } from "@/lib/primingSource";
 import { openInvite } from "@/components/coach/InviteHost";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 
@@ -773,12 +774,12 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 locked={!canDecideFor(a)}
                 collect={collectFor(a)}
                 onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
-                onUnlock={() => { setDeck(null); unlock(); }}
+                onUnlock={() => { markPrimingSource("decision", { athleteName: a.name.split(" ")[0], ifEmpty: true }); setDeck(null); unlock(); }}
                 onDecide={() => { setDeck(null); openEditor(a); }}
                 onAddSession={() => { setDeck(null); openCreator(a); }}
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 programPill={programPillFor(a)}
-                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve((markPrimingSource("decision", { athleteName: a.name.split(" ")[0] }), unlock()))}
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                 onAutoregDecided={() => markAutoregDecided(a.id)}
                 onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
@@ -911,12 +912,12 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 locked={!canDecideFor(a)}
                 collect={collectFor(a)}
                 onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
-                onUnlock={unlock}
+                onUnlock={() => { markPrimingSource("decision", { athleteName: a.name.split(" ")[0], ifEmpty: true }); unlock(); }}
                 onDecide={() => openEditor(a)}
                 onEditSession={sess => { setReviewAthlete(a); setReviewSession(sess); }}
                 onAddSession={() => openCreator(a)}
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
-                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve(unlock())}
+                onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve((markPrimingSource("decision", { athleteName: a.name.split(" ")[0] }), unlock()))}
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                 onAutoregDecided={() => markAutoregDecided(a.id)}
                 onAutoregUndone={() => unmarkAutoregDecided(a.id)} />

@@ -16,6 +16,7 @@ import { METRICS, prettyStatus, statusDisplayColor, TREND_ARROW, trendFor, AGG_B
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { wellnessColor } from "@/lib/wellness";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { markPrimingSource } from "@/lib/primingSource";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import type { CoachAthlete } from "@/types";
 import { AthleteRing } from "@/app/(app)/coach/athletes/AthletesClient";
@@ -444,7 +445,7 @@ export function TeamAnalyticsList({ rows, metric, onSelect, locked = false, show
                     {metric === "charge" ? "Leur analyse de charge est prête" : "Leur analyse de récupération est prête"}
                   </div>
                   {/* span : la pancarte vit dans le bouton de la ligne, pas de bouton imbriqué. */}
-                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); onUnlock(); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); onUnlock(); } }} style={{ cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
+                  <span role="button" tabIndex={0} onClick={e => { e.stopPropagation(); markPrimingSource("insight", { athleteName: a.name.split(" ")[0] }); onUnlock(); }} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); e.preventDefault(); markPrimingSource("insight", { athleteName: a.name.split(" ")[0] }); onUnlock(); } }} style={{ cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800, borderRadius: 999, padding: "9px 16px", background: "#D44000" }}>
                     Activer le Coach Control
                   </span>
                 </div>

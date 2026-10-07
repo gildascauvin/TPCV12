@@ -1,5 +1,6 @@
 "use client";
 
+import { markPrimingSource } from "@/lib/primingSource";
 import { Skel } from "@/components/ui/Skeleton";
 import { haptic } from "@/lib/native";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -435,7 +436,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
            est gatée (voir chantier gating save, 2026-08-19). isActive vient
            directement de usePaywall() : requireSubscription() ne peut pas envelopper
            ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
-        if (!canDecide) { setPaywallStep("priming"); return; }
+        if (!canDecide) { markPrimingSource("decision"); setPaywallStep("priming"); return; }
         const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
         const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
         const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
