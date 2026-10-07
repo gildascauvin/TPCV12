@@ -31,13 +31,13 @@ const RULES: [TokKind, string][] = [
   ["ladder",  `(${NUM}(?:\\s*-\\s*${NUM}){2,})\\s*(kg|min|m|s|')?(?![a-zà-ÿ\\d])`],
   ["tempo",   `tempo\\s*([0-9X](?:\\s*[-.]?\\s*[0-9X]){3})(?![\\d])`],
   ["interval",`(\\d+)\\s*(?:s|"|'')?\\s*\\/\\s*(\\d+)\\s*(?:s|"|'')?(?![\\d\\/a-zà-ÿ])`],
-  ["scheme",  `(\\d+)\\s*[x×]\\s*(?:@\\s*)?(${NUM}|max)(?:\\s*-\\s*(\\d+)(?![.,\\d]))?((?:\\s*\\+\\s*\\d+(?![\\d.,]*\\s*kg))*)\\s*(kg|km|min|m|s|"|')?(?![a-zà-ÿ\\d.,])((?:${SIDE})?)`],
+  ["scheme",  `(\\d+)\\s*[x×]\\s*(?:@\\s*)?(${NUM}|max)(?:\\s*-\\s*(\\d+)(?![.,\\d]))?((?:\\s*\\+\\s*\\d+(?![\\d.,]*\\s*kg))*)\\s*(kg|km|min|m|s|"|')?(?!(?![x×]\\s*${NUM}\\s*%)[a-zà-ÿ\\d.,%])((?:${SIDE})?)`],
   ["series",  `(\\d+)\\s*(?:séries|series|sets|rounds|tours)\\b`],
   ["otm",     `(?:(\\d+)\\s*)?(?:E\\d?MOM|OTM)\\b`],
-  ["mult",    `[x×]\\s?(\\d+)(?![\\d.,]|\\s*[x×])(?:\\s*(?:tours|rounds|sets|séries)\\b)?`],
-  ["count",   `(\\d+)\\s*[x×](?![\\d(])`],
+  ["mult",    `[x×]\\s?(\\d+)(?![\\d.,%]|\\s*[x×]|\\s*%)(?:\\s*(?:tours|rounds|sets|séries)\\b)?`],
+  ["count",   `(\\d+)\\s*[x×](?=\\s*${NUM}\\s*%|(?![\\d(]))`],
   ["rpe",     `\\b(RPE|RIR)\\s*(${NUM})(?:\\s*-\\s*(${NUM}))?`],
-  ["pct",     `@?\\s*(${NUM})(?:\\s*-\\s*(${NUM}))?\\s*%\\s*(1\\s?RM|RM|FC\\s?max|FCM|FTP|VMA|PMA|MAS|CP)?`],
+  ["pct",     `(?:@|[x×])?\\s*(${NUM})(?:\\s*-\\s*(${NUM}))?\\s*%\\s*(1\\s?RM|RM|FC\\s?max|FCM|FTP|VMA|PMA|MAS|CP)?`],
   ["zone",    `\\b(Z[1-5](?:\\s*[\\/-]\\s*Z?[1-5])?|zone\\s*[1-5](?:\\s*[\\/-]\\s*[1-5])?)\\b`],
   ["pace",    `(\\d+)\\s*[':](\\d{2})\\s*(?:\\/\\s*km|min\\/km)`],
   ["rest",    `(?:\\br|\\bR|récup|recup|rest|repos)\\s*[=:]?\\s*(${TIME})`],
@@ -156,7 +156,8 @@ function scan(raw: string): { toks: Token[]; masked: string } {
   while (i < m.length) {
     const prev = i ? m[i - 1] : " ";
     let hit: Token | null = null;
-    if (!/[a-zà-ÿ0-9.,\u0003]/i.test(prev) || /[x×@]/i.test(m[i])) {
+    // « 1X90% » : le « X » appartient au token précédent (count), le % suit directement
+    if (!/[a-zà-ÿ0-9.,\u0003]/i.test(prev) || /[x×@]/i.test(m[i]) || toks[toks.length - 1]?.end === i) {
       for (const [k, rx] of RX) {
         rx.lastIndex = i;
         const mm = rx.exec(m);
