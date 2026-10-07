@@ -54,8 +54,11 @@ export function ShareChip({ b, fontSize = 12, padding = "4px 10px" }: { b: Share
   );
 }
 
-export function ShareExerciseList({ exercises, max, fontSize = 13.5, rowPadding = "10px 12px" }: {
+export function ShareExerciseList({ exercises, max, fontSize = 13.5, rowPadding = "10px 12px", renderLine }: {
   exercises: string[]; max?: number; fontSize?: number; rowPadding?: string;
+  /* Page /share (navigateur) : rendu enrichi commun à l'app (ExerciseLineView). Absent pour l'image
+     OpenGraph (satori ne sait rendre que du flex/texte simple), qui garde la ligne brute. */
+  renderLine?: (line: string, index: number) => React.ReactNode;
 }) {
   const shown = max ? exercises.slice(0, max) : exercises;
   const more = exercises.length - shown.length;
@@ -64,7 +67,7 @@ export function ShareExerciseList({ exercises, max, fontSize = 13.5, rowPadding 
     <div style={{ display: "flex", flexDirection: "column", border: "1px solid rgba(0,0,0,.07)", borderRadius: 16, overflow: "hidden" }}>
       {shown.map((ex, i) => (
         <div key={i} style={{ display: "flex", padding: rowPadding, borderTop: i > 0 ? "1px solid rgba(0,0,0,.06)" : "none", fontSize, lineHeight: 1.45, color: "#2c3236", fontWeight: 650, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {ex}
+          {renderLine ? <div style={{ flex: 1, minWidth: 0 }}>{renderLine(ex, i)}</div> : ex}
         </div>
       ))}
       {more > 0 && (

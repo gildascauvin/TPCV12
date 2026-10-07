@@ -628,7 +628,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+          gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
           gap: isMd ? 12 : 10,
           overflowX: "auto",
           padding: isMd ? "14px 20px 18px" : "14px 14px 18px",
@@ -709,6 +709,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    notes={autoregTarget.notes}
                     storedDecision={validDecision(autoregTarget)}
                     viewer={{ role: "athlete" }}
                     actionsSlot={autoregActionsSlot}

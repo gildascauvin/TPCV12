@@ -7,6 +7,7 @@ import AddSessionModal from "@/components/sessions/AddSessionModal";
 import ReconduireModal, { type ReconduireOutputRow } from "@/components/sessions/ReconduireModal";
 import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { ExerciseLineView, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
@@ -73,43 +74,33 @@ function DraggableProgramSession({ day, sIdx, session, onClick, badgeOverride, g
       cardStyle={style}
       badgeOverride={badgeOverride}
       gaugeOverride={gaugeOverride}
-      renderExerciseLine={(line, exIdx) => (
-        <DraggableProgramExercise
-          key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} text={line}
-          adjustedText={autoregReco != null ? parseAndApply(line, autoregReco) : undefined}
-        />
+      adjustPct={autoregReco ?? null}
+      renderExerciseLine={(_line, exIdx, view) => (
+        <DraggableProgramExercise key={exIdx} day={day} sIdx={sIdx} exIdx={exIdx} view={view} />
       )}
     />
   );
 }
 
-function DraggableProgramExercise({ day, sIdx, exIdx, text, adjustedText }: { day: string; sIdx: number; exIdx: number; text: string; adjustedText?: string }) {
+function DraggableProgramExercise({ day, sIdx, exIdx, view }: { day: string; sIdx: number; exIdx: number; view: ExerciseLineViewData }) {
   const dragId = `ex:${day}:${sIdx}:${exIdx}`;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", day, sIdx, exIdx } });
-  const changed = adjustedText !== undefined && adjustedText !== text;
   return (
     <div
       ref={el => { setDragRef(el); setDropRef(el); }}
       style={{
-        padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-        borderTop: exIdx > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
-        background: isOver ? "#fff5f2" : "transparent", whiteSpace: "pre-wrap", wordBreak: "break-word",
-        display: "flex", alignItems: "flex-start", gap: 6, opacity: isDragging ? 0.4 : 1,
+        padding: "6px 9px", borderTop: exIdx > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
+        background: isOver ? "#fff5f2" : "#fff", display: "flex", alignItems: "flex-start", gap: 6, opacity: isDragging ? 0.4 : 1,
       }}
     >
       <span
         {...attributes} {...listeners}
-        style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
+        style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 3 }}
       >⠿</span>
-      {changed ? (
-        <span style={{ flex: 1 }}>
-          <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>{text}</div>
-          <div style={{ color: "#d44000", fontWeight: 800 }}>{adjustedText}</div>
-        </span>
-      ) : (
-        <span style={{ flex: 1 }}>{text}</span>
-      )}
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <ExerciseLineView text={view.text} original={view.original} ctx={view.ctx} adjusting={view.adjusting} compact />
+      </span>
     </div>
   );
 }
@@ -152,9 +143,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
     { key: "maintien", icon: "⏸", label: "Maintien", sub: "Identique" },
     { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtPct(customPct)}%` },
   ];
-  const lines = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const newDiff = adjustDifficulty(session.target_difficulty ?? 6, currentPct);
-  const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
   const previewSession: SessionTemplate = { ...session, target_difficulty: newDiff };
 
   return (
@@ -276,24 +265,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
           </div>
           <SessionTemplateCard
             session={previewSession}
-            renderExerciseLine={(_ex, i) => {
-              const { line, after } = rendered[i];
-              const changed = after !== line;
-              return changed ? (
-                <div style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                  <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
-                </div>
-              ) : (
-                <div style={{
-                  padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-                  borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
-                  whiteSpace: "pre-wrap", wordBreak: "break-word",
-                }}>
-                  {line}
-                </div>
-              );
-            }}
+            adjustPct={currentPct}
           />
         </div>
 
@@ -763,7 +735,7 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
       {autoregBanner}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(7, var(--wk-col, 240px))",
+        gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",

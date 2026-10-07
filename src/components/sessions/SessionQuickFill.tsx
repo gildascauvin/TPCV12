@@ -1,5 +1,6 @@
 "use client";
 
+import { ExerciseLinesBox } from "@/components/sessions/ExerciseLineView";
 import { Skel } from "@/components/ui/Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import posthog from "posthog-js";
@@ -154,11 +155,14 @@ function ModelPicker({ userChip, onPick }: { userChip: string | null; onPick: (r
         {list.map((i, k) => {
           const lines = (i.s.notes ?? "").split("\n").filter(Boolean);
           return (
-            <button key={k} onClick={() => onPick({ name: i.s.name, notes: lines.join("\n"), target_difficulty: i.s.target_difficulty, source: "model" })} style={{ ...rowBtn, display: "block" }}>
+            <div key={k} role="button" tabIndex={0}
+              onClick={() => onPick({ name: i.s.name, notes: lines.join("\n"), target_difficulty: i.s.target_difficulty, source: "model" })}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick({ name: i.s.name, notes: lines.join("\n"), target_difficulty: i.s.target_difficulty, source: "model" }); } }}
+              style={{ ...rowBtn, display: "block" }}>
               <span style={{ display: "block", fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#8a8f94" }}>{i.program}</span>
               <span style={{ display: "block", fontSize: 14, fontWeight: 800, marginTop: 2 }}>{i.s.name}</span>
-              <span style={{ display: "block", fontSize: 12, color: "#8a8f94", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lines.slice(0, 3).join(" · ")}{lines.length > 3 ? " · …" : ""}</span>
-            </button>
+              <ExerciseLinesBox lines={lines} max={3} style={{ marginTop: 8 }} />
+            </div>
           );
         })}
       </div>
@@ -199,10 +203,12 @@ function ImportSession({ onPick }: { onPick: (r: QuickFillResult) => void }) {
         <div style={label}>{choices.length} séances trouvées : choisis celle du jour</div>
         <div style={{ display: "grid", gap: 8 }}>
           {choices.map((s, k) => (
-            <button key={k} onClick={() => pick(s)} style={{ ...rowBtn, display: "block" }}>
+            <div key={k} role="button" tabIndex={0} onClick={() => pick(s)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(s); } }}
+              style={{ ...rowBtn, display: "block" }}>
               <span style={{ display: "block", fontSize: 14, fontWeight: 800 }}>{s.name}</span>
-              <span style={{ display: "block", fontSize: 12, color: "#8a8f94", marginTop: 2 }}>{(s.notes ?? "").split("\n").filter(Boolean).slice(0, 3).join(" · ")}</span>
-            </button>
+              <ExerciseLinesBox lines={(s.notes ?? "").split("\n").filter(Boolean)} max={3} style={{ marginTop: 8 }} />
+            </div>
           ))}
         </div>
       </div>

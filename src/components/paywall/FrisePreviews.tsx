@@ -1,5 +1,6 @@
 "use client";
 
+import { ExerciseLineView, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import { addDays, format as formatDate } from "date-fns";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
@@ -11,7 +12,6 @@ import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesC
 import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";
-import { parseAndApply } from "@/lib/loadAdjust";
 import { loadRule } from "@/lib/loadRule";
 import { classifyTrend, describeTrend, trendSeverity, trendActionWord, type TrendInput } from "@/lib/trainingLoad";
 import { sigDimInfo } from "@/lib/fatigueSignature";
@@ -99,9 +99,9 @@ function SessionMiniCard({ preview, width }: { preview: SessionPreview; width?: 
         <DiffGauge value={preview.diff} height={9} />
       </div>
       <div style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-        {preview.exercises.map((ex, i) => (
-          <div key={i} style={{ padding: "6px 8px", fontSize: 10.5, lineHeight: 1.35, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
-            {ex}
+        {exerciseViews(preview.exercises).map((v, i) => (
+          <div key={i} style={{ padding: "6px 8px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
+            <ExerciseLineView text={v.text} ctx={v.ctx} compact />
           </div>
         ))}
       </div>
@@ -496,7 +496,7 @@ export function ProgramPreview3Days({ role, sport, athleteName }: { role: "athle
         {/* Centré en desktop (2026-09-04, retour explicite de Gildas) — 2 colonnes tiennent
             largement dans la colonne d'illustration (720px), plus besoin de scroll ni d'ancrage
             à gauche ; mobile garde son scroll horizontal naturel, jamais de largeur maximale. */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, var(--wk-col, 240px))", gap: 10, maxWidth: isMd ? 500 : undefined, margin: isMd ? "0 auto" : undefined }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, var(--wk-col, 280px))", gap: 10, maxWidth: isMd ? "calc(2 * var(--wk-col, 280px) + 10px)" : undefined, margin: isMd ? "0 auto" : undefined }}>
           {days.map(({ date, isAlertDay, score }, i) => {
             const p = previews[i] ?? previews[0];
             const sessions: SessionLike[] = [{
@@ -514,22 +514,7 @@ export function ProgramPreview3Days({ role, sport, athleteName }: { role: "athle
                 renderSession={s => (
                   <WeekSessionCard
                     session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }}
-                    renderExerciseLine={isAlertDay && suggestion ? (line, li) => {
-                      const modified = parseAndApply(line, suggestion.reco);
-                      const changed = modified !== line;
-                      return (
-                        <div style={{ padding: "6px 9px", borderTop: li > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                          {changed && (
-                            <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>
-                              {line}
-                            </div>
-                          )}
-                          <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600 }}>
-                            {modified}
-                          </div>
-                        </div>
-                      );
-                    } : undefined}
+                    adjustPct={isAlertDay && suggestion ? suggestion.reco : null}
                   />
                 )}
               />
@@ -583,22 +568,7 @@ export function SingleSessionAdjustPreview({ sport }: { sport?: string }) {
           renderSession={s => (
             <WeekSessionCard
               session={s} onComplete={HYROX_NOOP} onEdit={HYROX_NOOP} onDuplicate={HYROX_NOOP} hideActions cardStyle={{ cursor: "default" }}
-              renderExerciseLine={suggestion ? (line, li) => {
-                const modified = parseAndApply(line, suggestion.reco);
-                const changed = modified !== line;
-                return (
-                  <div style={{ padding: "6px 9px", borderTop: li > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                    {changed && (
-                      <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>
-                        {line}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600 }}>
-                      {modified}
-                    </div>
-                  </div>
-                );
-              } : undefined}
+              adjustPct={suggestion ? suggestion.reco : null}
             />
           )}
         />

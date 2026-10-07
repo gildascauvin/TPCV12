@@ -25,3 +25,4 @@ tsconfig.notnext.tsbuildinfo
 
 # backups one-off scripts
 scripts/library-templates-backup-*.json
+scripts/backup-session-notes-*.json

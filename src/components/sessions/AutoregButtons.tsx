@@ -1,7 +1,9 @@
 "use client";
 
 import { haptic } from "@/lib/native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import posthog from "posthog-js";
+import { adjustNotes } from "@/lib/sessionLevers";
 import { markFirstAdjustment } from "@/lib/onboardingProgress";
 import { createPortal } from "react-dom";
 import {
@@ -51,6 +53,8 @@ interface Props {
      carte à droite = "apply", à gauche = "maintain". Exécute EXACTEMENT les mêmes fonctions que les
      boutons (apply()/maintenir()), à chaque nouveau `nonce`. Ignoré en gratuit et une fois décidé. */
   actionRequest?: { kind: "apply" | "maintain"; nonce: number } | null;
+  /** Notes de la séance : uniquement pour le suivi PostHog (lignes modifiées / non ajustées). */
+  notes?: string | null;
   sessionId: string;
   /* `dir`/`reco` optionnels (2026-09-25, retour de Gildas — "même quand ya pas de reco, je veux
      pouvoir bouger la jauge et avoir le range") : absents = pas de suggestion système ("Plan
@@ -126,7 +130,7 @@ interface Props {
   viewer?: DecisionViewer;
 }
 
-export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
+export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -247,7 +251,25 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plann
     };
   }
 
+  /* Suivi (2026-10-07) : aperçu (1er glisser), appliquer, annuler, maintenir, avec le nombre de
+     lignes modifiées et non ajustées par le moteur unique (sessionLevers). */
+  function track(action: "preview" | "apply" | "undo" | "maintain", pct: number | null) {
+    const a = pct ? adjustNotes(notes ?? "", pct) : null;
+    posthog.capture("autoreg_adjust", {
+      action, pct, viewer: viewer.role, suggested: dir ?? null, reco: reco || null,
+      lines_changed: a?.changed ?? 0, lines_skipped: a?.skipped ?? 0,
+    });
+  }
+  const previewTracked = useRef(false);
+  useEffect(() => {
+    if (free || mode !== "active" || !selectedPct || previewTracked.current) return;
+    previewTracked.current = true;
+    track("preview", selectedPct);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPct, mode, free]);
+
   async function maintenir() {
+    track("maintain", null);
     haptic("light");
     // `cursorDir` plutôt que `dir` (absent en mode libre, voir plus haut) — sans effet visible pour
     // "Maintenir" (pct=null, aucun texte/couleur n'en dépend en mode "decided"), mais reste correct
@@ -313,6 +335,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plann
     setMode("decided");
     setDecidedPct(pctToApply);
     setDecidedPlannedDiff(original?.target_difficulty ?? null);
+    track("apply", pctToApply);
     // Plus de barré une fois validé — voir le commentaire de l'effet de montage ci-dessus.
     onPreviewChange?.(null);
     if (!free) markFirstAdjustment();
@@ -326,6 +349,7 @@ export default function AutoregButtons({ sessionId, dir, reco = 0, advice, plann
 
   async function undo() {
     const decision = getAutoregDecision(sessionId);
+    track("undo", decision?.pct ?? null);
     setUndoing(true);
     await onUndo?.(decision?.original ?? record?.original ?? undefined);
     saveDecisionRecord(sessionId, null);

@@ -7,7 +7,8 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 import { DraggableExerciseLine } from "@/components/calendar/DraggablePlanning";
 import ShareButton from "@/components/sessions/ShareButton";
 import { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
-import { parseAndApply } from "@/lib/loadAdjust";
+import { ExerciseLinesBox, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
+import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono } from "@/lib/liveSession";
 import type { Session } from "@/types";
 
@@ -53,6 +54,8 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
     return () => clearInterval(t);
   }, [live]);
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
+  const views = exerciseViews(exercises, previewPct);
+  const decidedOriginal = validDecision(session)?.original?.notes ?? null;
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
   const exerciseSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   function handleExerciseDragEnd(e: DragEndEvent) {
@@ -117,6 +120,9 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
         </div>
       </div>
 
+      {/* Synthèse de l'ajustement, sous le titre : aperçu en cours, ou décision déjà appliquée. */}
+      {!concealed && <SessionSynthesis notes={session.notes} adjustPct={previewPct} originalNotes={decidedOriginal} style={{ marginBottom: 12 }} />}
+
       {/* 2. Single difficulty gauge (no label) — masquée pour la séance dont la jauge de décision a
          été promue en tête de l'onglet, voir `hideGauge`. */}
       {!hideGauge && gaugeValue && (
@@ -129,10 +135,8 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       {concealed ? (
         <div style={{ marginBottom: 12 }}>
           {exercises.length > 0 && (
-            <div aria-hidden style={{ border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
-              {exercises.map((ex, i) => (
-                <div key={i} style={{ padding: "9px 12px", fontSize: 13, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
-              ))}
+            <div aria-hidden style={{ filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              <ExerciseLinesBox lines={exercises} compact={false} style={{ borderRadius: 16 }} />
             </div>
           )}
           <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
@@ -141,12 +145,11 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
         <div style={{ marginBottom: 12, border: "1px solid rgba(0,0,0,.075)", borderRadius: 16, overflow: "hidden" }}>
           <DndContext sensors={exerciseSensors} onDragEnd={handleExerciseDragEnd}>
             {exercises.map((ex, i) => {
-              const modified = previewPct != null ? parseAndApply(ex, previewPct) : ex;
               const unseen = viewer === "coach"
                 ? hasUnseenAttachment(session.exercise_media?.[String(i)], "coach", (session as Session & { viewed_by_coach_at?: string | null }).viewed_by_coach_at)
                 : hasUnseenAttachment(session.exercise_media?.[String(i)], "athlete", session.viewed_by_athlete_at);
               return (
-                <DraggableExerciseLine key={i} sessionId={session.id} index={i} text={modified} originalText={ex} unseen={unseen} />
+                <DraggableExerciseLine key={i} sessionId={session.id} index={i} text={views[i].text} originalText={views[i].original} unseen={unseen} ctx={views[i].ctx} compact={false} adjusting={views[i].adjusting} />
               );
             })}
           </DndContext>

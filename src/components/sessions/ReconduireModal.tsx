@@ -170,7 +170,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
             </div>
           ) : (
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 220px))", gap: 10,
+              display: "grid", gridTemplateColumns: "repeat(7, var(--wk-col, 280px))", gap: 10,
               overflowX: "auto", scrollSnapType: "x proximity", scrollbarWidth: "thin" as const,
               margin: "0 -24px 20px", padding: "2px 24px 6px",
             }}>
@@ -185,9 +185,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
                     </div>
                   )}
                   {slot.sessions.map(s => {
-                    const lines = s.notes ? s.notes.split("\n").filter(Boolean) : [];
                     const newDiff = adjustDifficulty(s.target_difficulty ?? 6, currentPct);
-                    const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
                     const previewSession: SessionLike = {
                       id: s.id, date: s.date, name: s.name, notes: s.notes,
                       duration: s.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
@@ -201,24 +199,7 @@ export default function ReconduireModal({ daySlots, title, onClose, onConfirm, a
                         onDuplicate={() => {}}
                         hideActions
                         cardStyle={{ cursor: "default" }}
-                        renderExerciseLine={(_ex, i) => {
-                          const { line, after } = rendered[i];
-                          const changed = after !== line;
-                          return changed ? (
-                            <div style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                              <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
-                            </div>
-                          ) : (
-                            <div style={{
-                              padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-                              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff",
-                              whiteSpace: "pre-wrap", wordBreak: "break-word",
-                            }}>
-                              {line}
-                            </div>
-                          );
-                        }}
+                        adjustPct={currentPct}
                       />
                     );
                   })}

@@ -10,7 +10,6 @@ import { loadRule, ruleTagColors } from "@/lib/loadRule";
 import AlertBox from "@/components/calendar/AlertBox";
 import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty, zoneRange } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
-import { parseAndApply } from "@/lib/loadAdjust";
 import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { WELLNESS_RAMP } from "@/lib/wellness";
@@ -393,8 +392,10 @@ export default function PublicProgramView({ program, coachName }: Props) {
       )}
       <div style={{
         display: "grid",
-        // Intégrée (WordPress, fiche programme) : les 7 jours tiennent dans la largeur quand il y a la place.
-        gridTemplateColumns: (inApp || isEmbedded) ? "repeat(7, minmax(180px, 1fr))" : "repeat(7, var(--wk-col, 240px))",
+        // Même largeur de jour que le Planning et l'éditeur partout, iframe comprise : défilement
+        // horizontal quand les 7 jours ne tiennent pas (2026-10-07, les colonnes à 180 px écrasaient
+        // les lignes d'exercice).
+        gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
         alignItems: "start",
         gap: 10,
         overflowX: "auto",
@@ -485,22 +486,7 @@ export default function PublicProgramView({ program, coachName }: Props) {
                         );
                       })() : undefined}
                       badgeOverride={isTarget ? { label: formatAutoregPoints(suggestion.reco), bg: `${severityColor}22`, color: severityColor! } : undefined}
-                      renderExerciseLine={isTarget ? (line, li) => {
-                        const modified = parseAndApply(line, suggestion.reco);
-                        const changed = modified !== line;
-                        return (
-                          <div style={{ padding: "6px 9px", borderTop: li > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                            {changed && (
-                              <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>
-                                {line}
-                              </div>
-                            )}
-                            <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#d44000" : "#2c3236", fontWeight: changed ? 800 : 600 }}>
-                              {modified}
-                            </div>
-                          </div>
-                        );
-                      } : undefined}
+                      adjustPct={isTarget ? suggestion.reco : null}
                     />
                   );
                 })}

@@ -4902,3 +4902,24 @@ POC : https://claude.ai/artifact/QpGXUusZ3mTYRPB63WDrK3. `DecisionStep.tsx` gard
 - Reco jamais écrite à la main : `syntheticBaselineFor` + `computeAutoregSuggestion`. Scores calibrés le 07/10 : sportif 55 + séance 8 → Alléger −2 ; Karim 50 + 9 → −2 ; radar 45/8, 50/9, 65/6, 70/7, 85/3. À recalibrer si la règle de reco change.
 - Personnalisation (séance réelle d'un programme claimé, prénom du sportif côté coach) discutée puis écartée (« overkill »).
 - Anciennes illustrations de `FrisePreviews.tsx` probablement orphelines, pas supprimées.
+
+## Parseur d'exercices, moteur de leviers unique, lignes enrichies partout (2026-10-07)
+
+POC : https://claude.ai/artifact/EMTXTuFq2uzmxVabB2pPt2 (v5). La ligne tapée dans `notes` reste la source de vérité ; rien n'est stocké en structuré.
+
+- **`src/lib/exerciseParser.ts`** : parseur unique. Chaque token garde sa position dans le texte, le nom = le reste ; parenthèses = notes (jamais parsées ni ajustées) ; consignes (Note, Focus, Bilan…) = `kind: "note"` ; ligne non comprise = `fallback` ; `ambiguous` = jamais ajustée. `rewriteLine()` ne réécrit que les chiffres modifiés.
+- **`src/lib/sessionLevers.ts`** : moteur d'ajustement UNIQUE. `loadAdjust.parseAndApply` délègue ici, donc décisions, aperçus, Reconduire, Dupliquer, acclimatation et simulateurs utilisent tous les mêmes règles :
+  - surcharge : charges +% (cran mini 2,5 kg, 1 kg sous 20 kg), sinon intensité (%, allure ±5 s/km par 5 %, plafond 10 s/km), sinon durée, sinon +1 série/tour (endurance, en-tête de bloc), sinon reps +% au poids du corps (au moins +1) ;
+  - baisse < 10 % : même ordre à la baisse, RPE −1, au poids du corps −1 rep ;
+  - décharge (≤ −10 %) : séries −|pct| en retirant les dernières (le haut des montées) ET charges −|pct|/2 sauf sur une montée ; endurance : intensité −1 cran ;
+  - `mode: "loads"` (acclimatation seulement) : mêmes séries, charges −pct.
+  - `adjustNotes()` (texte + synthèse), `describeChange()` (décision déjà appliquée).
+- **`src/lib/exerciseBank.ts`** : ~745 termes FR/EN → 11 catégories (icône de ligne).
+- **`src/components/sessions/ExerciseLineView.tsx`** : rendu UNIQUE de toutes les lignes (cartes Accueil/Planning/Coach Control/revue swipe, programmes, `/p/`, fiche modèle, Reconduire/Dupliquer, choix Modèle/Importer, exercices floutés, démos, page `/share`, tiroir d'édition avec pastilles et noms cliquables, séance en direct en `size="large"`). Une pastille par charge, points/barres de séries en orange transparent à droite, pas d'aplat noir. `SessionSynthesis` sous le titre de chaque séance (aperçu ou décision appliquée). `WeekSessionCard`/`SessionTemplateCard` : props `adjustPct`, `originalNotes` ; `renderExerciseLine(line, i, view)`.
+- **Éditeur** : clic sur une pastille = éditeur de token ; clic ailleurs = texte, un clic dans le texte ne rouvre plus de panneau ; « ✏️ Modifier toute la ligne en texte » dans le panneau.
+- **Placeholder du check-in** (`plannedPlaceholderLine`) : « Séance haltéro 45 min @ RPE 6 (à compléter) ».
+- **Largeur des jours unique** : `--wk-col` 280/305/330 px (Planning, éditeur, modèles, `/p/` iframe comprise, Reconduire).
+- **Landings** (`~/Desktop/LP prod`) : chargent `go.theperfclub.com/embed/exercise-lines.js` (`src/embed/exerciseLines.tsx`, compilé par `scripts/build-embed.mjs` en `prebuild`, esbuild en devDep, `/embed` exclu du middleware, cache 1 h), seulement quand le simulateur approche de l'écran. Champ « Teste ta propre séance ». Tables de décision régénérées avec `computeDecisionCard()` actuel.
+- **Fix carte décision** : un jour de séance prévue pas encore faite, les tendances de charge de la Phase sont lues jusqu'à la veille (la charge du jour valait 0 et faisait dire « ta charge récente se relâche » à tort).
+- **PostHog** : `autoreg_adjust` {action preview/apply/undo/maintain, pct, lines_changed, lines_skipped}.
+- **Migration de données** : `scripts/migrate-session-notes-cleanup.mjs` (dry run par défaut, `--apply` écrit une sauvegarde avant) : supprime les « Difficulté cible : N », réécrit les blocs génériques des anciennes démos avec les consignes entre parenthèses. À lancer à la main.

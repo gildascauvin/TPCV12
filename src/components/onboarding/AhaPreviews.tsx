@@ -10,7 +10,8 @@ import DiffGauge from "@/components/calendar/DiffGauge";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor, pctToPoints, zoneRange } from "@/lib/autoregulation";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { adjustDifficulty } from "@/lib/loadAdjust";
+import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import { AGG_BANDS, chartSpecFor, type AggBand } from "@/lib/metricCards";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { DayPoint } from "@/lib/fatigueSignature";
@@ -155,22 +156,14 @@ export function AhaDecisionPreview({ name }: { name?: string }) {
             {applied ? "Ajustée" : "Prévue"}
           </span>
         </div>
+        <SessionSynthesis notes={DEMO_SESSION_LINES.join("\n")} adjustPct={applied ? sug.reco : null} style={{ marginBottom: 10 }} />
         <DiffGauge value={applied ? adjustDifficulty(planned, sug.reco) : planned} height={10} />
         <div style={{ display: "grid", gap: 7, marginTop: 12 }}>
-          {DEMO_SESSION_LINES.map(line => {
-            const next = parseAndApply(line, sug.reco);
-            const changed = next.replace(/\s/g, "") !== line.replace(/\s/g, "");
-            return (
-              <div key={line} style={{ fontSize: 13, lineHeight: 1.35, padding: "8px 10px", borderRadius: 12, background: "#f7f8f9", color: "#171b1f", fontWeight: 600 }}>
-                {applied && changed ? (
-                  <>
-                    <span style={{ display: "block", color: "#a3a8ad", textDecoration: "line-through", fontSize: 12 }}>{line}</span>
-                    <span style={{ color: "#d44000", fontWeight: 800 }}>{next}</span>
-                  </>
-                ) : line}
-              </div>
-            );
-          })}
+          {exerciseViews(DEMO_SESSION_LINES, applied ? sug.reco : null).map((v, i) => (
+            <div key={i} style={{ padding: "8px 10px", borderRadius: 12, background: "#f7f8f9" }}>
+              <ExerciseLineView text={v.text} original={v.original} ctx={v.ctx} />
+            </div>
+          ))}
         </div>
       </div>
     </Panel>

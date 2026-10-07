@@ -660,7 +660,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         ) : (
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+            gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
             gap: isMd ? 12 : 10,
             overflowX: "auto",
             padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
@@ -987,7 +987,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, var(--wk-col, 260px))",
+          gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
           gap: isMd ? 12 : 10,
           overflowX: "auto",
           padding: isMd ? "14px 24px 18px" : "14px 16px 18px",
@@ -1095,6 +1095,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                   <AutoregButtons
                     key={`${autoregTarget.id}-${decisionTick}`}
                     sessionId={autoregTarget.id}
+                    notes={autoregTarget.notes}
                     storedDecision={validDecision(autoregTarget)}
                     viewer={{ role: "coach", subjectName: athlete.name }}
                     actionsSlot={autoregActionsSlot}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
-import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
+import { adjustDifficulty } from "@/lib/loadAdjust";
 import { wellnessColor } from "@/lib/wellness";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -60,9 +60,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
     { key: "surcharge", icon: "📈", label: "Surcharge", sub: `+${fmtNum(customPct)}%` },
   ];
 
-  const lines = session.notes ? session.notes.split("\n").filter(Boolean) : [];
   const newDiff = adjustDifficulty(session.target_difficulty ?? 6, currentPct);
-  const rendered = lines.map(line => ({ line, after: parseAndApply(line, currentPct) }));
   const previewSession: SessionLike = {
     id: session.id, date: newDate, name: session.name, notes: session.notes,
     duration: session.duration ?? null, rpe: null, done: false, target_difficulty: newDiff,
@@ -213,24 +211,7 @@ export default function DuplicateModal({ session, onDuplicate, onClose, athletes
             onDuplicate={() => {}}
             hideActions
             cardStyle={{ cursor: "default" }}
-            renderExerciseLine={(_ex, i) => {
-              const { line, after } = rendered[i];
-              const changed = after !== line;
-              return changed ? (
-                <div style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                  <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>{line}</div>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "#171b1f", wordBreak: "break-word" }}>{after}</div>
-                </div>
-              ) : (
-                <div style={{
-                  padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-                  borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff",
-                  whiteSpace: "pre-wrap", wordBreak: "break-word",
-                }}>
-                  {line}
-                </div>
-              );
-            }}
+            adjustPct={currentPct}
           />
         </div>
 

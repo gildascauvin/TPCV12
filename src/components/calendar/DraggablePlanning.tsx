@@ -3,7 +3,7 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
-import { parseAndApply } from "@/lib/loadAdjust";
+import { ExerciseLineView, type LineContext } from "@/components/sessions/ExerciseLineView";
 
 /* Wrappers dnd-kit partagés par /week (WeekClient.tsx) ET /coach/planning (CoachPlanningClient.tsx) —
    "le même composant" des deux côtés, générique sur SessionLike (Session ou CoachViewSession).
@@ -71,11 +71,14 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
       cardRef={cardRef}
       cardStyle={style}
       decisionGauge={decisionGauge}
-      renderExerciseLine={(line, index) => (
+      adjustPct={previewPct}
+      renderExerciseLine={(_line, index, view) => (
         <DraggableExerciseLine
           key={index} sessionId={session.id} index={index}
-          text={previewPct != null ? parseAndApply(line, previewPct) : line}
-          originalText={previewPct != null ? line : undefined}
+          text={view.text}
+          originalText={view.original}
+          adjusting={view.adjusting}
+          ctx={view.ctx}
           unseen={hasUnseenAttachment(session.exercise_media?.[String(index)], viewerRole, viewedAt)}
         />
       )}
@@ -83,8 +86,14 @@ export function DraggableSessionCard<T extends SessionLike>({ session, onComplet
   );
 }
 
-export function DraggableExerciseLine({ sessionId, index, text, originalText, unseen }: {
+export function DraggableExerciseLine({ sessionId, index, text, originalText, unseen, ctx, compact = true, adjusting = false }: {
   sessionId: string; index: number; text: string; unseen?: boolean;
+  /** Contexte de la ligne dans sa séance (catégorie héritée, bloc), voir sessionLineContexts. */
+  ctx?: LineContext;
+  /** Variante serrée (cartes du Planning, Coach Control) ; false sur la carte de l'Accueil. */
+  compact?: boolean;
+  /** Aperçu ou décision en cours : signale les lignes non ajustées (lecture incertaine). */
+  adjusting?: boolean;
   /* Ligne brute avant décharge/surcharge (autorégulation) — quand différente de `text`, affichée
      barrée au-dessus (même style que TodaySessionCard/CoachAthleteCard). undefined partout où ce
      mécanisme n'existe pas (comportement inchangé pour /week et /coach/planning aujourd'hui). */
@@ -93,12 +102,11 @@ export function DraggableExerciseLine({ sessionId, index, text, originalText, un
   const dragId = `ex:${sessionId}:${index}`;
   const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({ id: dragId, data: { type: "exercise", sessionId, index } });
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: dragId, data: { type: "exercise", sessionId, index } });
-  const changed = originalText !== undefined && originalText !== text;
   return (
     <div
       ref={el => { setDragRef(el); setDropRef(el); }}
       style={{
-        padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
+        padding: compact ? "7px 9px" : "10px 12px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
         borderTop: index > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
         background: isOver ? "#fff5f2" : "#fff", whiteSpace: "pre-wrap", wordBreak: "break-word",
         display: "flex", alignItems: "flex-start", gap: 6,
@@ -109,12 +117,9 @@ export function DraggableExerciseLine({ sessionId, index, text, originalText, un
         {...attributes} {...listeners}
         style={{ cursor: "grab", touchAction: "none", color: "#c7ccd1", fontSize: 11, flexShrink: 0, userSelect: "none" as const, lineHeight: 1.4, marginTop: 1 }}
       >⠿</span>
-      <span style={{ flex: 1 }}>
-        {changed && (
-          <div style={{ fontSize: 10.5, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1 }}>{originalText}</div>
-        )}
-        <span style={{ color: changed ? "#E8571A" : undefined, fontWeight: changed ? 800 : undefined }}>{text}</span>
-        {unseen && <UnseenDot />}
+      <span style={{ flex: 1, minWidth: 0, position: "relative" }}>
+        <ExerciseLineView text={text} original={originalText} ctx={ctx} compact={compact} adjusting={adjusting} />
+        {unseen && <span style={{ position: "absolute", top: 0, right: 0 }}><UnseenDot /></span>}
       </span>
     </div>
   );

@@ -49,7 +49,7 @@ import type { RangeMode } from "@/components/calendar/RangeToggle";
 import type { ConseilsData } from "@/lib/conseilsData";
 
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
-import { PLANNED_RPE, PLANNED_LABEL, type PlannedIntensity } from "@/lib/plannedIntensity";
+import { PLANNED_RPE, PLANNED_LABEL, plannedPlaceholderLine, type PlannedIntensity } from "@/lib/plannedIntensity";
 import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
 import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
@@ -410,6 +410,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const decisionGaugeSlot: React.ReactNode = autoregTargetTop ? (
     <AutoregButtons
       sessionId={autoregTargetTop.id}
+      notes={autoregTargetTop.notes}
       storedDecision={decisionLocked ? null : validDecision(autoregTargetTop)}
       /* Gratuit (2026-10-02) : réglage manuel sans zone ni reco, CTA sous l'anneau (la carte décision
          est floutée) ; c'est une entrée, donc enregistrée. */
@@ -574,7 +575,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
        la décision du jour existe même sans programme. Repos = rien. */
     if (plannedIntensity && plannedIntensity !== "rest") {
       try {
-        await saveSession({ name: `Séance du jour ${PLANNED_LABEL[plannedIntensity]}`, notes: "", date: selectedDate, target_difficulty: PLANNED_RPE[plannedIntensity], exercise_media: {} });
+        await saveSession({ name: `Séance du jour ${PLANNED_LABEL[plannedIntensity]}`, notes: plannedPlaceholderLine(profile.sport, plannedIntensity), date: selectedDate, target_difficulty: PLANNED_RPE[plannedIntensity], exercise_media: {} });
       } catch (e) { console.error("[checkin] séance prévue non créée", e); }
     }
     setShowWellness(false);

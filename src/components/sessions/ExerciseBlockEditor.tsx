@@ -1,9 +1,10 @@
 "use client";
 
+import { ExerciseLineView, sessionLineContexts, type LineContext } from "@/components/sessions/ExerciseLineView";
 import { useEffect, useRef, useState } from "react";
 import {
-  type TokenSuggestion, type TokenType, TOKEN_RE,
-  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, getClickToken, resolveExerciseName, findNameSpans,
+  type TokenSuggestion, type TokenType,
+  generateSuggestions, generateSuggestionsClickMode, getCurrentToken, resolveExerciseName,
 } from "@/lib/exerciseAutocomplete";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -149,7 +150,7 @@ function useKeyboardInset(active: boolean): number {
    ligne en texte libre, cf. ExerciseCard) — pré-rempli avec la valeur actuelle, un tap dedans
    ouvre le clavier pour taper une valeur personnalisée ; sinon un tap direct sur une suggestion
    applique la valeur sans jamais ouvrir le clavier (façon sélecteur multi-valeurs Notion). */
-function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur, anchorRect, isMobile, valueRow }: {
+function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur, anchorRect, isMobile, valueRow, onSwitchToText }: {
   suggestions: TokenSuggestion[];
   selectedIdx: number;
   onAccept: (value: string) => void;
@@ -157,6 +158,8 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
   anchorRect: DOMRect | null;
   isMobile: boolean;
   valueRow?: { value: string; onChange: (v: string) => void; onClear: () => void; inputRef?: (el: HTMLInputElement | null) => void; onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>; onFocus?: () => void; onBlur?: () => void };
+  /** Lien "Modifier toute la ligne en texte" (éditeur de token uniquement). */
+  onSwitchToText?: () => void;
 }) {
   const keyboardInset = useKeyboardInset(isMobile);
 
@@ -202,6 +205,12 @@ function TokenSuggestionPanel({ suggestions, selectedIdx, onAccept, onCancelBlur
         </div>
       )}
       <div style={{ overflowY: "auto" }}>{list}</div>
+      {onSwitchToText && (
+        <button
+          onMouseDown={e => { e.preventDefault(); onCancelBlur(); onSwitchToText(); }}
+          style={{ flexShrink: 0, border: "none", borderTop: "1px solid #eee", background: "#fff", padding: "11px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: "#62686e", cursor: "pointer", fontFamily: "inherit" }}
+        >✏️ Modifier toute la ligne en texte</button>
+      )}
     </>
   );
 
@@ -350,27 +359,9 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => refreshSuggestions(text, pos), 120);
   }
-  function resolveClickSuggestions(pos: number) {
-    const el = ref.current;
-    if (!el) return;
-    const text = el.value;
-    const clicked = getClickToken(text, pos);
-    if (!clicked) {
-      const { fullLine } = getCurrentToken(text, pos);
-      if (!fullLine.trim()) { closeAc(); return; }
-      openAc(generateSuggestions("", fullLine), null, null);
-      return;
-    }
-    const suggestions = generateSuggestionsClickMode(clicked.token, clicked.fullLine);
-    if (!suggestions.length) openAc(generateSuggestions(clicked.token, clicked.fullLine), null, null);
-    else openAc(suggestions, clicked.tokenStart, clicked.tokenEnd);
-  }
-  function handleClick() {
-    const el = ref.current;
-    if (!el) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => resolveClickSuggestions(el.selectionStart ?? 0), 60);
-  }
+  /* Un clic dans le texte libre ne fait que placer le curseur (2026-10-07) : les suggestions s'ouvrent
+     pendant la frappe, et au clic sur une pastille en lecture (éditeur de token). Avant, chaque clic
+     dans le texte rouvrait le panneau, ce qui empêchait d'éditer librement. */
   function acceptSuggestion(valueToInsert: string) {
     const el = ref.current;
     if (!el || !ac) return;
@@ -424,7 +415,7 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
     <>
       <textarea
         ref={ref} value={value} autoFocus={autoFocus} placeholder={placeholder} rows={1}
-        onChange={e => handleChange(e.target.value)} onClick={handleClick} onKeyDown={handleKeyDown} onBlur={handleBlur} onPaste={handlePaste}
+        onChange={e => handleChange(e.target.value)} onKeyDown={handleKeyDown} onBlur={handleBlur} onPaste={handlePaste}
         style={{
           display: "block", width: "100%", fontSize: 16, fontFamily: "inherit", border: "none", outline: "none",
           background: "transparent", color: "#171b1f", padding: 0, margin: 0, resize: "none", overflow: "hidden",
@@ -438,75 +429,6 @@ function TokenInput({ value, onChange, onCommit, onCancel, placeholder, autoFocu
           anchorRect={ac.rect} isMobile={!isMd}
         />
       )}
-    </>
-  );
-}
-
-/* TOKEN_RE vit désormais dans exerciseAutocomplete.ts (source unique, réutilisée aussi par
-   getClickToken côté détection) — voir ce fichier pour le détail des 4 alternatives.
-
-   `onTokenClick` reçoit les bornes exactes du même match TOKEN_RE utilisé pour l'affichage — la
-   source de vérité du "qu'est-ce qui est cliqué" est donc unique (plus de recalcul séparé via
-   getClickToken pour ce chemin, cf. ExerciseCard). Le token cliqué en cours d'édition (mode click,
-   voir ExerciseCard) est mis en évidence différemment (fond plein plutôt que teinté) pour montrer
-   clairement quel token le panneau de suggestions est en train de modifier. */
-function Tokenized({ text, onTokenClick, activeSpan, large = false }: {
-  text: string;
-  large?: boolean;
-  onTokenClick?: (start: number, end: number, rect: DOMRect) => void;
-  activeSpan?: { start: number; end: number } | null;
-}) {
-  const spans: { start: number; end: number; kind: "numeric" | "name" }[] = [];
-  let m: RegExpExecArray | null;
-  TOKEN_RE.lastIndex = 0;
-  while ((m = TOKEN_RE.exec(text))) {
-    spans.push({ start: m.index, end: m.index + m[0].length, kind: "numeric" });
-  }
-  // Le nom de l'exercice est aussi un token cliquable (demande explicite : "les exercices ne sont
-  // pas tokénisés") — jamais ajouté s'il chevauche un token numérique déjà trouvé (arrive quand le
-  // nom EST une distance/durée, ex. "400m" reconnu à la fois comme nom et comme volume — un seul
-  // span suffit dans ce cas, inutile de le dupliquer). Plusieurs spans "name" possibles quand la
-  // ligne combine plusieurs exercices avec "+" (ex. "Power clean + Split jerk") — chacun devient
-  // sa propre pastille cliquable, le "+" restant du texte simple entre les deux.
-  const nameSpans = findNameSpans(text);
-  nameSpans.forEach(nameSpan => {
-    if (!spans.some(s => nameSpan.start < s.end && nameSpan.end > s.start)) {
-      spans.push({ ...nameSpan, kind: "name" });
-    }
-  });
-  spans.sort((a, b) => a.start - b.start);
-
-  const parts: { text: string; isToken: boolean; start: number; end: number; kind?: "numeric" | "name" }[] = [];
-  let lastIndex = 0;
-  spans.forEach(s => {
-    if (s.start > lastIndex) parts.push({ text: text.slice(lastIndex, s.start), isToken: false, start: lastIndex, end: s.start });
-    parts.push({ text: text.slice(s.start, s.end), isToken: true, start: s.start, end: s.end, kind: s.kind });
-    lastIndex = s.end;
-  });
-  if (lastIndex < text.length) parts.push({ text: text.slice(lastIndex), isToken: false, start: lastIndex, end: text.length });
-
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (!part.isToken) return part.text;
-        const isActive = !!activeSpan && activeSpan.start === part.start && activeSpan.end === part.end;
-        const isName = part.kind === "name";
-        const baseBg = isName ? "#EBF5FB" : "rgba(212,64,0,.1)";
-        const baseColor = isName ? "#2980B9" : "#d44000";
-        return (
-          <span
-            key={i}
-            onClick={onTokenClick ? e => { e.stopPropagation(); onTokenClick(part.start, part.end, e.currentTarget.getBoundingClientRect()); } : undefined}
-            style={{
-              background: isActive ? baseColor : baseBg, color: isActive ? "#fff" : baseColor,
-              fontFamily: "var(--font-mono), monospace", fontWeight: 700, borderRadius: large ? 8 : 8, padding: large ? "2px 9px" : "1px 6px", marginLeft: i === 0 ? 0 : 4, fontSize: large ? 21 : 13.5, lineHeight: large ? 1.7 : undefined,
-              cursor: onTokenClick ? "pointer" : undefined,
-            }}
-          >
-            {part.text}
-          </span>
-        );
-      })}
     </>
   );
 }
@@ -618,6 +540,8 @@ function emptyAttachments(): ExerciseAttachments {
 
 interface CardProps {
   line: Line;
+  /** Contexte de la ligne dans la séance (catégorie héritée, bloc). */
+  lineCtx?: LineContext;
   editing: boolean;
   onStartEdit: () => void;
   onCommitEdit: (text: string) => void;
@@ -650,7 +574,7 @@ interface CardProps {
   large?: boolean;
 }
 
-function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate, large = false }: CardProps) {
+function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiveEdit, onDeleteEmpty, onDelete, attachments, authorRole, authorName, onUpdateAttachments, isPanelOwner, requestPanel, releasePanel, ownerId, testSubject, sessionDate, large = false }: CardProps) {
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
@@ -950,7 +874,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
 
   /* Clic sur un token en lecture — ouvre le panneau directement sur ce token, sans jamais passer
      par onStartEdit (qui activerait toute la ligne en texte libre). `start`/`end` viennent
-     directement de Tokenized (même regex que l'affichage), jamais recalculés autrement.
+     directement de la pastille cliquée dans ExerciseLineView (parseur unique), jamais recalculés.
      requestPanel() prend possession du panneau partagé — ferme automatiquement tout autre panneau
      déjà ouvert (cf. l'effet ci-dessus, côté de la carte qui le perd). */
   function openTokenClick(start: number, end: number, rect: DOMRect) {
@@ -1052,9 +976,12 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
             onClick={() => { setDraftText(line.text); closeClickTok(); onStartEdit(); }}
             style={{ flex: 1, minWidth: 0, fontSize: large ? 22 : 13.5, fontWeight: large ? 700 : 650, color: "#2c3236", cursor: "text", whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: large ? 1.7 : undefined }}
           >
-            <Tokenized
-              large={large}
+            {/* Même rendu enrichi que partout dans l'app ; chaque pastille et chaque nom ouvrent
+               l'éditeur de token sur le texte brut qu'ils représentent, un clic ailleurs ouvre le texte. */}
+            <ExerciseLineView
               text={line.text}
+              ctx={lineCtx}
+              size={large ? "large" : "normal"}
               onTokenClick={(start, end, rect) => openTokenClick(start, end, rect)}
               activeSpan={clickTok ? { start: clickTok.start, end: clickTok.start + clickTok.value.length } : null}
             />
@@ -1065,6 +992,7 @@ function ExerciseCard({ line, editing, onStartEdit, onCommitEdit, onLiveEdit, on
             suggestions={clickAc.suggestions} selectedIdx={clickAc.selectedIdx} onAccept={acceptClickSuggestion}
             onCancelBlur={() => { if (clickBlurTimeout.current) clearTimeout(clickBlurTimeout.current); }}
             anchorRect={clickTok.rect} isMobile={!isMd}
+            onSwitchToText={() => { const t = line.text; setClickTok(null); setDraftText(t); onStartEdit(); }}
             valueRow={{
               value: clickTok.value,
               onChange: updateClickValue,
@@ -1534,6 +1462,10 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
 
   const focused = focusIndex !== undefined;
   const shownLines = focused ? lines.filter((_, i) => i === focusIndex) : lines;
+  const lineCtxById: Record<string, LineContext> = (() => {
+    const ctxs = sessionLineContexts(lines.map(l => l.text));
+    return Object.fromEntries(lines.map((l, i) => [l.id, ctxs[i]]));
+  })();
   return (
     <div style={{ border: focused ? "none" : "1.5px solid rgba(0,0,0,.08)", borderRadius: 16, background: "#fff", overflow: "visible" }}>
       {!focused && <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "#fafafa", borderBottom: "1px solid rgba(0,0,0,.06)", borderRadius: "16px 16px 0 0" }}>
@@ -1549,6 +1481,7 @@ export default function ExerciseBlockEditor({ value, onChange, authorRole, autho
                 key={l.id}
                 large={focused}
                 line={l}
+                lineCtx={lineCtxById[l.id]}
                 editing={editingId === l.id}
                 onStartEdit={() => setEditingId(l.id)}
                 onCommitEdit={text => {

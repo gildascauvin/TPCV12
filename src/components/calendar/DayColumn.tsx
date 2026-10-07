@@ -1,5 +1,7 @@
 "use client";
 
+import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
+import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 import { format } from "date-fns";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -52,7 +54,7 @@ export interface SessionLike {
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
    à l'identique par /coach/planning et par l'aperçu programme de l'onboarding (WeekPreviewStep.tsx). ─── */
-export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge, onStart, liveLabel }: {
+export function WeekSessionCard<T extends SessionLike>({ session, onComplete, onEdit, dragHandleProps, cardRef, cardStyle, renderExerciseLine, hideActions, decisionGauge, onStart, liveLabel, adjustPct, originalNotes }: {
   session: T;
   onComplete: (s: T) => void;
   /* Séance en direct (2026-10-02) : Démarrer / Reprendre (séance du jour à faire, côté sportif). */
@@ -69,7 +71,12 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   cardStyle?: React.CSSProperties;
   /* Réordonnancement des exercices par drag & drop — remplace le rendu par défaut d'une ligne
      d'exercice quand fourni. */
-  renderExerciseLine?: (line: string, index: number) => React.ReactNode;
+  renderExerciseLine?: (line: string, index: number, view: ExerciseLineViewData) => React.ReactNode;
+  /* Ajustement en aperçu (autorégulation, Reconduire, Dupliquer…) : lignes en diff + synthèse sous
+     le titre. `originalNotes` : notes d'avant une décision déjà appliquée (synthèse seule). Sans
+     ces props, la décision enregistrée sur la séance (autoreg_decision) fournit l'original. */
+  adjustPct?: number | null;
+  originalNotes?: string | null;
   /* Masque le bloc Terminer/Dupliquer — réservé aux aperçus en lecture seule (ReconduireModal.tsx)
      où onComplete/onEdit/onDuplicate ne sont que des no-ops requis par le type : ce n'est pas
      l'endroit où l'action se fait, les boutons n'ont donc pas leur place à l'écran. */
@@ -82,6 +89,8 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   decisionGauge?: React.ReactNode;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
+  const views = exerciseViews(exercises, adjustPct);
+  const synthOriginal = originalNotes !== undefined ? originalNotes : validDecision(session as { date: string; autoreg_decision?: AutoregDecisionRecord | null })?.original?.notes ?? null;
   const isFuture = session.date > format(new Date(), "yyyy-MM-dd");
   // Séance d'un programme ThePerfClub au-delà de J+7 (2026-10-05) : exercices floutés, pas d'ouverture.
   const concealed = session.concealed ?? null;
@@ -120,6 +129,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           {session.done ? "Terminé" : liveLabel ? `● ${liveLabel}` : "Prévu"}
         </span>
       </div>
+      {!concealed && <SessionSynthesis notes={session.notes} adjustPct={adjustPct} originalNotes={synthOriginal} compact style={{ marginBottom: 8 }} />}
 
       {/* 2. Single gauge — jauge de décision interactive si une suggestion cible cette séance,
          DiffGauge statique sinon (no label) */}
@@ -137,10 +147,8 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       {concealed ? (
         <div style={{ marginBottom: 8 }}>
           {exercises.length > 0 && (
-            <div aria-hidden style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
-              {exercises.map((ex, i) => (
-                <div key={i} style={{ padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
-              ))}
+            <div aria-hidden style={{ filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              <ExerciseLinesBox lines={exercises} />
             </div>
           )}
           <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
@@ -148,15 +156,10 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
       ) : exercises.length > 0 && (
         <div style={{ marginBottom: 8, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
-            <div key={i}>{renderExerciseLine(ex, i)}</div>
+            <div key={i}>{renderExerciseLine(ex, i, views[i])}</div>
           ) : (
-            <div key={i} style={{
-              padding: "7px 9px", fontSize: 11.5, lineHeight: 1.4,
-              color: "#2c3236", fontWeight: 600,
-              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
-              background: "#fff", whiteSpace: "pre-wrap", wordBreak: "break-word",
-            }}>
-              {ex}
+            <div key={i} style={{ padding: "7px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
+              <ExerciseLineView text={views[i].text} original={views[i].original} ctx={views[i].ctx} adjusting={views[i].adjusting} compact />
             </div>
           ))}
         </div>

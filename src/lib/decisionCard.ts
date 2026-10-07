@@ -327,11 +327,18 @@ function withPhase(
   const voice: Voice = { coach: params.perspective === "coach", subject: params.subject };
   const perspective = params.perspective;
 
-  const loadLong = lastNLoadPoints(params.sessions, anchor, CONSEILS_HISTORY_DAYS);
+  /* Séance prévue pas encore faite (2026-10-07) : la charge du jour n'est pas connue, ce n'est pas
+     un 0. Sans ça, la fatigue récente (EWMA 7j) chutait artificiellement chaque jour de séance prévue
+     et un sportif fatigué lisait « ta charge récente se relâche pourtant » à tort. Les tendances de
+     charge de la Phase sont donc lues jusqu'à la veille tant qu'aucune séance n'est faite aujourd'hui. */
+  const todayStr = daysAgoStr(0, anchor);
+  const doneToday = params.sessions.some(s => s.date === todayStr && s.done);
+  const loadAnchor = day.kind === "planned" && !doneToday ? new Date(anchor.getTime() - 86_400_000) : anchor;
+  const loadLong = lastNLoadPoints(params.sessions, loadAnchor, CONSEILS_HISTORY_DAYS);
   const ff = fitnessFatigueTrend(loadLong);
   const fitnessTrendInfo = ff.fitness !== null ? trendDimInfo("fitness", ff.fitness, perspective) : null;
-  const { monotonyVal, strainVal } = monotonyStrainFor(params.sessions, anchor);
-  const acwrZone = acwr(lastNLoadPoints(params.sessions, anchor, 42));
+  const { monotonyVal, strainVal } = monotonyStrainFor(params.sessions, loadAnchor);
+  const acwrZone = acwr(lastNLoadPoints(params.sessions, loadAnchor, 42));
   const emptyZone = { label: "", color: "#8a8f94", text: "" };
   const loadInfo = acwrZone.value !== null ? sigDimInfo("load", acwrZone.value, perspective) : emptyZone;
   const monotonyInfo = monotonyVal !== null ? sigDimInfo("monotony", monotonyVal, perspective) : emptyZone;

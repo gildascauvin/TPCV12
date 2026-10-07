@@ -120,7 +120,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           const base = {
             date: addDaysStr(acclimatationToday, idx - todayIdx),
             name: `Acclimatation · ${s.name}`,
-            notes: s.notes ? parseAndApply(s.notes, ACCLIMATATION_LOAD_PCT) : s.notes,
+            notes: s.notes ? parseAndApply(s.notes, ACCLIMATATION_LOAD_PCT, { mode: "loads" }) : s.notes,
             target_difficulty: Math.max(1, s.target_difficulty + ACCLIMATATION_DIFF),
             done: false,
           };

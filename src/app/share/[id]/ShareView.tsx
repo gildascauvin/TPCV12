@@ -1,5 +1,6 @@
 "use client";
 
+import { ExerciseLineView, sessionLineContexts } from "@/components/sessions/ExerciseLineView";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import ZoneSparkline from "@/components/conseils/ZoneSparkline";
 import SparkLineClient, { FORM_ZONES } from "@/components/conseils/SparkLineClient";
@@ -7,6 +8,12 @@ import ZoneBadge from "@/components/conseils/ZoneBadge";
 import { METRIC_DEFINITIONS } from "@/lib/fatigueSignature";
 import type { ShareResourceType } from "@/lib/share";
 import { ShareRing, ShareChip, ShareExerciseList, type ShareBehavior } from "./ShareCardParts";
+
+// Même rendu de ligne que dans l'app (contexte de séance pour la catégorie héritée et les blocs).
+function enrichedLine(lines: string[]) {
+  const ctxs = sessionLineContexts(lines);
+  return (line: string, i: number) => <ExerciseLineView text={line} ctx={ctxs[i]} />;
+}
 
 /* Rendu public de /share/[id] — un snapshot figé au moment du partage (jamais un pointeur live
    vers la ligne source), aucune notion de connecté/non-connecté (décision explicite, aucune donnée
@@ -90,7 +97,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
             </span>
           </div>
           {s.difficulty != null && <div style={{ marginBottom: 14 }}><DiffGauge value={s.difficulty} height={10} /></div>}
-          <ShareExerciseList exercises={s.exercises ?? []} />
+          <ShareExerciseList exercises={s.exercises ?? []} renderLine={enrichedLine(s.exercises ?? [])} />
           <div style={{ fontSize: 11, color: "#9a9ea1", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>
         </Card>
       )}
@@ -174,7 +181,7 @@ export default function ShareView({ resourceType, snapshot }: { resourceType: Sh
                 </span>
               </div>
               {s.topSession.difficulty != null && <div style={{ marginBottom: Array.isArray(s.topSession.exercises) && s.topSession.exercises.length ? 8 : 0 }}><DiffGauge value={s.topSession.difficulty} height={8} /></div>}
-              {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} />}
+              {Array.isArray(s.topSession.exercises) && s.topSession.exercises.length > 0 && <ShareExerciseList exercises={s.topSession.exercises} renderLine={enrichedLine(s.topSession.exercises)} />}
             </div>
           )}
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.35)", marginTop: 14, textAlign: "center" }}>Partagé par {s.authorName}</div>

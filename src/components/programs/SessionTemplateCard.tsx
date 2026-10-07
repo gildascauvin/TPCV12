@@ -1,5 +1,6 @@
 import type { SessionTemplate, WeekTemplate } from "@/types";
 import DiffGauge from "@/components/calendar/DiffGauge";
+import { ExerciseLineView, ExerciseLinesBox, SessionSynthesis, exerciseViews, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -16,13 +17,15 @@ export function loadBarColor(avg: number): string {
   return "#d44000";
 }
 
-export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride, gaugeSlot, concealed }: {
+export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef, cardStyle, renderExerciseLine, badgeOverride, gaugeOverride, gaugeSlot, concealed, adjustPct }: {
   session: SessionTemplate;
   onClick?: () => void;
   dragHandleProps?: Record<string, unknown>;
   cardRef?: (el: HTMLDivElement | null) => void;
   cardStyle?: React.CSSProperties;
-  renderExerciseLine?: (line: string, index: number) => React.ReactNode;
+  renderExerciseLine?: (line: string, index: number, view: ExerciseLineViewData) => React.ReactNode;
+  /* Ajustement en aperçu (simulateur, Dupliquer…) : lignes en diff + synthèse sous le titre. */
+  adjustPct?: number | null;
   /* Aperçu autorégulation sur /p/[id] (2026-09) — remplace le badge "Prévu" fixe par la reco
      ("+10%"/"−20%") quand une suggestion est active pour cette séance. Additif, aucun autre
      appelant ne le passe (`Prévu` reste le comportement par défaut, inchangé). */
@@ -41,6 +44,7 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
   concealed?: string | null;
 }) {
   const exercises = session.notes ? session.notes.split("\n").filter(Boolean) : [];
+  const views = exerciseViews(exercises, adjustPct);
   const gaugeValue = gaugeOverride ?? session.target_difficulty ?? null;
   return (
     <div ref={cardRef} onClick={concealed ? undefined : onClick} style={{
@@ -66,14 +70,13 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
           {badgeOverride?.label ?? "Prévu"}
         </span>
       </div>
+      {!concealed && <SessionSynthesis notes={session.notes} adjustPct={adjustPct} compact style={{ marginBottom: 8 }} />}
       {gaugeSlot ?? (gaugeValue ? <DiffGauge value={gaugeValue} height={10} /> : null)}
       {concealed ? (
         <div style={{ marginTop: 7 }}>
           {exercises.length > 0 && (
-            <div aria-hidden style={{ borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)", filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
-              {exercises.map((ex, i) => (
-                <div key={i} style={{ padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600, borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>{ex}</div>
-              ))}
+            <div aria-hidden style={{ filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+              <ExerciseLinesBox lines={exercises} />
             </div>
           )}
           <div style={{ marginTop: 7, fontSize: 11, fontWeight: 700, color: "#8a8f94" }}>🔒 {concealed}</div>
@@ -81,13 +84,11 @@ export function SessionTemplateCard({ session, onClick, dragHandleProps, cardRef
       ) : exercises.length > 0 && (
         <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
           {exercises.map((ex, i) => renderExerciseLine ? (
-            <div key={i}>{renderExerciseLine(ex, i)}</div>
+            <div key={i}>{renderExerciseLine(ex, i, views[i])}</div>
           ) : (
-            <div key={i} style={{
-              padding: "6px 9px", fontSize: 11, lineHeight: 1.4, color: "#2c3236", fontWeight: 600,
-              borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none",
-              whiteSpace: "pre-wrap", wordBreak: "break-word",
-            }}>{ex}</div>
+            <div key={i} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
+              <ExerciseLineView text={views[i].text} original={views[i].original} ctx={views[i].ctx} adjusting={views[i].adjusting} compact />
+            </div>
           ))}
         </div>
       )}

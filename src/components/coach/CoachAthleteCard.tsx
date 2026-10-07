@@ -13,7 +13,7 @@ import ShareButton from "@/components/sessions/ShareButton";
 import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot";
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
-import { parseAndApply } from "@/lib/loadAdjust";
+import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import type { AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
@@ -416,6 +416,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               <AutoregButtons
                 actionRequest={actionRequest}
                 sessionId={topSession!.id}
+                notes={topSession!.notes}
                 storedDecision={validDecision(topSession)}
                 viewer={selfView ? { role: "athlete" } : { role: "coach", subjectName: athlete.name }}
                 dir={decision.suggestion?.dir}
@@ -544,6 +545,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               {topSession.done ? "Terminé" : "Prévu"}
             </span>
           </div>
+          {/* Synthèse sous le titre : aperçu en cours, ou décision déjà appliquée vs le plan. */}
+          <SessionSynthesis notes={topSession.notes} adjustPct={effectivePreviewPct} originalNotes={validDecision(topSession)?.original?.notes ?? null} compact style={{ marginTop: 6 }} />
           {!topSession.done ? null : (
             (topSession.done ? topSession.rpe : topSession.target_difficulty) != null && (
               <DiffGauge value={(topSession.done ? topSession.rpe : topSession.target_difficulty) ?? null} height={8} />
@@ -551,20 +554,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
           )}
           {topSession.notes && (
             <div style={{ marginTop: 7, borderRadius: 12, overflow: "hidden", background: "#f7f7f7", border: "1px solid rgba(0,0,0,.07)" }}>
-              {topSession.notes.split("\n").filter(Boolean).map((ex, i) => {
-                const modified = effectivePreviewPct != null ? parseAndApply(ex, effectivePreviewPct) : ex;
-                const changed = modified !== ex;
+              {exerciseViews(topSession.notes.split("\n").filter(Boolean), effectivePreviewPct).map((v, i) => {
                 const unseen = hasUnseenAttachment(topSession.exercise_media?.[String(i)], "coach", topSession.viewed_by_coach_at);
                 return (
-                  <div key={i} style={{ padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none" }}>
-                    {changed && (
-                      <div style={{ fontSize: 9.5, lineHeight: 1.3, color: "#b8bfc4", textDecoration: "line-through", marginBottom: 1, wordBreak: "break-word" }}>
-                        {ex}
-                      </div>
-                    )}
-                    <div style={{ fontSize: 11, lineHeight: 1.4, color: changed ? "#E8571A" : "#2c3236", fontWeight: changed ? 800 : 600, wordBreak: "break-word" }}>
-                      {modified}{unseen && <UnseenDot />}
-                    </div>
+                  <div key={i} style={{ position: "relative", padding: "6px 9px", borderTop: i > 0 ? "1px solid rgba(0,0,0,.07)" : "none", background: "#fff" }}>
+                    <ExerciseLineView text={v.text} original={v.original} ctx={v.ctx} compact adjusting={v.adjusting} />
+                    {unseen && <span style={{ position: "absolute", top: 4, right: 6 }}><UnseenDot /></span>}
                   </div>
                 );
               })}
