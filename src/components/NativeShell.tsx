@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { hideSplash } from "@/lib/native";
+import "@/lib/pwaInstall"; // démarre l'écoute de l'invite d'installation de Chrome au chargement
 
 /* App iOS (2026-10-03) : masque l'écran de lancement une fois la page affichée (gardé jusque-là pour
    éviter le flash et l'écran vide du chargement), et pose la classe `native` sur <html> pour

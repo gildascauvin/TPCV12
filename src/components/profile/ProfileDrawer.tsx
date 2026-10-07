@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import NotificationToggle from "./NotificationToggle";
+import InstallAppRow from "./InstallAppRow";
 import LogoutButton from "@/components/auth/LogoutButton";
 import DeleteAccountButton from "./DeleteAccountButton";
 import CoachAthletesManager from "./CoachAthletesManager";
@@ -327,6 +328,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                     )}
                   </div>
                 </div>
+
+                <InstallAppRow />
 
                 <NotificationToggle />
 

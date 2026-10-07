@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import posthog from "posthog-js";
+import { useInstallMode, runInstall } from "@/lib/pwaInstall";
 import {
   useOnboardingProgress, refreshOnboardingProgress, OPEN_QUICKADD, OPEN_PRIMING,
   type OnboardingStep, type OnboardingStepKey,
@@ -44,6 +45,7 @@ export default function OnboardingChecklist() {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
+  const installMode = useInstallMode();
 
   // Rafraîchi à chaque changement de page (une étape a pu être faite ailleurs).
   useEffect(() => { if (!sandbox) refreshOnboardingProgress(); }, [pathname, sandbox]);
@@ -76,6 +78,10 @@ export default function OnboardingChecklist() {
     window.addEventListener("scroll", place, true);
     return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
   }, [open]);
+
+  useEffect(() => {
+    if (open && installMode) posthog.capture("pwa_install_cta_viewed", { surface: "checklist", mode: installMode });
+  }, [open, installMode]);
 
   if (!progress || progress.complete || !total) return null;
   const role = progress.role;
@@ -189,6 +195,24 @@ export default function OnboardingChecklist() {
                 );
               })}
             </div>
+            {installMode && (
+              <button
+                onClick={() => { setOpen(false); runInstall("checklist"); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, textAlign: "left", width: "100%", marginTop: 12,
+                  padding: "11px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit",
+                  background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.12)", color: "#fff",
+                }}
+              >
+                <span style={{ fontSize: 18, flexShrink: 0 }}>📲</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14.5, fontWeight: 700 }}>Installer l'app</span>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: "rgba(255,255,255,.62)", marginTop: 3 }}>
+                    Une icône sur ton écran d'accueil, en un tap.
+                  </span>
+                </span>
+              </button>
+            )}
           </div>
         </>,
         document.body,
