@@ -2658,7 +2658,9 @@ function selectTriathlon(n: number, ctx?: CurriculumContext): Archetype[] {
       ? n <= 3
         ? [TRI_BASE_COURSE_RENFO, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH]
         : [TRI_BASE_NAT_END, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_RENFO]
-      : [TRI_SEUIL_VELO, TRI_DEV_NAT, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO,
+      // Course entre vélo et natation : en phase seuil (S5), course EF et course seuil ne
+      // tombent jamais sur deux slots adjacents.
+      : [TRI_SEUIL_VELO, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_DEV_NAT,
          phase === "brick" ? TRI_BRICK : TRI_SEUIL_COURSE, TRI_RENFO];
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }

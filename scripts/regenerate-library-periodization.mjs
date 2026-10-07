@@ -31,6 +31,8 @@ import { writeFileSync } from "fs";
 const APPLY = process.argv.includes("--apply");
 // --only=<texte> : ne régénère que les programmes dont le nom contient ce texte (ex. --only=Triathlon).
 const ONLY = process.argv.find(a => a.startsWith("--only="))?.slice(7).toLowerCase();
+// --days=Mar,Jeu,Sam,Dim : force les jours (avec --only), sinon dérivés du template existant.
+const DAYS_OVERRIDE = process.argv.find(a => a.startsWith("--days="))?.slice(7).split(",");
 
 // ====================================================================================
 // Portage de src/app/api/programs/generate/route.ts — voir ce fichier pour les commentaires
@@ -836,7 +838,9 @@ function selectTriathlon(n, ctx) {
       ? n <= 3
         ? [TRI_BASE_COURSE_RENFO, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH]
         : [TRI_BASE_NAT_END, TRI_BASE_VELO_LONG, TRI_BASE_NAT_TECH, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_RENFO]
-      : [TRI_SEUIL_VELO, TRI_DEV_NAT, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO,
+      // Course entre vélo et natation : en phase seuil (S5), course EF et course seuil ne
+      // tombent jamais sur deux slots adjacents.
+      : [TRI_SEUIL_VELO, high ? TRI_BASE_COURSE : TRI_BASE_COURSE_RENFO, TRI_DEV_NAT,
          phase === "brick" ? TRI_BRICK : TRI_SEUIL_COURSE, TRI_RENFO];
   return Array.from({ length: n }, (_, i) => list[i % list.length]);
 }
@@ -1380,7 +1384,7 @@ async function main() {
   console.log(`Sauvegarde des templates d'origine écrite dans ${backupFile}\n`);
 
   for (const p of programs) {
-    const days = Object.keys(p.template.weeks?.[0] ?? {}).sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
+    const days = (ONLY && DAYS_OVERRIDE ? DAYS_OVERRIDE : Object.keys(p.template.weeks?.[0] ?? {})).sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
     if (!p.level || !days.length) {
       console.log(`- ${p.name} (${p.id}) : ⚠ ignoré (level ou jours introuvables)`);
       continue;
