@@ -298,6 +298,8 @@ interface Props {
   template: ProgramTemplate;
   assignmentCount?: number;
   userName?: string;
+  /* Sport du programme : présélectionné dans Modèle / Générer de l'éditeur de séance. */
+  sport?: string | null;
   requireSubscription?: (fn: () => void) => void;
   /* Vue au-delà de S1 gatée (2026-08-19) — voir doc dans ProgramLibraryPage.tsx. Absent = jamais
      floué (repli permissif). */
@@ -352,7 +354,7 @@ interface Props {
   role?: "athlete" | "coach";
 }
 
-export default function ProgramBuilderModal({ concealFrom, programName: initialName, template: initialTemplate, assignmentCount = 0, userName, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset, showAutoregSimulator = false, role = "athlete" }: Props) {
+export default function ProgramBuilderModal({ concealFrom, programName: initialName, template: initialTemplate, assignmentCount = 0, userName, sport, requireSubscription, isActive, onUnlockClick, onSaveToLibrary, onSaveAndAssign, onBack, footerVariant = "default", wizardSingleLabel = "Assigner ce programme →", wizardHero, onShare, shareGated = false, topOffset, showAutoregSimulator = false, role = "athlete" }: Props) {
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const { isMd } = useBreakpoint();
   const [name, setName] = useState(initialName || "Mon programme");
@@ -908,7 +910,9 @@ export default function ProgramBuilderModal({ concealFrom, programName: initialN
           date={fakeSession.date}
           session={fakeSession}
           hideDate
-          userName={userName ?? "Toi"}
+          userName={userName}
+          authorRole={role}
+          sport={sport}
           onSave={async (data) => {
             // Autosave (2026-09-06) — mutation locale du template à chaque frappe (aucune écriture
             // DB tant que le programme n'est pas enregistré/assigné), ne ferme plus le drawer :

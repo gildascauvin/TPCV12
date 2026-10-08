@@ -400,6 +400,8 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         concealFrom={concealFor(step.meta.origin, step.programId)}
         programName={step.programName ?? (step.meta.sport ? `Programme ${step.meta.sport}` : "Mon programme")}
         template={step.template}
+        sport={step.meta.origin === "blank" ? null : step.meta.sport}
+        role={coachSide ? "coach" : "athlete"}
         assignmentCount={step.assignmentCount ?? 0}
         requireSubscription={requireSubscription}
         isActive={isActive}

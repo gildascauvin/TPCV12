@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProgramTemplate } from "@/types";
+import { mediaForAssignment } from "@/lib/programMedia";
 import { scheduleSessions } from "@/lib/programSchedule";
 
 /* "Mettre à jour mes séances à venir" (onboarding in-app, 2026-10-01) — après édition d'un programme
@@ -45,7 +46,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       const rows = scheduleSessions(template, a.start_date, a.day_anchor)
         .filter(x => x.date > today || (x.date === today && !skipToday))
         .map(({ date, session: s }) => {
-          const base = { date, name: s.name, notes: s.notes, target_difficulty: s.target_difficulty, done: false, program_assignment_id: a.id };
+          const base = { date, name: s.name, notes: s.notes, target_difficulty: s.target_difficulty, done: false, program_assignment_id: a.id, exercise_media: mediaForAssignment(s.exercise_media, !!a.user_id && a.user_id === user.id) };
           return a.user_id ? { ...base, user_id: a.user_id } : { ...base, coach_id: a.coach_id, athlete_id: a.athlete_id };
         });
       if (rows.length) {

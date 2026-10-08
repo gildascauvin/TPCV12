@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProgramTemplate } from "@/types";
+import { mediaForAssignment } from "@/lib/programMedia";
 import { firstTrainingDay, scheduleSessions, addDaysStr } from "@/lib/programSchedule";
 import { parseAndApply } from "@/lib/loadAdjust";
 
@@ -96,6 +97,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json({ error: assignError.message }, { status: 500 });
     }
 
+    // Commentaires de sportif recopiés seulement si on s'assigne son propre programme.
+    const keepAthleteComments = !!user_id && user_id === user.id;
     const sessionsToInsert: object[] = [];
     const coachSessionsToInsert: object[] = [];
 
@@ -104,7 +107,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const target_difficulty = weekIdx === 0 && typeof wellnessAdjustment === "number"
         ? Math.max(1, Math.min(10, s.target_difficulty + wellnessAdjustment))
         : s.target_difficulty;
-      const base = { date, name: s.name, notes: s.notes, target_difficulty, done: false };
+      const base = { date, name: s.name, notes: s.notes, target_difficulty, done: false, exercise_media: mediaForAssignment(s.exercise_media, keepAthleteComments) };
       if (user_id) {
         sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
       } else if (athlete_id) {
@@ -123,6 +126,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             notes: s.notes ? parseAndApply(s.notes, ACCLIMATATION_LOAD_PCT, { mode: "loads" }) : s.notes,
             target_difficulty: Math.max(1, s.target_difficulty + ACCLIMATATION_DIFF),
             done: false,
+            exercise_media: mediaForAssignment(s.exercise_media, keepAthleteComments),
           };
           if (user_id) sessionsToInsert.push({ ...base, user_id, program_assignment_id: assignment.id });
           else if (athlete_id) coachSessionsToInsert.push({ ...base, coach_id: user.id, athlete_id, program_assignment_id: assignment.id });

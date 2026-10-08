@@ -39,20 +39,43 @@ interface AddSessionModalProps {
   /* Créer une séance en 30 secondes (2026-10-02) : sport du sportif, présélectionné dans Modèle et
      Générer seulement s'il est renseigné et reconnu. */
   sport?: string | null;
+  /* Éditeur de programme (2026-10-08) : un coach qui commente un exercice de son programme signe en
+     coach (le commentaire suit le programme chez chaque sportif assigné). Défaut : sportif. */
+  authorRole?: "athlete" | "coach";
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport, authorRole = "athlete" }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
 
+  /* Éditeur de programme (2026-10-08) : aucun userId/nom n'est passé par ProgramBuilderModal. On lit
+     l'utilisateur connecté pour signer les commentaires de son vrai nom et nourrir l'autocomplete
+     avec ses vraies séances (sportif) ou celles qu'il a créées pour ses sportifs (coach). */
+  const isTemplate = session?.user_id === "template";
+  const [self, setSelf] = useState<{ id: string; name: string | null } | null>(null);
   useEffect(() => {
-    if (!userId) return;
+    if (!isTemplate || userId) return;
     let cancelled = false;
     const supabase = createClient();
-    supabase.from("sessions").select("notes,date").eq("user_id", userId).eq("done", true)
-      .order("date", { ascending: false }).limit(60)
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user || cancelled) return;
+      const { data } = await supabase.from("profiles").select("name").eq("user_id", user.id).maybeSingle();
+      if (!cancelled) setSelf({ id: user.id, name: data?.name ?? null });
+    });
+    return () => { cancelled = true; };
+  }, [isTemplate, userId]);
+  const historyUserId = userId ?? self?.id;
+
+  useEffect(() => {
+    if (!historyUserId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    const query = authorRole === "coach"
+      ? supabase.from("coach_sessions").select("notes,date").eq("coach_id", historyUserId).eq("done", true)
+      : supabase.from("sessions").select("notes,date").eq("user_id", historyUserId).eq("done", true);
+    query.order("date", { ascending: false }).limit(60)
       .then(({ data }) => { if (!cancelled && data) setUserHistory(buildUserHistory(data)); });
     return () => { cancelled = true; resetUserHistory(); };
-  }, [userId]);
+  }, [historyUserId, authorRole]);
 
   // Marque la séance vue par le sportif — fait disparaître le point de notification sur ses lignes
   // dans les vues de lecture. `user_id: "template"` = édition de programme (ProgramBuilderModal),
@@ -246,14 +269,15 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           </div>
 
           {/* Séance vide : raccourcis modèle / import / générer au-dessus de l'éditeur, repliés dès qu'un
-              exercice existe. Jamais pour un template de programme (pas une séance du jour). */}
-          {!exercisesText.trim() && session?.user_id !== "template" && (
+              exercice existe. Aussi dans l'éditeur de programme (2026-10-08) : mêmes features partout. */}
+          {!exercisesText.trim() && (
             <SessionQuickFill
               sport={sport}
               onFill={r => {
                 if (!name.trim()) setName(r.name);
                 setExercisesText(r.notes);
-                if (!isEdit) setTargetDiff(r.target_difficulty);
+                // Séance de template : toujours "édition" (fakeSession), mais vide ici, donc on remplit aussi.
+                if (!isEdit || session?.user_id === "template") setTargetDiff(r.target_difficulty);
                 setEditorKey(k => k + 1);
               }}
             />
@@ -264,8 +288,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             key={editorKey}
             value={exercisesText}
             onChange={setExercisesText}
-            authorRole="athlete"
-            authorName={userName ?? "Toi"}
+            authorRole={authorRole}
+            authorName={userName ?? self?.name ?? "Toi"}
             initialMedia={session?.exercise_media}
             onMediaChange={setExerciseMedia}
             sessionDate={selectedDate}
