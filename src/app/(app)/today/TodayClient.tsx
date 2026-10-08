@@ -157,6 +157,21 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .finally(() => setAnalyticsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homeTab, selectedDate, sandboxMode, analyticsData, analyticsLoading]);
+  /* Relecture silencieuse après une saisie (check-in, RPE/durée, séance ajoutée/supprimée) : les
+     graphes gardent leurs données actuelles pendant le fetch (pas de fantôme), puis se mettent à
+     jour. Regroupé sur 400 ms : une saisie déclenche à la fois l'appel direct et l'event temps réel. */
+  const analyticsRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshAnalyticsSoon = useCallback(() => {
+    if (sandboxMode) return;
+    if (analyticsRefreshTimer.current) clearTimeout(analyticsRefreshTimer.current);
+    analyticsRefreshTimer.current = setTimeout(() => {
+      const date = selectedDateRef.current;
+      fetch(`/api/conseils?date=${date}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(fresh => { if (fresh && selectedDateRef.current === date) setAnalyticsData(fresh); })
+        .catch(() => {});
+    }, 400);
+  }, [sandboxMode]);
 
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
@@ -272,6 +287,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         } else if (payload.eventType === "DELETE") {
           setAllSessions(prev => prev.filter(s => s.id !== (payload.old as { id: string }).id));
         }
+        refreshAnalyticsSoon();
       })
       .subscribe();
 
@@ -283,7 +299,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           if (w.date === selectedDateRef.current) {
             setWellness(w);
           }
+          setBaselineHistory(prev => [...prev.filter(x => x.date !== w.date), w]);
         }
+        refreshAnalyticsSoon();
       })
       .subscribe();
 
@@ -503,10 +521,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       if (isOffline()) { await applyOfflinePending(); return; }
       const { data } = await supabase.from("sessions").select("*").eq("user_id", userId).eq("date", initialDate);
       if (data) setAllSessions(prev => [...prev.filter(x => x.date !== initialDate), ...(data as Session[])]);
+      refreshAnalyticsSoon();
     };
     window.addEventListener(LIVE_SESSION_CHANGED, onChanged);
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
-  }, [supabase, userId, initialDate]);
+  }, [supabase, userId, initialDate, refreshAnalyticsSoon]);
 
   function handleTerminer(session: Session) {
     if (!wellnessFilledToday) {
@@ -571,7 +590,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .select().single();
     if (saved) {
       setWellness(saved as WellnessDaily);
+      setBaselineHistory(prev => [...prev.filter(x => x.date !== (saved as WellnessDaily).date), saved as WellnessDaily]);
     }
+    refreshAnalyticsSoon();
     /* Séance prévue déclarée au check-in (2026-10-01) : une vraie séance, comme une autre, pour que
        la décision du jour existe même sans programme. Repos = rien. */
     if (plannedIntensity && plannedIntensity !== "rest") {
@@ -592,7 +613,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       setCompleting(pending);
     }
     if (!isOffline()) router.refresh();
-  }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession]);
+  }, [supabase, userId, selectedDate, router, pendingCompleteSession, pendingStartSession, saveSession, refreshAnalyticsSoon]);
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
     haptic("success");
@@ -602,14 +623,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     const saved = await updateOwnSession(supabase, completing, { done: true, ...data });
     if (saved) setAllSessions((prev) => prev.map((s) => s.id === saved.id ? saved : s));
     setCompleting(null);
+    refreshAnalyticsSoon();
     if (!isOffline()) router.refresh();
-  }, [supabase, completing, router]);
+  }, [supabase, completing, router, refreshAnalyticsSoon]);
 
   const deleteSession = useCallback(async (session: Session) => {
     await supabase.from("sessions").delete().eq("id", session.id);
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
+    refreshAnalyticsSoon();
     if (!isOffline()) router.refresh();
-  }, [supabase, router]);
+  }, [supabase, router, refreshAnalyticsSoon]);
 
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
   // surcharge), déclenchée depuis "⎘ Dupliquer" du tiroir de séance.

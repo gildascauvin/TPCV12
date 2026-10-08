@@ -255,6 +255,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 x.user_id === a.user_id ? { ...x, wellness_score: rowValue, behaviors: row.behaviors ?? [], wellnessFilledToday: true } : x
               ));
             }
+            // Graphes Charge/Récupération : l'historique ressenti du sportif suit en direct.
+            if (row?.date) {
+              setWellnessBaselineHistory(prev => ({
+                ...prev,
+                [a.user_id!]: [...(prev[a.user_id!] ?? []).filter(w => w.date !== row.date), row as WellnessDaily],
+              }));
+            }
           })
         .subscribe()
     );
@@ -334,7 +341,15 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   useEffect(() => {
     if (sandboxMode) return;
     const realAthletes = athletes.filter(a => a.user_id);
-    const refetchIfToday = () => { if (selectedDateRef.current === today) handleDateChangeRef.current(today); };
+    /* `recentSessions` (historique 42 j des graphes Charge/Récupération) vient du serveur : on relit
+       la page, regroupé sur 600 ms, pour qu'un RPE/durée saisi par un sportif s'y reflète sans
+       recharger. */
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const refetchIfToday = () => {
+      if (selectedDateRef.current === today) handleDateChangeRef.current(today);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => router.refresh(), 600);
+    };
 
     const channels = [
       ...realAthletes.map(a =>
@@ -349,7 +364,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
         .subscribe(),
     ];
 
-    return () => { channels.forEach(c => supabase.removeChannel(c)); };
+    return () => { if (refreshTimer) clearTimeout(refreshTimer); channels.forEach(c => supabase.removeChannel(c)); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function callSessionAPI(body: object): Promise<{ ok: boolean; session?: any; _real?: boolean }> {
