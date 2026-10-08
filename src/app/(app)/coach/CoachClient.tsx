@@ -542,7 +542,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     if (result.ok) setSessions(prev => prev.map(s => s.id === session.id ? { ...s, target_difficulty } : s));
   }
   async function applyAutoregAdjust(athleteId: string, session: CoachViewSession, pct: number) {
-    const notes = session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
+    /* Séance future (2026-10-08) : difficulté prévue seulement, les charges se décident le jour J. */
+    const future = session.date > format(new Date(), "yyyy-MM-dd");
+    const notes = !future && session.notes ? session.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : session.notes;
     const target_difficulty = applyAutoregDifficulty(session.target_difficulty ?? 6, pct);
     const result = await callSessionAPI({ action: "update", athleteId, sessionId: session.id, data: { notes, target_difficulty } });
     if (result.ok) {

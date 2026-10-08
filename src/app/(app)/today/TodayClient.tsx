@@ -345,6 +345,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
      par l'encart lui-même. */
   const autoregTargetTop = [...todaySessions].filter(s => !s.done)
     .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+  /* Séance future (2026-10-08, Gildas) : la jauge ne change que la difficulté prévue, jamais les
+     charges — elles dépendent de la forme du jour J, inconnue à l'avance. */
+  const futureDay = selectedDate > format(new Date(), "yyyy-MM-dd");
   /* Carte décision unifiée (2026-09, decisionCard.ts) — remplace l'ancien row() ad hoc (wellness du
      jour × diff du jour uniquement, pouvait ne rien afficher du tout) par 3 signaux combinés :
      le jour (wellness vs séance prévue), la tendance 7j/7j (même moteur que /conseils), la
@@ -456,7 +459,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
            ce callback, qui doit retourner `original` pour le mécanisme "Annuler". */
         if (!canDecide) { markPrimingSource("decision"); setPaywallStep("priming"); return; }
         const original = { notes: autoregTargetTop.notes, target_difficulty: autoregTargetTop.target_difficulty };
-        const notes = autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
+        const notes = !futureDay && autoregTargetTop.notes ? autoregTargetTop.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTargetTop.notes;
         const target_difficulty = applyAutoregDifficulty(autoregTargetTop.target_difficulty ?? 6, pct);
         const saved = await updateOwnSession(supabase, autoregTargetTop, { notes, target_difficulty });
         if (saved) setAllSessions(prev => prev.map(s => s.id === saved.id ? saved : s));
@@ -909,7 +912,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onComplete={(s) => handleTerminer(s)}
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => setEditing(s)}
-                    previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                    previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}

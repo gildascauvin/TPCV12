@@ -25,6 +25,9 @@ import {
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession, Session } from "@/types";
 
+/* Séance future : la jauge ne touche que la difficulté prévue, l'aperçu ne modifie pas les charges. */
+const isFutureDate = (date: string) => date > new Date().toLocaleDateString("sv-SE");
+
 /* Carte sportif de Coach Control — extraite de CoachClient.tsx pour être réutilisable ailleurs
    (ex. aperçu onboarding coach) sans dupliquer la logique décision/risque. */
 
@@ -515,7 +518,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               session={s as unknown as Session}
               viewer="coach"
               onEdit={() => (onEditSession ? onEditSession(s) : onDecide())}
-              previewPct={s.id === topSession?.id ? effectivePreviewPct : null}
+              previewPct={s.id === topSession?.id && !isFutureDate(s.date) ? effectivePreviewPct : null}
               authorName={coachName ?? "Coach"}
               hideGauge={s.id === topSession?.id && adjustable}
             />

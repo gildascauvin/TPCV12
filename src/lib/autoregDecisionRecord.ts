@@ -92,7 +92,7 @@ export function feltLine(rpe: number | null, planned: number | null, zone: { low
   const r = Math.round(rpe);
   if (zone) {
     if (r < zone.low) return coach ? "Difficulté sous la zone recommandée : il restait de la marge." : "Difficulté sous la zone recommandée : tu avais de la marge.";
-    if (r > zone.high) return "Difficulté au-dessus de la zone recommandée : plus dure que prévu.";
+    if (r > zone.high) return "Difficulté au-dessus de la zone recommandée : plus dure que conseillé.";
     return "Difficulté dans la zone recommandée.";
   }
   if (planned === null) return "Séance faite.";
