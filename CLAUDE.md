@@ -4944,3 +4944,8 @@ Contexte : 0 essai sur 43 comptes Android en 90 j (PostHog) ; une app Android na
 - Manifest : icônes `purpose: "any"` ajoutées (Chrome les exige, il n'y avait que des maskable).
 - PostHog : `pwa_install_cta_viewed`, `pwa_install_clicked`, `pwa_install_result {outcome}`, `pwa_installed` (propriété `surface`).
 - Testé par Gildas sur Chrome desktop (localhost). Déployé le 2026-10-07, commit `2d848bc`.
+
+## Graphes Charge/Récupération à jour sans recharger (2026-10-08)
+- `/today` : `refreshAnalyticsSoon()` (TodayClient.tsx) relit `/api/conseils` en silence (400 ms, sans fantôme) après check-in, Terminer (RPE/durée), suppression, fin de séance en direct et sur chaque event temps réel `sessions`/`wellness_daily` ; `baselineHistory` mis à jour avec la ligne de ressenti enregistrée.
+- `/coach` : l'event temps réel `wellness_daily` met à jour `wellnessBaselineHistory` ; les events `sessions`/`coach_sessions` déclenchent un `router.refresh()` (600 ms) pour relire `recentSessions` (prop serveur).
+- Déployé le 2026-10-08, commit `4e20cc5`.
