@@ -69,15 +69,17 @@ function parseExercise(raw: string): ParsedExercise {
 
   // "5×5" / "3×45s" / "6×20m" / "5×3@78%" — sets × qty avec unité optionnelle collée, et/ou
   // intensité collée directement après (convention des banques d'archétypes)
-  let m = rest.match(/^(\d+)\s*×\s*(\d+)(s|m)?\b(.*)$/);
+  // "6×3 min" — sets × durée en minutes. Testé AVANT la forme chargée : celle-ci avalait le
+  // " min" en suffixe et produisait "8×3@75% min" (vu à l'audit du 08/10/2026).
+  let m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
+  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[3].trim() };
+
+  // (?!-\d) : une plage ("4×15-20s") reste statique au lieu de devenir "4×15@75% -20s"
+  m = rest.match(/^(\d+)\s*×\s*(\d+)(?!-\d)(s|m)?\b(.*)$/);
   if (m) {
     const { pct: inlinePct, suffix } = extractInlinePct(m[4]);
     return { name, mode: "load", baseSets: +m[1], baseQty: +m[2], unit: m[3] ?? "", wordUnit: false, baseIntensityPct: intensityPct ?? inlinePct, suffix };
   }
-
-  // "6×3 min" — sets × durée en minutes
-  m = rest.match(/^(\d+)\s*×\s*(\d+)\s*min\b(.*)$/);
-  if (m) return { name, mode: "duration", baseSets: +m[1], baseQty: +m[2], unit: "min", wordUnit: false, baseIntensityPct: null, suffix: m[3].trim() };
 
   // "8 reps" / "4 tours" / "5 séries" / "8 rounds" — mot, pas d'unité collée, pas de vrai "sets"
   m = rest.match(/^(\d+)\s*(reps?|tours?|séries?|rounds?)\b(.*)$/);
@@ -135,7 +137,10 @@ function formatPrescription(spec: ParsedExercise, shape: Shape, phase: number): 
   // arrondi à 5 les dénaturerait (5×3 ne doit jamais devenir 5×5).
   const rawQty = spec.baseQty * mult.qty[phase];
   const isDurationLike = spec.mode === "duration" || spec.unit === "s" || spec.unit === "m";
-  const qty = isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
+  // Intervalles ("8×1 min", "6×2 min") : la durée d'une répétition ne bouge pas, seul le nombre de
+  // répétitions progresse ; l'arrondi à 5 transformait "8×1 min" en "10×5 min".
+  const isInterval = spec.mode === "duration" && spec.unit === "min" && spec.baseSets > 1;
+  const qty = isInterval ? spec.baseQty : isDurationLike ? Math.max(5, roundTo5(rawQty)) : Math.max(1, Math.round(rawQty));
   const suffix = spec.suffix ? ` ${spec.suffix}` : "";
 
   if (spec.mode === "duration") {
@@ -1881,8 +1886,84 @@ function buildNotesFromBank(bank: string[], type: SessionType, cycleIndex: numbe
   return rotated.map(line => formatPrescription(parseExercise(line), shape, phase)).join("\n");
 }
 
-function buildNotes(category: SportCategory, type: SessionType, cycleIndex: number, shape: Shape, phase: number): string {
-  return buildNotesFromBank(EXERCISES[category][type], type, cycleIndex, shape, phase);
+// Lignes interchangeables d'une banque générique : UNE seule par séance (change chaque semaine),
+// placée en tête, le reste de la banque suit. Sans ça les banques d'endurance empilaient 2 à 4
+// séances complètes (sortie longue + fartlek, 4 blocs d'intervalles vélo...) et les journées de
+// test enchaînaient toutes les épreuves (Murph + Fran + Grace + Cindy, simulation complète + chaque
+// épreuve séparément, 10k + test VMA...). Audit de toutes les banques le 08/10/2026 : les sports de
+// force (tentatives sur les 3 mouvements = une compétition) et les banques multi-modales par nature
+// (hyrox, fitness, aviron, collectif) restent empilées volontairement.
+const ONE_OF: Partial<Record<SportCategory, Partial<Record<SessionType, string[]>>>> = {
+  endurance: {
+    volume: ["Sortie longue en endurance fondamentale — 50-80 min", "Fartlek progressif — 40 min"],
+    intensite: ["Intervalles 400m allure 5km — 8 reps (récup 90s)", "Seuil lactique : 20 min continu", "Côtes longues 6% — 5×400m", "Tempo run — 30 min allure semi"],
+    test: ["Test VMA : demi-Cooper ou 6 min", "Course sur distance cible", "Test de seuil lactique"],
+  },
+  endurance_10k: {
+    volume: ["Endurance fondamentale Zone 2 — 35 min", "Sortie longue — 45-55 min"],
+    intensite: ["Fractionné 400m allure 10k — 10 reps (récup 60s)", "Fractionné 1000m allure 10k — 6 reps (récup 2 min)", "Seuil : 15 min continu allure semi", "Tempo run allure 10k — 20 min"],
+    test: ["Test : 5km chronométré", "Course sur 10k (objectif du bloc)", "Test de seuil lactique"],
+  },
+  endurance_semi: {
+    volume: ["Endurance fondamentale Zone 2 — 35-50 min", "Sortie longue — 50-100 min"],
+    intensite: ["Fractionné 1000m allure semi — 8 reps (récup 90s)", "Fractionné 2000m allure semi — 5 reps (récup 2 min)", "Seuil : 25 min continu allure semi", "Tempo run allure semi — 30 min"],
+    test: ["Test : 10km chronométré", "Sortie longue à allure semi cible — 16km", "Test de seuil lactique"],
+  },
+  endurance_marathon: {
+    volume: ["Endurance fondamentale Zone 2 — 40-60 min", "Sortie longue — 70-150 min"],
+    intensite: ["Fractionné 2000m allure marathon — 6 reps (récup 2 min)", "Tempo run allure marathon — 45 min", "Seuil : 35 min continu", "Bloc marathon : 3×20 min allure cible (récup 3 min)"],
+    test: ["Sortie longue à allure marathon cible — 30km", "Test : semi-marathon chronométré", "Test de seuil lactique"],
+  },
+  cyclisme: {
+    volume: ["Sortie endurance Z2 (60-70% FCmax) — 60-90 min", "Travail en côte progressive — 30 min", "Intervalles doux : 2×20 min Z2/Z3"],
+    intensite: ["Intervalles VO2max : 5×4 min à 110% FTP (récup 4 min)", "Montée longue : 2×15 min au seuil", "Pyramide puissance : 3-4-5-4-3 min"],
+    test: ["Test FTP : 20 min à puissance max", "VO2max indirect : test 5 min"],
+  },
+  natation: {
+    volume: ["Série de fond : 10×100m (récup 15s)", "Pyramide : 200-400-600-400-200m", "Nage alternée 4 nages — 1000m"],
+    test: ["Test 400m allure compétition", "Test VO2 : 3×300m progressif"],
+  },
+  trail: {
+    volume: ["Sortie longue trail avec dénivelé modéré — 90 min", "Sortie vallonnée D+400m — 70 min", "Marche active en côte — 40 min"],
+    intensite: ["Répétitions de côtes : montée rapide — 8×3 min (récup descente)", "Côtes longues D+ soutenu — 5×5 min", "Descente technique rapide — 6×2 min (récup montée)", "Fractionné vallonné — 6×5 min effort soutenu"],
+    test: ["Simulation course trail : distance + dénivelé cible", "Test : montée chronométrée sur une côte de référence"],
+  },
+  triathlon: {
+    volume: ["Sortie vélo endurance Z2 — 60-90 min", "Sortie course endurance fondamentale — 45 min", "Nage continue 4 nages — 1500m"],
+    intensite: ["Fractionné natation : 10×100m (récup 20s)", "Fractionné vélo : 6×4 min à 105% FTP (récup 3 min)", "Fractionné course : 6×1000m allure 10k (récup 2 min)", "Brick (enchaînement) : vélo 30 min + course 15 min"],
+    test: ["Simulation triathlon format court (natation+vélo+course enchaînés)", "Test : 1000m natation chronométré", "Test FTP vélo : 20 min à puissance max", "Test : 5km course chronométré"],
+  },
+  hyrox: {
+    test: ["Simulation Hyrox complète : 8km course + 8 stations", "Test : 1km course chronométré"],
+  },
+  fitness: {
+    test: [
+      "Benchmark WOD : Fran (21-15-9 thrusters + tractions, for time)", "Benchmark WOD : Cindy (AMRAP 20 min : 5 tractions + 10 pompes + 15 squats)",
+      "Benchmark WOD : Murph (1 mile course + 100 tractions + 200 pompes + 300 squats + 1 mile course)", "Benchmark WOD : Grace (30 épaulé-jeté for time)",
+    ],
+  },
+  // Concours : la simulation enchaîne déjà toutes les épreuves, les tests isolés sont l'autre option.
+  armee_tap: { test: ["Simulation TAP : les 6 épreuves enchaînées", "Test Luc Léger : palier atteint"] },
+  gendarmerie: { test: ["Simulation SOG : Luc Léger + tractions + parcours Killy enchaînés", "Test Luc Léger : palier atteint"] },
+  police_nationale: { test: ["Simulation PHM + TECR enchaînés", "Test TECR : palier atteint"] },
+  sapeur_pompier: { test: ["Simulation complète : natation 50m + PPA + Luc Léger", "Luc Léger : palier atteint"] },
+  gign: { test: ["Simulation sélection : parcours + natation contrainte + Luc Léger", "Test tractions/pompes max en 2 min"] },
+  collectif: { test: ["Match de préparation", "Yo-Yo test ou équivalent"] },
+  combat: { test: ["Assaut de qualification", "Test endurance spécifique (rounds enchaînés)"] },
+};
+
+function pickOneOf(bank: string[], oneOf: string[] | undefined, week: number): string[] | null {
+  const alts = oneOf?.filter(l => bank.includes(l));
+  if (!alts || alts.length < 2) return null;
+  return [alts[week % alts.length], ...bank.filter(l => !alts.includes(l))];
+}
+
+function buildNotes(category: SportCategory, type: SessionType, cycleIndex: number, shape: Shape, phase: number, week: number): string {
+  const bank = EXERCISES[category][type];
+  const picked = pickOneOf(bank, ONE_OF[category]?.[type], week);
+  return picked
+    ? buildNotesFromBank(picked, type, 0, shape, phase)
+    : buildNotesFromBank(bank, type, cycleIndex, shape, phase);
 }
 
 // ====================================================================================
@@ -1896,6 +1977,14 @@ interface Archetype {
   name: string;
   type: SessionType; // pilote le palier RPE / sessionDifficulty / prescription — pas le nom
   exercises: string[]; // banque propre à l'archétype (remplace EXERCISES[category][type] générique)
+  // Blocs interchangeables (ex. 3 façons de faire une sortie facile) : UN seul par séance, qui
+  // change chaque semaine, suivi de `exercises` dans l'ordre. Sans ça ils s'empilaient (2 sorties
+  // longues de 55 et 65 min dans la même séance, vu en prod le 08/10).
+  variants?: string[];
+}
+
+function archetypeLines(a: Archetype, week: number): string[] {
+  return a.variants ? [a.variants[week % a.variants.length], ...a.exercises] : a.exercises;
 }
 
 // ---- Endurance : priorité décroissante, on prend les N premiers selon le nombre de jours,
@@ -1910,26 +1999,25 @@ interface Archetype {
 // de séance "Endurance fondamentale" en dessous (≤3 jours) — règle donnée explicitement par
 // Gildas plutôt que le premier essai (archétype dédié en position 5/6, qui n'apparaissait
 // quasiment jamais aux fréquences réelles de ces programmes, 3-4 jours/semaine).
-const ENDURANCE_FONDAMENTALE: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [
+const ENDURANCE_FONDAMENTALE: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [], variants: [
   "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
 ]};
-const ENDURANCE_FONDAMENTALE_RENFO: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [
-  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+const ENDURANCE_FONDAMENTALE_RENFO: Archetype = { name: "Endurance fondamentale", type: "volume", variants: ENDURANCE_FONDAMENTALE.variants, exercises: [
   "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s",
 ]};
-const ENDURANCE_SEUIL: Archetype = { name: "Seuil", type: "intensite", exercises: [
+const ENDURANCE_SEUIL: Archetype = { name: "Seuil", type: "intensite", exercises: [], variants: [
   "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
 ]};
-const ENDURANCE_SORTIE_LONGUE: Archetype = { name: "Sortie longue", type: "volume", exercises: [
+const ENDURANCE_SORTIE_LONGUE: Archetype = { name: "Sortie longue", type: "volume", exercises: [], variants: [
   "Sortie longue endurance fondamentale — 70 min", "Sortie longue progressive — 80 min",
 ]};
-const ENDURANCE_FRACTIONNE: Archetype = { name: "Fractionné", type: "intensite", exercises: [
+const ENDURANCE_FRACTIONNE: Archetype = { name: "Fractionné", type: "intensite", exercises: [], variants: [
   "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
 ]};
 const ENDURANCE_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
   "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
 ]};
-const ENDURANCE_RECUPERATION: Archetype = { name: "Récupération active", type: "recuperation", exercises: [
+const ENDURANCE_RECUPERATION: Archetype = { name: "Récupération active", type: "recuperation", exercises: [], variants: [
   "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
 ]};
 const ENDURANCE_LOW_FREQ: Archetype[] = [ENDURANCE_FONDAMENTALE_RENFO, ENDURANCE_SEUIL, ENDURANCE_SORTIE_LONGUE];
@@ -2743,13 +2831,13 @@ function buildDistanceEnduranceArchetypes(bank: Record<SessionType, string[]>, n
     : { name: "Endurance fondamentale", type: "volume", exercises: bank.volume.slice(0, 1) };
   const list: Archetype[] = [
     fondamentale,
-    { name: "Seuil", type: "intensite", exercises: bank.intensite.slice(2, 4) },
+    { name: "Seuil", type: "intensite", exercises: [], variants: bank.intensite.slice(2, 4) },
     { name: "Récupération active", type: "recuperation", exercises: bank.recuperation },
     { name: "Sortie longue", type: "volume", exercises: bank.volume.slice(1, 2) }, // index 1 : la longue, distincte du Z2 quotidien
   ];
   if (n > 4) {
     list.push({ name: "Renfo", type: "technique", exercises: DISTANCE_RENFO_LINES });
-    list.push({ name: "Fractionné", type: "intensite", exercises: bank.intensite.slice(0, 2) });
+    list.push({ name: "Fractionné", type: "intensite", exercises: [], variants: bank.intensite.slice(0, 2) });
   }
   return list;
 }
@@ -3129,20 +3217,22 @@ export async function POST(req: Request) {
       let type: SessionType;
       let archetypeName: string | undefined;
       let exercises: string[] | undefined;
+      let fixedOrder = false;
       if (forced) {
         type = "test";
       } else if (archetypes) {
         const archetype = archetypes[dayIdx];
         type = archetype.type;
         archetypeName = archetype.name;
-        exercises = archetype.exercises;
+        exercises = archetypeLines(archetype, w);
+        fixedOrder = !!archetype.variants;
       } else if (autreTypes) {
         type = autreTypes[dayIdx];
       } else {
         const typeIdx = (rotationAnchor * sortedDays.length + dayIdx) % focusDist.length;
         type = focusDist[typeIdx];
       }
-      return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises };
+      return { day, dayIdx, calIdx: DAY_ORDER.indexOf(day), type, forced, archetypeName, exercises, fixedOrder };
     });
 
     // Faiblesses, niveau 1 — appliqué ICI (sur dayPlans, après avoir calculé calIdx), pas sur le
@@ -3179,7 +3269,8 @@ export async function POST(req: Request) {
           if (!candidate) continue;
           candidate.type = target.type;
           candidate.archetypeName = target.name;
-          candidate.exercises = target.exercises;
+          candidate.exercises = archetypeLines(target, w);
+          candidate.fixedOrder = !!target.variants;
         }
       }
     }
@@ -3322,15 +3413,20 @@ export async function POST(req: Request) {
     }
 
     // Phase C — construire les séances à partir du type (éventuellement corrigé par la phase B)
-    dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises }) => {
+    dayPlans.forEach(({ day, dayIdx, type, archetypeName, exercises, fixedOrder }) => {
       const target_difficulty = sessionDifficulty(type, weekDiff, moderateOnly);
+      // fixedOrder : le bloc principal varie déjà chaque semaine, pas de rotation qui ferait passer le renfo devant la course
       let notes = exercises
-        ? buildNotesFromBank(exercises, type, rotationAnchor, shape, prescriptionPhase)
+        ? buildNotesFromBank(exercises, type, fixedOrder ? 0 : rotationAnchor, shape, prescriptionPhase)
         : customExercises
         ? buildNotesFromBank(customExercises[type], type, rotationAnchor, shape, prescriptionPhase)
         : category === "triathlon" && triathlonPhase(w, duration) !== "brick"
-        ? buildNotesFromBank(EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l)), type, rotationAnchor, shape, prescriptionPhase)
-        : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase);
+        ? (() => {
+            const bank = EXERCISES.triathlon[type].filter(l => !TRI_COMBINED_RE.test(l));
+            const picked = pickOneOf(bank, ONE_OF.triathlon?.[type], w);
+            return buildNotesFromBank(picked ?? bank, type, picked ? 0 : rotationAnchor, shape, prescriptionPhase);
+          })()
+        : buildNotes(category, type, rotationAnchor, shape, prescriptionPhase, w);
       Array.from(weaknessDayIdx.entries()).forEach(([key, idx]) => {
         if (idx === dayIdx) notes += "\n" + (customWeaknessMeta?.[key]?.extraLine ?? WEAKNESS_META[key].extraLine);
       });
