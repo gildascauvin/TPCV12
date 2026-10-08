@@ -4949,3 +4949,11 @@ Contexte : 0 essai sur 43 comptes Android en 90 j (PostHog) ; une app Android na
 - `/today` : `refreshAnalyticsSoon()` (TodayClient.tsx) relit `/api/conseils` en silence (400 ms, sans fantôme) après check-in, Terminer (RPE/durée), suppression, fin de séance en direct et sur chaque event temps réel `sessions`/`wellness_daily` ; `baselineHistory` mis à jour avec la ligne de ressenti enregistrée.
 - `/coach` : l'event temps réel `wellness_daily` met à jour `wellnessBaselineHistory` ; les events `sessions`/`coach_sessions` déclenchent un `router.refresh()` (600 ms) pour relire `recentSessions` (prop serveur).
 - Déployé le 2026-10-08, commit `4e20cc5`.
+
+## Éditeur de programme : mêmes features que les séances, commentaires du coach suivent le programme (2026-10-08)
+- **Modèle / Importer / Générer** (`SessionQuickFill`) dans les séances d'un programme : la condition `session?.user_id !== "template"` d'`AddSessionModal` est retirée. Difficulté remplie aussi pour un template (toujours "édition"). `ProgramBuilderModal` prop `sport` (passé par `ProgramLibraryPage` depuis `step.meta.sport`, null pour un programme vierge) présélectionné dans Modèle/Générer.
+- **Auteur des commentaires** : `AddSessionModal` prop `authorRole` (défaut sportif) ; `ProgramBuilderModal` passe son `role`, que `ProgramLibraryPage` fournit enfin (`coachSide`). En template, l'utilisateur connecté et son `profiles.name` sont lus par la modale (signature du vrai nom au lieu de « Toi »).
+- **Autocomplete** en template : historique réel (sportif : `sessions` faites ; coach : `coach_sessions` faites qu'il a créées).
+- **Recopie à l'assignation** (`src/lib/programMedia.ts`, `mediaForAssignment`) : `POST /api/programs/[id]/assign` (séances + acclimatation) et `/resync` copient `exercise_media` du template. Commentaires de sportif retirés sauf si le sportif s'assigne son propre programme ; un test garde son marquage, jamais sa valeur. Les commentaires du coach déclenchent le point de notification chez chaque sportif.
+- Limites : programmes déjà assignés non rétro-remplis (réassigner ou « Mettre à jour mes séances à venir ») ; un programme partagé via `/p/` garde ses commentaires dans la copie claimée.
+- Déployé le 2026-10-08, commit `62ef641`.
