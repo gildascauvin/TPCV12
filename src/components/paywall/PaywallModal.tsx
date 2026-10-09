@@ -281,8 +281,9 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
      le titre du form, sur desktop ET mobile (avant, seulement 3 lignes séparées, mobile only). */
   const testimonial = PAYWALL_TESTIMONIALS[mode];
   const p = PRICING[mode];
+  // App iOS (refus App Store 3.1.2(c), 2026-10-09) : montant facturé seul, et le 0€ de l'essai pas plus en vue que lui.
   const due = billing === "annual"
-    ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
+    ? native ? `${p.annual}€/an` : `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
     : `${p.monthly}€/mois`;
   const endDate = (() => { const d = new Date(); d.setDate(d.getDate() + TRIAL_DAYS); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); })();
 
@@ -295,7 +296,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const recap = (
     <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "4px 16px" }}>
       {[
-        { l: "Aujourd'hui", v: "0€", big: true },
+        { l: "Aujourd'hui", v: "0€", big: !native },
         { l: `Le ${endDate}`, v: due },
         { l: "Annulation", v: "1 clic" },
       ].map((r, i) => (

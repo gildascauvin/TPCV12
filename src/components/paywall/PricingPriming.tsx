@@ -4,6 +4,7 @@ import { PRICING } from "./PaywallModal";
 import type { Billing } from "./PaywallModal";
 import { INTERVIEWS } from "./interviews";
 import ShareButton from "@/components/sessions/ShareButton";
+import { isNativeApp } from "@/lib/nativeGoogleAuth";
 
 /* Offre Gratuit / Elite (2026-10-07, POC https://claude.ai/artifact/MgsQY4Fncy8XtVgmNBA9Q5).
    Partagé par PrimingJourneyModal.tsx (desktop : 2 colonnes côte à côte ; mobile : Elite puis
@@ -84,10 +85,13 @@ function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; e
 }
 
 /* Prix réel en gros, « 6,50€/mois (78€/an) » en annuel (2026-10-07, équivalent mensuel en tête à la demande de Gildas ; plus de « 0€ » en tête : à côté de la carte Gratuit, deux 0€
-   effaçaient le contraste entre les offres). Le 0€ d'aujourd'hui reste dit juste en dessous. */
+   effaçaient le contraste entre les offres). Le 0€ d'aujourd'hui reste dit juste en dessous.
+   App iOS (refus App Store 3.1.2(c), 2026-10-09) : le montant facturé doit être l'élément de prix le plus
+   visible, donc « 78€/an » en gros et l'équivalent mensuel relégué dans la ligne du dessous. */
 function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void }) {
   const p = PRICING[role];
   const isMonthly = billing === "monthly";
+  const billedFirst = isNativeApp() && !isMonthly;
   const pct = Math.round(((p.monthly * 12 - p.annual) / (p.monthly * 12)) * 100);
   const perMonth = `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois`;
   const toggleBtn = (active: boolean): React.CSSProperties => ({
@@ -97,13 +101,13 @@ function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontFamily: mono, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>
-        {isMonthly ? `${p.monthly}€` : perMonth.replace("/mois", "")}
+        {isMonthly ? `${p.monthly}€` : billedFirst ? `${p.annual}€` : perMonth.replace("/mois", "")}
         <span style={{ fontSize: 15, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>
-          {isMonthly ? "/mois" : `/mois (${p.annual}€/an)`}
+          {isMonthly ? "/mois" : billedFirst ? "/an" : `/mois (${p.annual}€/an)`}
         </span>
       </div>
       <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>
-        {isMonthly ? "Sans engagement. " : ""}0€ aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.
+        {isMonthly ? "Sans engagement. " : billedFirst ? `Soit ${perMonth}. ` : ""}0€ aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.
       </div>
       <div style={{ display: "inline-flex", alignSelf: "flex-start", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3 }}>
         <button type="button" onClick={() => setBilling("annual")} style={toggleBtn(!isMonthly)}>
