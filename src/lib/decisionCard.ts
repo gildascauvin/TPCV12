@@ -202,7 +202,7 @@ function restText(feel: Feel, relative: boolean, fitness: TrendDirection | null,
 function afterText(feel: Feel, rpeGap: number | null, tomorrow: number | null | undefined): string {
   if (tomorrow === undefined) return "";
   if (tomorrow === null || tomorrow <= 0) {
-    return feel === "bad" || (rpeGap ?? 0) >= 1 ? " Demain repos, il tombe bien." : " Demain repos : bon moment pour assimiler.";
+    return feel === "bad" || (rpeGap ?? 0) >= 1 ? " Demain repos, il tombe bien." : " Demain repos pour consolider.";
   }
   const q = qualitativeDifficulty(tomorrow);
   return feel === "bad" || (rpeGap ?? 0) >= 1

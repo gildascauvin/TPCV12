@@ -400,14 +400,21 @@ export function crossTrendInsight(
 
   const t = crossPhaseText(code, coach, relative);
   let nuance = "";
+  /* Nuances sans redite (2026-10-09, Gildas : "Ta charge chronique monte... Ta charge récente pèse
+     plus que d'habitude") : quand la phrase de phase dit déjà que la charge monte (ou baisse), la
+     nuance ne répète pas la direction de la charge récente, elle donne seulement la conséquence. */
   if (wellBad && fatigueTrend === "down") {
-    nuance = coach
-      ? " Sa charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie son sommeil et son stress."
-      : " Ta charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress.";
+    nuance = loadDir === "down"
+      ? (coach
+        ? " La cause n'est peut-être pas l'entraînement : vérifie son sommeil et son stress."
+        : " La cause n'est peut-être pas l'entraînement : vérifie ton sommeil et ton stress.")
+      : (coach
+        ? " Sa charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie son sommeil et son stress."
+        : " Ta charge récente se relâche pourtant : la cause n'est peut-être pas l'entraînement, vérifie ton sommeil et ton stress.");
   } else if (!wellBad && fatigueTrend === "up") {
-    nuance = coach
-      ? " Sa charge récente pèse plus que d'habitude : la fatigue pourrait apparaître avec un peu de retard."
-      : " Ta charge récente pèse plus que d'habitude : la fatigue pourrait apparaître avec un peu de retard.";
+    nuance = loadDir === "up"
+      ? " La fatigue peut arriver avec un peu de retard."
+      : ` Mais ${coach ? "sa" : "ta"} charge récente pèse plus que d'habitude : la fatigue peut arriver avec un peu de retard.`;
   }
   return { title: CROSS_TREND_LABEL[code], text: t + nuance, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
 }
