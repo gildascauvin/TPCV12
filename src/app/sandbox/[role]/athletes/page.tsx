@@ -10,7 +10,7 @@ import { buildCoachFixture, buildAthleteSignatures } from "@/lib/sandboxFixtures
 export default function SandboxAthletesPage({ params }: { params: { role: string } }) {
   if (params.role !== "coach") notFound();
   const fixture = buildCoachFixture();
-  const { signatures, trends, trendInsights, baselines } = buildAthleteSignatures(fixture);
+  const { signatures, baselines } = buildAthleteSignatures(fixture);
 
   return (
     <AthletesClient
@@ -18,8 +18,6 @@ export default function SandboxAthletesPage({ params }: { params: { role: string
       initialAthletes={fixture.athletes}
       initialDate={fixture.todayStr}
       initialSignatures={signatures}
-      initialTrends={trends}
-      initialTrendInsights={trendInsights}
       initialBaselines={baselines}
       initialLastTests={{}}
       initialTestVerdicts={{}}

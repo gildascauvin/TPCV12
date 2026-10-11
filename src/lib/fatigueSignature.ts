@@ -385,7 +385,7 @@ export function crossTrendInsight(
   _loadInfo: ZoneInfo, _monotonyInfo: ZoneInfo, _strainInfo: ZoneInfo,
   fitnessTrend: TrendDirection | null, _fitnessTrendInfo: ZoneInfo | null, fatigueTrend: TrendDirection | null,
   recoveryInfo: ZoneInfo, perspective: Perspective = "athlete",
-): { title: string; text: string; severity: Severity; code: TrendCode } {
+): { title: string; text: string; severity: Severity; code: TrendCode; chargeText: string; chargeTextNoRecent: string } {
   const coach = perspective === "coach";
   const loadDir = fitnessTrend ?? "stable";
   const wellBad = recoveryInfo.label === "RÉCUP FRAGILE" || recoveryInfo.label === "FATIGUÉ";
@@ -416,7 +416,40 @@ export function crossTrendInsight(
       ? " La fatigue peut arriver avec un peu de retard."
       : ` Mais ${coach ? "sa" : "ta"} charge récente pèse plus que d'habitude : la fatigue peut arriver avec un peu de retard.`;
   }
-  return { title: CROSS_TREND_LABEL[code], text: t + nuance, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode };
+  /* Version "charge seule" (2026-10-11) : pour la carte décision, quand sa ligne 2 dit déjà le niveau
+     de récupération du jour (reco Alléger/Surcharger). Même code, même nuance, sans redire la
+     récupération ni l'action du jour. `chargeTextNoRecent` : la ligne 2 dit déjà que la charge
+     récente pèse (Alléger déclenché par le seul chronique), la nuance n'en garde que la conséquence. */
+  const tc = crossPhaseChargeText(code, coach);
+  const shortRecent = !wellBad && fatigueTrend === "up" ? " La fatigue peut arriver avec un peu de retard." : nuance;
+  return {
+    title: CROSS_TREND_LABEL[code], text: t + nuance, severity: CROSS_TREND_SEVERITY[code], code: code as TrendCode,
+    chargeText: tc + nuance, chargeTextNoRecent: tc + shortRecent,
+  };
+}
+
+function crossPhaseChargeText(code: string, coach: boolean): string {
+  const Ta = coach ? "Sa" : "Ta";
+  switch (code) {
+    case "accumulation": return coach
+      ? "Sa charge chronique monte : les signaux de fatigue convergent, allège ses prochains jours."
+      : "Ta charge chronique monte : les signaux de fatigue convergent, lève le pied quelques jours.";
+    case "recuperation_insuffisante": return `${Ta} charge chronique est stable : priorité au sommeil et au repos avant d'enchaîner.`;
+    case "fatigue_persistante": return `${Ta} charge chronique baisse mais la fatigue n'est pas encore résorbée.`;
+    // Sans "continue sur cette lancée" : ce texte ne s'affiche qu'à côté d'une reco Alléger/Surcharger.
+    case "adaptation": return `${Ta} charge chronique monte et ${coach ? "son" : "ton"} corps encaisse bien.`;
+    case "recuperation_legere": return `${Ta} charge chronique baisse : bien pour souffler, mais possible perte de forme si ça dure.`;
+    case "supercompensation": return coach
+      ? "Sa charge chronique monte, assimilation en cours : bon moment pour performer."
+      : "Ta charge chronique monte et tu l'assimiles bien : bon moment pour performer.";
+    case "tolerance_stable": return coach
+      ? "Sa charge chronique est stable et bien tolérée : elle peut augmenter progressivement."
+      : "Ta charge chronique est stable et bien tolérée : tu peux l'augmenter progressivement.";
+    case "recuperation": return `${Ta} charge chronique baisse : ${coach ? "réserves rechargées" : "tu refais le plein d'énergie"}.`;
+    default: return coach
+      ? "Sa charge chronique est stable : rythme habituel."
+      : "Ta charge chronique est stable : tu restes dans ton rythme habituel.";
+  }
 }
 
 function crossPhaseText(code: string, coach: boolean, relative: boolean): string {

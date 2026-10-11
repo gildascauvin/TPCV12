@@ -3,7 +3,7 @@ import { daysAgoStr, dailyLoad, partialChargeReady, monotony, strain, acwr, form
 import { sigDimInfo, trendDimInfo, crossTrendInsight, type Severity as PhaseSeverity } from "@/lib/fatigueSignature";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, qualitativeDifficulty, absoluteFeel, zoneRange, pctToPoints, type AutoregSuggestion } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, autoregStatusLabel, autoregDetail, qualitativeDifficulty, absoluteFeel, zoneRange, pctToPoints, type AutoregSuggestion } from "@/lib/autoregulation";
 import { decisionSummary, feltLine, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 
 /* Carte décision unifiée /today + Coach Control + Planning (2026-09, 2e itération — remplace la
@@ -174,28 +174,68 @@ function feelOf(label: string): Feel {
   return "mid";
 }
 
-/* Jour de repos, ressenti renseigné : l'insight croisé ne parle jamais d'un jour sans séance, d'où
-   ces phrases dédiées. Entrées : ressenti (même lecture que crossTrendInsight), tendance fitness
-   42j, séance de demain. */
-function restText(feel: Feel, relative: boolean, fitness: TrendDirection | null, tomorrow: number | null | undefined, voice: Voice): string {
+/* Jour de repos, ressenti renseigné : la Phase parle de la charge (tendance chronique 42j) et de ce
+   que ce repos change, jamais du niveau de récupération ni de demain, que la ligne 2 dit déjà
+   (2026-10-11, Gildas : pas de redite entre les deux lignes). La ligne 2 reste autonome : le Planning
+   n'affiche pas la Phase. */
+function restText(feel: Feel, fitness: TrendDirection | null, tomorrow: number | null | undefined, voice: Voice): string {
   const hasTomorrow = typeof tomorrow === "number" && tomorrow > 0;
   const ta = v(voice, "ta", "sa"), Ta = v(voice, "Ta", "Sa");
+  const restFx = `une journée sans séance fait baisser ${ta} fatigue accumulée`;
+  const RestFx = `Une journée sans séance fait baisser ${ta} fatigue accumulée`;
   if (feel === "bad") {
-    return `Repos bien placé : ${ta} récupération ${relative ? `est sous ${ta} norme` : "est basse"} et une journée sans séance fait baisser ${ta} fatigue accumulée.`
-      + (hasTomorrow ? v(voice, " Si ton ressenti ne remonte pas demain, allège la séance prévue.", " Si son ressenti ne remonte pas demain, allège la séance prévue.") : "");
+    if (fitness === "up") return `${Ta} charge chronique monte : les signaux de fatigue convergent, et ${restFx}.`;
+    if (fitness === "down") return `${Ta} charge chronique baisse mais la fatigue n'est pas encore résorbée : ${restFx}.`;
+    if (fitness === "stable") return `${Ta} charge chronique est stable : ${restFx}, priorité au sommeil avant d'enchaîner.`;
+    return `${RestFx}.`;
   }
   if (feel === "good") {
-    const head = fitness === "down"
-      ? `${Ta} récupération ${relative ? `est au-dessus de ${ta} norme` : "est bonne"} et ${ta} charge chronique baisse : ce repos n'était pas indispensable.`
-      : `${Ta} récupération ${relative ? `est au-dessus de ${ta} norme` : "est bonne"} : ce repos a bien fait son travail.`;
-    return head + (hasTomorrow ? " Demain, la séance prévue est le bon moment pour pousser." : "");
+    if (fitness === "up") return v(voice,
+      "Ta charge chronique monte et tu l'assimiles bien : bon moment pour performer à la reprise.",
+      "Sa charge chronique monte, assimilation en cours : bon moment pour performer à la reprise.");
+    if (fitness === "down") return `${Ta} charge chronique baisse : ce repos n'était pas indispensable.`;
+    if (fitness === "stable") return `${Ta} charge chronique est stable et bien tolérée : ${v(voice, "tu as", "il reste")} de la marge pour la suite.`;
+    return v(voice, "Pas encore assez de séances pour lire ta charge.", "Pas encore assez de séances pour lire sa charge.");
   }
-  return `${Ta} récupération ${relative ? `est dans ${ta} norme` : "est correcte"} et ${ta} fatigue accumulée baisse avec ce repos.`
-    + (fitness === "down"
-      ? (hasTomorrow
-        ? ` ${Ta} charge chronique baisse aussi : la séance de demain tombe bien pour la relancer.`
-        : ` Attention, ${ta} charge chronique baisse aussi : possible perte de forme si ça dure.`)
-      : "");
+  if (fitness === "up") return `${Ta} charge chronique monte et ${v(voice, "ton", "son")} corps encaisse bien : ${restFx}.`;
+  if (fitness === "down") return `${RestFx}, mais ${ta} charge chronique baisse aussi : `
+    + (hasTomorrow ? `${ta} prochaine séance tombe bien pour la relancer.` : "possible perte de forme si ça dure.");
+  if (fitness === "stable") return `${Ta} charge chronique est stable et ${restFx}.`;
+  return `${RestFx}.`;
+}
+
+/* Ligne 2 d'une reco quand la carte porte une Phase (2026-10-11) : le niveau de récupération est dit
+   ICI, avec la même lecture que la Phase (relative si norme, bande 60-80 sinon), et la Phase n'en
+   reparle plus. Corrige au passage 2 libellés faux : "Forme optimale" sur une récup dans la norme
+   (surcharge d'une séance très légère), "Récupération dans ta norme" sur un sportif frais (norm_hard). */
+function phaseAdviceLine(
+  suggestion: AutoregSuggestion, chronicOnly: boolean, feel: Feel, relative: boolean, voice: Voice,
+  params: { plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null; subject?: string },
+): string {
+  const planned = params.plannedDifficulty ?? 6;
+  const q = qualitativeDifficulty(planned);
+  const subj = params.subject;
+  const of = subj ? ` de ${subj}` : "";
+  const ta = v(voice, "ta", "sa");
+  const level = relative
+    ? ({ bad: `sous ${ta} norme`, mid: `dans ${ta} norme`, good: `au-dessus de ${ta} norme` } as const)[feel]
+    : ({ bad: "basse", mid: "correcte", good: "bonne" } as const)[feel];
+  const head = `Récupération${of} ${level}`;
+  if (chronicOnly) {
+    return `${head}, mais ${ta} charge récente pèse : la séance ${q} prévue est un peu trop élevée.`;
+  }
+  if (suggestion.kind === "norm_hard") {
+    return `${head} : sur une séance ${q} comme celle-ci, ${subj ? "garder un point de marge suffit" : "garde un point de marge"}.`;
+  }
+  const standard = (suggestion.dir === "low" && feel === "bad") || (suggestion.dir === "high" && feel === "good");
+  const label = standard ? autoregStatusLabel(suggestion.dir, params.baseline) : head;
+  return `${label} : ${autoregDetail(suggestion.dir, planned, subj)}`;
+}
+
+function isChronicOnly(suggestion: AutoregSuggestion, chronicPenalty: number, params: { wellnessScore: number | null; plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null }): boolean {
+  if (suggestion.dir !== "low" || chronicPenalty === 0 || suggestion.kind === "norm_hard") return false;
+  const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0);
+  return !base || base.kind === "norm_hard";
 }
 
 /* Après la séance : ce que la journée implique pour demain. */
@@ -356,13 +396,17 @@ function withPhase(
   const feel = feelOf(recoveryInfo.label);
   const tomorrow = day.tomorrowDifficulty;
 
+  const chronicOnly = !!suggestion && isChronicOnly(suggestion, chronicPenalty, params);
   const insufficient = (!acwrZone.hasEnoughHistory && !partialChargeReady(lastNLoadPoints(params.sessions, anchor, 42))) || (params.wellnessFilledToday && !params.baseline?.hasEnoughHistory);
   const phaseCore: Omit<NonNullable<DecisionCard["phase"]>, "insufficient"> = !params.wellnessFilledToday
-    ? { title: null, text: chargeHalfText(ff.fatigue, ff.fitness, voice, day.kind === "rest"), severity: null, lockedText: day.kind === "rest" ? restText(feel, relative, ff.fitness, tomorrow, voice) : cross.text }
+    ? { title: null, text: chargeHalfText(ff.fatigue, ff.fitness, voice, day.kind === "rest"), severity: null, lockedText: day.kind === "rest" ? restText(feel, ff.fitness, tomorrow, voice) : cross.text }
     : day.kind === "rest"
-    ? { title: cross.title, text: restText(feel, relative, ff.fitness, tomorrow, voice), severity: cross.severity, lockedText: null }
+    ? { title: cross.title, text: restText(feel, ff.fitness, tomorrow, voice), severity: cross.severity, lockedText: null }
     : day.kind === "done"
     ? { title: cross.title, text: cross.text + afterText(feel, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow), severity: cross.severity, lockedText: null }
+    : suggestion
+    // La ligne 2 dit le niveau de récupération et l'action du jour : la Phase ne garde que la charge.
+    ? { title: cross.title, text: chronicOnly ? cross.chargeTextNoRecent : cross.chargeText, severity: cross.severity, lockedText: null }
     : { title: cross.title, text: cross.text, severity: cross.severity, lockedText: null };
   const phase: NonNullable<DecisionCard["phase"]> = { ...phaseCore, insufficient };
 
@@ -385,7 +429,15 @@ function withPhase(
       : `${Ta} récupération est ${relative ? `dans ${ta} norme` : "correcte"}.`;
     // Repos déclaré ou subi (2026-10-01) : une piste douce, jamais imposée.
     const restNudge = params.wellnessFilledToday ? v(voice, " Une marche de 20 à 30 min ou 10 min d'étirements aident à récupérer.", " Une marche ou des étirements l'aideraient à récupérer.") : "";
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${tomorrowLine}`, phase };
+    // Demain, dit ici et seulement ici (la Phase n'en parle plus) : selon le ressenti, une consigne.
+    const restTomorrow = params.wellnessFilledToday && typeof tomorrow === "number" && tomorrow > 0
+      ? (feel === "bad"
+        ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, ${v(voice, "si ton ressenti ne remonte pas, allège-la.", "si son ressenti ne remonte pas, allège-la.")}`
+        : feel === "good"
+        ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, le bon moment pour pousser.`
+        : tomorrowLine)
+      : tomorrowLine;
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
@@ -416,7 +468,7 @@ function withPhase(
   if (suggestion) {
     return {
       suggestion, icon: suggestion.icon, phase,
-      text: `${autoregHeadline(suggestion.dir)}\n${adviceLine(suggestion, chronicPenalty, params)}`,
+      text: `${autoregHeadline(suggestion.dir)}\n${phaseAdviceLine(suggestion, chronicOnly, feel, relative, voice, params)}`,
     };
   }
   return {

@@ -67,7 +67,7 @@ export default async function CoachAthletesPage() {
   }
 
   const today = new Date().toISOString().split("T")[0];
-  const [{ signatures, trends, trendInsights, baselines }, lastTests, testVerdicts] = await Promise.all([
+  const [{ signatures, baselines }, lastTests, testVerdicts] = await Promise.all([
     getAthletesSignatures(admin, athletes, today),
     getAthletesLastTests(admin, user.id, athletes),
     getAthletesTestVerdicts(admin, user.id, athletes),
@@ -79,8 +79,6 @@ export default async function CoachAthletesPage() {
       initialAthletes={athletes}
       initialDate={today}
       initialSignatures={signatures}
-      initialTrends={trends}
-      initialTrendInsights={trendInsights}
       initialBaselines={baselines}
       initialLastTests={lastTests}
       initialTestVerdicts={testVerdicts}

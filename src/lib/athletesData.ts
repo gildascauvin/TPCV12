@@ -1,39 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoachAthlete, Session, WellnessDaily, CoachSession } from "@/types";
-import { buildDailyTimeSeries, computeSignature, sigDimInfo, trendDimInfo, crossTrendInsight, fitnessFatigueTrend, type AthleteSignature } from "@/lib/fatigueSignature";
-import { daysAgoStr, type TrendCode } from "@/lib/trainingLoad";
+import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
+import { daysAgoStr } from "@/lib/trainingLoad";
 import { coachWellnessScoreFor } from "@/lib/sandboxFixtures";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 
-const EMPTY_ZONE = { label: "", color: "#8a8f94", text: "" };
-function severityEmoji(sev: "good" | "watch" | "alert"): string {
-  return sev === "alert" ? "🔴" : sev === "watch" ? "🟡" : "🟢";
-}
-
-/* Même calcul que /conseils (voir conseilsData.ts) pour l'insight global "croisé" — factorisé ici
-   car appelé 2 fois (sportif démo + vrai sportif). `series` = buildDailyTimeSeries() déjà calculée
-   par l'appelant (42j), `sig` = computeSignature() déjà calculée aussi — aucune donnée recalculée. */
-function computeCrossInsight(
-  series: ReturnType<typeof buildDailyTimeSeries>,
-  sig: ReturnType<typeof computeSignature>,
-  baseline: WellnessBaselineResult | null,
-  perspective: "athlete" | "coach",
-) {
-  const todayPoint = series[series.length - 1];
-  const loadInfo = todayPoint?.acwr !== null && todayPoint?.acwr !== undefined
-    ? sigDimInfo("load", todayPoint.acwr, perspective)
-    : EMPTY_ZONE;
-  const monotonyInfo = sig.monotony !== null ? sigDimInfo("monotony", sig.monotony, perspective) : EMPTY_ZONE;
-  const strainInfo = sig.strain !== null ? sigDimInfo("strain", sig.strain, perspective) : EMPTY_ZONE;
-  const loadPoints = series.map(p => ({ date: p.date, load: p.load }));
-  const ffTrend = fitnessFatigueTrend(loadPoints);
-  const fitnessTrendInfo = ffTrend.fitness !== null ? trendDimInfo("fitness", ffTrend.fitness, perspective) : null;
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, baseline);
-  return crossTrendInsight(loadInfo, monotonyInfo, strainInfo, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, perspective);
-}
-
-/* Signatures de fatigue + tendances par sportif pour /coach/athletes, paramétré par une date de
+/* Signatures de fatigue par sportif pour /coach/athletes, paramétré par une date de
    référence — réutilisé par la page (SSR, date = aujourd'hui) et par
    GET /api/coach/athletes?date=... (sélecteur de calendrier, voir AthletesClient.tsx). `admin`
    attendu (bypass RLS nécessaire pour lire les sessions/wellness d'autres utilisateurs, même
@@ -44,16 +17,12 @@ function computeCrossInsight(
    acwrSeries/formPercentSeries n'ont une valeur valide qu'à partir du 14e jour de la série fournie —
    il faut donc n-fenêtreAffichée+1 >= 14. Pour 90j affichés (le cas le plus large) : n >= 103 ; 104
    aligne avec /conseils et garantit les 90 points de la vue la plus large. */
-export type AthleteTrendInsight = { text: string; emoji: string; action: string } | null;
-
 export async function getAthletesSignatures(
   admin: SupabaseClient,
   athletes: CoachAthlete[],
   referenceDate: string
 ): Promise<{
   signatures: Record<string, AthleteSignature>;
-  trends: Record<string, TrendCode | null>;
-  trendInsights: Record<string, AthleteTrendInsight>;
   /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du jour de référence + série 42j
      (même alignement que `series` dans AthleteSignature), par sportif. */
   baselines: Record<string, WellnessBaselineResult | null>;
@@ -80,8 +49,6 @@ export async function getAthletesSignatures(
   const allDemoSessions = (demoSessionsRes.data || []) as CoachSession[];
 
   const signatures: Record<string, AthleteSignature> = {};
-  const trends: Record<string, TrendCode | null> = {};
-  const trendInsights: Record<string, AthleteTrendInsight> = {};
   const baselines: Record<string, WellnessBaselineResult | null> = {};
   const baselineSeries: Record<string, (WellnessBaselineResult | null)[]> = {};
   for (const a of athletes) {
@@ -116,21 +83,12 @@ export async function getAthletesSignatures(
         : null;
       baselines[a.id] = demoBaseline;
       baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, anchor);
-      if (demoTodayRow) {
-        const cross = computeCrossInsight(series, sig, demoBaseline, "coach");
-        trends[a.id] = cross.code;
-        trendInsights[a.id] = { text: cross.text, emoji: severityEmoji(cross.severity), action: cross.title };
-      } else {
-        trends[a.id] = null;
-        trendInsights[a.id] = null;
-      }
       continue;
     }
     const myWellness = allWellness.filter(w => w.user_id === a.user_id);
     const mySessions = allSessions.filter(s => s.user_id === a.user_id);
     if (myWellness.length === 0) {
       signatures[a.id] = { kind: "no_data" }; baselines[a.id] = null; baselineSeries[a.id] = [];
-      trends[a.id] = null; trendInsights[a.id] = null;
       continue;
     }
     const refWellness = myWellness.find(w => w.date === referenceDate);
@@ -144,18 +102,7 @@ export async function getAthletesSignatures(
       : null;
     baselines[a.id] = baseline;
     baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, anchor);
-    // Insight global "croisé" (mêmes entrées que /conseils, voir fatigueSignature.ts) — wording coach
-    // (3e personne), seulement si un vrai wellness existe ce jour-là (sinon recoveryInfo reposerait
-    // sur le repli 75 ci-dessus, pas une vraie donnée).
-    if (refWellness) {
-      const cross = computeCrossInsight(series, sig, baseline, "coach");
-      trends[a.id] = cross.code;
-      trendInsights[a.id] = { text: cross.text, emoji: severityEmoji(cross.severity), action: cross.title };
-    } else {
-      trends[a.id] = null;
-      trendInsights[a.id] = null;
-    }
   }
 
-  return { signatures, trends, trendInsights, baselines, baselineSeries };
+  return { signatures, baselines, baselineSeries };
 }

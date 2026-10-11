@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
-import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, crossTrendInsight, daysAgoStr, type DayPoint, type Perspective } from "@/lib/fatigueSignature";
-import { fitnessFatigueTrend, dailyLoad, type TrendCode } from "@/lib/trainingLoad";
+import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint, type Perspective } from "@/lib/fatigueSignature";
+import { fitnessFatigueTrend, dailyLoad } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
@@ -202,10 +202,6 @@ export type ConseilsData = {
   freqTarget: number;
   sessionStatus: { label: string; color: string };
   loadTrend: number | null;
-  trendCode: TrendCode | null;
-  trendText: string | null;
-  trendEmoji: string | null;
-  trendAction: string | null;
   loadAdviceShort: string;
   correlations: BehaviorCorrelation[];
   filledDays: number;
@@ -342,14 +338,6 @@ export function computeConseilsData(
   const chargeInsight = chargeCrossInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, perspective);
   const recoveryInsight = recoveryCrossInsight(recoveryInfo, todayForm, perspective, wellnessBaseline, fitnessTrendInfo, fatigueTrendInfo);
 
-  // Insight global "croisé" (remplace classifyTrend()/describeTrend() — voir fatigueSignature.ts) :
-  // dérivé des MÊMES entrées que les cartes ⚡ Charge / 🌿 Récupération ci-dessus, jamais d'une 3e
-  // source indépendante — garanti cohérent avec ce qui est déjà affiché sous ce titre.
-  const cross = crossTrendInsight(loadInfo, monotonyInfo, strainInfo ?? { label: "", color: "#8a8f94", text: "" }, ffTrend.fitness, fitnessTrendInfo, ffTrend.fatigue, recoveryInfo, perspective);
-  const trendCode: TrendCode | null = refWellness ? cross.code : null;
-  const trendText = refWellness ? cross.text : null;
-  const trendEmoji = refWellness ? (cross.severity === "alert" ? "🔴" : cross.severity === "watch" ? "🟡" : "🟢") : null;
-  const trendAction = refWellness ? cross.title : null;
 
   const last7 = timeSeries.slice(-7);
   const zoneAcwr = last7.map(p => p.acwr);
@@ -371,6 +359,6 @@ export function computeConseilsData(
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
     sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
     recoveryAlert, wellnessBaseline, wellnessBaselineSeries, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
-    trendCode, trendText, trendEmoji, trendAction, loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
+    loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };
 }

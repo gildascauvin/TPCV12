@@ -29,7 +29,6 @@ import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import type { AthleteSignature } from "@/lib/fatigueSignature";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
-import type { AthleteTrendInsight } from "@/lib/athletesData";
 import type { LastTestByAthlete, AthleteTestVerdictByAthlete } from "@/lib/testSummary";
 import type { Verdict } from "@/lib/testNorms";
 
@@ -106,8 +105,6 @@ interface Props {
   initialAthletes: CoachAthlete[];
   initialDate: string;
   initialSignatures: Record<string, AthleteSignature>;
-  initialTrends: Record<string, TrendCode | null>;
-  initialTrendInsights: Record<string, AthleteTrendInsight>;
   /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) par sportif — série 42j alignée sur
      `initialSignatures[id].series`. Absent (sandbox) = repli absolu automatique. */
   initialBaselines?: Record<string, WellnessBaselineResult | null>;
@@ -121,7 +118,7 @@ interface Props {
   sandboxMode?: boolean;
 }
 
-export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialTrends, initialTrendInsights, initialBaselines = {}, initialLastTests, initialTestVerdicts = {}, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
+export default function AthletesClient({ userId, initialAthletes, initialDate, initialSignatures, initialBaselines = {}, initialLastTests, initialTestVerdicts = {}, subscriptionStatus, inviteCode, sandboxMode = false }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isMd, isLg } = useBreakpoint();

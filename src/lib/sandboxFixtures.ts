@@ -2,9 +2,8 @@ import { format, addDays } from "date-fns";
 import type { Profile, Session, WellnessDaily, CoachAthlete, CoachSession } from "@/types";
 import type { MergedTest, TestResultRow } from "@/lib/testResults";
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
-import { computeWeekOverWeekTrend, describeTrend, trendSeverity, trendActionWord, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
+import { computeWeekOverWeekTrend, type TrendCode, type TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, computeWellnessBaselineSeries, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
-import type { AthleteTrendInsight } from "@/lib/athletesData";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 
 /* Données fictives pour la sandbox non authentifiée (2026-08-19) — brief : "les programmes doivent
@@ -383,14 +382,12 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
   /* Input brut de la tendance — pour la carte décision unifiée (decisionCard.ts, 2026-09) côté
      Coach Control sandbox, qui a besoin de plus que le seul code pour produire son texte. */
   trendInputs: Record<string, TrendInput | null>;
-  trendInsights: Record<string, AthleteTrendInsight>;
   baselines: Record<string, WellnessBaselineResult | null>;
   baselineSeries: Record<string, (WellnessBaselineResult | null)[]>;
 } {
   const signatures: Record<string, AthleteSignature> = {};
   const trends: Record<string, TrendCode | null> = {};
   const trendInputs: Record<string, TrendInput | null> = {};
-  const trendInsights: Record<string, AthleteTrendInsight> = {};
   const baselines: Record<string, WellnessBaselineResult | null> = {};
   const baselineSeries: Record<string, (WellnessBaselineResult | null)[]> = {};
 
@@ -400,10 +397,6 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
     const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, now);
     trends[a.id] = code;
     trendInputs[a.id] = input;
-    const coachText = code ? describeTrend(code, input, "coach") : null;
-    trendInsights[a.id] = coachText
-      ? { text: coachText, emoji: trendSeverity(code!) === "alert" ? "🔴" : trendSeverity(code!) === "watch" ? "🟡" : "🟢", action: trendActionWord(code!) }
-      : null;
     const refWellness = myWellness.find(w => w.date === fixture.todayStr);
     const wellnessScore = refWellness?.score ?? refWellness?.base_score ?? 75;
     const series = buildDailyTimeSeries(mySessions, myWellness, CONSEILS_HISTORY_DAYS, now);
@@ -415,5 +408,5 @@ export function buildAthleteSignatures(fixture: CoachFixture, now: Date = new Da
     baselineSeries[a.id] = computeWellnessBaselineSeries(myWellness, CONSEILS_HISTORY_DAYS, now);
   }
 
-  return { signatures, trends, trendInputs, trendInsights, baselines, baselineSeries };
+  return { signatures, trends, trendInputs, baselines, baselineSeries };
 }
