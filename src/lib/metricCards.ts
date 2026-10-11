@@ -18,6 +18,7 @@ import { WELLNESS_RAMP, wellnessColor } from "@/lib/wellness";
 /* Import de TYPE seulement : effacé à la compilation, donc aucun cycle à l'exécution avec
    conseilsData.ts (qui, lui, n'importe rien d'ici — vérifié). */
 import type { ConseilsData } from "@/lib/conseilsData";
+import type { DeviceDay } from "@/lib/deviceWellness";
 import { DIMENSION_LABELS, Z_SWC } from "@/lib/wellnessBaseline";
 import type { DimensionKey, Perspective, WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
@@ -467,14 +468,17 @@ export function chartSpecFor(
    celui-ci aligné sur le mot du formulaire, "État physique"). Garder une seconde table ici serait
    exactement le point de divergence qu'on vient de supprimer. */
 export const DIMENSION_CHART_LABELS = DIMENSION_LABELS;
-export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResult | null)[], dates: string[]): ChartSpec {
+/* `device` (2026-10-11) : même alignement que `baseline`. Sur le sommeil, un jour sans check-in mais
+   avec une nuit mesurée prend son point "durée seule" (DeviceDay.sleepZ). */
+export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResult | null)[], dates: string[], device?: DeviceDay[]): ChartSpec {
   /* On trace le Z, pas la valeur brute (2026-09-28, Gildas : "comparer aux valeurs d'il y a 7 jours
      est nul, il faudrait la comparer au Z-score"). Le Z est par construction l'écart à SA norme
      personnelle, donc la référence est la ligne 0 — pas besoin de la reconstruire, et surtout pas
      un point arbitraire du passé. La bande ±Z_SWC matérialise ce qui compte comme "stable" (même
      seuil que la flèche du chip, Hopkins & Batterham).
      Le brut reste lisible au survol via `tooltipExtra`. */
-  const values = baseline.map(b => b?.dimensions?.[dim]?.z ?? null);
+  const deviceOnly = (i: number) => (dim === "sleep" && !baseline[i] ? device?.[i] ?? null : null);
+  const values = baseline.map((b, i) => b?.dimensions?.[dim]?.z ?? deviceOnly(i)?.sleepZ ?? null);
   const raws = baseline.map(b => b?.dimensions?.[dim]?.raw ?? null);
   /* Le stress est la SEULE dimension inversée (dimensionRaw : `10 - stress`), pour que "plus haut =
      mieux" vaille partout. Deux conséquences, toutes deux corrigées ici (2026-09-29, bug trouvé par
@@ -505,6 +509,11 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
     fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
     colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
     tooltipExtra: i => {
+      const only = deviceOnly(i);
+      if (only?.sleepZ != null && only.sleepMin != null) {
+        const m = Math.round(only.sleepMin);
+        return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")} mesuré · pas de check-in`;
+      }
       const r = raws[i];
       if (r === null || r === undefined) return null;
       // Sommeil mesuré par la montre (2026-09-30) : le point tracé combine les deux, on les montre séparément.
@@ -521,21 +530,33 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
 /* FC au repos (montre, 2026-09-30) : même lecture que les 4 autres sous-jacents (Z de la composante,
    plus haut = mieux, donc une FC PLUS BASSE que d'habitude tire le chart vers le haut). Les libellés
    nomment le sens réel pour ne pas refaire l'erreur du stress. Le bpm reste lisible au survol. */
-export function rhrSpec(baseline: (WellnessBaselineResult | null)[], dates: string[]): ChartSpec {
-  const values = baseline.map(b => b?.rhr?.z ?? null);
+/* FC au repos (2026-10-11, Gildas) : on trace les BPM réels et la norme, plus le Z de la composante.
+   Le Z exigeait 5 jours de norme PUIS 5 jours d'écarts avant le 1er point : la courbe démarrait ~10
+   jours après les premières données. Les bpm s'affichent dès le 1er jour ; la norme (moyenne des 28
+   jours précédents, comme le score) apparaît dès qu'elle existe. Bande "dans ma norme" = ±2 bpm, le
+   même seuil que deviceSummary() ("FC dans ta norme"). Plus bas = mieux.
+   Les zones sont posées sur la norme la plus récente de la fenêtre : elle bouge de quelques dixièmes
+   d'un jour à l'autre, le tooltip donne celle du jour. */
+const RHR_NORM_BAND = 2;
+export function rhrSpec(device: DeviceDay[], dates: string[]): ChartSpec {
+  const values = device.map(d => d?.rhr ?? null);
+  const norm = [...device].reverse().find(d => d?.rhrNorm != null)?.rhrNorm ?? null;
+  const dark = WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, mid = WELLNESS_RAMP[2].hex, light = WELLNESS_RAMP[0].hex;
   return {
-    values, dates, kind: "line", lo: -2.5, hi: 2.5, showTicks: false,
-    zones: [
-      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: "FC PLUS BASSE" },
-      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
-      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "FC PLUS HAUTE" },
-    ],
-    bandZones: ["FC PLUS BASSE", "DANS MA NORME", "FC PLUS HAUTE"],
-    fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
-    colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
+    values, dates, kind: "line", lo: 25, hi: 220, autoScale: true, minSpan: 10, showTicks: false,
+    zones: norm != null ? [
+      { from: 0, to: norm - RHR_NORM_BAND, color: dark, label: "FC PLUS BASSE" },
+      { from: norm - RHR_NORM_BAND, to: norm + RHR_NORM_BAND, color: mid, label: "DANS MA NORME" },
+      { from: norm + RHR_NORM_BAND, to: 300, color: light, label: "FC PLUS HAUTE" },
+    ] : undefined,
+    bandZones: norm != null ? ["DANS MA NORME"] : undefined,
+    refLine: norm != null ? { value: norm, label: `norme ${Math.round(norm)} bpm` } : undefined,
+    fmt: v => `${Math.round(v)}`,
+    colorAt: v => (norm == null ? mid : v <= norm - RHR_NORM_BAND ? dark : v < norm + RHR_NORM_BAND ? mid : light),
     tooltipExtra: i => {
-      const r = baseline[i]?.rhr;
-      return r ? `${Math.round(r.bpm)} bpm · norme ${Math.round(r.norm)}` : null;
+      const d = device[i];
+      if (d?.rhr == null) return null;
+      return d.rhrNorm != null ? `${Math.round(d.rhr)} bpm · norme ${Math.round(d.rhrNorm)}` : `${Math.round(d.rhr)} bpm`;
     },
   };
 }
@@ -656,21 +677,29 @@ function lastNonNull(a: (number | null)[]): number | null {
 
 /* VFC (montre, 2026-09-30) : même lecture que la FC au repos, mais ici plus haut = VFC plus haute =
    mieux, sans inversion. Le ms reste lisible au survol. */
-export function hrvSpec(baseline: (WellnessBaselineResult | null)[], dates: string[]): ChartSpec {
-  const values = baseline.map(b => b?.hrv?.z ?? null);
+/* VFC (2026-10-11) : même principe que la FC, en ms. Bande "dans ma norme" = ±8 %, le seuil de
+   deviceSummary(). Plus haut = mieux. */
+const HRV_NORM_BAND = 0.08;
+export function hrvSpec(device: DeviceDay[], dates: string[]): ChartSpec {
+  const values = device.map(d => d?.hrv ?? null);
+  const norm = [...device].reverse().find(d => d?.hrvNorm != null)?.hrvNorm ?? null;
+  const dark = WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, mid = WELLNESS_RAMP[2].hex, light = WELLNESS_RAMP[0].hex;
+  const loB = norm != null ? norm * (1 - HRV_NORM_BAND) : 0, hiB = norm != null ? norm * (1 + HRV_NORM_BAND) : 0;
   return {
-    values, dates, kind: "line", lo: -2.5, hi: 2.5, showTicks: false,
-    zones: [
-      { from: Z_SWC, to: 2.5, color: WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex, label: "AU-DESSUS" },
-      { from: -Z_SWC, to: Z_SWC, color: WELLNESS_RAMP[2].hex, label: "DANS MA NORME" },
-      { from: -2.5, to: -Z_SWC, color: WELLNESS_RAMP[0].hex, label: "EN DESSOUS" },
-    ],
-    bandZones: ["AU-DESSUS", "DANS MA NORME", "EN DESSOUS"],
-    fmt: v => `${v > 0 ? "+" : ""}${v.toFixed(1).replace(".", ",")}`,
-    colorAt: v => (v >= Z_SWC ? WELLNESS_RAMP[WELLNESS_RAMP.length - 1].hex : v > -Z_SWC ? WELLNESS_RAMP[2].hex : WELLNESS_RAMP[0].hex),
+    values, dates, kind: "line", lo: 0, hi: 400, autoScale: true, minSpan: 15, showTicks: false,
+    zones: norm != null ? [
+      { from: hiB, to: 1000, color: dark, label: "AU-DESSUS" },
+      { from: loB, to: hiB, color: mid, label: "DANS MA NORME" },
+      { from: 0, to: loB, color: light, label: "EN DESSOUS" },
+    ] : undefined,
+    bandZones: norm != null ? ["DANS MA NORME"] : undefined,
+    refLine: norm != null ? { value: norm, label: `norme ${Math.round(norm)} ms` } : undefined,
+    fmt: v => `${Math.round(v)}`,
+    colorAt: v => (norm == null ? mid : v >= hiB ? dark : v > loB ? mid : light),
     tooltipExtra: i => {
-      const h = baseline[i]?.hrv;
-      return h ? `${Math.round(h.ms)} ms · norme ${Math.round(h.norm)}` : null;
+      const d = device[i];
+      if (d?.hrv == null) return null;
+      return d.hrvNorm != null ? `${Math.round(d.hrv)} ms · norme ${Math.round(d.hrvNorm)}` : `${Math.round(d.hrv)} ms`;
     },
   };
 }

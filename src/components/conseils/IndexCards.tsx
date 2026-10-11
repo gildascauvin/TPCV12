@@ -107,8 +107,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   /* Montre (Apple Santé, 2026-09-30) : le sommeil mesuré complète le déclaré et la FC au repos entre
      dans le score. Ligne de synthèse sous la carte + sous-jacent "FC repos" dès qu'une FC existe sur
      la période. Rien de tout ça sans montre : la carte reste 100 % subjective. */
-  const hasRhr = baselineWindow.some(b => b?.rhr);
-  const hasHrv = baselineWindow.some(b => b?.hrv);
+  /* FC repos / VFC : lues dans la série montre (health_daily quand on y a accès), pas dans la
+     baseline — un jour sans check-in a donc quand même son point. */
+  const deviceWindow = (data.deviceSeries ?? []).slice(-days);
+  const hasRhr = deviceWindow.some(d => d?.rhr != null);
+  const hasHrv = deviceWindow.some(d => d?.hrv != null);
   const lastB = data.wellnessBaselineSeries.slice(-1)[0] ?? null;
   const deviceToday = (() => {
     if (!lastB) return null;
@@ -331,11 +334,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                   </div>
                   <MetricChart
                     spec={metric === "recovery" && subDim === "rhr"
-                      ? rhrSpec(baselineWindow, series.map(p => p.date))
+                      ? rhrSpec(deviceWindow, series.map(p => p.date))
                       : metric === "recovery" && subDim === "hrv"
-                      ? hrvSpec(baselineWindow, series.map(p => p.date))
+                      ? hrvSpec(deviceWindow, series.map(p => p.date))
                       : metric === "recovery" && subDim && subDim !== "rhr" && subDim !== "hrv"
-                      ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date))
+                      ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date), deviceWindow.slice(-baselineWindow.length))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
                     weekLabels={days > 7} locked={locked} height={200}
                     exampleNote={example ? exampleText : undefined}

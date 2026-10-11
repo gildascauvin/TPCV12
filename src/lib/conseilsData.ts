@@ -4,7 +4,8 @@ import { BEHAVIOR_META } from "@/lib/behaviors";
 import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
 import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint, type Perspective } from "@/lib/fatigueSignature";
 import { fitnessFatigueTrend, dailyLoad } from "@/lib/trainingLoad";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
+import { buildDeviceSeries, type DeviceDay, type HealthRow } from "@/lib/deviceWellness";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, sleepZFromDeviceOnly, WELLNESS_BASELINE_WINDOW_DAYS, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -197,6 +198,10 @@ export type ConseilsData = {
   /* Série jour par jour (42j, même alignement que `timeSeries`) — pour le chart Récupération, tracé
      en relatif plutôt qu'en absolu dès que l'historique de chaque jour est suffisant. */
   wellnessBaselineSeries: (WellnessBaselineResult | null)[];
+  /* Montre jour par jour (même alignement que `timeSeries`) : FC repos / VFC brutes + norme, pour les
+     sous-charts FC repos et VFC. Lue dans health_daily quand on y a accès (jours sans check-in
+     compris), sinon dans les colonnes device_* des check-ins. */
+  deviceSeries: DeviceDay[];
   done7Count: number;
   avgRpe: number | null;
   freqTarget: number;
@@ -217,13 +222,22 @@ export async function getConseilsData(
   const anchor = new Date(referenceDate + "T12:00:00");
   const since42 = daysAgoStr(CONSEILS_HISTORY_DAYS, anchor);
 
-  const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }] = await Promise.all([
+  // Montre : 28 jours de plus que la fenêtre, pour que la norme FC du premier jour affiché existe.
+  const sinceHealth = daysAgoStr(CONSEILS_HISTORY_DAYS + 28, anchor);
+  const [{ data: rawProfile }, { data: rawSessions }, { data: rawWellness }, { data: rawHealth, error: healthError }] = await Promise.all([
     supabase.from("profiles").select("*").eq("user_id", userId).single(),
     supabase.from("sessions").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
     supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
+    supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms").eq("user_id", userId).gte("date", sinceHealth).lte("date", referenceDate),
   ]);
+  if (healthError) console.error("[health_daily] lecture conseils:", healthError.message);
+  const health: HealthRow[] = (rawHealth ?? []).map(h => ({
+    date: h.date, sleep_minutes: h.sleep_minutes,
+    resting_hr: h.resting_hr == null ? null : Number(h.resting_hr),
+    hrv_ms: h.hrv_ms == null ? null : Number(h.hrv_ms),
+  }));
 
-  return computeConseilsData(referenceDate, rawProfile as Profile | null, (rawSessions || []) as Session[], (rawWellness || []) as WellnessDaily[]);
+  return computeConseilsData(referenceDate, rawProfile as Profile | null, (rawSessions || []) as Session[], (rawWellness || []) as WellnessDaily[], "athlete", health);
 }
 
 /* Extrait de getConseilsData() (2026-08-19, chantier sandbox) — pure, ne dépend plus d'un client
@@ -241,7 +255,9 @@ export function computeConseilsData(
   // wording — "Ta charge" affiché à tort à un coach au sujet d'un sportif qu'il consulte, doit être
   // "Sa charge" : chargeCrossInsight()/recoveryCrossInsight()/crossTrendInsight()/sigDimInfo("recovery",...)
   // acceptent déjà ce paramètre, seul computeConseilsData() ne le laissait jamais passer jusqu'ici).
-  perspective: Perspective = "athlete"
+  perspective: Perspective = "athlete",
+  // Lignes health_daily (montre) si l'appelant y a accès — voir `deviceSeries`.
+  health?: HealthRow[] | null,
 ): ConseilsData {
   const anchor = new Date(referenceDate + "T12:00:00");
   /* CONSEILS_HISTORY_DAYS jours attendus en entrée (104, pas 90) pour que la vue "90 j" du chart
@@ -320,6 +336,15 @@ export function computeConseilsData(
     ? computeWellnessBaselineAt(allWellness.filter(w => w.date < referenceDate), refWellness)
     : null;
   const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, 42, anchor);
+  const deviceSeries = buildDeviceSeries(timeSeries.map(p => p.date), health, allWellness);
+  // Nuits mesurées sans check-in : point "durée seule" sur le chart Sommeil (voir sleepZFromDeviceOnly).
+  const checkinDates = new Set(allWellness.filter(w => wellnessSignal(w) !== null).map(w => w.date));
+  deviceSeries.forEach((d, i) => {
+    const date = timeSeries[i].date;
+    if (d.sleepMin == null || checkinDates.has(date)) return;
+    const from = daysAgoStr(WELLNESS_BASELINE_WINDOW_DAYS, new Date(date + "T12:00:00"));
+    d.sleepZ = sleepZFromDeviceOnly(allWellness.filter(w => w.date < date && w.date >= from), d.sleepMin);
+  });
   const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, wellnessBaseline);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, perspective) : null;
@@ -358,7 +383,7 @@ export function computeConseilsData(
     referenceDate,
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
     sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
-    recoveryAlert, wellnessBaseline, wellnessBaselineSeries, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
+    recoveryAlert, wellnessBaseline, wellnessBaselineSeries, deviceSeries, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
     loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };
 }

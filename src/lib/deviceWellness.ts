@@ -53,7 +53,7 @@ export const RHR_BASELINE_MIN_DAYS = 5;
 const MIN_NIGHT_MINUTES = 180;
 const RHR_BASELINE_WINDOW = 28;
 
-type HealthRow = { date: string; resting_hr: number | null; sleep_minutes: number | null; hrv_ms?: number | null };
+export type HealthRow = { date: string; resting_hr: number | null; sleep_minutes: number | null; hrv_ms?: number | null };
 
 /* Ce que la montre apporte au jour `date` : sommeil de la nuit, FC au repos, et sa norme = moyenne des
    FC des 28 jours précédents (au moins 5). `days` = lignes health_daily, n'importe quel ordre. */
@@ -107,4 +107,33 @@ export function deviceSummary(d: DeviceInputs): string | null {
       : "VFC dans ta norme");
   }
   return parts.length ? parts.join(" · ") : null;
+}
+
+/* Valeurs montre d'un jour, pour les charts FC repos / VFC (2026-10-11). `rhr`/`hrv` = mesure brute,
+   `rhrNorm`/`hrvNorm` = norme perso de ce jour-là (moyenne des 28 jours précédents, au moins 5). */
+export type DeviceDay = {
+  rhr: number | null; rhrNorm: number | null; hrv: number | null; hrvNorm: number | null;
+  /* Nuit mesurée (≥ 3 h, même filtre que le score). `sleepZ` n'est rempli que les jours SANS check-in :
+     écart à la norme sommeil calculé sur la durée seule, pour que le chart Sommeil ait son point. */
+  sleepMin: number | null; sleepZ: number | null;
+};
+
+type DeviceCols = { date: string } & DeviceInputs;
+
+/* Série jour par jour alignée sur `dates`. Source prioritaire : health_daily (la montre), pour qu'un
+   jour sans check-in ait quand même son point. Repli : les colonnes device_* de wellness_daily (côté
+   coach, qui ne peut pas lire health_daily, ou sandbox) — un point seulement les jours de check-in. */
+export function buildDeviceSeries(dates: string[], health: HealthRow[] | null | undefined, wellness: DeviceCols[]): DeviceDay[] {
+  const num = (v: unknown) => (v == null ? null : Number(v));
+  if (health && health.length) {
+    return dates.map(date => {
+      const d = deviceInputsFor(date, health);
+      return { rhr: num(d.device_resting_hr), rhrNorm: num(d.device_rhr_baseline), hrv: num(d.device_hrv_ms), hrvNorm: num(d.device_hrv_baseline), sleepMin: num(d.device_sleep_minutes), sleepZ: null };
+    });
+  }
+  const byDate = new Map(wellness.map(w => [w.date, w]));
+  return dates.map(date => {
+    const w = byDate.get(date);
+    return { rhr: num(w?.device_resting_hr), rhrNorm: num(w?.device_rhr_baseline), hrv: num(w?.device_hrv_ms), hrvNorm: num(w?.device_hrv_baseline), sleepMin: num(w?.device_sleep_minutes), sleepZ: null };
+  });
 }

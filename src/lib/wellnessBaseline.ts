@@ -1,6 +1,6 @@
 import type { WellnessDaily } from "@/types";
 import { daysAgoStr } from "@/lib/trainingLoad";
-import { effectiveSleep, rhrComponent, hrvComponent, RHR_BASELINE_MIN_DAYS } from "@/lib/deviceWellness";
+import { effectiveSleep, rhrComponent, hrvComponent, sleepMinutesScore, RHR_BASELINE_MIN_DAYS } from "@/lib/deviceWellness";
 
 /* Baseline personnelle du wellness — Z-score vs moyenne/écart-type glissants (14-28j, défaut 21j),
    composite ET par dimension (sommeil/stress/récup/motivation), pour remplacer les seuils absolus
@@ -254,6 +254,23 @@ export function computeWellnessBaselineAt(
     drivingDimension,
     guardRailTriggered: todayComposite < WELLNESS_ABSOLUTE_GUARD_SCORE,
   };
+}
+
+/* Sommeil d'une nuit mesurée par la montre SANS check-in ce jour-là (2026-10-11, Gildas : "si on n'a
+   que la durée issue de la montre, on l'affiche, on n'attend pas le check-in"). Même norme que la
+   dimension sommeil des autres jours (mêmes jours d'historique, même a priori), seule la valeur du
+   jour vient de la durée seule. Ne sert qu'au chart : le score de récup, lui, attend le check-in.
+   null tant que l'historique ne permet pas de situer le jour (mêmes seuils que le reste). */
+export function sleepZFromDeviceOnly(
+  history: WellnessRow[],
+  minutes: number,
+  windowDays: number = WELLNESS_BASELINE_WINDOW_DAYS,
+): number | null {
+  const filled = history.filter(h => compositeValue(h) !== null);
+  if (filled.length < WELLNESS_BASELINE_PROVISIONAL_MIN_DAYS) return null;
+  const series = filled.map(h => ({ date: h.date, value: dimensionRaw(h, "sleep") }));
+  const stat = shrinkStat(rollingMeanStd(series, windowDays), PRIOR_DIM.sleep);
+  return zScore(sleepMinutesScore(minutes), stat);
 }
 
 /**
