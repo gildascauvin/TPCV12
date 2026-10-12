@@ -473,20 +473,18 @@ function withPhase(
     const coachVoice = voice.coach || !!voice.subject;
     const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
     const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
-    /* Titre = même repère qu'avant la séance (zone proposée s'il y en avait une, sinon le plan) ;
-       la ligne 2 ne redit pas la comparaison, seulement la décision et ce qu'on en tire (2026-10-12). */
+    /* Titre = même repère qu'avant la séance (2026-10-12) : la zone proposée, ou sans reco la même
+       zone par défaut que l'anneau avant séance (prévu et le point en dessous, AutoregButtons). La
+       ligne 2 ne garde que le résumé de la décision : toute comparaison y redisait le titre. */
+    const shownZone = zone ?? (day.planned !== null
+      ? (({ zoneLow, zoneHigh }) => ({ low: zoneLow, high: zoneHigh }))(zoneRange(Math.round(day.planned), "low"))
+      : null);
     const r = day.rpe !== null ? Math.round(day.rpe) : null;
-    const gap = r !== null && day.planned !== null ? r - Math.round(day.planned) : null;
     const doneTitle = r === null ? "Difficulté non notée"
-      : zone ? (r < zone.low ? "Sous la zone" : r > zone.high ? "Au-dessus de la zone" : "Dans la zone")
-      : gap === null ? undefined
-      : gap > 0 ? "Plus dure que prévu" : gap < 0 ? "Plus facile que prévu" : "Comme prévu";
-    const consequence = r === null ? (coachVoice ? "RPE pas encore noté." : "Pense à noter ton RPE.")
-      : zone && r < zone.low ? (coachVoice ? "Il restait de la marge." : "Tu avais de la marge.")
-      : zone && r > zone.high ? "Plus dure que conseillé."
-      : "";
-    const titleDetail = [summary, consequence].filter(Boolean).join(" ");
-    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? titleDetail : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
+      : shownZone ? (r < shownZone.low ? "Sous la zone" : r > shownZone.high ? "Au-dessus de la zone" : "Dans la zone")
+      : undefined;
+    const titleDetail = [summary, r === null ? (coachVoice ? "RPE pas encore noté." : "Pense à noter ton RPE.") : ""].filter(Boolean).join(" ");
+    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? titleDetail : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: shownZone };
   }
 
   const planned = params.plannedDifficulty ?? 6;
