@@ -865,7 +865,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 <AlertBox
                   variant="darkColor"
                   centered
-                  alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title) }}
+                  alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
                   /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
                   actions={(autoregTargetTop || decision.phase) ? (
                     <div style={{ display: "grid", gap: 12 }}>

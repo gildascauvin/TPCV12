@@ -488,7 +488,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
         <AlertBox
           variant="darkColor"
-          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title) }}
+          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title, adjustable ? undefined : decision.titleDetail) }}
           centered={!!decision.phase}
           actions={adjustable ? (
             /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */

@@ -137,13 +137,17 @@ export interface DecisionCard {
      Gildas) — repos et séance faite seulement ; une séance à ajuster prend le texte vivant de
      l'anneau (Dans / Sous / Au-dessus de la zone). `text` reste inchangé pour les autres usages. */
   title?: string;
+  /* Ligne 2 affichée avec `title` (séance faite, 2026-10-12) : sans la comparaison, que le titre
+     porte déjà. Absente = la ligne 2 de `text` est gardée telle quelle ; "" = plus de ligne 2. */
+  titleDetail?: string;
 }
 
-/* Remplace la 1re ligne (headline) de `text` par `title`, si fourni. */
-export function withTitle(text: string, title: string | null | undefined): string {
+/* Remplace la 1re ligne (headline) de `text` par `title`, si fourni — et la 2e par `detail`, si fourni. */
+export function withTitle(text: string, title: string | null | undefined, detail?: string): string {
   if (!title) return text;
   const lines = text.split("\n");
-  return [title, ...lines.slice(1)].join("\n");
+  const rest = detail === undefined ? lines.slice(1) : [detail, ...lines.slice(2)];
+  return [title, ...rest.filter(Boolean)].join("\n");
 }
 
 /* État de la journée vu par la carte (2026-09-29). `planned` = une séance reste à faire ;
@@ -469,11 +473,20 @@ function withPhase(
     const coachVoice = voice.coach || !!voice.subject;
     const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
     const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
-    const gap = day.rpe !== null && day.planned !== null ? Math.round(day.rpe) - Math.round(day.planned) : null;
-    const doneTitle = day.rpe === null ? "Difficulté non notée"
+    /* Titre = même repère qu'avant la séance (zone proposée s'il y en avait une, sinon le plan) ;
+       la ligne 2 ne redit pas la comparaison, seulement la décision et ce qu'on en tire (2026-10-12). */
+    const r = day.rpe !== null ? Math.round(day.rpe) : null;
+    const gap = r !== null && day.planned !== null ? r - Math.round(day.planned) : null;
+    const doneTitle = r === null ? "Difficulté non notée"
+      : zone ? (r < zone.low ? "Sous la zone" : r > zone.high ? "Au-dessus de la zone" : "Dans la zone")
       : gap === null ? undefined
       : gap > 0 ? "Plus dure que prévu" : gap < 0 ? "Plus facile que prévu" : "Comme prévu";
-    return { suggestion: null, icon: "🟢", title: doneTitle, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
+    const consequence = r === null ? (coachVoice ? "RPE pas encore noté." : "Pense à noter ton RPE.")
+      : zone && r < zone.low ? (coachVoice ? "Il restait de la marge." : "Tu avais de la marge.")
+      : zone && r > zone.high ? "Plus dure que conseillé."
+      : "";
+    const titleDetail = [summary, consequence].filter(Boolean).join(" ");
+    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? titleDetail : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
   }
 
   const planned = params.plannedDifficulty ?? 6;
