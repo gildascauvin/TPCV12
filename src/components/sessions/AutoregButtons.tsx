@@ -10,6 +10,7 @@ import {
   type AutoregDir, type AutoregOriginal, autoregCtaLabel, zoneRange,
   pointsToPct, pctToPoints,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
+  qualitativeDifficulty,
 } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
 import { saveDecisionRecord, decisionSummary, type AutoregDecisionRecord, type DecisionViewer } from "@/lib/autoregDecisionRecord";
@@ -415,10 +416,11 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                 light={light}
                 size={ringSize ?? (light ? 150 : 188)}
                 hideZone={free}
-                centerLabel={free ? { arrow: String(roundedCurrent), verb: "RPE" } : undefined}
-                hideHint={!free}
+                /* Gratuit (2026-10-12) : le chiffre + son mot (légère / modérée / dure) au centre, plus
+                   rien dessous — le RPE seul ne parle pas à tout le monde. */
+                centerLabel={free ? { arrow: String(roundedCurrent), verb: qualitativeDifficulty(roundedCurrent) } : undefined}
+                hideHint
                 onHint={free ? undefined : onHint}
-                hint={free ? (applying ? "Enregistrement…" : `Séance ${roundedCurrent >= 8 ? "dure" : roundedCurrent >= 5 ? "modérée" : "légère"} prévue`) : undefined}
                 plannedMarker={plannedDifficulty}
                 zoneLow={zoneLow}
                 zoneHigh={zoneHigh}
@@ -482,7 +484,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   zoneHigh={appliedZone.zoneHigh}
                   hideZone={free}
                   centerLabel={free ? { arrow: String(appliedDiff), verb: "Ajustée" } : undefined}
-                  hideHint={!free}
+                  hideHint
                   onHint={free ? undefined : onHint}
                   value={plannedDifficulty}
                   plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}

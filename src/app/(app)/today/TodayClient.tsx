@@ -477,12 +477,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     />
   ) : todaySessions.length === 0 ? (
     /* Jour de repos : l'anneau reste affiché, en lecture seule, dans sa zone (2026-09-30). */
-    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing hideHint={!decisionLocked} /></div>
+    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing hideHint /></div>
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint={!decisionLocked} zone={decision.doneZone} /></div>;
+    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={decision.doneZone} /></div>;
   })();
 
   useEffect(() => {
