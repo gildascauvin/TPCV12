@@ -133,6 +133,17 @@ export interface DecisionCard {
   /* Séance faite (2026-10-04) : zone proposée ce jour-là (décision enregistrée, sinon reco recalculée
      depuis le check-in), pour que l'anneau "Faite" situe le RPE réel par rapport à elle. */
   doneZone?: { low: number; high: number } | null;
+  /* Titre affiché sous l'anneau de décision, à la place de la 1re ligne de `text` (2026-10-12,
+     Gildas) — repos et séance faite seulement ; une séance à ajuster prend le texte vivant de
+     l'anneau (Dans / Sous / Au-dessus de la zone). `text` reste inchangé pour les autres usages. */
+  title?: string;
+}
+
+/* Remplace la 1re ligne (headline) de `text` par `title`, si fourni. */
+export function withTitle(text: string, title: string | null | undefined): string {
+  if (!title) return text;
+  const lines = text.split("\n");
+  return [title, ...lines.slice(1)].join("\n");
 }
 
 /* État de la journée vu par la carte (2026-09-29). `planned` = une séance reste à faire ;
@@ -437,7 +448,9 @@ function withPhase(
         ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, le bon moment pour pousser.`
         : tomorrowLine)
       : tomorrowLine;
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${restTomorrow}`, phase };
+    const restTitle = !params.wellnessFilledToday ? "Récup à confirmer"
+      : ({ bad: "Récup fragile", mid: "Récup stable", good: "Bonne récup" } as const)[feel];
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", title: restTitle, text: `Jour de repos\n${feelLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
@@ -456,7 +469,11 @@ function withPhase(
     const coachVoice = voice.coach || !!voice.subject;
     const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
     const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
-    return { suggestion: null, icon: "🟢", text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
+    const gap = day.rpe !== null && day.planned !== null ? Math.round(day.rpe) - Math.round(day.planned) : null;
+    const doneTitle = day.rpe === null ? "Difficulté non notée"
+      : gap === null ? undefined
+      : gap > 0 ? "Plus dure que prévu" : gap < 0 ? "Plus facile que prévu" : "Comme prévu";
+    return { suggestion: null, icon: "🟢", title: doneTitle, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
   }
 
   const planned = params.plannedDifficulty ?? 6;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { hapticTick } from "@/lib/native";
 import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
 
@@ -141,11 +141,11 @@ export function decisionRingCenterY(size = 188) {
   return Math.round(r + sw * 0.95 + sw / 2 + 3);
 }
 
-export function RestDecisionRing({ size, light }: { size?: number; light?: boolean }) {
+export function RestDecisionRing({ size, light, hideHint }: { size?: number; light?: boolean; hideHint?: boolean }) {
   return (
     <DecisionRing
       zoneLow={1} zoneHigh={2} value={1} readOnly hideZone onChange={() => {}}
-      size={size} light={light}
+      size={size} light={light} hideHint={hideHint}
       centerLabel={{ arrow: "→", verb: "Repos" }}
       hint="Jour de repos"
     />
@@ -155,7 +155,7 @@ export function RestDecisionRing({ size, light }: { size?: number; light?: boole
 /* Séance déjà faite (2026-09-30, Gildas : "dans le passé, je veux voir la jauge qu'il y ait une
    séance de faite ou non") — lecture seule, curseur sur le RPE réellement ressenti, repère blanc sur
    le prévu, zone = la difficulté prévue. Sans RPE noté, le curseur reste sur le prévu. */
-export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, zone }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean;
+export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, zone, hideHint }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean; hideHint?: boolean;
   /* Zone proposée ce jour-là (decisionCard.doneZone, 2026-10-04) : le RPE réel se lit par rapport à
      elle, plus seulement par rapport au plan. */
   zone?: { low: number; high: number } | null }) {
@@ -169,7 +169,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
     <DecisionRing
       zoneLow={zone ? zone.low : Math.round(target)} zoneHigh={zone ? zone.high : Math.round(target)} value={value} readOnly hideZone={hideZone} onChange={() => {}}
       plannedMarker={planned}
-      size={size} light={light}
+      size={size} light={light} hideHint={hideHint}
       centerLabel={{ arrow: "✓", verb: "Faite" }}
       hint={hint}
     />
@@ -192,8 +192,12 @@ export function PlannedDecisionRing({ planned, size, light }: { planned: number;
 }
 
 export default function DecisionRing({
-  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size = 188, light, centerLabel, hideZone = false,
+  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
 }: {
+  /* Texte sous l'anneau masqué (2026-10-12, Gildas) : il devient le titre de la carte décision
+     (Premium, /today + Coach Control), remonté par `onHint`. Le gratuit le garde sous l'anneau. */
+  hideHint?: boolean;
+  onHint?: (hint: string) => void;
   /* Pas de zone conseillée (difficulté prévue seule, gratuit). */
   hideZone?: boolean;
   zoneLow: number;
@@ -279,6 +283,10 @@ export default function DecisionRing({
 
   const k = recoDir ?? "flat";
   const zonePos = roundedValue < zoneLow ? "Sous la zone" : roundedValue > zoneHigh ? "Au-dessus de la zone" : "Dans la zone";
+  const hintText = hintOverride ?? zonePos;
+  const onHintRef = useRef(onHint);
+  onHintRef.current = onHint;
+  useEffect(() => { onHintRef.current?.(hintText); }, [hintText]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -339,9 +347,9 @@ export default function DecisionRing({
           </span>
         </div>
       </div>
-      <div style={{ marginTop: 8, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: inZone ? (light ? "#2a8045" : "#4ade80") : (light ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.5)") }}>
-        {hintOverride ?? zonePos}
-      </div>
+      {!hideHint && <div style={{ marginTop: 8, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: inZone ? (light ? "#2a8045" : "#4ade80") : (light ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.5)") }}>
+        {hintText}
+      </div>}
     </div>
   );
 }

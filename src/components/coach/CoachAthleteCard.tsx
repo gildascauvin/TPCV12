@@ -15,7 +15,7 @@ import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import type { AutoregOriginal } from "@/lib/autoregulation";
-import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, withTitle, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
 import { PhaseCollecting, type CollectProgress } from "@/components/conseils/AnalyticsCollecting";
 import {
@@ -321,6 +321,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   const [previewPct, setPreviewPct] = useState<number | null>(null);
   /* Nœud des CTA d'ajustement dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [actionsSlot, setActionsSlot] = useState<HTMLDivElement | null>(null);
+  /* Texte vivant de l'anneau, titre de la carte décision — comme /today (2026-10-12). */
+  const [ringHint, setRingHint] = useState<string | null>(null);
   const adjustable = !!topSession && !topSession.done;
   const effectivePreviewPct = externalPreviewPct !== undefined ? externalPreviewPct : previewPct;
 
@@ -430,6 +432,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 variant="dark"
                 shape="ring"
                 ringSize={ringSz}
+                onHint={setRingHint}
                 actionsSlot={actionsSlot}
                 severityColor={decision.suggestion ? badgeColor : undefined}
                 onPreviewChange={setPreviewPct}
@@ -450,9 +453,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={ringSz} />
+            <RestDecisionRing size={ringSz} hideHint />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} />
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint />
           )}
         </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (
@@ -485,7 +488,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
         <AlertBox
           variant="darkColor"
-          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: decision.text }}
+          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title) }}
           centered={!!decision.phase}
           actions={adjustable ? (
             /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */
