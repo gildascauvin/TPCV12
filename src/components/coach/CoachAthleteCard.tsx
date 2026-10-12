@@ -312,6 +312,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     sessions: recentSessions,
     perspective,
     subject: selfView ? undefined : firstName,
+    behaviors,
   });
   /* Pas assez d'historique (2026-10-02) : gratuit → phase d'exemple derrière le flou, sans mention ;
      lisible → collecte. Jamais d'exemple en clair. */

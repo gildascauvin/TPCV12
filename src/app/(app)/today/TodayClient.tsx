@@ -382,6 +382,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
   const decision = computeDecisionCard({
     day: decisionDay,
+    behaviors: wellnessFilledToday ? wellness?.behaviors ?? null : null,
     wellnessScore: displayScore,
     plannedDifficulty: autoregTargetTop?.target_difficulty ?? null,
     baseline: wellnessBaseline,
