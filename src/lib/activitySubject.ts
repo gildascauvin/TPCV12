@@ -5,7 +5,7 @@ import { sportShortLabel } from "@/lib/sportShortLabel";
 import type { ActivitySubject } from "@/lib/activityStatus";
 
 export type ActivityProgramRow = { id: string; name: string; sport: string | null; weeks_count: number; template?: unknown };
-export type ActivityAssignmentRow = { start_date: string; athlete_id?: string | null; user_id?: string | null; programs: ActivityProgramRow | ActivityProgramRow[] | null };
+export type ActivityAssignmentRow = { start_date: string; acclimatation?: boolean | null; athlete_id?: string | null; user_id?: string | null; programs: ActivityProgramRow | ActivityProgramRow[] | null };
 export type ActivitySessionRow = { date: string; name: string; done: boolean };
 
 const TEMPLATE_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
@@ -51,7 +51,7 @@ export function buildActivitySubject(
     if (!day.length) return 0 as const;
     return day.every(s => s.done) ? 2 as const : 1 as const;
   });
-  const viewed = findProgramForWeek(assignments.map(x => ({ start_date: x.start_date, programs: x.programs })), pMonday);
+  const viewed = findProgramForWeek(assignments.map(x => ({ start_date: x.start_date, acclimatation: x.acclimatation, programs: x.programs })), pMonday);
   const viewSport = viewed?.program.sport ?? sport;
 
   return {
