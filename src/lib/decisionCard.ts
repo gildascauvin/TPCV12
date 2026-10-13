@@ -254,16 +254,26 @@ function isChronicOnly(suggestion: AutoregSuggestion, chronicPenalty: number, pa
   return !base || base.kind === "norm_hard";
 }
 
-/* Après la séance : ce que la journée implique pour demain. */
-function afterText(feel: Feel, rpeGap: number | null, tomorrow: number | null | undefined): string {
+/* Après la séance : ce que la journée implique pour demain. Dit en ligne 2 depuis le 2026-10-13
+   (comme le jour de repos), la Phase ne garde que la charge. Coach : pas de consigne, ses conseils
+   de ligne 2 disent déjà « vérifie son ressenti au réveil ». */
+function afterText(feel: Feel | null, rpeGap: number | null, tomorrow: number | null | undefined, coach = false): string {
   if (tomorrow === undefined) return "";
-  if (tomorrow === null || tomorrow <= 0) {
-    return feel === "bad" || (rpeGap ?? 0) >= 1 ? " Demain repos, il tombe bien." : " Demain repos pour consolider.";
-  }
+  const heavy = feel === "bad" || (rpeGap ?? 0) >= 1;
+  if (tomorrow === null || tomorrow <= 0) return heavy ? " Demain repos, il tombe bien." : " Demain repos pour consolider.";
   const q = qualitativeDifficulty(tomorrow);
-  return feel === "bad" || (rpeGap ?? 0) >= 1
-    ? ` Demain : séance ${q} prévue, refais le point au réveil.`
-    : ` Demain : séance ${q} prévue.`;
+  return heavy && !coach ? ` Demain : séance ${q} prévue, refais le point au réveil.` : ` Demain : séance ${q} prévue.`;
+}
+
+/* Ressenti vs prévu, en mots (2026-10-13, Gildas : on peut être dans la zone et avoir trouvé la
+   séance plus dure que prévu ; des mots plutôt que des chiffres). Repère = la difficulté prévue de
+   la séance (après ajustement éventuel), pas la zone que dit déjà le titre. */
+function feltVsPlanned(rpe: number | null, planned: number | null): string {
+  if (rpe === null || planned === null) return "";
+  const gap = Math.round(rpe) - Math.round(planned);
+  if (gap === 0) return "Séance ressentie comme prévu.";
+  const how = Math.abs(gap) === 1 ? "un peu" : Math.abs(gap) === 2 ? "modérément" : "beaucoup";
+  return `Séance ressentie ${how} plus ${gap > 0 ? "dure" : "facile"} que prévu.`;
 }
 
 /* Pénalité chronique (charge récente, monotonie, contrainte, Forme négative) — extraite le
@@ -407,18 +417,18 @@ function morningSignal(b: WellnessBaselineResult | null, behaviors: string[] | n
 const LOW_ADVICE: Record<DimensionKey, Record<Outcome, [athlete: string, coach: string]>> = {
   sleep: {
     below: ["Bien vu de lever le pied après une nuit courte.", "Bien vu de lever le pied après une nuit courte."],
-    in: ["Nuit courte mais séance tenue : couche-toi tôt.", "Nuit courte mais séance tenue : vérifie son ressenti demain."],
-    above: ["Effort lourd après une nuit courte : couche-toi tôt.", "Effort lourd après une nuit courte : vérifie son ressenti demain."],
+    in: ["Nuit courte mais séance tenue : couche-toi tôt.", "Nuit courte mais séance tenue : vérifie son ressenti au réveil."],
+    above: ["Effort lourd après une nuit courte : couche-toi tôt.", "Effort lourd après une nuit courte : vérifie son ressenti au réveil."],
   },
   stress: {
     below: ["Bien vu de lever le pied sous stress.", "Bien vu de lever le pied sous stress."],
-    in: ["Stress élevé : coupe les écrans ce soir.", "Stress élevé : vérifie son ressenti demain."],
-    above: ["Effort lourd sous stress : coupe les écrans ce soir.", "Effort lourd sous stress : vérifie son ressenti demain."],
+    in: ["Stress élevé : coupe les écrans ce soir.", "Stress élevé : vérifie son ressenti au réveil."],
+    above: ["Effort lourd sous stress : coupe les écrans ce soir.", "Effort lourd sous stress : vérifie son ressenti au réveil."],
   },
   recovery: {
     below: ["Bien vu de ménager tes douleurs.", "Bien vu de ménager ses douleurs."],
-    in: ["Douleurs présentes : étirements ce soir.", "Douleurs présentes : vérifie son ressenti demain."],
-    above: ["Effort lourd sur des douleurs : étirements ce soir.", "Effort lourd sur des douleurs : vérifie son ressenti demain."],
+    in: ["Douleurs présentes : étirements ce soir.", "Douleurs présentes : vérifie son ressenti au réveil."],
+    above: ["Effort lourd sur des douleurs : étirements ce soir.", "Effort lourd sur des douleurs : vérifie son ressenti au réveil."],
   },
   motivation: {
     below: ["Motivation basse : change de stimulus la prochaine fois.", "Motivation basse : propose un autre stimulus la prochaine fois."],
@@ -442,7 +452,7 @@ function doneAdvice(a: {
   const sig = a.signal;
   if (sig?.kind === "behavior") {
     if (outcome === "below") return `${sig.label} : bien vu de lever le pied.`;
-    if (coach) return `${sig.label} : vérifie son ressenti demain.`;
+    if (coach) return `${sig.label} : vérifie son ressenti au réveil.`;
     return outcome === "above"
       ? `Effort lourd, ${sig.label.charAt(0).toLowerCase()}${sig.label.slice(1)} : ${sig.tip}.`
       : `${sig.label} : ${sig.tip}.`;
@@ -459,8 +469,8 @@ function doneAdvice(a: {
   if (a.feel === "bad") {
     const R = a.relative ? `récup sous ${ta} norme` : "récup fragile";
     return outcome === "below" ? `Bien vu de lever le pied sur une ${R}.`
-      : outcome === "in" ? `${R.charAt(0).toUpperCase()}${R.slice(1)} : ${coach ? "vérifie son ressenti demain" : "couche-toi tôt ce soir"}.`
-      : `Effort lourd sur une ${R} : ${coach ? "vérifie son ressenti demain" : "dors bien ce soir"}.`;
+      : outcome === "in" ? `${R.charAt(0).toUpperCase()}${R.slice(1)} : ${coach ? "vérifie son ressenti au réveil" : "couche-toi tôt ce soir"}.`
+      : `Effort lourd sur une ${R} : ${coach ? "vérifie son ressenti au réveil" : "dors bien ce soir"}.`;
   }
   if (a.feel === "good") {
     const R = a.relative ? `Récup au-dessus de ${ta} norme` : "Bonne récup";
@@ -470,7 +480,7 @@ function doneAdvice(a: {
   }
   return outcome === "below" ? `${Ta} récup permettait plus${coach ? "." : ", ose la prochaine fois."}`
     : outcome === "in" ? `Effort adapté à ${ta} récup, rien à changer.`
-    : `Effort au-delà de ${ta} récup : ${coach ? "vérifie son ressenti demain" : "soigne ton sommeil"}.`;
+    : `Effort au-delà de ${ta} récup : ${coach ? "vérifie son ressenti au réveil" : "soigne ton sommeil"}.`;
 }
 
 function withPhase(
@@ -519,8 +529,8 @@ function withPhase(
     : day.kind === "rest"
     ? { title: cross.title, text: restText(feel, ff.fitness, tomorrow, voice), severity: cross.severity, lockedText: null }
     : day.kind === "done"
-    // La ligne 2 (doneAdvice) parle déjà de la récup du matin : la Phase ne garde que la charge + demain.
-    ? { title: cross.title, text: cross.chargeText + afterText(feel, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow), severity: cross.severity, lockedText: null }
+    // La ligne 2 dit le ressenti, le conseil du matin et demain : la Phase ne garde que la charge.
+    ? { title: cross.title, text: cross.chargeText, severity: cross.severity, lockedText: null }
     : suggestion
     // La ligne 2 dit le niveau de récupération et l'action du jour : la Phase ne garde que la charge.
     ? { title: cross.title, text: chronicOnly ? cross.chargeTextNoRecent : cross.chargeText, severity: cross.severity, lockedText: null }
@@ -588,13 +598,18 @@ function withPhase(
       : shownZone ? (r < shownZone.low ? "Sous la zone" : r > shownZone.high ? "Au-dessus de la zone" : "Dans la zone")
       : undefined;
     const outcome: Outcome | null = r === null || !shownZone ? null : r < shownZone.low ? "below" : r > shownZone.high ? "above" : "in";
-    const titleDetail = doneAdvice({
+    const advice = doneAdvice({
       outcome, coach: coachVoice, recoDir,
       maintained: !rec || Math.round(rec.applied_difficulty) === Math.round(rec.original_difficulty),
       signal: params.wellnessFilledToday ? morningSignal(params.baseline ?? null, params.behaviors ?? null) : null,
       feel: params.wellnessFilledToday ? feel : null, relative,
     });
-    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? titleDetail : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: shownZone };
+    // Ligne 2 = ressenti vs prévu + conseil + demain (2026-10-13). RPE non noté : le conseil le dit déjà.
+    const doneLine = [
+      feltVsPlanned(day.rpe, day.planned),
+      advice,
+    ].filter(Boolean).join(" ") + (r === null ? "" : afterText(params.wellnessFilledToday ? feel : null, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow, coachVoice));
+    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? doneLine : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: shownZone };
   }
 
   const planned = params.plannedDifficulty ?? 6;
