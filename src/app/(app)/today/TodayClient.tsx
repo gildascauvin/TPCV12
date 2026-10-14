@@ -18,7 +18,7 @@ import LockedBlur from "@/components/paywall/LockedBlur";
 import AnalyticsCollecting, { PhaseCollecting, phaseProgress } from "@/components/conseils/AnalyticsCollecting";
 import { analyticsReady } from "@/lib/demoAnalytics";
 import { computeWeekOverWeekTrend } from "@/lib/trainingLoad";
-import { computeDecisionCard, decisionCardColor, type DecisionDay } from "@/lib/decisionCard";
+import { computeDecisionCard, decisionCardColor, withTitle, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { personalizedBehaviorTip } from "@/lib/conseilsData";
@@ -270,6 +270,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
   /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
+  /* Texte vivant de l'anneau (Dans / Sous / Au-dessus de la zone, puis décision appliquée), titre de
+     la carte décision (2026-10-12). */
+  const [ringHint, setRingHint] = useState<string | null>(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -383,6 +386,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
   const decision = computeDecisionCard({
     day: decisionDay,
+    behaviors: wellnessFilledToday ? wellness?.behaviors ?? null : null,
     wellnessScore: displayScore,
     plannedDifficulty: autoregTargetTop?.target_difficulty ?? null,
     baseline: wellnessBaseline,
@@ -453,6 +457,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       sessionLabel={autoregTargetTop.name}
       variant="dark"
       shape="ring"
+      onHint={setRingHint}
       actionsSlot={decisionLocked ? undefined : autoregActionsSlot}
       severityColor={decision.suggestion && !decisionLocked ? decisionColor : undefined}
       isActive={canDecide || decisionLocked}
@@ -478,12 +483,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     />
   ) : todaySessions.length === 0 ? (
     /* Jour de repos : l'anneau reste affiché, en lecture seule, dans sa zone (2026-09-30). */
-    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing /></div>
+    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing hideHint /></div>
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} zone={decision.doneZone} /></div>;
+    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={decision.doneZone} /></div>;
   })();
 
   useEffect(() => {
@@ -866,7 +871,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 <AlertBox
                   variant="darkColor"
                   centered
-                  alert={{ border: `${decisionColor}66`, glow: decisionColor, text: decision.text }}
+                  alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
                   /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
                   actions={(autoregTargetTop || decision.phase) ? (
                     <div style={{ display: "grid", gap: 12 }}>

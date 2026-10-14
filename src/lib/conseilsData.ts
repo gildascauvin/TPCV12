@@ -195,7 +195,7 @@ export type ConseilsData = {
   /* Baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) du jour de référence — pilote
      recoveryInfo/recoveryInsight dès que l'historique est suffisant (voir plus bas). */
   wellnessBaseline: WellnessBaselineResult | null;
-  /* Série jour par jour (42j, même alignement que `timeSeries`) — pour le chart Récupération, tracé
+  /* Série jour par jour (CONSEILS_HISTORY_DAYS, même longueur et alignement que `timeSeries`) — pour le chart Récupération, tracé
      en relatif plutôt qu'en absolu dès que l'historique de chaque jour est suffisant. */
   wellnessBaselineSeries: (WellnessBaselineResult | null)[];
   /* Montre jour par jour (même alignement que `timeSeries`) : FC repos / VFC brutes + norme, pour les
@@ -335,7 +335,9 @@ export function computeConseilsData(
   const wellnessBaseline = refWellness
     ? computeWellnessBaselineAt(allWellness.filter(w => w.date < referenceDate), refWellness)
     : null;
-  const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, 42, anchor);
+  /* Même longueur que timeSeries (2026-10-13) : à 42 j, la vue « 90 j » du chart Récupération posait
+     les 42 points sur les 42 premières dates et s'arrêtait 48 jours avant aujourd'hui. */
+  const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, CONSEILS_HISTORY_DAYS, anchor);
   const deviceSeries = buildDeviceSeries(timeSeries.map(p => p.date), health, allWellness);
   // Nuits mesurées sans check-in : point "durée seule" sur le chart Sommeil (voir sleepZFromDeviceOnly).
   const checkinDates = new Set(allWellness.filter(w => wellnessSignal(w) !== null).map(w => w.date));

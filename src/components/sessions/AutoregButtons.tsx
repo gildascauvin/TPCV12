@@ -10,6 +10,7 @@ import {
   type AutoregDir, type AutoregOriginal, autoregCtaLabel, zoneRange,
   pointsToPct, pctToPoints,
   getAutoregDecision, setAutoregDecision, clearAutoregDecision,
+  qualitativeDifficulty,
 } from "@/lib/autoregulation";
 import DecisionGauge from "@/components/sessions/DecisionGauge";
 import { saveDecisionRecord, decisionSummary, type AutoregDecisionRecord, type DecisionViewer } from "@/lib/autoregDecisionRecord";
@@ -76,6 +77,9 @@ interface Props {
   /* Ex. "Sprint technique" — utilisé dans la ligne "traité" ("−15% appliqué · Sprint technique") */
   sessionLabel: string;
   onPreviewChange?: (pct: number | null) => void;
+  /* Anneau (shape="ring") hors gratuit : son texte n'est plus affiché dessous mais remonté ici, pour
+     servir de titre à la carte décision (2026-10-12). */
+  onHint?: (hint: string) => void;
   /* Retourne le snapshot AVANT écriture (notes/target_difficulty d'origine) — capturé par le
      parent, seul à connaître la valeur pré-modification au moment précis de l'appel. Stocké
      avec la décision pour permettre un "Annuler" fidèle (voir autoregulation.ts). */
@@ -130,7 +134,7 @@ interface Props {
   viewer?: DecisionViewer;
 }
 
-export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
+export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -412,8 +416,11 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                 light={light}
                 size={ringSize ?? (light ? 150 : 188)}
                 hideZone={free}
-                centerLabel={free ? { arrow: String(roundedCurrent), verb: "RPE" } : undefined}
-                hint={free ? (applying ? "Enregistrement…" : `Séance ${roundedCurrent >= 8 ? "dure" : roundedCurrent >= 5 ? "modérée" : "légère"} prévue`) : undefined}
+                /* Gratuit (2026-10-12) : le chiffre + son mot (légère / modérée / dure) au centre, plus
+                   rien dessous — le RPE seul ne parle pas à tout le monde. */
+                centerLabel={free ? { arrow: String(roundedCurrent), verb: qualitativeDifficulty(roundedCurrent) } : undefined}
+                hideHint
+                onHint={free ? undefined : onHint}
                 plannedMarker={plannedDifficulty}
                 zoneLow={zoneLow}
                 zoneHigh={zoneHigh}
@@ -461,6 +468,8 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
            (curseur vert), repère "prévu" sur le plan d'origine, et non draguable — la décision est
            prise, on la relit ; pour la refaire il y a le retour arrière juste en dessous. */
         const appliedDiff = Math.round(plannedDifficulty);
+        // Sens de la décision prise, pas de la reco (2026-10-12, Gildas).
+        const decidedHint = decidedPct ? (decidedPct < 0 ? "Allègement appliqué" : "Surcharge appliquée") : "Difficulté maintenue";
         // 2 entiers contenant la valeur appliquée (2026-09-29, "toujours 2 points").
         const appliedZone = zoneRange(appliedDiff, dir ?? "low");
         return (
@@ -475,10 +484,12 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   zoneHigh={appliedZone.zoneHigh}
                   hideZone={free}
                   centerLabel={free ? { arrow: String(appliedDiff), verb: "Ajustée" } : undefined}
+                  hideHint
+                  onHint={free ? undefined : onHint}
                   value={plannedDifficulty}
                   plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
                   readOnly
-                  hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
+                  hint={decidedHint}
                   onChange={() => {}}
                 />
               ) : (
@@ -490,7 +501,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   value={plannedDifficulty}
                   plannedMarker={decidedPct !== null ? decidedPlannedDiff : null}
                   readOnly
-                  hint={decidedPct !== null ? "Difficulté ajustée appliquée" : "Difficulté prévue maintenue"}
+                  hint={decidedHint}
                   onChange={() => {}}
                 />
               )}

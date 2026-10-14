@@ -331,7 +331,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
 
                 <InstallAppRow />
 
-                <NotificationToggle />
+                {/* App iOS : pas de push web dans la coque native (push natif pas encore branché), la carte afficherait « Non disponible ». */}
+                {!isNativeApp() && <NotificationToggle />}
 
                 <LogoutButton />
 

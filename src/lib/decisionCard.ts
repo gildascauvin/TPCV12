@@ -2,7 +2,8 @@ import type { Session } from "@/types";
 import { daysAgoStr, dailyLoad, partialChargeReady, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendDirection, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
 import { sigDimInfo, trendDimInfo, crossTrendInsight, type Severity as PhaseSeverity } from "@/lib/fatigueSignature";
 import { CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
-import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
+import { Z_SWC, DIMENSION_KEYS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
+import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
 import { computeAutoregSuggestion, autoregHeadline, autoregAdvice, autoregStatusLabel, autoregDetail, qualitativeDifficulty, absoluteFeel, zoneRange, pctToPoints, type AutoregSuggestion } from "@/lib/autoregulation";
 import { decisionSummary, feltLine, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 
@@ -133,6 +134,21 @@ export interface DecisionCard {
   /* Séance faite (2026-10-04) : zone proposée ce jour-là (décision enregistrée, sinon reco recalculée
      depuis le check-in), pour que l'anneau "Faite" situe le RPE réel par rapport à elle. */
   doneZone?: { low: number; high: number } | null;
+  /* Titre affiché sous l'anneau de décision, à la place de la 1re ligne de `text` (2026-10-12,
+     Gildas) — repos et séance faite seulement ; une séance à ajuster prend le texte vivant de
+     l'anneau (Dans / Sous / Au-dessus de la zone). `text` reste inchangé pour les autres usages. */
+  title?: string;
+  /* Ligne 2 affichée avec `title` (séance faite, 2026-10-12) : sans la comparaison, que le titre
+     porte déjà. Absente = la ligne 2 de `text` est gardée telle quelle ; "" = plus de ligne 2. */
+  titleDetail?: string;
+}
+
+/* Remplace la 1re ligne (headline) de `text` par `title`, si fourni — et la 2e par `detail`, si fourni. */
+export function withTitle(text: string, title: string | null | undefined, detail?: string): string {
+  if (!title) return text;
+  const lines = text.split("\n");
+  const rest = detail === undefined ? lines.slice(1) : [detail, ...lines.slice(2)];
+  return [title, ...rest.filter(Boolean)].join("\n");
 }
 
 /* État de la journée vu par la carte (2026-09-29). `planned` = une séance reste à faire ;
@@ -238,16 +254,26 @@ function isChronicOnly(suggestion: AutoregSuggestion, chronicPenalty: number, pa
   return !base || base.kind === "norm_hard";
 }
 
-/* Après la séance : ce que la journée implique pour demain. */
-function afterText(feel: Feel, rpeGap: number | null, tomorrow: number | null | undefined): string {
+/* Après la séance : ce que la journée implique pour demain. Dit en ligne 2 depuis le 2026-10-13
+   (comme le jour de repos), la Phase ne garde que la charge. Coach : pas de consigne, ses conseils
+   de ligne 2 disent déjà « vérifie son ressenti au réveil ». */
+function afterText(feel: Feel | null, rpeGap: number | null, tomorrow: number | null | undefined, coach = false): string {
   if (tomorrow === undefined) return "";
-  if (tomorrow === null || tomorrow <= 0) {
-    return feel === "bad" || (rpeGap ?? 0) >= 1 ? " Demain repos, il tombe bien." : " Demain repos pour consolider.";
-  }
+  const heavy = feel === "bad" || (rpeGap ?? 0) >= 1;
+  if (tomorrow === null || tomorrow <= 0) return heavy ? " Demain repos, il tombe bien." : " Demain repos pour consolider.";
   const q = qualitativeDifficulty(tomorrow);
-  return feel === "bad" || (rpeGap ?? 0) >= 1
-    ? ` Demain : séance ${q} prévue, refais le point au réveil.`
-    : ` Demain : séance ${q} prévue.`;
+  return heavy && !coach ? ` Demain : séance ${q} prévue, refais le point au réveil.` : ` Demain : séance ${q} prévue.`;
+}
+
+/* Ressenti vs prévu, en mots (2026-10-13, Gildas : on peut être dans la zone et avoir trouvé la
+   séance plus dure que prévu ; des mots plutôt que des chiffres). Repère = la difficulté prévue de
+   la séance (après ajustement éventuel), pas la zone que dit déjà le titre. */
+function feltVsPlanned(rpe: number | null, planned: number | null): string {
+  if (rpe === null || planned === null) return "";
+  const gap = Math.round(rpe) - Math.round(planned);
+  if (gap === 0) return "Séance ressentie comme prévu.";
+  const how = Math.abs(gap) === 1 ? "un peu" : Math.abs(gap) === 2 ? "modérément" : "beaucoup";
+  return `Séance ressentie ${how} plus ${gap > 0 ? "dure" : "facile"} que prévu.`;
 }
 
 /* Pénalité chronique (charge récente, monotonie, contrainte, Forme négative) — extraite le
@@ -319,6 +345,9 @@ export function computeDecisionCard(params: {
      que ce que dit le cœur : une tendance, donc Phase. `sessionHeart` = la séance faite ce jour-là vs
      son cœur : une fois la séance faite, c'est elle que commente la ligne 2, plus le check-in du matin. */
   physio?: { verdictTitle?: string | null; heartRepeated?: string | null; sessionHeart?: string | null } | null;
+  /* Comportements cochés au check-in du jour (2026-10-12) : un comportement négatif est le 1er
+     signal cité par le conseil après séance (doneAdvice). */
+  behaviors?: string[] | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
 
@@ -363,6 +392,103 @@ function deviceNoteLine(note?: string | null): string {
    La phase est crossTrendInsight() tel quel (mêmes entrées que la carte ⚡ Charge / 🌿 Récupération,
    sur la même fenêtre CONSEILS_HISTORY_DAYS pour que la tendance 6 semaines ne diverge pas de
    l'onglet Charge). */
+/* ── Conseil après séance (ligne 2 de la carte, 2026-10-12, Gildas) ─────────────────────────────
+   Une phrase, sans le mot « zone » (le titre le dit) ni « demain » (la Phase le dit). Elle rebondit
+   sur le signal du matin qui ressort le plus : comportement négatif, puis dimension la plus loin de
+   la norme (ou sous les seuils fixes sans historique), sinon la récup globale. */
+type Outcome = "below" | "in" | "above";
+type MorningSignal = { kind: "behavior"; label: string; tip: string } | { kind: "dim"; dim: DimensionKey; low: boolean };
+
+function morningSignal(b: WellnessBaselineResult | null, behaviors: string[] | null): MorningSignal | null {
+  const neg = (behaviors ?? []).map(k => NEGATIVE_BEHAVIOR_TIPS[k]).find(Boolean);
+  if (neg) return { kind: "behavior", label: neg.label, tip: neg.tip };
+  if (!b) return null;
+  if (b.hasEnoughHistory) {
+    // z déjà orienté « positif = mieux » sur les 4 dimensions (stress inversé, dimensionRaw).
+    let best: { dim: DimensionKey; z: number } | null = null;
+    for (const dim of DIMENSION_KEYS) {
+      const z = b.dimensions[dim].z;
+      if (z !== null && (!best || Math.abs(z) > Math.abs(best.z))) best = { dim, z };
+    }
+    return best && Math.abs(best.z) >= Z_SWC ? { kind: "dim", dim: best.dim, low: best.z < 0 } : null;
+  }
+  // Sans historique : mêmes seuils fixes que getRecoveryAdvice() (raw stress = 10 - stress).
+  const lows = DIMENSION_KEYS
+    .map(dim => ({ dim, v: b.dimensions[dim].raw }))
+    .filter(x => x.dim === "stress" ? x.v < 4 : x.v < 5)
+    .sort((x, y) => x.v - y.v);
+  return lows.length ? { kind: "dim", dim: lows[0].dim, low: true } : null;
+}
+
+const LOW_ADVICE: Record<DimensionKey, Record<Outcome, [athlete: string, coach: string]>> = {
+  sleep: {
+    below: ["Bien vu de lever le pied après une nuit courte.", "Bien vu de lever le pied après une nuit courte."],
+    in: ["Nuit courte mais séance tenue : couche-toi tôt.", "Nuit courte mais séance tenue : vérifie son ressenti au réveil."],
+    above: ["Effort lourd après une nuit courte : couche-toi tôt.", "Effort lourd après une nuit courte : vérifie son ressenti au réveil."],
+  },
+  stress: {
+    below: ["Bien vu de lever le pied sous stress.", "Bien vu de lever le pied sous stress."],
+    in: ["Stress élevé : coupe les écrans ce soir.", "Stress élevé : vérifie son ressenti au réveil."],
+    above: ["Effort lourd sous stress : coupe les écrans ce soir.", "Effort lourd sous stress : vérifie son ressenti au réveil."],
+  },
+  recovery: {
+    below: ["Bien vu de ménager tes douleurs.", "Bien vu de ménager ses douleurs."],
+    in: ["Douleurs présentes : étirements ce soir.", "Douleurs présentes : vérifie son ressenti au réveil."],
+    above: ["Effort lourd sur des douleurs : étirements ce soir.", "Effort lourd sur des douleurs : vérifie son ressenti au réveil."],
+  },
+  motivation: {
+    below: ["Motivation basse : change de stimulus la prochaine fois.", "Motivation basse : propose un autre stimulus la prochaine fois."],
+    in: ["Séance tenue malgré une motivation basse.", "Séance tenue malgré une motivation basse."],
+    above: ["Bel effort malgré une motivation basse.", "Bel effort malgré une motivation basse."],
+  },
+};
+const HIGH_LABEL: Record<DimensionKey, string> = { sleep: "Bonne nuit", stress: "Stress bas", recovery: "Corps frais", motivation: "Belle motivation" };
+
+function doneAdvice(a: {
+  outcome: Outcome | null; coach: boolean; recoDir: AutoregSuggestion["dir"] | null; maintained: boolean;
+  signal: MorningSignal | null; feel: Feel | null; relative: boolean;
+}): string {
+  const { outcome, coach } = a;
+  if (outcome === null) return coach ? "RPE pas encore noté." : "Note ton RPE pour affiner ta prochaine reco.";
+  // Reco ignorée et le RPE lui donne raison : prioritaire, remplace le reste.
+  if (a.maintained && a.recoDir === "low" && outcome === "above")
+    return coach ? "La reco d'alléger était justifiée." : "La reco d'alléger était justifiée : soigne ta récup.";
+  if (a.maintained && a.recoDir === "high" && outcome === "below")
+    return coach ? "La surcharge était à sa portée." : "Tu pouvais surcharger, suis la reco la prochaine fois.";
+  const sig = a.signal;
+  if (sig?.kind === "behavior") {
+    if (outcome === "below") return `${sig.label} : bien vu de lever le pied.`;
+    if (coach) return `${sig.label} : vérifie son ressenti au réveil.`;
+    return outcome === "above"
+      ? `Effort lourd, ${sig.label.charAt(0).toLowerCase()}${sig.label.slice(1)} : ${sig.tip}.`
+      : `${sig.label} : ${sig.tip}.`;
+  }
+  if (sig?.kind === "dim" && sig.low) return LOW_ADVICE[sig.dim][outcome][coach ? 1 : 0];
+  if (sig?.kind === "dim") {
+    const l = HIGH_LABEL[sig.dim];
+    return outcome === "below" ? `${l} : marge pour pousser la prochaine fois.`
+      : outcome === "in" ? `${l}, séance bien dosée.`
+      : `${l} : ça encaisse, mais pas deux jours de suite.`;
+  }
+  if (a.feel === null) return coach ? "Sans check-in, difficile de juger cette séance." : "Fais ton check-in demain pour juger tes séances.";
+  const ta = coach ? "sa" : "ta", Ta = coach ? "Sa" : "Ta";
+  if (a.feel === "bad") {
+    const R = a.relative ? `récup sous ${ta} norme` : "récup fragile";
+    return outcome === "below" ? `Bien vu de lever le pied sur une ${R}.`
+      : outcome === "in" ? `${R.charAt(0).toUpperCase()}${R.slice(1)} : ${coach ? "vérifie son ressenti au réveil" : "couche-toi tôt ce soir"}.`
+      : `Effort lourd sur une ${R} : ${coach ? "vérifie son ressenti au réveil" : "dors bien ce soir"}.`;
+  }
+  if (a.feel === "good") {
+    const R = a.relative ? `Récup au-dessus de ${ta} norme` : "Bonne récup";
+    return outcome === "below" ? `${R} : marge pour pousser la prochaine fois.`
+      : outcome === "in" ? `${R}, séance bien dosée.`
+      : `${R} : ça encaisse, mais pas deux jours de suite.`;
+  }
+  return outcome === "below" ? `${Ta} récup permettait plus${coach ? "." : ", ose la prochaine fois."}`
+    : outcome === "in" ? `Effort adapté à ${ta} récup, rien à changer.`
+    : `Effort au-delà de ${ta} récup : ${coach ? "vérifie son ressenti au réveil" : "soigne ton sommeil"}.`;
+}
+
 function withPhase(
   params: Parameters<typeof computeDecisionCard>[0] & { day: DecisionDay },
   suggestion: AutoregSuggestion | null,
@@ -409,7 +535,8 @@ function withPhase(
     : day.kind === "rest"
     ? { title: cross.title, text: restText(feel, ff.fitness, tomorrow, voice), severity: cross.severity, lockedText: null }
     : day.kind === "done"
-    ? { title: cross.title, text: cross.text + afterText(feel, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow), severity: cross.severity, lockedText: null }
+    // La ligne 2 dit le ressenti, le conseil du matin et demain : la Phase ne garde que la charge.
+    ? { title: cross.title, text: cross.chargeText, severity: cross.severity, lockedText: null }
     : suggestion
     // La ligne 2 dit le niveau de récupération et l'action du jour : la Phase ne garde que la charge.
     ? { title: cross.title, text: chronicOnly ? cross.chargeTextNoRecent : cross.chargeText, severity: cross.severity, lockedText: null }
@@ -452,18 +579,22 @@ function withPhase(
         ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, le bon moment pour pousser.`
         : tomorrowLine)
       : tomorrowLine;
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
+    const restTitle = !params.wellnessFilledToday ? "Récup à confirmer"
+      : ({ bad: "Récup fragile", mid: "Récup stable", good: "Bonne récup" } as const)[feel];
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", title: restTitle, text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
        reco était 7-8), pas seulement le plan. Décision enregistrée d'abord ; sans elle (séance faite
        sans passer par la carte), reco recalculée depuis le check-in du matin. */
     const rec = day.decision ?? null;
+    let recoDir: AutoregSuggestion["dir"] | null = rec?.proposed ?? null;
     let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null
       ? { low: rec.zoneLow, high: rec.zoneHigh } : null;
     if (!rec && params.wellnessFilledToday && day.planned !== null) {
       const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty);
       if (sug) {
+        recoDir = sug.dir;
         const z = zoneRange(Math.round(day.planned + pctToPoints(sug.reco)), sug.dir);
         zone = { low: z.zoneLow, high: z.zoneHigh };
       }
@@ -471,7 +602,29 @@ function withPhase(
     const coachVoice = voice.coach || !!voice.subject;
     const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
     const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
-    return { suggestion: null, icon: "🟢", text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}${doneHeartLine}`, phase, doneZone: zone };
+    /* Titre = même repère qu'avant la séance (2026-10-12) : la zone proposée, ou sans reco la même
+       zone par défaut que l'anneau avant séance (prévu et le point en dessous, AutoregButtons). La
+       ligne 2 ne garde que le résumé de la décision : toute comparaison y redisait le titre. */
+    const shownZone = zone ?? (day.planned !== null
+      ? (({ zoneLow, zoneHigh }) => ({ low: zoneLow, high: zoneHigh }))(zoneRange(Math.round(day.planned), "low"))
+      : null);
+    const r = day.rpe !== null ? Math.round(day.rpe) : null;
+    const doneTitle = r === null ? "Difficulté non notée"
+      : shownZone ? (r < shownZone.low ? "Sous la zone" : r > shownZone.high ? "Au-dessus de la zone" : "Dans la zone")
+      : undefined;
+    const outcome: Outcome | null = r === null || !shownZone ? null : r < shownZone.low ? "below" : r > shownZone.high ? "above" : "in";
+    const advice = doneAdvice({
+      outcome, coach: coachVoice, recoDir,
+      maintained: !rec || Math.round(rec.applied_difficulty) === Math.round(rec.original_difficulty),
+      signal: params.wellnessFilledToday ? morningSignal(params.baseline ?? null, params.behaviors ?? null) : null,
+      feel: params.wellnessFilledToday ? feel : null, relative,
+    });
+    // Ligne 2 = ressenti vs prévu + conseil + demain (2026-10-13). RPE non noté : le conseil le dit déjà.
+    const doneLine = [
+      feltVsPlanned(day.rpe, day.planned),
+      advice,
+    ].filter(Boolean).join(" ") + doneHeartLine + (r === null ? "" : afterText(params.wellnessFilledToday ? feel : null, day.rpe !== null && day.planned !== null ? day.rpe - day.planned : null, tomorrow, coachVoice));
+    return { suggestion: null, icon: "🟢", title: doneTitle, titleDetail: doneTitle ? doneLine : undefined, text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}${doneHeartLine}`, phase, doneZone: shownZone };
   }
 
   const planned = params.plannedDifficulty ?? 6;
