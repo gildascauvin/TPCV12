@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import AuthBackground from "@/components/auth/AuthBackground";
 import BrandLogoStacked from "@/components/brand/BrandLogo";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
+import AppBanner from "@/components/AppBanner";
 
 function EyeOn() {
   return (
@@ -155,6 +156,7 @@ export default function LoginPage() {
   return (
     <AuthBackground>
       <div style={{ width: "100%", maxWidth: 400 }}>
+        <AppBanner source="login" variant="card" />
         {/* Logo */}
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
           <BrandLogoStacked size={104} theme="dark" />

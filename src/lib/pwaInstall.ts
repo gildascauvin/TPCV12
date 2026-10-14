@@ -13,7 +13,7 @@ import { isIOS, isStandalone } from "@/lib/push";
    iOS Safari n'a pas cet événement : on y renverra vers l'App Store dès que APP_STORE_URL est posé. */
 
 /** Lien App Store, vide tant que l'app n'est pas publiée (rien n'est affiché sur iOS d'ici là). */
-export const APP_STORE_URL = "";
+export const APP_STORE_URL = "https://apps.apple.com/fr/app/theperfclub/id6817809833";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;

@@ -15,6 +15,7 @@ import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { WELLNESS_RAMP } from "@/lib/wellness";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import AppBanner from "@/components/AppBanner";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const DAY_NAMES: Record<string, string> = { Lun: "Lundi", Mar: "Mardi", Mer: "Mercredi", Jeu: "Jeudi", Ven: "Vendredi", Sam: "Samedi", Dim: "Dimanche" };
@@ -306,6 +307,8 @@ export default function PublicProgramView({ program, coachName }: Props) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#f1f0ee", display: "flex", flexDirection: "column" }}>
+
+      {!inApp && !isEmbedded && <AppBanner source="public_program" />}
 
       {/* Topbar */}
       {!inApp && <div style={{ background: "#fff", borderBottom: "1px solid rgba(0,0,0,.08)", height: 56, padding: "0 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
