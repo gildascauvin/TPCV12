@@ -155,9 +155,11 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
         {locked && <defs><filter id={blurId} x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="7" /></filter></defs>}
         <g filter={locked ? `url(#${blurId})` : undefined} opacity={locked ? 0.55 : 1}>
         {spec.kind === "bars" && vals.map((v, i) => {
-          if (v === null || v <= lo) return null;
+          if (v === null || (spec.barsFrom == null && v <= lo)) return null;
           const bw = Math.max(2, Math.min(18, (plotW / n) * 0.62));
-          return <rect key={i} x={toX(i) - bw / 2} y={toY(v)} width={bw} height={toY(lo) - toY(v)} rx={2} fill={colorAt(v)} opacity={0.9} />;
+          // barsFrom : bâtons signés qui partent d'une ligne de base (écarts) au lieu du bas du chart.
+          const base = toY(spec.barsFrom ?? lo), y = toY(v);
+          return <rect key={i} x={toX(i) - bw / 2} y={Math.min(y, base)} width={bw} height={Math.max(1.5, Math.abs(base - y))} rx={2} fill={colorAt(v)} opacity={0.9} />;
         })}
 
         {spec.kind === "area" && segments.map((seg, k) => (

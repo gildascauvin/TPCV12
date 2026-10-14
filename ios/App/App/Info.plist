@@ -43,7 +43,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>ThePerfClub utilise l'appareil photo pour filmer tes exercices et les partager avec ton coach.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>ThePerfClub lit ta fréquence cardiaque au repos, ta variabilité cardiaque (VFC), ton sommeil et tes entraînements pour ajuster tes séances à ta récupération.</string>
+	<string>ThePerfClub lit ta fréquence cardiaque (au repos et pendant tes entraînements), ta variabilité cardiaque (VFC), ton sommeil et tes entraînements pour ajuster tes séances à ta récupération et comparer ton ressenti à l'effort mesuré.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>ThePerfClub n'écrit aucune donnée dans Santé.</string>
 	<key>NSMicrophoneUsageDescription</key>

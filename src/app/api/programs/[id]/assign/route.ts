@@ -138,6 +138,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const { error } = await admin.from("sessions").insert(sessionsToInsert);
       if (error) {
         console.error("[assign] sessions insert error:", error);
+        // Pas d'assignation active sans séances : elle afficherait un programme vide.
+        await admin.from("coach_sessions").delete().eq("program_assignment_id", assignment.id);
+        await admin.from("sessions").delete().eq("program_assignment_id", assignment.id);
+        await admin.from("program_assignments").delete().eq("id", assignment.id);
         return Response.json({ error: error.message }, { status: 500 });
       }
     }
@@ -146,6 +150,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const { error } = await admin.from("coach_sessions").insert(coachSessionsToInsert);
       if (error) {
         console.error("[assign] coach_sessions insert error:", error);
+        // Pas d'assignation active sans séances : elle afficherait un programme vide.
+        await admin.from("coach_sessions").delete().eq("program_assignment_id", assignment.id);
+        await admin.from("sessions").delete().eq("program_assignment_id", assignment.id);
+        await admin.from("program_assignments").delete().eq("id", assignment.id);
         return Response.json({ error: error.message }, { status: 500 });
       }
     }

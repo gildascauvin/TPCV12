@@ -55,6 +55,7 @@ import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from 
 import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
+import { usePhysioData, physioDecisionInputs } from "@/lib/physioData";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -114,6 +115,9 @@ interface Props {
 }
 
 export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, revealAssignmentIds = [], sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [], initialAnalyticsData }: Props) {
+  // Ressenti vs cœur (2026-10-11) : verdicts des séances faites, lus par le sportif seul (RLS).
+  const physio = usePhysioData(userId, !sandboxMode);
+  const heartRpeOf = (id: string) => { const r = physio?.heart[id]; return r?.kind === "ok" ? Math.round(r.predicted) : null; };
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -390,6 +394,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     perspective: "athlete",
     behaviorTip,
     deviceNote,
+    physio: physioDecisionInputs(physio, selectedDate),
   });
   const decisionColor = decisionCardColor(decision.icon);
   /* Freemium (2026-09-30) : 1re vraie décision (check-in fait + séance à ajuster, sur le jour réel)
@@ -917,6 +922,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
                     hideGauge={s.id === autoregTargetTop?.id}
+                    heartRpe={s.done ? heartRpeOf(s.id) : null}
                   />
                 ))}
                 {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx
@@ -948,13 +954,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           analyticsData ? (
             <>
               {homeTab === "charge" && (chargeReady
-                ? <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />
+                ? <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
                 : <AnalyticsCollecting data={analyticsData} group="charge" />)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
                 {recupReady
-                  ? <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} />
+                  ? <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
                   : <AnalyticsCollecting data={analyticsData} group="recup" />}
               </>}
             </>

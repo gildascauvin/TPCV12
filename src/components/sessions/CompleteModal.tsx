@@ -7,6 +7,8 @@ import { computeFatigueImpact } from "@/lib/wellness";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
 import { chronoMinutes } from "@/lib/liveSession";
+import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
+import PhysioTeaser from "@/components/physio/PhysioTeaser";
 
 interface CompleteModalProps {
   session: Session;
@@ -39,10 +41,22 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     return () => { alive = false; };
   }, [session.user_id, session.date, session.duration, chrono]);
 
+  /* Ressenti à l'aveugle (2026-10-11) : si la montre a la FC de la séance ce jour-là, le RPE part sans
+     valeur (6 par défaut orientait déjà la note) et la comparaison au cœur reste floutée jusqu'à la
+     validation. Elle s'affiche ensuite (PhysioRevealHost), note figée : rien ne peut la caler sur le cœur. */
+  const blind = session.rpe == null && workouts.some(w => w.trimp != null);
+  const [touched, setTouched] = useState(false);
+  const rpeMissing = blind && !touched;
+
   async function handleSave() {
+    if (rpeMissing) return;
     setSaving(true);
     await onSave({ rpe, duration });
     setSaving(false);
+    if (blind) {
+      invalidatePhysio();
+      requestPhysioReveal({ kind: "session", sessionId: session.id, date: session.date, rpe, duration });
+    }
   }
 
   const impact = computeFatigueImpact(rpe, duration);
@@ -74,6 +88,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         <div style={{ fontSize: 14, color: "#62686e", marginBottom: 22, lineHeight: 1.4 }}>
           {session.name}
         </div>
+
+        {blind && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour savoir si ton cœur a vécu la séance comme tu la sens." chips={["142 bpm", "171 max", "Effort"]} />}
 
         {/* Duration */}
         <div style={{ marginBottom: 18 }}>
@@ -107,7 +123,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           {workouts.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <div style={{ fontSize: 11, color: "#8a8f94", marginBottom: 6 }}>
-                {workouts.length > 1 ? "Enregistrés par ta montre ce jour-là :" : "Enregistré par ta montre :"}
+                {workouts.length > 1 ? "Enregistrés dans Santé ce jour-là :" : "Enregistré dans Santé :"}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {workouts.map(w => {
@@ -137,12 +153,13 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         <div style={{ marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
             <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpe}<span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>/10</span></div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpeMissing ? <span style={{ color: "#8a8f94" }}>—</span> : rpe}<span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>/10</span></div>
           </div>
           <input
             type="range" min={1} max={10} step={1} value={rpe}
-            onChange={(e) => { const n = Number(e.target.value); hapticTick(rpe, n); setRpe(n); }}
-            style={{ width: "100%", accentColor: "#d44000", cursor: "pointer" }}
+            onChange={(e) => { const n = Number(e.target.value); hapticTick(rpe, n); setRpe(n); setTouched(true); }}
+            onPointerDown={() => setTouched(true)}
+            style={{ width: "100%", accentColor: "#d44000", cursor: "pointer", opacity: rpeMissing ? 0.45 : 1 }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
             <span>Très facile</span><span>Modéré</span><span>Max effort</span>
@@ -156,15 +173,16 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
             <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MINUTES</div>
           </div>
           <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em", lineHeight: 1 }}>{rpe}</div>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em", lineHeight: 1 }}>{rpeMissing ? "—" : rpe}</div>
             <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFFICULTÉ</div>
           </div>
         </div>
 
-        {/* Impact banner */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff3e8", border: "0.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 13px", marginBottom: 20, fontSize: 13, color: "#d44000", fontWeight: 700 }}>
-          🔥 Impact fatigue estimé : −{impact} pts
-        </div>
+        {!blind && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff3e8", border: "0.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 13px", marginBottom: 20, fontSize: 13, color: "#d44000", fontWeight: 700 }}>
+            🔥 Impact fatigue estimé : −{impact} pts
+          </div>
+        )}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 8 }}>
@@ -175,8 +193,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
             Annuler
           </button>
           <button
-            onClick={handleSave} disabled={saving}
-            style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+            onClick={handleSave} disabled={saving || rpeMissing}
+            style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: rpeMissing ? "default" : "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)", opacity: rpeMissing ? 0.45 : 1 }}
           >
             {saving ? "..." : "Valider ✓"}
           </button>

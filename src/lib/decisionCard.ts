@@ -313,6 +313,12 @@ export function computeDecisionCard(params: {
      et au jour de repos non renseigné, avec l'invitation à faire le check-in. Sportif seul (le coach ne
      lit pas health_daily). */
   deviceNote?: string | null;
+  /* Ressenti vs physiologie (2026-10-11), sportif seul (le coach ne lit pas health_*).
+     `verdict` = check-in du jour vs données de la nuit : c'est du niveau de récup du jour, donc
+     ligne 2 (jamais la Phase). `heartRepeated` = 2 dernières séances d'une même famille plus dures
+     que ce que dit le cœur : une tendance, donc Phase. `sessionHeart` = la séance faite ce jour-là vs
+     son cœur : une fois la séance faite, c'est elle que commente la ligne 2, plus le check-in du matin. */
+  physio?: { verdictTitle?: string | null; heartRepeated?: string | null; sessionHeart?: string | null } | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
 
@@ -347,10 +353,10 @@ export function computeDecisionCard(params: {
   return { suggestion: null, icon: "🟢", text: ctxLine ? `Plan cohérent\n${ctxLine}` : "Plan cohérent" };
 }
 
-/* Montre avant le check-in : " Ta montre : Nuit 5h40 · FC 4 bpm au-dessus de ta norme. Fais ton
-   check-in pour confirmer." — le ressenti reste la décision, la montre n'est qu'un signal d'appel. */
+/* Données physiologiques avant le check-in (2026-10-13) : on dit seulement qu'elles sont arrivées,
+   jamais leurs valeurs, pour ne pas biaiser le ressenti (saisie à l'aveugle, cf. Ressenti vs physiologie). */
 function deviceNoteLine(note?: string | null): string {
-  return note ? ` Ta montre : ${note}. Fais ton check-in pour confirmer.` : "";
+  return note ? " Tes données physiologiques de la nuit sont arrivées : fais ton check-in pour les comparer à ton ressenti." : "";
 }
 
 /* Carte "avec phase" (2026-09-29) : titre + ligne 2 selon l'état de la journée, puis la ligne Phase.
@@ -408,7 +414,16 @@ function withPhase(
     // La ligne 2 dit le niveau de récupération et l'action du jour : la Phase ne garde que la charge.
     ? { title: cross.title, text: chronicOnly ? cross.chargeTextNoRecent : cross.chargeText, severity: cross.severity, lockedText: null }
     : { title: cross.title, text: cross.text, severity: cross.severity, lockedText: null };
-  const phase: NonNullable<DecisionCard["phase"]> = { ...phaseCore, insufficient };
+  const heartRepeated = params.wellnessFilledToday ? params.physio?.heartRepeated ?? null : null;
+  const phase: NonNullable<DecisionCard["phase"]> = {
+    ...phaseCore,
+    text: heartRepeated ? `${phaseCore.text} ${heartRepeated}` : phaseCore.text,
+    insufficient,
+  };
+  // Ligne 2 : désaccord ressenti / données de la nuit (rien quand ils sont d'accord).
+  const physioLine = params.wellnessFilledToday && params.physio?.verdictTitle ? ` ${params.physio.verdictTitle}.` : "";
+  // Séance faite : son écart au cœur, sauf s'il est déjà dit par la Phase (écart répété).
+  const doneHeartLine = params.physio?.sessionHeart && !heartRepeated ? ` ${params.physio.sessionHeart}` : "";
 
   const tomorrowLine = tomorrow === undefined ? ""
     : typeof tomorrow === "number" && tomorrow > 0 ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}.` : " Demain : repos.";
@@ -420,7 +435,7 @@ function withPhase(
     const ta = v(voice, "ta", "sa"), Ta = v(voice, "Ta", "Sa");
     const feelLine = !params.wellnessFilledToday
       ? (params.deviceNote && !voice.coach
-          ? `Ta montre : ${params.deviceNote}. Fais ton check-in pour confirmer ta récupération.`
+          ? "Tes données physiologiques de la nuit sont arrivées : fais ton check-in pour les comparer à ton ressenti."
           : v(voice, "Renseigne ton ressenti pour savoir comment tu récupères.", "Ressenti du jour pas encore renseigné."))
       : feel === "bad"
       ? `${Ta} récupération est ${relative ? `sous ${ta} norme` : "basse"} : ce repos tombe bien.`
@@ -437,7 +452,7 @@ function withPhase(
         ? ` Demain : séance ${qualitativeDifficulty(tomorrow)}, le bon moment pour pousser.`
         : tomorrowLine)
       : tomorrowLine;
-    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${restNudge}${restTomorrow}`, phase };
+    return { suggestion: null, icon: params.wellnessFilledToday ? "🟢" : "⚪", text: `Jour de repos\n${feelLine}${physioLine}${restNudge}${restTomorrow}`, phase };
   }
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
@@ -456,7 +471,7 @@ function withPhase(
     const coachVoice = voice.coach || !!voice.subject;
     const summary = rec ? decisionSummary(rec, { role: perspective === "coach" ? "coach" : "athlete", subjectName: params.subject }) : null;
     const felt = feltLine(day.rpe, day.planned, zone, coachVoice);
-    return { suggestion: null, icon: "🟢", text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}`, phase, doneZone: zone };
+    return { suggestion: null, icon: "🟢", text: `Séance faite\n${summary ? `${summary} ` : ""}${felt}${doneHeartLine}`, phase, doneZone: zone };
   }
 
   const planned = params.plannedDifficulty ?? 6;
@@ -468,11 +483,11 @@ function withPhase(
   if (suggestion) {
     return {
       suggestion, icon: suggestion.icon, phase,
-      text: `${autoregHeadline(suggestion.dir)}\n${phaseAdviceLine(suggestion, chronicOnly, feel, relative, voice, params)}`,
+      text: `${autoregHeadline(suggestion.dir)}\n${phaseAdviceLine(suggestion, chronicOnly, feel, relative, voice, params)}${physioLine}`,
     };
   }
   return {
     suggestion: null, icon: "🟢", phase,
-    text: `Plan cohérent\n${v(voice, `La séance ${qualif} prévue colle à ta récupération du jour.`, `La séance ${qualif} prévue colle à sa récupération du jour.`)}`,
+    text: `Plan cohérent\n${v(voice, `La séance ${qualif} prévue colle à ta récupération du jour.`, `La séance ${qualif} prévue colle à sa récupération du jour.`)}${physioLine}`,
   };
 }

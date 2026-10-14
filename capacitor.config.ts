@@ -22,6 +22,9 @@ const config: CapacitorConfig = {
   backgroundColor: "#070a0d",
   ios: {
     contentInset: "always",
+    /* FC des séances (2026-10-14) : marque les builds dont le texte d'autorisation Santé mentionne la
+       FC pendant les entraînements ; le site ne la demande qu'à eux (src/lib/heartAccess.ts). */
+    appendUserAgent: "TPCHeart",
     // Pas d'aperçu de lien à l'appui long (réflexe "page web", 2026-10-03).
     allowsLinkPreview: false,
     /* Mode hors ligne (2026-10-02) : nécessaire pour que le service worker fonctionne dans l'app

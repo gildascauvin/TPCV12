@@ -1,13 +1,16 @@
 "use client";
 
 import { hapticTick } from "@/lib/native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
 import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
+import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import type { PlannedIntensity } from "@/lib/plannedIntensity";
 
@@ -129,11 +132,33 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     );
   }
 
+  /* Ressenti vs physiologie (2026-10-11) : si la montre a déjà la nuit de ce jour (FC au repos ou nuit
+     de 3 h et plus), la 1re question montre un teaser (PhysioTeaser) ; la comparaison s'affiche après la
+     validation (PhysioRevealHost), réponses déjà enregistrées. Jamais dans le wizard. */
+  const [physioReady, setPhysioReady] = useState(false);
+  useEffect(() => {
+    if (wizardHero) return;
+    let alive = true;
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      return supabase.from("health_daily").select("resting_hr, sleep_minutes").eq("user_id", data.user.id).eq("date", date).maybeSingle()
+        .then(({ data: row }) => {
+          if (alive && row && (row.resting_hr != null || (row.sleep_minutes ?? 0) >= 180)) setPhysioReady(true);
+        });
+    });
+    return () => { alive = false; };
+  }, [date, wizardHero]);
+
   async function handleSave() {
     setSaving(true);
     const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
     await onSave({ sleep, stress, recovery, motivation, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
     setSaving(false);
+    if (physioReady) {
+      invalidatePhysio();
+      requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation });
+    }
   }
 
   function goNext() {
@@ -302,6 +327,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 0: Sleep + Bedtime */}
         {q === 0 && (
           <div>
+            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour savoir si ton corps récupère comme tu le sens." chips={["7h30", "48 bpm", "Zone"]} />}
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               😴 Comment as-tu dormi ?
             </div>

@@ -17,7 +17,7 @@ async function withTemplate(
   db: { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => PromiseLike<{ data: { template: unknown } | null }> } } } },
   assignments: AssignmentRow[], monday: string,
 ): Promise<AssignmentRow[]> {
-  const match = findProgramForWeek(assignments.map(a => ({ start_date: a.start_date, programs: a.programs })), monday);
+  const match = findProgramForWeek(assignments.map(a => ({ start_date: a.start_date, acclimatation: a.acclimatation, programs: a.programs })), monday);
   if (!match) return assignments;
   const { data } = await db.from("programs").select("template").eq("id", match.program.id).maybeSingle();
   if (!data) return assignments;
@@ -54,7 +54,7 @@ export async function GET(req: Request) {
 
   if (profile?.mode !== "coach") {
     const [aRes, sRes] = await Promise.all([
-      supabase.from("program_assignments").select(`start_date, ${PROGRAM_COLS}`).eq("user_id", user.id).eq("status", "active"),
+      supabase.from("program_assignments").select(`start_date, acclimatation, ${PROGRAM_COLS}`).eq("user_id", user.id).eq("status", "active"),
       supabase.from("sessions").select("date, name, done").eq("user_id", user.id).gte("date", since),
     ]);
     const asg = await withTemplate(supabase as never, (aRes.data ?? []) as AssignmentRow[], from);
@@ -73,8 +73,8 @@ export async function GET(req: Request) {
   const [realSess, demoSess, byAthlete, byUser, realProfiles] = await Promise.all([
     userIds.length ? admin.from("sessions").select("user_id, date, name, done").in("user_id", userIds).gte("date", since) : Promise.resolve({ data: [] }),
     ids.length ? admin.from("coach_sessions").select("athlete_id, date, name, done").eq("coach_id", user.id).in("athlete_id", ids).gte("date", since) : Promise.resolve({ data: [] }),
-    ids.length ? admin.from("program_assignments").select(`athlete_id, start_date, ${PROGRAM_COLS}`).eq("status", "active").in("athlete_id", ids) : Promise.resolve({ data: [] }),
-    userIds.length ? admin.from("program_assignments").select(`user_id, start_date, ${PROGRAM_COLS}`).eq("status", "active").in("user_id", userIds) : Promise.resolve({ data: [] }),
+    ids.length ? admin.from("program_assignments").select(`athlete_id, start_date, acclimatation, ${PROGRAM_COLS}`).eq("status", "active").in("athlete_id", ids) : Promise.resolve({ data: [] }),
+    userIds.length ? admin.from("program_assignments").select(`user_id, start_date, acclimatation, ${PROGRAM_COLS}`).eq("status", "active").in("user_id", userIds) : Promise.resolve({ data: [] }),
     userIds.length ? admin.from("profiles").select("user_id, sport, free_training_label").in("user_id", userIds) : Promise.resolve({ data: [] }),
   ]);
   type RealProfile = { user_id: string; sport: string | null; free_training_label: Record<string, string> | null };

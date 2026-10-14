@@ -5,6 +5,7 @@ import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
 import OfflineSync from "@/components/layout/OfflineSync";
 import LiveSessionHost from "@/components/sessions/LiveSessionHost";
 import InviteHost from "@/components/coach/InviteHost";
+import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
 
 /* Verrouillage de page entière (.locked, coin cadenas sur les CTA premium) retiré le 2026-08-19
    (chantier "gating save") : un compte gratuit navigue et interagit librement partout désormais,
@@ -37,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <HealthSyncOnOpen userId={user.id} />
       <OfflineSync />
       {role === "coach" && <InviteHost />}
+      {role === "athlete" && <PhysioRevealHost userId={user.id} />}
       {role === "athlete" && <LiveSessionHost userId={user.id} userName={(profile as { name?: string | null } | null)?.name ?? "Toi"} />}
     </div>
   );

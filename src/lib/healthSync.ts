@@ -3,6 +3,7 @@ import { Health, type HealthDataType, type HealthSample, type Workout } from "@c
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HEALTH_SYNCED_EVENT, type HealthDay } from "@/lib/healthDays";
 import { reapplyDeviceToRecentWellness } from "@/lib/deviceWellnessDb";
+import { canReadHeart } from "@/lib/heartAccess";
 
 /* Synchro Apple Santé → health_daily (2026-09-30). Ne fait rien hors de l'app iOS : Santé n'existe
    pas dans un navigateur. Relit les 30 derniers jours à chaque fois plutôt que de suivre un curseur :
@@ -61,7 +62,8 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   if (!av.available) return null;
   // Sur iOS, la fenêtre d'autorisation ne s'affiche qu'une fois ; les appels suivants rendent la main direct.
   // "workouts" ajouté après coup : iOS redemande l'accès pour ce seul type à la prochaine ouverture.
-  await Health.requestAuthorization({ read: [...TYPES, "workouts"] });
+  // FC des séances : seulement si ce build l'annonce dans son texte d'autorisation (heartAccess.ts).
+  await Health.requestAuthorization({ read: [...TYPES, "workouts", ...(canReadHeart() ? ["heartRate" as const] : [])] });
 
   /* Fenêtre : minuit local il y a SYNC_DAYS jours, moins 12 h pour capter en entier la nuit qui se
      termine ce jour-là (sinon le 1er jour n'avait qu'un morceau de nuit — 9 min vus en test réel). */
@@ -75,7 +77,7 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   const days = aggregateHealthDays(rhr, hrv, sleep).filter(d => d.date >= firstDayStr);
   const now = new Date().toISOString();
   // Entraînements à part : un échec ici (accès refusé) ne doit pas bloquer FC / VFC / sommeil.
-  await syncWorkouts(supabase, userId, firstDay.toISOString(), endDate, now).catch(e => console.error("[health-sync] workouts", e));
+  await syncWorkouts(supabase, userId, firstDay.toISOString(), endDate, now, medianValue(rhr.map((x) => x.value))).catch(e => console.error("[health-sync] workouts", e));
   if (!days.length) return 0;
 
   const { error } = await supabase
@@ -87,13 +89,26 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   return days.length;
 }
 
-/* Entraînements de la montre → health_workouts, pour pré-remplir la durée dans "Terminer la séance".
-   Même relecture de 30 jours que le reste : upsert sur l'UUID HealthKit. */
-async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate: string, endDate: string, now: string) {
+/* Entraînements de la montre → health_workouts, pour pré-remplir la durée dans "Terminer la séance"
+   et comparer le ressenti au cœur (2026-10-11). Même relecture de 30 jours que le reste : upsert sur
+   l'UUID HealthKit. Garmin réécrit la même séance avec un nouvel UUID : une seule par début. */
+async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate: string, endDate: string, now: string, restHr: number | null) {
   const { workouts } = await Health.queryWorkouts({ startDate, endDate, limit: 500, ascending: true });
-  const rows = workouts
-    .filter((w: Workout) => !!w.platformId)
-    .map((w: Workout) => ({
+  const byStart = new Map<string, Workout>();
+  workouts.filter((w: Workout) => !!w.platformId).forEach((w: Workout) => byStart.set(w.startDate, w));
+  const unique = Array.from(byStart.values());
+  // FC pendant chaque séance ; accès refusé ou séance sans FC = colonnes vides.
+  const heart = canReadHeart();
+  const hr = await Promise.all(unique.map((w) => heart && w.duration >= 600
+    ? Health.readSamples({ dataType: "heartRate", startDate: w.startDate, endDate: w.endDate, limit: 10000 })
+        .then((r) => r.samples).catch(() => [] as HealthSample[])
+    : Promise.resolve([] as HealthSample[])));
+  // FC max = la plus haute vue sur la fenêtre, jamais sous 180 : seule la comparaison d'une séance
+  // à l'autre compte, pas la valeur absolue du TRIMP.
+  const hrMax = Math.max(180, ...hr.flat().map((x) => x.value).filter(Number.isFinite));
+  const rows = unique.map((w, i) => {
+    const stats = workoutHeartStats(hr[i], w.startDate, w.endDate, restHr ?? 60, hrMax);
+    return {
       user_id: userId,
       platform_id: w.platformId!,
       date: localDay(w.startDate),
@@ -103,9 +118,42 @@ async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate:
       workout_type: w.workoutType,
       energy_kcal: w.totalEnergyBurned == null ? null : Math.round(w.totalEnergyBurned),
       source: w.sourceName ?? null,
+      avg_hr: stats?.avg ?? null,
+      max_hr: stats?.max ?? null,
+      trimp: stats?.trimp ?? null,
       updated_at: now,
-    }));
+    };
+  });
   if (!rows.length) return;
   const { error } = await supabase.from("health_workouts").upsert(rows, { onConflict: "user_id,platform_id" });
   if (error) throw new Error(`health_workouts upsert: ${error.message}`);
+}
+
+function medianValue(xs: number[]): number | null {
+  const s = xs.filter(Number.isFinite).sort((a, b) => a - b);
+  return s.length ? s[Math.floor(s.length / 2)] : null;
+}
+
+/* TRIMP de Banister (2026-10-11) : somme, sur la séance, de durée (min) × FC de réserve
+   × 0,64·e^(1,92·FC de réserve). Chaque échantillon pèse le temps jusqu'au suivant, plafonné à 2 min
+   (un trou de mesure ne compte pas comme de l'effort). Moins de 5 échantillons ou de 5 min mesurées :
+   pas de calcul. */
+function workoutHeartStats(samples: HealthSample[], start: string, end: string, rest: number, max: number) {
+  const pts = samples
+    .map((s) => ({ t: new Date(s.startDate).getTime(), v: s.value }))
+    .filter((p) => Number.isFinite(p.v) && p.v > 30)
+    .sort((a, b) => a.t - b.t);
+  if (pts.length < 5 || max <= rest) return null;
+  const t0 = new Date(start).getTime(), t1 = new Date(end).getTime();
+  let trimp = 0, wsum = 0, vsum = 0;
+  pts.forEach((p, i) => {
+    const next = i < pts.length - 1 ? pts[i + 1].t : t1;
+    const dtMin = Math.min(2, Math.max(0, (Math.min(next, t1) - Math.max(p.t, t0)) / 60000));
+    const r = Math.min(1, Math.max(0, (p.v - rest) / (max - rest)));
+    trimp += dtMin * r * 0.64 * Math.exp(1.92 * r);
+    wsum += dtMin;
+    vsum += dtMin * p.v;
+  });
+  if (wsum < 5) return null;
+  return { avg: Math.round(vsum / wsum), max: Math.round(Math.max(...pts.map((p) => p.v))), trimp: Math.round(trimp * 10) / 10 };
 }

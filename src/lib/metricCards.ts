@@ -387,6 +387,8 @@ export type ChartSpec = {
   link?: boolean;
   showTicks?: boolean;
   refLine?: { value: number; label: string };
+  /* Bâtons signés (écarts, 2026-10-11) : partent de cette valeur au lieu du bas du chart. */
+  barsFrom?: number;
   fmt: (v: number) => string;
   colorAt: (v: number) => string;
   tooltipExtra?: (i: number) => string | null;

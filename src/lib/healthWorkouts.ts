@@ -11,6 +11,8 @@ export type HealthWorkout = {
   duration_min: number;
   workout_type: string;
   source: string | null;
+  // TRIMP de la séance (FC pendant l'effort), null sans FC exploitable. Voir healthSync.ts.
+  trimp?: number | null;
 };
 
 const LABELS: Record<string, string> = {
@@ -38,11 +40,14 @@ export const workoutTime = (iso: string) => {
 export async function fetchWorkoutsForDay(supabase: SupabaseClient, userId: string, date: string): Promise<HealthWorkout[]> {
   const { data, error } = await supabase
     .from("health_workouts")
-    .select("platform_id, date, start_at, duration_min, workout_type, source")
+    .select("platform_id, date, start_at, duration_min, workout_type, source, trimp")
     .eq("user_id", userId)
     .eq("date", date)
     .gte("duration_min", 5)
     .order("start_at");
   if (error) { console.error("[health_workouts] lecture:", error.message); return []; }
-  return data ?? [];
+  // Doublons Garmin (même séance réécrite avec un nouvel UUID) : une ligne par début de séance.
+  const byStart = new Map<string, HealthWorkout>();
+  (data ?? []).forEach((w) => { if (!byStart.has(w.start_at) || w.trimp != null) byStart.set(w.start_at, w); });
+  return Array.from(byStart.values());
 }

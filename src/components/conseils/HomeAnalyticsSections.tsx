@@ -9,6 +9,8 @@
 
 import { type DimensionKey, type Perspective, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import IndexCards, { type ExtraIndexCard } from "@/components/conseils/IndexCards";
+import { heartIndexCard, physioIndexCard } from "@/components/physio/PhysioIndexCards";
+import type { PhysioData } from "@/lib/physioData";
 import { ExampleNote } from "@/components/conseils/MetricChart";
 import type { RangeMode } from "@/components/calendar/RangeToggle";
 import { sigDimInfo } from "@/lib/fatigueSignature";
@@ -63,14 +65,18 @@ export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onA
    remplacent les sous-onglets Charge/Adaptation et la rangée de badges : les badges disaient la même
    chose que le chart juste en dessous, et il fallait cliquer pour savoir où on en était sur chaque
    indice. Une carte par indice, statut visible en permanence, chart au clic. */
-export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} lockedHistory={lockedHistory} example={example} />;
+export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false, physio = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean; physio?: PhysioData | null }) {
+  // Ressenti vs cœur (2026-10-11) : sportif uniquement, absente sans FC de séance.
+  const heart = heartIndexCard(physio, data.timeSeries[data.timeSeries.length - 1]?.date ?? "");
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} extraCards={heart ? [heart] : []} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
    à l'intérieur de la carte Récupération, où ils pilotent le chart au lieu de n'être qu'un état. */
-export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean }) {
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[behaviorIndexCard(data)]} lockedHistory={lockedHistory} example={example} />;
+export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false, physio = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean; physio?: PhysioData | null }) {
+  // Ressenti vs physiologie (2026-10-11) : avant Comportements, absente sans données de nuit.
+  const physioCard = physioIndexCard(physio, data.timeSeries[data.timeSeries.length - 1]?.date ?? "");
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[...(physioCard ? [physioCard] : []), behaviorIndexCard(data)]} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que
