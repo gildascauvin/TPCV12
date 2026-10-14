@@ -42,17 +42,19 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
   if (todayWell) return false;
   const [{ data: first }, { data: sessions }] = await Promise.all([
     admin.from("wellness_daily").select("date").eq("user_id", p.user_id).not("bedtime", "is", null).order("date", { ascending: true }).limit(1).maybeSingle(),
-    admin.from("sessions").select("target_difficulty, done").eq("user_id", p.user_id).eq("date", today),
+    admin.from("sessions").select("name, target_difficulty, done").eq("user_id", p.user_id).eq("date", today),
   ]);
-  const planned = (sessions ?? []).filter((s) => !s.done);
-  const hardest = planned.reduce((m, s) => Math.max(m, s.target_difficulty ?? 0), 0);
+  // La séance la plus dure du jour donne son nom à la notif (POC onboarding v4).
+  const planned = (sessions ?? []).filter((s) => !s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0));
+  const main = planned[0];
   let title = "Comment tu te sens ce matin ?";
   let body = "30 secondes de check-in et ThePerfClub t'aide à ajuster ta séance.";
-  if (first?.date === shiftDate(today, -1) && planned.length) {
+  if (first?.date === shiftDate(today, -1) && main) {
     title = "Ta 1re séance ajustée t'attend";
     body = "Fais ton check-in : ta séance s'adapte à ta forme du jour.";
-  } else if (planned.length) {
-    body = `Ta séance ${hardest ? qualitativeDifficulty(hardest) + " " : ""}s'ajuste à ta réponse, 30 secondes.`;
+  } else if (main) {
+    title = `${main.name || `Séance ${main.target_difficulty ? qualitativeDifficulty(main.target_difficulty) : "du jour"}`} prévue aujourd'hui`;
+    body = "10 secondes pour l'ajuster à ta forme.";
   }
   return sendOnce(admin, p.user_id, "morning", today, { title, body, url: "/today?checkin=1", tag: "morning" });
 }
