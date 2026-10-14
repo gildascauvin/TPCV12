@@ -125,7 +125,9 @@ async function syncWorkouts(supabase: SupabaseClient, userId: string, startDate:
     };
   });
   if (!rows.length) return;
-  const { error } = await supabase.from("health_workouts").upsert(rows, { onConflict: "user_id,platform_id" });
+  // Une ligne par début de séance (migration 035) : la séance réécrite par Garmin sous un nouvel UUID
+  // met à jour la ligne existante au lieu de s'empiler.
+  const { error } = await supabase.from("health_workouts").upsert(rows, { onConflict: "user_id,start_at" });
   if (error) throw new Error(`health_workouts upsert: ${error.message}`);
 }
 
