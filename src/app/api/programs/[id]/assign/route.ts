@@ -4,6 +4,7 @@ import type { ProgramTemplate } from "@/types";
 import { mediaForAssignment } from "@/lib/programMedia";
 import { firstTrainingDay, scheduleSessions, addDaysStr } from "@/lib/programSchedule";
 import { parseAndApply } from "@/lib/loadAdjust";
+import { notifyCoachUpdate } from "@/lib/pushSend";
 
 const WEEK_DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 // Allègement de la semaine 0 : difficulté −2, charges et volumes −20 %.
@@ -158,6 +159,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
+    // Programme assigné par un coach à un sportif inscrit : il est prévenu (notif regroupée).
+    if (user_id && user_id !== user.id) {
+      const { data: coach } = await admin.from("profiles").select("name").eq("user_id", user.id).maybeSingle();
+      await notifyCoachUpdate(admin, user_id, coach?.name ?? null);
+    }
     return Response.json({ assignment }, { status: 201 });
   } catch (e) {
     console.error("[assign] Unexpected error:", e);

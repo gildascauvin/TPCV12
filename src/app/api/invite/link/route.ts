@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
+import { notifyAthleteJoined } from "@/lib/pushSend";
 
 /* Logging .error ajouté (2026-09-14) — cas réel trouvé en prod (kouirassbadr@gmail.com, invité par
    jeremie.thiebaud.pro@gmail.com) : cette route s'est déclenchée (200, aucune exception) mais n'a
@@ -82,6 +83,7 @@ export async function POST() {
       return Response.json({ ok: false, failed: failed.map(f => f.label) }, { status: 500 });
     }
 
+    await notifyAthleteJoined(admin, invite.coach_id, user.id, athleteProfile?.name ?? null);
     return Response.json({ ok: true });
   } catch (err) {
     console.error("[invite/link] exception non gérée", err);

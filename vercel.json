@@ -1,7 +1,3 @@
 {
-  "framework": "nextjs",
-  "crons": [
-    { "path": "/api/push/send?job=session", "schedule": "0 8 * * *" },
-    { "path": "/api/push/send?job=winback", "schedule": "0 19 * * *" }
-  ]
+  "framework": "nextjs"
 }

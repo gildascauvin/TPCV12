@@ -42,7 +42,7 @@ export async function isSubscribedToPush(): Promise<boolean> {
 }
 
 /** No-op silencieux si non supporté/refusé — jamais bloquant. */
-export async function subscribeToPush(): Promise<boolean> {
+export async function subscribeToPush(hour?: number, tz?: string): Promise<boolean> {
   if (!isPushSupported() || needsInstallForPush()) return false;
   const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   if (!vapidKey) return false;
@@ -57,7 +57,7 @@ export async function subscribeToPush(): Promise<boolean> {
     await fetch("/api/push/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subscription: subscription.toJSON() }),
+      body: JSON.stringify({ subscription: subscription.toJSON(), hour, tz }),
     });
     return true;
   } catch {

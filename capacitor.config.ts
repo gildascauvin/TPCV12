@@ -36,6 +36,8 @@ const config: CapacitorConfig = {
     /* Écran de lancement (2026-10-03) : fond de l'app + logo, gardé jusqu'à ce que la page soit
        affichée (NativeShell → hideSplash), au lieu d'un flash blanc puis d'un écran vide. */
     SplashScreen: { launchAutoHide: false, backgroundColor: "#070a0d", showSpinner: false },
+    // Notifications reçues app ouverte : affichées quand même (bannière + son), comme app fermée.
+    PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
     SocialLogin: { providers: { google: true, apple: true, facebook: false, twitter: false } },
   },
 };

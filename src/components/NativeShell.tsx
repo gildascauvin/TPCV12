@@ -2,13 +2,16 @@
 
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
+import { useRouter } from "next/navigation";
 import { hideSplash } from "@/lib/native";
+import { initNativeNotifications } from "@/lib/notifications";
 import "@/lib/pwaInstall"; // démarre l'écoute de l'invite d'installation de Chrome au chargement
 
 /* App iOS (2026-10-03) : masque l'écran de lancement une fois la page affichée (gardé jusque-là pour
    éviter le flash et l'écran vide du chargement), et pose la classe `native` sur <html> pour
    retirer les réflexes "page web" (sélection de texte, menu de l'appui long — voir globals.css). */
 export default function NativeShell() {
+  const router = useRouter();
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     document.documentElement.classList.add("native");
@@ -17,6 +20,8 @@ export default function NativeShell() {
     const vp = document.querySelector('meta[name="viewport"]');
     if (vp) vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
     hideSplash();
-  }, []);
+    // Notifications (2026-10-14) : tap sur une notif → sa page ; jeton APNs renvoyé s'il a changé.
+    initNativeNotifications((url) => router.push(url)).catch(() => {});
+  }, [router]);
   return null;
 }

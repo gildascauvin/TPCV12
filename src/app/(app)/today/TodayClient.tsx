@@ -56,6 +56,7 @@ import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
 import { usePhysioData, physioDecisionInputs } from "@/lib/physioData";
+import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -796,6 +797,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
         {homeTab === "today" && (
         <>
+        {/* Notifications (2026-10-14) : demandées juste après le check-in, avec la promesse du lendemain. */}
+        {!sandboxMode && userId && <NotificationPrompt userId={userId} role="athlete" show={wellnessFilledToday && selectedDate === initialDate} />}
         {/* ── Welcome handled by overlay modal below ── */}
 
 

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyCoachUpdate } from "@/lib/pushSend";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -22,6 +23,14 @@ export async function POST(req: Request) {
   if (!athlete) return Response.json({ error: "Sportif introuvable" }, { status: 404 });
 
   const isReal = !!athlete.user_id;
+  // Notif "programme mis à jour" au sportif inscrit (regroupée, 1 toutes les 6 h), jamais pour une
+  // séance passée ni pour "Terminer" (le coach note un résultat, rien à annoncer).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const notifyAthlete = async (date: string | null | undefined) => {
+    if (!isReal || !athlete.user_id || (date && date < todayIso)) return;
+    const { data: coach } = await admin.from("profiles").select("name").eq("user_id", user.id).maybeSingle();
+    await notifyCoachUpdate(admin, athlete.user_id, coach?.name ?? null);
+  };
 
   if (action === "add") {
     if (isReal) {
@@ -30,6 +39,7 @@ export async function POST(req: Request) {
         .insert({ user_id: athlete.user_id, done: false, ...data })
         .select().single();
       if (error) return Response.json({ error: error.message }, { status: 500 });
+      await notifyAthlete(row?.date);
       return Response.json({ ok: true, session: row, _real: true });
     } else {
       const { data: row, error } = await admin
@@ -53,6 +63,7 @@ export async function POST(req: Request) {
         .eq("user_id", athlete.user_id)
         .select().single();
       if (error) return Response.json({ error: error.message }, { status: 500 });
+      if (action === "update") await notifyAthlete(row?.date);
       return Response.json({ ok: true, session: row, _real: true });
     } else {
       const { data: row, error } = await admin

@@ -154,6 +154,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     setSaving(true);
     const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
     await onSave({ sleep, stress, recovery, motivation, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
+    // Coach prévenu tout de suite si la reco du jour est d'alléger (2026-10-14). Sans effet hors compte lié.
+    fetch("/api/push/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "checkin", date }) }).catch(() => {});
     setSaving(false);
     if (physioReady) {
       invalidatePhysio();

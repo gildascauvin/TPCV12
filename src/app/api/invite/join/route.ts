@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { migratePlaceholderSessions } from "@/lib/migratePlaceholderSessions";
+import { notifyAthleteJoined } from "@/lib/pushSend";
 
 export async function POST(request: Request) {
   const { invite_code } = await request.json();
@@ -59,5 +60,6 @@ export async function POST(request: Request) {
     placeholder ? migratePlaceholderSessions(admin, placeholder.id, user.id) : Promise.resolve({ ok: true }),
   ]);
 
+  await notifyAthleteJoined(admin, coachId, user.id, athleteProfile?.name ?? null);
   return NextResponse.json({ ok: true });
 }

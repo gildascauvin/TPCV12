@@ -331,8 +331,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
 
                 <InstallAppRow />
 
-                {/* App iOS : pas de push web dans la coque native (push natif pas encore branché), la carte afficherait « Non disponible ». */}
-                {!isNativeApp() && <NotificationToggle />}
+                {!sandboxMode && <NotificationToggle role={isCoach ? "coach" : "athlete"} initialHour={(profile as { push_hour?: number } | null)?.push_hour ?? 8} />}
 
                 <LogoutButton />
 

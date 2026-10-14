@@ -26,6 +26,7 @@ import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
 import { decisionRingState, DecisionRingMini } from "@/components/sessions/DecisionRing";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
+import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 import type { DeckItem } from "@/components/coach/CoachDecisionDeck";
 import { aggregateFor, AGG_BANDS, bandFor, type AggBand } from "@/lib/metricCards";
 import { analyticsReady } from "@/lib/demoAnalytics";
@@ -1006,6 +1007,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
               return (
                 <div style={{ display: "grid", gridTemplateColumns: isLg ? "minmax(0,1.15fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 20, alignItems: "start", margin: "13px 0" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+                    {/* Notifications (2026-10-14) : dès qu'il a au moins un sportif. */}
+                    {!sandboxMode && <NotificationPrompt userId={userId} role="coach" show={athletes.length > 0} />}
                     <div>
                       <p style={{ margin: "0 0 12px", fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,.75)" }}>
                         Chaque sportif est placé selon sa récupération du jour et la difficulté de sa séance prévue. La bande montre ce que sa récupération peut encaisser : au-dessus, on allège ; en dessous, on peut pousser.
