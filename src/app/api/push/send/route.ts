@@ -53,7 +53,8 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
     title = "Ta 1re séance ajustée t'attend";
     body = "Fais ton check-in : ta séance s'adapte à ta forme du jour.";
   } else if (main) {
-    title = `${main.name || `Séance ${main.target_difficulty ? qualitativeDifficulty(main.target_difficulty) : "du jour"}`} prévue aujourd'hui`;
+    // « Aujourd'hui : {nom} » : pas d'accord à faire, le nom d'une séance est souvent masculin.
+    title = `Aujourd'hui : ${main.name || `séance ${main.target_difficulty ? qualitativeDifficulty(main.target_difficulty) : "prévue"}`}`;
     body = "10 secondes pour l'ajuster à ta forme.";
   }
   return sendOnce(admin, p.user_id, "morning", today, { title, body, url: "/today?checkin=1", tag: "morning" });
