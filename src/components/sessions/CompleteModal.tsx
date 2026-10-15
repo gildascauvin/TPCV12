@@ -91,7 +91,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           {session.name}
         </div>
 
-        {blind && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour savoir si ton cœur a vécu la séance comme tu la sens." chips={["142 bpm", "171 max", "Effort"]} />}
+        {hasHeart && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour savoir si ton cœur a vécu la séance comme tu la sens." chips={["142 bpm", "171 max", "Effort"]} />}
 
         {/* Duration */}
         <div style={{ marginBottom: 18 }}>
@@ -180,7 +180,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           </div>
         </div>
 
-        {!blind && (
+        {!hasHeart && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff3e8", border: "0.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 13px", marginBottom: 20, fontSize: 13, color: "#d44000", fontWeight: 700 }}>
             🔥 Impact fatigue estimé : −{impact} pts
           </div>
