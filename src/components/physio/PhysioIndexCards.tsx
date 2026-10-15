@@ -1,7 +1,7 @@
 import type { ExtraIndexCard } from "@/components/conseils/IndexCards";
 import MetricChart from "@/components/conseils/MetricChart";
 import type { ChartSpec } from "@/lib/metricCards";
-import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, heartVerdictText, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
+import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import type { PhysioData } from "@/lib/physioData";
 import { canReadHeart } from "@/lib/heartAccess";
 
@@ -35,11 +35,11 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     const hasWorkouts = physio.workouts.some(w => w.date >= dates[0] && w.date <= referenceDate && w.duration_min >= 10);
     if (!hasWorkouts) return null;
     return {
-      key: "heart", label: "Ressenti vs cœur", status: "En attente de FC", statusColor: MID, accent: null,
-      trend: "0 séance avec FC",
-      impact: "Tes séances arrivent dans Santé, mais pas encore leur fréquence cardiaque. Ouvre l'app iPhone et autorise la lecture de la FC dans Santé.",
+      key: "heart", label: "Ressenti vs physiologie", status: "En attente de fréquence cardiaque", statusColor: MID, accent: null,
+      trend: "0 séance mesurée",
+      impact: "Tes séances arrivent dans Santé, mais pas encore leur fréquence cardiaque. Ouvre l'app iPhone et autorise la lecture de la fréquence cardiaque dans Santé.",
       preview: <GapBars values={[]} />,
-      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Dès que la FC de tes séances arrive, chaque séance compare ton ressenti à ce que dit ton cœur (après {HEART_CALIBRATION} séances du même type).</div>,
+      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Dès que la fréquence cardiaque de tes séances arrive, chaque séance compare ton ressenti à tes données physiologiques (après {HEART_CALIBRATION} séances du même type).</div>,
     };
   }
   const ok = rows.filter((x): x is { date: string; r: Ok } => x.r.kind === "ok");
@@ -49,11 +49,11 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     const have = last.kind === "calibrating" ? last.have : 0;
     const fam = HEART_FAMILY_LABEL[last.family];
     return {
-      key: "heart", label: "Ressenti vs cœur", status: "En calibrage", statusColor: MID,
+      key: "heart", label: "Ressenti vs physiologie", status: "En calibrage", statusColor: MID,
       accent: null, trend: `${have}/${HEART_CALIBRATION} séances${fam ? ` ${fam}` : ""}`,
-      impact: heartVerdictText(last).text,
+      impact: `Encore ${HEART_CALIBRATION - have} séance${HEART_CALIBRATION - have > 1 ? "s" : ""}${fam ? ` ${fam}` : ""} avec fréquence cardiaque et on pourra comparer ton ressenti à tes données physiologiques.`,
       preview: <GapBars values={[]} />,
-      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Chaque séance avec FC apprend la relation entre ton ressenti et ton cœur. Le verdict arrive après {HEART_CALIBRATION} séances du même type.</div>,
+      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Chaque séance avec fréquence cardiaque apprend la relation entre ton ressenti et tes données physiologiques. Le verdict arrive après {HEART_CALIBRATION} séances du même type.</div>,
     };
   }
 
@@ -66,13 +66,13 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
   const fam = HEART_FAMILY_LABEL[lastTwo[lastTwo.length - 1].r.family];
   let status = "D'accord", color = NEUTRAL, accent: string | null = null, impact: string;
   if (repeated || harder >= 2) {
-    status = "Plus dur que ton cœur"; color = HARDER; accent = HARDER;
-    impact = `${repeated ? `Tes 2 dernières séances${fam ? ` ${fam}` : ""}` : `${harder} de tes ${recent.length} dernières séances`} t'ont paru plus dures que ce qu'elles font monter ton cœur : souvent le signe d'une fatigue qui s'installe.`;
+    status = "Plus dur que mesuré"; color = HARDER; accent = HARDER;
+    impact = `${repeated ? `Tes 2 dernières séances${fam ? ` ${fam}` : ""}` : `${harder} de tes ${recent.length} dernières séances`} t'ont paru plus dures que ce que mesurent tes données physiologiques : souvent le signe d'une fatigue qui s'installe.`;
   } else if (easier >= 2) {
-    status = "Plus facile que ton cœur"; color = EASIER;
-    impact = "Ton cœur travaille plus que tu ne le sens : signe de forme, ou effort sous-estimé.";
+    status = "Plus facile que mesuré"; color = EASIER;
+    impact = "Tes données physiologiques mesurent plus d'effort que tu n'en ressens : signe de forme, ou effort sous-estimé.";
   } else {
-    impact = "Ton ressenti suit ton cœur : tes séances sont encaissées comme d'habitude.";
+    impact = "Ton ressenti suit tes données physiologiques : tes séances sont encaissées comme d'habitude.";
   }
 
   // Chart : un bâton par séance comparée, l'écart en points de RPE (au-dessus = plus dur que le cœur).
@@ -88,10 +88,10 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     bandZones: ["D'ACCORD"], showTicks: false,
     fmt: fmtGap,
     colorAt: v => (v >= 1 ? HARDER : v <= -1 ? EASIER : MID),
-    tooltipExtra: i => { const r = byDate.get(dates[i]); return r ? `Ressenti ${r.rpe} · cœur ${Math.round(r.predicted)}` : null; },
+    tooltipExtra: i => { const r = byDate.get(dates[i]); return r ? `Ressenti ${r.rpe} · mesuré ${Math.round(r.predicted)}` : null; },
   };
   return {
-    key: "heart", label: "Ressenti vs cœur", status, statusColor: color, value: fmtGap(avgGap), accent, impact,
+    key: "heart", label: "Ressenti vs physiologie", status, statusColor: color, value: fmtGap(avgGap), accent, impact,
     trend: harder ? `${harder} séance${harder > 1 ? "s" : ""} sur ${recent.length}` : `${recent.length} séances`,
     preview: <GapBars values={ok.slice(-8).map(x => ({ v: x.r.gap, color: x.r.verdict === "harder" ? HARDER : x.r.verdict === "easier" ? EASIER : MID }))} />,
     body: <MetricChart spec={spec} height={200} weekLabels />,

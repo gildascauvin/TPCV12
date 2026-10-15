@@ -174,7 +174,7 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           Jour passé : Terminer. Dupliquer vit désormais dans le tiroir d'édition. */}
       {!hideActions && session.done && (session.duration || session.rpe) ? (
         <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: session.heart_rpe != null ? "1fr 1fr 1fr" : "1fr 1fr", gap: 5, cursor: "pointer" }}>
-          {[{ v: session.duration, l: "MIN", c: "#d44000" }, { v: session.rpe, l: "DIFF.", c: "#d44000" }, ...(session.heart_rpe != null ? [{ v: session.heart_rpe, l: "♥ CŒUR", c: "#171b1f" }] : [])].map(t => t.v ? (
+          {[{ v: session.duration, l: "MIN", c: "#d44000" }, { v: session.rpe, l: "DIFF.", c: "#d44000" }, ...(session.heart_rpe != null ? [{ v: session.heart_rpe, l: "♥ MESURÉ", c: "#171b1f" }] : [])].map(t => t.v ? (
             <div key={t.l} style={{ background: "#f7f8f9", borderRadius: 8, padding: "5px 4px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: t.c, lineHeight: 1 }}>{t.v}</div>
               <div style={{ fontSize: 8.5, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", color: "#8a8f94", marginTop: 3 }}>{t.l}</div>

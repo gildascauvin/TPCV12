@@ -177,7 +177,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
           {heartRpe != null && (
             <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1 }}>{heartRpe}</div>
-              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>♥ CŒUR</div>
+              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>♥ MESURÉ</div>
             </div>
           )}
         </div>
