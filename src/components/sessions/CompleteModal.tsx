@@ -44,7 +44,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   /* Ressenti à l'aveugle (2026-10-11) : si la montre a la FC de la séance ce jour-là, le RPE part sans
      valeur (6 par défaut orientait déjà la note) et la comparaison au cœur reste floutée jusqu'à la
      validation. Elle s'affiche ensuite (PhysioRevealHost), note figée : rien ne peut la caler sur le cœur. */
-  const blind = session.rpe == null && workouts.some(w => w.trimp != null);
+  const hasHeart = workouts.some(w => w.trimp != null);
+  const blind = session.rpe == null && hasHeart;
   const [touched, setTouched] = useState(false);
   const rpeMissing = blind && !touched;
 
@@ -53,7 +54,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     setSaving(true);
     await onSave({ rpe, duration });
     setSaving(false);
-    if (blind) {
+    // Comparaison aussi à la correction d'une séance déjà notée : la note est figée, rien à biaiser.
+    if (hasHeart) {
       invalidatePhysio();
       requestPhysioReveal({ kind: "session", sessionId: session.id, date: session.date, rpe, duration });
     }
