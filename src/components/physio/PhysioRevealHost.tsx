@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import DiffGauge from "@/components/calendar/DiffGauge";
 import { RADIUS } from "@/lib/theme";
 import { loadPhysioData, PHYSIO_REVEAL, type PhysioRevealDetail } from "@/lib/physioData";
-import { heartResultFor, heartVerdictText, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
+import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import posthog from "posthog-js";
+import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 
 /* Fin de formulaire "Ressenti vs physiologie" (2026-10-11). Le tiroir qui vient d'enregistrer
    (Terminer la séance, check-in) se ferme ; cet écran prend le relais avec la comparaison, la note
@@ -13,7 +13,7 @@ import posthog from "posthog-js";
 
 type Shown =
   | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null }
-  | { kind: "wellness"; verdict: PhysioVerdict | null };
+  | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null };
 
 export default function PhysioRevealHost({ userId }: { userId: string }) {
   const [shown, setShown] = useState<Shown | null>(null);
@@ -32,7 +32,7 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
       } else {
         const verdict = physioVerdictAt(detail.date, detail, data.checkins, data.health);
         if (!verdict) return;
-        setShown({ kind: "wellness", verdict });
+        setShown({ kind: "wellness", verdict, night: nightSentence(detail.date, data.health) });
         posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
       }
     };
@@ -43,34 +43,43 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
   if (!shown) return null;
   const close = () => setShown(null);
 
-  let title: string, sub: string, body: React.ReactNode;
+  let title: string, mean: string, gauge: React.ReactNode = null, extra: string | null = null;
   if (shown.kind === "session") {
     const r = shown.result!;
-    const t = heartVerdictText(r);
-    title = "Séance enregistrée ✓";
-    sub = `${shown.detail.duration} min · difficulté ${shown.detail.rpe}`;
-    body = (
-      <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "14px 14px" }}>
-        {r.kind === "ok" && (
-          <div style={{ display: "grid", gridTemplateColumns: "64px 1fr 28px", gap: "8px 10px", alignItems: "center", marginBottom: 12, fontSize: 12.5, fontWeight: 700, color: "#171b1f" }}>
-            <span>Ressenti</span><DiffGauge value={r.rpe} height={10} /><span style={mono}>{r.rpe}</span>
-            <span>♥ Cœur</span><DiffGauge value={Math.max(1, Math.round(r.predicted))} height={10} /><span style={mono}>{Math.round(r.predicted)}</span>
-          </div>
-        )}
-        <div style={{ fontSize: 14, fontWeight: 800, color: "#171b1f", lineHeight: 1.3 }}>{t.title}</div>
-        <div style={{ fontSize: 13, color: "#62686e", marginTop: 5, lineHeight: 1.45 }}>{t.text}</div>
-      </div>
-    );
+    if (r.kind === "calibrating") {
+      const left = HEART_CALIBRATION - r.have, fam = HEART_FAMILY_LABEL[r.family];
+      title = "On apprend encore ton profil";
+      mean = `Encore ${left} séance${left > 1 ? "s" : ""}${fam ? ` ${fam}` : ""} avec ta fréquence cardiaque et on pourra comparer ton ressenti à ce qu'elle mesure.`;
+    } else {
+      if (r.verdict === "harder") { title = "Ta séance t'a paru plus dure que ce qu'a mesuré ta FC"; mean = "Quand ça se répète, c'est souvent de la fatigue qui s'installe : surveille ta récupération ces prochains jours."; }
+      else if (r.verdict === "easier") { title = "Ta FC a mesuré une séance plus dure que ton ressenti"; mean = "Signe de forme, ou effort sous-estimé. La charge retenue reste ton ressenti."; }
+      else { title = "Ton ressenti et ta FC sont d'accord"; mean = "Séance encaissée comme d'habitude, rien à signaler."; }
+      gauge = (
+        <TwoMarkGauge
+          eyebrow="Difficulté de la séance"
+          track="linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)"
+          a={{ pos: r.rpe * 10, label: `Ressenti · ${diffWord(r.rpe)}`, color: diffColor(r.rpe) }}
+          b={{ pos: r.predicted * 10, label: `Mesuré · ${diffWord(r.predicted)}`, color: "#171b1f" }}
+          ticks={["Légère", "Modérée", "Dure"]}
+        />
+      );
+    }
   } else {
     const v = shown.verdict!;
-    title = "Ta nuit selon tes données physiologiques";
-    sub = "Check-in enregistré ✓";
-    body = (
-      <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "14px 14px" }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: "#171b1f", lineHeight: 1.3 }}>{v.title}</div>
-        <div style={{ fontSize: 13, color: "#62686e", marginTop: 5, lineHeight: 1.45 }}>{v.text}</div>
-      </div>
+    if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
+    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = "La fatigue ne se voit pas dans ta nuit : le stress ou la motivation, plutôt que les jambes ?"; }
+    else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
+    gauge = (
+      <TwoMarkGauge
+        eyebrow="Ta récupération ce matin"
+        track="linear-gradient(90deg,#cde2fb,#6da7ec 50%,#184f95)"
+        normBand
+        a={{ pos: zPos(v.zFeel), label: `Ressenti · ${zShort(v.zFeel)}`, color: "#2a78d6" }}
+        b={{ pos: zPos(v.zPhysio), label: `Mesuré · ${zShort(v.zPhysio)}`, color: "#171b1f" }}
+        ticks={["Moins bien", "Ta norme", "Mieux"]}
+      />
     );
+    extra = shown.night;
   }
 
   return (
@@ -80,12 +89,17 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
         <div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15 }}>{title}</div>
-          <div style={{ fontSize: 13.5, color: "#62686e", marginTop: 4 }}>{sub}</div>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
+          <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
         </div>
-        {body}
+        {gauge && (
+          <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            {gauge}
+            {extra && <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>{extra}</div>}
+          </div>
+        )}
         <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
-          {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : tes données physiologiques ne les modifient pas."}
+          {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
         </div>
         <button
           onClick={close}
@@ -98,4 +112,66 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
   );
 }
 
-const mono: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, textAlign: "right" };
+const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+const diffWord = (d: number) => (d >= 7.5 ? "Dure" : d >= 4.5 ? "Modérée" : "Légère");
+const diffColor = (d: number) => (d >= 7.5 ? "#d44000" : d >= 4.5 ? "#e07a00" : "#2f9e44");
+// Écart à la norme (en écarts-types) : mêmes seuils que les textes de physioCompare (±0,5).
+const zShort = (z: number) => (z <= -0.5 ? "sous ta norme" : z >= 0.5 ? "au-dessus" : "dans ta norme");
+const zPos = (z: number) => 50 + clamp(z, -2, 2) * 22;
+
+/* « Tu as dormi 58 min de moins que d'habitude et ta FC au repos est 4 bpm au-dessus de ta norme. »
+   Norme du sommeil = moyenne des nuits mesurées des 28 jours précédents (au moins 5). */
+function nightSentence(date: string, health: HealthRow[]): string | null {
+  const today = health.find(h => h.date === date);
+  const parts: string[] = [];
+  const sleep = today?.sleep_minutes;
+  if (sleep != null) {
+    const prior = health.filter(h => h.date < date && h.sleep_minutes != null).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 28).map(h => Number(h.sleep_minutes));
+    if (prior.length >= 5) {
+      const ds = Math.round(Number(sleep) - prior.reduce((a, b) => a + b, 0) / prior.length);
+      parts.push(Math.abs(ds) < 15 ? "Tu as dormi comme d'habitude" : `Tu as dormi ${Math.abs(ds)} min de ${ds > 0 ? "plus" : "moins"} que d'habitude`);
+    }
+  }
+  const d = deviceInputsFor(date, health);
+  if (d.device_resting_hr != null && d.device_rhr_baseline != null) {
+    const dr = Math.round(Number(d.device_resting_hr) - Number(d.device_rhr_baseline));
+    const fc = Math.abs(dr) < 2 ? "ta FC au repos est dans ta norme" : `ta FC au repos est ${Math.abs(dr)} bpm ${dr > 0 ? "au-dessus" : "en dessous"} de ta norme`;
+    parts.push(parts.length ? fc : fc.charAt(0).toUpperCase() + fc.slice(1));
+  }
+  return parts.length ? `${parts.join(" et ")}.` : null;
+}
+
+type Mark = { pos: number; label: string; color: string };
+
+/* Une échelle, deux repères (POC A9XZaSXeHW9WW5amXDzEHv) : l'écart entre Ressenti et Mesuré est le message. */
+function TwoMarkGauge({ eyebrow, track, a, b, ticks, normBand }: { eyebrow: string; track: string; a: Mark; b: Mark; ticks: string[]; normBand?: boolean }) {
+  const pa = clamp(a.pos, 4, 96), pb = clamp(b.pos, 4, 96);
+  const pin = (m: Mark, p: number, top: boolean): React.CSSProperties => ({
+    position: "absolute", left: `${p}%`, [top ? "top" : "bottom"]: 0,
+    // Près d'un bord, l'étiquette s'aligne sur le repère au lieu de déborder de la carte.
+    transform: p < 25 ? "translateX(-12px)" : p > 75 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)",
+    fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap", padding: "3px 8px", borderRadius: RADIUS.pill, color: "#fff", background: m.color,
+  });
+  const dot = (m: Mark, p: number): React.CSSProperties => ({
+    position: "absolute", top: "50%", left: `${p}%`, width: 14, height: 14, borderRadius: "50%", transform: "translate(-50%,-50%)",
+    background: m.color, border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.25)",
+  });
+  return (
+    <div>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>{eyebrow}</div>
+      <div style={{ position: "relative", padding: "26px 0", margin: "0 6px" }}>
+        <span style={pin(a, pa, true)}>{a.label}</span>
+        <div style={{ position: "relative", height: 10, borderRadius: RADIUS.pill, background: track }}>
+          {normBand && <span style={{ position: "absolute", left: "39%", width: "22%", top: -4, bottom: -4, borderRadius: 6, background: "rgba(255,255,255,.25)", border: "1px dashed rgba(255,255,255,.7)" }} />}
+          <span style={{ position: "absolute", top: "50%", height: 4, transform: "translateY(-50%)", left: `${Math.min(pa, pb)}%`, width: `${Math.abs(pa - pb)}%`, background: "repeating-linear-gradient(90deg,#171b1f 0 4px,transparent 4px 7px)" }} />
+          <span style={dot(a, pa)} />
+          <span style={dot(b, pb)} />
+        </div>
+        <span style={pin(b, pb, false)}>{b.label}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#8a8f94" }}>
+        {ticks.map(t => <span key={t}>{t}</span>)}
+      </div>
+    </div>
+  );
+}
