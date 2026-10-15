@@ -5041,3 +5041,30 @@ Notre propre bannière plutôt que la Smart App Banner d'Apple (Safari seulement
 - Politique WordPress (page id 3, /politique-de-confidentialite/) : « fréquence cardiaque pendant ces entraînements », usage « comparer son ressenti à l'effort mesuré pendant ses séances », nouveau paragraphe « Notifications (application iOS) ». Modifiable via l'éditeur Gutenberg (le MCP WordPress ne gère que les articles).
 - Version 1.1 créée dans App Store Connect, build 12 attaché, notes de version FR, paragraphe « WHAT'S NEW IN 1.1 » ajouté aux Remarques du relecteur, publication manuelle. Soumission cliquée par Gildas.
 - Pendant la revue : ne rien mettre en prod sur l'onboarding ni le paiement (le relecteur voit le site en ligne). Le nouvel onboarding sort après validation (son étape notifications a besoin du 1.1).
+
+## Nouveau parcours post-signup « Elite » : EN PRÉPARATION (2026-10-15)
+Rien n'est codé. On attend la validation par Apple du build 1.1 (voir section précédente) ; ensuite on code en local, on teste, puis on déploie (notifications comprises).
+
+**Maquette** : https://claude.ai/artifact/HopwXw7gFnAdRLpB496JvE (v26). Bascule de variantes (rôle, plateforme iOS / web iPhone / Android / ordinateur, arrivée directe / programme claimé / invité coach payant / invité coach gratuit) et une note « pourquoi cet écran » par écran.
+
+**Parcours visés**
+- Sportif direct : `value_intro → aha → account → sport → programme → quand → miroir → Apple Santé (iOS) → check-in → semaine → notifs → paywall`.
+- Programme claimé : mêmes écrans sans sport/programme/import/objectif/points faibles/jours.
+- Invité par un coach : `value_intro → aha → account → Apple Santé (iOS) → check-in → notifs → paywall seulement si le coach ne paie pas` (`coachIsPaying`, `lib/access.ts` ; aucune règle propre à l'onboarding). Pas d'écran semaine (il n'a peut-être pas encore de séances), pas d'écran de fin.
+- Coach : inchangé (`ob_invite`).
+
+**Décisions**
+- Réutiliser les composants actuels : `QuestionShell`/`OptionCard`/`ChoiceChip` (`PostSignupSteps.tsx`), `WellnessModal` pour le check-in (jauges 1-10 de prod, même score), `NotificationPrompt`, paywall de prod (`PrimingJourneyModal`, achat Apple via `NativeCheckout` dans l'app). Limiter les cas particuliers.
+- Paywall en fin de parcours avec « Continuer en Gratuit » placé comme en prod : lien souligné sous l'achat sur mobile, bouton sur la carte Gratuit sur ordinateur. Le freemium reste (gratuit sans limite ou Elite 14 jours offerts). Seul le titre reprend ses réponses.
+- Écran semaine : bandeau du programme (S0 · Acclimatation + barres de blocs), 3 matins différents, anneau ; pas de récap des réponses ni de jours de repos.
+- Écran Apple Santé : bandeau texte « Via Apple Santé · Apple Watch · Garmin · Whoop · Oura · Polar · Coros · Suunto », jamais de logos de marques (refus App Store possible), l'icône Santé seulement via le badge officiel.
+
+**Trous à couvrir au moment de coder**
+- Générer le programme avant le check-in / la semaine (aujourd'hui dans `finishOnboarding`). Sauter l'écran semaine si « Passer », import raté ou génération ratée.
+- Démarrage un lundi = pas de S0 : le bandeau semaine doit suivre la règle d'`assign`.
+- Notifs : détecter le plugin push (absent de l'app 1.0), pas la version, pour ne jamais proposer « Activer » pour rien.
+- Checklist (`/api/onboarding/progress`) : « Renseigne ta forme » doit passer à fait après le check-in d'onboarding.
+- PostHog : `onboarding_<step>_viewed` pour chaque nouvel écran, funnel sportif 4403213 à mettre à jour (grep des events avant tout remplacement).
+- Reprise après OAuth / email : atterrir sur le bon écran avec les réponses conservées.
+
+**Tests prévus** (Gildas ne veut pas passer des heures en QA) : matrice automatique de `getPath` sur toutes les variantes, parcours Playwright en local sur un compte de test à vraie adresse (alias Gmail) remis à zéro entre les passages avec contrôle des écritures (profil, programme, assignation, check-in du jour), repasse des parcours inchangés avant/après. QA manuelle limitée à l'iPhone : Apple Santé, notifications, achat Apple.
