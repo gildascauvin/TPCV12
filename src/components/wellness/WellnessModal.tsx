@@ -329,7 +329,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 0: Sleep + Bedtime */}
         {q === 0 && (
           <div>
-            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour savoir si ton corps récupère comme tu le sens." chips={["7h30", "48 bpm", "Zone"]} />}
+            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
             <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               😴 Comment as-tu dormi ?
             </div>

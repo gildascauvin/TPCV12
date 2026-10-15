@@ -91,7 +91,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           {session.name}
         </div>
 
-        {hasHeart && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour savoir si ton cœur a vécu la séance comme tu la sens." chips={["142 bpm", "171 max", "Effort"]} />}
+        {hasHeart && <PhysioTeaser label="♥ Séance mesurée" text="Renseigne ton ressenti pour le comparer à ce qu'a mesuré ta fréquence cardiaque." chips={["142 bpm", "171 max", "Effort"]} />}
 
         {/* Duration */}
         <div style={{ marginBottom: 18 }}>

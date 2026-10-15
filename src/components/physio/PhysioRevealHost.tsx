@@ -51,9 +51,9 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
       title = "On apprend encore ton profil";
       mean = `Encore ${left} séance${left > 1 ? "s" : ""}${fam ? ` ${fam}` : ""} avec ta fréquence cardiaque et on pourra comparer ton ressenti à ce qu'elle mesure.`;
     } else {
-      if (r.verdict === "harder") { title = "Ta séance t'a paru plus dure que ce qu'a mesuré ta FC"; mean = "Quand ça se répète, c'est souvent de la fatigue qui s'installe : surveille ta récupération ces prochains jours."; }
-      else if (r.verdict === "easier") { title = "Ta FC a mesuré une séance plus dure que ton ressenti"; mean = "Signe de forme, ou effort sous-estimé. La charge retenue reste ton ressenti."; }
-      else { title = "Ton ressenti et ta FC sont d'accord"; mean = "Séance encaissée comme d'habitude, rien à signaler."; }
+      if (r.verdict === "harder") { title = "Ta séance t'a paru plus dure que ce qu'a mesuré ta fréquence cardiaque"; mean = "Quand ça se répète, c'est souvent de la fatigue qui s'installe : surveille ta récupération ces prochains jours."; }
+      else if (r.verdict === "easier") { title = "Ta fréquence cardiaque a mesuré une séance plus dure que ton ressenti"; mean = "Signe de forme, ou effort sous-estimé. La charge retenue reste ton ressenti."; }
+      else { title = "Ton ressenti et ta fréquence cardiaque sont d'accord"; mean = "Séance encaissée comme d'habitude, rien à signaler."; }
       gauge = (
         <TwoMarkGauge
           eyebrow="Difficulté de la séance"
@@ -119,7 +119,7 @@ const diffColor = (d: number) => (d >= 7.5 ? "#d44000" : d >= 4.5 ? "#e07a00" : 
 const zShort = (z: number) => (z <= -0.5 ? "sous ta norme" : z >= 0.5 ? "au-dessus" : "dans ta norme");
 const zPos = (z: number) => 50 + clamp(z, -2, 2) * 22;
 
-/* « Tu as dormi 58 min de moins que d'habitude et ta FC au repos est 4 bpm au-dessus de ta norme. »
+/* « Tu as dormi 58 min de moins que d'habitude et ta fréquence cardiaque au repos est 4 bpm au-dessus de ta norme. »
    Norme du sommeil = moyenne des nuits mesurées des 28 jours précédents (au moins 5). */
 function nightSentence(date: string, health: HealthRow[]): string | null {
   const today = health.find(h => h.date === date);
@@ -135,7 +135,7 @@ function nightSentence(date: string, health: HealthRow[]): string | null {
   const d = deviceInputsFor(date, health);
   if (d.device_resting_hr != null && d.device_rhr_baseline != null) {
     const dr = Math.round(Number(d.device_resting_hr) - Number(d.device_rhr_baseline));
-    const fc = Math.abs(dr) < 2 ? "ta FC au repos est dans ta norme" : `ta FC au repos est ${Math.abs(dr)} bpm ${dr > 0 ? "au-dessus" : "en dessous"} de ta norme`;
+    const fc = Math.abs(dr) < 2 ? "ta fréquence cardiaque au repos est dans ta norme" : `ta fréquence cardiaque au repos est ${Math.abs(dr)} bpm ${dr > 0 ? "au-dessus" : "en dessous"} de ta norme`;
     parts.push(parts.length ? fc : fc.charAt(0).toUpperCase() + fc.slice(1));
   }
   return parts.length ? `${parts.join(" et ")}.` : null;
