@@ -24,7 +24,9 @@ function dayRange(end: string, n: number): string[] {
 }
 
 /* ── Ressenti vs cœur ── */
-export function heartIndexCard(physio: PhysioData | null | undefined, referenceDate: string): ExtraIndexCard | null {
+/* `chartDays` (2026-10-17) : fenêtre du chart déplié, pilotée par le toggle 7/28/90 partagé des cartes
+   d'indice. Statut, impact et aperçu restent sur leur fenêtre propre (42 j / 7 j). */
+export function heartIndexCard(physio: PhysioData | null | undefined, referenceDate: string, chartDays = 42): ExtraIndexCard | null {
   if (!physio || !referenceDate) return null;
   const dates = dayRange(referenceDate, 42);
   const rows = physio.sessions
@@ -80,15 +82,17 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
 
   // Chart (2026-10-17) : lecture horizontale, un trait vertical par séance entre le ressenti (point
   // plein) et ce qu'a mesuré la fréquence cardiaque (point vide). Séances en calibrage : ressenti seul.
+  const chartDates = dayRange(referenceDate, chartDays);
   const byDate = new Map<string, { id: string; name: string | null; r: HeartResult; rpe: number }>();
   physio.sessions
-    .filter(s => s.date <= referenceDate && s.date >= dates[0] && physio.heart[s.id] && s.rpe != null)
+    .filter(s => s.date <= referenceDate && s.date >= chartDates[0] && physio.heart[s.id] && s.rpe != null)
     .forEach(s => byDate.set(s.date, { id: s.id, name: s.name ?? null, r: physio.heart[s.id], rpe: s.rpe as number }));
   return {
     key: "heart", label: "Ressenti vs physiologie", status, statusColor: color, value: fmtGap(avgGap), accent, impact,
     trend: harder ? `${harder} séance${harder > 1 ? "s" : ""} sur ${recent.length}` : `${recent.length} séances`,
     preview: <GapBars values={ok.slice(-8).map(x => ({ v: x.r.gap, color: x.r.verdict === "harder" ? HARDER : x.r.verdict === "easier" ? EASIER : MID }))} />,
-    body: <HeartPairChart dates={dates} byDate={byDate} />,
+    rangeToggle: true,
+    body: <HeartPairChart dates={chartDates} byDate={byDate} />,
   };
 }
 
@@ -116,7 +120,7 @@ function HeartPairChart({ dates, byDate }: { dates: string[]; byDate: Map<string
   const cur = picked != null ? at(picked) : undefined;
   return (
     <div>
-      <MetricChart spec={spec} height={200} weekLabels picked={picked} onPick={setPicked} />
+      <MetricChart spec={spec} height={200} weekLabels={dates.length > 7} picked={picked} onPick={setPicked} />
       <Legend items={[{ dot: "#ff8a55", label: "Ressenti" }, { hollow: true, label: "Mesuré" }, { dot: "rgba(255,255,255,.3)", label: "En calibrage" }]} />
       {cur && picked != null && (
         <DetailBox
@@ -166,12 +170,13 @@ function DetailBox({ date, sub, title, titleColor, text, onOpen }: { date: strin
 }
 
 /* ── Ressenti vs physiologie ── */
-export function physioIndexCard(physio: PhysioData | null | undefined, referenceDate: string): ExtraIndexCard | null {
+export function physioIndexCard(physio: PhysioData | null | undefined, referenceDate: string, chartDays = 28): ExtraIndexCard | null {
   if (!physio || !referenceDate) return null;
   const dates = dayRange(referenceDate, 28);
   const checkins = physio.checkins.filter(c => c.bedtime != null);
   const verdicts = new Map<string, PhysioVerdict>();
-  dates.forEach(d => {
+  const chartDates = dayRange(referenceDate, chartDays);
+  (chartDays > dates.length ? chartDates : dates).forEach(d => {
     const c = checkins.find(x => x.date === d);
     const v = c ? physioVerdictAt(d, c, checkins, physio.health) : null;
     if (v) verdicts.set(d, v);
@@ -200,7 +205,8 @@ export function physioIndexCard(physio: PhysioData | null | undefined, reference
     impact: `${latest.title}. ${latest.text}`,
     trend: `${agree}/${week.length} jours d'accord`,
     preview: <GapBars values={week.map(d => { const v = verdicts.get(d)!; return { v: v.diff, color: colorOf(v.kind) }; })} />,
-    body: <RecoveryPairChart dates={dates} verdicts={verdicts} />,
+    rangeToggle: true,
+    body: <RecoveryPairChart dates={chartDates} verdicts={verdicts} />,
   };
 }
 
@@ -230,7 +236,7 @@ function RecoveryPairChart({ dates, verdicts }: { dates: string[]; verdicts: Map
   const cur = picked != null ? verdicts.get(dates[picked]) : undefined;
   return (
     <div>
-      <MetricChart spec={spec} height={200} weekLabels picked={picked} onPick={setPicked} />
+      <MetricChart spec={spec} height={200} weekLabels={dates.length > 7} picked={picked} onPick={setPicked} />
       <Legend items={[{ dot: MORE, label: "Ressenti" }, { hollow: true, label: "Mesuré" }]} />
       {cur && picked != null && (
         <DetailBox

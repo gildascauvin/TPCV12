@@ -69,6 +69,8 @@ export type ExtraIndexCard = {
   preview: React.ReactNode;
   trend: string;
   body: React.ReactNode;
+  /* Le chart déplié suit la fenêtre 7/28/90 partagée (toggle affiché au-dessus du contenu). */
+  rangeToggle?: boolean;
 };
 
 export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false }: {
@@ -348,6 +350,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         })}
         {extraCards.map(c => renderCard(c.key, { ...c }, (
           <div style={{ position: "relative" }}>
+            {c.rangeToggle && (
+              <div style={{ marginBottom: 10, width: "fit-content" }} onClick={e => e.stopPropagation()}>
+                <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
+              </div>
+            )}
             <div style={blurChart}>{c.body}</div>
             {example && !locked && <ExampleNote text={exampleText} top="50%" />}
           </div>
