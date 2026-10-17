@@ -73,7 +73,7 @@ export type ExtraIndexCard = {
   rangeToggle?: boolean;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false, compare = null }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -93,8 +93,13 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   /* Données d'exemple (2026-10-01, Gildas : pas de bandeau en haut, le message sur chaque chart) :
      pastille "Exemple" sur la jauge et sur chaque carte, phrase explicite au-dessus de chaque chart. */
   example?: boolean;
+  /* « Ressenti vs physiologie » (2026-10-17, Gildas) : une puce DANS la carte de l'indicateur qui lui
+     correspond (Charge : séances vs fréquence cardiaque ; Récupération : nuit vs ressenti) au lieu
+     d'une carte de plus dans la liste. `body` = le chart de comparaison, rendu à la place du chart. */
+  compare?: { metric: "load" | "recovery"; body: React.ReactNode } | null;
 }) {
   const { isMd } = useBreakpoint();
+  const [compareOpen, setCompareOpen] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   /* Sous-jacent affiché DANS la carte Récupération (null = le score composite). */
   const [subDim, setSubDim] = useState<DimensionKey | "rhr" | "hrv" | null>(null);
@@ -306,15 +311,15 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                   {metric === "recovery" && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" as const, overflowX: "auto", scrollbarWidth: "none" as const, marginBottom: 12, paddingBottom: 2 }}>
                       {([null, ...DIMENSION_KEYS, ...(hasRhr ? ["rhr" as const] : []), ...(hasHrv ? ["hrv" as const] : [])] as (DimensionKey | "rhr" | "hrv" | null)[]).map(dim => {
-                        const active = subDim === dim;
+                        const active = !compareOpen && subDim === dim;
                         const badge = dim && dim !== "rhr" && dim !== "hrv" ? dimBadges?.find(b => b.key === dim) : null;
                         return (
                           <span
                             key={dim ?? "composite"}
                             role="button"
                             tabIndex={0}
-                            onClick={e => { e.stopPropagation(); setSubDim(dim); }}
-                            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); setSubDim(dim); } }}
+                            onClick={e => { e.stopPropagation(); setSubDim(dim); setCompareOpen(false); }}
+                            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); setSubDim(dim); setCompareOpen(false); } }}
                             style={{
                               cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
                               fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600,
@@ -329,11 +334,21 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                           </span>
                         );
                       })}
+                      {compare?.metric === "recovery" && <CompareChip active={compareOpen} onPick={() => setCompareOpen(true)} />}
+                    </div>
+                  )}
+                  {metric === "load" && compare?.metric === "load" && (
+                    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                      <ChipBtn active={!compareOpen} onPick={() => setCompareOpen(false)}>Charge</ChipBtn>
+                      <CompareChip active={compareOpen} onPick={() => setCompareOpen(true)} />
                     </div>
                   )}
                   <div style={{ marginBottom: 10, width: "fit-content" }}>
                     <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
                   </div>
+                  {compareOpen && compare?.metric === metric ? (
+                    <div style={blurChart}>{compare.body}</div>
+                  ) : (
                   <MetricChart
                     spec={metric === "recovery" && subDim === "rhr"
                       ? rhrSpec(deviceWindow, series.map(p => p.date))
@@ -345,6 +360,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                     weekLabels={days > 7} locked={locked} height={200}
                     exampleNote={example ? exampleText : undefined}
                   />
+                  )}
                             </>
           ));
         })}
@@ -471,4 +487,31 @@ function MiniLine({ metric, series, sessionRef, override }: { metric: MetricKey;
           ) : null))}
     </svg>
   );
+}
+
+function ChipBtn({ active, onPick, children, accent = false }: { active: boolean; onPick: () => void; children: React.ReactNode; accent?: boolean }) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={e => { e.stopPropagation(); onPick(); }}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); onPick(); } }}
+      style={{
+        cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5,
+        fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600,
+        padding: "4px 9px", borderRadius: 999, flex: "0 0 auto", whiteSpace: "nowrap" as const,
+        background: active ? (accent ? "rgba(240,74,8,.22)" : "rgba(255,255,255,.12)") : "rgba(255,255,255,.04)",
+        border: `1px solid ${active ? (accent ? "rgba(240,74,8,.55)" : "rgba(255,255,255,.30)") : "rgba(255,255,255,.10)"}`,
+        color: active ? "#fff" : "rgba(255,255,255,.55)",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/* Puce « Ressenti vs physiologie » : même forme que les autres, teinte orange pour la distinguer
+   des composantes du score (c'est une comparaison, pas une mesure de plus). */
+function CompareChip({ active, onPick }: { active: boolean; onPick: () => void }) {
+  return <ChipBtn active={active} onPick={onPick} accent>Ressenti vs physiologie</ChipBtn>;
 }

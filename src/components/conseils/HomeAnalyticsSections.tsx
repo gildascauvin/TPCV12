@@ -70,7 +70,7 @@ const rangeDays = (m: RangeMode) => (m === "quarter" ? 90 : m === "month" ? 28 :
 export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false, physio = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean; physio?: PhysioData | null }) {
   // Ressenti vs cœur (2026-10-11) : sportif uniquement, absente sans FC de séance.
   const heart = heartIndexCard(physio, data.timeSeries[data.timeSeries.length - 1]?.date ?? "", rangeDays(rangeMode));
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} extraCards={heart ? [heart] : []} lockedHistory={lockedHistory} example={example} />;
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="charge" insight={data.chargeInsight} perspective={perspective} compare={heart ? { metric: "load", body: heart.body } : null} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* Les 4 badges de dimension ont disparu d'ici (2026-09-28) : ils sont devenus les chips de filtre
@@ -78,7 +78,7 @@ export function ChargeSection({ data, rangeMode, onRangeModeChange, perspective 
 export function RecuperationSection({ data, rangeMode, onRangeModeChange, perspective = "athlete", lockedHistory = null, example = false, physio = null }: { data: ConseilsData; rangeMode: RangeMode; onRangeModeChange: (m: RangeMode) => void; perspective?: Perspective; lockedHistory?: { onUnlock: () => void } | null; example?: boolean; physio?: PhysioData | null }) {
   // Ressenti vs physiologie (2026-10-11) : avant Comportements, absente sans données de nuit.
   const physioCard = physioIndexCard(physio, data.timeSeries[data.timeSeries.length - 1]?.date ?? "", rangeDays(rangeMode));
-  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} extraCards={[...(physioCard ? [physioCard] : []), behaviorIndexCard(data)]} lockedHistory={lockedHistory} example={example} />;
+  return <IndexCards data={data} rangeMode={rangeMode} onRangeModeChange={onRangeModeChange} group="recup" insight={data.recoveryInsight} perspective={perspective} compare={physioCard ? { metric: "recovery", body: physioCard.body } : null} extraCards={[behaviorIndexCard(data)]} lockedHistory={lockedHistory} example={example} />;
 }
 
 /* ── Carte "Comportements" dans l'onglet Récupération (2026-09-30, Gildas : "sous la même forme que
