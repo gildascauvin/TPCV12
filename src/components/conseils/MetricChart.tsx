@@ -30,8 +30,11 @@ function formatDateFr(dateStr: string) {
 
 const W = 400, PAD_L = 8, PAD_R = 10, PAD_TOP = 12, PAD_BOT = 22;
 
-export default function MetricChart({ spec, height, weekLabels, locked = false, onUnlock, exampleNote }: {
+export default function MetricChart({ spec, height, weekLabels, locked = false, onUnlock, exampleNote, picked = null, onPick }: {
   spec: ChartSpec;
+  /* Sélection d'un jour au clic (charts "pairs", 2026-10-17) : le parent affiche le détail dessous. */
+  picked?: number | null;
+  onPick?: (i: number) => void;
   height?: number;
   weekLabels?: boolean;
   /* Freemium (2026-09-30) : seule la série de données est floutée — zones, légendes, axes et dates
@@ -103,6 +106,15 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
     <div
       style={{ position: "relative" as const, width: "100%" }}
       onMouseLeave={() => setHover(null)}
+      onClick={e => {
+        if (locked || !onPick || !known.length) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / r.width) * W;
+        const raw = ((x - padL) / plotW) * (n - 1);
+        // Jour le plus proche qui a une valeur : une colonne fait quelques pixels sur un téléphone.
+        const best = known.reduce((a, p) => (Math.abs(p.i - raw) < Math.abs(a.i - raw) ? p : a));
+        onPick(best.i);
+      }}
       onMouseMove={e => {
         if (locked) return;
         const r = e.currentTarget.getBoundingClientRect();
@@ -111,7 +123,7 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
         setHover(i >= 0 && i < n ? i : null);
       }}
     >
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", aspectRatio: `${W} / ${H}`, cursor: "crosshair" }} aria-hidden="true">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", width: "100%", aspectRatio: `${W} / ${H}`, cursor: onPick ? "pointer" : "crosshair" }} aria-hidden="true">
         {spec.kind === "area" && spec.gradient && (
           <defs>
             <linearGradient id={gradId} gradientUnits="userSpaceOnUse" x1="0" y1={PAD_TOP} x2="0" y2={PAD_TOP + plotH}>
@@ -216,7 +228,21 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
           </div>
         )}
 
-        {!locked && spec.kind !== "bars" && known.filter(p => markerIdx.has(p.i)).map(p => {
+        {!locked && spec.kind === "pairs" && known.map(p => {
+          const b = spec.values2?.[p.i] ?? null;
+          const ya = pctY(p.v), yb = b == null ? ya : pctY(b);
+          const sel = picked === p.i || hover === p.i;
+          return (
+            <div key={p.i}>
+              {sel && <div style={{ position: "absolute", left: `${pctX(p.i)}%`, top: 0, bottom: `${(PAD_BOT / H) * 100}%`, width: 14, transform: "translateX(-50%)", borderRadius: 7, background: "rgba(255,255,255,.10)" }} />}
+              {b != null && <div style={{ position: "absolute", left: `${pctX(p.i)}%`, top: `${Math.min(ya, yb)}%`, height: `${Math.abs(ya - yb)}%`, width: 3, transform: "translateX(-50%)", borderRadius: 2, background: spec.pairColorAt?.(p.i) ?? "rgba(255,255,255,.45)" }} />}
+              {b != null && <div style={{ position: "absolute", left: `${pctX(p.i)}%`, top: `${yb}%`, width: 8, height: 8, borderRadius: "50%", transform: "translate(-50%,-50%)", background: "#070a0d", border: "2px solid #fff" }} />}
+              <div style={{ position: "absolute", left: `${pctX(p.i)}%`, top: `${ya}%`, width: 10, height: 10, borderRadius: "50%", transform: "translate(-50%,-50%)", background: b == null ? "rgba(255,255,255,.3)" : colorAt(p.v) }} />
+            </div>
+          );
+        })}
+
+        {!locked && spec.kind !== "bars" && spec.kind !== "pairs" && known.filter(p => markerIdx.has(p.i)).map(p => {
           const size = hover === p.i ? markerSize + 3 : markerSize;
           return (
             <div key={p.i} style={{

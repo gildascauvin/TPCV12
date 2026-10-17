@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RADIUS } from "@/lib/theme";
-import { loadPhysioData, PHYSIO_REVEAL, type PhysioRevealDetail } from "@/lib/physioData";
+import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type PhysioRevealDetail, type PhysioReplayDetail } from "@/lib/physioData";
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
@@ -15,14 +15,45 @@ type Shown =
   | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null }
   | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null };
 
+/* Relecture (2026-10-17) : liste des séances comparées (ou des matins comparés) et position. */
+type Nav = { kind: "session" | "wellness"; keys: string[]; idx: number; data: PhysioData; editKey: string; onEdit?: () => void };
+
+const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const DAYS = ["Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
+const dateFr = (iso: string) => { const d = new Date(iso + "T12:00:00"); return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+
+function replayKeys(kind: Nav["kind"], data: PhysioData): string[] {
+  if (kind === "session") {
+    return data.sessions.filter(s => data.heart[s.id]?.kind === "ok").sort((a, b) => a.date.localeCompare(b.date)).map(s => s.id);
+  }
+  const checkins = data.checkins.filter(c => c.bedtime != null);
+  return checkins.filter(c => physioVerdictAt(c.date, c, checkins, data.health)).map(c => c.date).sort();
+}
+
+function shownFor(nav: Nav): Shown | null {
+  const key = nav.keys[nav.idx], data = nav.data;
+  if (nav.kind === "session") {
+    const s = data.sessions.find(x => x.id === key);
+    const result = data.heart[key];
+    if (!s || !result || s.rpe == null) return null;
+    return { kind: "session", detail: { kind: "session", sessionId: s.id, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result };
+  }
+  const checkins = data.checkins.filter(c => c.bedtime != null);
+  const c = checkins.find(x => x.date === key);
+  const verdict = c ? physioVerdictAt(key, c, checkins, data.health) : null;
+  return verdict ? { kind: "wellness", verdict, night: nightSentence(key, data.health) } : null;
+}
+
 export default function PhysioRevealHost({ userId }: { userId: string }) {
   const [shown, setShown] = useState<Shown | null>(null);
+  const [nav, setNav] = useState<Nav | null>(null);
 
   useEffect(() => {
     const onReveal = async (e: Event) => {
       const detail = (e as CustomEvent<PhysioRevealDetail>).detail;
       const data = await loadPhysioData(userId, true).catch(() => null);
       if (!data) return;
+      setNav(null);
       if (detail.kind === "session") {
         const history = data.sessions.filter(s => s.id !== detail.sessionId);
         const result = heartResultFor({ date: detail.date, duration: detail.duration, rpe: detail.rpe }, history, data.workouts);
@@ -36,12 +67,44 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
         posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
       }
     };
+    const onReplay = async (e: Event) => {
+      const detail = (e as CustomEvent<PhysioReplayDetail>).detail;
+      const data = await loadPhysioData(userId).catch(() => null);
+      if (!data) return;
+      const keys = replayKeys(detail.kind, data);
+      const key = detail.kind === "session" ? detail.sessionId : detail.date;
+      const idx = keys.indexOf(key);
+      if (idx < 0) { detail.onEdit?.(); return; }
+      const next: Nav = { kind: detail.kind, keys, idx, data, editKey: key, onEdit: detail.onEdit };
+      const s = shownFor(next);
+      if (!s) { detail.onEdit?.(); return; }
+      setNav(next); setShown(s);
+      posthog.capture("physio_replay_opened", { kind: detail.kind });
+    };
     window.addEventListener(PHYSIO_REVEAL, onReveal);
-    return () => window.removeEventListener(PHYSIO_REVEAL, onReveal);
+    window.addEventListener(PHYSIO_REPLAY, onReplay);
+    return () => { window.removeEventListener(PHYSIO_REVEAL, onReveal); window.removeEventListener(PHYSIO_REPLAY, onReplay); };
   }, [userId]);
 
   if (!shown) return null;
-  const close = () => setShown(null);
+  const close = () => { setShown(null); setNav(null); };
+  const go = (delta: number) => {
+    if (!nav) return;
+    const idx = nav.idx + delta;
+    if (idx < 0 || idx >= nav.keys.length) return;
+    const next = { ...nav, idx };
+    const s = shownFor(next);
+    if (s) { setNav(next); setShown(s); }
+  };
+  const canEdit = !!nav?.onEdit && nav.keys[nav.idx] === nav.editKey;
+  let navTitle: string | null = null;
+  if (nav) {
+    const key = nav.keys[nav.idx];
+    if (nav.kind === "session") {
+      const s = nav.data.sessions.find(x => x.id === key);
+      navTitle = s ? `${dateFr(s.date)}${s.name ? ` · ${s.name}` : ""}` : null;
+    } else navTitle = `${dateFr(key)} · check-in`;
+  }
 
   let title: string, mean: string, gauge: React.ReactNode = null, extra: string | null = null;
   if (shown.kind === "session") {
@@ -88,6 +151,18 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
       onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+        {nav && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <NavArrow dir="prev" disabled={nav.idx === 0} onClick={() => go(-1)} label={nav.kind === "session" ? "Séance précédente" : "Matin précédent"} />
+            <div style={{ textAlign: "center", minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{navTitle}</div>
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600, letterSpacing: ".08em", color: "#6b7177", marginTop: 3, textTransform: "uppercase" }}>
+                {nav.kind === "session" ? `Séance ${nav.idx + 1} sur ${nav.keys.length} comparées` : `Matin ${nav.idx + 1} sur ${nav.keys.length}`}
+              </div>
+            </div>
+            <NavArrow dir="next" disabled={nav.idx === nav.keys.length - 1} onClick={() => go(1)} label={nav.kind === "session" ? "Séance suivante" : "Matin suivant"} />
+          </div>
+        )}
         <div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
           <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
@@ -101,12 +176,30 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
         <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
           {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
         </div>
-        <button
-          onClick={close}
-          style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
-        >
-          Fermer
-        </button>
+        {canEdit ? (
+          /* Relecture ouverte par un geste de modification : le formulaire d'origine est à un tap. */
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <button
+              onClick={() => { const fn = nav?.onEdit; close(); fn?.(); }}
+              style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f", fontSize: 14, fontWeight: 800, cursor: "pointer" }}
+            >
+              {shown.kind === "session" ? "Modifier ma note" : "Modifier mes réponses"}
+            </button>
+            <button
+              onClick={close}
+              style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+            >
+              Fermer
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={close}
+            style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
+          >
+            Fermer
+          </button>
+        )}
       </div>
     </div>
   );
@@ -173,5 +266,18 @@ function TwoMarkGauge({ eyebrow, track, a, b, ticks, normBand }: { eyebrow: stri
         {ticks.map(t => <span key={t}>{t}</span>)}
       </div>
     </div>
+  );
+}
+
+function NavArrow({ dir, disabled, onClick, label }: { dir: "prev" | "next"; disabled: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      onClick={onClick} disabled={disabled} aria-label={label}
+      style={{ width: 44, height: 44, flex: "none", borderRadius: RADIUS.control, border: "1px solid rgba(0,0,0,.10)", background: "#f7f8f9", color: "#171b1f", cursor: disabled ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1 }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={dir === "prev" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"} />
+      </svg>
+    </button>
   );
 }

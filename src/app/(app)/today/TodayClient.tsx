@@ -55,7 +55,7 @@ import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from 
 import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
-import { usePhysioData, physioDecisionInputs } from "@/lib/physioData";
+import { usePhysioData, physioDecisionInputs, requestPhysioReplay, hasSessionResult, hasWellnessResult } from "@/lib/physioData";
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
@@ -118,7 +118,6 @@ interface Props {
 export default function TodayClient({ userId, profile, initialDate, initialWellness, initialSessions, subscriptionStatus, hasCoach = false, hasActiveCoach = false, activeProgram, revealAssignmentIds = [], sandboxMode = false, sandboxWellnessByDate, initialWellnessHistory = [], initialAnalyticsData }: Props) {
   // Ressenti vs cœur (2026-10-11) : verdicts des séances faites, lus par le sportif seul (RLS).
   const physio = usePhysioData(userId, !sandboxMode);
-  const heartRpeOf = (id: string) => { const r = physio?.heart[id]; return r?.kind === "ok" ? Math.round(r.predicted) : null; };
   const supabase = createClient();
   const router = useRouter();
   const { isMd, isLg } = useBreakpoint();
@@ -541,6 +540,20 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
   }, [supabase, userId, initialDate, refreshAnalyticsSoon]);
 
+  /* Modifier une séance faite ou son check-in (2026-10-17) : si une mesure existe, l'écran de résultat
+     s'ouvre d'abord (flèches vers les autres séances / matins), son bouton « Modifier » mène au
+     formulaire. Sans mesure : le formulaire directement, comme avant. */
+  function openResult(session: Session) {
+    if (session.done && hasSessionResult(physio, session.id)) {
+      requestPhysioReplay({ kind: "session", sessionId: session.id, onEdit: () => setCompleting(session) });
+    } else handleTerminer(session);
+  }
+  function editWellness() {
+    if (wellnessFilledToday && hasWellnessResult(physio, selectedDate)) {
+      requestPhysioReplay({ kind: "wellness", date: selectedDate, onEdit: () => setShowWellness(true) });
+    } else setShowWellness(true);
+  }
+
   function handleTerminer(session: Session) {
     if (!wellnessFilledToday) {
       setPendingCompleteSession(session);
@@ -887,7 +900,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                         <PhaseLine
                           phase={decision.phase}
                           onUnlock={() => setShowWellness(true)}
-                          onEdit={wellnessFilledToday ? () => setShowWellness(true) : undefined}
+                          onEdit={wellnessFilledToday ? editWellness : undefined}
                         />
                       )}
                     </div>
@@ -898,7 +911,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               {decisionLocked && (
                 /* Le ressenti reste modifiable (c'est une entrée) ; aucun indice de la décision ne passe. */
                 <div style={{ textAlign: "center", marginTop: 10 }}>
-                  <button onClick={() => setShowWellness(true)} style={{ border: "none", background: "none", cursor: "pointer", color: "rgba(255,255,255,.55)", fontSize: 12, fontWeight: 700 }}>
+                  <button onClick={editWellness} style={{ border: "none", background: "none", cursor: "pointer", color: "rgba(255,255,255,.55)", fontSize: 12, fontWeight: 700 }}>
                     {wellnessFilledToday ? "✎ Modifier mon ressenti" : "Renseigner mon ressenti"}
                   </button>
                 </div>
@@ -922,7 +935,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   <TodaySessionCard
                     key={s.id}
                     session={s}
-                    onComplete={(s) => handleTerminer(s)}
+                    onComplete={(s) => openResult(s)}
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
                     onEdit={(s) => setEditing(s)}
                     previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
@@ -930,7 +943,6 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     onReorderExercises={reorderTodayExercises}
                     authorName={profile.name ?? "Toi"}
                     hideGauge={s.id === autoregTargetTop?.id}
-                    heartRpe={s.done ? heartRpeOf(s.id) : null}
                   />
                 ))}
                 {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx

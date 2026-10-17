@@ -19,9 +19,8 @@ import type { Session } from "@/types";
    retiré par `body.ath-dark`, contrairement à `.card`/`.ana-card`) : contraste volontaire, contenu
    actionnable qui doit "ressortir" du fond sombre ambiant. Retour explicite de Gildas : "les
    background des séances doivent rester light (même dans le wellness card, partout)". ─── */
-export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed, heartRpe }: {
+export default function TodaySessionCard({ session, onComplete, onEdit, previewPct, onReorderExercises, authorName, hideGauge, onStart, viewer = "athlete", concealed }: {
   /* Difficulté que laissait attendre la FC de la séance (physioCompare.ts) : 3e tuile « ♥ CŒUR ». */
-  heartRpe?: number | null;
   /* Séance d'un programme ThePerfClub au-delà de J+7 (programReveal.ts) : exercices floutés, pas d'ouverture. */
   concealed?: string | null;
   session: Session;
@@ -161,7 +160,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       {/* 4. Résultat (séance faite) : durée et difficulté réelle, sans bouton — un tap dessus rouvre
           la saisie du résultat pour le corriger (2026-10-02). */}
       {session.done && (session.duration || session.rpe) ? (
-        <div onClick={e => { e.stopPropagation(); onComplete?.(session); }} style={{ display: "grid", gridTemplateColumns: heartRpe != null ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8, cursor: "pointer" }}>
+        <div onClick={e => { e.stopPropagation(); onComplete?.(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, cursor: "pointer" }}>
           {session.duration ? (
             <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#d44000", letterSpacing: "-0.02em", lineHeight: 1 }}>{session.duration}</div>
@@ -174,12 +173,6 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
               <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFF.</div>
             </div>
           ) : <div />}
-          {heartRpe != null && (
-            <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "9px 8px", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1 }}>{heartRpe}</div>
-              <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>♥ MESURÉ</div>
-            </div>
-          )}
         </div>
       ) : session.done || !onComplete ? null : isFuture ? null : (
         /* 5. Actions — aujourd'hui : Démarrer (+ « Déjà faite ? ») ; jour passé : Terminer. Jamais

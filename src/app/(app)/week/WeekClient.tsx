@@ -1,7 +1,7 @@
 "use client";
 
 import { markPrimingSource } from "@/lib/primingSource";
-import { usePhysioData, physioDecisionInputs } from "@/lib/physioData";
+import { usePhysioData, physioDecisionInputs, requestPhysioReplay, hasSessionResult, hasWellnessResult } from "@/lib/physioData";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
@@ -537,6 +537,20 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
   }, [supabase, userId, todayStr]);
 
+  /* Modifier une séance faite ou le check-in du jour (2026-10-17) : écran de résultat d'abord quand
+     une mesure existe, son bouton « Modifier » ouvre le formulaire (cf. TodayClient). */
+  function openResult(session: Session) {
+    if (session.done && hasSessionResult(physio, session.id)) {
+      requestPhysioReplay({ kind: "session", sessionId: session.id, onEdit: () => setCompleting(session) });
+    } else handleTerminer(session);
+  }
+  function editWellness() {
+    const filled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
+    if (filled && hasWellnessResult(physio, todayStr)) {
+      requestPhysioReplay({ kind: "wellness", date: todayStr, onEdit: () => setShowWellness(true) });
+    } else setShowWellness(true);
+  }
+
   function handleTerminer(session: Session) {
     const wellnessTodayFilled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
     if (session.date === todayStr && !wellnessTodayFilled) {
@@ -574,14 +588,9 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const revealAssignmentIds = new Set(activeAssignments
     .filter(a => { const p = Array.isArray(a.programs) ? a.programs[0] : a.programs; return isThePerfClubProgram(p?.origin); })
     .map(a => a.id));
-  function withReveal<S extends { id: string; date: string; done?: boolean; program_assignment_id?: string | null }>(list: S[]): (S & { concealed?: string | null; heart_rpe?: number | null })[] {
-    // Ressenti vs cœur (2026-10-11) : 3e tuile « ♥ CŒUR » des séances faites qui ont une FC.
-    const withHeart = physio ? list.map(s => {
-      const r = s.done ? physio.heart[s.id] : undefined;
-      return r?.kind === "ok" ? { ...s, heart_rpe: Math.round(r.predicted) } : s;
-    }) : list;
-    if (sandboxMode || !revealAssignmentIds.size) return withHeart;
-    return withHeart.map(s => s.program_assignment_id && revealAssignmentIds.has(s.program_assignment_id)
+  function withReveal<S extends { id: string; date: string; done?: boolean; program_assignment_id?: string | null }>(list: S[]): (S & { concealed?: string | null })[] {
+    if (sandboxMode || !revealAssignmentIds.size) return list;
+    return list.map(s => s.program_assignment_id && revealAssignmentIds.has(s.program_assignment_id)
       ? { ...s, concealed: revealLabel(s.date, todayStr) } : s);
   }
   function weekTitleForPopup(mondayIso: string): string | null {
@@ -782,7 +791,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                     key={s.id}
                     session={s}
                     viewerRole="athlete"
-                    onComplete={(sess) => handleTerminer(sess)}
+                    onComplete={(sess) => openResult(sess)}
                     onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
                     liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
                     onEdit={(sess) => setEditing(sess)}
@@ -793,9 +802,9 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                 onAddSession={(d) => setAddingDate(d)}
                 onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
                 emptyToday
-                onComplete={(s) => handleTerminer(s)}
+                onComplete={(s) => openResult(s)}
                 onEdit={(s) => setEditing(s)}
-                onWellness={() => setShowWellness(true)}
+                onWellness={editWellness}
               />
               </DroppableDay>
               </div>

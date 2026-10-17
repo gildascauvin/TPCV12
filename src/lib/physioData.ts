@@ -33,6 +33,29 @@ export function requestPhysioReveal(detail: PhysioRevealDetail) {
   window.dispatchEvent(new CustomEvent(PHYSIO_REVEAL, { detail }));
 }
 
+/* Relecture (2026-10-17) : le même écran de fin, rouvert après coup — par les gestes de modification
+   (taper le résultat d'une séance faite, « Modifier mon ressenti ») et par un jour des charts
+   "Ressenti vs physiologie" — avec des flèches pour passer à la séance / au matin précédent ou
+   suivant. `onEdit` = le formulaire d'origine, proposé par le bouton « Modifier » de l'écran (sur
+   l'élément ouvert seulement). */
+export const PHYSIO_REPLAY = "tpc-physio-replay";
+export type PhysioReplayDetail = ({ kind: "session"; sessionId: string } | { kind: "wellness"; date: string }) & { onEdit?: () => void };
+
+/* Vrai si l'écran de résultat a quelque chose à montrer pour cette séance / ce matin. */
+export function hasSessionResult(data: PhysioData | null, sessionId: string) {
+  return data?.heart[sessionId]?.kind === "ok";
+}
+export function hasWellnessResult(data: PhysioData | null, date: string) {
+  if (!data) return false;
+  const checkins = data.checkins.filter(c => c.bedtime != null);
+  const c = checkins.find(x => x.date === date);
+  return !!c && !!physioVerdictAt(date, c, checkins, data.health);
+}
+export function requestPhysioReplay(detail: PhysioReplayDetail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(PHYSIO_REPLAY, { detail }));
+}
+
 const isoDaysAgo = (n: number) => {
   const d = new Date(); d.setDate(d.getDate() - n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -44,7 +67,7 @@ export async function fetchPhysioData(supabase: SupabaseClient, userId: string):
   const since = isoDaysAgo(PHYSIO_HISTORY_DAYS);
   const sinceHealth = isoDaysAgo(PHYSIO_HISTORY_DAYS + 28);
   const [s, w, h, c] = await Promise.all([
-    supabase.from("sessions").select("id, date, duration, rpe, done").eq("user_id", userId).eq("done", true).gte("date", since),
+    supabase.from("sessions").select("id, date, duration, rpe, done, name").eq("user_id", userId).eq("done", true).gte("date", since),
     supabase.from("health_workouts").select("date, start_at, duration_min, workout_type, trimp").eq("user_id", userId).gte("date", since),
     supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms").eq("user_id", userId).gte("date", sinceHealth),
     supabase.from("wellness_daily").select("date, sleep, stress, recovery, motivation, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline").eq("user_id", userId).gte("date", since),

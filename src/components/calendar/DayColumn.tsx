@@ -52,7 +52,6 @@ export interface SessionLike {
   concealed?: string | null;
   /* Calculé côté affichage (jamais en base, 2026-10-11) : difficulté que laissait attendre la FC de
      la séance (physioCompare.ts), 3e tuile « ♥ CŒUR » d'une séance faite. */
-  heart_rpe?: number | null;
 }
 
 /* ─── Week session card (v59 POC exact layout) — extrait de WeekClient.tsx pour être réutilisé
@@ -173,8 +172,8 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
           termine pas une séance qui n'a pas eu lieu). Aujourd'hui : Démarrer + « Déjà faite ? ».
           Jour passé : Terminer. Dupliquer vit désormais dans le tiroir d'édition. */}
       {!hideActions && session.done && (session.duration || session.rpe) ? (
-        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: session.heart_rpe != null ? "1fr 1fr 1fr" : "1fr 1fr", gap: 5, cursor: "pointer" }}>
-          {[{ v: session.duration, l: "MIN", c: "#d44000" }, { v: session.rpe, l: "DIFF.", c: "#d44000" }, ...(session.heart_rpe != null ? [{ v: session.heart_rpe, l: "♥ MESURÉ", c: "#171b1f" }] : [])].map(t => t.v ? (
+        <div onClick={e => { e.stopPropagation(); onComplete(session); }} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5, cursor: "pointer" }}>
+          {[{ v: session.duration, l: "MIN", c: "#d44000" }, { v: session.rpe, l: "DIFF.", c: "#d44000" }].map(t => t.v ? (
             <div key={t.l} style={{ background: "#f7f8f9", borderRadius: 8, padding: "5px 4px", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: t.c, lineHeight: 1 }}>{t.v}</div>
               <div style={{ fontSize: 8.5, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", color: "#8a8f94", marginTop: 3 }}>{t.l}</div>

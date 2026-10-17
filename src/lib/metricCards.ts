@@ -38,7 +38,7 @@ export const TREND_ARROW: Record<TrendDir, string> = { up: "↗", down: "↘", f
 export const SESSION_DEAD_ZONE = 0.1;
 
 export type ZoneBand = { from: number; to: number; color: string; label: string };
-export type ChartKind = "bars" | "dots" | "line" | "area";
+export type ChartKind = "bars" | "dots" | "line" | "area" | "pairs";
 
 export type MetricMeta = {
   key: MetricKey;
@@ -389,6 +389,11 @@ export type ChartSpec = {
   refLine?: { value: number; label: string };
   /* Bâtons signés (écarts, 2026-10-11) : partent de cette valeur au lieu du bas du chart. */
   barsFrom?: number;
+  /* Paires ressenti / mesuré (kind "pairs", 2026-10-17) : `values` = point plein (ressenti),
+     `values2` = point vide (mesuré), reliés par un trait vertical dont `pairColorAt` donne la couleur
+     (le verdict). Un jour sans `values2` (calibrage) n'a que son point plein, grisé. */
+  values2?: (number | null)[];
+  pairColorAt?: (i: number) => string;
   fmt: (v: number) => string;
   colorAt: (v: number) => string;
   tooltipExtra?: (i: number) => string | null;

@@ -1,8 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import type { ExtraIndexCard } from "@/components/conseils/IndexCards";
 import MetricChart from "@/components/conseils/MetricChart";
 import type { ChartSpec } from "@/lib/metricCards";
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
-import type { PhysioData } from "@/lib/physioData";
+import { requestPhysioReplay, type PhysioData } from "@/lib/physioData";
 import { canReadHeart } from "@/lib/heartAccess";
 
 /* Cartes d'indice "Ressenti vs cœur" (onglet Charge) et "Ressenti vs physiologie" (onglet
@@ -75,27 +78,91 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     impact = "Ton ressenti suit tes données physiologiques : tes séances sont encaissées comme d'habitude.";
   }
 
-  // Chart : un bâton par séance comparée, l'écart en points de RPE (au-dessus = plus dur que le cœur).
-  const byDate = new Map<string, Ok>();
-  ok.forEach(x => byDate.set(x.date, x.r));
-  const spec: ChartSpec = {
-    values: dates.map(d => { const g = byDate.get(d)?.gap; return g == null ? null : Math.max(-3, Math.min(3, g)); }), dates, kind: "bars", lo: -3, hi: 3, barsFrom: 0,
-    zones: [
-      { from: -99, to: -1, color: EASIER, label: "PLUS FACILE" },
-      { from: -1, to: 1, color: MID, label: "D'ACCORD" },
-      { from: 1, to: 99, color: HARDER, label: "PLUS DUR" },
-    ],
-    bandZones: ["D'ACCORD"], showTicks: false,
-    fmt: fmtGap,
-    colorAt: v => (v >= 1 ? HARDER : v <= -1 ? EASIER : MID),
-    tooltipExtra: i => { const r = byDate.get(dates[i]); return r ? `Ressenti ${r.rpe} · mesuré ${Math.round(r.predicted)}` : null; },
-  };
+  // Chart (2026-10-17) : lecture horizontale, un trait vertical par séance entre le ressenti (point
+  // plein) et ce qu'a mesuré la fréquence cardiaque (point vide). Séances en calibrage : ressenti seul.
+  const byDate = new Map<string, { id: string; name: string | null; r: HeartResult; rpe: number }>();
+  physio.sessions
+    .filter(s => s.date <= referenceDate && s.date >= dates[0] && physio.heart[s.id] && s.rpe != null)
+    .forEach(s => byDate.set(s.date, { id: s.id, name: s.name ?? null, r: physio.heart[s.id], rpe: s.rpe as number }));
   return {
     key: "heart", label: "Ressenti vs physiologie", status, statusColor: color, value: fmtGap(avgGap), accent, impact,
     trend: harder ? `${harder} séance${harder > 1 ? "s" : ""} sur ${recent.length}` : `${recent.length} séances`,
     preview: <GapBars values={ok.slice(-8).map(x => ({ v: x.r.gap, color: x.r.verdict === "harder" ? HARDER : x.r.verdict === "easier" ? EASIER : MID }))} />,
-    body: <MetricChart spec={spec} height={200} weekLabels />,
+    body: <HeartPairChart dates={dates} byDate={byDate} />,
   };
+}
+
+const diffWord = (d: number) => (d >= 7.5 ? "dure" : d >= 4.5 ? "modérée" : "légère");
+const diffColor = (d: number) => (d >= 7.5 ? "#ff8a55" : d >= 4.5 ? "#ffd27a" : "#6ede8a");
+
+function HeartPairChart({ dates, byDate }: { dates: string[]; byDate: Map<string, { id: string; name: string | null; r: HeartResult; rpe: number }> }) {
+  const [picked, setPicked] = useState<number | null>(() => {
+    for (let i = dates.length - 1; i >= 0; i--) if (byDate.get(dates[i])?.r.kind === "ok") return i;
+    return null;
+  });
+  const at = (i: number) => byDate.get(dates[i]);
+  const spec: ChartSpec = {
+    values: dates.map(d => byDate.get(d)?.rpe ?? null), dates, kind: "pairs", lo: 1, hi: 10,
+    values2: dates.map(d => { const r = byDate.get(d)?.r; return r?.kind === "ok" ? r.predicted : null; }),
+    pairColorAt: i => { const r = at(i)?.r; return r?.kind === "ok" ? (r.verdict === "harder" ? HARDER : r.verdict === "easier" ? EASIER : MID) : MID; },
+    zones: [
+      { from: 1, to: 4.5, color: EASIER, label: "LÉGÈRE" },
+      { from: 4.5, to: 7.5, color: "#ffd27a", label: "MODÉRÉE" },
+      { from: 7.5, to: 10.01, color: HARDER, label: "DURE" },
+    ],
+    showTicks: false, fmt: v => diffWord(v), colorAt: diffColor,
+    tooltipExtra: i => { const r = at(i)?.r; return r?.kind === "ok" ? `Mesuré : ${diffWord(r.predicted)}` : "En calibrage"; },
+  };
+  const cur = picked != null ? at(picked) : undefined;
+  return (
+    <div>
+      <MetricChart spec={spec} height={200} weekLabels picked={picked} onPick={setPicked} />
+      <Legend items={[{ dot: "#ff8a55", label: "Ressenti" }, { hollow: true, label: "Mesuré" }, { dot: "rgba(255,255,255,.3)", label: "En calibrage" }]} />
+      {cur && picked != null && (
+        <DetailBox
+          date={dates[picked]} sub={cur.name}
+          title={cur.r.kind === "ok" ? (cur.r.verdict === "harder" ? "Plus dure que mesuré" : cur.r.verdict === "easier" ? "Plus facile que mesuré" : "D'accord") : "En calibrage"}
+          titleColor={cur.r.kind === "ok" ? (cur.r.verdict === "harder" ? HARDER : cur.r.verdict === "easier" ? EASIER : NEUTRAL) : MID}
+          text={cur.r.kind === "ok"
+            ? `Ressenti ${diffWord(cur.rpe)} · mesuré ${diffWord(cur.r.predicted)}`
+            : `Ressenti ${diffWord(cur.rpe)} · séance ${cur.r.have + 1}/${HEART_CALIBRATION}${HEART_FAMILY_LABEL[cur.r.family] ? ` ${HEART_FAMILY_LABEL[cur.r.family]}` : ""} avec fréquence cardiaque`}
+          onOpen={cur.r.kind === "ok" ? () => requestPhysioReplay({ kind: "session", sessionId: cur.id }) : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
+function Legend({ items }: { items: { dot?: string; hollow?: boolean; label: string }[] }) {
+  return (
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: 11.5, color: "rgba(255,255,255,.7)" }}>
+      {items.map(it => (
+        <span key={it.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={it.hollow ? { width: 7, height: 7, borderRadius: "50%", border: "2px solid #fff" } : { width: 9, height: 9, borderRadius: "50%", background: it.dot }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const DAYS = ["Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
+const dateFr = (iso: string) => { const d = new Date(iso + "T12:00:00"); return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}`; };
+
+function DetailBox({ date, sub, title, titleColor, text, onOpen }: { date: string; sub?: string | null; title: string; titleColor: string; text: string; onOpen?: () => void }) {
+  return (
+    <div style={{ marginTop: 10, background: "rgba(255,255,255,.07)", borderRadius: 12, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "rgba(255,255,255,.55)" }}>{dateFr(date)}{sub ? ` · ${sub}` : ""}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2, color: titleColor }}>{title}</div>
+        <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.7)", marginTop: 1 }}>{text}</div>
+      </div>
+      {onOpen && (
+        <button onClick={onOpen} style={{ flex: "none", border: "none", background: "none", cursor: "pointer", color: "#ff9a6a", fontSize: 12.5, fontWeight: 800, padding: 0 }}>Ouvrir ›</button>
+      )}
+    </div>
+  );
 }
 
 /* ── Ressenti vs physiologie ── */
@@ -127,27 +194,55 @@ export function physioIndexCard(physio: PhysioData | null | undefined, reference
   const agree = week.filter(d => verdicts.get(d)!.kind === "agree").length;
   const color = latest.kind === "less" ? LESS : latest.kind === "more" ? MORE : NEUTRAL;
   const colorOf = (k: PhysioVerdict["kind"]) => (k === "less" ? LESS : k === "more" ? MORE : MID);
-  // Chart : écart données − ressenti, en écarts-types (au-dessus = données plus optimistes).
-  const spec: ChartSpec = {
-    values: dates.map(d => { const x = verdicts.get(d)?.diff; return x == null ? null : Math.max(-3, Math.min(3, x)); }), dates, kind: "bars", lo: -3, hi: 3, barsFrom: 0,
-    zones: [
-      { from: -99, to: -1, color: LESS, label: "DONNÉES MOINS OPTIMISTES" },
-      { from: -1, to: 1, color: MID, label: "D'ACCORD" },
-      { from: 1, to: 99, color: MORE, label: "DONNÉES PLUS OPTIMISTES" },
-    ],
-    bandZones: ["D'ACCORD"], showTicks: false,
-    fmt: v => fmtGap(v),
-    colorAt: v => (v >= 1 ? MORE : v <= -1 ? LESS : MID),
-    tooltipExtra: i => verdicts.get(dates[i])?.status ?? null,
-  };
   return {
     key: "physio", label: "Ressenti vs physiologie", status: latest.status, statusColor: color,
     accent: latest.kind === "less" ? LESS : null,
     impact: `${latest.title}. ${latest.text}`,
     trend: `${agree}/${week.length} jours d'accord`,
     preview: <GapBars values={week.map(d => { const v = verdicts.get(d)!; return { v: v.diff, color: colorOf(v.kind) }; })} />,
-    body: <MetricChart spec={spec} height={200} weekLabels />,
+    body: <RecoveryPairChart dates={dates} verdicts={verdicts} />,
   };
+}
+
+const zWord = (z: number) => (z <= -0.5 ? "sous ta norme" : z >= 0.5 ? "au-dessus de ta norme" : "dans ta norme");
+const clampZ = (z: number) => Math.max(-2.5, Math.min(2.5, z));
+
+function RecoveryPairChart({ dates, verdicts }: { dates: string[]; verdicts: Map<string, PhysioVerdict> }) {
+  const [picked, setPicked] = useState<number | null>(() => {
+    for (let i = dates.length - 1; i >= 0; i--) if (verdicts.has(dates[i])) return i;
+    return null;
+  });
+  const colorOf = (k: PhysioVerdict["kind"]) => (k === "less" ? LESS : k === "more" ? MORE : MID);
+  const spec: ChartSpec = {
+    values: dates.map(d => { const v = verdicts.get(d); return v ? clampZ(v.zFeel) : null; }),
+    values2: dates.map(d => { const v = verdicts.get(d); return v ? clampZ(v.zPhysio) : null; }),
+    dates, kind: "pairs", lo: -2.5, hi: 2.5,
+    pairColorAt: i => { const v = verdicts.get(dates[i]); return v ? colorOf(v.kind) : MID; },
+    zones: [
+      { from: -2.5, to: -0.5, color: LESS, label: "MOINS BIEN" },
+      { from: -0.5, to: 0.5, color: "rgba(255,255,255,.55)", label: "TA NORME" },
+      { from: 0.5, to: 2.51, color: MORE, label: "MIEUX" },
+    ],
+    bandZones: ["TA NORME"], neutralBand: true, showTicks: false,
+    fmt: v => zWord(v), colorAt: () => MORE,
+    tooltipExtra: i => { const v = verdicts.get(dates[i]); return v ? `Mesuré : ${zWord(v.zPhysio)}` : null; },
+  };
+  const cur = picked != null ? verdicts.get(dates[picked]) : undefined;
+  return (
+    <div>
+      <MetricChart spec={spec} height={200} weekLabels picked={picked} onPick={setPicked} />
+      <Legend items={[{ dot: MORE, label: "Ressenti" }, { hollow: true, label: "Mesuré" }]} />
+      {cur && picked != null && (
+        <DetailBox
+          date={dates[picked]}
+          title={cur.kind === "less" ? "Mesures moins bonnes que ton ressenti" : cur.kind === "more" ? "Mesures meilleures que ton ressenti" : "D'accord"}
+          titleColor={cur.kind === "agree" ? NEUTRAL : colorOf(cur.kind)}
+          text={`Ressenti ${zWord(cur.zFeel)}, mesuré ${zWord(cur.zPhysio)}.`}
+          onOpen={() => requestPhysioReplay({ kind: "wellness", date: dates[picked] })}
+        />
+      )}
+    </div>
+  );
 }
 
 /* Aperçu : écarts en barres verticales centrées sur zéro. */
