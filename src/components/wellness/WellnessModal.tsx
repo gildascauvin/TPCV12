@@ -1,7 +1,7 @@
 "use client";
 
 import { hapticTick } from "@/lib/native";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
@@ -11,6 +11,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import PhysioTeaser from "@/components/physio/PhysioTeaser";
+import ScaleBars from "@/components/ui/ScaleBars";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import type { PlannedIntensity } from "@/lib/plannedIntensity";
 
@@ -50,6 +51,17 @@ const PLAN_OPTIONS: { key: PlannedIntensity; emoji: string; label: string; sub: 
   { key: "mod", emoji: "🏃", label: "Modéré", sub: "Une séance classique" },
   { key: "hard", emoji: "🔥", label: "Dur", sub: "Séance intense, compétition" },
 ];
+
+/* Échelles 1-10 (ScaleBars) : un libellé par note, extrémités reprises des anciens curseurs.
+   Le stress est la seule question où 10 = mauvais : sa palette bleue est inversée. */
+const L = (...w: string[]) => Object.fromEntries(w.map((x, i) => [i + 1, x])) as Record<number, string>;
+const SCALE_WORDS = {
+  sleep: { labels: L("Très mauvais", "Mauvais", "Médiocre", "Passable", "Moyen", "Correct", "Bon", "Très bon", "Reposant", "Excellent"), inverted: false },
+  stress: { labels: L("Zen total", "Très calme", "Calme", "Léger", "Modéré", "Présent", "Marqué", "Fort", "Élevé", "Très élevé"), inverted: true },
+  recovery: { labels: L("Courbatures sévères", "Très douloureux", "Douloureux", "Lourd", "Raide", "Correct", "Bien", "Frais", "Très frais", "Frais et dispo"), inverted: false },
+  motivation: { labels: L("Pas du tout", "Très faible", "Faible", "Peu", "Moyenne", "Correcte", "Bonne", "Forte", "Très forte", "Au max"), inverted: false },
+} as const;
+type ScaleKey = keyof typeof SCALE_WORDS;
 
 interface Props {
   date: string;
@@ -94,12 +106,19 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const off = askPlan ? 1 : 0;
   const total = WQ_TOTAL + off;
   const q = step - off; // index de la question de ressenti (−1 = séance prévue)
-  const [sleep, setSleep] = useState(7);
-  const [bedtime, setBedtime] = useState("23to00");
-  const [stress, setStress] = useState(5);
-  const [recovery, setRecovery] = useState(7);
+  /* Notes en un tap (2026-10-17) : plus aucune valeur par défaut. Avant, 7/5/7/8 et 23h-minuit
+     étaient enregistrés tels quels si le sportif validait sans toucher, impossible à distinguer
+     d'une vraie réponse. Une note tapée passe à la question suivante (ScaleBars). */
+  const [sleep, setSleep] = useState<number | null>(null);
+  const [bedtime, setBedtime] = useState<string | null>(null);
+  const [stress, setStress] = useState<number | null>(null);
+  const [recovery, setRecovery] = useState<number | null>(null);
   const [behaviors, setBehaviors] = useState<string[]>([]);
-  const [motivation, setMotivation] = useState(8);
+  const [motivation, setMotivation] = useState<number | null>(null);
+  const advanceTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (advanceTimer.current) window.clearTimeout(advanceTimer.current); }, []);
+  /* Aperçu du wizard seulement : valeurs neutres tant que la question n'a pas de réponse. */
+  const pv = { sleep: sleep ?? 7, stress: stress ?? 5, recovery: recovery ?? 7, motivation: motivation ?? 8 };
   const [saving, setSaving] = useState(false);
 
   /* Aha réactif (2026-09-14, wizard uniquement — voir wizardHero ci-dessous) : la vraie fonction
@@ -109,7 +128,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
      comportements de tout calcul de "l'état de forme" pour ne pas rendre la corrélation
      tautologique (voir /conseils). Les chips restent affichés (ce qui est coché aujourd'hui),
      ils ne font juste plus bouger le chiffre. */
-  const { base_score: liveBaseScore } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
+  const { base_score: liveBaseScore } = computeWellnessScore(pv.sleep, pv.stress, pv.recovery, pv.motivation, behaviors);
   /* Même baseline que /today (computeWellnessBaselineAt) si l'historique fourni suffit. Repli
      (2026-09-14, retour explicite de Gildas) : toujours "Frais"/"Équilibré"/"Fatigué", jamais
      l'ancien vocabulaire absolu ("Zone stable"...) — celui-ci n'est plus affiché nulle part
@@ -118,7 +137,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const liveBaseline = wellnessHistory
     ? computeWellnessBaselineAt(
         wellnessHistory.filter(h => h.date < date),
-        { sleep, stress, recovery, motivation, score: liveBaseScore, base_score: liveBaseScore },
+        { ...pv, score: liveBaseScore, base_score: liveBaseScore },
       )
     : null;
   const liveZone = liveBaseline?.hasEnoughHistory
@@ -150,16 +169,19 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     return () => { alive = false; };
   }, [date, wizardHero]);
 
-  async function handleSave() {
+  async function handleSave(override: { motivation?: number } = {}) {
+    const m = override.motivation ?? motivation;
+    if (sleep == null || stress == null || recovery == null || m == null || bedtime == null) return;
+    const motivation_ = m;
     setSaving(true);
-    const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation, behaviors);
-    await onSave({ sleep, stress, recovery, motivation, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
+    const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation_, behaviors);
+    await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
     // Coach prévenu tout de suite si la reco du jour est d'alléger (2026-10-14). Sans effet hors compte lié.
     fetch("/api/push/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "checkin", date }) }).catch(() => {});
     setSaving(false);
     if (physioReady) {
       invalidatePhysio();
-      requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation });
+      requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation: motivation_ });
     }
   }
 
@@ -167,10 +189,42 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     if (step < total - 1) setStep((s) => s + 1);
     else handleSave();
   }
+  /* Après un tap : courte pause pour lire le mot de la note, puis question suivante (ou
+     enregistrement à la dernière). */
+  function autoAdvance(override: { motivation?: number } = {}) {
+    if (advanceTimer.current) window.clearTimeout(advanceTimer.current);
+    advanceTimer.current = window.setTimeout(() => {
+      advanceTimer.current = null;
+      if (step < total - 1) setStep((s) => s + 1);
+      else handleSave(override);
+    }, 380);
+  }
+  const answered = q === 0 ? sleep != null && bedtime != null
+    : q === 1 ? stress != null
+    : q === 2 ? recovery != null
+    : q === 4 ? motivation != null
+    : true;
   function goBack() {
+    if (advanceTimer.current) { window.clearTimeout(advanceTimer.current); advanceTimer.current = null; }
     if (step > 0) setStep((s) => s - 1);
   }
 
+
+  function renderScale(key: ScaleKey, title: string, sub: string, value: number | null, onPick: (n: number) => void, onRelease: (n: number) => void) {
+    const w = SCALE_WORDS[key];
+    const palette = w.inverted ? "recovery-inverted" : "recovery";
+    return (
+      <div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+          {title}
+        </div>
+        <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
+          {sub}
+        </div>
+        <ScaleBars value={value} onChange={onPick} onRelease={onRelease} palette={palette} labels={w.labels} />
+      </div>
+    );
+  }
 
   /* Drawer docké à droite sur desktop, plein écran mobile (2026-09-04, même shell que
      ProgramCriteriaModal.tsx/InviteModal.tsx/ProgramAssignModal.tsx — "tout le wizard doit
@@ -220,7 +274,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                   getRecoveryAdvice(). loadCls="moderate" par défaut faute de séance du jour
                   connue à cet endroit (WellnessModal n'a aucune notion de programme/séance). */}
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,.08)", fontSize: 12, color: "rgba(255,255,255,.75)", lineHeight: 1.5 }}>
-                🌿 {getRecoveryAdvice({ sleep, stress, recovery, motivation, behaviors }, "moderate", liveBaseline)}
+                🌿 {getRecoveryAdvice({ ...pv, behaviors }, "moderate", liveBaseline)}
               </div>
             </div>
           </div>
@@ -326,90 +380,36 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           </div>
         )}
 
-        {/* Step 0: Sleep + Bedtime */}
+        {/* Step 0: Sleep + Bedtime — la question avance une fois les deux réponses données. */}
         {q === 0 && (
           <div>
             {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              😴 Comment as-tu dormi ?
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
-              Qualité et récupération pendant le sommeil
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-              <input type="range" min={1} max={10} value={sleep} step={1}
-                onChange={(e) => { const n = Number(e.target.value); hapticTick(sleep, n); setSleep(n); }}
-                style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
-                {sleep}
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#7b7f82", marginBottom: 18 }}>
-              <span>Très mauvais</span><span>Excellent</span>
-            </div>
-            {/* Bedtime select */}
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 6 }}>
+            {renderScale("sleep", "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 8 }}>
                 Heure de coucher
               </div>
-              <select
-                value={bedtime}
-                onChange={(e) => setBedtime(e.target.value)}
-                style={{ width: "100%", background: "#fff", border: "1px solid rgba(0,0,0,0.12)", borderRadius: 12, padding: "10px 14px", fontSize: 14, color: "#172018", fontFamily: "inherit", outline: "none" }}
-              >
-                {BEDTIME_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {BEDTIME_OPTIONS.map((o) => {
+                  const on = bedtime === o.value;
+                  return (
+                    <button key={o.value} type="button"
+                      onClick={() => { hapticTick(0, 1); setBedtime(o.value); if (sleep != null) autoAdvance(); }}
+                      style={{ padding: "9px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, border: on ? "1.5px solid #2a78d6" : "1.5px solid rgba(0,0,0,0.10)", background: on ? "#eaf2fd" : "#fff", color: on ? "#184f95" : "#3b4046" }}>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
 
         {/* Step 1: Stress */}
-        {q === 1 && (
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              🧠 Niveau de stress mental
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
-              Travail, vie personnelle, charge mentale
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-              <input type="range" min={1} max={10} value={stress} step={1}
-                onChange={(e) => { const n = Number(e.target.value); hapticTick(stress, n); setStress(n); }}
-                style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
-                {stress}
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#7b7f82" }}>
-              <span>Zen total</span><span>Très élevé</span>
-            </div>
-          </div>
-        )}
+        {q === 1 && renderScale("stress", "🧠 Niveau de stress mental", "Travail, vie personnelle, charge mentale", stress, setStress, () => autoAdvance())}
 
         {/* Step 2: Physical recovery */}
-        {q === 2 && (
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              💪 État physique aujourd'hui
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
-              Ressenti musculaire, douleurs, lourdeur
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-              <input type="range" min={1} max={10} value={recovery} step={1}
-                onChange={(e) => { const n = Number(e.target.value); hapticTick(recovery, n); setRecovery(n); }}
-                style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
-                {recovery}
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#7b7f82" }}>
-              <span>Courbatures sévères</span><span>Frais et dispo</span>
-            </div>
-          </div>
-        )}
+        {q === 2 && renderScale("recovery", "💪 État physique aujourd'hui", "Ressenti musculaire, douleurs, lourdeur", recovery, setRecovery, () => autoAdvance())}
 
         {/* Step 3: Behaviors */}
         {q === 3 && (
@@ -473,28 +473,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           </div>
         )}
 
-        {/* Step 4: Motivation */}
-        {q === 4 && (
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              ⚡ As-tu envie de t'entraîner ?
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
-              Motivation intrinsèque du moment
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
-              <input type="range" min={1} max={10} value={motivation} step={1}
-                onChange={(e) => { const n = Number(e.target.value); hapticTick(motivation, n); setMotivation(n); }}
-                style={{ flex: 1, height: 34, accentColor: "#d44000" }} />
-              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 38, fontWeight: 700, color: "#d44000", minWidth: 48, textAlign: "center", lineHeight: 1 }}>
-                {motivation}
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#7b7f82" }}>
-              <span>Pas du tout</span><span>Au max</span>
-            </div>
-          </div>
-        )}
+        {/* Step 4: Motivation — dernière question : le tap enregistre. */}
+        {q === 4 && renderScale("motivation", "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
 
         </div>
         {/* Navigation — flex item non-scrollable (pas position:sticky, voir convention "Footer
@@ -517,10 +497,10 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           )}
           <button
             onClick={goNext}
-            disabled={saving || (q === -1 && !plannedIntensity)}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: q === -1 && !plannedIntensity ? 0.45 : 1 }}
+            disabled={saving || (q === -1 && !plannedIntensity) || !answered}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: (q === -1 && !plannedIntensity) || !answered ? 0.45 : 1 }}
           >
-            {saving ? "..." : step === total - 1 ? "Valider ✓" : "Suivant →"}
+            {saving ? "..." : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
           </button>
         </div>
       </div>
