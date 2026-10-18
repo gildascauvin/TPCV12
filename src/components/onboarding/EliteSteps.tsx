@@ -4,7 +4,7 @@ import { useState } from "react";
 import DecisionRing from "@/components/sessions/DecisionRing";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import { computeAutoregSuggestion, qualitativeDifficulty, zoneRange } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, zoneRange } from "@/lib/autoregulation";
 import { adjustDifficulty } from "@/lib/loadAdjust";
 import { wellnessColor } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -172,7 +172,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.8)" }}>
             <b style={{ display: "block", fontSize: 16, color: wellnessColor(score), marginBottom: 4 }}>Forme {score}/100</b>
-            {dayLabel(focus.date, today)} : {focus.name}, prévue {qualitativeDifficulty(focus.target_difficulty ?? 5)}.<br />
+            {dayLabel(focus.date, today)} : {focus.name}.<br />
             {a0.points < 0 ? (a0.points < -1 ? "On l'allège nettement." : "On l'allège un peu.")
               : a0.points > 0 ? (a0.points > 1 ? "On la pousse nettement." : "On la pousse un peu.")
               : morning === "forme" ? "Le plan tient : en forme, seules les séances légères se surchargent."
