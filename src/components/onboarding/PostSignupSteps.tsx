@@ -37,6 +37,7 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
   const ink = dark ? "#fff" : INK;
   const muted = dark ? "rgba(255,255,255,.62)" : MUTED;
   const line = dark ? "rgba(255,255,255,.12)" : LINE;
+  const pill: React.CSSProperties = { padding: "7px 11px", borderRadius: 999, background: "rgba(255,255,255,.92)", border: `1px solid ${line}` };
   return (
     <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
       {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
@@ -54,9 +55,10 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
           {onBack ? (
             <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
           ) : <span style={{ width: 34 }} />}
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: muted }}>{index + 1} / {total}</span>
+          {/* Pastilles claires comme le bouton retour : lisibles même posées sur une photo sombre. */}
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: dark ? muted : INK, ...(dark ? {} : pill) }}>{index + 1} / {total}</span>
           {onSkip && (
-            <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: muted, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
+            <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: dark ? 0 : `1px solid ${line}`, background: dark ? "transparent" : "rgba(255,255,255,.92)", color: dark ? muted : INK, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", ...(dark ? {} : { padding: "7px 14px", borderRadius: 999 }) }}>{skipLabel}</button>
           )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4, marginBottom: 28 }}>
