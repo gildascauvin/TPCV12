@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@/types";
-import { computeFatigueImpact } from "@/lib/wellness";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
 import { chronoMinutes } from "@/lib/liveSession";
@@ -61,7 +60,6 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     }
   }
 
-  const impact = rpe != null ? computeFatigueImpact(rpe, duration) : null;
 
   return (
     <div
@@ -156,12 +154,6 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           </div>
           <ScaleBars value={rpe} onChange={setRpe} palette="load" labels={CR10_LABELS} />
         </div>
-
-        {!hasHeart && impact != null && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff3e8", border: "0.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 13px", marginBottom: 20, fontSize: 13, color: "#d44000", fontWeight: 700 }}>
-            🔥 Impact fatigue estimé : −{impact} pts
-          </div>
-        )}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 8 }}>
