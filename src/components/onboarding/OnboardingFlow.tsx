@@ -1065,7 +1065,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           if (target) {
             const a = await fetch(`/api/programs/${programId}/assign`, {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...target, start_date: localTodayStr(), acclimatation: true }),
+              /* Sportif démo du coach : pas d'acclimatation, 1re séance calée sur aujourd'hui (écarts
+                 gardés) pour qu'il y ait toujours une décision à prendre le jour de l'inscription. */
+              body: JSON.stringify(role === "coach"
+                ? { ...target, start_date: localTodayStr(), align_first_session: true }
+                : { ...target, start_date: localTodayStr(), acclimatation: true }),
             });
             if (!a.ok) console.error("[finishOnboarding] assign error:", await a.text().catch(() => ""));
             if (!a.ok && role === "coach" && demoAthleteId) {
