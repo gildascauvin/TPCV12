@@ -93,12 +93,12 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
   return [...base, ...post];
 }
 
-/* Interrupteur du parcours Elite : `?elite=1` / `?elite=0` dans l'URL (mémorisé, pour survivre à la
-   redirection Google ou au lien de l'email), sinon NEXT_PUBLIC_ELITE_ONBOARDING=1. Désactivé par
-   défaut. */
+/* Interrupteur du parcours Elite : ALLUMÉ pour tout le monde depuis le 2026-10-18. Le couper :
+   NEXT_PUBLIC_ELITE_ONBOARDING=0 sur Vercel puis redéployer. `?elite=1` / `?elite=0` dans l'URL force
+   un parcours pour un test (mémorisé, pour survivre à la redirection Google ou au lien de l'email). */
 const ELITE_KEY = "tpc_elite_onboarding";
 export function readEliteFlag(): boolean {
-  const envOn = process.env.NEXT_PUBLIC_ELITE_ONBOARDING === "1";
+  const envOn = process.env.NEXT_PUBLIC_ELITE_ONBOARDING !== "0";
   if (typeof window === "undefined") return envOn;
   try {
     const p = new URLSearchParams(window.location.search).get("elite");
