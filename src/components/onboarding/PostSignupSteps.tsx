@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import SportPicker from "@/components/programs/SportPicker";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Questions post-signup (2026-10-05, POC https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW#v2ob).
    Analogie : l'app est livrée sans device, ces écrans sont l'achat/la configuration du device (le
@@ -21,46 +22,55 @@ const MUTED = "#6b7177";
 const LINE = "rgba(0,0,0,.10)";
 const PAGE = "#f1f0ee";
 
-export function QuestionShell({ index, total, cover, title, sub, onSkip, onBack, cta, children }: {
+export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLabel = "Passer", onBack, cta, children, dark = false, eyebrow }: {
   index: number; total: number; cover: string;
-  title: string; sub?: string;
-  onSkip?: () => void; onBack?: () => void;
+  title: React.ReactNode; sub?: React.ReactNode;
+  onSkip?: () => void; skipLabel?: string; onBack?: () => void;
   cta?: { label: string; onClick: () => void; disabled?: boolean; busy?: boolean };
   children: React.ReactNode;
+  /* Écran de valeur sans question (parcours Elite, 2026-10-17) : fond sombre de l'app, sans photo. */
+  dark?: boolean;
+  eyebrow?: string;
 }) {
   const { isMd } = useBreakpoint();
   const col = isMd ? 560 : 520;
+  const ink = dark ? "#fff" : INK;
+  const muted = dark ? "rgba(255,255,255,.62)" : MUTED;
+  const line = dark ? "rgba(255,255,255,.12)" : LINE;
   return (
-    <div style={{ position: "fixed", inset: 0, background: PAGE, overflowY: "auto", zIndex: 1 }}>
-      <div style={{ position: "relative", height: isMd ? 240 : 190 }}>
-        <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
-        {/* Voile sombre (comme l'écran d'accueil) qui s'éclaircit progressivement jusqu'à la page :
-            un seul dégradé, sans bande grise entre le voile et le fondu. */}
-        <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.4) 35%, rgba(60,58,56,.28) 55%, rgba(241,240,238,.55) 78%, rgba(241,240,238,.88) 90%, ${PAGE} 100%)` }} />
-      </div>
-      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: "16px 20px 140px", color: INK }}>
+    <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
+      {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
+        <div style={{ position: "relative", height: isMd ? 240 : 190 }}>
+          <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
+          {/* Voile sombre (comme l'écran d'accueil) qui s'éclaircit progressivement jusqu'à la page :
+              un seul dégradé, sans bande grise entre le voile et le fondu. */}
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.4) 35%, rgba(60,58,56,.28) 55%, rgba(241,240,238,.55) 78%, rgba(241,240,238,.88) 90%, ${PAGE} 100%)` }} />
+        </div>
+      )}
+      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: "16px 20px 140px", color: ink }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           {onBack ? (
-            <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${LINE}`, background: "#fff", color: INK, cursor: "pointer", fontSize: 16 }}>←</button>
+            <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
           ) : <span style={{ width: 34 }} />}
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: MUTED }}>{index + 1} / {total}</span>
+          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: muted }}>{index + 1} / {total}</span>
           {onSkip && (
-            <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: MUTED, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Passer</button>
+            <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: muted, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
           )}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4, marginBottom: 28 }}>
           {Array.from({ length: total }, (_, k) => (
-            <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : "rgba(0,0,0,.10)" }} />
+            <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)" }} />
           ))}
         </div>
+        {eyebrow && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: dark ? "#ff8a55" : ORANGE, marginBottom: 8 }}>{eyebrow}</div>}
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>
-        {sub && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 22px" }}>{sub}</p>}
+        {sub && <p style={{ fontSize: 15, color: muted, lineHeight: 1.5, margin: "0 0 22px" }}>{sub}</p>}
         {children}
       </div>
       {cta && (
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", background: PAGE, borderTop: `1px solid ${LINE}` }}>
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "16px 20px calc(16px + env(safe-area-inset-bottom, 0px))", background: dark ? "#070a0d" : PAGE, borderTop: `1px solid ${line}` }}>
           <button type="button" onClick={cta.onClick} disabled={cta.disabled || cta.busy}
-            style={{ display: "block", width: "100%", maxWidth: col - 40, margin: "0 auto", padding: "16px", borderRadius: 999, border: 0, background: cta.disabled ? "#e8e4df" : ORANGE, color: cta.disabled ? "#a3a8ad" : "#fff", fontWeight: 800, fontSize: 16, cursor: cta.disabled ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: cta.busy ? .7 : 1 }}>
+            style={{ display: "block", width: "100%", maxWidth: col - 40, margin: "0 auto", padding: "16px", borderRadius: 999, border: 0, background: cta.disabled ? (dark ? "rgba(255,255,255,.12)" : "#e8e4df") : ORANGE, color: cta.disabled ? (dark ? "rgba(255,255,255,.4)" : "#a3a8ad") : "#fff", fontWeight: 800, fontSize: 16, cursor: cta.disabled ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: cta.busy ? .7 : 1 }}>
             {cta.busy ? "Un instant…" : cta.label}
           </button>
         </div>

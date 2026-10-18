@@ -25,15 +25,17 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
+import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
+import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, type ObWhen, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { notificationSupport, enableNotifications } from "@/lib/notifications";
+import { withDeviceScore } from "@/lib/deviceWellnessDb";
+import dynamic from "next/dynamic";
+// Chargés seulement sur leurs écrans (parcours Elite) : Stripe et le check-in n'alourdissent pas /register.
+const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 
-type Role = "athlete" | "coach";
 type Level = "beginner" | "intermediate" | "elite";
-type StepId =
-  | "value_intro"
-  | "decision_2a" | "decision_2b"
-  | "account"
-  // Questions post-signup (2026-10-05) : la configuration du « device » (le programme).
-  | "ob_sport" | "ob_program" | "ob_import" | "ob_goal" | "ob_weak" | "ob_days" | "ob_invite";
 
 type ObCustom =
   | { status: "matched"; sportLabel: string }
@@ -138,12 +140,12 @@ interface Props { userId?: string; pendingData?: PendingData | null; initialRole
    l'onboarding (checklist dans le header, cartes "À faire"). Plus de wizard ni de paywall forcé :
    le priming s'ouvre après la 1re décision prise. Les steps wizard_* restent dans le type et le
    JSX (code mort assumé) le temps de valider le nouveau parcours. */
-const ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
+// (constante déplacée dans src/lib/onboardingPath.ts, 2026-10-17)
 /* Onboarding dans l'app (2026-10-01) : le parcours s'arrête au compte — le produit fait
    l'onboarding (checklist dans le header, cartes "À faire"). Plus de wizard ni de paywall forcé :
    le priming s'ouvre après la 1re décision prise. Les steps wizard_* restent dans le type et le
    JSX (code mort assumé) le temps de valider le nouveau parcours. */
-const COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
+// (constante déplacée dans src/lib/onboardingPath.ts, 2026-10-17)
 
 /* DARK_STEPS ne contient plus que value_intro — les autres steps sombres (autoreg_score,
    celebration, concept_autoreg, wellness_reveal) ont disparu avec le nettoyage du code mort du
@@ -255,8 +257,8 @@ function SignalDuJourCard({ isMd }: { isMd: boolean }) {
    programme" cliqué). Un event onboarding_wizard_builder_viewed synthétique est émis quand même à
    ce moment-là (même principe déjà utilisé pour onboarding_role_viewed lors de la fusion
    role/value_intro du 2026-07-31) — il l'a techniquement vu, sur /p/[id], juste avant ce funnel. */
-const PROGRAM_ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
-const PROGRAM_COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
+// (constante déplacée dans src/lib/onboardingPath.ts, 2026-10-17)
+// (constante déplacée dans src/lib/onboardingPath.ts, 2026-10-17)
 
 /* Sportif invité par un coach (coach_invite_code en localStorage, posé par /join/[code]) : le lien
    coach→sportif est confirmé au submit d'"account" via /api/invite/join (voir handleFinish()), donc
@@ -265,7 +267,7 @@ const PROGRAM_COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
    dans getPath() : une invitation coach est plus spécifique qu'un programme claimé. "celebration" retiré (2026-09-02, plus un step actif ailleurs — voir doc en
    tête de fichier) : ce trafic n'a jamais eu de wizard non plus (pas de programme à construire),
    next() après "account" redirige donc directement vers l'app réelle (/today ou /coach). */
-const INVITE_ATHLETE_PATH: StepId[] = ["value_intro", "account"];
+// (constante déplacée dans src/lib/onboardingPath.ts, 2026-10-17)
 
 /* Fusion decision/account (2026-09-04, voir doc des paths plus haut) — les 3 continuations qui
    recalculaient un stepIdx "juste après account" (Google OAuth, reprise magic-link, invite coach
@@ -447,6 +449,34 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obError, setObError] = useState<string | null>(null);
   const savedProgramIdRef = useRef<string | null>(null);
 
+  /* Parcours Elite (2026-10-17, voir src/lib/onboardingPath.ts). */
+  const [elite] = useState(readEliteFlag);
+  const [coachPaying, setCoachPaying] = useState(false);
+  // Résolus après montage (Capacitor / navigateur indisponibles côté serveur).
+  const [healthAvailable, setHealthAvailable] = useState(false);
+  const [pushAvailable, setPushAvailable] = useState(false);
+  useEffect(() => {
+    setHealthAvailable(isNativeApp());
+    const n = notificationSupport();
+    setPushAvailable(n === "native" || n === "web");
+  }, []);
+  const [obWhen, setObWhen] = useState<ObWhen | null>(null);
+  // Lu par completeProfile(), qui peut tourner en arrière-plan après le clic sur ob_when.
+  const obWhenRef = useRef<ObWhen | null>(null);
+  const [obHealthBusy, setObHealthBusy] = useState(false);
+  const [obHealthError, setObHealthError] = useState<string | null>(null);
+  const [obCheckinBusy, setObCheckinBusy] = useState(false);
+  const [obCheckinOpen, setObCheckinOpen] = useState(true);
+  const [obCheckinScore, setObCheckinScore] = useState<number | null>(null);
+  // null = pas encore connu ; false = pas de programme créé (l'écran semaine saute).
+  const [obProgramOk, setObProgramOk] = useState<boolean | null>(null);
+  const [obWeekSessions, setObWeekSessions] = useState<WeekSession[]>([]);
+  const [obNotifHour, setObNotifHour] = useState(8);
+  const [obNotifBusy, setObNotifBusy] = useState(false);
+  const [obPayStage, setObPayStage] = useState<"priming" | "paywall">("priming");
+  const [obBilling, setObBilling] = useState<"monthly" | "annual">("annual");
+  const builtRef = useRef<{ name: string; sport: string; template: ProgramTemplate } | null>(null);
+
   /* Ancien fallback "coach → 4 jours par défaut, pas de sélecteur" (2026-08-14) supprimé le
      2026-08-19 : déjà mort en pratique depuis la 3e itération du 2026-08-17 (days_2a redemande de
      vrais jours aux deux rôles, voir sa doc plus bas — "ce choix réel le remplace"), mais inoffensif
@@ -525,21 +555,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   /* Après « account » : les questions post-signup. Claimé = programme déjà choisi, aucune question
      (coach : invitation seule). « Passer » la question programme (obHas = "later") retire les
      questions du programme. */
-  const getPath = (r: Role, has: ObHas = obHas): StepId[] => {
-    if (hasCoachInvite && r === "athlete") return INVITE_ATHLETE_PATH;
-    const base = hasClaimedProgram ? (r === "coach" ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH) : (r === "coach" ? COACH_PATH : ATHLETE_PATH);
-    const post: StepId[] = [];
-    if (!hasClaimedProgram) {
-      post.push("ob_sport", "ob_program");
-      if (has === "import") post.push("ob_import");
-      else if (has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
-    }
-    if (r === "coach") post.push("ob_invite");
-    return [...base, ...post];
-  };
+  /* Parcours calculé par src/lib/onboardingPath.ts (fonction pure, testée par
+     scripts/onboarding-path.test.ts). Parcours Elite derrière `elite` (?elite=1 ou
+     NEXT_PUBLIC_ELITE_ONBOARDING=1) ; coupé, c'est exactement le parcours d'avant. */
+  const getPath = (r: Role, has: ObHas = obHas, programOk: boolean | null = obProgramOk): StepId[] => buildOnboardingPath({
+    role: r, has, claimed: !!hasClaimedProgram, invited: !!hasCoachInvite,
+    elite, coachPaying, healthAvailable, pushAvailable, programReady: programOk === false ? false : undefined,
+  });
   const path         = getPath(role);
-  // Tout parcours sauf INVITE_ATHLETE_PATH (sportif invité : ni profil généré ni sportif démo).
-  const isFullPath   = path !== INVITE_ATHLETE_PATH;
+  // Tout parcours sauf celui du sportif invité (ni profil généré ni sportif démo).
+  const isFullPath   = !isInvitedAthlete({ role, invited: !!hasCoachInvite });
   /* Filet de sécurité : si stepIdx dépasse jamais path.length (double-invocation d'un handler,
      changement de path non anticipé…), on ne rend jamais un currentStep undefined — écran
      blanc et irrécupérable sinon, confirmé en prod via des sessions PostHog qui s'arrêtaient
@@ -551,6 +576,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   useEffect(() => {
     if (stepIdx > path.length - 1) setStepIdx(path.length - 1);
   }, [path.length, stepIdx]);
+
+  /* Parcours Elite : préparation du programme lancée dès le 1er écran Elite (après les questions de
+     programme), en arrière-plan. Les fonctions appelées sont déclarées plus bas (hoisting). */
+  useEffect(() => {
+    if (!elite || !ELITE_STEPS.includes(currentStep)) return;
+    const uid = userId || newUserId;
+    if (!uid) return;
+    ensureWeek(uid).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   // Étape d'invitation : le lien a besoin du code d'invitation du coach.
   useEffect(() => {
@@ -579,6 +614,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             setHasCoachInvite(false);
           } else {
             setCoachInviteName(data.coachName ?? null);
+            setCoachPaying(data.coachPaying === true);
           }
         })
         .catch(() => {});
@@ -819,7 +855,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       freq_target:        (obTrainingDays ?? trainingDays).length || null,
       training_days:      (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
       objective:          obGoal || goal || null,
-      frustration:        role === "athlete" ? (frustration || null) : null,
+      frustration:        role === "athlete" ? (obWhenRef.current || frustration || null) : null,
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
     }, { onConflict: "user_id" });
 
@@ -968,13 +1004,22 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   /* Fin de l'onboarding : profil (et sportif démo côté coach), programme enregistré puis assigné
      en démarrant aujourd'hui avec sa semaine 0 d'acclimatation (au sportif lui-même, ou au sportif
      démo du coach), invitations, puis l'app. */
-  const finishGuardRef2 = useRef(false);
-  async function finishOnboarding(uid: string) {
-    if (finishGuardRef2.current) return;
-    finishGuardRef2.current = true;
-    setObFinishing(true); setObError(null);
-    try {
+  /* Préparation (profil, programme créé puis assigné, invitations) séparée de l'entrée dans l'app
+     (2026-10-17) : le parcours Elite la lance dès le 1er écran qui suit les questions de programme,
+     en arrière-plan, pour que la semaine et le check-in trouvent le programme déjà assigné. Une
+     seule exécution par session (promesse mémorisée), relancée seulement si elle a échoué.
+     Renvoie l'id du programme créé (null : aucun). */
+  const prepareRef = useRef<Promise<string | null> | null>(null);
+  function runPrepare(uid: string): Promise<string | null> {
+    if (!prepareRef.current) {
+      prepareRef.current = prepareOnboarding(uid).catch(e => { prepareRef.current = null; throw e; });
+    }
+    return prepareRef.current;
+  }
+  async function prepareOnboarding(uid: string): Promise<string | null> {
+    {
       const built = isFullPath ? await obBuildProgram() : null;
+      if (built) builtRef.current = { name: built.name, sport: built.sport, template: built.template };
       const claimForBrevo = hasClaimedProgram ? localStorage.getItem("claim_program_id") : null;
       let demoAthleteId: string | null = null;
       if (!profileCompleteGuardRef.current && isFullPath) {
@@ -1024,6 +1069,51 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claimProgramId: claimForBrevo }),
       }).catch(() => null);
+      /* Parcours Elite : le compte est prêt (programme assigné) avant le check-in et le paywall.
+         onboarding_done posé ici pour qu'un départ en cours de route (ou un retour après un
+         paiement) ouvre l'app au lieu de rejouer l'onboarding. */
+      if (elite) {
+        const { error } = await supabase.from("profiles").upsert(
+          { user_id: uid, mode: role, onboarding_done: true, ...(name.trim() ? { name: name.trim() } : {}) },
+          { onConflict: "user_id" },
+        );
+        if (error) console.error("[prepareOnboarding] onboarding_done error:", error);
+      }
+      return savedProgramIdRef.current;
+    }
+  }
+
+  /* Séances à venir du programme qu'on vient d'assigner (écran semaine). false = pas de programme
+     exploitable : l'écran semaine saute. Mémorisé comme la préparation. */
+  const weekRef = useRef<Promise<boolean> | null>(null);
+  function ensureWeek(uid: string): Promise<boolean> {
+    if (!weekRef.current) {
+      weekRef.current = (async () => {
+        let programId: string | null = null;
+        try { programId = await runPrepare(uid); } catch (e) { console.error("[ensureWeek] prepare", e); weekRef.current = null; return false; }
+        if (!programId || role === "coach") { setObProgramOk(false); return false; }
+        const { data, error } = await supabase.from("sessions")
+          .select("id, date, name, notes, target_difficulty")
+          .eq("user_id", uid).eq("done", false).gte("date", localTodayStr())
+          .order("date").limit(6);
+        if (error) console.error("[ensureWeek] sessions error:", error);
+        const rows = (data ?? []) as WeekSession[];
+        const ok = !error && rows.length > 0;
+        setObWeekSessions(rows);
+        setObProgramOk(ok);
+        return ok;
+      })();
+    }
+    return weekRef.current;
+  }
+
+  const finishGuardRef2 = useRef(false);
+  async function finishOnboarding(uid: string) {
+    if (finishGuardRef2.current) return;
+    finishGuardRef2.current = true;
+    setObFinishing(true); setObError(null);
+    try {
+      await runPrepare(uid);
       await enterApp(uid);
     } catch (e) {
       console.error("[finishOnboarding]", e);
@@ -1079,8 +1169,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
 
   // Écran suivant du parcours post-signup (le parcours peut changer avec la réponse donnée).
-  function obAdvance(has?: ObHas) {
-    const p = getPath(role, has === undefined ? obHas : has);
+  function obAdvance(has?: ObHas, programOk?: boolean) {
+    const p = getPath(role, has === undefined ? obHas : has, programOk === undefined ? obProgramOk : programOk);
     let i = p.indexOf(currentStep);
     if (i < 0) i = p.indexOf("ob_program");
     if (i + 1 < p.length) { setStepIdx(i + 1); return; }
@@ -1707,10 +1797,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <div style={{ textAlign: "center", color: "#171b1f" }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
-            {obHas === "later" && !hasClaimedProgram ? "Ouverture de ton espace…" : "Préparation de ton programme…"}
+            {(obHas === "later" && !hasClaimedProgram) || (elite && role === "athlete") ? "Ouverture de ton espace…" : "Préparation de ton programme…"}
           </div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
-          {obHas === "generate" && !hasClaimedProgram && <div style={{ maxWidth: 420, margin: "0 auto" }}>{obRecapCard("Ton programme")}</div>}
+          {obHas === "generate" && !hasClaimedProgram && !(elite && role === "athlete") && <div style={{ maxWidth: 420, margin: "0 auto" }}>{obRecapCard("Ton programme")}</div>}
         </div>
       </OnboardingBackground>
     );
@@ -1720,7 +1810,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const post = path.slice(path.indexOf("account") + 1);
     const idx = Math.max(0, post.indexOf(currentStep));
     const matched = obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel) : null;
-    const back = idx > 0 ? () => setStepIdx(path.indexOf(post[idx - 1])) : undefined;
+    /* Parcours Elite : jamais de retour d'un écran Elite vers les questions de programme (le
+       programme est déjà en cours de création à partir de ob_when). */
+    const prevStep = idx > 0 ? post[idx - 1] : null;
+    const backBlocked = !!prevStep && ELITE_STEPS.includes(currentStep) && !ELITE_STEPS.includes(prevStep);
+    const back = prevStep && !backBlocked ? () => setStepIdx(path.indexOf(prevStep)) : undefined;
     // Bandeau photo : le sport choisi (ou reconnu), sinon le programme claimé, sinon l'image par défaut.
     const cover = sportCover(obSport || matched?.value) ?? claimedCover ?? DEFAULT_ONBOARDING_COVER;
     const common = { index: idx, total: post.length, cover, onBack: back };
@@ -1820,6 +1914,166 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           {obDays.length > 0 && obRecapCard("Ton programme")}
           {errorLine}
         </QuestionShell>
+      );
+    }
+    /* ───────── Parcours Elite (2026-10-17) ───────── */
+    const eliteUid = userId || newUserId;
+    const invitedAthlete = isInvitedAthlete({ role, invited: !!hasCoachInvite });
+    // Après le check-in (fait ou passé) : on attend le programme pour savoir si l'écran semaine existe.
+    const continueAfterCheckin = async () => {
+      if (!eliteUid) return;
+      setObCheckinBusy(true);
+      const ok = invitedAthlete ? false : await ensureWeek(eliteUid).catch(() => false);
+      setObCheckinBusy(false);
+      obAdvance(undefined, ok);
+    };
+
+    if (currentStep === "ob_when") {
+      const chooseWhen = (v: ObWhen) => {
+        setObWhen(v); obWhenRef.current = v;
+        posthog.capture("onboarding_when_answered", { answer: v });
+        if (eliteUid) {
+          supabase.from("profiles").update({ frustration: v }).eq("user_id", eliteUid)
+            .then(({ error }) => { if (error) console.error("[ob_when] frustration update error:", error); });
+        }
+        obAdvance();
+      };
+      return (
+        <QuestionShell {...common}
+          title={<>Tu as mal dormi, et ta séance dure est prévue aujourd&apos;hui. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}>
+          {WHEN_OPTIONS.map((w, k) => (
+            <OptionCard key={w.value} icon={String.fromCharCode(65 + k)} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)} />
+          ))}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_mirror") {
+      return (
+        <QuestionShell {...common} dark eyebrow="Ton constat" title={mirrorTitle(obWhen)}
+          cta={{ label: "Voir ce que ça change", onClick: () => obAdvance() }}>
+          <MirrorBody when={obWhen} />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_health") {
+      const connect = async () => {
+        if (!eliteUid || obHealthBusy) return;
+        setObHealthBusy(true);
+        try {
+          // Import à la demande : le plugin Santé n'existe que dans l'app iOS.
+          const { syncHealthData } = await import("@/lib/healthSync");
+          const days = await syncHealthData(supabase, eliteUid);
+          posthog.capture("onboarding_health_connected", { days });
+        } catch (e) {
+          // Ne bloque jamais le parcours : Apple Santé reste connectable depuis l'app.
+          console.error("[ob_health] sync error:", e);
+          posthog.capture("onboarding_health_failed");
+        } finally { setObHealthBusy(false); }
+        obAdvance();
+      };
+      return (
+        <QuestionShell {...common}
+          title="Ta montre sait déjà comment tu as dormi."
+          sub="Connecte Apple Santé : ton ressenti et tes mesures donnent une forme du jour bien plus juste."
+          onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} skipLabel="Plus tard"
+          cta={{ label: "Connecter Apple Santé", onClick: connect, busy: obHealthBusy }}>
+          <HealthStepBody />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_checkin") {
+      const today = localTodayStr();
+      const saveCheckin = async (data: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string; base_score: number; score: number; plannedIntensity?: unknown }) => {
+        if (!eliteUid) return;
+        /* La préparation (completeProfile) refuse d'écrire si un ressenti existe déjà : elle doit
+           être finie avant ce 1er check-in. Presque toujours déjà le cas à ce stade. */
+        await runPrepare(eliteUid).catch(() => null);
+        // Même écriture que /today (saveWellness) : montre intégrée au score si elle a la nuit.
+        const { plannedIntensity: _ignored, ...w } = data;
+        void _ignored;
+        const payload = await withDeviceScore(supabase, eliteUid, today, w);
+        const { data: saved, error } = await supabase.from("wellness_daily")
+          .upsert({ user_id: eliteUid, date: today, ...payload }, { onConflict: "user_id,date" })
+          .select().single();
+        if (error) console.error("[ob_checkin] wellness upsert error:", error);
+        posthog.capture("onboarding_checkin_saved", { ok: !error });
+        setObCheckinScore(error ? null : ((saved as { score?: number } | null)?.score ?? payload.score));
+        setObCheckinOpen(false);
+        void continueAfterCheckin();
+      };
+      return (
+        <>
+          <QuestionShell {...common}
+            title="Comment tu te sens ce matin ?"
+            sub="10 secondes, chaque matin : ta séance s'ajuste à ta réponse."
+            onSkip={obCheckinBusy ? undefined : () => { posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} skipLabel="Plus tard"
+            cta={{ label: "Faire mon check-in", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
+            <div />
+          </QuestionShell>
+          {obCheckinOpen && !obCheckinBusy && (
+            <WellnessModal date={today} onSave={saveCheckin} onClose={() => setObCheckinOpen(false)} cancelLabel="Plus tard" />
+          )}
+        </>
+      );
+    }
+    if (currentStep === "ob_week") {
+      const today = localTodayStr();
+      const monday = (new Date(`${today}T12:00:00`).getDay() + 6) % 7 === 0;
+      const de = sessionsComplement(builtRef.current?.sport || obChosenSport() || sport);
+      return (
+        <QuestionShell {...common} dark eyebrow={de ? `Ta semaine ${de}` : "Ta semaine"}
+          title="Le même programme. Trois matins différents."
+          cta={{ label: "C'est ce qu'il me faut", onClick: () => obAdvance() }}>
+          <WeekStepBody sessions={obWeekSessions} program={builtRef.current} checkinScore={obCheckinScore} acclimatation={!monday} today={today} />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_notif") {
+      const snoozeKey = eliteUid ? `tpc_notif_prompt_${eliteUid}` : null;
+      const snooze = () => { try { if (snoozeKey) localStorage.setItem(snoozeKey, String(Date.now())); } catch { /* ignore */ } };
+      const enable = async () => {
+        if (obNotifBusy) return;
+        setObNotifBusy(true);
+        // Jamais bloquant : sans réponse en 12 s (enregistrement de l'appareil), on continue.
+        const ok = await Promise.race([
+          enableNotifications(obNotifHour).catch(() => false),
+          new Promise<boolean>(r => setTimeout(() => r(false), 12000)),
+        ]);
+        setObNotifBusy(false);
+        posthog.capture("notif_prompt_enabled", { role, ok, hour: obNotifHour, surface: "onboarding" });
+        if (!ok) snooze();
+        obAdvance();
+      };
+      return (
+        <QuestionShell {...common}
+          title={`Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
+          onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard"
+          cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
+          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_pay") {
+      const done = () => { if (eliteUid) finishOnboarding(eliteUid); };
+      const label = obSportLabel() || (hasClaimedProgram ? claimedProgramName ?? "" : "");
+      const headline = invitedAthlete
+        ? `${coachInviteName || "Ton coach"} prépare tes séances. Elite les ajuste à ta forme chaque matin.`
+        : `Ton programme${label ? ` ${label}` : ""} est prêt. Elite l'ajuste à ta forme chaque matin.`;
+      return (
+        <OnboardingBackground variant="dark">
+          {obPayStage === "priming" ? (
+            <PrimingJourneyModal mode="athlete" billing={obBilling} setBilling={setObBilling} allowDismiss
+              onContinue={() => setObPayStage("paywall")}
+              onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
+              onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}
+              headline={headline} sub={null} name={name.trim() || undefined}
+              athleteSelfId={invitedAthlete ? undefined : eliteUid ?? undefined} />
+          ) : (
+            <PaywallModal mode="athlete" allowDismiss initialBilling={obBilling}
+              onClose={() => setObPayStage("priming")}
+              onSuccess={() => { posthog.capture("onboarding_pay_purchased"); done(); }} />
+          )}
+        </OnboardingBackground>
       );
     }
     if (currentStep === "ob_invite") {
