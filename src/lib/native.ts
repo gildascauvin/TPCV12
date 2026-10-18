@@ -30,3 +30,15 @@ export function hapticTick(prev: number, next: number, enteredZone = false) {
   if (Math.round(prev) === Math.round(next)) return;
   haptic(enteredZone ? "medium" : "light");
 }
+
+/* Appareil d'inscription pour Brevo (attribut PLATEFORME, 2026-10-18) : l'email J0 pousse l'app
+   iPhone, les notifs Chrome ou les deux selon l'appareil. iPad compté comme ordinateur. */
+export type SignupPlatform = "IOS_APP" | "IPHONE" | "ANDROID" | "DESKTOP";
+
+export function signupPlatform(): SignupPlatform {
+  if (Capacitor.isNativePlatform()) return Capacitor.getPlatform() === "android" ? "ANDROID" : "IOS_APP";
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  if (/iPhone|iPod/.test(ua)) return "IPHONE";
+  if (/Android/.test(ua)) return "ANDROID";
+  return "DESKTOP";
+}

@@ -35,6 +35,7 @@ import dynamic from "next/dynamic";
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+import { signupPlatform } from "@/lib/native";
 
 type Level = "beginner" | "intermediate" | "elite";
 
@@ -1325,7 +1326,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free", ...(hasClaimedProgram ? { sport, claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
+          body: JSON.stringify({ email: email.trim(), name: name.trim(), role, status: "free", platform: signupPlatform(), ...(hasClaimedProgram ? { sport, claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
         });
         await fetch("/api/invite/link", { method: "POST" });
         if (role === "athlete" && hasCoachInvite) {
@@ -1477,7 +1478,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         fetch("/api/brevo/contact", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free", ...(localStorage.getItem("claim_program_id") ? { claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
+          body: JSON.stringify({ email: userEmail, name: finalName, role: pendingData.role, status: "free", platform: signupPlatform(), ...(localStorage.getItem("claim_program_id") ? { claimProgramId: localStorage.getItem("claim_program_id") } : {}) }),
         });
         await fetch("/api/invite/link", { method: "POST" });
 

@@ -34,6 +34,18 @@ export async function POST(req: Request) {
     if (pErr) console.error("[push/subscribe] préférences", pErr);
   }
 
+  // Brevo : NOTIFS=OUI coupe le rappel notifs du J+2. Un échec n'empêche pas l'abonnement.
+  if (process.env.BREVO_API_KEY && user.email) {
+    try {
+      const r = await fetch(`https://api.brevo.com/v3/contacts/${encodeURIComponent(user.email)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "api-key": process.env.BREVO_API_KEY },
+        body: JSON.stringify({ attributes: { NOTIFS: "OUI" } }),
+      });
+      if (!r.ok && r.status !== 204) console.error("[push/subscribe] brevo", r.status, await r.text());
+    } catch (e) { console.error("[push/subscribe] brevo", e); }
+  }
+
   return Response.json({ ok: true });
 }
 

@@ -36,8 +36,9 @@ async function removeFromList(email: string, listId: number) {
 }
 
 export async function POST(request: Request) {
-  const { email, name, role, status, sport, claimProgramId } = await request.json() as {
+  const { email, name, role, status, sport, claimProgramId, platform } = await request.json() as {
     email: string;
+    platform?: string;
     name?: string;
     role?: string;
     status?: string;
@@ -52,6 +53,11 @@ export async function POST(request: Request) {
   const attributes: Record<string, string> = { STATUS: (status ?? "free").toUpperCase() };
   if (name) attributes.PRENOM = name;
   if (role) attributes.ROLE = role.toUpperCase();
+  // Appareil d'inscription : le J0 adapte son paragraphe app/notifs (bloc conditionnel du template).
+  if (platform && ["IOS_APP", "IPHONE", "ANDROID", "DESKTOP"].includes(platform)) {
+    attributes.PLATEFORME = platform;
+    attributes.NOTIFS = "NON";
+  }
   // Sport connu dès l'inscription (programme claimé) : l'email de bienvenue en profite.
   if (sport || claimProgramId) Object.assign(attributes, brevoSportAttributes(sport, claimProgramId));
 
