@@ -4,7 +4,7 @@ import { useState } from "react";
 import DecisionRing from "@/components/sessions/DecisionRing";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import { computeAutoregSuggestion, zoneRange } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, qualitativeDifficulty, zoneRange } from "@/lib/autoregulation";
 import { adjustDifficulty } from "@/lib/loadAdjust";
 import { wellnessColor } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -172,9 +172,9 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.8)" }}>
             <b style={{ display: "block", fontSize: 16, color: wellnessColor(score), marginBottom: 4 }}>Forme {score}/100</b>
-            {dayLabel(focus.date, today)} : {focus.name}, RPE prévu {focus.target_difficulty}.<br />
-            {a0.points < 0 ? `On allège de ${-a0.points} point${a0.points < -1 ? "s" : ""}.`
-              : a0.points > 0 ? `On surcharge de ${a0.points} point${a0.points > 1 ? "s" : ""}.`
+            {dayLabel(focus.date, today)} : {focus.name}, prévue {qualitativeDifficulty(focus.target_difficulty ?? 5)}.<br />
+            {a0.points < 0 ? (a0.points < -1 ? "On l'allège nettement." : "On l'allège un peu.")
+              : a0.points > 0 ? (a0.points > 1 ? "On la pousse nettement." : "On la pousse un peu.")
               : morning === "forme" ? "Le plan tient : en forme, seules les séances légères se surchargent."
               : morning === "cuit" ? "Le plan tient : cette séance est déjà légère."
               : "Le plan tient tel quel."}
@@ -234,6 +234,52 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
         ))}
       </div>
       {error && <p style={{ fontSize: 13, color: "#b42318", marginTop: 12 }}>{error}</p>}
+    </div>
+  );
+}
+
+/* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
+   navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
+   l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
+export type WatchKind = "apple" | "garmin" | "whoop" | "none";
+export const WATCHES: { value: WatchKind; label: string }[] = [
+  { value: "apple", label: "Apple Watch" },
+  { value: "garmin", label: "Garmin, Coros, Polar ou Suunto" },
+  { value: "whoop", label: "Whoop ou Oura" },
+  { value: "none", label: "Pas de montre" },
+];
+export function appPushSub(watch: WatchKind | null, coachName: string | null): string {
+  const name = watch === "apple" ? "ton Apple Watch" : watch === "garmin" ? "ta montre" : watch === "whoop" ? "ton capteur" : null;
+  const data = watch === "garmin" ? "ton sommeil et ta fréquence cardiaque au repos" : "ton sommeil, ta fréquence cardiaque au repos et ta VFC";
+  const base = name
+    ? `Et connecte ${name} : l'app lit Apple Santé (${data}). 30 jours relus, analyses dès aujourd'hui.`
+    : "Une notification à l'heure que tu choisis : 10 secondes de check-in et ta séance s'ajuste.";
+  return coachName ? `${base} ${coachName} voit ta forme dès ton check-in.` : base;
+}
+export function AppPushStepBody({ desktop, watch, setWatch, hour, setHour, sessionName }: {
+  desktop: boolean; watch: WatchKind | null; setWatch: (w: WatchKind) => void;
+  hour: number; setHour: (h: number) => void; sessionName: string | null;
+}) {
+  return (
+    <div>
+      {desktop && (
+        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 16, border: `1px solid ${LINE}`, background: "#fff", marginBottom: 18 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/app-store-qr.svg" alt="QR code de l'App Store" width={92} height={92} style={{ flexShrink: 0, borderRadius: 8 }} />
+          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : ton plan t&apos;attend.</span>
+        </div>
+      )}
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Tu portes une montre ?</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+        {WATCHES.map(w => (
+          <button key={w.value} type="button" onClick={() => setWatch(w.value)}
+            style={{ padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13.5, color: watch === w.value ? "#d44000" : "#171b1f",
+              border: watch === w.value ? "2px solid #d44000" : `1px solid ${LINE}`, background: watch === w.value ? "rgba(212,64,0,.06)" : "#fff" }}>
+            {w.label}
+          </button>
+        ))}
+      </div>
+      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} />
     </div>
   );
 }

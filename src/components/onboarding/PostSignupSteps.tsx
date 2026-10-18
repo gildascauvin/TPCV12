@@ -37,35 +37,39 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
   const ink = dark ? "#fff" : INK;
   const muted = dark ? "rgba(255,255,255,.62)" : MUTED;
   const line = dark ? "rgba(255,255,255,.12)" : LINE;
-  const pill: React.CSSProperties = { padding: "7px 11px", borderRadius: 999, background: "rgba(255,255,255,.92)", border: `1px solid ${line}` };
+  // En-tête (retour, compteur, Passer, frise) toujours sur fond uni : lisible quelle que soit la photo.
+  const header = (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        {onBack ? (
+          <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
+        ) : <span style={{ width: 34 }} />}
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: muted }}>{index + 1} / {total}</span>
+        {onSkip && (
+          <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: muted, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4 }}>
+        {Array.from({ length: total }, (_, k) => (
+          <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)" }} />
+        ))}
+      </div>
+    </>
+  );
   return (
     <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
       {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
-        /* Mobile : bandeau plus court et en-tête (retour, progression) posé sur son fondu, pour que
-           la question et ses réponses tiennent dans l'écran (2026-10-18). */
-        <div style={{ position: "relative", height: isMd ? 240 : 132 }}>
-          <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
-          {/* Voile sombre (comme l'écran d'accueil) qui s'éclaircit progressivement jusqu'à la page :
-              un seul dégradé, sans bande grise entre le voile et le fondu. */}
-          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.4) 35%, rgba(60,58,56,.28) 55%, rgba(241,240,238,.55) 78%, rgba(241,240,238,.88) 90%, ${PAGE} 100%)` }} />
-        </div>
+        <>
+          <div style={{ maxWidth: col, margin: "0 auto", padding: "calc(14px + env(safe-area-inset-top, 0px)) 20px 14px", color: ink }}>{header}</div>
+          {/* Bandeau photo du sport choisi, sous l'en-tête, fondu vers la page en bas. */}
+          <div style={{ position: "relative", height: isMd ? 200 : 120 }}>
+            <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
+            <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(241,240,238,0) 55%, rgba(241,240,238,.7) 82%, ${PAGE} 100%)` }} />
+          </div>
+        </>
       )}
-      <div style={{ position: "relative", maxWidth: col, margin: dark || isMd ? "0 auto" : "-52px auto 0", padding: "16px 20px 140px", color: ink }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-          {onBack ? (
-            <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
-          ) : <span style={{ width: 34 }} />}
-          {/* Pastilles claires comme le bouton retour : lisibles même posées sur une photo sombre. */}
-          <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: dark ? muted : INK, ...(dark ? {} : pill) }}>{index + 1} / {total}</span>
-          {onSkip && (
-            <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: dark ? 0 : `1px solid ${line}`, background: dark ? "transparent" : "rgba(255,255,255,.92)", color: dark ? muted : INK, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit", ...(dark ? {} : { padding: "7px 14px", borderRadius: 999 }) }}>{skipLabel}</button>
-          )}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4, marginBottom: 28 }}>
-          {Array.from({ length: total }, (_, k) => (
-            <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)" }} />
-          ))}
-        </div>
+      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? "16px 20px 140px" : "8px 20px 140px", color: ink }}>
+        {dark && <div style={{ marginBottom: 28 }}>{header}</div>}
         {eyebrow && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: dark ? "#ff8a55" : ORANGE, marginBottom: 8 }}>{eyebrow}</div>}
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>
         {sub && <p style={{ fontSize: 15, color: muted, lineHeight: 1.5, margin: "0 0 22px" }}>{sub}</p>}
@@ -84,7 +88,7 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
 }
 
 /* Carte d'option : un clic = choix (et passage à l'écran suivant, décidé par le parent). */
-export function OptionCard({ icon, label, hint, on, onClick }: { icon: string; label: string; hint?: string; on?: boolean; onClick: () => void }) {
+export function OptionCard({ icon, label, hint, on, onClick }: { icon: React.ReactNode; label: string; hint?: string; on?: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
       style={{ display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left", padding: "16px", borderRadius: 16, cursor: "pointer", fontFamily: "inherit", color: INK,

@@ -26,7 +26,8 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, type ObWhen, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, appPushSub, type ObWhen, type WeekSession, type WatchKind } from "@/components/onboarding/EliteSteps";
+import { APP_STORE_URL } from "@/lib/pwaInstall";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import dynamic from "next/dynamic";
@@ -454,11 +455,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [coachPaying, setCoachPaying] = useState(false);
   // Résolus après montage (Capacitor / navigateur indisponibles côté serveur).
   const [healthAvailable, setHealthAvailable] = useState(false);
-  const [pushAvailable, setPushAvailable] = useState(false);
+  /* Écran notifications : "native" (app iOS avec le plugin), "web" (notification du navigateur, Android
+     seulement), "app" (iPhone dans Safari ou ordinateur : on pousse l'app iPhone), null (rien). */
+  const [notifMode, setNotifMode] = useState<"native" | "web" | "app" | null>(null);
+  const [webIphone, setWebIphone] = useState(false);
+  const pushAvailable = notifMode !== null;
+  const [obWatch, setObWatch] = useState<WatchKind | null>(null);
   useEffect(() => {
     setHealthAvailable(isNativeApp());
     const n = notificationSupport();
-    setPushAvailable(n === "native" || n === "web");
+    const ua = navigator.userAgent;
+    setWebIphone(/iPhone|iPad|iPod/.test(ua));
+    if (isNativeApp()) setNotifMode(n === "native" ? "native" : null);
+    else if (/Android/.test(ua)) setNotifMode(n === "web" ? "web" : null);
+    else setNotifMode("app");
   }, []);
   const [obWhen, setObWhen] = useState<ObWhen | null>(null);
   // Lu par completeProfile(), qui peut tourner en arrière-plan après le clic sur ob_when.
@@ -1942,7 +1952,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common}
           title={<>Tu as mal dormi, et ta séance dure est prévue aujourd&apos;hui. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}>
           {WHEN_OPTIONS.map((w, k) => (
-            <OptionCard key={w.value} icon={String.fromCharCode(65 + k)} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)} />
+            <OptionCard key={w.value} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)}
+              icon={<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>} />
           ))}
         </QuestionShell>
       );
@@ -2044,6 +2055,28 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         if (!ok) snooze();
         obAdvance();
       };
+      if (notifMode === "app") {
+        // L'heure choisie est gardée sur le profil : l'app iPhone s'en sert dès l'activation des notifs.
+        const saveHour = () => {
+          posthog.capture("onboarding_app_push", { watch: obWatch, hour: obNotifHour, device: webIphone ? "iphone" : "desktop" });
+          if (eliteUid) {
+            let tz = "Europe/Paris"; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* repli */ }
+            supabase.from("profiles").update({ push_hour: obNotifHour, push_tz: tz }).eq("user_id", eliteUid)
+              .then(({ error }) => { if (error) console.error("[ob_notif] push_hour update error:", error); });
+          }
+        };
+        return (
+          <QuestionShell {...common}
+            title="Reçois ta séance chaque matin sur ton iPhone."
+            sub={appPushSub(obWatch, invitedAthlete ? coachInviteName : null)}
+            onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard"
+            cta={webIphone
+              ? { label: "Télécharger l'app iPhone", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
+              : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
+            <AppPushStepBody desktop={!webIphone} watch={obWatch} setWatch={setObWatch} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} />
+          </QuestionShell>
+        );
+      }
       return (
         <QuestionShell {...common}
           title={`Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
