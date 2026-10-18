@@ -1,14 +1,14 @@
 "use client";
 
-import { hapticTick } from "@/lib/native";
 import { useEffect, useState } from "react";
 import type { Session } from "@/types";
-import { computeFatigueImpact } from "@/lib/wellness";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
 import { chronoMinutes } from "@/lib/liveSession";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import PhysioTeaser from "@/components/physio/PhysioTeaser";
+import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
+
 
 interface CompleteModalProps {
   session: Session;
@@ -17,7 +17,9 @@ interface CompleteModalProps {
 }
 
 export default function CompleteModal({ session, onSave, onClose }: CompleteModalProps) {
-  const [rpe, setRpe] = useState(session.rpe ?? 6);
+  /* Note en un tap (2026-10-17) : jamais de valeur par défaut pour une 1re note (le 6 d'avant
+     était enregistré tel quel si on validait sans toucher). Une séance déjà notée garde sa note. */
+  const [rpe, setRpe] = useState<number | null>(session.rpe ?? null);
   /* Séance démarrée avec le chrono (2026-10-02) : sa durée, pauses déduites, est pré-remplie. */
   const chrono = session.duration == null ? chronoMinutes(session) : null;
   const [duration, setDuration] = useState(session.duration ?? chrono ?? 45);
@@ -41,16 +43,13 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     return () => { alive = false; };
   }, [session.user_id, session.date, session.duration, chrono]);
 
-  /* Ressenti à l'aveugle (2026-10-11) : si la montre a la FC de la séance ce jour-là, le RPE part sans
-     valeur (6 par défaut orientait déjà la note) et la comparaison au cœur reste floutée jusqu'à la
-     validation. Elle s'affiche ensuite (PhysioRevealHost), note figée : rien ne peut la caler sur le cœur. */
+  /* Ressenti à l'aveugle (2026-10-11) : la comparaison au cœur reste floutée jusqu'à la validation
+     (PhysioRevealHost), note figée : rien ne peut la caler sur le cœur. */
   const hasHeart = workouts.some(w => w.trimp != null);
-  const blind = session.rpe == null && hasHeart;
-  const [touched, setTouched] = useState(false);
-  const rpeMissing = blind && !touched;
+  const rpeMissing = rpe == null;
 
   async function handleSave() {
-    if (rpeMissing) return;
+    if (rpe == null) return;
     setSaving(true);
     await onSave({ rpe, duration });
     setSaving(false);
@@ -61,9 +60,6 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     }
   }
 
-  const impact = computeFatigueImpact(rpe, duration);
-  const rpeCls = rpe >= 8 ? "hard" : rpe >= 5 ? "moderate" : "easy";
-  const rpeColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[rpeCls];
 
   return (
     <div
@@ -80,7 +76,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         border: "1px solid rgba(0,0,0,.10)",
         boxShadow: "0 42px 120px rgba(0,0,0,.34)",
         borderRadius: 24, padding: 28,
-        width: "100%", maxWidth: 400,
+        width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto",
         animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
         {/* Title */}
@@ -151,40 +147,13 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           )}
         </div>
 
-        {/* RPE */}
+        {/* RPE — jauge 1-10 (ScaleBars, palette charge), un libellé CR-10 par note. */}
         <div style={{ marginBottom: 18 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 7 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 20, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em" }}>{rpeMissing ? <span style={{ color: "#8a8f94" }}>—</span> : rpe}<span style={{ fontSize: 12, color: "#8a8f94", fontWeight: 600 }}>/10</span></div>
           </div>
-          <input
-            type="range" min={1} max={10} step={1} value={rpe}
-            onChange={(e) => { const n = Number(e.target.value); hapticTick(rpe, n); setRpe(n); setTouched(true); }}
-            onPointerDown={() => setTouched(true)}
-            style={{ width: "100%", accentColor: "#d44000", cursor: "pointer", opacity: rpeMissing ? 0.45 : 1 }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
-            <span>Très facile</span><span>Modéré</span><span>Max effort</span>
-          </div>
+          <ScaleBars value={rpe} onChange={setRpe} palette="load" labels={CR10_LABELS} />
         </div>
-
-        {/* Stats mini grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em", lineHeight: 1 }}>{duration}</div>
-            <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>MINUTES</div>
-          </div>
-          <div style={{ background: "#f7f8f9", borderRadius: 16, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 22, fontWeight: 700, color: rpeColor, letterSpacing: "-0.02em", lineHeight: 1 }}>{rpeMissing ? "—" : rpe}</div>
-            <div style={{ fontSize: 9, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginTop: 4 }}>DIFFICULTÉ</div>
-          </div>
-        </div>
-
-        {!hasHeart && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff3e8", border: "0.5px solid rgba(212,64,0,.22)", borderRadius: 12, padding: "10px 13px", marginBottom: 20, fontSize: 13, color: "#d44000", fontWeight: 700 }}>
-            🔥 Impact fatigue estimé : −{impact} pts
-          </div>
-        )}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 8 }}>

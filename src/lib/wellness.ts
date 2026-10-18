@@ -31,10 +31,6 @@ export function computeWellnessScore(
   return { base_score, score };
 }
 
-export function computeFatigueImpact(rpe: number, durationMinutes: number): number {
-  return Math.min(Math.round((rpe * durationMinutes) / 60), 25);
-}
-
 export function zoneLabel(score: number | null): string {
   if (score === null) return "Non renseigné";
   if (score >= 82) return "Zone optimale";
