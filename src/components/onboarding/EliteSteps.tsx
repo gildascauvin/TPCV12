@@ -346,9 +346,10 @@ export function ControlStepBody({ hard, easy }: { hard: ControlSession; easy: Co
   });
   const [open, setOpen] = useState(team.find(t => t.sug)?.id ?? team[0].id);
   const o = team.find(t => t.id === open) ?? team[0];
-  const points: RadarPoint[] = team.filter(t => t.x != null).map(t => ({
+  // Léa (sans check-in) va dans la bande « Sans séance ou sans check-in » sous le radar, comme en prod.
+  const points: RadarPoint[] = team.map(t => ({
     id: t.id, name: t.name, score: t.x, diff: t.s.target_difficulty,
-    ring: decisionRingState([{ done: false, target_difficulty: t.s.target_difficulty }], t.sug), hideZone: !t.sug,
+    ring: t.x == null ? null : decisionRingState([{ done: false, target_difficulty: t.s.target_difficulty }], t.sug), hideZone: !t.sug,
   }));
   const pill = (t: typeof team[number]) => !t.sug ? null : t.sug.dir === "low"
     ? { label: "⬇ Alléger", bg: "#d44000", fg: "#fff" } : { label: "⬆ Surcharger", bg: "rgba(47,158,68,.18)", fg: "#8fe0b0" };

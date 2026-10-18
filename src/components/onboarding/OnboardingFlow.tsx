@@ -2034,7 +2034,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const easy = pick(week1.filter(p => p.s.target_difficulty <= 4), -1) ?? pick(pool, -1) ?? { name: demoLightest.name, notes: demoLightest.notes ?? null, target_difficulty: demoLightest.target_difficulty ?? 3 };
       return (
         <QuestionShell {...common} dark eyebrow="Coach Control · demain matin"
-          title="Ta séance, quatre sportifs, quatre décisions."
+          title="Une séance, ajustée à la forme de chacun."
           sub="Sportifs de démo : les tiens les remplacent dès leur premier check-in."
           onSkip={() => obAdvance()}
           cta={{ label: "Je veux ça pour mon groupe", onClick: () => obAdvance(), busy: !ready }}>
