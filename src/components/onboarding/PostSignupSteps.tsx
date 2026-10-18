@@ -40,14 +40,16 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
   return (
     <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
       {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
-        <div style={{ position: "relative", height: isMd ? 240 : 190 }}>
+        /* Mobile : bandeau plus court et en-tête (retour, progression) posé sur son fondu, pour que
+           la question et ses réponses tiennent dans l'écran (2026-10-18). */
+        <div style={{ position: "relative", height: isMd ? 240 : 132 }}>
           <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
           {/* Voile sombre (comme l'écran d'accueil) qui s'éclaircit progressivement jusqu'à la page :
               un seul dégradé, sans bande grise entre le voile et le fondu. */}
           <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.4) 35%, rgba(60,58,56,.28) 55%, rgba(241,240,238,.55) 78%, rgba(241,240,238,.88) 90%, ${PAGE} 100%)` }} />
         </div>
       )}
-      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: "16px 20px 140px", color: ink }}>
+      <div style={{ position: "relative", maxWidth: col, margin: dark || isMd ? "0 auto" : "-52px auto 0", padding: "16px 20px 140px", color: ink }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           {onBack ? (
             <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>

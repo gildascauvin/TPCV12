@@ -2057,8 +2057,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const done = () => { if (eliteUid) finishOnboarding(eliteUid); };
       const label = obSportLabel() || (hasClaimedProgram ? claimedProgramName ?? "" : "");
       const headline = invitedAthlete
-        ? `${coachInviteName || "Ton coach"} prépare tes séances. Elite les ajuste à ta forme chaque matin.`
-        : `Ton programme${label ? ` ${label}` : ""} est prêt. Elite l'ajuste à ta forme chaque matin.`;
+        ? `${coachInviteName || "Ton coach"} prépare tes séances. ThePerfClub les ajuste à ta forme chaque matin.`
+        : `Ton programme${label ? ` ${label}` : ""} est prêt. ThePerfClub l'ajuste à ta forme chaque matin.`;
       return (
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (
