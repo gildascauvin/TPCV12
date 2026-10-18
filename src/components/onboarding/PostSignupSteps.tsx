@@ -37,21 +37,24 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
   const ink = dark ? "#fff" : INK;
   const muted = dark ? "rgba(255,255,255,.62)" : MUTED;
   const line = dark ? "rgba(255,255,255,.12)" : LINE;
-  // En-tête (retour, compteur, Passer, frise) toujours sur fond uni : lisible quelle que soit la photo.
+  /* En-tête transparent posé en haut de la photo, comme le POC (2026-10-18) : le voile sombre du haut
+     de la photo rend le compteur et « Passer » lisibles en blanc ; la question commence sur le fondu. */
+  const onPhoto = !dark;
+  const headInk = onPhoto ? "#fff" : muted;
   const header = (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         {onBack ? (
           <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
         ) : <span style={{ width: 34 }} />}
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: muted }}>{index + 1} / {total}</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: headInk }}>{index + 1} / {total}</span>
         {onSkip && (
-          <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: muted, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
+          <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: headInk, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
         )}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${total}, 1fr)`, gap: 4 }}>
         {Array.from({ length: total }, (_, k) => (
-          <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : dark ? "rgba(255,255,255,.14)" : "rgba(0,0,0,.10)" }} />
+          <i key={k} style={{ height: 4, borderRadius: 999, background: k <= index ? ORANGE : onPhoto ? "rgba(255,255,255,.4)" : "rgba(255,255,255,.14)" }} />
         ))}
       </div>
     </>
@@ -59,16 +62,16 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
   return (
     <div style={{ position: "fixed", inset: 0, background: dark ? DARK_CARD_BG : PAGE, overflowY: "auto", zIndex: 1 }}>
       {dark ? <div style={{ height: isMd ? 56 : 28 }} /> : (
-        <>
-          <div style={{ maxWidth: col, margin: "0 auto", padding: "calc(14px + env(safe-area-inset-top, 0px)) 20px 14px", color: ink }}>{header}</div>
-          {/* Bandeau photo du sport choisi, sous l'en-tête, fondu vers la page en bas. */}
-          <div style={{ position: "relative", height: isMd ? 200 : 120 }}>
-            <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
-            <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(241,240,238,0) 55%, rgba(241,240,238,.7) 82%, ${PAGE} 100%)` }} />
-          </div>
-        </>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: isMd ? 260 : 200 }}>
+          <Image src={cover} alt="" fill priority sizes="100vw" style={{ objectFit: "cover", objectPosition: "center 35%" }} />
+          {/* Fondu fini avant le titre : la question se lit toujours sur le fond uni de la page. */}
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, rgba(7,10,13,.5) 0%, rgba(7,10,13,.4) 35%, rgba(60,58,56,.28) 52%, rgba(241,240,238,.7) 72%, rgba(241,240,238,.95) 86%, ${PAGE} 94%)` }} />
+        </div>
       )}
-      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? "16px 20px 140px" : "8px 20px 140px", color: ink }}>
+      {!dark && (
+        <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 0" }}>{header}</div>
+      )}
+      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? "16px 20px 140px" : `${isMd ? 196 : 136}px 20px 140px`, color: ink }}>
         {dark && <div style={{ marginBottom: 28 }}>{header}</div>}
         {eyebrow && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: dark ? "#ff8a55" : ORANGE, marginBottom: 8 }}>{eyebrow}</div>}
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>
