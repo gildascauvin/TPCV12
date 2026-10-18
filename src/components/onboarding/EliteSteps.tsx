@@ -241,24 +241,12 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
    navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
-export type WatchKind = "apple" | "garmin" | "whoop" | "none";
-export const WATCHES: { value: WatchKind; label: string }[] = [
-  { value: "apple", label: "Apple Watch" },
-  { value: "garmin", label: "Garmin, Coros, Polar ou Suunto" },
-  { value: "whoop", label: "Whoop ou Oura" },
-  { value: "none", label: "Pas de montre" },
-];
-export function appPushSub(watch: WatchKind | null, coachName: string | null): string {
-  const name = watch === "apple" ? "ton Apple Watch" : watch === "garmin" ? "ta montre" : watch === "whoop" ? "ton capteur" : null;
-  const data = watch === "garmin" ? "ton sommeil et ta fréquence cardiaque au repos" : "ton sommeil, ta fréquence cardiaque au repos et ta VFC";
-  const base = name
-    ? `Et connecte ${name} : l'app lit Apple Santé (${data}). 30 jours relus, analyses dès aujourd'hui.`
-    : "Une notification à l'heure que tu choisis : 10 secondes de check-in et ta séance s'ajuste.";
+export function appPushSub(coachName: string | null): string {
+  const base = "Une notification à l'heure que tu choisis : 10 secondes de check-in et ta séance s'ajuste. Et si tu portes une montre, l'app lit Apple Santé : 30 jours relus, analyses dès aujourd'hui.";
   return coachName ? `${base} ${coachName} voit ta forme dès ton check-in.` : base;
 }
-export function AppPushStepBody({ desktop, watch, setWatch, hour, setHour, sessionName }: {
-  desktop: boolean; watch: WatchKind | null; setWatch: (w: WatchKind) => void;
-  hour: number; setHour: (h: number) => void; sessionName: string | null;
+export function AppPushStepBody({ desktop, hour, setHour, sessionName }: {
+  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null;
 }) {
   return (
     <div>
@@ -269,16 +257,6 @@ export function AppPushStepBody({ desktop, watch, setWatch, hour, setHour, sessi
           <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : ton plan t&apos;attend.</span>
         </div>
       )}
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>Tu portes une montre ?</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-        {WATCHES.map(w => (
-          <button key={w.value} type="button" onClick={() => setWatch(w.value)}
-            style={{ padding: "9px 14px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 13.5, color: watch === w.value ? "#d44000" : "#171b1f",
-              border: watch === w.value ? "2px solid #d44000" : `1px solid ${LINE}`, background: watch === w.value ? "rgba(212,64,0,.06)" : "#fff" }}>
-            {w.label}
-          </button>
-        ))}
-      </div>
       <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} />
     </div>
   );
