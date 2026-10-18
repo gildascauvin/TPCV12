@@ -1,6 +1,6 @@
 /* Matrice des parcours d'onboarding (src/lib/onboardingPath.ts).
    Lancer : node scripts/run-onboarding-path-test.mjs */
-import { buildOnboardingPath, ELITE_STEPS, type ObHas, type PathOptions, type Role, type StepId } from "../src/lib/onboardingPath";
+import { buildOnboardingPath, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type ObHas, type PathOptions, type Role, type StepId } from "../src/lib/onboardingPath";
 
 let failures = 0, checks = 0;
 function expect(cond: boolean, msg: string) {
@@ -43,7 +43,15 @@ for (const role of roles) for (const has of hasValues) for (const claimed of boo
     expect(p.slice(accountIdx + 1).every(s => s.startsWith("ob_")), `après account : seulement des écrans ob_ ${tag}`);
 
     if (role === "coach") {
-      expect(eq(p, legacy(role, has, claimed, invited)), `coach inchangé en Elite ${tag}`);
+      expect(p.includes("decision_2b"), `aha coach ${tag}`);
+      expect(p.includes("ob_count") && p.includes("ob_when") && p.includes("ob_mirror") && p.includes("ob_control") && p.includes("ob_invite") && p.includes("ob_pay"), `écrans coach présents ${tag}`);
+      expect(!p.some(s => ["ob_health", "ob_checkin", "ob_week", "decision_2a"].includes(s)), `coach : ni Santé, ni check-in, ni semaine ${tag}`);
+      expect(p.includes("ob_notif") === pushAvailable, `coach : notifs seulement si activables ${tag}`);
+      expect(p.indexOf("ob_control") < p.indexOf("ob_invite") && p.indexOf("ob_invite") < p.indexOf("ob_pay"), `coach : déclic avant l'invitation, paywall en dernier ${tag}`);
+      expect(p[p.length - 1] === "ob_pay", `coach : paywall en dernier ${tag}`);
+      const lastQ = Math.max(...PROGRAM_QUESTION_STEPS.map(s => p.indexOf(s)), p.indexOf("ob_count"));
+      expect(lastQ < p.indexOf("ob_when"), `coach : questions avant le cadrage ${tag}`);
+      if (claimed) expect(!p.includes("ob_sport") && !p.includes("ob_program"), `coach claimé : pas de questions programme ${tag}`);
       continue;
     }
     // Sportif Elite
@@ -78,7 +86,8 @@ show("Sportif direct, passé, ordinateur sans push", { role: "athlete", has: "la
 show("Sportif claimé, iOS", { role: "athlete", has: null, claimed: true, invited: false, elite: true, healthAvailable: true, pushAvailable: true });
 show("Invité, coach payant, iOS", { role: "athlete", has: null, claimed: false, invited: true, coachPaying: true, elite: true, healthAvailable: true, pushAvailable: true });
 show("Invité, coach gratuit, web", { role: "athlete", has: null, claimed: false, invited: true, coachPaying: false, elite: true, pushAvailable: true });
-show("Coach", { role: "coach", has: "generate", claimed: false, invited: false, elite: true, pushAvailable: true });
+show("Coach direct, généré, iOS", { role: "coach", has: "generate", claimed: false, invited: false, elite: true, pushAvailable: true });
+show("Coach claimé, ordinateur", { role: "coach", has: null, claimed: true, invited: false, elite: true });
 show("Génération ratée", { role: "athlete", has: "generate", claimed: false, invited: false, elite: true, programReady: false });
 
 console.log(`\n${checks - failures}/${checks} vérifications OK`);

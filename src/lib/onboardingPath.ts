@@ -9,7 +9,9 @@
      Programme claimé : mêmes écrans sans les questions de programme.
      Invité par un coach : value_intro → decision_2a → account → ob_health → ob_checkin → ob_notif →
                        ob_pay (seulement si le coach ne paie pas).
-     Coach : inchangé. */
+     Coach (2026-10-19) : value_intro → decision_2b → account → ob_sport → ob_count → questions
+                       programme → ob_when → ob_mirror → ob_control → ob_invite → ob_notif → ob_pay
+                       (claimé : ob_count seul avant ob_when). Ni Apple Santé, ni check-in, ni semaine. */
 
 export type Role = "athlete" | "coach";
 export type ObHas = "import" | "generate" | "later" | null;
@@ -21,7 +23,9 @@ export type StepId =
   // Questions post-signup (2026-10-05) : la configuration du « device » (le programme).
   | "ob_sport" | "ob_program" | "ob_import" | "ob_goal" | "ob_weak" | "ob_days" | "ob_invite"
   // Parcours Elite (2026-10-17).
-  | "ob_when" | "ob_mirror" | "ob_health" | "ob_checkin" | "ob_week" | "ob_notif" | "ob_pay";
+  | "ob_when" | "ob_mirror" | "ob_health" | "ob_checkin" | "ob_week" | "ob_notif" | "ob_pay"
+  // Parcours Elite coach (2026-10-19) : taille du groupe, puis Coach Control démo.
+  | "ob_count" | "ob_control";
 
 export const ATHLETE_PATH: StepId[] = ["value_intro", "decision_2a", "account"];
 export const COACH_PATH: StepId[] = ["value_intro", "decision_2b", "account"];
@@ -34,7 +38,9 @@ export const INVITE_ATHLETE_ELITE_PATH: StepId[] = ["value_intro", "decision_2a"
 
 /* Écrans propres au parcours Elite, dans l'ordre. On ne revient jamais d'un de ces écrans vers les
    questions de programme : le programme est déjà en cours de création à partir de ob_when. */
-export const ELITE_STEPS: StepId[] = ["ob_when", "ob_mirror", "ob_health", "ob_checkin", "ob_week", "ob_notif", "ob_pay"];
+export const ELITE_STEPS: StepId[] = ["ob_when", "ob_mirror", "ob_health", "ob_checkin", "ob_week", "ob_control", "ob_notif", "ob_pay"];
+/* Questions qui construisent le programme : un écran Elite n'y revient jamais en arrière. */
+export const PROGRAM_QUESTION_STEPS: StepId[] = ["ob_sport", "ob_program", "ob_import", "ob_goal", "ob_weak", "ob_days"];
 
 export interface PathOptions {
   role: Role;
@@ -61,7 +67,7 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
   const invited = isInvitedAthlete(o);
   const coach = o.role === "coach";
 
-  if (!o.elite || coach) {
+  if (!o.elite) {
     if (invited) return INVITE_ATHLETE_PATH;
     const base = o.claimed ? (coach ? PROGRAM_COACH_PATH : PROGRAM_ATHLETE_PATH) : (coach ? COACH_PATH : ATHLETE_PATH);
     const post: StepId[] = [];
@@ -71,6 +77,22 @@ export function buildOnboardingPath(o: PathOptions): StepId[] {
       else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
     }
     if (coach) post.push("ob_invite");
+    return [...base, ...post];
+  }
+
+  if (coach) {
+    const base = o.claimed ? PROGRAM_COACH_PATH : COACH_PATH;
+    const post: StepId[] = [];
+    if (!o.claimed) post.push("ob_sport");
+    post.push("ob_count");
+    if (!o.claimed) {
+      post.push("ob_program");
+      if (o.has === "import") post.push("ob_import");
+      else if (o.has !== "later") post.push("ob_goal", "ob_weak", "ob_days");
+    }
+    post.push("ob_when", "ob_mirror", "ob_control", "ob_invite");
+    if (o.pushAvailable) post.push("ob_notif");
+    post.push("ob_pay");
     return [...base, ...post];
   }
 

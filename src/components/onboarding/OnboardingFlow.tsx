@@ -25,8 +25,8 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
-import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, type ObWhen, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
+import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { APP_STORE_URL } from "@/lib/pwaInstall";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
@@ -472,6 +472,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obWhen, setObWhen] = useState<ObWhen | null>(null);
   // Lu par completeProfile(), qui peut tourner en arrière-plan après le clic sur ob_when.
   const obWhenRef = useRef<ObWhen | null>(null);
+  // Parcours Elite coach (2026-10-19) : même question vécue côté coach, et taille du groupe.
+  const [obWhenCoach, setObWhenCoach] = useState<ObWhenCoach | null>(null);
+  const obWhenCoachRef = useRef<ObWhenCoach | null>(null);
+  const [obCount, setObCount] = useState<ObCount | null>(null);
   const [obHealthBusy, setObHealthBusy] = useState(false);
   const [obHealthError, setObHealthError] = useState<string | null>(null);
   const [obCheckinBusy, setObCheckinBusy] = useState(false);
@@ -864,7 +868,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       freq_target:        (obTrainingDays ?? trainingDays).length || null,
       training_days:      (obTrainingDays ?? trainingDays).length ? (obTrainingDays ?? trainingDays) : null,
       objective:          obGoal || goal || null,
-      frustration:        role === "athlete" ? (obWhenRef.current || frustration || null) : null,
+      frustration:        role === "athlete" ? (obWhenRef.current || frustration || null) : (obWhenCoachRef.current ? `coach_${obWhenCoachRef.current}` : null),
       coaching_challenge: role === "coach"   ? (coachingChallenge || null) : null,
     }, { onConflict: "user_id" });
 
@@ -934,6 +938,13 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (obSport) return obSport;
     if (obCustom) return obCustom.status === "failed" ? obCustom.text : obCustom.sportLabel;
     return "";
+  }
+  // Séances par semaine du programme (constat coach) : jours choisis, ou ceux du programme claimé/importé.
+  function obProgramDays(): number {
+    const tpl = hasClaimedProgram ? wizardTemplate : obHas === "import" ? obImportTemplate : null;
+    const fromTpl = tpl?.weeks?.[0] ? Object.values(tpl.weeks[0]).filter(v => (v as unknown[]).length > 0).length : 0;
+    if (fromTpl) return fromTpl;
+    return obHas === "generate" && obDays.length ? obDays.length : 4;
   }
   function obSportLabel(): string {
     const e = catalogEntry(obSport);
@@ -1066,13 +1077,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           if (role === "coach" && demoAthleteId) await assignDemoProgram(demoAthleteId, built.sport);
         }
       }
-      if (role === "coach") {
-        const rows = obInvites.filter(r => /\S+@\S+\.\S+/.test(r.email.trim()));
-        await Promise.all(rows.map(r => fetch("/api/invite/create", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ athleteEmail: r.email.trim(), athleteName: r.name.trim() || undefined }),
-        }).catch(() => null)));
-      }
+      // Parcours Elite : la préparation part avant ob_invite, les invitations partent en quittant cet écran.
+      if (role === "coach" && !elite) await sendObInvites();
       // Sport connu maintenant (questions post-signup) : les emails suivants l'utilisent.
       fetch("/api/brevo/sport", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -1090,6 +1096,14 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       }
       return savedProgramIdRef.current;
     }
+  }
+
+  async function sendObInvites() {
+    const rows = obInvites.filter(r => /\S+@\S+\.\S+/.test(r.email.trim()));
+    await Promise.all(rows.map(r => fetch("/api/invite/create", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteEmail: r.email.trim(), athleteName: r.name.trim() || undefined }),
+    }).catch(() => null)));
   }
 
   /* Séances à venir du programme qu'on vient d'assigner (écran semaine). false = pas de programme
@@ -1806,10 +1820,10 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <div style={{ textAlign: "center", color: "#171b1f" }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
-            {(obHas === "later" && !hasClaimedProgram) || (elite && role === "athlete") ? "Ouverture de ton espace…" : "Préparation de ton programme…"}
+            {(obHas === "later" && !hasClaimedProgram) || elite ? "Ouverture de ton espace…" : "Préparation de ton programme…"}
           </div>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Ça prend quelques secondes</div>
-          {obHas === "generate" && !hasClaimedProgram && !(elite && role === "athlete") && <div style={{ maxWidth: 420, margin: "0 auto" }}>{obRecapCard("Ton programme")}</div>}
+          {obHas === "generate" && !hasClaimedProgram && !elite && <div style={{ maxWidth: 420, margin: "0 auto" }}>{obRecapCard("Ton programme")}</div>}
         </div>
       </OnboardingBackground>
     );
@@ -1823,7 +1837,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     /* Parcours Elite : jamais de retour d'un écran Elite vers les questions de programme (le
        programme est déjà en cours de création à partir de ob_when). */
     const prevStep = idx > 0 ? post[idx - 1] : null;
-    const backBlocked = !!prevStep && ELITE_STEPS.includes(currentStep) && !ELITE_STEPS.includes(prevStep);
+    const backBlocked = !!prevStep && ELITE_STEPS.includes(currentStep) && PROGRAM_QUESTION_STEPS.includes(prevStep);
     const back = prevStep && !backBlocked ? () => setStepIdx(path.indexOf(prevStep)) : undefined;
     // Bandeau photo : le sport choisi (ou reconnu), sinon le programme claimé, sinon l'image par défaut.
     const cover = sportCover(obSport || matched?.value) ?? claimedCover ?? DEFAULT_ONBOARDING_COVER;
@@ -1938,6 +1952,45 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       obAdvance(undefined, ok);
     };
 
+    const letterIcon = (k: number) => <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>;
+    if (currentStep === "ob_count") {
+      const chooseCount = (v: ObCount) => {
+        setObCount(v);
+        posthog.capture("onboarding_count_answered", { answer: v });
+        posthog.setPersonProperties({ team_size: v });
+        obAdvance();
+      };
+      return (
+        <QuestionShell {...common}
+          title="Combien de sportifs suis-tu ?"
+          sub="Leur accès est gratuit. Ton abonnement couvre tout le groupe."
+          onSkip={() => obAdvance()}>
+          {COUNT_OPTIONS.map(c => (
+            <OptionCard key={c.value} icon="👥" label={c.label} on={obCount === c.value} onClick={() => chooseCount(c.value)} />
+          ))}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_when" && coach) {
+      const chooseWhenCoach = (v: ObWhenCoach) => {
+        setObWhenCoach(v); obWhenCoachRef.current = v;
+        posthog.capture("onboarding_when_answered", { answer: `coach_${v}`, role });
+        if (eliteUid) {
+          supabase.from("profiles").update({ frustration: `coach_${v}` }).eq("user_id", eliteUid)
+            .then(({ error }) => { if (error) console.error("[ob_when] frustration update error:", error); });
+        }
+        obAdvance();
+      };
+      return (
+        <QuestionShell {...common}
+          title={<>Un de tes sportifs arrive cuit à une séance dure. <span style={{ color: "#d44000" }}>Tu le découvres quand ?</span></>}
+          onSkip={() => obAdvance()}>
+          {WHEN_OPTIONS_COACH.map((w, k) => (
+            <OptionCard key={w.value} label={w.label} on={obWhenCoach === w.value} onClick={() => chooseWhenCoach(w.value)} icon={letterIcon(k)} />
+          ))}
+        </QuestionShell>
+      );
+    }
     if (currentStep === "ob_when") {
       const chooseWhen = (v: ObWhen) => {
         setObWhen(v); obWhenRef.current = v;
@@ -1956,6 +2009,36 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             <OptionCard key={w.value} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)}
               icon={<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>} />
           ))}
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_mirror" && coach) {
+      return (
+        <QuestionShell {...common} dark eyebrow="Ton constat" title={mirrorTitleCoach(obWhenCoach)}
+          onSkip={() => obAdvance()}
+          cta={{ label: "Adopter l'autorégulation", onClick: () => obAdvance() }}>
+          <MirrorBody when={obWhenCoach} coach={{ count: obCount, days: obProgramDays() }} />
+        </QuestionShell>
+      );
+    }
+    if (currentStep === "ob_control") {
+      // Le programme du coach (créé en arrière-plan depuis ob_when), sinon les séances génériques de l'AHA.
+      const ready = obProgramOk !== null;
+      const pool = (builtRef.current?.template.weeks ?? []).flatMap((w, wi) => Object.values(w).flat().map(x => ({ x: x as SessionTemplate, wi })))
+        .filter(({ x }) => (x.target_difficulty ?? 0) > 0 && x.type !== "test")
+        .map(({ x, wi }) => ({ wi, s: { name: x.name, notes: x.notes ?? null, target_difficulty: x.target_difficulty as number } as ControlSession }));
+      const pick = (list: typeof pool, dir: 1 | -1) => list.length ? list.reduce((a, b) => (b.s.target_difficulty - a.s.target_difficulty) * dir > 0 ? b : a).s : null;
+      // Semaine 1 d'abord (continuité avec son programme), tout le programme si elle n'a pas de vraie séance dure/légère.
+      const week1 = pool.filter(p => p.wi === 0);
+      const hard = pick(week1.filter(p => p.s.target_difficulty >= 7), 1) ?? pick(pool, 1) ?? { name: demoHardest.name, notes: demoHardest.notes ?? null, target_difficulty: demoHardest.target_difficulty ?? 8 };
+      const easy = pick(week1.filter(p => p.s.target_difficulty <= 4), -1) ?? pick(pool, -1) ?? { name: demoLightest.name, notes: demoLightest.notes ?? null, target_difficulty: demoLightest.target_difficulty ?? 3 };
+      return (
+        <QuestionShell {...common} dark eyebrow="Coach Control · demain matin"
+          title="Ta séance, quatre sportifs, quatre décisions."
+          sub="Sportifs de démo : les tiens les remplacent dès leur premier check-in."
+          onSkip={() => obAdvance()}
+          cta={{ label: "Je veux ça pour mon groupe", onClick: () => obAdvance(), busy: !ready }}>
+          {ready ? <ControlStepBody hard={hard} easy={easy} /> : <div style={{ minHeight: 320 }} />}
         </QuestionShell>
       );
     }
@@ -2071,42 +2154,44 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         };
         return (
           <QuestionShell {...common}
-            title="Reçois ta séance chaque matin sur ton iPhone."
+            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : "Reçois ta séance chaque matin sur ton iPhone."}
             sub={invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
             onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
               ? { label: "Télécharger dans l'App Store", store: true, onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
-            <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} />
+            <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} />
           </QuestionShell>
         );
       }
       return (
         <QuestionShell {...common}
-          title={`Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
+          title={coach ? "Sois prévenu quand un sportif a besoin de toi." : `Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
           onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard" skipBottom
           cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
-          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} />
+          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} />
         </QuestionShell>
       );
     }
     if (currentStep === "ob_pay") {
       const done = () => { if (eliteUid) finishOnboarding(eliteUid); };
       const label = obSportLabel() || (hasClaimedProgram ? claimedProgramName ?? "" : "");
-      const headline = invitedAthlete
+      const headline = coach
+        ? "Ton espace est prêt. ThePerfClub ajuste la séance de chacun de tes sportifs, chaque matin."
+        : invitedAthlete
         ? `${coachInviteName || "Ton coach"} prépare tes séances. ThePerfClub les ajuste à ta forme chaque matin.`
         : `Ton programme${label ? ` ${label}` : ""} est prêt. ThePerfClub l'ajuste à ta forme chaque matin.`;
       return (
         <OnboardingBackground variant="dark">
           {obPayStage === "priming" ? (
-            <PrimingJourneyModal mode="athlete" billing={obBilling} setBilling={setObBilling} allowDismiss
+            <PrimingJourneyModal mode={coach ? "coach" : "athlete"} billing={obBilling} setBilling={setObBilling} allowDismiss
               onContinue={() => setObPayStage("paywall")}
               onDismiss={() => { posthog.capture("onboarding_pay_free"); done(); }}
               onPurchased={() => { posthog.capture("onboarding_pay_purchased"); done(); }}
               headline={headline} sub={null} name={name.trim() || undefined}
-              athleteSelfId={invitedAthlete ? undefined : eliteUid ?? undefined} />
+              athleteSelfId={invitedAthlete || coach ? undefined : eliteUid ?? undefined} />
           ) : (
-            <PaywallModal mode="athlete" allowDismiss initialBilling={obBilling}
+            <PaywallModal mode={coach ? "coach" : "athlete"} allowDismiss initialBilling={obBilling}
               onClose={() => setObPayStage("priming")}
               onSuccess={() => { posthog.capture("onboarding_pay_purchased"); done(); }} />
           )}
@@ -2120,7 +2205,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title="Invite tes sportifs"
           sub="Tu peux leur créer des séances avant même qu'ils arrivent."
           onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
-          cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => obAdvance() }}>
+          cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => { if (elite && hasEmail) void sendObInvites(); obAdvance(); } }}>
           <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} />
         </QuestionShell>
       );

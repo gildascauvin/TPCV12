@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import DecisionRing from "@/components/sessions/DecisionRing";
+import DecisionRing, { decisionRingState } from "@/components/sessions/DecisionRing";
+import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
+import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
 import { computeAutoregSuggestion, zoneRange } from "@/lib/autoregulation";
@@ -59,10 +61,69 @@ const SCIENCE: Record<ObWhen, { title: string; n: string; text: string; source: 
 export function mirrorTitle(when: ObWhen | null): string {
   return SCIENCE[when ?? "force"].title;
 }
-export function MirrorBody({ when }: { when: ObWhen | null }) {
-  const x = SCIENCE[when ?? "force"];
+
+/* ── Coach (2026-10-19) : même cadrage, vécu côté coach. Réponse enregistrée dans profiles.frustration
+   préfixée "coach_" pour ne jamais se confondre avec celles d'un sportif. ── */
+export type ObWhenCoach = "avant" | "pendant" | "apres" | "jamais";
+export const WHEN_OPTIONS_COACH: { value: ObWhenCoach; label: string }[] = [
+  { value: "avant", label: "Avant, il me prévient" },
+  { value: "pendant", label: "Pendant la séance" },
+  { value: "apres", label: "Après, en voyant ses résultats" },
+  { value: "jamais", label: "Souvent, je ne le sais pas" },
+];
+type CoachScienceKey = "c_avant" | "c_vu" | "c_jamais";
+const SCIENCE_COACH: Record<CoachScienceKey, { title: string; n: string; text: string; source: string; quote: string }> = {
+  c_avant: {
+    title: "Il te prévient. Mais vit-il la même séance que toi ?",
+    n: "27",
+    text: "études le montrent : coach et sportif ne jugent pas la même séance de la même façon. Le plus souvent, la séance « facile » ne l'est pas pour le sportif.",
+    source: "Inoue et al. · Sports Medicine Open, 2022",
+    quote: "Ce qu'il te dit, c'est quand il y pense. Son check-in, c'est chaque matin.",
+  },
+  c_vu: {
+    title: "Tu prévois une séance. Ils en vivent une autre.",
+    n: "2 446",
+    text: "séances de jeunes footballeurs : les joueurs les ont trouvées plus dures que ce que leur coach avait prévu.",
+    source: "Brink et al. · Int J Sports Physiol Perform, 2014",
+    quote: "L'écart se voit avant la séance, pas après. À condition de le demander.",
+  },
+  c_jamais: {
+    title: "Leur sommeil et leur stress pèsent autant que ta séance.",
+    n: "536",
+    text: "joueuses de netball suivies : un mauvais sommeil et une mauvaise récupération allaient de pair avec plus de blessures et de maladies.",
+    source: "Horgan et al. · Scand J Med Sci Sports, 2021",
+    quote: "Conclusion des auteurs : suivre chaque jour le sommeil et la récupération physique et mentale.",
+  },
+};
+const coachScienceKey = (w: ObWhenCoach | null): CoachScienceKey => w === "avant" ? "c_avant" : w === "jamais" ? "c_jamais" : "c_vu";
+export function mirrorTitleCoach(when: ObWhenCoach | null): string {
+  return SCIENCE_COACH[coachScienceKey(when)].title;
+}
+
+/* ── ob_count : la taille du groupe. Sert au chiffre du constat coach. ── */
+export type ObCount = "1-5" | "6-15" | "16-30" | "30+";
+export const COUNT_OPTIONS: { value: ObCount; label: string; n: number }[] = [
+  { value: "1-5", label: "1 à 5 sportifs", n: 3 },
+  { value: "6-15", label: "6 à 15 sportifs", n: 10 },
+  { value: "16-30", label: "16 à 30 sportifs", n: 22 },
+  { value: "30+", label: "Plus de 30", n: 40 },
+];
+
+export function MirrorBody({ when, coach }: { when: ObWhen | ObWhenCoach | null; coach?: { count: ObCount | null; days: number } }) {
+  const x = coach ? SCIENCE_COACH[coachScienceKey(when as ObWhenCoach | null)] : SCIENCE[(when as ObWhen | null) ?? "force"];
+  const n = coach ? (COUNT_OPTIONS.find(c => c.value === coach.count)?.n ?? 10) : 0;
   return (
     <div>
+      {coach && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 64, fontWeight: 800, letterSpacing: "-.05em", lineHeight: .95, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+            {n * coach.days}<span style={{ fontSize: 17, fontWeight: 600, color: "rgba(255,255,255,.55)", letterSpacing: "-.01em", marginLeft: 8 }}>séances par semaine</span>
+          </div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, color: "rgba(255,255,255,.55)", marginTop: 10, lineHeight: 1.6 }}>
+            {n} sportifs × {coach.days} séances, prescrites sans savoir comment chacun a dormi
+          </div>
+        </div>
+      )}
       <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 16, padding: "16px 16px 14px", marginBottom: 16 }}>
         <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".14em", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 8 }}>Ce que dit la science</div>
         <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-.03em", color: "#ff8a55", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{x.n}</div>
@@ -197,11 +258,16 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
 
 /* ── ob_notif : la carte de prod (NotificationPrompt), version écran. ── */
 export const NOTIF_HOURS = [6, 7, 8, 9];
-export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: {
+export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach }: {
   hour: number; setHour: (h: number) => void; sessionName: string | null; coachName: string | null; error?: string | null;
+  /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
+  coach?: boolean;
 }) {
   const clock = `${String(hour).padStart(2, "0")}:00`;
-  const pushes = [
+  const pushes = coach ? [
+    { title: "Thomas : récup fragile, séance dure prévue", body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
+    { title: "2 sportifs à regarder ce matin", body: "Thomas M. · Léa P.", when: clock },
+  ] : [
     { title: "Ta 1re séance ajustée t'attend", body: "Fais ton check-in : ta séance s'adapte à ta forme du jour.", when: "demain" },
     { title: sessionName ?? "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
   ];
@@ -209,7 +275,7 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
     <div>
       {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit ta forme dès ton check-in.</p>}
       {/* L'heure d'abord : c'est le seul choix de l'écran, il doit être visible sans défiler. */}
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>À quelle heure ?</div>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{coach ? "Le résumé du matin, à quelle heure ?" : "À quelle heure ?"}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
         {NOTIF_HOURS.map(h => (
           <button key={h} type="button" onClick={() => setHour(h)}
@@ -242,8 +308,8 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
    navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
-export function AppPushStepBody({ desktop, hour, setHour, sessionName }: {
-  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null;
+export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach }: {
+  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean;
 }) {
   return (
     <div>
@@ -251,10 +317,74 @@ export function AppPushStepBody({ desktop, hour, setHour, sessionName }: {
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 16, border: `1px solid ${LINE}`, background: "#fff", marginBottom: 18 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/app-store-qr.svg" alt="QR code de l'App Store" width={92} height={92} style={{ flexShrink: 0, borderRadius: 8 }} />
-          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : ton plan t&apos;attend.</span>
+          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
         </div>
       )}
-      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} />
+      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} />
+    </div>
+  );
+}
+
+/* ── ob_control (coach) : le déclic. Son programme appliqué à 4 sportifs de démo, chacun avec la
+   décision du VRAI moteur (syntheticBaselineFor + computeAutoregSuggestion), sur le radar du Coach
+   Control. Sportifs de démo, présentés comme tels ; les siens les remplacent dès leur check-in. ── */
+export interface ControlSession { name: string; notes: string | null; target_difficulty: number }
+const CONTROL_TEAM: { id: string; name: string; score: number | null; pick: "hard" | "easy" }[] = [
+  { id: "thomas", name: "Thomas M.", score: 30, pick: "hard" },
+  { id: "ines", name: "Inès R.", score: 84, pick: "easy" },
+  { id: "hugo", name: "Hugo B.", score: 80, pick: "hard" },
+  { id: "lea", name: "Léa P.", score: null, pick: "hard" },
+];
+
+export function ControlStepBody({ hard, easy }: { hard: ControlSession; easy: ControlSession }) {
+  const team = CONTROL_TEAM.map(a => {
+    const s = a.pick === "hard" ? hard : easy;
+    const baseline = a.score == null ? null : syntheticBaselineFor(a.score);
+    const sug = a.score == null ? null : computeAutoregSuggestion(a.score, s.target_difficulty, baseline);
+    const x = a.score == null ? null : Math.round(baseline?.relativeScore ?? a.score);
+    return { ...a, s, sug, x };
+  });
+  const [open, setOpen] = useState(team.find(t => t.sug)?.id ?? team[0].id);
+  const o = team.find(t => t.id === open) ?? team[0];
+  const points: RadarPoint[] = team.filter(t => t.x != null).map(t => ({
+    id: t.id, name: t.name, score: t.x, diff: t.s.target_difficulty,
+    ring: decisionRingState([{ done: false, target_difficulty: t.s.target_difficulty }], t.sug), hideZone: !t.sug,
+  }));
+  const pill = (t: typeof team[number]) => !t.sug ? null : t.sug.dir === "low"
+    ? { label: "⬇ Alléger", bg: "#d44000", fg: "#fff" } : { label: "⬆ Surcharger", bg: "rgba(47,158,68,.18)", fg: "#8fe0b0" };
+  const decide = team.filter(t => t.sug);
+  const inPlan = team.filter(t => !t.sug);
+  const row = (t: typeof team[number], k: number) => {
+    const p = pill(t);
+    return (
+      <button key={t.id} type="button" onClick={() => setOpen(t.id)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", padding: "11px 14px", border: 0, borderTop: k ? "1px solid rgba(255,255,255,.08)" : 0,
+          background: open === t.id ? "rgba(255,255,255,.06)" : "transparent", color: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+        <span style={{ minWidth: 0 }}>
+          <b style={{ display: "block", fontSize: 14 }}>{t.name}</b>
+          <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.55)", marginTop: 2 }}>{t.x == null ? "Pas encore de check-in" : t.s.name}</span>
+        </span>
+        {p && <span style={{ flexShrink: 0, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 6, background: p.bg, color: p.fg }}>{p.label}</span>}
+      </button>
+    );
+  };
+  const box = (label: string, list: typeof team) => list.length === 0 ? null : (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 8 }}>{label}</div>
+      <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, overflow: "hidden" }}>{list.map(row)}</div>
+    </div>
+  );
+  const tpl = { name: o.s.name, notes: o.s.notes, target_difficulty: o.s.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
+  const pct = o.sug?.reco ?? 0;
+  return (
+    <div>
+      <CoachRadar points={points} onSelect={setOpen} />
+      {box("À décider maintenant", decide)}
+      {box("Dans le plan", inPlan)}
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", margin: "20px 0 8px" }}>
+        La séance de {o.name.split(" ")[0]}{o.x == null ? ", en attente de son check-in" : pct ? ", ajustée" : ", telle que prévue"}
+      </div>
+      <SessionTemplateCard session={tpl} adjustPct={pct || null} gaugeOverride={pct ? adjustDifficulty(o.s.target_difficulty, pct) : undefined} cardStyle={{ cursor: "default" }} />
     </div>
   );
 }
