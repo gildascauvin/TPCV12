@@ -2075,7 +2075,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             sub={invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
             onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
-              ? { label: "Télécharger l'app iPhone", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
+              ? { label: "Télécharger dans l'App Store", store: true, onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
             <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} />
           </QuestionShell>
