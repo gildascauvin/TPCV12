@@ -106,7 +106,7 @@ export function HealthStepBody({ error }: { error?: string | null }) {
 /* ── ob_week : le déclic. Le même programme, trois matins différents (vraie règle de reco). ── */
 export interface WeekSession { id: string; date: string; name: string; notes: string | null; target_difficulty: number | null }
 type Morning = "cuit" | "today" | "forme";
-const MORNING_SCORE: Record<Exclude<Morning, "today">, number> = { cuit: 28, forme: 80 };
+const MORNING_SCORE: Record<Exclude<Morning, "today">, number> = { cuit: 28, forme: 92 };
 
 function dayLabel(date: string, today: string): string {
   if (date === today) return "Aujourd'hui";
@@ -139,7 +139,11 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
     const zone = sug ? zoneRange(value, sug.dir) : zoneRange(planned, "low");
     return { sug, pct, value, zone, points: value - planned };
   };
-  const a0 = first ? adjust(first.target_difficulty ?? 5) : null;
+  /* L'anneau montre la 1re séance que ce matin-là fait vraiment bouger (une séance légère ne
+     s'allège pas même cuit, une séance dure ne se surcharge pas même en forme) ; sinon la 1re. */
+  const pool = sessions.filter(s => (s.target_difficulty ?? 0) > 0);
+  const focus = pool.find(s => adjust(s.target_difficulty ?? 5).points !== 0) ?? first;
+  const a0 = focus ? adjust(focus.target_difficulty ?? 5) : null;
 
   return (
     <div>
@@ -160,17 +164,19 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
           </button>
         ))}
       </div>
-      {first && a0 && (
+      {focus && a0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 24, background: DARK_CARD_BG, border: "1px solid rgba(255,255,255,.10)", marginBottom: 16 }}>
           <div style={{ flexShrink: 0 }}>
             <DecisionRing zoneLow={a0.zone.zoneLow} zoneHigh={a0.zone.zoneHigh} recoDir={a0.sug?.dir} value={a0.value}
-              plannedMarker={first.target_difficulty} readOnly onChange={() => {}} size={132} hideHint />
+              plannedMarker={focus.target_difficulty} readOnly onChange={() => {}} size={132} hideHint />
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.8)" }}>
             <b style={{ display: "block", fontSize: 16, color: wellnessColor(score), marginBottom: 4 }}>Forme {score}/100</b>
-            {first.name}, RPE prévu {first.target_difficulty}.<br />
+            {dayLabel(focus.date, today)} : {focus.name}, RPE prévu {focus.target_difficulty}.<br />
             {a0.points < 0 ? `On allège de ${-a0.points} point${a0.points < -1 ? "s" : ""}.`
               : a0.points > 0 ? `On surcharge de ${a0.points} point${a0.points > 1 ? "s" : ""}.`
+              : morning === "forme" ? "Le plan tient : en forme, seules les séances légères se surchargent."
+              : morning === "cuit" ? "Le plan tient : cette séance est déjà légère."
               : "Le plan tient tel quel."}
           </div>
         </div>
