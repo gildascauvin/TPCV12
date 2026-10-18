@@ -1963,7 +1963,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       return (
         <QuestionShell {...common} dark eyebrow="Ton constat" title={mirrorTitle(obWhen)}
           onSkip={() => obAdvance()}
-          cta={{ label: "Voir ce que ça change", onClick: () => obAdvance() }}>
+          cta={{ label: "Adopter l'autorégulation", onClick: () => obAdvance() }}>
           <MirrorBody when={obWhen} />
         </QuestionShell>
       );
@@ -2038,7 +2038,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common} dark eyebrow={de ? `Ta semaine ${de}` : "Ta semaine"}
           title="Le même programme. Trois matins différents."
           onSkip={() => obAdvance()}
-          cta={{ label: "C'est ce qu'il me faut", onClick: () => obAdvance() }}>
+          cta={{ label: "Continuer avec ce programme", onClick: () => obAdvance() }}>
           <WeekStepBody sessions={obWeekSessions} program={builtRef.current} checkinScore={obCheckinScore} acclimatation={!monday} today={today} />
         </QuestionShell>
       );
