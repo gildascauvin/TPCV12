@@ -22,10 +22,12 @@ const MUTED = "#6b7177";
 const LINE = "rgba(0,0,0,.10)";
 const PAGE = "#f1f0ee";
 
-export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLabel = "Passer", onBack, cta, children, dark = false, eyebrow }: {
+export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLabel = "Passer", skipBottom = false, onBack, cta, children, dark = false, eyebrow }: {
   index: number; total: number; cover: string;
   title: React.ReactNode; sub?: React.ReactNode;
   onSkip?: () => void; skipLabel?: string; onBack?: () => void;
+  /* « Plus tard » sous le bouton principal (écrans de permission : Apple Santé, notifications). */
+  skipBottom?: boolean;
   cta?: { label: string; onClick: () => void; disabled?: boolean; busy?: boolean };
   children: React.ReactNode;
   /* Écran de valeur sans question (parcours Elite, 2026-10-17) : fond sombre de l'app, sans photo. */
@@ -48,7 +50,7 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
           <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
         ) : <span style={{ width: 34 }} />}
         <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: headInk }}>{index + 1} / {total}</span>
-        {onSkip && (
+        {onSkip && !skipBottom && (
           <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: headInk, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
         )}
       </div>
@@ -71,7 +73,7 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
       {!dark && (
         <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: "calc(16px + env(safe-area-inset-top, 0px)) 20px 0" }}>{header}</div>
       )}
-      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? "16px 20px 140px" : `${isMd ? 196 : 136}px 20px 140px`, color: ink }}>
+      <div style={{ position: "relative", maxWidth: col, margin: "0 auto", padding: dark ? `16px 20px ${skipBottom ? 180 : 140}px` : `${isMd ? 196 : 136}px 20px ${skipBottom ? 180 : 140}px`, color: ink }}>
         {dark && <div style={{ marginBottom: 28 }}>{header}</div>}
         {eyebrow && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: dark ? "#ff8a55" : ORANGE, marginBottom: 8 }}>{eyebrow}</div>}
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, letterSpacing: "-.02em", lineHeight: 1.2, margin: "0 0 8px", textWrap: "balance" as React.CSSProperties["textWrap"] }}>{title}</h1>
@@ -84,6 +86,12 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
             style={{ display: "block", width: "100%", maxWidth: col - 40, margin: "0 auto", padding: "16px", borderRadius: 999, border: 0, background: cta.disabled ? (dark ? "rgba(255,255,255,.12)" : "#e8e4df") : ORANGE, color: cta.disabled ? (dark ? "rgba(255,255,255,.4)" : "#a3a8ad") : "#fff", fontWeight: 800, fontSize: 16, cursor: cta.disabled ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: cta.busy ? .7 : 1 }}>
             {cta.busy ? "Un instant…" : cta.label}
           </button>
+          {onSkip && skipBottom && (
+            <button type="button" onClick={onSkip} disabled={cta.busy}
+              style={{ display: "block", margin: "10px auto 0", border: 0, background: "transparent", color: muted, fontWeight: 600, fontSize: 14, textDecoration: "underline", textUnderlineOffset: 3, cursor: "pointer", fontFamily: "inherit" }}>
+              {skipLabel}
+            </button>
+          )}
         </div>
       )}
     </div>

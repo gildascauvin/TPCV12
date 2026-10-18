@@ -26,7 +26,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, appPushSub, type ObWhen, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { WHEN_OPTIONS, MirrorBody, mirrorTitle, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, type ObWhen, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { APP_STORE_URL } from "@/lib/pwaInstall";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
@@ -1985,7 +1985,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common}
           title="Ta montre sait déjà comment tu as dormi."
           sub="Connecte Apple Santé : ton ressenti et tes mesures donnent une forme du jour bien plus juste."
-          onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} skipLabel="Plus tard"
+          onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
           cta={{ label: "Connecter Apple Santé", onClick: connect, busy: obHealthBusy }}>
           <HealthStepBody />
         </QuestionShell>
@@ -2016,7 +2016,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           <QuestionShell {...common}
             title="Comment tu te sens ce matin ?"
             sub="10 secondes, chaque matin : ta séance s'ajuste à ta réponse."
-            onSkip={obCheckinBusy ? undefined : () => { posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} skipLabel="Plus tard"
+            onSkip={obCheckinBusy ? undefined : () => { posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} skipLabel="Plus tard" skipBottom
             cta={{ label: "Faire mon check-in", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
             <div />
           </QuestionShell>
@@ -2067,8 +2067,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         return (
           <QuestionShell {...common}
             title="Reçois ta séance chaque matin sur ton iPhone."
-            sub={appPushSub(invitedAthlete ? coachInviteName : null)}
-            onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard"
+            sub={invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
+            onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
               ? { label: "Télécharger l'app iPhone", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
@@ -2079,7 +2079,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       return (
         <QuestionShell {...common}
           title={`Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
-          onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard"
+          onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard" skipBottom
           cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
           <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} />
         </QuestionShell>

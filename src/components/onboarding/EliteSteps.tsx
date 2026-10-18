@@ -203,11 +203,22 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
   const clock = `${String(hour).padStart(2, "0")}:00`;
   const pushes = [
     { title: "Ta 1re séance ajustée t'attend", body: "Fais ton check-in : ta séance s'adapte à ta forme du jour.", when: "demain" },
-    { title: sessionName ? `Aujourd'hui : ${sessionName}` : "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
+    { title: sessionName ?? "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
   ];
   return (
     <div>
       {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit ta forme dès ton check-in.</p>}
+      {/* L'heure d'abord : c'est le seul choix de l'écran, il doit être visible sans défiler. */}
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>À quelle heure ?</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+        {NOTIF_HOURS.map(h => (
+          <button key={h} type="button" onClick={() => setHour(h)}
+            style={{ padding: "10px 16px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: hour === h ? "#d44000" : "#171b1f",
+              border: hour === h ? "2px solid #d44000" : `1px solid ${LINE}`, background: hour === h ? "rgba(212,64,0,.06)" : "#fff" }}>
+            {h} h
+          </button>
+        ))}
+      </div>
       <div style={{ borderRadius: 24, padding: "18px 14px 14px", background: DARK_CARD_BG, marginBottom: 18 }}>
         <div style={{ textAlign: "center", color: "#fff", fontSize: 44, fontWeight: 300, letterSpacing: "-.02em", marginBottom: 10, fontVariantNumeric: "tabular-nums" }}>{clock}</div>
         {pushes.map(p => (
@@ -223,16 +234,6 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>À quelle heure ?</div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        {NOTIF_HOURS.map(h => (
-          <button key={h} type="button" onClick={() => setHour(h)}
-            style={{ padding: "10px 16px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 700, fontSize: 14, color: hour === h ? "#d44000" : "#171b1f",
-              border: hour === h ? "2px solid #d44000" : `1px solid ${LINE}`, background: hour === h ? "rgba(212,64,0,.06)" : "#fff" }}>
-            {h} h
-          </button>
-        ))}
-      </div>
       {error && <p style={{ fontSize: 13, color: "#b42318", marginTop: 12 }}>{error}</p>}
     </div>
   );
@@ -241,10 +242,6 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error }: 
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
    navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
-export function appPushSub(coachName: string | null): string {
-  const base = "Une notification à l'heure que tu choisis : 10 secondes de check-in et ta séance s'ajuste. Et si tu portes une montre, l'app lit Apple Santé : 30 jours relus, analyses dès aujourd'hui.";
-  return coachName ? `${base} ${coachName} voit ta forme dès ton check-in.` : base;
-}
 export function AppPushStepBody({ desktop, hour, setHour, sessionName }: {
   desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null;
 }) {
