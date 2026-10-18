@@ -1816,7 +1816,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   }
   if (currentStep.startsWith("ob_")) {
     const coach = role === "coach";
-    const post = path.slice(path.indexOf("account") + 1);
+    // Le paywall n'a ni compteur ni frise : on ne le compte pas, la frise finit sur le dernier écran.
+    const post: StepId[] = path.slice(path.indexOf("account") + 1).filter(st => st !== "ob_pay");
     const idx = Math.max(0, post.indexOf(currentStep));
     const matched = obCustom?.status === "matched" ? findCatalogEntry(obCustom.sportLabel) : null;
     /* Parcours Elite : jamais de retour d'un écran Elite vers les questions de programme (le
@@ -1836,7 +1837,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? "Quel sport pour ton programme ?" : "Quel est ton sport ?"}
           sub={coach ? "On personnalise ton programme selon le sport, les points forts et les faiblesses de tes sportifs." : "On personnalise tes séances selon ton sport, tes points forts et tes faiblesses."}
           onSkip={() => { setObSport(""); setObCustom(null); obAdvance(); }}
-          cta={obCustom ? { label: "Continuer →", onClick: () => obAdvance(), busy: obAnalyzing } : undefined}>
+          cta={obCustom ? { label: "Continuer", onClick: () => obAdvance(), busy: obAnalyzing } : undefined}>
           <SportStepBody
             value={obSport}
             customLabel={analyzed ? obCustom.sportLabel : null}
@@ -1867,7 +1868,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title="Importe ton programme"
           sub="Colle le texte, ou prends-le en photo."
           onSkip={() => { setObHas("later"); obAdvance("later"); }}
-          cta={{ label: "Importer →", onClick: obRunImport, disabled: !obImportText.trim() && !obImportFile, busy: obImportBusy }}>
+          cta={{ label: "Importer", onClick: obRunImport, disabled: !obImportText.trim() && !obImportFile, busy: obImportBusy }}>
           <ImportStepBody text={obImportText} onText={setObImportText} file={obImportFile} onFile={setObImportFile} error={obImportError} />
         </QuestionShell>
       );
@@ -1878,7 +1879,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         <QuestionShell {...common}
           title={coach ? "L'objectif de ton programme ?" : "Ton objectif pour les prochaines semaines ?"}
           onSkip={() => { setObGoal(null); obAdvance(); }}
-          cta={comp ? { label: "Continuer →", onClick: () => obAdvance(), disabled: !obDeadline } : undefined}>
+          cta={comp ? { label: "Continuer", onClick: () => obAdvance(), disabled: !obDeadline } : undefined}>
           {GOAL_OPTIONS.map(g => (
             <div key={g.value}>
               <OptionCard icon={g.icon} label={g.label} hint={g.hint} on={obGoal === g.value}
@@ -1897,7 +1898,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? "Les points à travailler en priorité dans ton programme ?" : "Tes points à travailler en priorité ?"}
           sub="2 maximum, on personnalise ton programme selon tes réponses."
           onSkip={() => { setObWeak([]); obAdvance(); }}
-          cta={{ label: "Continuer →", onClick: () => obAdvance() }}>
+          cta={{ label: "Continuer", onClick: () => obAdvance() }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {options.map(w => {
               const on = obWeak.includes(w.key);
@@ -1913,7 +1914,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title={coach ? "Quels jours d'entraînement dans ton programme ?" : "Quels jours tu t'entraînes ?"}
           sub={"Plusieurs choix possibles." + (obGoal === "competition" && obDeadline ? " La durée se cale sur ton échéance." : "")}
           onSkip={() => obAdvance()}
-          cta={{ label: "Créer mon programme →", onClick: () => obAdvance(), disabled: !obDays.length }}>
+          cta={{ label: "Créer mon programme", onClick: () => obAdvance(), disabled: !obDays.length }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {WEEK_DAY_LABELS.map((d, k) => {
               const on = obDays.includes(k);
@@ -1949,7 +1950,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       };
       return (
         <QuestionShell {...common}
-          title={<>Tu as mal dormi, et ta séance dure est prévue aujourd&apos;hui. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}>
+          title={<>Tu as mal dormi, et ta séance dure est prévue aujourd&apos;hui. <span style={{ color: "#d44000" }}>Tu fais quoi ?</span></>}
+          onSkip={() => obAdvance()}>
           {WHEN_OPTIONS.map((w, k) => (
             <OptionCard key={w.value} label={w.label} on={obWhen === w.value} onClick={() => chooseWhen(w.value)}
               icon={<span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: "1px solid rgba(0,0,0,.14)", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#6b7177" }}>{String.fromCharCode(65 + k)}</span>} />
@@ -2022,7 +2024,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             <div />
           </QuestionShell>
           {obCheckinOpen && !obCheckinBusy && (
-            <WellnessModal date={today} onSave={saveCheckin} onClose={() => setObCheckinOpen(false)} cancelLabel="Plus tard" />
+            <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard"
+              onClose={() => { setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} />
           )}
         </>
       );
@@ -2117,7 +2120,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           title="Invite tes sportifs"
           sub="Tu peux leur créer des séances avant même qu'ils arrivent."
           onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
-          cta={{ label: hasEmail ? "Envoyer les invitations →" : "Continuer →", onClick: () => obAdvance() }}>
+          cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => obAdvance() }}>
           <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} />
         </QuestionShell>
       );
