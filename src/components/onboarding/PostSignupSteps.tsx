@@ -49,7 +49,6 @@ export function QuestionShell({ index, total, cover, title, sub, onSkip, skipLab
         {onBack ? (
           <button type="button" onClick={onBack} aria-label="Retour" style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${line}`, background: dark ? "rgba(255,255,255,.06)" : "#fff", color: ink, cursor: "pointer", fontSize: 16 }}>←</button>
         ) : <span style={{ width: 34 }} />}
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".06em", color: headInk }}>{index + 1} / {total}</span>
         {onSkip && !skipBottom && (
           <button type="button" onClick={onSkip} style={{ marginLeft: "auto", border: 0, background: "transparent", color: headInk, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{skipLabel}</button>
         )}
