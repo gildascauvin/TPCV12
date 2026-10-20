@@ -12,6 +12,8 @@ import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import ScaleBars from "@/components/ui/ScaleBars";
+import { computeBehaviorCorrelations } from "@/lib/conseilsData";
+import type { WellnessDaily } from "@/types";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import type { PlannedIntensity } from "@/lib/plannedIntensity";
 
@@ -62,6 +64,64 @@ const SCALE_WORDS = {
   motivation: { labels: L("Pas du tout", "Très faible", "Faible", "Peu", "Moyenne", "Correcte", "Bonne", "Forte", "Très forte", "Au max"), inverted: false },
 } as const;
 type ScaleKey = keyof typeof SCALE_WORDS;
+
+/* Check-in augmenté (2026-10-20, POC "Notes en un tap", pistes 2 et 3) : seulement avec de l'historique.
+   Insight après la réponse, jamais avant (pas d'ancrage), et seulement si elle est rare : |z| ≥ 1,6
+   sur les 28 derniers jours (≥ 12 réponses) ET plus extrême que tous les jours des 7 derniers au moins.
+   Le stress est comparé sur le stress réel (10 = mauvais). */
+const INSIGHT_MIN_DAYS = 12;
+const INSIGHT_Z = 1.6;
+const INSIGHT_WORDS: Record<ScaleKey, { bad: string; good: string }> = {
+  sleep: { bad: "Ta pire nuit", good: "Ta meilleure nuit" },
+  stress: { bad: "Ton stress le plus haut", good: "Ton stress le plus bas" },
+  recovery: { bad: "Ton état physique le plus bas", good: "Ton meilleur état physique" },
+  motivation: { bad: "Ton envie la plus basse", good: "Ton envie la plus haute" },
+};
+/* Badge du coût d'un comportement : mêmes seuils et couleurs que la carte Comportements
+   (behaviorStatus, HomeAnalyticsSections.tsx), en version fond clair, sans les mots Aide / Pénalise
+   (demande de Gildas, la couleur suffit). */
+function CostBadge({ impact }: { impact: number }) {
+  const neutral = Math.abs(impact) < 0.3;
+  const pos = impact > 0;
+  const color = neutral ? "#7b7f82" : pos ? "#2f9e44" : "#d10000";
+  const bg = neutral ? "rgba(0,0,0,.05)" : pos ? "rgba(47,158,68,.12)" : "rgba(209,0,0,.09)";
+  const label = neutral ? "0 pt" : `${pos ? "+" : "−"}${Math.abs(impact).toFixed(1).replace(".", ",")} pts`;
+  return (
+    <span style={{ marginLeft: "auto", padding: "3px 8px", borderRadius: 999, background: bg, color, fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>
+  );
+}
+type HistoryRow = Pick<WellnessDaily, "date" | "sleep" | "stress" | "recovery" | "motivation" | "score" | "base_score" | "behaviors">;
+function daysBetween(a: string, b: string) {
+  return Math.round((new Date(`${b}T12:00:00`).getTime() - new Date(`${a}T12:00:00`).getTime()) / 86400000);
+}
+function sinceText(days: number) {
+  if (days >= 84) return "depuis 3 mois";
+  if (days >= 56) return "depuis 2 mois";
+  if (days >= 28) return "depuis un mois";
+  if (days >= 14) return `depuis ${Math.floor(days / 7)} semaines`;
+  return `depuis ${days} jours`;
+}
+export function notableInsight(key: ScaleKey, value: number, history: HistoryRow[], today: string): { text: string; bad: boolean } | null {
+  const rows = history.filter(h => h.date < today && h[key] != null).sort((a, b) => b.date.localeCompare(a.date));
+  const recent = rows.filter(h => daysBetween(h.date, today) <= 28);
+  if (recent.length < INSIGHT_MIN_DAYS) return null;
+  const vals = recent.map(h => h[key] as number);
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const sd = Math.max(0.75, Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length));
+  const z = (value - mean) / sd;
+  if (Math.abs(z) < INSIGHT_Z) return null;
+  const higher = z > 0;
+  // Dernier jour au moins aussi extrême dans le même sens : l'insight dit depuis quand ce n'était pas arrivé.
+  const last = rows.find(h => (higher ? (h[key] as number) >= value : (h[key] as number) <= value));
+  const since = last ? daysBetween(last.date, today) : daysBetween(rows[rows.length - 1].date, today) + 1;
+  if (since < 7) return null;
+  const bad = key === "stress" ? higher : !higher;
+  const w = INSIGHT_WORDS[key];
+  // L'historique lu s'arrête à 90 jours : au-delà, on ne peut pas dire « depuis le début ».
+  const beyond = since >= 85 ? "depuis plus de 3 mois" : "depuis le début de ton suivi";
+  const text = `${bad ? w.bad : w.good} ${last ? sinceText(since) : beyond}.`;
+  return { text, bad };
+}
 
 interface Props {
   date: string;
@@ -116,6 +176,31 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const [behaviors, setBehaviors] = useState<string[]>([]);
   const [motivation, setMotivation] = useState<number | null>(null);
   const advanceTimer = useRef<number | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [insight, setInsight] = useState<{ key: ScaleKey; text: string; bad: boolean } | null>(null);
+  const advanceDelay = useRef<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - 90);
+      const { data } = await supabase.from("wellness_daily")
+        .select("date, sleep, stress, recovery, motivation, score, base_score, behaviors")
+        .eq("user_id", user.id).lt("date", date).gte("date", since.toISOString().slice(0, 10));
+      if (alive && data) setHistory(data as HistoryRow[]);
+    })().catch(() => {});
+    return () => { alive = false; };
+  }, [date]);
+  useEffect(() => { setInsight(null); }, [step]);
+  /* Coût réel de chaque comportement, sur son historique (même calcul que la carte Comportements).
+     Rien tant qu'il n'y a pas au moins 12 check-ins : un compte neuf ne voit aucun chiffre. */
+  const behaviorCost: Record<string, number> = {};
+  if (history.length >= INSIGHT_MIN_DAYS) {
+    for (const c of computeBehaviorCorrelations(history as WellnessDaily[])) behaviorCost[c.key] = c.impact;
+  }
+  const hasCost = Object.keys(behaviorCost).length > 0;
   useEffect(() => () => { if (advanceTimer.current) window.clearTimeout(advanceTimer.current); }, []);
   /* Aperçu du wizard seulement : valeurs neutres tant que la question n'a pas de réponse. */
   const pv = { sleep: sleep ?? 7, stress: stress ?? 5, recovery: recovery ?? 7, motivation: motivation ?? 8 };
@@ -197,7 +282,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
       advanceTimer.current = null;
       if (step < total - 1) setStep((s) => s + 1);
       else handleSave(override);
-    }, 380);
+    }, advanceDelay.current ?? 380);
+    advanceDelay.current = null;
   }
   const answered = q === 0 ? sleep != null && bedtime != null
     : q === 1 ? stress != null
@@ -221,7 +307,20 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
           {sub}
         </div>
-        <ScaleBars value={value} onChange={onPick} onRelease={onRelease} palette={palette} labels={w.labels} />
+        <ScaleBars value={value} onChange={onPick} palette={palette} labels={w.labels}
+          onRelease={(n) => {
+            const ins = notableInsight(key, n, history, date);
+            setInsight(ins ? { key, ...ins } : null);
+            // Le temps de lire la ligne avant de passer à la question suivante.
+            advanceDelay.current = ins ? 3000 : null;
+            onRelease(n);
+          }} />
+        {insight && insight.key === key && (
+          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 12, fontSize: 14, fontWeight: 700, lineHeight: 1.35,
+            background: insight.bad ? "#fff3e8" : "#eef4fc", color: insight.bad ? "#b45309" : "#184f95", animation: "modalIn 0.25s cubic-bezier(0.2,0,0,1)" }}>
+            {insight.bad ? "↘ " : "↗ "}{insight.text}
+          </div>
+        )}
       </div>
     );
   }
@@ -418,7 +517,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               🔍 Comportements d'hier
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
-              Coche tout ce qui s'applique
+              {hasCost ? "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi." : "Coche tout ce qui s'applique"}
             </div>
 
             {/* Negative section */}
@@ -433,7 +532,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     key={b.key}
                     onClick={() => toggleBehavior(b.key)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
+                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
                       border: checked ? "1px solid rgba(200,30,30,0.40)" : "1px solid rgba(0,0,0,0.10)",
                       background: checked ? "rgba(200,30,30,0.08)" : "#fff",
                       color: checked ? "#c81e1e" : "#7b7f82",
@@ -441,6 +540,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     }}
                   >
                     <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
+                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
                   </button>
                 );
               })}
@@ -458,7 +558,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     key={b.key}
                     onClick={() => toggleBehavior(b.key)}
                     style={{
-                      display: "flex", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
+                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
                       border: checked ? "1px solid rgba(47,158,68,0.40)" : "1px solid rgba(0,0,0,0.10)",
                       background: checked ? "rgba(47,158,68,0.08)" : "#fff",
                       color: checked ? "#2f9e44" : "#7b7f82",
@@ -466,6 +566,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
                     }}
                   >
                     <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
+                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
                   </button>
                 );
               })}

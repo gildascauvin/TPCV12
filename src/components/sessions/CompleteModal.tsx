@@ -8,6 +8,8 @@ import { chronoMinutes } from "@/lib/liveSession";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
+import RpeInsightLine from "@/components/sessions/RpeInsightLine";
+import { rpeInsight, type RatedSession, type RpeInsight } from "@/lib/rpeInsight";
 
 
 interface CompleteModalProps {
@@ -24,6 +26,18 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
   const chrono = session.duration == null ? chronoMinutes(session) : null;
   const [duration, setDuration] = useState(session.duration ?? chrono ?? 45);
   const [saving, setSaving] = useState(false);
+  /* Insight après la note (2026-10-20) : historique des séances notées, lu une fois. */
+  const [rated, setRated] = useState<RatedSession[]>([]);
+  const [insight, setInsight] = useState<RpeInsight | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const since = new Date(`${session.date}T12:00:00`); since.setDate(since.getDate() - 90);
+    createClient().from("sessions").select("date, rpe")
+      .eq("user_id", session.user_id).eq("done", true).not("rpe", "is", null).neq("id", session.id)
+      .gte("date", since.toISOString().slice(0, 10)).lte("date", session.date)
+      .then(({ data }) => { if (alive && data) setRated(data as RatedSession[]); });
+    return () => { alive = false; };
+  }, [session.id, session.user_id, session.date]);
   // Entraînements enregistrés par la montre ce jour-là (app iOS → health_workouts). Si la séance n'a pas
   // encore de durée, on pré-remplit avec le plus long ; le sportif peut en choisir un autre ou ajuster.
   const [workouts, setWorkouts] = useState<HealthWorkout[]>([]);
@@ -152,7 +166,10 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94" }}>Difficulté réelle</div>
           </div>
-          <ScaleBars value={rpe} onChange={setRpe} palette="load" labels={CR10_LABELS} />
+          <ScaleBars value={rpe} palette="load" labels={CR10_LABELS}
+            onChange={n => { setRpe(n); setInsight(null); }}
+            onRelease={n => setInsight(rpeInsight(n, session.target_difficulty, rated, session.date))} />
+          <RpeInsightLine insight={insight} />
         </div>
 
         {/* Actions */}

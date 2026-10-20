@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import ScaleBars, { CR10_LABELS } from "@/components/ui/ScaleBars";
+import RpeInsightLine from "@/components/sessions/RpeInsightLine";
+import { rpeInsight, type RpeInsight } from "@/lib/rpeInsight";
 import type { CoachSession } from "@/types";
 
 interface Props {
@@ -18,6 +20,8 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
   const [rpe, setRpe] = useState<number | null>(session.rpe ?? null);
   const [duration, setDuration] = useState(session.duration ?? 45);
   const [saving, setSaving] = useState(false);
+  // Insight après la note : écart au prévu seulement (pas d'historique du sportif lu ici).
+  const [insight, setInsight] = useState<RpeInsight | null>(null);
 
   async function handleSave() {
     if (rpe == null) return;
@@ -52,7 +56,10 @@ export default function CoachCompleteModal({ session, athleteName, onSave, onClo
 
           <div>
             <div style={{ fontSize: 11, fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 8 }}>Difficulté réelle</div>
-            <ScaleBars value={rpe} onChange={setRpe} palette="load" labels={CR10_LABELS} />
+            <ScaleBars value={rpe} palette="load" labels={CR10_LABELS}
+              onChange={n => { setRpe(n); setInsight(null); }}
+              onRelease={n => setInsight(rpeInsight(n, session.target_difficulty, [], session.date))} />
+            <RpeInsightLine insight={insight} />
           </div>
         </div>
 
