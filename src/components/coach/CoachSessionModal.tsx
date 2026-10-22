@@ -1,5 +1,7 @@
 "use client";
 
+import { CR10_LABELS } from "@/components/ui/ScaleBars";
+
 import { useState, useEffect, useRef } from "react";
 import type { CoachSession, CoachAthlete, ExerciseAttachments } from "@/types";
 import type { TrendCode } from "@/lib/trainingLoad";
@@ -60,7 +62,7 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
   if (trend === "accumulation") points.push("Charge en hausse cette semaine + récupération qui se dégrade : accumulation à surveiller.");
   if (trend === "fatigue_persistante") points.push("Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.");
   if (wellness === null) {
-    if (maxDiff >= 8) points.push(`Séance dure prévue (${maxDiff}/10) — récupération non renseignée aujourd'hui, vérifier avec lui.`);
+    if (maxDiff >= 8) points.push(`Séance très dure prévue (${maxDiff}/10) — récupération non renseignée aujourd'hui, vérifier avec lui.`);
     return points;
   }
 
@@ -80,7 +82,7 @@ function buildAttentionPoints(wellness: number | null, maxDiff: number, trend?: 
   if (maxDiff >= 9) {
     points.push(`Séance maximale prévue (${maxDiff}/10) — confirmer que la forme le permet.`);
   } else if (maxDiff >= 8) {
-    points.push(`Séance dure prévue (${maxDiff}/10) — vérifier l'état de récupération.`);
+    points.push(`Séance très dure prévue (${maxDiff}/10) — vérifier l'état de récupération.`);
   } else if (maxDiff >= 6 && belowOptimal) {
     points.push(`Charge importante (${maxDiff}/10) malgré une récupération limitée.`);
   }
@@ -141,7 +143,8 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
   const autosaveEnabled = !reviewContext && !!autosaveTargetId;
 
   const diffCls = difficulty >= 8 ? "hard" : difficulty >= 5 ? "moderate" : "easy";
-  const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
+  // Mot de l'échelle de Foster pour la note (le même que la jauge RPE de fin de séance).
+  const diffLabel = CR10_LABELS[difficulty] ?? "";
   const diffBg = { hard: "#fff0ed", moderate: "#fff7e6", easy: "#edf9f0" }[diffCls];
   const diffColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[diffCls];
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
@@ -405,7 +408,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
           {/* Même jauge que le Planning (2026-10-02), en simple réglage : pas de zone. */}
           <div style={{ padding: "4px 0 2px" }}><DecisionGauge noZone light zoneLow={0} zoneHigh={0} dir="low" value={difficulty} onChange={setDifficulty} /></div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
-            <span>Facile</span><span>Modérée</span><span>Dure</span>
+            <span>{CR10_LABELS[1]}</span><span>{CR10_LABELS[10]}</span>
           </div>
         </div>
 

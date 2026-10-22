@@ -6,17 +6,28 @@ import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type Phy
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
+import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
+import { sessionResult, type SessionResult } from "@/lib/sessionInsight";
+import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
+import AggregateGauge from "@/components/conseils/AggregateGauge";
+import { DARK_CARD_BG } from "@/lib/theme";
+import { createClient } from "@/lib/supabase/client";
 
-/* Fin de formulaire "Ressenti vs physiologie" (2026-10-11). Le tiroir qui vient d'enregistrer
+/* Écran de résultat (2026-10-22) : après CHAQUE check-in et CHAQUE séance notée, pour tous, montre ou
+   pas. Check-in : score, zone, un insight (checkinInsight.ts) et les 5 premiers matins ; séance :
+   ressentie vs prévu, la décision du matin, sa place dans la semaine (sessionInsight.ts). La
+   comparaison au cœur / à la nuit (ci-dessous, déjà en prod) s'ajoute quand elle existe.
+
+   Fin de formulaire "Ressenti vs physiologie" (2026-10-11). Le tiroir qui vient d'enregistrer
    (Terminer la séance, check-in) se ferme ; cet écran prend le relais avec la comparaison, la note
    étant déjà figée en base. Monté une fois dans le layout de l'app, côté sportif. */
 
 type Shown =
-  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null }
-  | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null };
+  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null }
+  | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null; checkin?: CheckinResult | null };
 
 /* Relecture (2026-10-17) : liste des séances comparées (ou des matins comparés) et position. */
-type Nav = { kind: "session" | "wellness"; keys: string[]; idx: number; data: PhysioData; editKey: string; onEdit?: () => void };
+type Nav = { kind: "session" | "wellness"; keys: string[]; idx: number; data: PhysioData | null; editKey: string; onEdit?: () => void; userId: string };
 
 const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 const DAYS = ["Dim.", "Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam."];
@@ -30,53 +41,76 @@ function replayKeys(kind: Nav["kind"], data: PhysioData): string[] {
   return checkins.filter(c => physioVerdictAt(c.date, c, checkins, data.health)).map(c => c.date).sort();
 }
 
-function shownFor(nav: Nav): Shown | null {
-  const key = nav.keys[nav.idx], data = nav.data;
-  if (nav.kind === "session") {
-    const s = data.sessions.find(x => x.id === key);
-    const result = data.heart[key];
-    if (!s || !result || s.rpe == null) return null;
-    return { kind: "session", detail: { kind: "session", sessionId: s.id, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result };
+
+/* Relecture (2026-10-22) : le même écran que juste après la saisie (résultat + comparaison physio si
+   elle existe), pour n'importe quelle séance notée ou n'importe quel matin, montre ou pas. */
+async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | null, userId: string): Promise<Shown | null> {
+  if (kind === "session") {
+    const ctx = await loadSessionContext(userId, key).catch(() => null);
+    const s = ctx?.session;
+    const heart = data?.heart[key];
+    const result = heart && heart.kind === "ok" ? heart : null;
+    const summary = s ? sessionResult(s, ctx!.week) : null;
+    if (!s || (!result && !summary)) return null;
+    return { kind: "session", detail: { kind: "session", sessionId: key, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result, summary };
   }
-  const checkins = data.checkins.filter(c => c.bedtime != null);
+  const ctx = await loadCheckinContext(userId, key).catch(() => null);
+  const checkins = data?.checkins.filter(c => c.bedtime != null) ?? [];
   const c = checkins.find(x => x.date === key);
-  const verdict = c ? physioVerdictAt(key, c, checkins, data.health) : null;
-  return verdict ? { kind: "wellness", verdict, night: nightSentence(key, data.health) } : null;
+  const verdict = c && data ? physioVerdictAt(key, c, checkins, data.health) : null;
+  const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form) : null;
+  if (!verdict && !checkin) return null;
+  return { kind: "wellness", verdict, night: data && verdict ? nightSentence(key, data.health) : null, checkin };
 }
 
-export default function PhysioRevealHost({ userId }: { userId: string }) {
+/* userId absent (onboarding, compte créé en cours de parcours) : résolu à l'ouverture. */
+export default function PhysioRevealHost({ userId: userIdProp }: { userId?: string }) {
   const [shown, setShown] = useState<Shown | null>(null);
   const [nav, setNav] = useState<Nav | null>(null);
 
   useEffect(() => {
     const onReveal = async (e: Event) => {
       const detail = (e as CustomEvent<PhysioRevealDetail>).detail;
-      const data = await loadPhysioData(userId, true).catch(() => null);
-      if (!data) return;
-      setNav(null);
+      const userId = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
+      if (!userId) return;
       if (detail.kind === "session") {
-        const history = data.sessions.filter(s => s.id !== detail.sessionId);
-        const result = heartResultFor({ date: detail.date, duration: detail.duration, rpe: detail.rpe }, history, data.workouts);
-        if (!result) return;
-        setShown({ kind: "session", detail, result });
-        posthog.capture("physio_reveal_shown", { kind: "session", result: result.kind === "ok" ? result.verdict : "calibrating" });
+        const [data, ctx] = await Promise.all([
+          loadPhysioData(userId, true).catch(() => null),
+          loadSessionContext(userId, detail.sessionId).catch(() => null),
+        ]);
+        const history = data?.sessions.filter(s => s.id !== detail.sessionId) ?? [];
+        const result = data ? heartResultFor({ date: detail.date, duration: detail.duration, rpe: detail.rpe }, history, data.workouts) : null;
+        const summary = ctx?.session ? sessionResult(ctx.session, ctx.week) : null;
+        if (!result && !summary) return;
+        setNav(null);
+        setShown({ kind: "session", detail, result, summary });
+        posthog.capture("session_result_shown", { rows: summary?.rows.length ?? 0, heart: result ? (result.kind === "ok" ? result.verdict : "calibrating") : null });
+        if (result) posthog.capture("physio_reveal_shown", { kind: "session", result: result.kind === "ok" ? result.verdict : "calibrating" });
       } else {
-        const verdict = physioVerdictAt(detail.date, detail, data.checkins, data.health);
-        if (!verdict) return;
-        setShown({ kind: "wellness", verdict, night: nightSentence(detail.date, data.health) });
-        posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
+        const [data, ctx] = await Promise.all([
+          loadPhysioData(userId, true).catch(() => null),
+          loadCheckinContext(userId, detail.date).catch(() => null),
+        ]);
+        const verdict = data ? physioVerdictAt(detail.date, detail, data.checkins, data.health) : null;
+        const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form) : null;
+        if (!verdict && !checkin) return;
+        setNav(null);
+        setShown({ kind: "wellness", verdict, night: data && verdict ? nightSentence(detail.date, data.health) : null, checkin });
+        posthog.capture("checkin_result_shown", { day: checkin?.day ?? null, relative: checkin?.relative ?? null, physio: verdict?.kind ?? null });
+        if (verdict) posthog.capture("physio_reveal_shown", { kind: "wellness", result: verdict.kind });
       }
     };
     const onReplay = async (e: Event) => {
       const detail = (e as CustomEvent<PhysioReplayDetail>).detail;
+      const userId = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
+      if (!userId) return;
       const data = await loadPhysioData(userId).catch(() => null);
-      if (!data) return;
-      const keys = replayKeys(detail.kind, data);
       const key = detail.kind === "session" ? detail.sessionId : detail.date;
-      const idx = keys.indexOf(key);
-      if (idx < 0) { detail.onEdit?.(); return; }
-      const next: Nav = { kind: detail.kind, keys, idx, data, editKey: key, onEdit: detail.onEdit };
-      const s = shownFor(next);
+      // Flèches entre les éléments comparés à la physio quand celui-ci en fait partie, sinon écran seul.
+      const physioKeys = data ? replayKeys(detail.kind, data) : [];
+      const keys = physioKeys.includes(key) ? physioKeys : [key];
+      const next: Nav = { kind: detail.kind, keys, idx: keys.indexOf(key), data, editKey: key, onEdit: detail.onEdit, userId };
+      const s = await buildShown(detail.kind, key, data, userId);
       if (!s) { detail.onEdit?.(); return; }
       setNav(next); setShown(s);
       posthog.capture("physio_replay_opened", { kind: detail.kind });
@@ -84,16 +118,16 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
     window.addEventListener(PHYSIO_REVEAL, onReveal);
     window.addEventListener(PHYSIO_REPLAY, onReplay);
     return () => { window.removeEventListener(PHYSIO_REVEAL, onReveal); window.removeEventListener(PHYSIO_REPLAY, onReplay); };
-  }, [userId]);
+  }, [userIdProp]);
 
   if (!shown) return null;
   const close = () => { setShown(null); setNav(null); };
-  const go = (delta: number) => {
+  const go = async (delta: number) => {
     if (!nav) return;
     const idx = nav.idx + delta;
     if (idx < 0 || idx >= nav.keys.length) return;
     const next = { ...nav, idx };
-    const s = shownFor(next);
+    const s = await buildShown(nav.kind, nav.keys[idx], nav.data, nav.userId);
     if (s) { setNav(next); setShown(s); }
   };
   const canEdit = !!nav?.onEdit && nav.keys[nav.idx] === nav.editKey;
@@ -101,14 +135,15 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
   if (nav) {
     const key = nav.keys[nav.idx];
     if (nav.kind === "session") {
-      const s = nav.data.sessions.find(x => x.id === key);
+      const s = nav.data?.sessions.find(x => x.id === key);
       navTitle = s ? `${dateFr(s.date)}${s.name ? ` · ${s.name}` : ""}` : null;
     } else navTitle = `${dateFr(key)} · check-in`;
   }
 
-  let title: string, mean: string, gauge: React.ReactNode = null, extra: string | null = null;
-  if (shown.kind === "session") {
-    const r = shown.result!;
+  let title = "", mean = "", gauge: React.ReactNode = null, extra: string | null = null;
+  const hasPhysio = shown.kind === "session" ? !!shown.result : !!shown.verdict;
+  if (shown.kind === "session" && shown.result) {
+    const r = shown.result;
     if (r.kind === "calibrating") {
       const left = HEART_CALIBRATION - r.have, fam = HEART_FAMILY_LABEL[r.family];
       title = "On apprend encore ton profil";
@@ -123,12 +158,12 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
           track="linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)"
           a={{ pos: r.rpe * 10, label: `Ressenti · ${diffWord(r.rpe)}`, color: diffColor(r.rpe) }}
           b={{ pos: r.predicted * 10, label: `Mesuré · ${diffWord(r.predicted)}`, color: "#171b1f" }}
-          ticks={["Légère", "Modérée", "Dure"]}
+          ticks={["Légère", "Modérée", "Dure", "Très dure"]}
         />
       );
     }
-  } else {
-    const v = shown.verdict!;
+  } else if (shown.kind === "wellness" && shown.verdict) {
+    const v = shown.verdict;
     if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
     else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = "La fatigue ne se voit pas dans ta nuit : le stress ou la motivation, plutôt que les jambes ?"; }
     else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
@@ -150,8 +185,8 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
-      <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
-        {nav && (
+      <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+        {nav && nav.keys.length > 1 && (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <NavArrow dir="prev" disabled={nav.idx === 0} onClick={() => go(-1)} label={nav.kind === "session" ? "Séance précédente" : "Matin précédent"} />
             <div style={{ textAlign: "center", minWidth: 0 }}>
@@ -163,19 +198,30 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
             <NavArrow dir="next" disabled={nav.idx === nav.keys.length - 1} onClick={() => go(1)} label={nav.kind === "session" ? "Séance suivante" : "Matin suivant"} />
           </div>
         )}
-        <div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
-          <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
-        </div>
+        {shown.kind === "wellness" && shown.checkin && <CheckinBlock r={shown.checkin} />}
+        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} />}
+        {hasPhysio && (
+          <div>
+            {((shown.kind === "wellness" && shown.checkin) || (shown.kind === "session" && shown.summary)) && (
+              <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
+                {shown.kind === "session" ? "Ressenti vs fréquence cardiaque" : "Ressenti vs nuit mesurée"}
+              </div>
+            )}
+            <div style={{ fontFamily: "var(--font-display)", fontSize: (shown.kind === "wellness" && shown.checkin) || (shown.kind === "session" && shown.summary) ? 18 : 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
+            <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
+          </div>
+        )}
         {gauge && (
           <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             {gauge}
             {extra && <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>{extra}</div>}
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
-          {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
-        </div>
+        {hasPhysio && (
+          <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
+            {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
+          </div>
+        )}
         {canEdit ? (
           /* Relecture ouverte par un geste de modification : le formulaire d'origine est à un tap. */
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -206,7 +252,7 @@ export default function PhysioRevealHost({ userId }: { userId: string }) {
 }
 
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
-const diffWord = (d: number) => (d >= 7.5 ? "Dure" : d >= 4.5 ? "Modérée" : "Légère");
+const diffWord = (d: number) => (d >= 7.5 ? "Très dure" : d >= 4.5 ? "Dure" : d >= 2.5 ? "Modérée" : "Légère"); // mots de Foster, voir qualitativeDifficulty
 const diffColor = (d: number) => (d >= 7.5 ? "#d44000" : d >= 4.5 ? "#e07a00" : "#2f9e44");
 // Écart à la norme (en écarts-types) : mêmes seuils que les textes de physioCompare (±0,5).
 const zShort = (z: number) => (z <= -0.5 ? "sous ta norme" : z >= 0.5 ? "au-dessus" : "dans ta norme");
@@ -279,5 +325,73 @@ function NavArrow({ dir, disabled, onClick, label }: { dir: "prev" | "next"; dis
         <path d={dir === "prev" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"} />
       </svg>
     </button>
+  );
+}
+
+/* Résultat du check-in : le score en gros au centre (la jauge ouverte de l'onglet Récupération),
+   l'insight, puis les 5 premiers matins en ronds cochés. */
+function CheckinBlock({ r }: { r: CheckinResult }) {
+  const g = recoveryGauge(r.score);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ background: DARK_CARD_BG, borderRadius: RADIUS.block, padding: "18px 12px 14px", display: "flex", flexDirection: "column", alignItems: "center", color: "#fff" }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>Ta récupération ce matin</div>
+        <AggregateGauge pos={g.pos} band={g.band} bands={g.bands} size={220} />
+      </div>
+      <div style={{ background: "#f4f7fb", color: "#184f95", borderRadius: RADIUS.block, padding: "12px 14px", fontSize: 14.5, fontWeight: 700, lineHeight: 1.4 }}>{r.insight}</div>
+      {r.day != null && <NormStreak day={r.day} />}
+    </div>
+  );
+}
+
+function NormStreak({ day }: { day: number }) {
+  const text = day >= 5 ? "Ta norme est prête : dès demain, ton score se compare à toi-même."
+    : day === 1 ? "Pour l'instant, un repère général. Dès ton 5e matin, on te compare à toi-même."
+    : `Encore ${5 - day} matin${5 - day > 1 ? "s" : ""} et ton score se calera sur toi.`;
+  return (
+    <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>
+        <span>Matin {Math.min(day, 5)} sur 5</span><span>ta norme</span>
+      </div>
+      <div style={{ fontSize: 13.5, color: "#3d4247", marginTop: 6, lineHeight: 1.45 }}>{text}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+        {[1, 2, 3, 4, 5].map(i => {
+          const done = i <= day, today = i === day;
+          return (
+            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <span style={{
+                width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14,
+                background: done ? "#2a78d6" : "transparent", color: done ? "#fff" : "#a3a8ad",
+                border: done ? "none" : "2px dashed rgba(0,0,0,.18)", boxShadow: today ? "0 0 0 3px rgba(42,120,214,.25)" : undefined,
+              }}>{done ? "✓" : i}</span>
+              <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9, fontWeight: 700, color: today ? "#171b1f" : "#a3a8ad" }}>{today ? "AUJ." : `J${i}`}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). */
+function SessionBlock({ r }: { r: SessionResult }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94" }}>Séance enregistrée</div>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, marginTop: 4 }}>{r.title}</div>
+        {r.sub && <div style={{ fontSize: 14, color: "#62686e", marginTop: 6 }}>{r.sub}</div>}
+      </div>
+      {r.rows.length > 0 && (
+        <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {r.rows.map(row => (
+            <div key={row.text} style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.4, color: "#2b3035" }}>
+              <span style={{ width: 18, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{row.icon}</span>
+              <span>{row.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

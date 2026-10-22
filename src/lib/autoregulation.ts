@@ -25,7 +25,7 @@ export function absoluteFeel(score: number): "bad" | "mid" | "good" {
 }
 /* Difficulté au-delà de laquelle une séance n'est plus un jour de récupération programmé — le
    générateur sort toujours `recuperation` dans 1-3 (generate/route.ts, sessionDifficulty()). */
-// Même seuil que qualitativeDifficulty() "dure" (DiffGauge, loadRule.ts).
+// Même seuil que qualitativeDifficulty() "très dure" (DiffGauge, loadRule.ts).
 const HARD_MIN_DIFFICULTY = 8;
 
 
@@ -208,9 +208,15 @@ export function suggestionSeverityColor(s: AutoregSuggestion): string {
 
 /* Reprend les paliers déjà établis ailleurs dans l'app (DiffGauge, loadRule.ts : hard≥8/moderate≥5/
    easy<5) — jamais de nombre brut dans les textes d'autorégulation, uniquement ce vocabulaire. */
-export function qualitativeDifficulty(diff: number): "légère" | "modérée" | "dure" {
-  if (diff >= 8) return "dure";
-  if (diff >= 5) return "modérée";
+/* Mots de difficulté calés sur l'échelle CR-10 de Foster (2026-10-22) : 1-2 « Très, très facile /
+   Facile » = légère, 3-4 « Modéré / Un peu dur » = modérée, 5-7 « Dur → Très dur » = dure, 8-10 =
+   très dure. Avant, 5-7 s'appelait « modérée », ce qui contredisait la jauge RPE (5 = « Dur »). Les
+   seuils de la logique (5 et 8 : recos, enchaînements, couleurs) ne changent pas. */
+export type DifficultyWord = "légère" | "modérée" | "dure" | "très dure";
+export function qualitativeDifficulty(diff: number): DifficultyWord {
+  if (diff >= 8) return "très dure";
+  if (diff >= 5) return "dure";
+  if (diff >= 3) return "modérée";
   return "légère";
 }
 

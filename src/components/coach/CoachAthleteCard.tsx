@@ -14,7 +14,7 @@ import UnseenDot, { hasUnseenAttachment } from "@/components/sessions/UnseenDot"
 import { zoneLabel, wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
-import type { AutoregOriginal } from "@/lib/autoregulation";
+import { qualitativeDifficulty, type AutoregOriginal } from "@/lib/autoregulation";
 import { computeDecisionCard, decisionCardColor, withTitle, type DecisionDay } from "@/lib/decisionCard";
 import PhaseLine from "@/components/calendar/PhaseLine";
 import { PhaseCollecting, type CollectProgress } from "@/components/conseils/AnalyticsCollecting";
@@ -145,8 +145,8 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   if (trend === "fatigue_persistante") return "Charge en baisse mais récupération toujours dégradée : fatigue pas encore résorbée.";
   if (a.wellnessFilledToday === false) {
     if (maxDiff >= 8) return selfView
-      ? "Récupération non renseignée aujourd'hui + séance dure prévue : vérifie avant de te lancer."
-      : "Récupération non renseignée aujourd'hui + séance dure prévue : vérifier avec lui avant.";
+      ? "Récupération non renseignée aujourd'hui + séance très dure prévue : vérifie avant de te lancer."
+      : "Récupération non renseignée aujourd'hui + séance très dure prévue : vérifier avec lui avant.";
     return "Récupération non renseignée aujourd'hui.";
   }
   const useZ = baseline?.hasEnoughHistory ?? false;
@@ -158,9 +158,9 @@ export function decisionText(a: CoachAthlete, maxDiff: number, trend?: TrendCode
   // jamais atteint pour ce cas précis — branche retirée plutôt que laissée en texte incohérent
   // ("alléger maintenant" sans bouton pour le faire).
   if (maxDiff >= 8) return selfView
-    ? "Séance dure prévue : assure-toi de ne pas enchaîner trop dur."
-    : "Séance dure prévue : vérifier qu'il n'enchaîne pas dur.";
-  if (mildLowZ && maxDiff <= 4) return `${mildLabel}, séance légère : rien à changer, surveiller demain.`;
+    ? "Séance très dure prévue : assure-toi de ne pas enchaîner trop dur."
+    : "Séance très dure prévue : vérifier qu'il n'enchaîne pas dur.";
+  if (mildLowZ && maxDiff <= 4) return `${mildLabel}, séance ${qualitativeDifficulty(maxDiff)} : rien à changer, surveiller demain.`;
   if (mildLowZ) return "Récupération à surveiller : réduire le volume ou vérifier la difficulté réelle.";
   return "Plan cohérent : suivre la difficulté réelle.";
 }

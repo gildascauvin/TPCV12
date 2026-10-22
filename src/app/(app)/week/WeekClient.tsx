@@ -1,7 +1,7 @@
 "use client";
 
 import { markPrimingSource } from "@/lib/primingSource";
-import { usePhysioData, physioDecisionInputs, requestPhysioReplay, hasSessionResult, hasWellnessResult } from "@/lib/physioData";
+import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
@@ -540,13 +540,13 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   /* Modifier une séance faite ou le check-in du jour (2026-10-17) : écran de résultat d'abord quand
      une mesure existe, son bouton « Modifier » ouvre le formulaire (cf. TodayClient). */
   function openResult(session: Session) {
-    if (session.done && hasSessionResult(physio, session.id)) {
+    if (session.done) {
       requestPhysioReplay({ kind: "session", sessionId: session.id, onEdit: () => setCompleting(session) });
     } else handleTerminer(session);
   }
   function editWellness() {
     const filled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
-    if (filled && hasWellnessResult(physio, todayStr)) {
+    if (filled) {
       requestPhysioReplay({ kind: "wellness", date: todayStr, onEdit: () => setShowWellness(true) });
     } else setShowWellness(true);
   }

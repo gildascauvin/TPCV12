@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { hapticTick } from "@/lib/native";
-import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
+import { type AutoregDir, zoneRange, pctToPoints, qualitativeDifficulty } from "@/lib/autoregulation";
 
 /* Jauge de décision en ANNEAU (2026-09-30, variante R2 du POC "Onglet Charge, version retenue" :
    https://claude.ai/artifact/McRwVAu86X9vArN2JRHBGF). Même contrat que DecisionGauge.tsx (la barre
@@ -186,7 +186,7 @@ export function PlannedDecisionRing({ planned, size, light }: { planned: number;
       zoneLow={v} zoneHigh={v} value={planned} readOnly hideZone onChange={() => {}}
       size={size} light={light}
       centerLabel={{ arrow: String(v), verb: "Prévue" }}
-      hint={`Séance ${v >= 8 ? "dure" : v >= 5 ? "modérée" : "légère"} prévue`}
+      hint={`Séance ${qualitativeDifficulty(v)} prévue`}
     />
   );
 }

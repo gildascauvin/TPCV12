@@ -104,8 +104,8 @@ export function getRecoveryAdvice(
   if (!wellness) return "Remplis ta récupération pour voir ton état de forme.";
   const { sleep, stress, recovery, motivation, behaviors } = wellness;
 
-  const charge = loadCls === "hard" ? "charge élevée en ce moment"
-    : loadCls === "moderate" ? "charge modérée en ce moment"
+  const charge = loadCls === "hard" ? "charge très élevée en ce moment"
+    : loadCls === "moderate" ? "charge élevée en ce moment"
     : "charge légère en ce moment";
   const isDemanding = loadCls === "hard";
 

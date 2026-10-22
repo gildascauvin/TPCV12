@@ -5,14 +5,17 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
-import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBaseline";
+import { computeWellnessBaselineAt, relativeZoneLabel, WELLNESS_BASELINE_WINDOW_DAYS, Z_SWC } from "@/lib/wellnessBaseline";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import PhysioTeaser from "@/components/physio/PhysioTeaser";
 import ScaleBars from "@/components/ui/ScaleBars";
-import { computeBehaviorCorrelations } from "@/lib/conseilsData";
+import { SCALE_WORDS, type ScaleKey } from "@/lib/wellnessWords";
+import { recoveryGauge, recoveryAggregate, formAt } from "@/lib/checkinInsight";
+import AggregateGauge from "@/components/conseils/AggregateGauge";
+import { computeBehaviorCorrelations, CONSEILS_HISTORY_DAYS } from "@/lib/conseilsData";
 import type { WellnessDaily } from "@/types";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import type { PlannedIntensity } from "@/lib/plannedIntensity";
@@ -51,19 +54,11 @@ const PLAN_OPTIONS: { key: PlannedIntensity; emoji: string; label: string; sub: 
   { key: "rest", emoji: "🛌", label: "Repos", sub: "Pas d'entraînement aujourd'hui" },
   { key: "easy", emoji: "🚶", label: "Léger", sub: "Marche, mobilité, footing tranquille" },
   { key: "mod", emoji: "🏃", label: "Modéré", sub: "Une séance classique" },
-  { key: "hard", emoji: "🔥", label: "Dur", sub: "Séance intense, compétition" },
+  { key: "hard", emoji: "🔥", label: "Dur", sub: "Séance intense" },
+  { key: "vhard", emoji: "🚀", label: "Très dur", sub: "Séance max, compétition" },
 ];
 
-/* Échelles 1-10 (ScaleBars) : un libellé par note, extrémités reprises des anciens curseurs.
-   Le stress est la seule question où 10 = mauvais : sa palette bleue est inversée. */
-const L = (...w: string[]) => Object.fromEntries(w.map((x, i) => [i + 1, x])) as Record<number, string>;
-const SCALE_WORDS = {
-  sleep: { labels: L("Très mauvais", "Mauvais", "Médiocre", "Passable", "Moyen", "Correct", "Bon", "Très bon", "Reposant", "Excellent"), inverted: false },
-  stress: { labels: L("Zen total", "Très calme", "Calme", "Léger", "Modéré", "Présent", "Marqué", "Fort", "Élevé", "Très élevé"), inverted: true },
-  recovery: { labels: L("Courbatures sévères", "Très douloureux", "Douloureux", "Lourd", "Raide", "Correct", "Bien", "Frais", "Très frais", "Frais et dispo"), inverted: false },
-  motivation: { labels: L("Pas du tout", "Très faible", "Faible", "Peu", "Moyenne", "Correcte", "Bonne", "Forte", "Très forte", "Au max"), inverted: false },
-} as const;
-type ScaleKey = keyof typeof SCALE_WORDS;
+
 
 /* Check-in augmenté (2026-10-20, POC "Notes en un tap", pistes 2 et 3) : seulement avec de l'historique.
    Insight après la réponse, jamais avant (pas d'ancrage), et seulement si elle est rare : |z| ≥ 1,6
@@ -146,6 +141,8 @@ interface Props {
      tard" (même mécanisme que le "🔔 Plus tard" de célébration/InviteModal) — absent = "Annuler"
      inchangé (usage in-app). */
   cancelLabel?: string;
+  /** Pas d'écran de résultat après l'enregistrement (onboarding : l'écran suivant montre déjà l'effet du check-in). */
+  skipResult?: boolean;
   /* Wizard onboarding (2026-09-04) : "←" vers l'étape wizard précédente, affiché uniquement au 1er
      step (step>0 a déjà son propre "← Retour" intra-formulaire) — absent = pas de bouton retour
      (usage in-app). */
@@ -158,7 +155,7 @@ interface Props {
   wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
@@ -177,6 +174,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const [motivation, setMotivation] = useState<number | null>(null);
   const advanceTimer = useRef<number | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [form, setForm] = useState<number | null>(null);
   const [insight, setInsight] = useState<{ key: ScaleKey; text: string; bad: boolean } | null>(null);
   const advanceDelay = useRef<number | null>(null);
   useEffect(() => {
@@ -185,11 +183,16 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - 90);
+      const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - CONSEILS_HISTORY_DAYS);
       const { data } = await supabase.from("wellness_daily")
         .select("date, sleep, stress, recovery, motivation, score, base_score, behaviors")
         .eq("user_id", user.id).lt("date", date).gte("date", since.toISOString().slice(0, 10));
       if (alive && data) setHistory(data as HistoryRow[]);
+      // Forme du jour (charge) : la part fixe du score agrégé, la même que l'onglet Récupération.
+      const sinceS = new Date(`${date}T12:00:00`); sinceS.setDate(sinceS.getDate() - 120);
+      const { data: done } = await supabase.from("sessions").select("date, rpe, duration, done")
+        .eq("user_id", user.id).eq("done", true).gte("date", sinceS.toISOString().slice(0, 10)).lte("date", date);
+      if (alive && done) setForm(formAt(done as { date: string; rpe: number | null; duration: number | null; done: boolean }[], date));
     })().catch(() => {});
     return () => { alive = false; };
   }, [date]);
@@ -230,6 +233,68 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     : liveBaseScore >= 58 ? "Frais" : liveBaseScore >= 42 ? "Équilibré" : "Fatigué";
   const liveChips = behaviors.map(k => BEHAVIOR_META[k]).filter(Boolean);
 
+  /* Score qui se construit (2026-10-22, POC « Notes en un tap » + POC Wellness live) : moyenne des
+     seules questions répondues (même formule que computeWellnessScore, qui fait la moyenne des 4),
+     comparée à sa norme comme sur /today, et même zone que l'écran de résultat (checkinInsight). */
+  const answeredParts = [sleep, stress == null ? null : 10 - stress, recovery, motivation].filter((v): v is number => v != null);
+  const partBase = answeredParts.length ? Math.round(answeredParts.reduce((a, b) => a + b, 0) / (answeredParts.length * 10) * 100) : null;
+  const buildBaseline = (() => {
+    if (partBase == null) return null;
+    // Même norme que l'onglet Récupération : tous les check-ins chargés (fenêtre CONSEILS_HISTORY_DAYS).
+    const hist = (wellnessHistory ?? history).filter(h => h.date < date);
+    return computeWellnessBaselineAt(hist, { ...pv, score: partBase, base_score: partBase });
+  })();
+  // Même score que l'onglet Récupération et que l'écran de fin : agrégat ressenti + Forme.
+  const buildFeel = partBase == null || !buildBaseline ? null : buildBaseline.hasEnoughHistory && buildBaseline.composite.z != null ? buildBaseline.relativeScore : partBase;
+  const buildScore = buildFeel == null ? null : recoveryAggregate(buildFeel, form)?.score ?? null;
+  const answerChips = ([["sleep", "😴", sleep], ["stress", "🧠", stress], ["recovery", "💪", recovery], ["motivation", "⚡", motivation]] as const)
+    .map(([k, e, v]) => ({ k, e, word: v == null ? null : SCALE_WORDS[k].labels[v] }));
+  // Même jauge ouverte que l'onglet Récupération (AggregateGauge), score en gros au centre.
+  const buildGauge = recoveryGauge(buildScore);
+  function renderBuildingScore(size: number) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", color: "#fff" }}>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>Ta récupération ce matin</div>
+        <AggregateGauge pos={buildGauge.pos} band={buildGauge.band} bands={buildGauge.bands} size={size} />
+        {buildScore == null && <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 4 }}>Réponds, ton score se construit</div>}
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10, maxWidth: 360 }}>
+          {answerChips.map(c => (
+            <span key={c.k} style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: c.word ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.04)", color: c.word ? "#fff" : "rgba(255,255,255,.35)", transition: "background .2s" }}>
+              {c.e} {c.word ?? "…"}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* Bottom sheet réglable sur mobile (2026-10-22) : le formulaire en bas, le score qui se construit
+     au-dessus. Hauteur en % de l'écran, glissée par la poignée, posée sur le cran le plus proche. */
+  const SHEET_SNAPS = [52, 66, 92];
+  const [sheetH, setSheetH] = useState(66);
+  const sheetDrag = useRef<{ y: number; h: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const sheetMode = !isMd && !wizardHero;
+  /* Défiler pilote la feuille (2026-10-22) : tant qu'elle n'est pas ouverte en grand, glisser vers le
+     haut l'ouvre (le contenu ne défile pas encore) ; ouverte et en haut du contenu, glisser vers le
+     bas la rabaisse. Un geste sur la note choisie de la jauge (data-handle) reste un réglage de note. */
+  const SHEET_MAX = SHEET_SNAPS[SHEET_SNAPS.length - 1];
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const swipe = useRef<{ y: number; used: boolean; skip: boolean } | null>(null);
+  function onSheetTouchStart(e: React.TouchEvent) {
+    if (!sheetMode) return;
+    const skip = !!(e.target as HTMLElement).closest?.("[data-handle]");
+    swipe.current = { y: e.touches[0].clientY, used: false, skip };
+  }
+  function onSheetTouchMove(e: React.TouchEvent) {
+    const sw = swipe.current;
+    if (!sw || sw.used || sw.skip) return;
+    const dy = sw.y - e.touches[0].clientY;  // > 0 : le doigt monte (défiler vers le bas)
+    const top = (scrollRef.current?.scrollTop ?? 0) <= 0;
+    if (dy > 14 && sheetH < SHEET_MAX) { sw.used = true; setSheetH(SHEET_MAX); }
+    else if (dy < -14 && top && sheetH >= SHEET_MAX) { sw.used = true; setSheetH(66); }
+  }
+
   function toggleBehavior(key: string) {
     setBehaviors((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
@@ -264,10 +329,9 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     // Coach prévenu tout de suite si la reco du jour est d'alléger (2026-10-14). Sans effet hors compte lié.
     fetch("/api/push/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "checkin", date }) }).catch(() => {});
     setSaving(false);
-    if (physioReady) {
-      invalidatePhysio();
-      requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation: motivation_ });
-    }
+    // Écran de résultat pour tous (2026-10-22) : score, insight, norme ; la comparaison à la nuit s'y ajoute si la montre l'a.
+    if (physioReady) invalidatePhysio();
+    if (!skipResult) requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation: motivation_ });
   }
 
   function goNext() {
@@ -301,7 +365,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     const palette = w.inverted ? "recovery-inverted" : "recovery";
     return (
       <div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
           {title}
         </div>
         <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -331,13 +395,25 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   return (
     <div
       style={{
-        position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.72)",
-        backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
-        display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
+        position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0,
+        background: sheetMode ? DARK_CARD_BG : "rgba(0,0,0,0.72)",
+        backdropFilter: sheetMode ? undefined : "blur(16px)", WebkitBackdropFilter: sheetMode ? undefined : "blur(16px)",
+        display: "flex", flexDirection: sheetMode ? "column" : "row", alignItems: "stretch", justifyContent: heroOnLeft || (isMd && !wizardHero) ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {isMd && !wizardHero && (
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 48, background: DARK_CARD_BG }}
+          onClick={onClose}>
+          <div onClick={e => e.stopPropagation()}>{renderBuildingScore(260)}</div>
+        </div>
+      )}
+      {sheetMode && (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "max(16px, env(safe-area-inset-top)) 20px 12px", overflow: "hidden" }}>
+          {renderBuildingScore(sheetH > 80 ? 110 : sheetH > 60 ? 200 : 240)}
+        </div>
+      )}
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
           <div style={{ maxWidth: 480, width: "100%" }}>
@@ -382,14 +458,38 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
       <div style={{
         background: "#fff",
         color: "#171b1f",
-        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : "none",
-        borderRadius: isMd ? "24px 0 0 24px" : 0,
+        boxShadow: isMd ? "-32px 0 80px rgba(0,0,0,.30)" : sheetMode ? "0 -18px 50px rgba(0,0,0,.35)" : "none",
+        borderRadius: isMd ? "24px 0 0 24px" : sheetMode ? "24px 24px 0 0" : 0,
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
-        height: wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
+        /* Feuille : hauteur = son contenu, plafonnée par le cran choisi. Jamais plus haute que son
+           contenu, donc jamais de blanc sous le formulaire (2026-10-22, retour de Gildas). */
+        height: sheetMode ? undefined : wizardHero ? `calc(100dvh - ${WIZARD_BANNER_H}px)` : "100dvh",
+        maxHeight: sheetMode ? `${sheetH}dvh` : undefined,
+        flexShrink: 0, transition: sheetMode && !dragging ? "max-height .25s cubic-bezier(0.2,0,0,1)" : undefined,
         display: "flex", flexDirection: "column", overflow: "hidden",
-        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : sheetMode ? "sheetInUp 0.25s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
       }}>
-        <div style={{ flex: 1, overflowY: "auto", padding: 34 }}>
+        {sheetMode && (
+          <div
+            role="slider" aria-label="Hauteur du formulaire" aria-valuemin={SHEET_SNAPS[0]} aria-valuemax={SHEET_SNAPS[SHEET_SNAPS.length - 1]} aria-valuenow={sheetH}
+            onPointerDown={e => { sheetDrag.current = { y: e.clientY, h: sheetH }; setDragging(true); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ } }}
+            onPointerMove={e => {
+              const d = sheetDrag.current; if (!d) return;
+              const h = d.h + ((d.y - e.clientY) / window.innerHeight) * 100;
+              setSheetH(Math.max(SHEET_SNAPS[0] - 6, Math.min(96, h)));
+            }}
+            onPointerUp={() => {
+              if (!sheetDrag.current) return; sheetDrag.current = null; setDragging(false);
+              setSheetH(h => SHEET_SNAPS.reduce((best, x) => (Math.abs(x - h) < Math.abs(best - h) ? x : best), SHEET_SNAPS[0]));
+            }}
+            onPointerCancel={() => { sheetDrag.current = null; setDragging(false); }}
+            style={{ flexShrink: 0, padding: "10px 0 8px", display: "flex", justifyContent: "center", touchAction: "none", cursor: "grab" }}
+          >
+            <span style={{ width: 42, height: 5, borderRadius: 999, background: "rgba(0,0,0,.18)" }} />
+          </div>
+        )}
+        <div ref={scrollRef} onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={() => { swipe.current = null; }}
+          style={{ flex: sheetMode ? "0 1 auto" : 1, minHeight: 0, overflowY: sheetMode && sheetH < SHEET_MAX ? "hidden" : "auto", padding: sheetMode ? "4px 22px 18px" : 34 }}>
         {/* Hero déplacé DANS la zone scrollable sur mobile (2026-09-08) — voir ProgramCreatePicker.tsx.
             Marge basse retirée (2026-09-14) : la bande live juste en dessous doit être directement
             accolée au hero (même fond dark, aucun écart blanc entre les deux) — l'espacement de 20px
@@ -455,7 +555,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Séance prévue (askPlan) : clic = avance direct, aucune valeur présélectionnée. */}
         {q === -1 && (
           <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               Qu&apos;as-tu prévu aujourd&apos;hui ?
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
@@ -513,7 +613,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {/* Step 3: Behaviors */}
         {q === 3 && (
           <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
               🔍 Comportements d'hier
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
@@ -580,7 +680,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         </div>
         {/* Navigation — flex item non-scrollable (pas position:sticky, voir convention "Footer
             non-scrollable des modales" déjà établie dans ce repo pour ce genre de carte). */}
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: "20px 34px 20px", background: "#fff" }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: sheetMode ? "12px 22px max(14px, env(safe-area-inset-bottom))" : "20px 34px 20px", background: "#fff" }}>
           {step > 0 ? (
             <button
               onClick={goBack}

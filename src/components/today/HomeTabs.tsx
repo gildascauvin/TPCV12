@@ -17,6 +17,7 @@
    parce que les agrégats charge/récup viennent d'un fetch différé (voir TodayClient.tsx) et ne sont
    donc pas là au premier rendu. */
 import AggregateGauge from "@/components/conseils/AggregateGauge";
+import { qualitativeDifficulty } from "@/lib/autoregulation";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DecisionRingMini, type DecisionRingState } from "@/components/sessions/DecisionRing";
 import { AGG_BANDS, type AggBand, type MetricGroup } from "@/lib/metricCards";
@@ -54,7 +55,7 @@ function statusOf(key: HomeTab, previews?: HomeTabPreviews, plain = false): { la
     // Séance faite (2026-10-02, Gildas) : juste son intensité, pas de « zone ».
     if (st.rest) return { label: "Repos", color: "rgba(255,255,255,.62)" };
     // Séance faite : intensité seule en gratuit, la zone reste en Premium (2026-10-02, Gildas).
-    if (st.done && plain) return { label: `Séance ${v >= 8 ? "dure" : v >= 5 ? "modérée" : "légère"}`, color: "rgba(255,255,255,.62)" };
+    if (st.done && plain) return { label: `Séance ${qualitativeDifficulty(v)}`, color: "rgba(255,255,255,.62)" };
     if (v < st.zoneLow) return { label: "Sous la zone", color: "rgba(255,255,255,.62)" };
     if (v > st.zoneHigh) return { label: "Au-dessus de la zone", color: "rgba(255,255,255,.62)" };
     return { label: "Dans la zone", color: "#6ede8a" };
@@ -101,7 +102,7 @@ export default function HomeTabs({ active, onChange, dark = true, previews, lock
         const plannedOnly = t.key === "today" && isLocked("today") && previews?.today?.planned;
         const pv = previews?.today ? Math.round(previews.today.value) : 0;
         const status = plannedOnly
-          ? { label: `Séance ${pv >= 8 ? "dure" : pv >= 5 ? "modérée" : "légère"} prévue`, color: "rgba(255,255,255,.62)" }
+          ? { label: `Séance ${qualitativeDifficulty(pv)} prévue`, color: "rgba(255,255,255,.62)" }
           : statusOf(t.key, previews, isLocked(t.key));
         return (
           <button

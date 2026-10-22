@@ -96,7 +96,7 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
   };
 }
 
-const diffWord = (d: number) => (d >= 7.5 ? "dure" : d >= 4.5 ? "modérée" : "légère");
+const diffWord = (d: number) => (d >= 7.5 ? "très dure" : d >= 4.5 ? "dure" : d >= 2.5 ? "modérée" : "légère"); // mots de Foster, voir qualitativeDifficulty
 const diffColor = (d: number) => (d >= 7.5 ? "#ff8a55" : d >= 4.5 ? "#ffd27a" : "#6ede8a");
 
 function HeartPairChart({ dates, byDate }: { dates: string[]; byDate: Map<string, { id: string; name: string | null; r: HeartResult; rpe: number }> }) {

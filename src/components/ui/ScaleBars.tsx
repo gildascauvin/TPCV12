@@ -33,7 +33,7 @@ function mixHex(a: string, b: string, t: number) {
 }
 
 /* Couleur d'une note. Récup : clair = mauvais, foncé = bon (stress inversé : 10 = le plus clair).
-   Charge : zone facile 1-4, modérée 5-7, dure 8-10, la teinte fonce à l'intérieur de chaque zone. */
+   Charge : couleurs vert 1-4, orange 5-7, rouge 8-10 (mots : voir qualitativeDifficulty), la teinte fonce à l'intérieur de chaque zone. */
 export function scaleColor(palette: ScalePalette, n: number): string {
   if (palette === "load") {
     const [stops, lo, hi] = n <= 4 ? [LOAD_STOPS.easy, 1, 4] : n <= 7 ? [LOAD_STOPS.moderate, 5, 7] : [LOAD_STOPS.hard, 8, 10];

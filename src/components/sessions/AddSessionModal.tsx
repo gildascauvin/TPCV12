@@ -1,5 +1,7 @@
 "use client";
 
+import { CR10_LABELS } from "@/components/ui/ScaleBars";
+
 import { useState, useEffect, useRef } from "react";
 import type { Session, ExerciseAttachments } from "@/types";
 import ExerciseBlockEditor from "@/components/sessions/ExerciseBlockEditor";
@@ -100,7 +102,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   const isEdit = !!session;
 
   const diffCls = targetDiff >= 8 ? "hard" : targetDiff >= 5 ? "moderate" : "easy";
-  const diffLabel = { hard: "Dure", moderate: "Modérée", easy: "Facile" }[diffCls];
+  // Mot de l'échelle de Foster pour la note (le même que la jauge RPE de fin de séance).
+  const diffLabel = CR10_LABELS[targetDiff] ?? "";
   const diffBg = { hard: "#fff0ed", moderate: "#fff7e6", easy: "#edf9f0" }[diffCls];
   const diffColor = { hard: "#d44000", moderate: "#b96500", easy: "#2f9e44" }[diffCls];
   const diffBorder = { hard: "rgba(212,64,0,.18)", moderate: "rgba(249,138,0,.22)", easy: "rgba(47,158,68,.18)" }[diffCls];
@@ -264,7 +267,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
             {/* Même jauge que le Planning (2026-10-02), en simple réglage : pas de zone. */}
             <div style={{ padding: "4px 0 2px" }}><DecisionGauge noZone light zoneLow={0} zoneHigh={0} dir="low" value={targetDiff} onChange={setTargetDiff} /></div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#8a8f94", marginTop: 4 }}>
-              <span>Facile</span><span>Modérée</span><span>Dure</span>
+              <span>{CR10_LABELS[1]}</span><span>{CR10_LABELS[10]}</span>
             </div>
           </div>
 

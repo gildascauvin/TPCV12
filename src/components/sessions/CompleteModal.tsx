@@ -67,11 +67,10 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
     setSaving(true);
     await onSave({ rpe, duration });
     setSaving(false);
-    // Comparaison aussi à la correction d'une séance déjà notée : la note est figée, rien à biaiser.
-    if (hasHeart) {
-      invalidatePhysio();
-      requestPhysioReveal({ kind: "session", sessionId: session.id, date: session.date, rpe, duration });
-    }
+    // Écran de résultat pour tous (2026-10-22) : ce que la séance a appris ; la comparaison au cœur
+    // s'y ajoute quand la montre l'a mesurée. Aussi à la correction d'une séance déjà notée.
+    if (hasHeart) invalidatePhysio();
+    requestPhysioReveal({ kind: "session", sessionId: session.id, date: session.date, rpe, duration });
   }
 
 

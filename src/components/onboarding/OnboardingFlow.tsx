@@ -26,7 +26,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
-import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
+import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, StreakTitle, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { APP_STORE_URL } from "@/lib/pwaInstall";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
@@ -481,7 +481,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obHealthError, setObHealthError] = useState<string | null>(null);
   const [obCheckinBusy, setObCheckinBusy] = useState(false);
   const [obCheckinOpen, setObCheckinOpen] = useState(true);
-  const [obCheckinScore, setObCheckinScore] = useState<number | null>(null);
+  // ?dbgcheckin=1 (dev, avec ?dbgstep) : simule un check-in déjà fait, pour voir l'écran notifications avec la série.
+  const [obCheckinScore, setObCheckinScore] = useState<number | null>(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dbgcheckin")) return 60;
+    return null;
+  });
   // null = pas encore connu ; false = pas de programme créé (l'écran semaine saute).
   const [obProgramOk, setObProgramOk] = useState<boolean | null>(null);
   const [obWeekSessions, setObWeekSessions] = useState<WeekSession[]>([]);
@@ -2112,7 +2116,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             <div />
           </QuestionShell>
           {obCheckinOpen && !obCheckinBusy && (
-            <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard"
+            <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard" skipResult={path.indexOf("ob_week") > stepIdx}
               onClose={() => { setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} />
           )}
         </>
@@ -2132,6 +2136,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       );
     }
     if (currentStep === "ob_notif") {
+      // Il vient de faire son 1er check-in : les notifs servent à continuer sa série des 5 premiers matins.
+      const streak = !coach && obCheckinScore != null;
       const snoozeKey = eliteUid ? `tpc_notif_prompt_${eliteUid}` : null;
       const snooze = () => { try { if (snoozeKey) localStorage.setItem(snoozeKey, String(Date.now())); } catch { /* ignore */ } };
       const enable = async () => {
@@ -2159,22 +2165,23 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         };
         return (
           <QuestionShell {...common}
-            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : "Reçois ta séance chaque matin sur ton iPhone."}
-            sub={invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
+            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : "Reçois ta séance chaque matin sur ton iPhone."}
+            sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. Télécharge l'app pour être prévenu chaque matin." : invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
             onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
               ? { label: "Télécharger dans l'App Store", store: true, onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
-            <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} />
+            <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} />
           </QuestionShell>
         );
       }
       return (
         <QuestionShell {...common}
-          title={coach ? "Sois prévenu quand un sportif a besoin de toi." : `Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
+          title={coach ? "Sois prévenu quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : `Demain à ${obNotifHour}h, ta séance ajustée à ta forme.`}
+          sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. On te prévient chaque matin pour ne pas casser ta série." : undefined}
           onSkip={() => { snooze(); posthog.capture("notif_prompt_dismissed", { role, surface: "onboarding" }); obAdvance(); }} skipLabel="Plus tard" skipBottom
           cta={{ label: "Activer les notifications", onClick: enable, busy: obNotifBusy }}>
-          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} />
+          <NotifStepBody hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coachName={invitedAthlete ? coachInviteName : null} coach={coach} streak={streak} />
         </QuestionShell>
       );
     }

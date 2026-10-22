@@ -232,7 +232,8 @@ function ImportSession({ onPick }: { onPick: (r: QuickFillResult) => void }) {
 }
 
 const DURATIONS = [{ k: "30 min", lines: 3 }, { k: "45 min", lines: 4 }, { k: "60 min", lines: 5 }, { k: "90 min", lines: 99 }];
-const INTENSITIES = [{ k: "Légère", diff: 3 }, { k: "Modérée", diff: 6 }, { k: "Dure", diff: 8 }];
+// Mots et chiffres calés sur Foster (2026-10-22).
+const INTENSITIES = [{ k: "Légère", diff: 2 }, { k: "Modérée", diff: 4 }, { k: "Dure", diff: 6 }, { k: "Très dure", diff: 8 }];
 
 // Même état que ProgramCriteriaModal : "matched" = le texte tombe sur un curriculum existant,
 // "generated" = Claude a fourni exercices + points à travailler, "failed" = repli générique.
@@ -292,7 +293,7 @@ function GenerateSession({ sport, onPick }: { sport: string; onPick: (r: QuickFi
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sport: sportValue, level: "intermediaire", days: ["Mer"], duration: 4,
-          focus: intensity === "Dure" ? "intensite" : intensity === "Légère" ? "volume" : "mixte",
+          focus: intensity === "Dure" || intensity === "Très dure" ? "intensite" : intensity === "Légère" ? "volume" : "mixte",
           weaknesses,
           ...(c?.status === "generated" ? { customExercises: c.exercises, customWeaknessMeta: c.weaknessMeta, customSessionLabels: c.sessionLabels } : {}),
         }),

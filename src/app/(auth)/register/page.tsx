@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
+import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
+// Écran de résultat du check-in de l'onboarding (2026-10-22) : même écran que dans l'app.
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   if (user) {
     /* User connecté + pendingData → complétion onboarding Google */
     if (pendingData) {
-      return <OnboardingFlow userId={user.id} pendingData={pendingData} />;
+      return <><OnboardingFlow userId={user.id} pendingData={pendingData} /><PhysioRevealHost /></>;
     }
     /* User connecté sans pendingData : si l'onboarding n'est pas vraiment fini
        (paywall jamais atteint), on le fait rentrer à nouveau dans le flow plutôt que
@@ -41,7 +43,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       .eq("user_id", user.id)
       .single();
     if (!profile?.onboarding_done) {
-      return <OnboardingFlow userId={user.id} resumeRole={profile?.mode === "coach" ? "coach" : "athlete"} />;
+      return <><OnboardingFlow userId={user.id} resumeRole={profile?.mode === "coach" ? "coach" : "athlete"} /><PhysioRevealHost /></>;
     }
     redirect(profile?.mode === "coach" ? "/coach" : "/today");
   }
@@ -58,7 +60,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
           {...{ fetchpriority: "high" }}
         />
       )}
-      <OnboardingFlow initialRole={initialRole} />
+      <><OnboardingFlow initialRole={initialRole} /><PhysioRevealHost /></>
     </>
   );
 }

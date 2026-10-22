@@ -55,7 +55,7 @@ import { isLive, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from 
 import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions";
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
-import { usePhysioData, physioDecisionInputs, requestPhysioReplay, hasSessionResult, hasWellnessResult } from "@/lib/physioData";
+import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
@@ -540,16 +540,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
   }, [supabase, userId, initialDate, refreshAnalyticsSoon]);
 
-  /* Modifier une séance faite ou son check-in (2026-10-17) : si une mesure existe, l'écran de résultat
-     s'ouvre d'abord (flèches vers les autres séances / matins), son bouton « Modifier » mène au
-     formulaire. Sans mesure : le formulaire directement, comme avant. */
+  /* Modifier une séance faite ou son check-in (2026-10-17) : l'écran de résultat s'ouvre
+     d'abord (depuis le 2026-10-22, pour tous, avec ou sans mesure), son bouton « Modifier » mène au
+     formulaire. */
   function openResult(session: Session) {
-    if (session.done && hasSessionResult(physio, session.id)) {
+    if (session.done) {
       requestPhysioReplay({ kind: "session", sessionId: session.id, onEdit: () => setCompleting(session) });
     } else handleTerminer(session);
   }
   function editWellness() {
-    if (wellnessFilledToday && hasWellnessResult(physio, selectedDate)) {
+    if (wellnessFilledToday) {
       requestPhysioReplay({ kind: "wellness", date: selectedDate, onEdit: () => setShowWellness(true) });
     } else setShowWellness(true);
   }

@@ -258,8 +258,29 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
 
 /* ── ob_notif : la carte de prod (NotificationPrompt), version écran. ── */
 export const NOTIF_HOURS = [6, 7, 8, 9];
-export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach }: {
+/* Série des 5 premiers matins (2026-10-22), fusionnée dans le titre de l'écran notifications :
+   5 petits ronds (jour 1 plein, demain cerclé) devant « Jour 1 sur 5 ». Même repère que l'écran de
+   fin du check-in in-app (« Jour n sur 5 ») ; ici l'argument des notifications : ne pas casser la série. */
+export function StreakTitle({ day = 1 }: { day?: number }) {
+  return (
+    <>
+      <span style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12 }}>
+        {[1, 2, 3, 4, 5].map(d => (
+          <span key={d} style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box",
+            display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12, fontWeight: 800,
+            background: d <= day ? "#d44000" : "transparent",
+            border: d <= day ? "none" : d === day + 1 ? "2px dashed #d44000" : "2px solid rgba(0,0,0,.16)" }}>{d <= day ? "✓" : ""}</span>
+        ))}
+      </span>
+      <span style={{ color: "#d44000" }}>Jour {day} sur 5</span> : reviens demain pour le jour {day + 1}.
+    </>
+  );
+}
+
+export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach, streak }: {
   hour: number; setHour: (h: number) => void; sessionName: string | null; coachName: string | null; error?: string | null;
+  /** Le sportif vient de faire son 1er check-in : les notifs servent à continuer sa série. */
+  streak?: boolean;
   /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
   coach?: boolean;
 }) {
@@ -267,6 +288,9 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
   const pushes = coach ? [
     { title: "Thomas : récup fragile, séance dure prévue", body: "ThePerfClub recommande d'alléger. Tu valides ?", when: "maintenant" },
     { title: "2 sportifs à regarder ce matin", body: "Thomas M. · Léa P.", when: clock },
+  ] : streak ? [
+    { title: "Jour 2 sur 5 · Comment tu te sens ?", body: "10 secondes pour continuer ta série et ajuster ta séance.", when: "demain" },
+    { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton check-in pour l'ajuster.` : "Fais ton check-in pour ajuster ta séance.", when: "après-demain" },
   ] : [
     { title: "Ta 1re séance ajustée t'attend", body: "Fais ton check-in : ta séance s'adapte à ta forme du jour.", when: "demain" },
     { title: sessionName ?? "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
@@ -275,7 +299,7 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
     <div>
       {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit ta forme dès ton check-in.</p>}
       {/* L'heure d'abord : c'est le seul choix de l'écran, il doit être visible sans défiler. */}
-      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{coach ? "Le résumé du matin, à quelle heure ?" : "À quelle heure ?"}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{coach ? "Le résumé du matin, à quelle heure ?" : streak ? "À quelle heure on te le rappelle ?" : "À quelle heure ?"}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
         {NOTIF_HOURS.map(h => (
           <button key={h} type="button" onClick={() => setHour(h)}
@@ -308,8 +332,8 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
    navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
-export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach }: {
-  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean;
+export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach, streak }: {
+  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean;
 }) {
   return (
     <div>
@@ -320,7 +344,7 @@ export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach }: 
           <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
         </div>
       )}
-      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} />
+      <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} />
     </div>
   );
 }
