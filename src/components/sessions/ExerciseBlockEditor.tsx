@@ -11,6 +11,8 @@ import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } 
 import { CSS } from "@dnd-kit/utilities";
 import type { ExerciseAttachments, ExerciseComment } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import { DemoBlock } from "@/components/sessions/ExerciseDemo";
+import { LINE_MEDIA_EVENT } from "@/lib/demoPrefs";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import {
   TEST_UNITS, parseResultValue, resolveTest, upsertTestResult, listTests, listTestResults, deleteTestResult, deleteTestIfEmpty, mergeTestInto,
@@ -578,6 +580,12 @@ function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiv
   const { isMd } = useBreakpoint();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: line.id });
   const [open, setOpen] = useState<"media" | "comments" | null>(null);
+  // « Mettre ma vidéo » depuis le lecteur de démo : ouvre le bloc vidéo de cette ligne.
+  useEffect(() => {
+    const fn = (e: Event) => { if ((e as CustomEvent).detail?.text === line.text) setOpen("media"); };
+    window.addEventListener(LINE_MEDIA_EVENT, fn);
+    return () => window.removeEventListener(LINE_MEDIA_EVENT, fn);
+  }, [line.text]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const moreRef = useRef<HTMLButtonElement | null>(null);
@@ -1044,6 +1052,8 @@ function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiv
         )}
       </div>
 
+      {/* Séance en direct : la démo (ou l'illustration) en grand sous l'exercice. */}
+      {large && !editing && <DemoBlock text={line.text} />}
       {/* Séance en direct : les actions du menu ⋯ en boutons visibles, mêmes blocs ouverts. */}
       {large && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8, marginTop: 14 }}>

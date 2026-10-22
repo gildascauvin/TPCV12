@@ -62,7 +62,7 @@ function behaviorsFor(offset: number): string[] {
 /* ============================= SPORTIF — 1 profil CrossFit ============================= */
 
 const CROSSFIT_ARCHETYPES = [
-  { name: "Force — Back squat", notes: "Back squat — 5×5@75%\nSoulevé de terre roumain — 4×8@60kg\nGainage complet — 3×40s", baseDiff: 7 },
+  { name: "Force — Back squat", notes: "Back squat — 5×5@75%\nSoulevé de terre roumain — 4×8@60kg\nPlanche — 3×40s\nGainage latéral — 2×30s par côté", baseDiff: 7 },
   { name: "Conditioning — WOD", notes: "Wall balls — 3×15@9kg\nKettlebell swings — 3×20@24kg\nWOD — Metcon — AMRAP 20 min\nÉchauffement — 10 min", baseDiff: 8 },
   { name: "Haltérophilie — Technique", notes: "Épaulé-jeté — 6×2@70%\nArraché — 5×2@65%\nTirage nuque — 3×5@40kg", baseDiff: 6 },
   { name: "Gymnastics/Mixed — Skill", notes: "Muscle-up — 5×3\nThrusters lestés — 4×8@30kg\nAMRAP 12 min — burpees, kb swings, box jumps\nHandstand hold — 3×30s", baseDiff: 6 },
@@ -210,13 +210,13 @@ interface AthleteSeed {
 const COACH_ATHLETE_SEEDS: AthleteSeed[] = [
   {
     name: "Léa Girard", sport: "Haltérophilie", wellness: 35,
-    todayName: "Arraché — Bloc MRV", todayNotes: "Arraché — 5×3@85%\nTirage nuque — 4×5\nGainage — 3×40s", todayDiff: 8,
+    todayName: "Arraché — Bloc MRV", todayNotes: "Arraché — 5×3@85%\nTirage nuque — 4×5\nPlanche — 3×40s", todayDiff: 8,
     routineName: "Épaulé-jeté — Technique", routineNotes: "Épaulé-jeté — 5×3@70%\nSquat clavicule — 4×5", routineDiff: 6,
   },
   {
     name: "Karim Haddad", sport: "Sprint", wellness: 50,
     todayName: "Vitesse max — 6×80m", todayNotes: "Gammes techniques — 15 min\nSprint 6×80m (récup 3 min)\nPliométrie — 3×8 bonds", todayDiff: 7,
-    routineName: "Renfo — Bas du corps", routineNotes: "Squat — 4×6\nFentes bulgares — 3×10\nGainage — 3×40s", routineDiff: 5,
+    routineName: "Renfo — Bas du corps", routineNotes: "Squat — 4×6\nFentes bulgares — 3×10\nPlanche — 3×40s", routineDiff: 5,
   },
   {
     name: "Sofia Renard", sport: "CrossFit", wellness: 85,
@@ -232,7 +232,7 @@ const COACH_ATHLETE_SEEDS: AthleteSeed[] = [
   },
   {
     name: "Nora Lefebvre", sport: "Triathlon", wellness: 90,
-    todayName: "Sortie vélo — Endurance", todayNotes: "Vélo Zone 2 — 60 min\nGainage — 3×40s", todayDiff: 4,
+    todayName: "Sortie vélo — Endurance", todayNotes: "Vélo Zone 2 — 60 min\nPlanche — 3×40s", todayDiff: 4,
     routineName: "Sortie course + natation", routineNotes: "Course à pied — 45 min\nNatation technique — 30 min", routineDiff: 6,
   },
 ];

@@ -5115,3 +5115,36 @@ POC : https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu (pistes 2 et 3). Ne chan
 - Orange = plus dur / défavorable, bleu = plus facile / favorable.
 - Écartée après essai en local : la rampe horizontale 1-10 (19/10), la jauge verticale reste.
 - Validé pour la suite (onboarding J0, voir mémoire « check-in augmenté ») : check-in qui pilote la vraie séance en direct, teaser des 5 jours, boucle complète le soir même, écran du 5e matin.
+
+## Démos d'exercices et illustrations (2026-10-22)
+
+POC : `~/Desktop/poc_demos_exercices/prod.html` (rendu de l'app). Constat de départ : des inscrits cherchent des vidéos de démo, la bibliothèque perso (`exercise_video_library`) ne contenait qu'1 vidéo.
+
+### Données
+- **Démos** : `src/data/catalystDemos.json`, les 624 exercices de catalystathletics.com/exercises/ (chaque page intègre sa vidéo YouTube officielle, toutes intégrables), noms traduits en FR + alias + flag `base` (mouvement de référence ou variante). Catalyst = source unique : OPEX écarté (vend CoachRx, concurrent). Pas de recherche YouTube en direct.
+- **Illustrations** : `public/illustrations/*.jpg` (~1,2 Mo) = images tirées des clips du TPC Studio (course, échauffement, sprint, vélo, metcon, circuit, sport collectif, mobilité, étirements, récup, repos, pliométrie) et couvertures WordPress des programmes réduites à 480 px (natation, aviron, ski, escalade, boxe, MMA, judo, golf, voile, équitation, rugby, hand, basket, volley, hockey, gym, trail, yoga). Pour l'endurance, la pratique du sport, la mobilité : une image, pas une vidéo.
+
+### Correspondance — `src/lib/exerciseDemos.ts` (`mediaForLine`)
+- Nom de la ligne via `parseLine` (préfixe A/B/C, format AMRAP/EMOM, parenthèses retirés), terme le plus long gagne (en, fr, alias).
+- Complexe « A + B » : une démo par mouvement, sauf si Catalyst a le complexe entier qui couvre TOUS les mouvements (« Clean & Jerk »).
+- Jamais de démo sur une ligne d'échauffement/cardio/technique/test (exerciseBank) sauf nom de la démo écrit en entier.
+- « épaule » (articulation) vs « épaulé » (mouvement) : tranché sur l'accent, sinon sur le contexte (rotation, mobilité, élastique…) — sinon « Rotation externe épaule » prenait l'épaulé.
+- Variantes sans démo (squat gobelet, presse à cuisses) : rien plutôt que le mouvement de base.
+
+### Affichage — `src/components/sessions/ExerciseDemo.tsx`
+- **`DemoThumb`** : dans `ExerciseLineView`, la vignette remplace le picto (toutes tailles, Planning et `/p/` compris, voulu par Gildas pour vendre les démos dans les iframes). Une démo = image du milieu de la vidéo (`/vi/ID/2.jpg`, la miniature YouTube porte du texte), complexe = 2 vignettes en cascade, illustration sans bouton lecture. Les lignes sans média gardent leur picto, centré dans le même emplacement. `noMedia` pour désactiver.
+- **`DemoBlock`** : séance en direct (taille large), démo pleine largeur sous l'exercice (tuiles côte à côte pour un complexe), plus de picto.
+- **`DemoSheetHost`** (layout racine) : le lecteur, ouvert par l'event `tpc-demo-sheet`. Mobile = bottom sheet, ordinateur = fenêtre centrée, au-dessus des tiroirs (z 2147483300). Complexe = toutes les vidéos d'un coup (pas de lecture enchaînée), la 1re démarre sans le son. **En iframe** (`/p/` sur WordPress, l'iframe fait toute la hauteur du programme) : fenêtre ouverte à hauteur du tap (`anchorY`).
+- **Dans l'éditeur** (ligne avec `onTokenClick`), sous chaque vidéo : **Changer de démo** (variantes Catalyst du même mouvement, `alternativesFor`), **Mettre ma vidéo** (event `tpc-line-media` → ouvre le bloc vidéo existant de la carte, bibliothèque perso inchangée), **Masquer**.
+- Choix stockés dans **`exercise_demo_prefs`** (migration 038, appliquée ; RLS : chacun ses choix), cache client `src/lib/demoPrefs.ts` (`resolveLineMedia`, `useDemoPrefs`). Limite v1 : le choix d'un coach ne s'applique pas encore chez ses sportifs ; une vidéo perso du coach n'apparaît pas dans la vignette (seulement dans le bloc vidéo de la carte).
+
+### Générateur et bibliothèque
+- Règle produit : **plus de familles dans les programmes générés, des exercices précis** (« Gainage complet » → Planche + Gainage latéral, « anti-rotation » → Pallof press tenu, mobilité hanches → Squat cosaque + Bascule adducteurs, proprioception → SDT roumain unijambe / pas chassés…). Circuits et complexes écrits en **bloc** (« Circuit — 4 tours : » puis une ligne par exercice, `formatBankLine` fait progresser l'en-tête). Endurance, pratique du sport, bain froid restent tels quels (image ou rien).
+- `scripts/audit-library-demos.mts` : 8 088 programmes générés (50 catégories) passés dans `mediaForLine`. Avant → après : démo 33 % → 55 %, image 39 % → 34 %, rien 28 % → 11 % (consignes, tests, bain froid, épreuves de concours, et mouvements absents de Catalyst : mollets, burpees, L-sit, rotation d'épaule…).
+- **Mode `libraryShape`** de `/api/programs/generate` : forme « universelle » des modèles sans focus (alternance volume/intensité, dernier bloc en tapering). **`scripts/regenerate-library-from-generator.mts`** remplace `regenerate-library-periodization.mjs` (supprimé : portage manuel très en retard, et il ciblait `is_public`, donc aussi les programmes partagés par les utilisateurs). Il ne touche que `is_official_template = true`, dry-run par défaut, sauvegarde JSON avant `--apply`.
+- **Appliqué le 2026-10-22 avec l'accord de Gildas** : 65 modèles officiels régénérés, 0 échec, démo 33 % → 51 %, rien 32 % → 11 %. Sauvegarde : `scripts/library-templates-backup-demos-1792704144806.json` (gitignorée). Certains programmes changent aussi de structure (générés par une ancienne version du générateur). Les copies déjà claimées/assignées gardent leur ancien contenu.
+- Sandbox (`sandboxFixtures.ts`) et séances de démo de l'onboarding (`sessionTemplates.ts`, `AhaPreviews.tsx`) nettoyées des familles. L'onboarding affiche les vignettes partout où il montre un programme (même rendu que l'app).
+
+### Pièges
+- Après un changement du layout racine, le dev server peut servir un vieux chunk (« reading 'call' » ou erreur d'hydratation) : vider le service worker et recharger.
+- Les vignettes YouTube viennent d'`i.ytimg.com` (balise `<img>` simple, pas `next/image`).

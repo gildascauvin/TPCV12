@@ -378,11 +378,11 @@ export function getSportCategory(sport: string): SportCategory {
 const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   halterophilie: {
     technique: [
-      "Arraché technique à 60% — 6×2",
+      "Arraché suspendu à 60% — 6×2",
       "Épaulé à genoux + montée (drill) — 5×3",
       "Tirage arraché lent — 4×4",
       "Squat avant pause basse — 4×3",
-      "Mobilité chevilles et hanches — 10 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
       "Back squat — 5×5",
@@ -390,16 +390,16 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Soulevé de terre roumain — 4×8",
       "Développé militaire — 4×8",
       "Fentes marchées — 3×12",
-      "Gainage anti-rotation — 3×40s",
+      "Pallof press tenu — 3×30s par côté",
     ],
     intensite: [
       "Arraché compétition à 90%+ — 5×1",
       "Épaulé-jeté max effort — 5×1",
       "Squat avant lourd — 4×2",
-      "Tirage haltère à 100%+ — 4×2",
+      "Tirage arraché à 100%+ — 4×2",
     ],
     recuperation: [
-      "Mobilité hanches et chevilles — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Foam rolling chaîne postérieure",
       "Stretching actif épaules — 10 min",
       "Marche active — 20 min",
@@ -417,13 +417,13 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Squat pause — 4×3",
       "Bench pause 2s — 4×3",
       "Deadlift déficit — 4×3",
-      "Mobilité hanches et épaules — 10 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
     ],
     volume: [
       "Back squat — 5×5",
       "Développé couché — 5×5",
       "Soulevé de terre — 4×5",
-      "Gainage anti-rotation — 3×40s",
+      "Pallof press tenu — 3×30s par côté",
     ],
     intensite: [
       "Squat lourd — 5×3",
@@ -431,7 +431,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Deadlift lourd — 4×2",
     ],
     recuperation: [
-      "Mobilité hanches et chevilles — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Foam rolling dos et jambes",
       "Stretching actif épaules — 10 min",
       "Marche active — 20 min",
@@ -446,20 +446,20 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   musculation: {
     technique: [
-      "Squat gobelet technique — 4×8",
+      "Front squat léger — 4×8",
       "Rowing haltère un bras focus posture — 4×8 par côté",
       "Développé incliné technique — 4×8",
-      "Mobilité épaules et hanches — 10 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
     ],
     volume: [
       "Squat — 4×10",
       "Tirage horizontal — 4×10",
       "Développé couché — 4×10",
       "Développé militaire — 3×12",
-      "Curl biceps barre — 3×12",
+      "Curl barre EZ — 3×12",
     ],
     intensite: [
-      "Presse à cuisses lourde — 4×6",
+      "Fente bulgare lourde — 4×6 par jambe",
       "Tractions lestées — 4×6",
       "Développé couché lourd — 4×6",
       "Extension triceps poulie lourde — 3×8",
@@ -482,45 +482,45 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   // banques identiques aux catégories génériques correspondantes (le mouvement/vocabulaire ne
   // change pas, seule la FRÉQUENCE hebdomadaire par lift change, voir le curriculum dédié).
   powerlifting_squat: {
-    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
-    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Squat cosaque — 2×8 par côté", "Wall slide — 2×10"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
-    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
   },
   powerlifting_bench: {
-    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
-    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Squat cosaque — 2×8 par côté", "Wall slide — 2×10"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
-    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
   },
   powerlifting_deadlift: {
-    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Mobilité hanches et épaules — 10 min"],
-    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Gainage anti-rotation — 3×40s"],
+    technique: ["Squat pause — 4×3", "Bench pause 2s — 4×3", "Deadlift déficit — 4×3", "Squat cosaque — 2×8 par côté", "Wall slide — 2×10"],
+    volume: ["Back squat — 5×5", "Développé couché — 5×5", "Soulevé de terre — 4×5", "Pallof press tenu — 3×30s par côté"],
     intensite: ["Squat lourd — 5×3", "Développé couché lourd — 5×3", "Deadlift lourd — 4×2"],
-    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling dos et jambes", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Squat : tentative de maximum", "Développé couché : tentative de maximum", "Deadlift : tentative de maximum", "Bilan technique (vidéo)"],
   },
   halterophilie_snatch: {
-    technique: ["Arraché technique à 60% — 6×2", "Épaulé à genoux + montée (drill) — 5×3", "Tirage arraché lent — 4×4", "Squat avant pause basse — 4×3", "Mobilité chevilles et hanches — 10 min"],
-    volume: ["Back squat — 5×5", "Épaulé-jeté à 70% — 5×3", "Soulevé de terre roumain — 4×8", "Développé militaire — 4×8", "Fentes marchées — 3×12", "Gainage anti-rotation — 3×40s"],
-    intensite: ["Arraché compétition à 90%+ — 5×1", "Épaulé-jeté max effort — 5×1", "Squat avant lourd — 4×2", "Tirage haltère à 100%+ — 4×2"],
-    recuperation: ["Mobilité hanches et chevilles — 15 min", "Foam rolling chaîne postérieure", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
+    technique: ["Arraché suspendu à 60% — 6×2", "Épaulé à genoux + montée (drill) — 5×3", "Tirage arraché lent — 4×4", "Squat avant pause basse — 4×3", "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10"],
+    volume: ["Back squat — 5×5", "Épaulé-jeté à 70% — 5×3", "Soulevé de terre roumain — 4×8", "Développé militaire — 4×8", "Fentes marchées — 3×12", "Pallof press tenu — 3×30s par côté"],
+    intensite: ["Arraché compétition à 90%+ — 5×1", "Épaulé-jeté max effort — 5×1", "Squat avant lourd — 4×2", "Tirage arraché à 100%+ — 4×2"],
+    recuperation: ["Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10", "Foam rolling chaîne postérieure", "Stretching actif épaules — 10 min", "Marche active — 20 min"],
     test: ["Arraché : tentative de maximum", "Épaulé-jeté : tentative de maximum", "Squat avant : max du cycle", "Bilan technique (vidéo)"],
   },
 
   puissance: {
-    technique: ["Squat gobelet technique — 4×5", "Épaulé technique léger — 4×3", "Skipping + gammes — 3×20m", "Mobilité hanches et chevilles — 10 min"],
-    volume: ["Squat — 4×6", "Fentes sautées — 3×10", "Tirage vertical — 3×10", "Gainage complet — 3×40s"],
+    technique: ["Front squat — 4×5", "Épaulé debout suspendu léger — 4×3", "Skipping + gammes — 3×20m", "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10"],
+    volume: ["Squat — 4×6", "Fentes sautées — 3×10", "Tirage vertical — 3×10", "Planche — 3×40s", "Gainage latéral — 2×30s par côté"],
     intensite: ["Box jump — 4×5", "Épaulé puissance — 4×3", "Squat jump chargé — 4×5", "Sprints courts en côte — 5×20m"],
-    recuperation: ["Mobilité complète — 15 min", "Foam rolling jambes et dos", "Marche active — 20 min", "Stretching global — 15 min"],
+    recuperation: ["Squat cosaque — 2×8 par côté", "Wall slide — 2×10", "Foam rolling jambes et dos", "Marche active — 20 min", "Stretching global — 15 min"],
     test: ["Test : squat jump hauteur", "Test : épaulé max", "Sprint 30m chronométré", "Bilan explosivité vidéo"],
   },
   perte_de_poids: {
-    technique: ["Squat gobelet technique — 4×8", "Fentes marchées technique — 3×10 par jambe", "Rowing haltère technique — 4×8", "Mobilité globale — 10 min"],
-    volume: ["Circuit full-body : squat + pompes + rowing — 4 tours", "Vélo ou rameur continu — 30 min", "Gainage complet — 3×40s"],
-    intensite: ["Circuit cardio : burpees + jumping jacks + mountain climbers — 6 rounds", "Tabata vélo/rameur — 8×20s effort/10s récup", "Corde à sauter intervalles — 8×1 min"],
+    technique: ["Front squat léger — 4×8", "Fentes marchées technique — 3×10 par jambe", "Rowing haltère technique — 4×8", "Squat cosaque — 2×8 par côté", "Wall slide — 2×10"],
+    volume: ["Circuit full-body — 4 tours :\nSquat — 15\nPompes — 10\nRowing haltère — 10 par bras", "Vélo ou rameur continu — 30 min", "Planche — 3×40s", "Gainage latéral — 2×30s par côté"],
+    intensite: ["Circuit cardio — 6 rounds :\nBurpees — 10\nKettlebell swing — 15\nSquat jump — 10", "Tabata vélo/rameur — 8×20s effort/10s récup", "Corde à sauter intervalles — 8×1 min"],
     recuperation: ["Marche active — 30 min", "Stretching global — 15 min", "Mobilité douce — 15 min", "Respiration et relaxation — 10 min"],
     test: ["Test : Cooper 12 min", "Tour de taille / mensurations", "Test : squat max reps 2 min", "Bilan poids/composition corporelle"],
   },
@@ -536,15 +536,15 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Sprint 60m à 80% — 8 reps",
       "Fartlek 20 min (1 min vif / 1 min calme)",
-      "Pas courus spéciaux — 3×60m",
-      "Squats + fentes + hip thrust — 4×10",
-      "Gainage dynamique — 3×45s",
+      "Gammes : pas courus — 3×60m",
+      "Squat — 4×10", "Fentes marchées — 3×10 par jambe", "Pont fessier sur banc (hip thrust) — 4×10",
+      "Hollow rock — 3×30s",
     ],
     intensite: [
       "Sprint 30m départ arrêté — 6 reps (récup 5 min)",
       "Sprint 60m à 95% — 4 reps",
       "Départs en blocs — 5×30m",
-      "Pliométrie : sauts horizontaux — 3×6",
+      "Saut en longueur — 3×6",
     ],
     recuperation: [
       "Jogging léger — 20 min",
@@ -562,27 +562,27 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   combat: {
     technique: [
-      "Esquives et déplacements — 3×5 min",
-      "Enchaînements techniques au sac — 5×3 min",
+      "Shadow : esquives et déplacements — 3×5 min",
+      "Sac de frappe : enchaînements techniques — 5×3 min",
       "Shadow boxing — 4×3 min",
-      "Combinaisons avec partenaire — 3×5 min",
+      "Combinaisons aux paos avec partenaire — 3×5 min",
     ],
     volume: [
       "Assauts légers — 6×3 min",
-      "Sac lourd endurance — 5×3 min",
-      "Circuit : tractions + dips + abdos — 4 tours",
+      "Sac de frappe endurance — 5×3 min",
+      "Circuit — 4 tours :\nTractions — 6\nDips — 10\nRelevé de jambes suspendu — 10",
       "Corde à sauter — 5×3 min",
-      "Gainage + travail au sol — 3×45s",
+      "Planche — 3×45s", "Hollow rock — 3×30s",
     ],
     intensite: [
       "Assauts à intensité max — 4×3 min",
       "HIIT corde à sauter : 10×30s",
       "Sparring debout — 3×3 min",
-      "Pliométrie combat : sauts + frappes — 3×6",
+      "Tuck jump — 3×6", "Sac de frappe : frappes explosives — 3×10s",
     ],
     recuperation: [
       "Yoga ou stretching global — 20 min",
-      "Mobilité épaules, hanches, colonne",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Respiration et relaxation — 10 min",
       "Cryothérapie si disponible",
     ],
@@ -596,23 +596,23 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   fitness: {
     technique: [
-      "Squat overhead technique — 4×5",
-      "Deadlift roumain focus posture — 4×6",
+      "Squat bras tendus — 4×5",
+      "Soulevé de terre roumain — 4×6",
       "Pull-up avec bande — 4×6",
       "Développé haltères — 4×8",
-      "Mobilité thoracique et hanches — 10 min",
+      "Snow angel — 2×10", "Squat cosaque — 2×8 par côté",
     ],
     volume: [
       "Back squat — 4×10",
       "Développé couché — 4×10",
       "Tractions lestées — 4×8",
       "Fentes marchées — 3×12",
-      "Ab wheel ou planche — 3×45s",
+      "Planche — 3×45s",
     ],
     intensite: [
-      "AMRAP 15 min : 5 tractions + 10 pompes + 15 squats",
-      "Tabata : burpees + kettlebell swings — 8 rounds",
-      "Complex barbell : épaulé + squat + militaire — 5 séries",
+      "AMRAP 15 min :\nTractions — 5\nPompes — 10\nSquat — 15",
+      "Tabata 8 rounds (20s effort / 10s récup) :\nBurpees\nKettlebell swing",
+      "Complexe barre — 5 séries :\nÉpaulé debout — 1\nFront squat — 1\nDéveloppé militaire — 1",
       "Sprints rowing ou vélo : 6×250m effort max",
     ],
     recuperation: [
@@ -631,25 +631,25 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   hyrox: {
     technique: [
-      "Technique sled push/pull — 4×15m",
-      "Technique wall balls — 4×15",
+      "Hyrox : technique sled push/pull — 4×15m",
+      "Hyrox : technique wall balls — 4×15",
       "Technique burpee broad jump — 4×10m",
-      "Mobilité hanches et chevilles — 10 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
       "Endurance fondamentale course — 40 min",
-      "Circuit stations légères : sled + wall balls + farmers carry — 3 tours",
+      "Circuit stations Hyrox — 3 tours :\nHyrox sled push — 20m\nHyrox wall balls — 15\nFarmer walk — 50m",
       "Rameur continu — 20 min",
     ],
     intensite: [
       "SkiErg — 5×500m (récup 90s)",
       "Fractionné course 1km — 5 reps (récup 3 min)",
-      "Circuit stations intense : sled + burpees + lunges — 4 tours",
+      "Circuit stations Hyrox — 4 tours :\nHyrox sled push — 20m\nBurpee broad jumps — 10m\nFentes marchées — 20m",
     ],
     recuperation: [
       "Marche active — 25 min",
       "Stretching global — 15 min",
-      "Mobilité chevilles et hanches — 10 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Foam rolling jambes",
     ],
     test: [
@@ -662,27 +662,27 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   collectif: {
     technique: [
-      "Exercices techniques au poste — 20 min",
+      "Passes et exercices techniques au poste — 20 min",
       "Passes + combinaisons à 2/3 — 15 min",
-      "Travail défensif en situation réduite",
-      "Prise d'information et placement — 15 min",
+      "Opposition réduite : travail défensif",
+      "Jeu réduit : prise d'information et placement — 15 min",
     ],
     volume: [
-      "Circuit cardio : navettes + sauts + sprint — 4 tours",
-      "Balle à intensité soutenue — 20 min",
-      "Renforcement bas du corps — 4×10",
-      "Gainage et proprioception — 3×45s",
+      "Circuit cardio — 4 tours :\nNavette — 40m\nSquat jump — 6\nSprint — 20m",
+      "Jeu réduit à intensité soutenue — 20 min",
+      "Fente bulgare — 3×8 par jambe", "Nordic curl — 3×5",
+      "Planche Copenhague — 3×20s par côté", "SDT roumain unijambe — 3×8 par jambe",
     ],
     intensite: [
       "Jeux effectif réduit haute intensité — 3×8 min",
       "Intervalles : 8×15s effort / 45s récup",
-      "Transitions défense/attaque — 4 séries",
+      "Opposition : transitions défense/attaque — 4 séries",
       "Accélérations + changements de direction — 6×20m",
     ],
     recuperation: [
       "Jogging léger + gamme — 15 min",
       "Stretching membres inférieurs — 15 min",
-      "Travail technique basse intensité",
+      "Passes et technique basse intensité",
       "Cryothérapie si disponible",
     ],
     test: [
@@ -702,8 +702,8 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Tractions pronation — 5×max (récup 2 min)",
       "Tirage poulie haute — 4×10",
-      "Circuit PPG : pompes + squats + burpees — 4 tours",
-      "Gainage complet — 3×45s",
+      "Circuit PPG — 4 tours :\nPompes — 15\nSquat — 20\nBurpees — 10",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "Luc Léger : paliers progressifs jusqu'à épuisement",
@@ -711,7 +711,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Course navette 20m — 8×30s effort",
     ],
     recuperation: [
-      "Mobilité générale — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Respiration et relaxation — 10 min",
@@ -731,9 +731,9 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Natation avec effort soutenu — 6×50m (récup 45s)",
     ],
     volume: [
-      "Port de charge : sac lesté 20kg — 5×30m",
-      "Tractions + pompes — 4×max",
-      "Gainage complet — 3×45s",
+      "Farmer walk 20kg — 5×30m",
+      "Tractions — 4×max", "Pompes — 4×max",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "Parcours simulation intervention : franchissement + portage — 4 passages",
@@ -742,7 +742,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Fractionné course — 8×400m (récup 90s)",
     ],
     recuperation: [
-      "Mobilité générale — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Respiration et relaxation — 10 min",
@@ -757,22 +757,22 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   armee_tap: {
     technique: [
-      "Squats rythmés technique — 3×1 min",
+      "Squat au poids du corps rythmé — 3×1 min",
       "Lancer médecine-ball 3kg assis technique — 4×8",
-      "Gainage technique : planche + variantes — 3×40s",
+      "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
     ],
     volume: [
       "Tractions pronation — 5×max (récup 2 min)",
       "Tirage poulie haute — 4×10",
-      "Abdos gainage 2 min — 3 séries",
-      "Circuit PPG complet : squats + pompes + burpees — 4 tours",
+      "Planche — 3×2 min",
+      "Circuit PPG — 4 tours :\nSquat — 20\nPompes — 15\nBurpees — 10",
     ],
     intensite: [
       "Luc Léger : paliers progressifs",
       "Fractionné VMA — 10×30s effort / 30s récup",
     ],
     recuperation: [
-      "Mobilité générale — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Natation base tranquille — 15 min",
@@ -789,20 +789,20 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     technique: [
       "Parcours PHM technique : ateliers enchaînés — 3 passages",
       "Franchissements + équilibre — 15 min",
-      "Port de charge 25-30kg — 5×20m",
+      "Farmer walk 25-30kg — 5×20m",
     ],
     volume: [
-      "Port de charge lourd — 5×20m",
-      "Tractions + pompes — 4×max",
-      "Circuit PPG : squats + fentes + burpees — 4 tours",
-      "Gainage complet — 3×45s",
+      "Farmer walk lourd — 5×20m",
+      "Tractions — 4×max", "Pompes — 4×max",
+      "Circuit PPG — 4 tours :\nSquat — 20\nFentes marchées — 10 par jambe\nBurpees — 10",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "TECR : course progressive par paliers",
       "Fractionné VMA — 8×400m (récup 90s)",
     ],
     recuperation: [
-      "Mobilité générale — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Respiration et relaxation — 10 min",
@@ -824,7 +824,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Tractions max en 2 min — 3 séries",
       "Pompes max en 2 min — 3 séries",
-      "Gainage complet — 3×50s",
+      "Planche — 3×50s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "Natation apnée dynamique — 8×25m (récup 45s)",
@@ -833,7 +833,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Fractionné VMA — 10×30s effort / 30s récup",
     ],
     recuperation: [
-      "Mobilité générale — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Respiration et relaxation — 10 min",
@@ -848,23 +848,23 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   escalade: {
     technique: [
-      "Travail gestuel : mouvements techniques sur mur — 45 min",
+      "Travail gestuel sur voies faciles — 45 min",
       "Répétitions de blocs faciles, focus posture — 6 blocs",
-      "Travail de placement de pieds — 20 min",
+      "Placement de pieds sur bloc facile — 20 min",
     ],
     volume: [
       "Suspension à la poutre — 6×10s (récup 3 min)",
-      "Travail de préhension : réglettes + bacs — 4 séries",
+      "Pan : préhension réglettes + bacs — 4 séries",
       "Continuité sur voies faciles — 45 min",
-      "Gainage spécifique grimpe — 3×40s",
+      "Relevé de jambes suspendu — 3×8",
     ],
     intensite: [
       "Blocs au niveau limite — 6 tentatives (récup 3-5 min)",
       "Voie à vue difficulté élevée — 3 essais",
-      "4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
+      "Blocs en 4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
     ],
     recuperation: [
-      "Mobilité épaules et doigts — 15 min",
+      "Wall slide — 2×10", "Seau de riz doigts — 2×30s",
       "Étirements avant-bras et dos — 15 min",
       "Marche active — 20 min",
       "Auto-massage avant-bras — 10 min",
@@ -879,24 +879,24 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   pliometrie: {
     technique: [
-      "Réception unipodale contrôlée — 3×8 par jambe",
-      "Gainage anti-rotation — 3×40s",
-      "Proprioception plateau instable — 3×30s",
+      "Depth drop (réception en contrebas) — 3×8",
+      "Pallof press tenu — 3×30s par côté",
+      "Pas chassés élastique — 3×10 par côté",
     ],
     volume: [
-      "Medicine ball chest pass — 4×8",
+      "Push press — 4×5",
       "Pompes plyométriques — 3×8",
-      "Medicine ball rotation lancée — 3×10 par côté",
+      "Cross chop (bûcheron) — 3×10 par côté",
     ],
     intensite: [
       "Squat jump — 4×6",
       "Box jump — 4×5",
       "Sauts en contrebas (depth jump) — 4×5",
-      "Sauts de haies — 4×8 (récup 2 min)",
+      "Tuck jump — 4×8 (récup 2 min)",
       "Bondissements alternés — 4×20m",
     ],
     recuperation: [
-      "Mobilité chevilles et hanches — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Auto-massage mollets et quadriceps — 10 min",
@@ -910,26 +910,26 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   golf: {
     technique: [
-      "Mobilité thoracique et hanches — 20 min",
+      "Snow angel — 2×10", "Squat cosaque — 2×8 par côté",
       "Étirements dynamiques épaules/dos — 15 min",
       "Rotation thoracique sur banc — 3×10 par côté",
-      "Stabilité unipodale (position de swing) — 3×8 par jambe",
+      "SDT roumain unijambe — 3×8 par jambe",
     ],
     volume: [
       "Squat — 4×8@70%",
       "Soulevé de terre roumain — 3×10",
-      "Gainage anti-rotation — 3×40s",
+      "Pallof press tenu — 3×30s par côté",
     ],
     intensite: [
-      "Rotation chargée medicine ball — 4×8 par côté",
-      "Swing résisté avec élastique — 4×10",
-      "Lancers rotatifs explosifs — 3×8 par côté",
+      "Rotation barre debout (landmine) — 4×8 par côté",
+      "Cross chop (bûcheron) — 4×10 par côté",
+      "Rotation disque debout (explosif) — 3×8 par côté",
     ],
     recuperation: [
-      "Mobilité thoracique et hanches — 15 min",
+      "Snow angel — 2×10", "Squat cosaque — 2×8 par côté",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
-      "Auto-massage dos et épaules — 10 min",
+      "Auto-massage dos et trapèzes — 10 min",
     ],
     test: [
       "Test de mobilité rotation thoracique",
@@ -940,24 +940,24 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   equitation: {
     technique: [
-      "Renforcement unipodal — 3×10 par jambe",
-      "Mobilité bassin et hanches — 20 min",
-      "Correction posturale (dos/épaules) — 15 min",
-      "Proprioception plateau instable — 3×30s",
+      "Split squat (fente statique) — 3×10 par jambe",
+      "Bascule adducteurs à genou — 2×10", "Squat cosaque — 2×8 par côté",
+      "Face pull — 3×15", "Band pull-apart — 3×15",
+      "Pas chassés élastique — 3×10 par côté",
     ],
     volume: [
-      "Gainage complet (planche + latéral) — 3×45s",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
       "Gainage dynamique dead bug — 3×12",
       "Anti-rotation Pallof press — 3×10 par côté",
-      "Cardio léger continu (vélo/course) — 30 min",
-      "Squats + fentes — 3×12",
+      "Cardio léger continu : vélo ou course — 30 min",
+      "Squat — 3×12", "Fentes marchées — 3×12",
     ],
     intensite: [
-      "Circuit fonctionnel modéré — 4 tours",
-      "Gainage dynamique chronométré — 3×45s effort",
+      "Circuit fonctionnel — 4 tours :\nSquat — 12\nRowing haltère — 10 par bras\nPlanche — 30s",
+      "Hollow rock — 3×45s effort",
     ],
     recuperation: [
-      "Mobilité bassin et hanches — 15 min",
+      "Bascule adducteurs à genou — 2×10", "Squat cosaque — 2×8 par côté",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Auto-massage lombaires — 10 min",
@@ -971,12 +971,12 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   hockey_glace: {
     technique: [
-      "Renforcement adducteurs/abducteurs — 3×12",
-      "Gainage complet — 3×40s",
-      "Proprioception chevilles — 3×10",
+      "Planche Copenhague — 3×20s par côté", "Pas chassés élastique — 3×12 par côté",
+      "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
+      "SDT roumain unijambe — 3×8 par jambe",
     ],
     volume: [
-      "Rotation chargée medicine ball — 4×8 par côté",
+      "Rotation barre debout (landmine) — 4×8 par côté",
       "Développé couché — 4×6@75%",
       "Squat — 4×6@75%",
     ],
@@ -987,7 +987,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Fractionné intermittent 30s effort / 30s récup — 10 répétitions",
     ],
     recuperation: [
-      "Mobilité hanches et chevilles — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Étirements globaux — 15 min",
       "Vélo doux — 20 min",
       "Auto-massage adducteurs et mollets — 10 min",
@@ -1001,9 +1001,9 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   baseball: {
     technique: [
-      "Stabilité de la coiffe des rotateurs — 3×12",
-      "Mobilité épaule et rotation externe — 15 min",
-      "Renforcement scapulaire — 3×12",
+      "Rotation externe élastique — 3×12",
+      "Wall slide — 2×10",
+      "Face pull — 3×12",
     ],
     volume: [
       "Squat — 4×6@75%",
@@ -1011,17 +1011,17 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Fentes marchées — 3×12",
     ],
     intensite: [
-      "Rotation chargée medicine ball — 4×8 par côté",
-      "Lancers rotatifs explosifs — 4×8 par côté",
-      "Swing résisté avec élastique — 3×10",
+      "Rotation barre debout (landmine) — 4×8 par côté",
+      "Rotation disque debout (explosif) — 4×8 par côté",
+      "Cross chop (bûcheron) — 3×10 par côté",
       "Sprints courts 10-20m — 6 reps (récup 3 min)",
       "Départs explosifs — 5 reps",
     ],
     recuperation: [
-      "Mobilité épaule et rotation externe — 15 min",
+      "Wall slide — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
-      "Auto-massage épaule et dos — 10 min",
+      "Auto-massage dos et trapèzes — 10 min",
     ],
     test: [
       "Test de mobilité épaule",
@@ -1034,22 +1034,22 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     technique: [
       "Tirage horizontal — 3×10",
       "Traction assistée — 3×8",
-      "Gainage anti-rotation — 3×40s",
+      "Pallof press tenu — 3×30s par côté",
     ],
     volume: [
-      "Gainage complet — 3×45s",
+      "Planche — 3×45s",
       "Gainage latéral — 3×40s par côté",
       "Hollow body hold — 3×30s",
-      "Cardio continu (rameur/vélo) — 30 min",
-      "Circuit fonctionnel — 4 tours",
+      "Cardio continu : rameur ou vélo — 30 min",
+      "Circuit fonctionnel — 4 tours :\nKettlebell swing — 15\nPompes — 10\nFentes marchées — 10 par jambe",
     ],
     intensite: [
-      "Position de rappel (hiking) tenue — 4×45s",
-      "Squat isométrique mur — 3×45s",
+      "Voile : position de rappel tenue (hiking) — 4×45s",
+      "Chaise contre mur — 3×45s",
       "Extension de hanches tenue — 3×40s",
     ],
     recuperation: [
-      "Mobilité dos et hanches — 15 min",
+      "Bascule adducteurs à genou — 2×10", "Snow angel — 2×10",
       "Étirements globaux — 15 min",
       "Marche active — 20 min",
       "Auto-massage lombaires et quadriceps — 10 min",
@@ -1063,13 +1063,13 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   bmx: {
     technique: [
-      "Sauts réactifs (rebonds) — 4×8",
-      "Proprioception plateau instable — 3×30s",
-      "Mobilité chevilles et hanches — 15 min",
+      "Tuck jump — 4×8",
+      "Pas chassés élastique — 3×10 par côté",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
-      "Gainage complet — 3×45s",
-      "Gainage dynamique — 3×12",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
+      "Dead bug — 3×12",
       "Anti-rotation Pallof press — 3×10 par côté",
       "Squat — 4×6@75%",
       "Fentes sautées — 3×10",
@@ -1081,7 +1081,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Sprint 10m départ arrêté — 6 reps",
     ],
     recuperation: [
-      "Mobilité chevilles et hanches — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Étirements globaux — 15 min",
       "Vélo doux — 15 min",
       "Auto-massage quadriceps et mollets — 10 min",
@@ -1095,7 +1095,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   endurance: {
     technique: [
-      "Foulées éducatives — 4×100m",
+      "Course : foulées éducatives — 4×100m",
       "Travail de foulée et technique de course — 20 min",
       "Côtes courtes 8% — 8×50m",
       "Travail de bras et gainage en course — 10 min",
@@ -1103,8 +1103,8 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Sortie longue en endurance fondamentale — 50-80 min",
       "Fartlek progressif — 40 min",
-      "Renforcement : mollets + squats + fentes",
-      "Gainage dynamique — 3×45s",
+      "Squat — 3×12", "Fente bulgare — 3×10 par jambe",
+      "Hollow rock — 3×30s",
     ],
     intensite: [
       "Intervalles 400m allure 5km — 8 reps (récup 90s)",
@@ -1128,28 +1128,28 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   cyclisme: {
     technique: [
-      "Travail de cadence 100 rpm — 20 min",
-      "Moulinage développement réduit — 15 min",
-      "Position aéro + exercices de placement — 10 min",
-      "Single leg pedaling — 3×2 min par jambe",
+      "Vélo : cadence 100 rpm — 20 min",
+      "Vélo : moulinage développement réduit — 15 min",
+      "Vélo : position aéro et placement — 10 min",
+      "Vélo : pédalage unijambe — 3×2 min par jambe",
     ],
     volume: [
-      "Sortie endurance Z2 (60-70% FCmax) — 60-90 min",
+      "Sortie vélo endurance Z2 (60-70% FCmax) — 60-90 min",
       "Travail en côte progressive — 30 min",
-      "Renforcement : squat + leg press + gainage",
-      "Intervalles doux : 2×20 min Z2/Z3",
+      "Squat — 3×10", "Fente bulgare — 3×8 par jambe",
+      "Intervalles doux vélo : 2×20 min Z2/Z3",
     ],
     intensite: [
-      "Intervalles VO2max : 5×4 min à 110% FTP (récup 4 min)",
+      "Intervalles VO2max vélo : 5×4 min à 110% FTP (récup 4 min)",
       "Sprints : 6×15s all-out (récup 5 min)",
       "Montée longue : 2×15 min au seuil",
-      "Pyramide puissance : 3-4-5-4-3 min",
+      "Pyramide puissance vélo : 3-4-5-4-3 min",
     ],
     recuperation: [
       "Vélo doux Z1 — 30 min",
       "Stretching quadriceps, fléchisseurs, mollets",
       "Foam rolling jambes et dos",
-      "Mobilité hanches et genoux",
+      "Squat cosaque — 2×8 par côté",
     ],
     test: [
       "Test FTP : 20 min à puissance max",
@@ -1163,26 +1163,26 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     technique: [
       "Drill catch-up crawl — 4×50m",
       "Nage avec palmes (jambes seules) — 4×50m",
-      "Travail de virage et poussée mur — 20 min",
-      "Coordination bras/souffle — 3×100m",
+      "Natation : virages et poussée mur — 20 min",
+      "Nage : coordination bras/souffle — 3×100m",
     ],
     volume: [
-      "Série de fond : 10×100m (récup 15s)",
-      "Pyramide : 200-400-600-400-200m",
+      "Série de fond nage : 10×100m (récup 15s)",
+      "Pyramide nage : 200-400-600-400-200m",
       "Nage alternée 4 nages — 1000m",
-      "Renforcement sec : gainage + tractions — 3×10",
+      "Tractions — 3×8", "Planche — 3×45s",
     ],
     intensite: [
       "Sprints : 10×50m (récup 1 min)",
-      "Intervalles VO2 : 4×200m effort max (récup 3 min)",
+      "Intervalles VO2 nage : 4×200m effort max (récup 3 min)",
       "Départs plongeon compétition — 6 reps",
-      "Virages haute intensité — 10 reps",
+      "Virages natation haute intensité — 10 reps",
     ],
     recuperation: [
       "Nage très douce — 20-30 min",
       "Stretching épaules et mobilité globale",
       "Eau froide + relaxation",
-      "Mobilité thoracique et hanches",
+      "Snow angel — 2×10", "Squat cosaque — 2×8 par côté",
     ],
     test: [
       "Test 400m allure compétition",
@@ -1195,25 +1195,25 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   ski: {
     technique: [
       "Position de ski statique (chaise) + transferts d'appui — 4×45s",
-      "Proprioception genou sur plateau instable — 3×10 par jambe",
+      "SDT roumain unijambe — 3×8 par jambe",
       "Fentes latérales dynamiques (dévers) — 4×10 par jambe",
-      "Gainage rotatoire type slalom — 3×40s",
+      "Russian twist — 3×20",
     ],
     volume: [
       "Squat bulgare — 4×10 par jambe",
       "Chaise au mur — 4×60s",
       "Fentes marchées + rotation tronc — 3×12",
-      "Gainage complet : planche + gainage latéral — 3×45s",
-      "Mollets debout — 4×15",
+      "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
+      "Nordic curl — 3×5",
     ],
     intensite: [
       "Pliométrie latérale : sauts de côté — 4×10",
       "Squat jump — 5×8",
-      "Circuit explosivité jambes : squats sautés + fentes sautées — 4 tours",
+      "Circuit explosivité — 4 tours :\nSquat jump — 8\nFentes sautées — 8 par jambe",
       "Sprints courts en côte — 6×20m",
     ],
     recuperation: [
-      "Mobilité chevilles et hanches — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Stretching quadriceps et ischio-jambiers — 15 min",
       "Foam rolling jambes complètes",
       "Vélo léger — 20 min",
@@ -1231,25 +1231,25 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Rameur technique basse intensité : focus séquence jambes-dos-bras — 20 min",
       "Tirage horizontal poulie, focus gainage — 4×10",
       "Rameur : drill par segments (jambes seules / dos seul / bras seuls) — 15 min",
-      "Mobilité thoracique et hanches — 10 min",
+      "Snow angel — 2×10", "Squat cosaque — 2×8 par côté",
     ],
     volume: [
       "Rameur endurance continue — 30-40 min à allure modérée",
       "Soulevé de terre — 4×8",
-      "Tirage vertical + tirage horizontal — 4×10",
-      "Gainage anti-flexion (planche + superman) — 3×45s",
+      "Tirage vertical — 4×10", "Tirage horizontal — 4×10",
+      "Planche — 3×45s", "Superman tenu — 3×30s",
     ],
     intensite: [
       "Rameur intervalles : 6×500m (récup 2 min)",
       "Rameur sprint : 8×250m effort max (récup 90s)",
-      "Squat + tirage complexe — 4×6",
-      "Circuit puissance : deadlift + row + squat jump — 4 tours",
+      "Squat — 4×6", "Rowing barre buste penché — 4×6",
+      "Circuit puissance — 4 tours :\nSoulevé de terre — 6\nRowing barre buste penché — 8\nSquat jump — 6",
     ],
     recuperation: [
       "Rameur très léger — 15 min",
-      "Stretching dos, épaules, ischio-jambiers — 15 min",
+      "Stretching dos et ischio-jambiers — 15 min",
       "Foam rolling dos et jambes",
-      "Mobilité colonne thoracique — 10 min",
+      "Snow angel — 2×10",
     ],
     test: [
       "Test rameur 2000m chronométré",
@@ -1261,26 +1261,26 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   gymnastique: {
     technique: [
-      "Gainage statique : ATR contre mur — 4×20-30s",
-      "Placement bassin et gainage en suspension — 4×15s",
-      "Technique de réception de saut — 4×6",
-      "Mobilité épaules et poignets — 15 min",
+      "Gymnastique : ATR contre mur — 4×20-30s",
+      "Hollow hold — 4×15s",
+      "Depth drop (réception en contrebas) — 4×6",
+      "Wall slide — 2×10", "Snow angel — 2×10",
     ],
     volume: [
       "Tractions strictes — 4×6",
       "Dips — 4×8",
       "L-sit ou tuck-sit tenu — 4×15-20s",
       "Pompes déclinées — 3×12",
-      "Gainage complet : planche + gainage latéral — 3×40s",
+      "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
-      "Pliométrie : sauts groupés + réceptions — 4×6",
-      "Muscle-up ou tractions explosives — 4×5",
-      "Circuit force relative : tractions + dips + pompes — 4 tours",
-      "Handstand hold contre mur — 4×20s",
+      "Tuck jump — 4×6",
+      "Tractions explosives — 4×5",
+      "Circuit force relative — 4 tours :\nTractions — 6\nDips — 8\nPompes — 12",
+      "Gymnastique : handstand hold contre mur — 4×20s",
     ],
     recuperation: [
-      "Mobilité épaules, hanches, poignets — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Stretching global — 15 min",
       "Foam rolling dos et épaules",
       "Respiration et relaxation — 10 min",
@@ -1301,16 +1301,16 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Mobilité et activation musculaire — 10 min",
     ],
     volume: [
-      "Travail de fond à intensité modérée — 30-45 min",
-      "Circuit : squats + fentes + pompes — 4 tours",
-      "Gainage : planche + rotation + pont fessier — 3×45s",
+      "Footing ou vélo à intensité modérée — 30-45 min",
+      "Circuit — 4 tours :\nSquat — 15\nFentes marchées — 10 par jambe\nPompes — 10",
+      "Planche — 3×45s", "Pont fessier — 3×12",
       "Corde à sauter endurance — 5×3 min",
     ],
     intensite: [
       "Intervalles : 8×30s effort max / 90s récup",
-      "Circuit haute intensité — 5 exercices × 4 tours",
+      "Circuit haute intensité — 4 tours :\nSquat jump — 10\nPompes — 10\nKettlebell swing — 15\nFentes sautées — 10\nPlanche — 30s",
       "Sprints courts — 6×20m",
-      "Travail de puissance : sauts, explosions — 4×6",
+      "Box jump — 4×5", "Squat jump — 4×6",
     ],
     recuperation: [
       "Activité légère au choix — 20 min",
@@ -1329,24 +1329,24 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   athletisme_sauts: {
     technique: [
       "Technique d'appel : course d'élan réduite + impulsion — 6 sauts",
-      "Décomposition du geste : approche + pose de pied — 4×3",
+      "Course d'élan : décomposition approche + pose de pied — 4×3",
       "Éducatifs de saut : cloche-pied, foulées bondissantes — 3×20m",
-      "Mobilité chevilles et hanches — 10 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
       "Multibonds : foulées bondissantes — 4×30m",
       "Course d'élan progressive (7-9 appuis) + saut — 5 sauts",
-      "Renforcement : squat + fentes + mollets — 3×10",
-      "Gainage complet — 3×40s",
+      "Squat — 3×10", "Fentes marchées — 3×10 par jambe",
+      "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "Pliométrie : sauts en contrebas (depth jump) — 4×5",
-      "Saut avec élan complet à intensité compétition — 5 sauts",
+      "Course d'élan complète + saut à intensité compétition — 5 sauts",
       "Squat jump chargé — 4×5",
       "Sprint d'élan 20m départ lancé — 4 reps",
     ],
     recuperation: [
-      "Mobilité chevilles, hanches, ischio-jambiers — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
       "Foam rolling jambes complètes",
       "Marche active — 20 min",
       "Stretching actif — 15 min",
@@ -1362,25 +1362,25 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   calisthenics: {
     technique: [
       "Tirage vertical progression (bande ou négatives) — 5×4",
-      "Alignement gainage en suspension (hollow body) — 4×20s",
+      "Hollow hold — 4×20s",
       "Placement dips sur barres parallèles — 4×5",
-      "Mobilité épaules et poignets — 10 min",
+      "Wall slide — 2×10", "Snow angel — 2×10",
     ],
     volume: [
       "Tractions strictes — 5×6",
       "Dips — 5×8",
       "Pompes archer (unilatérales) — 4×6 par côté",
       "Squat pistol assisté — 3×6 par jambe",
-      "Gainage complet : planche + gainage latéral — 3×40s",
+      "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
     ],
     intensite: [
       "Tractions explosives (vers barre haute) — 4×4",
-      "Muscle-up ou progression muscle-up — 5×3",
+      "Traction explosive (progression muscle-up) — 5×3",
       "Pompes plyométriques (décollé) — 4×6",
       "Front lever tenu (progression) — 4×10s",
     ],
     recuperation: [
-      "Mobilité épaules, poignets, hanches — 15 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
       "Stretching global — 15 min",
       "Foam rolling dos et épaules",
       "Respiration et relaxation — 10 min",
@@ -1395,7 +1395,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   endurance_10k: {
     technique: [
-      "Foulées éducatives — 4×100m",
+      "Course : foulées éducatives — 4×100m",
       "Travail de foulée allure 10k — 20 min",
       "Côtes courtes 8% — 6×50m",
       "Gainage en course — 10 min",
@@ -1403,8 +1403,8 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Endurance fondamentale Zone 2 — 35 min",
       "Sortie longue — 45-55 min",
-      "Renforcement : mollets + squats + fentes",
-      "Gainage dynamique — 3×45s",
+      "Squat — 3×12", "Fente bulgare — 3×10 par jambe",
+      "Hollow rock — 3×30s",
     ],
     intensite: [
       "Fractionné 400m allure 10k — 10 reps (récup 60s)",
@@ -1428,7 +1428,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   endurance_semi: {
     technique: [
-      "Foulées éducatives — 4×100m",
+      "Course : foulées éducatives — 4×100m",
       "Travail de foulée allure semi — 20 min",
       "Côtes moyennes 6% — 6×100m",
       "Gainage en course — 10 min",
@@ -1436,8 +1436,8 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Endurance fondamentale Zone 2 — 35-50 min",
       "Sortie longue — 50-100 min",
-      "Renforcement : mollets + squats + fentes",
-      "Gainage dynamique — 3×45s",
+      "Squat — 3×12", "Fente bulgare — 3×10 par jambe",
+      "Hollow rock — 3×30s",
     ],
     intensite: [
       "Fractionné 1000m allure semi — 8 reps (récup 90s)",
@@ -1461,7 +1461,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   endurance_marathon: {
     technique: [
-      "Foulées éducatives — 4×100m",
+      "Course : foulées éducatives — 4×100m",
       "Travail de foulée allure marathon — 25 min",
       "Côtes longues 5% — 6×200m",
       "Gainage en course — 10 min",
@@ -1472,7 +1472,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Endurance fondamentale Zone 2 — 40-60 min",
       "Sortie longue — 70-150 min",
-      "Renforcement : mollets + squats + fentes",
+      "Squat — 3×12", "Fente bulgare — 3×10 par jambe",
     ],
     intensite: [
       "Fractionné 2000m allure marathon — 6 reps (récup 2 min)",
@@ -1496,21 +1496,21 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   trail: {
     technique: [
-      "Technique de descente : petits appuis rapides — 15 min",
+      "Trail : technique de descente, petits appuis rapides — 15 min",
       "Marche rapide en côte, technique de poussée — 20 min",
-      "Franchissement d'obstacles (racines, pierres) — 15 min",
-      "Mobilité chevilles et hanches — 10 min",
+      "Trail : franchissement d'obstacles (racines, pierres) — 15 min",
+      "Squat cosaque — 2×8 par côté", "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
       "Sortie longue trail avec dénivelé modéré — 90 min",
-      "Sortie vallonnée D+400m — 70 min",
-      "Renforcement : mollets + squats + fentes + gainage",
+      "Sortie trail vallonnée D+400m — 70 min",
+      "Fente bulgare — 3×10 par jambe", "Planche — 3×45s",
       "Marche active en côte — 40 min",
     ],
     intensite: [
       "Répétitions de côtes : montée rapide — 8×3 min (récup descente)",
       "Côtes longues D+ soutenu — 5×5 min",
-      "Descente technique rapide — 6×2 min (récup montée)",
+      "Trail : descente technique rapide — 6×2 min (récup montée)",
       "Fractionné vallonné — 6×5 min effort soutenu",
     ],
     recuperation: [
@@ -1538,7 +1538,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Sortie vélo endurance Z2 — 60-90 min",
       "Sortie course endurance fondamentale — 45 min",
       "Nage continue 4 nages — 1500m",
-      "Renforcement général : gainage + squat + tirage — 3×10",
+      "Squat — 3×10", "Tirage horizontal — 3×10",
     ],
     intensite: [
       "Fractionné natation : 10×100m (récup 20s)",
@@ -1550,7 +1550,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Nage très douce — 20 min",
       "Vélo doux Z1 — 30 min",
       "Stretching global — 15 min",
-      "Mobilité épaules et hanches — 10 min",
+      "Squat cosaque — 2×8 par côté", "Wall slide — 2×10",
     ],
     test: [
       "Simulation triathlon format court (natation+vélo+course enchaînés)",
@@ -1562,20 +1562,20 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   reeducation_cheville: {
     technique: [
-      "Proprioception unipodale sur sol stable — 4×30s par jambe",
+      "Équilibre unipodal sur sol stable — 4×30s par jambe",
       "Mobilité cheville : flexion dorsale contre mur — 3×10",
       "Marche sur pointes puis talons — 3×20m",
       "Étirement mollets — 3×30s",
     ],
     volume: [
       "Isométrie chevilles : éverseurs/inverseurs contre résistance — 4×20s",
-      "Renforcement mollets léger : montées sur pointes — 3×15",
-      "Proprioception sur plateau instable — 4×30s par jambe",
+      "Montées sur pointes — 3×15",
+      "Équilibre unipodal sur plateau instable — 4×30s par jambe",
       "Vélo ou marche légère — 15 min",
     ],
     intensite: [
-      "Renforcement mollets modéré : montées sur pointes unipodales — 3×12 par jambe",
-      "Proprioception dynamique : petits sauts contrôlés — 3×8",
+      "Montées sur pointes unipodales — 3×12 par jambe",
+      "Petits sauts unipodaux contrôlés — 3×8",
       "Isométrie cheville en charge partielle — 4×25s",
     ],
     recuperation: [
@@ -1599,13 +1599,13 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   reeducation_genou: {
     technique: [
       "Activation fessiers : pont fessier — 3×12",
-      "Squat isométrique dos au mur (wall sit) — 4×20s",
-      "Contrôle du valgus : squat face à un miroir, focus alignement genou-pied — 3×10",
-      "Mobilité hanches — 10 min",
+      "Wall sit (chaise contre mur) — 4×20s",
+      "Squat abduction élastique, focus alignement genou-pied — 3×10",
+      "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
-      "Renforcement fessiers : clamshell + pont fessier + band walk — 3×15",
-      "Squat gobelet focus alignement — 3×12",
+      "Clamshell — 3×15 par côté", "Pas chassés élastique — 3×15 par côté",
+      "Squat abduction élastique — 3×12",
       "Step-down contrôlé face miroir — 3×10 par jambe",
       "Vélo léger sans résistance — 15-20 min",
     ],
@@ -1613,7 +1613,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Squat charge légère focus alignement — 3×10",
       "Fentes contrôlées focus alignement — 3×10 par jambe",
       "Step-up contrôlé — 3×10 par jambe",
-      "Proprioception dynamique unipodale — 4×20s",
+      "SDT roumain unijambe — 3×8 par jambe",
     ],
     recuperation: [
       "Mobilité douce genou et hanche — 10 min",
@@ -1638,18 +1638,18 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Squat partiel (90° ou moins) — 4×10",
       "Wall sit (chaise contre mur) — 4×20s",
       "Step-down excentrique lent — 3×8 par jambe",
-      "Mobilité hanches — 10 min",
+      "Bascule adducteurs à genou — 2×10",
     ],
     volume: [
       "Excentrique quadriceps : step-down lent — 4×10 par jambe",
-      "Renforcement fessiers : clamshell + pont fessier + band walk — 3×15",
-      "Presse à cuisses amplitude partielle — 3×15",
+      "Clamshell — 3×15 par côté", "Pas chassés élastique — 3×15 par côté",
+      "Spanish squat — 3×15",
       "Vélo léger sans résistance — 15-20 min",
     ],
     intensite: [
       "Excentrique quadriceps chargé : step-down lesté — 3×10 par jambe",
       "Squat progressif vers amplitude complète (si douleur <3/10) — 3×10",
-      "Renforcement fessiers chargé : hip thrust — 3×12",
+      "Pont fessier sur banc (hip thrust) — 3×12",
     ],
     recuperation: [
       "Mobilité douce genou et hanche — 10 min",
@@ -1673,19 +1673,19 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   // périodisation dédié supplémentaire.
   reeducation_genou_lca: {
     technique: [
-      "Activation quadriceps : contraction isométrique — 4×10s",
+      "TKE (extension terminale du genou) — 4×12",
       "Mobilité genou passive (flexion/extension) — 10 min",
-      "Proprioception bipodale sol stable — 4×20s",
+      "Équilibre bipodal sur sol stable — 4×20s",
       "Amplitude articulaire active assistée — 10 min",
     ],
     volume: [
-      "Renforcement quadriceps chaîne fermée léger : presse à cuisses — 3×15",
+      "Spanish squat — 3×15",
       "Nordic Hamstring Exercise assisté — 3×6",
-      "Renforcement fessiers : pont fessier + clamshell — 3×15",
+      "Pont fessier — 3×15", "Clamshell — 3×15 par côté",
       "Vélo sans résistance — 15-20 min",
     ],
     intensite: [
-      "Pliométrie débutante : sauts amortis bipodaux contrôlés — 3×6",
+      "Box jump (réception amortie) — 3×6",
       "Squat unipodal contrôlé — 3×8 par jambe",
       "Nordic Hamstring Exercise — 4×8",
       "Course en ligne droite progressive (si autorisé) — 10-15 min",
@@ -1721,7 +1721,7 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Isométrie planche prolongée — 4×30s",
       "Bird-dog avec charge légère (poids de cheville) — 3×10 par côté",
       "Renforcement dos modéré : tirage horizontal léger — 3×12",
-      "Gainage dynamique : mountain climber lent — 3×10",
+      "Dead bug — 3×12",
     ],
     recuperation: [
       "Mobilité douce colonne lombaire — 10 min",
@@ -1751,13 +1751,13 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
     volume: [
       "Excentrique mollet (protocole Alfredson) genou tendu — 3×15",
       "Excentrique mollet (protocole Alfredson) genou fléchi — 3×15",
-      "Renforcement pied/cheville léger — 3×12",
+      "Montées sur pointes bipodales — 3×12",
       "Vélo ou natation sans impact — 15-20 min",
     ],
     intensite: [
       "Excentrique mollet chargé (lesté, lent) — 4×12",
       "Montées sur pointes unipodales chargées — 3×12 par jambe",
-      "Renforcement mollet force maximale — 4×8",
+      "Mollets assis lestés (soléaire) — 4×8",
       "Course progressive courte (si douleur <4/10) — 10-15 min",
     ],
     recuperation: [
@@ -1779,21 +1779,21 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
   // course complète seulement en semaine 5-6.
   reeducation_periostite: {
     technique: [
-      "Renforcement tibial antérieur : flexion dorsale résistée — 4×15",
+      "Flexion dorsale résistée à l'élastique — 4×15",
       "Mobilité cheville : flexion dorsale — 3×10",
-      "Technique de foulée : cadence et appui médio-pied — 10 min",
+      "Course : technique de foulée, cadence et appui médio-pied — 10 min",
       "Auto-massage mollet et tibia",
     ],
     volume: [
-      "Renforcement tibial antérieur chargé — 3×15",
+      "Tibialis raise contre mur — 3×15",
       "Vélo ou natation sans impact — 20-25 min",
-      "Renforcement mollets et pied — 3×12",
-      "Proprioception cheville — 3×10",
+      "Montées sur pointes — 3×12",
+      "Équilibre unipodal — 3×30s par jambe",
     ],
     intensite: [
       "Marche-course progressive (ratio 1:2) — 20 min",
       "Course continue légère (si douleur absente) — 15-20 min",
-      "Renforcement tibial antérieur et mollets chargé — 4×12",
+      "Tibialis raise contre mur — 4×12", "Montées sur pointes lestées — 4×12",
     ],
     recuperation: [
       "Marche active — 20-25 min",
@@ -1811,31 +1811,31 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
 
   reeducation_epaule: {
     technique: [
-      "Isométrie rotateurs externes (coude au corps) — 4×15s",
+      "Rotation externe élastique tenue (coude au corps) — 4×15s",
       "Isométrie rotateurs internes — 4×15s",
-      "Mobilité scapulaire : rétraction/protraction — 3×12",
+      "Wall slide — 3×10",
       "Mobilité épaule douce (pendulaires) — 10 min",
     ],
     volume: [
-      "Renforcement coiffe léger bande élastique : rotation externe — 3×15",
-      "Renforcement coiffe léger bande élastique : rotation interne — 3×15",
-      "Stabilité scapulaire : Y-T-W au sol — 3×10 chaque",
-      "Mobilité thoracique — 10 min",
+      "Rotation externe élastique — 3×15",
+      "Rotation interne élastique léger — 3×15",
+      "Y-T-W au sol — 3×10 chaque",
+      "Snow angel — 2×10",
     ],
     intensite: [
-      "Isométrie rotateurs charge modérée — 4×20s",
-      "Renforcement coiffe modéré bande élastique — 3×15",
-      "Stabilité scapulaire avec charge légère — 3×12",
+      "Rotation externe élastique tenue — 4×20s",
+      "Face pull — 3×15",
+      "Scap push-up — 3×12",
     ],
     recuperation: [
       "Mobilité douce épaule (pendulaires) — 10 min",
-      "Étirements chaîne postérieure épaule",
+      "Étirement capsule postérieure (sleeper stretch)",
       "Auto-massage trapèzes et deltoïdes",
       "Respiration et relaxation — 10 min",
     ],
     test: [
       "Test : isométrie rotation externe, temps de tenue max",
-      "Test : amplitude articulaire épaule (mesure)",
+      "Test : amplitude articulaire du bras (mesure)",
       "Test : élévation bras sans douleur (amplitude)",
       "Bilan douleur au mouvement et à la charge",
     ],
@@ -1849,15 +1849,15 @@ const EXERCISES: Record<SportCategory, Record<SessionType, string[]>> = {
       "Respiration diaphragmatique — 10 min",
     ],
     volume: [
-      "Renforcement léger multi-articulaire : squat + rowing élastique — 3×12",
+      "Squat — 3×12", "Rowing anneaux — 3×12",
       "Isométrie ciblée zone concernée — 4×20s",
       "Marche active — 20 min",
       "Mobilité globale — 15 min",
     ],
     intensite: [
-      "Renforcement modéré multi-articulaire — 3×12",
+      "Fente arrière — 3×10 par jambe", "Pompes — 3×10",
       "Isométrie ciblée prolongée — 4×30s",
-      "Circuit léger : mobilité + renfo + équilibre — 3 tours",
+      "Circuit léger — 3 tours :\nBird dog — 8 par côté\nPont fessier — 12\nChaise — 30s",
     ],
     recuperation: [
       "Mobilité douce globale — 15 min",
@@ -1883,7 +1883,19 @@ function buildNotesFromBank(bank: string[], type: SessionType, cycleIndex: numbe
   const offset = (cycleIndex * 2) % bank.length;
   const rotated = [...bank.slice(offset), ...bank.slice(0, offset)];
   if (type !== "volume" && type !== "intensite") return rotated.join("\n");
-  return rotated.map(line => formatPrescription(parseExercise(line), shape, phase)).join("\n");
+  return rotated.map(entry => entry.split("\n").map(line => formatBankLine(line, shape, phase)).join("\n")).join("\n");
+}
+
+// Bloc (circuit, AMRAP, EMOM, complexe — 2026-10-22) : UNE entrée de banque sur plusieurs lignes,
+// en-tête « Circuit — 4 tours : » puis une ligne par exercice (« Pompes — 10 »), pour que chaque
+// mouvement ait sa propre ligne (et sa démo). Une entrée multi-ligne reste un seul élément de la
+// banque : la rotation ne la coupe jamais. Chaque ligne est reformatée séparément ; l'en-tête
+// progresse (tours/durée) en gardant son « : » final, les lignes d'exercice sans séries
+// (« Pompes — 10 ») ne sont pas reconnues par parseExercise et restent telles quelles.
+function formatBankLine(line: string, shape: Shape, phase: number): string {
+  const header = /\s:\s*$/.test(line);
+  const out = formatPrescription(parseExercise(header ? line.replace(/\s*:\s*$/, "") : line), shape, phase);
+  return header ? `${out} :` : out;
 }
 
 // Lignes interchangeables d'une banque générique : UNE seule par séance (change chaque semaine),
@@ -1915,17 +1927,17 @@ const ONE_OF: Partial<Record<SportCategory, Partial<Record<SessionType, string[]
     test: ["Sortie longue à allure marathon cible — 30km", "Test : semi-marathon chronométré", "Test de seuil lactique"],
   },
   cyclisme: {
-    volume: ["Sortie endurance Z2 (60-70% FCmax) — 60-90 min", "Travail en côte progressive — 30 min", "Intervalles doux : 2×20 min Z2/Z3"],
-    intensite: ["Intervalles VO2max : 5×4 min à 110% FTP (récup 4 min)", "Montée longue : 2×15 min au seuil", "Pyramide puissance : 3-4-5-4-3 min"],
+    volume: ["Sortie vélo endurance Z2 (60-70% FCmax) — 60-90 min", "Travail en côte progressive — 30 min", "Intervalles doux vélo : 2×20 min Z2/Z3"],
+    intensite: ["Intervalles VO2max vélo : 5×4 min à 110% FTP (récup 4 min)", "Montée longue : 2×15 min au seuil", "Pyramide puissance vélo : 3-4-5-4-3 min"],
     test: ["Test FTP : 20 min à puissance max", "VO2max indirect : test 5 min"],
   },
   natation: {
-    volume: ["Série de fond : 10×100m (récup 15s)", "Pyramide : 200-400-600-400-200m", "Nage alternée 4 nages — 1000m"],
+    volume: ["Série de fond nage : 10×100m (récup 15s)", "Pyramide nage : 200-400-600-400-200m", "Nage alternée 4 nages — 1000m"],
     test: ["Test 400m allure compétition", "Test VO2 : 3×300m progressif"],
   },
   trail: {
-    volume: ["Sortie longue trail avec dénivelé modéré — 90 min", "Sortie vallonnée D+400m — 70 min", "Marche active en côte — 40 min"],
-    intensite: ["Répétitions de côtes : montée rapide — 8×3 min (récup descente)", "Côtes longues D+ soutenu — 5×5 min", "Descente technique rapide — 6×2 min (récup montée)", "Fractionné vallonné — 6×5 min effort soutenu"],
+    volume: ["Sortie longue trail avec dénivelé modéré — 90 min", "Sortie trail vallonnée D+400m — 70 min", "Marche active en côte — 40 min"],
+    intensite: ["Répétitions de côtes : montée rapide — 8×3 min (récup descente)", "Côtes longues D+ soutenu — 5×5 min", "Trail : descente technique rapide — 6×2 min (récup montée)", "Fractionné vallonné — 6×5 min effort soutenu"],
     test: ["Simulation course trail : distance + dénivelé cible", "Test : montée chronométrée sur une côte de référence"],
   },
   triathlon: {
@@ -2000,10 +2012,10 @@ function archetypeLines(a: Archetype, week: number): string[] {
 // Gildas plutôt que le premier essai (archétype dédié en position 5/6, qui n'apparaissait
 // quasiment jamais aux fréquences réelles de ces programmes, 3-4 jours/semaine).
 const ENDURANCE_FONDAMENTALE: Archetype = { name: "Endurance fondamentale", type: "volume", exercises: [], variants: [
-  "Endurance fondamentale — 45 min", "Sortie facile Z2 — 40 min", "Footing fondamental — 50 min",
+  "Endurance fondamentale — 45 min", "Footing facile Z2 — 40 min", "Footing fondamental — 50 min",
 ]};
 const ENDURANCE_FONDAMENTALE_RENFO: Archetype = { name: "Endurance fondamentale", type: "volume", variants: ENDURANCE_FONDAMENTALE.variants, exercises: [
-  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s",
+  "Squat — 3×12", "Fente bulgare — 3×10 par jambe", "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const ENDURANCE_SEUIL: Archetype = { name: "Seuil", type: "intensite", exercises: [], variants: [
   "Seuil lactique — 20 min continu", "Tempo au seuil — 25 min", "Côtes au seuil — 5×400m (récup 90s)",
@@ -2015,7 +2027,7 @@ const ENDURANCE_FRACTIONNE: Archetype = { name: "Fractionné", type: "intensite"
   "Fractionné 400m allure 5km — 8 reps (récup 90s)", "Fractionné 1000m — 5 reps (récup 3 min)", "Fractionné 200m rapide — 12 reps (récup 60s)",
 ]};
 const ENDURANCE_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
-  "Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s", "Proprioception chevilles — 3×10",
+  "Squat — 3×12", "Fente bulgare — 3×10 par jambe", "Planche — 3×45s", "Gainage latéral — 2×30s par côté", "SDT roumain unijambe — 3×8 par jambe",
 ]};
 const ENDURANCE_RECUPERATION: Archetype = { name: "Récupération active", type: "recuperation", exercises: [], variants: [
   "Footing très facile — 25 min", "Marche active — 30 min", "Vélo doux — 20 min",
@@ -2048,7 +2060,7 @@ const SPRINT_VITESSE_MAX: Archetype = { name: "Vitesse max", type: "intensite", 
   "Gammes techniques : foulées bondissantes — 3×20m",
   "Sprint 60m à 95% — 5 reps (récup 5 min)",
   "Sprint 30m lancé — 4 reps (récup 4 min)",
-  "Pliométrie : sauts horizontaux — 3×6",
+  "Saut en longueur — 3×6",
 ]};
 const SPRINT_RENFO: Archetype = { name: "Renfo", type: "volume", exercises: [
   "Squat — 4×5@75%", "Soulevé de terre — 3×5@75%", "Fentes marchées — 3×12",
@@ -2084,13 +2096,13 @@ function selectSprint(n: number): Archetype[] {
 // Ordre interne à chaque séance, demandé explicitement : mouvement technique ou semi-technique
 // (le geste complet du jour), puis tirages (pulls), puis squats, puis renfo en fin de séance.
 const HA_SNATCH: Archetype = { name: "Focus Arraché", type: "intensite", exercises: [
-  "Arraché — 5×2@75%", "Tirage arraché — 4×3@80%", "Squat arraché — 4×3@70%", "Gainage anti-rotation — 3×40s",
+  "Arraché — 5×2@75%", "Tirage arraché — 4×3@80%", "Squat arraché — 4×3@70%", "Pallof press tenu — 3×30s par côté",
 ]};
 const HA_CLEAN_JERK: Archetype = { name: "Focus Épaulé-Jeté", type: "intensite", exercises: [
-  "Épaulé-jeté — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
+  "Épaulé-jeté — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Pallof press tenu — 3×30s par côté",
 ]};
 const HA_CLEAN: Archetype = { name: "Focus Épaulé", type: "intensite", exercises: [
-  "Épaulé — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Gainage anti-rotation — 3×40s",
+  "Épaulé — 5×2@75%", "Tirage épaulé — 4×3@80%", "Squat avant — 4×3@70%", "Pallof press tenu — 3×30s par côté",
 ]};
 const HA_JERK: Archetype = { name: "Focus Jeté", type: "intensite", exercises: [
   "Jeté — 5×2@75%", "Tirage épaulé — 4×3@78%", "Squat avant — 4×3@70%", "Développé militaire — 3×8@65%",
@@ -2099,7 +2111,7 @@ const HA_TOTAL: Archetype = { name: "Focus Total", type: "test", exercises: [
   "Complexe arraché + épaulé-jeté — 4×1@80%", "Simulation total : arraché puis épaulé-jeté",
 ]};
 const HA_LIGHT: Archetype = { name: "Séance légère variantes", type: "technique", exercises: [
-  "Arraché variantes légères — 4×3@60%", "Épaulé-jeté variantes techniques — 4×3@60%", "Squat léger + mobilité — 3×5",
+  "Arraché suspendu — 4×3@60%", "Épaulé debout + jeté — 4×3@60%", "Squat léger — 3×5",
 ]};
 function selectHalterophilie(n: number): Archetype[] {
   if (n <= 2) return [HA_SNATCH, HA_CLEAN_JERK].slice(0, n);
@@ -2116,13 +2128,13 @@ function selectHalterophilie(n: number): Archetype[] {
 // puis assistance (variantes du lift : pause, prise, déficit...), puis renfo général en fin de
 // séance (accessoire, pas spécifique au lift du jour).
 const PL_SQUAT: Archetype = { name: "Focus Squat", type: "intensite", exercises: [
-  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%", "Gainage anti-rotation — 3×40s",
+  "Back squat — 5×3@78%", "Squat pause — 4×3@70%", "Front squat — 4×4@70%", "Pallof press tenu — 3×30s par côté",
 ]};
 const PL_BENCH: Archetype = { name: "Focus Bench", type: "intensite", exercises: [
-  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé prise serrée — 4×5@65%", "Tirage horizontal — 3×10@65%",
+  "Développé couché — 5×3@78%", "Bench pause 2s — 4×3@70%", "Développé couché prise serrée — 4×5@65%", "Tirage horizontal — 3×10@65%",
 ]};
 const PL_DEADLIFT: Archetype = { name: "Focus Deadlift", type: "intensite", exercises: [
-  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%", "Gainage anti-extension — 3×40s",
+  "Soulevé de terre — 5×3@78%", "Deadlift déficit — 4×3@65%", "Soulevé de terre roumain — 4×6@65%", "Planche — 3×40s",
 ]};
 function selectPowerlifting(n: number): Archetype[] {
   const rotation = [PL_SQUAT, PL_BENCH, PL_DEADLIFT];
@@ -2144,16 +2156,16 @@ function selectPowerlifting(n: number): Archetype[] {
 // ---- Sports collectifs : au moins 2 techniques, 1 endurance, 1 vitesse, 1 renfo — technique en
 // tête (double priorité), on boucle sur cette base de 5 si plus de jours disponibles.
 const COLLECTIF_TECHNIQUE: Archetype = { name: "Technique", type: "technique", exercises: [
-  "Exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Travail défensif en situation réduite — 20 min",
+  "Passes et exercices techniques au poste — 20 min", "Passes + combinaisons à 2/3 — 15 min", "Opposition réduite : travail défensif — 20 min",
 ]};
 const COLLECTIF_ENDURANCE: Archetype = { name: "Endurance", type: "volume", exercises: [
-  "Circuit cardio : navettes + sauts + sprint — 4 tours", "Balle à intensité soutenue — 20 min",
+  "Circuit cardio — 4 tours :\nNavette — 40m\nSquat jump — 6\nSprint — 20m", "Jeu réduit à intensité soutenue — 20 min",
 ]};
 const COLLECTIF_VITESSE: Archetype = { name: "Vitesse", type: "intensite", exercises: [
-  "Accélérations + changements de direction — 6×20m", "Intervalles : 8×15s effort (récup 45s)",
+  "Accélérations + changements de direction — 6×20m", "Course intermittente : 8×15s effort (récup 45s)",
 ]};
 const COLLECTIF_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
-  "Renforcement bas du corps — 4×10", "Gainage et proprioception — 3×45s",
+  "Fente bulgare — 3×8 par jambe", "Nordic curl — 3×5", "Planche Copenhague — 3×20s par côté", "SDT roumain unijambe — 3×8 par jambe",
 ]};
 const COLLECTIF_BASE: Archetype[] = [COLLECTIF_TECHNIQUE, COLLECTIF_TECHNIQUE, COLLECTIF_ENDURANCE, COLLECTIF_VITESSE, COLLECTIF_RENFO];
 function selectCollectif(n: number): Archetype[] {
@@ -2165,19 +2177,19 @@ function selectCollectif(n: number): Archetype[] {
 // chaque séance, demandé explicitement : mouvement polyarticulaire (compound) en premier, puis
 // enchaînement d'exercices d'isolation ciblant le groupe musculaire du jour.
 const MUSCU_JAMBES: Archetype = { name: "Jambes", type: "volume", exercises: [
-  "Squat — 4×8@70%", "Presse à cuisses — 3×12@65%", "Leg curl — 3×12@60%", "Mollets debout — 3×15@60%",
+  "Squat — 4×8@70%", "Fente bulgare — 3×10@65% par jambe", "Leg curl — 3×12@60%", "Leg extension — 3×12@60%",
 ]};
 const MUSCU_DOS: Archetype = { name: "Dos", type: "volume", exercises: [
-  "Tirage horizontal — 4×8@70%", "Tirage vertical — 3×12@65%", "Curl biceps barre — 3×12@60%", "Curl marteau — 3×12@60%",
+  "Tirage horizontal — 4×8@70%", "Tirage vertical — 3×12@65%", "Curl haltères — 3×12@60%", "Curl marteau — 3×12@60%",
 ]};
 const MUSCU_PECTORAUX: Archetype = { name: "Pectoraux", type: "volume", exercises: [
   "Développé couché — 4×8@70%", "Développé incliné haltères — 3×10@65%", "Écarté couché — 3×12@60%", "Dips — 3×10@60%",
 ]};
 const MUSCU_EPAULES: Archetype = { name: "Épaules", type: "volume", exercises: [
-  "Développé militaire — 4×8@70%", "Élévations latérales — 3×15@55%", "Oiseau — 3×15@55%", "Shrugs — 3×12@65%",
+  "Développé militaire — 4×8@70%", "Élévations latérales — 3×15@55%", "Oiseau — 3×15@55%", "Tirage menton barre — 3×12@65%",
 ]};
 const MUSCU_BRAS: Archetype = { name: "Bras", type: "volume", exercises: [
-  "Développé prise serrée — 4×8@70%", "Extension triceps poulie — 3×12@60%", "Curl barre — 3×12@60%", "Curl marteau — 3×12@60%",
+  "Développé couché prise serrée — 4×8@70%", "Extension triceps poulie — 3×12@60%", "Curl barre — 3×12@60%", "Curl marteau — 3×12@60%",
 ]};
 const MUSCU_BASE: Archetype[] = [MUSCU_JAMBES, MUSCU_DOS, MUSCU_PECTORAUX, MUSCU_EPAULES, MUSCU_BRAS];
 function selectMusculation(n: number): Archetype[] {
@@ -2216,16 +2228,16 @@ function selectSnatchSpecialization(n: number): Archetype[] {
 // Pliométrie, 1 séance Sprint — dans cet ordre de priorité décroissante. Renfo systématiquement
 // en fin de chaque séance (baked dans chaque banque d'exercices, pas une séance à part).
 const PUISSANCE_FORCE: Archetype = { name: "Force", type: "intensite", exercises: [
-  "Back squat — 5×3@80%", "Développé couché — 5×3@80%", "Gainage complet — 3×40s",
+  "Back squat — 5×3@80%", "Développé couché — 5×3@80%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PUISSANCE_PUISSANCE: Archetype = { name: "Puissance", type: "intensite", exercises: [
-  "Épaulé — 4×3@70%", "Arraché puissance — 4×3@65%", "Push press — 4×4@65%", "Gainage complet — 3×40s",
+  "Épaulé — 4×3@70%", "Arraché puissance — 4×3@65%", "Push press — 4×4@65%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PUISSANCE_PLYO: Archetype = { name: "Pliométrie", type: "intensite", exercises: [
-  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Bondissements — 4×20m", "Gainage complet — 3×40s",
+  "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5", "Bondissements — 4×20m", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PUISSANCE_SPRINT: Archetype = { name: "Sprint", type: "intensite", exercises: [
-  "Départs blocs — 6×20m (récup 4 min)", "Sprint 30m — 5 reps", "Gainage complet — 3×40s",
+  "Départs blocs — 6×20m (récup 4 min)", "Sprint 30m — 5 reps", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PUISSANCE_PRIORITY: Archetype[] = [PUISSANCE_FORCE, PUISSANCE_PUISSANCE, PUISSANCE_PLYO, PUISSANCE_PLYO, PUISSANCE_SPRINT];
 function selectPuissanceExplosivite(n: number): Archetype[] {
@@ -2235,10 +2247,10 @@ function selectPuissanceExplosivite(n: number): Archetype[] {
 // ---- Perte de poids : varié plutôt que mono-modal — musculation (préserve la masse musculaire
 // en déficit calorique) et cardio en alternance, 1 à 2× chacun selon le nombre de jours.
 const PDP_MUSCU: Archetype = { name: "Musculation full-body", type: "volume", exercises: [
-  "Squat — 4×10@65%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10@65%", "Gainage complet — 3×40s",
+  "Squat — 4×10@65%", "Développé couché — 4×10@65%", "Tirage horizontal — 4×10@65%", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const PDP_CARDIO: Archetype = { name: "Cardio", type: "intensite", exercises: [
-  "Vélo ou rameur fractionné — 8×2 min effort / 1 min récup", "Circuit cardio : burpees + jumping jacks + mountain climbers — 4 tours",
+  "Vélo ou rameur fractionné — 8×2 min effort / 1 min récup", "Circuit cardio — 4 tours :\nBurpees — 10\nKettlebell swing — 15\nSquat jump — 10",
 ]};
 const PDP_PRIORITY: Archetype[] = [PDP_MUSCU, PDP_CARDIO, PDP_MUSCU, PDP_CARDIO];
 function selectPertePoids(n: number): Archetype[] {
@@ -2253,13 +2265,13 @@ function selectPertePoids(n: number): Archetype[] {
 // WOD" (Fran/Cindy/Murph/Grace) n'est pas un archétype à part — c'est le test forcé de fin de
 // semaine MRV (voir EXERCISES.fitness.test), même mécanisme que le test forcé partout ailleurs.
 const FITNESS_FORCE: Archetype = { name: "Force", type: "intensite", exercises: [
-  "Back squat — 5×5@75%", "Développé militaire — 4×5@70%", "WOD finisher : 10-8-6-4-2 burpees + kettlebell swings",
+  "Back squat — 5×5@75%", "Développé militaire — 4×5@70%", "WOD finisher 10-8-6-4-2 :\nBurpees\nKettlebell swing",
 ]};
 const FITNESS_METCON: Archetype = { name: "Metcon / WOD", type: "intensite", exercises: [
-  "Gammes + activation — 10 min", "WOD For Time : 21-15-9 thrusters + tractions", "AMRAP 15 min : 5 pompes + 10 squats + 15 mountain climbers",
+  "Gammes + activation — 10 min", "For time 21-15-9 :\nFront squat + push press (thruster)\nTractions", "AMRAP 15 min :\nPompes — 5\nSquat — 10\nKettlebell swing — 15",
 ]};
 const FITNESS_GYMNASTIQUE: Archetype = { name: "Gymnastique / Skill", type: "technique", exercises: [
-  "Muscle-up progression : négatives + tirage — 5×3", "Handstand hold contre mur — 4×20s", "EMOM 10 min : 5 tractions strictes + 10 pompes",
+  "Traction négative lente — 5×3", "Dips — 5×5", "Gymnastique : handstand hold contre mur — 4×20s", "EMOM 10 min :\nTractions strictes — 5\nPompes — 10",
 ]};
 const FITNESS_MONOSTRUCTURAL: Archetype = { name: "Monostructural", type: "volume", exercises: [
   "Rameur continu — 30 min endurance", "Bike ou course fractionné — 10×1 min effort / 1 min récup",
@@ -2276,19 +2288,19 @@ function selectFitness(n: number): Archetype[] {
 // sparring (contrairement au deadlift powerlifting) — la fréquence suit naturellement le nombre
 // de jours choisis (2 à 5/semaine en pratique), pas de contrainte artificielle à coder.
 const COMBAT_TECHNIQUE: Archetype = { name: "Technique", type: "technique", exercises: [
-  "Shadow boxing technique — 4×3 min", "Enchaînements techniques au sac — 5×3 min", "Travail au sol / projections technique (partenaire) — 20 min",
+  "Shadow boxing technique — 4×3 min", "Sac de frappe : enchaînements techniques — 5×3 min", "Lutte : travail au sol et projections (partenaire) — 20 min",
 ]};
 const COMBAT_SPARRING: Archetype = { name: "Sparring / Randori", type: "intensite", exercises: [
   "Échauffement technique — 10 min", "Sparring / randori — 5×3 min (récup 1 min)", "Retour au calme + mobilité — 10 min",
 ]};
 const COMBAT_CONDITIONNEMENT: Archetype = { name: "Conditionnement", type: "intensite", exercises: [
-  "HIIT corde à sauter — 10×30s effort / 30s récup", "Circuit combat : sac + pompes + squats — 4 tours", "Sprints courts — 6×20m",
+  "HIIT corde à sauter — 10×30s effort / 30s récup", "Circuit combat — 4 tours :\nSac de frappe — 30s\nPompes — 10\nSquat jump — 10", "Sprints courts — 6×20m",
 ]};
 // "volume" (pas "intensite") — force/explosivité générale (pas un lift de compétition, cf.
 // convention MUSCU_* de la catégorie musculation) : évite aussi que 3 des 4 archétypes combat
 // soient tous "durs" (voir sprint plus haut pour le bug que ça cause si adjacents).
 const COMBAT_FORCE: Archetype = { name: "Force & Explosivité", type: "volume", exercises: [
-  "Développé couché — 4×5@75%", "Squat ou fentes sautées — 4×6", "Médecine ball throws (puissance) — 4×8",
+  "Développé couché — 4×5@75%", "Squat jump — 4×6", "Épaulé debout suspendu — 4×3",
 ]};
 const COMBAT_PRIORITY: Archetype[] = [COMBAT_TECHNIQUE, COMBAT_SPARRING, COMBAT_CONDITIONNEMENT, COMBAT_FORCE];
 function selectCombat(n: number): Archetype[] {
@@ -2320,10 +2332,10 @@ const GEND_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exerc
 const GEND_TRACTIONS: Archetype = { name: "Tractions & Gainage", type: "volume", exercises: [
   "Tractions pronation — 5×max (récup 2 min)",
   "Tirage poulie haute — 4×10",
-  "Gainage complet — 3×45s",
+  "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const GEND_PPG: Archetype = { name: "PPG générale", type: "volume", exercises: [
-  "Circuit PPG : pompes + squats + burpees — 4 tours",
+  "Circuit PPG — 4 tours :\nPompes — 15\nSquat — 20\nBurpees — 10",
   "Fentes marchées — 3×12",
   "Gainage latéral — 3×30s par côté",
 ]};
@@ -2350,9 +2362,9 @@ const POMPIER_PPA: Archetype = { name: "PPA — Parcours Intervention", type: "i
   "Portage mannequin/partenaire — 5×20m",
 ]};
 const POMPIER_PORT_CHARGE: Archetype = { name: "Port de charge", type: "volume", exercises: [
-  "Port de charge : sac lesté 20kg — 5×30m",
-  "Tractions + pompes — 4×max",
-  "Gainage complet — 3×45s",
+  "Farmer walk 20kg — 5×30m",
+  "Tractions — 4×max", "Pompes — 4×max",
+  "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const POMPIER_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
   "Luc Léger : paliers progressifs",
@@ -2367,9 +2379,9 @@ function selectSapeurPompier(n: number): Archetype[] {
 // squats 1min, lancer médecine-ball 3kg assis, gainage/abdos 2min, natation base — 6 épreuves,
 // chacune notée sur son propre barème.
 const TAP_DRILLS: Archetype = { name: "Squats & Lancer — Drills", type: "technique", exercises: [
-  "Squats rythmés technique — 3×1 min",
+  "Squat au poids du corps rythmé — 3×1 min",
   "Lancer médecine-ball 3kg assis technique — 4×8",
-  "Gainage technique : planche + variantes — 3×40s",
+  "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const TAP_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
   "Luc Léger : paliers progressifs",
@@ -2378,10 +2390,10 @@ const TAP_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exerci
 const TAP_TRACTIONS: Archetype = { name: "Tractions & Gainage", type: "volume", exercises: [
   "Tractions pronation — 5×max (récup 2 min)",
   "Tirage poulie haute — 4×10",
-  "Abdos gainage 2 min — 3 séries",
+  "Planche — 3×2 min",
 ]};
 const TAP_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises: [
-  "Circuit PPG complet : squats + pompes + burpees — 4 tours",
+  "Circuit PPG — 4 tours :\nSquat — 20\nPompes — 15\nBurpees — 10",
   "Natation base tranquille — 15 min",
 ]};
 const ARMEE_TAP_PRIORITY: Archetype[] = [TAP_LUC_LEGER, TAP_DRILLS, TAP_TRACTIONS, TAP_CIRCUIT];
@@ -2394,19 +2406,19 @@ function selectArmeeTap(n: number): Archetype[] {
 const POLICE_PHM: Archetype = { name: "PHM — Parcours Habileté", type: "technique", exercises: [
   "Parcours PHM technique : ateliers enchaînés — 3 passages",
   "Franchissements + équilibre — 15 min",
-  "Port de charge 25-30kg — 5×20m",
+  "Farmer walk 25-30kg — 5×20m",
 ]};
 const POLICE_TECR: Archetype = { name: "TECR — Endurance", type: "intensite", exercises: [
   "TECR : course progressive par paliers",
   "Fractionné VMA — 8×400m (récup 90s)",
 ]};
 const POLICE_FORCE: Archetype = { name: "Port de charge & Force", type: "volume", exercises: [
-  "Port de charge lourd — 5×20m",
-  "Tractions + pompes — 4×max",
-  "Gainage complet — 3×45s",
+  "Farmer walk lourd — 5×20m",
+  "Tractions — 4×max", "Pompes — 4×max",
+  "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const POLICE_CIRCUIT: Archetype = { name: "Circuit PPG", type: "volume", exercises: [
-  "Circuit PPG : squats + fentes + burpees — 4 tours",
+  "Circuit PPG — 4 tours :\nSquat — 20\nFentes marchées — 10 par jambe\nBurpees — 10",
 ]};
 const POLICE_NATIONALE_PRIORITY: Archetype[] = [POLICE_TECR, POLICE_PHM, POLICE_FORCE, POLICE_CIRCUIT];
 function selectPoliceNationale(n: number): Archetype[] {
@@ -2429,7 +2441,7 @@ const GIGN_NATATION: Archetype = { name: "Natation contrainte", type: "intensite
 const GIGN_FORCE_MAX: Archetype = { name: "Force max", type: "volume", exercises: [
   "Tractions max en 2 min — 3 séries",
   "Pompes max en 2 min — 3 séries",
-  "Gainage complet — 3×50s",
+  "Planche — 3×50s", "Gainage latéral — 2×30s par côté",
 ]};
 const GIGN_LUC_LEGER: Archetype = { name: "Luc Léger", type: "intensite", exercises: [
   "Luc Léger : paliers élevés",
@@ -2443,9 +2455,9 @@ function selectGign(n: number): Archetype[] {
 // ---- Escalade : contenu dédié plutôt que "autre" générique — technique (gestuelle) → limite
 // (blocs/voies au niveau max) → doigts (préhension, poutre) → continuité (endurance spécifique).
 const ESCALADE_TECHNIQUE: Archetype = { name: "Technique gestuelle", type: "technique", exercises: [
-  "Travail gestuel : mouvements techniques sur mur — 45 min",
+  "Travail gestuel sur voies faciles — 45 min",
   "Répétitions de blocs faciles, focus posture — 6 blocs",
-  "Travail de placement de pieds — 20 min",
+  "Placement de pieds sur bloc facile — 20 min",
 ]};
 const ESCALADE_LIMITE: Archetype = { name: "Blocs limite", type: "intensite", exercises: [
   "Blocs au niveau limite — 6 tentatives (récup 3-5 min)",
@@ -2453,12 +2465,12 @@ const ESCALADE_LIMITE: Archetype = { name: "Blocs limite", type: "intensite", ex
 ]};
 const ESCALADE_DOIGTS: Archetype = { name: "Doigts & préhension", type: "volume", exercises: [
   "Suspension à la poutre — 6×10s (récup 3 min)",
-  "Travail de préhension : réglettes + bacs — 4 séries",
-  "Gainage spécifique grimpe — 3×40s",
+  "Pan : préhension réglettes + bacs — 4 séries",
+  "Relevé de jambes suspendu — 3×8",
 ]};
 const ESCALADE_CONTINUITE: Archetype = { name: "Continuité", type: "volume", exercises: [
   "Continuité sur voies faciles — 45 min",
-  "4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
+  "Blocs en 4×4 (4 blocs enchaînés ×4 tours, récup 4 min entre tours)",
 ]};
 const ESCALADE_PRIORITY: Archetype[] = [ESCALADE_LIMITE, ESCALADE_TECHNIQUE, ESCALADE_DOIGTS, ESCALADE_CONTINUITE];
 function selectEscalade(n: number): Archetype[] {
@@ -2472,13 +2484,13 @@ const PLIO_BAS_CORPS: Archetype = { name: "Bas du corps", type: "intensite", exe
   "Squat jump — 4×6", "Box jump — 4×5", "Sauts en contrebas (depth jump) — 4×5",
 ]};
 const PLIO_REACTIVITE: Archetype = { name: "Réactivité", type: "intensite", exercises: [
-  "Sauts de haies — 4×8 (récup 2 min)", "Bondissements alternés — 4×20m", "Skipping bas — 3×20m",
+  "Tuck jump — 4×8 (récup 2 min)", "Bondissements alternés — 4×20m", "Skipping bas — 3×20m",
 ]};
 const PLIO_HAUT_CORPS: Archetype = { name: "Haut du corps", type: "volume", exercises: [
-  "Medicine ball chest pass — 4×8", "Pompes plyométriques — 3×8", "Medicine ball rotation lancée — 3×10 par côté",
+  "Push press — 4×5", "Pompes plyométriques — 3×8", "Cross chop (bûcheron) — 3×10 par côté",
 ]};
 const PLIO_STABILISATION: Archetype = { name: "Stabilisation & atterrissage", type: "technique", exercises: [
-  "Réception unipodale contrôlée — 3×8 par jambe", "Gainage anti-rotation — 3×40s", "Proprioception plateau instable — 3×30s",
+  "Depth drop (réception en contrebas) — 3×8", "Pallof press tenu — 3×30s par côté", "Pas chassés élastique — 3×10 par côté",
 ]};
 const PLIO_PRIORITY: Archetype[] = [PLIO_BAS_CORPS, PLIO_REACTIVITE, PLIO_HAUT_CORPS, PLIO_STABILISATION];
 function selectPliometrie(n: number): Archetype[] {
@@ -2488,16 +2500,16 @@ function selectPliometrie(n: number): Archetype[] {
 // ---- Golf : rotation chargée (puissance de swing) > mobilité thoracique/hanches (amplitude du
 // geste) > force générale (chaîne postérieure) > stabilité unipodale (transfert de poids au swing).
 const GOLF_ROTATION: Archetype = { name: "Rotation & puissance de swing", type: "intensite", exercises: [
-  "Rotation chargée medicine ball — 4×8 par côté", "Swing résisté avec élastique — 4×10", "Lancers rotatifs explosifs — 3×8 par côté",
+  "Rotation barre debout (landmine) — 4×8 par côté", "Cross chop (bûcheron) — 4×10 par côté", "Rotation disque debout (explosif) — 3×8 par côté",
 ]};
 const GOLF_MOBILITE: Archetype = { name: "Mobilité thoracique & hanches", type: "technique", exercises: [
-  "Mobilité thoracique et hanches — 20 min", "Étirements dynamiques épaules/dos — 15 min", "Rotation thoracique sur banc — 3×10 par côté",
+  "Snow angel — 2×10", "Squat cosaque — 2×8 par côté", "Étirements dynamiques épaules/dos — 15 min", "Rotation thoracique sur banc — 3×10 par côté",
 ]};
 const GOLF_FORCE: Archetype = { name: "Force générale", type: "volume", exercises: [
-  "Squat — 4×8@70%", "Soulevé de terre roumain — 3×10", "Gainage anti-rotation — 3×40s",
+  "Squat — 4×8@70%", "Soulevé de terre roumain — 3×10", "Pallof press tenu — 3×30s par côté",
 ]};
 const GOLF_STABILITE: Archetype = { name: "Stabilité & transfert de poids", type: "technique", exercises: [
-  "Stabilité unipodale (position de swing) — 3×8 par jambe", "Proprioception plateau instable — 3×30s",
+  "SDT roumain unijambe — 3×8 par jambe", "Pas chassés élastique — 3×10 par côté",
 ]};
 const GOLF_PRIORITY: Archetype[] = [GOLF_ROTATION, GOLF_MOBILITE, GOLF_FORCE, GOLF_STABILITE];
 function selectGolf(n: number): Archetype[] {
@@ -2508,16 +2520,16 @@ function selectGolf(n: number): Archetype[] {
 // gauche/droite) > cardio léger (endurance générale du cavalier) > stabilité (proprioception,
 // équilibre dynamique).
 const EQUITATION_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
-  "Gainage complet (planche + latéral) — 3×45s", "Gainage dynamique dead bug — 3×12", "Anti-rotation Pallof press — 3×10 par côté",
+  "Planche — 3×45s", "Gainage latéral — 2×30s par côté", "Gainage dynamique dead bug — 3×12", "Anti-rotation Pallof press — 3×10 par côté",
 ]};
 const EQUITATION_SYMETRIE: Archetype = { name: "Symétrie & posture", type: "technique", exercises: [
-  "Renforcement unipodal — 3×10 par jambe", "Mobilité bassin et hanches — 20 min", "Correction posturale (dos/épaules) — 15 min",
+  "Split squat (fente statique) — 3×10 par jambe", "Bascule adducteurs à genou — 2×10", "Squat cosaque — 2×8 par côté", "Face pull — 3×15", "Band pull-apart — 3×15",
 ]};
 const EQUITATION_CARDIO: Archetype = { name: "Cardio léger", type: "volume", exercises: [
-  "Cardio léger continu (vélo/course) — 30 min", "Squats + fentes — 3×12",
+  "Cardio léger continu : vélo ou course — 30 min", "Squat — 3×12", "Fentes marchées — 3×12",
 ]};
 const EQUITATION_STABILITE: Archetype = { name: "Stabilité & équilibre", type: "technique", exercises: [
-  "Proprioception plateau instable — 3×30s", "Gainage sur swiss ball — 3×30s",
+  "Pas chassés élastique — 3×10 par côté", "Bird dog — 3×10 par côté",
 ]};
 const EQUITATION_PRIORITY: Archetype[] = [EQUITATION_GAINAGE, EQUITATION_SYMETRIE, EQUITATION_CARDIO, EQUITATION_STABILITE];
 function selectEquitation(n: number): Archetype[] {
@@ -2531,13 +2543,13 @@ const HOCKEY_PATINAGE: Archetype = { name: "Patinage & explosivité", type: "int
   "Sprints latéraux explosifs — 6×15m (récup 90s)", "Départs explosifs en carre — 6 reps", "Changements de direction — 4×20m",
 ]};
 const HOCKEY_PUISSANCE_TIR: Archetype = { name: "Puissance de tir", type: "volume", exercises: [
-  "Rotation chargée medicine ball — 4×8 par côté", "Développé couché — 4×6@75%", "Squat — 4×6@75%",
+  "Rotation barre debout (landmine) — 4×8 par côté", "Développé couché — 4×6@75%", "Squat — 4×6@75%",
 ]};
 const HOCKEY_ENDURANCE_INTERMITTENTE: Archetype = { name: "Endurance intermittente", type: "intensite", exercises: [
-  "Fractionné intermittent 30s effort / 30s récup — 10 répétitions", "Circuit intermittent haute intensité — 6 tours",
+  "Fractionné intermittent 30s effort / 30s récup — 10 répétitions", "Circuit intermittent — 6 tours :\nSquat jump — 8\nFente latérale — 8 par côté\nKettlebell swing — 15",
 ]};
 const HOCKEY_RENFO: Archetype = { name: "Renfo & prévention", type: "technique", exercises: [
-  "Renforcement adducteurs/abducteurs — 3×12", "Gainage complet — 3×40s", "Proprioception chevilles — 3×10",
+  "Planche Copenhague — 3×20s par côté", "Pas chassés élastique — 3×12 par côté", "Planche — 3×40s", "Gainage latéral — 2×30s par côté", "SDT roumain unijambe — 3×8 par jambe",
 ]};
 const HOCKEY_PRIORITY: Archetype[] = [HOCKEY_PATINAGE, HOCKEY_PUISSANCE_TIR, HOCKEY_ENDURANCE_INTERMITTENTE, HOCKEY_RENFO];
 function selectHockeyGlace(n: number): Archetype[] {
@@ -2548,10 +2560,10 @@ function selectHockeyGlace(n: number): Archetype[] {
 // la zone la plus à risque du sport) > puissance générale (squat/bench) > vitesse (sprints courts,
 // course entre les bases).
 const BASEBALL_ROTATION: Archetype = { name: "Rotation & puissance", type: "intensite", exercises: [
-  "Rotation chargée medicine ball — 4×8 par côté", "Lancers rotatifs explosifs — 4×8 par côté", "Swing résisté avec élastique — 3×10",
+  "Rotation barre debout (landmine) — 4×8 par côté", "Rotation disque debout (explosif) — 4×8 par côté", "Cross chop (bûcheron) — 3×10 par côté",
 ]};
 const BASEBALL_EPAULE: Archetype = { name: "Santé d'épaule", type: "technique", exercises: [
-  "Stabilité de la coiffe des rotateurs — 3×12", "Mobilité épaule et rotation externe — 15 min", "Renforcement scapulaire — 3×12",
+  "Rotation externe élastique — 3×12", "Wall slide — 2×10", "Face pull — 3×12",
 ]};
 const BASEBALL_PUISSANCE: Archetype = { name: "Puissance générale", type: "volume", exercises: [
   "Squat — 4×6@75%", "Développé couché — 4×6@75%", "Fentes marchées — 3×12",
@@ -2568,16 +2580,16 @@ function selectBaseball(n: number): Archetype[] {
 // spécifique dériveur/habitable léger) > endurance (efforts longs en régate) > force du haut du
 // corps (winch, bordage).
 const VOILE_GAINAGE: Archetype = { name: "Gainage", type: "volume", exercises: [
-  "Gainage complet — 3×45s", "Gainage latéral — 3×40s par côté", "Hollow body hold — 3×30s",
+  "Planche — 3×45s", "Gainage latéral — 3×40s par côté", "Hollow body hold — 3×30s",
 ]};
 const VOILE_HIKING: Archetype = { name: "Hiking & position de rappel", type: "intensite", exercises: [
-  "Position de rappel (hiking) tenue — 4×45s", "Squat isométrique mur — 3×45s", "Extension de hanches tenue — 3×40s",
+  "Voile : position de rappel tenue (hiking) — 4×45s", "Chaise contre mur — 3×45s", "Extension de hanches tenue — 3×40s",
 ]};
 const VOILE_ENDURANCE: Archetype = { name: "Endurance", type: "volume", exercises: [
-  "Cardio continu (rameur/vélo) — 30 min", "Circuit fonctionnel — 4 tours",
+  "Cardio continu : rameur ou vélo — 30 min", "Circuit fonctionnel — 4 tours :\nKettlebell swing — 15\nPompes — 10\nFentes marchées — 10 par jambe",
 ]};
 const VOILE_FORCE_HAUT_CORPS: Archetype = { name: "Force du haut du corps", type: "technique", exercises: [
-  "Tirage horizontal — 3×10", "Traction assistée — 3×8", "Gainage anti-rotation — 3×40s",
+  "Tirage horizontal — 3×10", "Traction assistée — 3×8", "Pallof press tenu — 3×30s par côté",
 ]};
 const VOILE_PRIORITY: Archetype[] = [VOILE_GAINAGE, VOILE_HIKING, VOILE_ENDURANCE, VOILE_FORCE_HAUT_CORPS];
 function selectVoile(n: number): Archetype[] {
@@ -2600,17 +2612,17 @@ function selectVoile(n: number): Archetype[] {
 // la séance Mardi (démarrage pur, jamais demandé) vers la séance Samedi (déjà starts+groupe).
 const BMX_MUSCU_FORCE: Archetype = { name: "Musculation — Force max (full body)", type: "intensite", exercises: [
   "Squat — 5×3@85%", "Développé couché — 5×3@85%", "Soulevé de terre — 4×3@85%",
-  "Tractions lestées — 4×6", "Presse à cuisses — 3×6@75%", "Gainage complet — 3×45s",
+  "Tractions lestées — 4×6", "Fente bulgare — 3×6@75% par jambe", "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const BMX_TECHNIQUE: Archetype = { name: "BMX Technique — Starts & piste", type: "technique", exercises: [
-  "Starts (gestuelle, 1ère ligne droite) — 6×15m (récup 3 min)", "Passages techniques piste (bosses, virages) — 20 min", "Gainage complet — 3×45s",
+  "Starts (gestuelle, 1ère ligne droite) — 6×15m (récup 3 min)", "Passages techniques piste (bosses, virages) — 20 min", "Planche — 3×45s", "Gainage latéral — 2×30s par côté",
 ]};
 const BMX_MUSCU_PUISSANCE: Archetype = { name: "Musculation — Puissance & explosivité (full body, contraste)", type: "volume", exercises: [
   "Squat — 4×5@70%", "Saut groupé enchaîné sans récup — 3×6", "Développé couché — 4×5@70%",
-  "Pompes claquées — 3×8", "Fentes sautées — 3×8", "Gainage dynamique — 3×12",
+  "Pompes claquées — 3×8", "Fentes sautées — 3×8", "Dead bug — 3×12",
 ]};
 const BMX_SPRINT: Archetype = { name: "Vitesse de démarrage", type: "intensite", exercises: [
-  "Accélération en côte — 6×15m (récup 3 min)", "Accélération sur le plat — 6×15m (récup 3 min)", "Gainage dynamique — 3×12",
+  "Accélération en côte — 6×15m (récup 3 min)", "Accélération sur le plat — 6×15m (récup 3 min)", "Dead bug — 3×12",
 ]};
 const BMX_TECHNIQUE_STARTS: Archetype = { name: "BMX Technique — Starts intensité & anaérobie lactique", type: "volume", exercises: [
   "Starts intensité 100% (1ère ligne droite) — 6 reps (récup 5 min)", "Puissance anaérobie lactique — 4×40s (récup 3 min)", "Travail en groupe (virages, relances, trajectoires) — 20 min", "Récupération active vélo sur le plat — 10 min",
@@ -2632,10 +2644,10 @@ function selectBmx(n: number): Archetype[] {
 // remplace l'ancien découpage "Cardio Course/Cardio Machines/Renfo Stations/Simulation" qui
 // n'était pas fidèle à ce qui est promis sur la page produit.
 const HYROX_ENDURANCE_FONCTIONNELLE: Archetype = { name: "Endurance fonctionnelle", type: "volume", exercises: [
-  "Course continue — 20 min", "SkiErg ou rameur — 15 min", "Circuit fonctionnel léger : farmers carry + wall balls — 3 tours",
+  "Course continue — 20 min", "SkiErg ou rameur — 15 min", "Circuit stations Hyrox — 3 tours :\nFarmer walk — 50m\nHyrox wall balls — 15",
 ]};
 const HYROX_FORCE_CONDITIONING: Archetype = { name: "Force + Conditioning", type: "intensite", exercises: [
-  "Sled push — 4×20m", "Sled pull — 4×20m", "Wall balls — 4×20", "Burpee broad jumps — 4×15m", "Farmers carry — 4×50m",
+  "Hyrox sled push — 4×20m", "Hyrox sled pull — 4×20m", "Hyrox wall balls — 4×20", "Burpee broad jumps — 4×15m", "Farmers carry — 4×50m",
 ]};
 const HYROX_SIMULATION: Archetype = { name: "Simulation de stations", type: "test", exercises: [
   "Simulation Hyrox : 1km course + 1 station (rotation) — 4 tours", "Simulation Hyrox courte : 2×(1km course + wall balls + sled push)",
@@ -2660,10 +2672,10 @@ const SAUTS_PLIOMETRIE: Archetype = { name: "Pliométrie spécifique", type: "in
   "Sauts en contrebas (depth jump) — 4×5", "Multibonds : foulées bondissantes — 4×30m", "Squat jump chargé — 4×5",
 ]};
 const SAUTS_TECHNIQUE_VOL: Archetype = { name: "Technique de vol / approche", type: "technique", exercises: [
-  "Décomposition du geste : approche + pose de pied — 4×3", "Éducatifs de saut : cloche-pied, foulées bondissantes — 3×20m", "Course d'élan isolée (sans saut) — 6 reps",
+  "Course d'élan : décomposition approche + pose de pied — 4×3", "Éducatifs de saut : cloche-pied, foulées bondissantes — 3×20m", "Course d'élan isolée (sans saut) — 6 reps",
 ]};
 const SAUTS_PPG: Archetype = { name: "PPG musculaire", type: "volume", exercises: [
-  "Squat — 4×6@75%", "Fentes — 3×10 par jambe", "Renforcement mollets — 3×15", "Gainage complet — 3×40s",
+  "Squat — 4×6@75%", "Fentes — 3×10 par jambe", "Montées sur pointes — 3×15", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 const SAUTS_PRIORITY: Archetype[] = [SAUTS_PISTE_COMPLETS, SAUTS_PLIOMETRIE, SAUTS_TECHNIQUE_VOL, SAUTS_PPG];
 function selectAthletismeSauts(n: number): Archetype[] {
@@ -2674,10 +2686,10 @@ function selectAthletismeSauts(n: number): Archetype[] {
 // rameur et séquence", "Force de tirage et jambes (soulevé de terre, tirages)", "Endurance
 // aérobie ou intervalles de puissance selon la phase").
 const AVIRON_TECHNIQUE: Archetype = { name: "Technique rameur", type: "technique", exercises: [
-  "Rameur technique : focus séquence jambes-dos-bras — 20 min", "Drill par segments (jambes seules / dos seul / bras seuls) — 15 min",
+  "Rameur technique : focus séquence jambes-dos-bras — 20 min", "Rameur : drill par segments (jambes seules / dos seul / bras seuls) — 15 min",
 ]};
 const AVIRON_FORCE_TIRAGE: Archetype = { name: "Force de tirage", type: "intensite", exercises: [
-  "Soulevé de terre — 5×5@75%", "Tirage horizontal — 4×8@70%", "Tirage vertical — 4×8@70%", "Gainage anti-flexion — 3×40s",
+  "Soulevé de terre — 5×5@75%", "Tirage horizontal — 4×8@70%", "Tirage vertical — 4×8@70%", "Extension lombaire tenue — 3×40s",
 ]};
 const AVIRON_ENDURANCE_PUISSANCE: Archetype = { name: "Endurance & Puissance", type: "volume", exercises: [
   "Rameur endurance continue — 30 min", "Rameur intervalles : 6×500m (récup 2 min)",
@@ -2709,7 +2721,7 @@ const TRI_BASE_COURSE: Archetype = { name: "Course à pied", type: "volume", exe
   "Sortie course endurance fondamentale — 45 min",
 ]};
 const TRI_BASE_COURSE_RENFO: Archetype = { name: "Course à pied", type: "volume", exercises: [
-  ...TRI_BASE_COURSE.exercises, "Renforcement général : squat + gainage + tirage — 3×10",
+  ...TRI_BASE_COURSE.exercises, "Squat — 3×10", "Tirage horizontal — 3×10",
 ]};
 const TRI_BASE_NAT_END: Archetype = { name: "Natation endurance", type: "volume", exercises: [
   "Nage continue 4 nages — 1500m",
@@ -2727,7 +2739,7 @@ const TRI_BRICK: Archetype = { name: "Brick (vélo + course)", type: "intensite"
   "Brick : vélo 30 min + course 15 min enchaînés",
 ]};
 const TRI_RENFO: Archetype = { name: "Renfo", type: "technique", exercises: [
-  "Renforcement général : squat + gainage + tirage — 3×10", "Gainage complet — 3×40s",
+  "Squat — 3×10", "Tirage horizontal — 3×10", "Planche — 3×40s", "Gainage latéral — 2×30s par côté",
 ]};
 // Phase du triathlon pour une semaine donnée (index 0). 12/16/8 semaines : base S1-4, bricks dès
 // S6 (page WP). 6 semaines : base = premier MEV→MRV, bricks dès S5. 4 semaines : trop court pour
@@ -2775,7 +2787,7 @@ const TRI_COMBINED_RE = /brick|simulation triathlon|transition/i;
 // Skill au lieu de corriger `days`, sur la base d'une hypothèse fausse (le nombre de jours en base
 // faisait foi) jamais vérifiée contre la page WordPress elle-même — trouvé par Gildas.
 const CALI_TIRER: Archetype = { name: "Tirer", type: "volume", exercises: [
-  "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 4×3", "Gainage en suspension (hollow body) — 3×20s",
+  "Tractions strictes — 5×6", "Tractions lestées (progression) — 4×4", "Traction explosive (progression muscle-up, chest-to-bar) — 4×3", "Hollow hold — 3×20s",
 ]};
 const CALI_POUSSER: Archetype = { name: "Pousser", type: "volume", exercises: [
   "Dips — 5×8", "Dips en anneau (progression) — 4×6", "Pompes archer (unilatérales) — 4×6 par côté", "Gainage : planche — 3×30s",
@@ -2784,7 +2796,7 @@ const CALI_PORTER: Archetype = { name: "Porter", type: "technique", exercises: [
   "L-sit ou tuck-sit tenu — 4×15-20s", "Squat pistol assisté — 3×6 par jambe", "Gainage latéral — 3×25s par côté",
 ]};
 const CALI_SKILL: Archetype = { name: "Skill", type: "intensite", exercises: [
-  "Muscle-up ou progression muscle-up (chest-to-bar, false grip) — 5×3", "Front lever tenu (progression) — 4×10s", "Gainage complet — 3×30s",
+  "Traction explosive (progression muscle-up, chest-to-bar) — 5×3", "Front lever tenu (progression) — 4×10s", "Planche — 3×30s", "Gainage latéral — 2×20s par côté",
 ]};
 const CALI_PRIORITY: Archetype[] = [CALI_TIRER, CALI_POUSSER, CALI_PORTER, CALI_SKILL];
 function selectCalisthenics(n: number): Archetype[] {
@@ -2795,13 +2807,13 @@ function selectCalisthenics(n: number): Archetype[] {
 // ("Gainage et placement (ATR, suspension)", "Force relative (tractions, dips, L-sit)",
 // "Pliométrie et réception").
 const GYM_GAINAGE_PLACEMENT: Archetype = { name: "Gainage et placement", type: "technique", exercises: [
-  "ATR contre mur — 4×20-30s", "Placement bassin en suspension (hollow body) — 4×15s", "Mobilité épaules et poignets — 10 min",
+  "Gymnastique : ATR contre mur — 4×20-30s", "Hollow hold — 4×15s", "Wall slide — 2×10", "Snow angel — 2×10",
 ]};
 const GYM_FORCE_RELATIVE: Archetype = { name: "Force relative", type: "intensite", exercises: [
   "Tractions strictes — 4×6", "Dips — 4×8", "L-sit ou tuck-sit tenu — 4×15-20s",
 ]};
 const GYM_PLIOMETRIE_RECEPTION: Archetype = { name: "Pliométrie et réception", type: "volume", exercises: [
-  "Sauts groupés + réceptions contrôlées — 4×6", "Technique de réception de saut — 4×6", "Handstand hold contre mur — 4×20s",
+  "Tuck jump — 4×6", "Depth drop (réception en contrebas) — 4×6", "Gymnastique : handstand hold contre mur — 4×20s",
 ]};
 const GYM_PRIORITY: Archetype[] = [GYM_GAINAGE_PLACEMENT, GYM_FORCE_RELATIVE, GYM_PLIOMETRIE_RECEPTION];
 function selectGymnastique(n: number): Archetype[] {
@@ -2818,7 +2830,7 @@ function selectGymnastique(n: number): Archetype[] {
 // appendu en fin de séance "Endurance fondamentale" en dessous (≤3 jours, la fréquence typique
 // de ces programmes selon les pages WordPress : 4 séances/semaine pour 10k/semi, 5 pour marathon
 // — donc la plupart des sélections utilisateur réelles restent sous le seuil "dédié").
-const DISTANCE_RENFO_LINES = ["Renforcement : mollets + squats + fentes — 3×12", "Gainage complet — 3×45s"];
+const DISTANCE_RENFO_LINES = ["Squat — 3×12", "Fente bulgare — 3×10 par jambe", "Planche — 3×45s", "Gainage latéral — 2×30s par côté"];
 // Le squelette WordPress de ces programmes (10k/semi : Zone2/Seuil/Récup/Sortie longue, 4
 // séances ; marathon : +1 Zone2 plus long) occupe déjà 4 slots sans laisser de place pour un 5e
 // archétype Renfo dédié tant qu'on veut rester fidèle à ce squelette documenté — même contrainte
@@ -2864,7 +2876,7 @@ function selectEnduranceMarathon(n: number): Archetype[] {
 // Cheville — post-entorse : 2 axes explicites (proprioception, renforcement péroniers/tibial
 // antérieur) — sem1-2 base, sem3 décharge (mécanisme MRV/Deload existant), sem4-5 avancé, sem6 test.
 const CHEVILLE_PROPRIOCEPTION: Archetype = { name: "Proprioception", type: "technique", exercises: [
-  "Proprioception unipodale sur sol stable — 4×30s par jambe", "Proprioception sur plateau instable — 4×30s par jambe", "Marche sur pointes puis talons — 3×20m",
+  "Équilibre unipodal sur sol stable — 4×30s par jambe", "Équilibre unipodal sur plateau instable — 4×30s par jambe", "Marche sur pointes puis talons — 3×20m",
 ]};
 const CHEVILLE_RENFORCEMENT: Archetype = { name: "Renforcement péroniers", type: "volume", exercises: [
   "Isométrie chevilles : éverseurs/inverseurs contre résistance — 4×20s", "Montées sur pointes — 3×15", "Mobilité cheville : flexion dorsale contre mur — 3×10",
@@ -2878,13 +2890,13 @@ function selectReeducationCheville(n: number): Archetype[] {
 // — regroupés en 3 séances par fonction (rotation externe/interne, stabilité scapulaire),
 // élastiques progressifs.
 const EPAULE_ROTATION_EXTERNE: Archetype = { name: "Rotation externe", type: "technique", exercises: [
-  "Isométrie rotateurs externes (coude au corps) — 4×15s", "Rotation externe élastique léger — 3×15",
+  "Rotation externe élastique tenue (coude au corps) — 4×15s", "Rotation externe élastique léger — 3×15",
 ]};
 const EPAULE_ROTATION_INTERNE: Archetype = { name: "Rotation interne", type: "technique", exercises: [
   "Isométrie rotateurs internes — 4×15s", "Rotation interne élastique léger — 3×15",
 ]};
 const EPAULE_STABILITE_SCAPULAIRE: Archetype = { name: "Stabilité scapulaire", type: "volume", exercises: [
-  "Rétraction/protraction scapulaire — 3×12", "Y-T-W au sol — 3×10 chaque", "Mobilité thoracique — 10 min",
+  "Rétraction/protraction scapulaire — 3×12", "Y-T-W au sol — 3×10 chaque", "Snow angel — 2×10",
 ]};
 const EPAULE_PRIORITY: Archetype[] = [EPAULE_ROTATION_EXTERNE, EPAULE_ROTATION_INTERNE, EPAULE_STABILITE_SCAPULAIRE];
 function selectReeducationEpaule(n: number): Archetype[] {
@@ -2894,10 +2906,10 @@ function selectReeducationEpaule(n: number): Archetype[] {
 // Valgus du genou : correction du schéma de mouvement (activation fessiers + contrôle visuel de
 // l'alignement genou-pied), distinct du Syndrome Rotulien (douleur) et du Post-LCA (chirurgie).
 const GENOU_ACTIVATION_FESSIERS: Archetype = { name: "Activation fessiers", type: "technique", exercises: [
-  "Pont fessier — 3×12", "Clamshell — 3×15 par côté", "Band walk latéral — 3×10 par côté",
+  "Pont fessier — 3×12", "Clamshell — 3×15 par côté", "Pas chassés élastique — 3×10 par côté",
 ]};
 const GENOU_CONTROLE_ALIGNEMENT: Archetype = { name: "Contrôle de l'alignement", type: "volume", exercises: [
-  "Squat face à un miroir, focus alignement genou-pied — 3×10", "Step-down contrôlé face miroir — 3×10 par jambe", "Wall sit — 4×20s",
+  "Squat abduction élastique, focus alignement genou-pied — 3×10", "Step-down contrôlé face miroir — 3×10 par jambe", "Wall sit — 4×20s",
 ]};
 const GENOU_PRIORITY: Archetype[] = [GENOU_ACTIVATION_FESSIERS, GENOU_CONTROLE_ALIGNEMENT];
 function selectReeducationGenou(n: number): Archetype[] {
@@ -2909,10 +2921,10 @@ const ROTULIEN_EXCENTRIQUE_QUAD: Archetype = { name: "Excentrique quadriceps", t
   "Squat partiel (90° ou moins) — 4×10", "Step-down excentrique lent — 3×8 par jambe", "Wall sit — 4×20s",
 ]};
 const ROTULIEN_RENFORCEMENT_FESSIERS: Archetype = { name: "Renforcement fessiers", type: "volume", exercises: [
-  "Clamshell — 3×15 par côté", "Pont fessier — 3×15", "Band walk latéral — 3×12",
+  "Clamshell — 3×15 par côté", "Pont fessier — 3×15", "Pas chassés élastique — 3×12 par côté",
 ]};
 const ROTULIEN_INTEGRATION: Archetype = { name: "Intégration fonctionnelle", type: "volume", exercises: [
-  "Squat progressif (si douleur <3/10) — 3×10", "Fentes contrôlées — 3×10 par jambe", "Équilibre unipodal dynamique — 4×20s",
+  "Squat progressif (si douleur <3/10) — 3×10", "Fentes contrôlées — 3×10 par jambe", "SDT roumain unijambe — 3×8 par jambe",
 ]};
 const ROTULIEN_PRIORITY: Archetype[] = [ROTULIEN_EXCENTRIQUE_QUAD, ROTULIEN_RENFORCEMENT_FESSIERS, ROTULIEN_INTEGRATION];
 function selectReeducationRotulien(n: number): Archetype[] {
@@ -2924,7 +2936,7 @@ const LOMBALGIE_GAINAGE_PROFOND: Archetype = { name: "Gainage profond", type: "t
   "Bird-dog contrôlé — 3×10 par côté", "Dead bug — 3×10 par côté", "Respiration diaphragmatique — 10 min",
 ]};
 const LOMBALGIE_MOBILITE: Archetype = { name: "Mobilité lombaire et hanche", type: "technique", exercises: [
-  "Bascule du bassin — 3×12", "Mobilité hanches (rotation, flexion) — 10 min", "Étirements chaîne postérieure doux — 10 min",
+  "Bascule du bassin — 3×12", "Bascule adducteurs à genou — 2×10", "Étirements chaîne postérieure doux — 10 min",
 ]};
 const LOMBALGIE_RENFORCEMENT: Archetype = { name: "Renforcement intégré", type: "volume", exercises: [
   "Planche — 4×20s", "Romanian deadlift charge légère — 3×10", "Superman contrôlé — 3×12",
@@ -2938,16 +2950,16 @@ function selectReeducationLombalgie(n: number): Archetype[] {
 // Hamstring, pliométrie débutante, retour sport progressif) — approximées par rotation par bloc
 // (rotationAnchor) plutôt qu'un modèle de périodisation dédié supplémentaire, voir EXERCISES.
 const LCA_ACTIVATION: Archetype = { name: "Activation neuromusculaire", type: "technique", exercises: [
-  "Contraction isométrique quadriceps — 4×10s", "Mobilité genou passive — 10 min", "Proprioception bipodale — 4×20s",
+  "TKE (extension terminale du genou) — 4×12", "Mobilité genou passive — 10 min", "Équilibre bipodal sur sol stable — 4×20s",
 ]};
 const LCA_FORCE: Archetype = { name: "Force progressive", type: "volume", exercises: [
-  "Presse à cuisses — 3×15", "Nordic Hamstring Exercise assisté — 3×6", "Pont fessier — 3×15",
+  "Spanish squat — 3×15", "Nordic Hamstring Exercise assisté — 3×6", "Pont fessier — 3×15",
 ]};
 const LCA_PLIOMETRIE: Archetype = { name: "Pliométrie débutante", type: "intensite", exercises: [
-  "Sauts amortis bipodaux contrôlés — 3×6", "Squat unipodal contrôlé — 3×8 par jambe", "Nordic Hamstring Exercise — 4×8",
+  "Box jump (réception amortie) — 3×6", "Squat unipodal contrôlé — 3×8 par jambe", "Nordic Hamstring Exercise — 4×8",
 ]};
 const LCA_RETOUR_SPORT: Archetype = { name: "Retour sport progressif", type: "intensite", exercises: [
-  "Course en ligne droite progressive — 15 min", "Hop test unipodal contrôlé — 3×5 par jambe", "Renforcement quadriceps chargé — 3×10",
+  "Course en ligne droite progressive — 15 min", "Hop test unipodal contrôlé — 3×5 par jambe", "Split squat (fente statique) — 3×10 par jambe",
 ]};
 const LCA_PRIORITY: Archetype[] = [LCA_ACTIVATION, LCA_FORCE, LCA_PLIOMETRIE, LCA_RETOUR_SPORT];
 function selectReeducationLca(n: number): Archetype[] {
@@ -2973,10 +2985,10 @@ function selectReeducationAchille(n: number): Archetype[] {
 // Périostite tibiale : 0 course les 2 premières semaines (règle explicite WordPress) —
 // renforcement tibial antérieur + cross-training sans impact, puis marche-course progressive.
 const PERIOSTITE_RENFORCEMENT: Archetype = { name: "Renforcement tibial antérieur", type: "technique", exercises: [
-  "Flexion dorsale résistée — 4×15", "Mobilité cheville — 3×10",
+  "Flexion dorsale résistée à l'élastique — 4×15", "Mobilité cheville — 3×10",
 ]};
 const PERIOSTITE_CROSS_TRAINING: Archetype = { name: "Cross-training sans impact", type: "volume", exercises: [
-  "Vélo ou natation sans impact — 20-25 min", "Renforcement mollets et pied — 3×12",
+  "Vélo ou natation sans impact — 20-25 min", "Montées sur pointes — 3×12",
 ]};
 const PERIOSTITE_MARCHE_COURSE: Archetype = { name: "Marche-course progressive", type: "volume", exercises: [
   "Marche-course (ratio 1:2) — 20 min", "Course continue légère (si douleur absente) — 15-20 min",
@@ -3065,27 +3077,27 @@ const SPORT_CURRICULUM: Partial<Record<SportCategory, (dayCount: number, ctx?: C
 // exactement comme pour n'importe quel autre archétype de curriculum.
 export interface WeaknessMeta { extraLine: string; typeHints: SessionType[] }
 const WEAKNESS_META: Record<string, WeaknessMeta> = {
-  jambes:            { extraLine: "Renfo ciblé jambes : squat gobelet + fentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  dos_bras:          { extraLine: "Renfo ciblé dos/bras : tirage horizontal + curl — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  pecs_epaules:      { extraLine: "Renfo ciblé pecs/épaules : développé incliné + élévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  dos:               { extraLine: "Renfo ciblé dos : tirage vertical + rowing — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  pectoraux:         { extraLine: "Renfo ciblé pectoraux : développé couché + écartés — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  epaules:           { extraLine: "Renfo ciblé épaules : développé militaire + élévations — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  bras:              { extraLine: "Renfo ciblé bras : curl + extensions triceps — 3×12", typeHints: ["volume", "intensite", "technique"] },
-  arrache:           { extraLine: "Travail technique arraché : position réceptrice + tirages — 5×3", typeHints: ["technique", "volume", "recuperation"] },
-  epaule_jete:       { extraLine: "Travail technique épaulé-jeté : réception + jeté sous barre — 5×3", typeHints: ["technique", "volume", "recuperation"] },
-  mobilite:          { extraLine: "Mobilité ciblée hanches/chevilles — 10 min", typeHints: ["technique", "recuperation", "volume"] },
+  jambes:            { extraLine: "Squat — 3×12\nFentes marchées — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos_bras:          { extraLine: "Tirage horizontal — 3×12\nCurl haltères — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  pecs_epaules:      { extraLine: "Développé incliné haltères — 3×12\nÉlévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  dos:               { extraLine: "Tirage vertical — 3×12\nRowing haltère — 3×12 par bras", typeHints: ["volume", "intensite", "technique"] },
+  pectoraux:         { extraLine: "Développé couché — 3×12\nÉcarté couché — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  epaules:           { extraLine: "Développé militaire — 3×12\nÉlévations latérales — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  bras:              { extraLine: "Curl haltères — 3×12\nExtension triceps poulie — 3×12", typeHints: ["volume", "intensite", "technique"] },
+  arrache:           { extraLine: "Snatch balance — 5×3\nTirage arraché — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  epaule_jete:       { extraLine: "Épaulé suspendu — 5×3\nJerk balance — 5×3", typeHints: ["technique", "volume", "recuperation"] },
+  mobilite:          { extraLine: "Squat cosaque — 2×8 par côté\nBascule adducteurs à genou — 2×10", typeHints: ["technique", "recuperation", "volume"] },
   vitesse:           { extraLine: "Sprints courts : 4×20m départ arrêté (récup complète)", typeHints: ["intensite", "volume"] },
   endurance_vitesse: { extraLine: "Répétitions longues : 4×150m allure soutenue", typeHints: ["volume", "intensite"] },
   endurance_fond:    { extraLine: "Extension endurance fondamentale : +10 min à allure facile", typeHints: ["volume", "recuperation"] },
-  explosivite:       { extraLine: "Pliométrie : squats sautés — 4×6", typeHints: ["intensite", "volume"] },
+  explosivite:       { extraLine: "Squat jump — 4×6", typeHints: ["intensite", "volume"] },
   technique:         { extraLine: "Travail technique ciblé (vidéo/feedback) — 15 min", typeHints: ["technique", "volume", "recuperation"] },
   technique_course:  { extraLine: "Éducatifs de course : montées de genoux + talons-fesses — 4×20m", typeHints: ["technique", "volume", "recuperation"] },
   recuperation:      { extraLine: "Récupération active ciblée : mobilité + étirements — 15 min", typeHints: ["recuperation", "technique", "volume"] },
-  cardio:            { extraLine: "Finisher cardio : 10 min zone modérée", typeHints: ["volume", "intensite"] },
-  force_generale:    { extraLine: "Renfo général : squat + tirage + gainage — 3×10", typeHints: ["volume", "intensite", "technique"] },
-  puissance:         { extraLine: "Puissance : sauts + lancers médecine-ball — 4×5", typeHints: ["intensite", "volume"] },
-  gainage:           { extraLine: "Gainage renforcé : planche + rotation — 3×40s", typeHints: ["technique", "volume", "recuperation"] },
+  cardio:            { extraLine: "Finisher cardio vélo ou rameur : 10 min zone modérée", typeHints: ["volume", "intensite"] },
+  force_generale:    { extraLine: "Squat — 3×10\nTirage horizontal — 3×10\nPlanche — 3×40s", typeHints: ["volume", "intensite", "technique"] },
+  puissance:         { extraLine: "Box jump — 4×5\nPush press — 4×5", typeHints: ["intensite", "volume"] },
+  gainage:           { extraLine: "Planche — 3×40s\nPallof press tenu — 3×30s par côté", typeHints: ["technique", "volume", "recuperation"] },
   frappe:            { extraLine: "Sac lourd : 5×10 frappes puissance maximale", typeHints: ["intensite", "volume"] },
 };
 
@@ -3113,9 +3125,13 @@ interface WeekSpec {
 // Calcule la séquence de semaines pour toute la durée du programme — gère les deux modèles
 // (blocs de 4 semaines standard, ou le modèle spécifique à 6 semaines) derrière une interface
 // commune, pour que le reste de la génération (Phases A/A2/B/C) n'ait pas à savoir lequel est actif.
-function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus): WeekSpec[] {
+/* `universal` : forme utilisée pour la bibliothèque officielle (programmes sans focus) — blocs
+   non terminaux en alternance volume/intensité, dernier bloc (ou bloc unique de 6 semaines) en
+   tapering. Remplace la copie scripts/regenerate-library-periodization.mjs (2026-10-22). */
+function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus, universal = false): WeekSpec[] {
+  const shapeOf = (c: number, last: boolean): Shape => universal ? (last ? "taper" : c % 2 === 0 ? "volume" : "intensity") : shapeForCycle(focus, c, last);
   if (duration === 6) {
-    const shape = shapeForCycle(focus, 0, true);
+    const shape = shapeOf(0, true);
     const offsets = SHAPE_OFFSETS[shape];
     return SIX_WEEK_PHASE_INDEX.map((pIdx, i) => ({
       weekDiff: Math.max(1, Math.min(10, baseDiff + SIX_WEEK_CYCLE_BASE[i] + offsets[pIdx])),
@@ -3132,7 +3148,7 @@ function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus)
   for (let c = 0; c < mesocycles; c++) {
     const cycleBase = baseDiff + c;
     const isLastCycle = c === mesocycles - 1;
-    const shape = shapeForCycle(focus, c, isLastCycle);
+    const shape = shapeOf(c, isLastCycle);
     const offsets = SHAPE_OFFSETS[shape];
     for (let phase = 0; phase < 4; phase++) {
       specs.push({
@@ -3150,7 +3166,8 @@ function buildWeekSpecs(duration: number, baseDiff: number, focus: ProgramFocus)
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { sport, level, days, duration, focus, weaknesses, customExercises, customWeaknessMeta, customSessionLabels } = body as {
+  const { sport, level, days, duration, focus, weaknesses, customExercises, customWeaknessMeta, customSessionLabels, libraryShape } = body as {
+    libraryShape?: boolean;
     sport: string;
     level: ProgramLevel;
     days: string[];
@@ -3184,7 +3201,7 @@ export async function POST(req: Request) {
   // Tri calendaire — nécessaire pour détecter des jours réellement consécutifs (ex. Lun+Mar)
   // plutôt que des jours simplement proches dans le tableau soumis par l'appelant.
   const sortedDays = [...days].sort((a, b) => DAY_ORDER.indexOf(a) - DAY_ORDER.indexOf(b));
-  const weekSpecs = buildWeekSpecs(duration, baseDiff, focus);
+  const weekSpecs = buildWeekSpecs(duration, baseDiff, focus, !!libraryShape);
 
   const weeks: WeekTemplate[] = [];
   // Dernier jour d'entraînement de la semaine précédente — nécessaire pour la Phase B

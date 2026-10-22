@@ -19,6 +19,8 @@ import { parseLine, type ParsedLine, type Scheme, type Token } from "@/lib/exerc
 import { bestExerciseMatch, CATEGORY_FAMILY, CATEGORY_LABEL, type ExerciseCategory } from "@/lib/exerciseBank";
 import { findNameSpans } from "@/lib/exerciseAutocomplete";
 import { adjustNotes, describeChange } from "@/lib/sessionLevers";
+import { resolveLineMedia, useDemoPrefs } from "@/lib/demoPrefs";
+import { DemoThumb } from "@/components/sessions/ExerciseDemo";
 
 const C = {
   text: "#1f2428", muted: "#7b7f82", line: "rgba(0,0,0,.09)", ghost: "#f4f4f2",
@@ -227,7 +229,7 @@ function Dots({ n, prev, z }: { n: number; prev: number | null; z: typeof SIZES.
   );
 }
 
-export function ExerciseLineView({ text, original, ctx, compact = false, size, adjusting = false, onTokenClick, activeSpan, hideSide = false }: {
+export function ExerciseLineView({ text, original, ctx, compact = false, size, adjusting = false, onTokenClick, activeSpan, hideSide = false, noMedia = false }: {
   text: string;
   /** Ligne avant ajustement : les chiffres modifiés passent en orange, ancienne valeur barrée. */
   original?: string;
@@ -242,15 +244,30 @@ export function ExerciseLineView({ text, original, ctx, compact = false, size, a
   activeSpan?: Span | null;
   /** Tiroir d'édition : pas de points ni de barres (on édite, la visualisation est sur les cartes). */
   hideSide?: boolean;
+  /** Pas de vignette de démo (le picto reste). */
+  noMedia?: boolean;
 }) {
-  const z = SIZES[size ?? (compact ? "compact" : "normal")];
+  useDemoPrefs();
+  const sizeKey = size ?? (compact ? "compact" : "normal");
+  const z = SIZES[sizeKey];
   const p = parseLine(text);
   const prev = original !== undefined && original !== text ? parseLine(original) : null;
   const cat = ctx?.cat ?? lineCategory(p);
   const role = ctx?.role ?? "";
   const indent: React.CSSProperties = role === "child" ? { marginLeft: z.icon * 0.6, borderLeft: `2px solid ${C.accentDim}`, paddingLeft: z.gap } : {};
 
+  // Démo (vidéo Catalyst) ou illustration à la place du picto, à toutes les tailles (Planning et /p/
+  // compris : les vignettes vendent les démos dans les iframes). En séance en direct (large), la démo
+  // s'affiche en grand sous la ligne (DemoBlock) : plus de picto.
+  const media = !noMedia && role !== "header" ? resolveLineMedia(text) : null;
+  const thumbSize = Math.round(z.icon * 1.43);
   const icon = (c: ExerciseCategory | null) => {
+    if (media && sizeKey === "large") return null;
+    if (media) return <DemoThumb media={media} text={text} size={thumbSize} editable={!!onTokenClick} />;
+    if (sizeKey !== "large") return <div style={{ width: thumbSize, flexShrink: 0, display: "flex", justifyContent: "center" }}>{iconBox(c)}</div>;
+    return iconBox(c);
+  };
+  const iconBox = (c: ExerciseCategory | null) => {
     if (!c) return <div style={{ width: z.icon, height: z.icon, flexShrink: 0 }} />;
     const st = FAMILY_STYLE[CATEGORY_FAMILY[c]];
     return (

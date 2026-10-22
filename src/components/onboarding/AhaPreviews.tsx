@@ -103,7 +103,7 @@ export function AhaRecoveryPreview() {
 }
 
 /* ── Sportif 2 / Coach 2 · l'ajustement : jauge de décision ronde ──────────────────────────── */
-const DEMO_SESSION_LINES = ["Back squat — 5×5 @ 120 kg", "Fentes bulgares — 3×8 @ 24 kg", "Sprint 30 m — 6 reps", "Gainage — 3×45 s"];
+const DEMO_SESSION_LINES = ["Back squat — 5×5 @ 120 kg", "Fentes bulgares — 3×8 @ 24 kg", "Sprint 30 m — 6 reps", "Planche — 3×45 s"];
 
 export function AhaDecisionPreview({ name }: { name?: string }) {
   const score = name ? 50 : ATHLETE_SCORE;
