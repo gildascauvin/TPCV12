@@ -5148,3 +5148,26 @@ POC : `~/Desktop/poc_demos_exercices/prod.html` (rendu de l'app). Constat de dé
 ### Pièges
 - Après un changement du layout racine, le dev server peut servir un vieux chunk (« reading 'call' » ou erreur d'hydratation) : vider le service worker et recharger.
 - Les vignettes YouTube viennent d'`i.ytimg.com` (balise `<img>` simple, pas `next/image`).
+
+## Check-in en bottom sheet, écrans de résultat, mots de difficulté Foster (2026-10-22, DÉPLOYÉ)
+POC : https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu (section « Le check-in · tous les jours, dès le jour 0 »). Commit `b6fbab3`.
+
+### Un seul score de récupération partout
+Le score du check-in, de l'écran de fin et de l'onglet Récupération est le même agrégat (`recupAggregatePos`, 70 % ressenti relatif + 30 % Forme), mêmes mots Fatigué / Équilibré / Frais. Norme calculée comme l'onglet : tous les check-ins des `CONSEILS_HISTORY_DAYS` derniers jours. `src/lib/checkinInsight.ts` : `recoveryAggregate`, `formAt`, `checkinResult`, `recoveryGauge`.
+
+### Check-in (`WellnessModal.tsx`)
+- Mobile hors wizard (`sheetMode`) : bottom sheet réglable (crans 52 / 66 / 92 dvh, poignée), jamais plus haute que son contenu ; le défilement du contenu pilote la sheet (vers le haut l'ouvre, en haut et vers le bas la ramène). Au-dessus, le score se construit pendant les réponses dans l'arc ouvert de l'onglet Récup (`AggregateGauge`). Desktop : même score dans le panneau sombre de gauche.
+- `skipResult` : pas d'écran de fin (onboarding, quand l'écran semaine suit).
+
+### Écrans de résultat (`PhysioRevealHost.tsx`, monté aussi sur /register)
+- Après check-in : score en gros au centre, UN insight en mots (jamais de chiffre ni de libellé d'échelle cité ; priorité jour 1 → écart ressenti/score dû à la charge → série sous la norme → comportement de la veille → séance très dure hier → écart avec hier → séance très dure demain → dimension la plus loin de la norme → point bas), « Jour n sur 5 » en ronds cochés tant que la norme se construit, comparaison physiologique si montre.
+- Après note de séance (`sessionInsight.ts`) : « Ressentie comme prévu / Un peu, Modérément, Beaucoup plus dure|facile que prévu », verdict de la décision du jour, poids dans la semaine en mots.
+- Rouvrir une séance faite / « Modifier mon ressenti » rouvre cet écran (`requestPhysioReplay`), son bouton ouvre le formulaire. Données : `resultContext.ts`.
+
+### Mots de difficulté calés sur Foster (CR-10)
+`qualitativeDifficulty()` : 1-2 légère, 3-4 modérée, 5-7 dure, 8-10 très dure. Seuils de logique (5 et 8 : recos, enchaînements, couleurs) inchangés. Repris partout : anneau, onglet Aujourd'hui, comparaison au cœur, alertes coach, règles `loadRule` (≥8 « très dure », tag 5-7 « Dure »), charge de `wellness.ts`, insights. Jauge des éditeurs de séance : badge = mot Foster de la note (`CR10_LABELS`), légende « Très, très facile … Maximal ». Check-in « Qu'as-tu prévu ? » : Léger 2 / Modéré 4 / Dur 6 / Très dur 8 (nouveau `vhard`) ; « Générer une séance » idem. Gardés : `sessionQualifier` (relatif à l'habitude), textes marketing, notifications.
+
+### Onboarding
+Écran notifications (`ob_notif`) après un check-in : `StreakTitle` (5 ronds 22 px au-dessus du titre, jour 1 coché, demain en pointillés) + « Jour 1 sur 5 : reviens demain pour le jour 2. », fausses notifs « Jour 2 sur 5 », « Jour 3 sur 5 ». Sans check-in : écran inchangé. Coach inchangé. Test sans compte : `/register?role=athlete&elite=1&dbgstep=12&dbgcheckin=1` (`dbgcheckin` simule le check-in, dev).
+
+Non testé par Claude au doigt sur iPhone (gestes de la sheet).
