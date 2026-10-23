@@ -5187,3 +5187,13 @@ POC : https://claude.ai/artifact/PgTQbMYpsUhqCounWHL28M. Commit `c08e21f`. Mobil
 - `healthSync.ts` : la synchro Apple Santé n'envoie plus les colonnes vides (un upsert par combinaison de colonnes remplies), sinon elle effaçait la VFC Garmin à chaque ouverture de l'app. Commit `78da25b`.
 - VFC Garmin = RMSSD, VFC Apple Watch = SDNN : jamais mélanger les deux sources pour un même sportif (la norme 28 j serait faussée).
 - Pas de synchro automatique : relancer le script à la main pour mettre à jour.
+
+## Garmin Connect Developer Program : connexion officielle (2026-10-23, DÉPLOYÉ)
+- App « ThePerfClub » approuvée le 23/10 (portail developerportal.garmin.com, compte contact@theperfclub.com, accès Starter : Health + Activity API, 1000 utilisateurs, push seulement, pas d'historique avant connexion). Politique de confidentialité complétée le même jour (paragraphe « Données issues de Garmin Connect »).
+- `src/lib/garmin.ts` (OAuth2 PKCE : `connect.garmin.com/oauth2Confirm`, jeton `diauth.garmin.com/di-oauth2-service/oauth/token`, rafraîchissement, suppression de l'inscription), `src/lib/garminIngest.ts` (hrv → `hrv_ms`, dailies → FC repos, sleeps → sommeil, sans écraser une valeur par du vide, source « Garmin », puis `reapplyDeviceToRecentWellness` ; activities/activityDetails → `health_workouts` `garmin:<id>`, TRIMP Banister ; `deleteGarminData`).
+- Routes `/api/garmin/connect`, `/callback` (retour `/today?garmin=…`, ouvre le profil), `/status`, `/disconnect` (supprime aussi les données), `/webhook?token=GARMIN_WEBHOOK_TOKEN` (une URL pour tous les types, dont deregistrations et userPermissionsChange ; 401 sans jeton).
+- Table `garmin_connections` (migration 039, appliquée) : RLS sans policy, jetons lus/écrits côté serveur seulement.
+- `GarminRow` dans le profil (sportif, hors sandbox) : Connecter / Connecté · Déconnecter, « Bientôt disponible » sans clés.
+- Variables Vercel (Production, ajoutées par Gildas le 23/10) : `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET`, `GARMIN_WEBHOOK_TOKEN`. `GARMIN_REDIRECT_URI` par défaut `https://go.theperfclub.com/api/garmin/callback`.
+- Pas de charge d'entraînement Garmin (absente de l'Activity API). App iPhone : la connexion risque de s'ouvrir dans Safari et de perdre la session au retour, à traiter dans une version iOS.
+- Commit `caa4669`.
