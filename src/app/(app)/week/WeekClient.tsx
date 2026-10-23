@@ -1,6 +1,7 @@
 "use client";
 
 import { markPrimingSource } from "@/lib/primingSource";
+import { proposalPersonal } from "@/lib/autoregPersonal";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import { withWatchEstimates } from "@/lib/watchEstimates";
 import { useState, useCallback, useRef, useEffect } from "react";
@@ -705,6 +706,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                 day: decisionDay,
                 wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
                 plannedDifficulty: autoregTarget?.target_difficulty ?? null,
+                personal: proposalPersonal(autoregTarget),
                 baseline, wellnessFilledToday, trendCode, trendInput,
                 sessions: withWatchEstimates(sessionsHistory, physio?.workouts, todayStr), anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
                 physio: physioDecisionInputs(physio, todayStr),

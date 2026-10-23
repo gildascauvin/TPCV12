@@ -14,17 +14,23 @@
    Wording validé par Gildas : « soirée (alcool ou sortie) », « se paie le lendemain ». */
 
 import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
-import { qualitativeDifficulty, type DifficultyWord } from "@/lib/autoregulation";
+import { qualitativeDifficulty, computeAutoregSuggestion, type DifficultyWord, type AutoregDir } from "@/lib/autoregulation";
+import { computeWellnessBaselineAt } from "@/lib/wellnessBaseline";
+import { chronicPenaltyFor } from "@/lib/decisionCard";
+import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
+import { learnSignals, type AutoregProposal, type PersonalDim, type SessionFamily } from "@/lib/autoregPersonal";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 
 export type BilanPeriodKind = "week" | "month" | "all";
 export type BilanPeriod = { kind: BilanPeriodKind; start: string; end: string };
 
-export type BilanSession = { date: string; name: string | null; rpe: number | null; target_difficulty: number | null; duration: number | null; done: boolean; created_at?: string | null };
+export type BilanSession = { date: string; name: string | null; notes?: string | null; rpe: number | null; target_difficulty: number | null; duration: number | null; done: boolean; created_at?: string | null; autoreg_decision?: AutoregDecisionRecord | null; autoreg_proposal?: AutoregProposal | null };
 export type BilanCheckin = {
   date: string; sleep: number; stress: number; recovery: number; motivation: number;
   score: number | null; behaviors: string[] | null; bedtime: string | null;
   device_sleep_minutes: number | null; device_hrv_ms: number | null; created_at?: string | null;
+  /* Pour rejouer le moteur sur l'historique (baseline personnelle), facultatifs. */
+  base_score?: number | null; device_resting_hr?: number | null; device_rhr_baseline?: number | null; device_hrv_baseline?: number | null;
 };
 export type BilanTest = { name: string; unit: string; date: string; value: number };
 
@@ -41,6 +47,8 @@ export type BilanSlide =
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
   | { kind: "tests"; main: { name: string; unit: string; points: { date: string; value: number }[]; pct: number }; others: { name: string; from: string; to: string; pct: number }[] }
+  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { harder: number; total: number }; recal: { shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number } | null; currentShift: number }
+  | { kind: "suivre"; followed: { n: number; felt: number }; ignored: { n: number; felt: number }; shifted: boolean }
   | { kind: "partage"; kpis: { value: string; label: string }[]; line: string | null };
 
 export type Bilan = { period: BilanPeriod; slides: BilanSlide[]; title: string };
@@ -157,41 +165,92 @@ function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
   return { kind: "ressenti", sleepBars, crashes, crashesSeen };
 }
 
-/* Famille de séance par mots-clés du nom : un même signal (sommeil, stress) ne pèse pas pareil sur un
-   sprint et sur une séance de force, mélanger les deux dilue tout (constaté sur les données de Gildas). */
-const CARDIO = /sprint|speed|vitesse|acc[ée]l|course|run|footing|fraction|vma|seuil|tempo|v[ée]lo|natation|trail|endurance|cardio|hyrox|rameur/i;
-const familyOf = (name: string | null): "cardio" | "force" => CARDIO.test(name ?? "") ? "cardio" : "force";
-const FAMILY_LABEL = { cardio: "Sprints et cardio", force: "Force et technique" } as const;
+/* Même calcul que la décision du jour (autoregPersonal.learnSignals) : la famille vient des
+   catégories du parseur, jamais du nom de séance. Ce que le bilan montre ici est ce qui ajuste. */
+const FAMILY_LABEL: Record<SessionFamily, string> = { force: "Force", vitesse: "Vitesse et explosivité" };
+const DIM_TEXT: Record<PersonalDim, [string, string, string]> = {
+  stress: ["ton stress mental", "Stress léger ou plus", "Stress calme ou moins"],
+  sleep: ["ton sommeil ressenti", "Sommeil correct ou moins", "Sommeil bon ou mieux"],
+  recovery: ["ton état physique", "État physique correct ou moins", "État physique bien ou mieux"],
+  motivation: ["ta motivation", "Motivation correcte ou moins", "Motivation bonne ou plus"],
+};
+function predit(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide | null {
+  const sig = learnSignals(sessions.map(s => ({ date: s.date, notes: s.notes ?? null, rpe: s.rpe, target_difficulty: s.target_difficulty, done: s.done })), checkins);
+  if (!sig.length) return null;
+  return { kind: "predit", blocks: sig.map(g => ({ title: `${FAMILY_LABEL[g.family]} · ${DIM_TEXT[g.dim][0]}`, rows: [
+    { label: DIM_TEXT[g.dim][1], part: g.low.part, total: g.low.total, highlight: true },
+    { label: DIM_TEXT[g.dim][2], part: g.high.part, total: g.high.total },
+  ] })) };
+}
 
-function predit(joined: Joined[]): BilanSlide | null {
-  const all = joined.filter(j => j.c);
-  if (all.length < 15) return null;
-  type Cand = { title: string; rows: Compare[]; diff: number };
-  const cands: Cand[] = [];
-  for (const fam of ["cardio", "force"] as const) {
-    const usable = all.filter(j => familyOf(j.s.name) === fam);
-    if (usable.length < 12) continue;
-    const split = (what: string, lowLabel: string, highLabel: string, isLow: (j: Joined) => boolean | null) => {
-      const title = `${FAMILY_LABEL[fam]} · ${what}`;
-      const lo = usable.filter(j => isLow(j) === true), hi = usable.filter(j => isLow(j) === false);
-      if (lo.length < 8 || hi.length < 8) return;
-      const hl = lo.filter(j => j.gap > 0).length, hh = hi.filter(j => j.gap > 0).length;
-      const diff = hl / lo.length - hh / hi.length;
-      if (diff < 0.2) return;
-      cands.push({ title, diff, rows: [{ label: lowLabel, part: hl, total: lo.length, highlight: true }, { label: highLabel, part: hh, total: hi.length }] });
-    };
-    split("ton stress mental", "Stress léger ou plus", "Stress calme ou moins", j => j.c!.stress >= 4);
-    split("ton sommeil ressenti", "Sommeil correct ou moins", "Sommeil bon ou mieux", j => j.c!.sleep <= 6);
-    split("ton état physique", "État physique correct ou moins", "État physique bien ou mieux", j => j.c!.recovery <= 6);
-    split("ta motivation", "Motivation correcte ou moins", "Motivation bonne ou plus", j => j.c!.motivation <= 6);
-    split("ta nuit mesurée", "Nuit sous 7 h 20", "Nuit de 7 h 20 et plus", j => j.c!.device_sleep_minutes ? j.c!.device_sleep_minutes < 440 : null);
+/* ── Le moteur rejoué sur l'historique (pistes 1 et 3) ──────────────────────────────────────────
+   Pour chaque séance faite avec un check-in le même jour : la reco cliquée (autoreg_decision), sinon
+   celle figée le matin (autoreg_proposal), sinon le moteur rejoué ce jour-là avec les seules données
+   d'avant (baseline, charge chronique). Le seuil peut varier : c'est ce qui permet de proposer « Me
+   recaler » avec ce que ça aurait changé. */
+type ReplayRow = { s: BilanSession; c: BilanCheckin; fixed: AutoregDir | null | undefined; applied: boolean | null; dirAt: (shift: number) => AutoregDir | null };
+function replay(sessions: BilanSession[], checkins: BilanCheckin[]): ReplayRow[] {
+  const byDate = new Map(checkins.map(c => [c.date, c]));
+  const out: ReplayRow[] = [];
+  for (const s of sessions) {
+    const c = byDate.get(s.date);
+    if (!c || !s.target_difficulty || s.rpe === null) continue;
+    const d = validDecision(s as { date: string; autoreg_decision?: AutoregDecisionRecord | null });
+    const p = s.autoreg_proposal && s.autoreg_proposal.date === s.date ? s.autoreg_proposal : null;
+    const fixed = d ? d.proposed : p ? p.proposed : undefined;
+    const applied = d ? Math.round(d.applied_difficulty) !== Math.round(d.original_difficulty) : null;
+    let cache: { base: ReturnType<typeof computeWellnessBaselineAt>; pen: number } | null = null;
+    const ctx = () => cache ?? (cache = {
+      base: computeWellnessBaselineAt(checkins.filter(x => x.date < s.date && x.date >= addDays(s.date, -35)) as never, c as never),
+      pen: chronicPenaltyFor(sessions.filter(x => x.date < s.date && x.date >= addDays(s.date, -60)), new Date(s.date + "T12:00:00"), "athlete").chronicPenalty,
+    });
+    out.push({ s, c, fixed, applied, dirAt: shift => fixed !== undefined ? fixed : computeAutoregSuggestion(c.score, s.target_difficulty, ctx().base, ctx().pen, shift)?.dir ?? null });
   }
-  if (!cands.length) return null;
-  cands.sort((a, b) => b.diff - a.diff);
-  // Au plus un signal par famille : « tes sprints écoutent ta nuit, ton haltéro ton stress ».
-  const picked: Cand[] = [];
-  for (const c of cands) if (!picked.some(p => p.title.split(" · ")[0] === c.title.split(" · ")[0]) && picked.length < 2) picked.push(c);
-  return { kind: "predit", blocks: picked.map(({ title, rows }) => ({ title, rows })) };
+  return out;
+}
+
+const harderWord = (s: BilanSession) => wordIdx(s.rpe!) > wordIdx(s.target_difficulty!);
+const sameWord = (s: BilanSession) => wordIdx(s.rpe!) === wordIdx(s.target_difficulty!);
+
+const RECAL_MAX = 15;
+function conseils(rows: ReplayRow[], currentShift: number): BilanSlide | null {
+  const none = rows.filter(r => r.dirAt(currentShift) === null), low = rows.filter(r => r.dirAt(currentShift) === "low");
+  if (low.length < 5 || none.length < 10) return null;
+  const justified = (rs: ReplayRow[]) => rs.filter(r => harderWord(r.s)).length;
+  let recal: Extract<BilanSlide, { kind: "conseils" }>["recal"] = null;
+  // Recalage proposé seulement si les alertes ont souvent été de trop, et sur l'historique rejoué
+  // (les jours déjà figés ne bougent pas avec le seuil).
+  // Plafond +15 au total : au-delà, le moteur perdrait trop d'alertes fondées pour un gain incertain.
+  if (low.length >= 10 && justified(low) / low.length < 0.35 && currentShift < RECAL_MAX) {
+    const score = (sh: number) => { const a = rows.filter(r => r.dirAt(sh) === "low"); const j = justified(a); return { a: a.length, j, v: j - 0.5 * (a.length - j) }; };
+    const now = score(currentShift);
+    let best = { sh: currentShift, ...now };
+    for (let sh = currentShift + 5; sh <= RECAL_MAX; sh += 5) { const r = score(sh); if (r.v > best.v + 0.5) best = { sh, ...r }; }
+    if (best.sh !== currentShift) recal = { shift: best.sh, alertsNow: now.a, alertsThen: best.a, justifiedNow: now.j, justifiedThen: best.j };
+  }
+  return { kind: "conseils", none: { same: none.filter(r => sameWord(r.s)).length, harder: justified(none), total: none.length }, low: { harder: justified(low), total: low.length }, recal, currentShift };
+}
+
+/* Suivre ou pas (piste 3) : les jours où l'app proposait d'alléger, forme ressentie le lendemain
+   selon que le sportif a allégé ou gardé sa séance. Allégé = décision cliquée ; sans clic (beaucoup
+   s'ajustent pendant la séance), séance ressentie sous le prévu ou nettement plus courte que ses
+   séances de même difficulté. */
+function suivre(rows: ReplayRow[], checkins: BilanCheckin[], currentShift: number): BilanSlide | null {
+  const byDate = new Map(checkins.map(c => [c.date, c]));
+  const durBy = new Map<number, number[]>();
+  for (const r of rows) if (r.s.duration) { const k = wordIdx(r.s.target_difficulty!); durBy.set(k, [...(durBy.get(k) ?? []), r.s.duration]); }
+  const median = (xs: number[]) => { const a = [...xs].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  const low = rows.filter(r => r.dirAt(0) === "low");
+  const f: number[] = [], g: number[] = [];
+  for (const r of low) {
+    const next = byDate.get(addDays(r.s.date, 1));
+    if (!next || (next.behaviors ?? []).some(b => SOIREE_WIDE.has(b))) continue;
+    const md = durBy.get(wordIdx(r.s.target_difficulty!));
+    const followed = r.applied ?? (r.s.rpe! < r.s.target_difficulty! || (!!r.s.duration && !!md && r.s.duration < 0.9 * median(md)));
+    (followed ? f : g).push(felt(next));
+  }
+  if (f.length < 5 || g.length < 5) return null;
+  return { kind: "suivre", followed: { n: f.length, felt: mean(f) }, ignored: { n: g.length, felt: mean(g) }, shifted: currentShift > 0 };
 }
 
 /* Regroupé par difficulté PRÉVUE en mots (légère, modérée, dure, très dure), jamais par nom de séance
@@ -318,6 +377,7 @@ function tests(period: BilanPeriod, rows: BilanTest[]): BilanSlide | null {
 export function computeBilan(input: {
   period: BilanPeriod; today: string; signupAt: string;
   sessions: BilanSession[]; checkins: BilanCheckin[]; tests: BilanTest[];
+  currentShift?: number;
 }): Bilan {
   const { period, today, signupAt } = input;
   const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, signupAt) && s.date <= period.end);
@@ -326,7 +386,9 @@ export function computeBilan(input: {
   const joined: Joined[] = [...sessions].sort((x, y) => x.date.localeCompare(y.date)).filter(s => s.target_difficulty).map(s => ({ s, c: byDate.get(s.date), gap: s.rpe! - s.target_difficulty! }));
 
   const periodSlides = [regularite(period, sessions, checkins, today), charge(period, sessions, today)];
-  const learned = [ressenti(checkins), predit(joined), biais(joined), fatigue(checkins, sessions), leviers(checkins)].filter((x): x is BilanSlide => !!x);
+  const rows = replay(sessions, checkins);
+  const shift = input.currentShift ?? 0;
+  const learned = [conseils(rows, shift), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
   const late = [tendance(period, checkins), tests(period, input.tests)];
   const slides = [...periodSlides, ...(period.kind === "week" ? learned.slice(0, 2) : learned), ...late].filter((x): x is BilanSlide => !!x);
 

@@ -1,6 +1,7 @@
 "use client";
 
 import type { EstimatedSession } from "@/lib/watchEstimates";
+import { proposalPersonal } from "@/lib/autoregPersonal";
 import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
@@ -1074,6 +1075,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               const decision = computeDecisionCard({
                 day: decisionDay,
                 wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
+                personal: proposalPersonal(autoregTarget),
                 baseline, wellnessFilledToday, trendCode, trendInput,
                 sessions: [...athleteSessionHistory, ...(watchEstimates[athlete.id] ?? [])], anchor: trendAnchor, perspective: "coach",
                 subject: athlete.name.split(" ")[0],

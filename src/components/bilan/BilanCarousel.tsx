@@ -23,13 +23,13 @@ type Props = {
 const GLOW: Record<BilanSlide["kind"], string> = {
   regularite: "rgba(212,64,0,0.45)", charge: "rgba(47,158,68,0.40)", ressenti: "rgba(56,189,248,0.38)",
   predit: "rgba(212,64,0,0.40)", biais: "rgba(242,138,0,0.40)", fatigue: "rgba(168,85,247,0.38)",
-  leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", partage: "rgba(56,189,248,0.20)",
+  leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", conseils: "rgba(47,158,68,0.38)", suivre: "rgba(168,85,247,0.36)", partage: "rgba(56,189,248,0.20)",
 };
 const KICKER: Record<BilanSlide["kind"], string> = {
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
-  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", partage: "EN UNE CARTE",
+  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "MES CONSEILS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
-const LEARNED = new Set<BilanSlide["kind"]>(["ressenti", "predit", "biais", "fatigue", "leviers"]);
+const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers"]);
 
 const card: React.CSSProperties = { background: "rgba(255,255,255,0.06)", borderRadius: 18, padding: 16, display: "flex", flexDirection: "column", gap: 10 };
 const h2: React.CSSProperties = { margin: 0, fontFamily: "var(--font-display)", fontSize: 30, lineHeight: 1.12, fontWeight: 700, color: "#fff" };
@@ -66,8 +66,49 @@ function Rows({ rows, color }: { rows: { label: string; part: number; total: num
   );
 }
 
-function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean }) {
+type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (shift: number) => void; keep: () => void };
+function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal }) {
   switch (s.kind) {
+    case "conseils": {
+      const lowWide = s.low.harder / s.low.total < 0.35;
+      const seg = (a: number, b: number, t: number) => [`${(a / t) * 100}%`, `${(b / t) * 100}%`, `${((t - a - b) / t) * 100}%`];
+      const [n1, n2, n3] = seg(s.none.same, s.none.harder, s.none.total);
+      return (<>
+        <h2 style={h2}>{lowWide ? <>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que je ne le pensais.</span></> : <>Mes alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
+        <div style={card}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Quand je ne disais rien</div>
+          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: n1, background: "#2f9e44" }} /><div style={{ width: n2, background: "#f28a00" }} /><div style={{ width: n3, background: "rgba(255,255,255,0.25)" }} /></div>
+          <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}.</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Quand je disais d'alléger</div>
+          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.low.harder / s.low.total) * 100}%`, background: "#f28a00" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
+          <div style={small}>Plus dure que prévu {s.low.harder} fois sur {s.low.total}.{lowWide ? ` Les ${s.low.total - s.low.harder} autres fois, tu avais de la marge.` : ""}</div>
+        </div>
+        {s.recal && recal.state !== "kept" && (
+          <div style={{ ...card, gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{recal.state === "done" ? "C'est fait" : "Ce que je te propose"}</div>
+            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done" ? "Je te dirai d'alléger moins souvent, et seulement quand ça compte. Ton bilan mesurera si c'était le bon réglage." : "Une récup un peu sous ta norme ne pèse presque pas sur tes séances. J'attends un signal plus net avant de te dire d'alléger."}</div>
+            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {s.recal.alertsThen} alertes au lieu de {s.recal.alertsNow}, fondées {s.recal.justifiedThen} fois au lieu de {s.recal.justifiedNow}.</div>}
+            {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d'enregistrer. Réessaie dans un instant.</div>}
+            {(recal.state === "idle" || recal.state === "error" || recal.state === "saving") && (
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button onClick={recal.keep} style={{ flex: 1, height: 46, borderRadius: 12, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Garder l'ancien</button>
+                <button onClick={() => recal.apply(s.recal!.shift)} disabled={recal.state === "saving"} style={{ flex: 1.4, height: 46, borderRadius: 12, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Me recaler"}</button>
+              </div>
+            )}
+          </div>
+        )}
+      </>);
+    }
+    case "suivre": {
+      const diff = s.followed.felt - s.ignored.felt;
+      const bars = [{ label: `Tu as allégé (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `Tu as gardé ta séance (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
+      return (<>
+        <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>ton lendemain est le même.</span></> : diff > 0 ? <>Quand tu allèges, <span style={{ color: "#c79bf7" }}>ton lendemain est meilleur.</span></> : <>Garder ta séance <span style={{ color: "#c79bf7" }}>ne t'a rien coûté.</span></>}</h2>
+        <div style={card}><div style={small}>Les jours où je proposais d'alléger · ta forme ressentie le lendemain</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
+        <p style={body}>{Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. Ton bilan « Mes conseils » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : je peux alléger moins souvent."}</p>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Plus tard : ta progression aux tests, les semaines où tu suis et celles où tu ne suis pas.</div>
+      </>);
+    }
     case "regularite": {
       const scope = bilan.period.kind === "week" ? "cette semaine" : bilan.period.kind === "month" ? "ce mois-ci" : "depuis le début";
       return (<>
@@ -199,6 +240,18 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
   const [failed, setFailed] = useState(false);
   const [idx, setIdx] = useState(0);
   const [shared, setShared] = useState(false);
+  const [recalState, setRecalState] = useState<Recal["state"]>("idle");
+  const recal: Recal = {
+    state: recalState,
+    apply: async (shift) => {
+      setRecalState("saving");
+      const { data, error } = await createClient().from("profiles").update({ autoreg_shift: shift }).eq("user_id", userId).select("user_id");
+      if (error || !data?.length) { console.error("[bilan] recalage", error?.message ?? "aucune ligne"); setRecalState("error"); return; }
+      posthog.capture("autoreg_recalibrated", { shift, period: kind });
+      setRecalState("done");
+    },
+    keep: () => { posthog.capture("autoreg_recalibration_declined", { period: kind }); setRecalState("kept"); },
+  };
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -206,9 +259,9 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
     (async () => {
       const supabase = createClient();
       const [p, s, w, t] = await Promise.all([
-        supabase.from("profiles").select("created_at").eq("user_id", userId).maybeSingle(),
-        supabase.from("sessions").select("date,name,rpe,target_difficulty,duration,done,created_at").eq("user_id", userId).eq("done", true).lte("date", today),
-        supabase.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,created_at").eq("user_id", userId).lte("date", today),
+        supabase.from("profiles").select("created_at, autoreg_shift").eq("user_id", userId).maybeSingle(),
+        supabase.from("sessions").select("date,name,notes,rpe,target_difficulty,duration,done,created_at,autoreg_decision,autoreg_proposal").eq("user_id", userId).eq("done", true).lte("date", today),
+        supabase.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,base_score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,device_resting_hr,device_rhr_baseline,device_hrv_baseline,created_at").eq("user_id", userId).lte("date", today),
         supabase.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", userId),
       ]);
       if (!alive) return;
@@ -222,7 +275,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
         .map(r => ({ date: r.date, value: Number(r.value), unit: r.unit, name: (Array.isArray(r.tests) ? r.tests[0]?.name : r.tests?.name) ?? "" }))
         .filter(r => r.name);
       const period = periodFor(kind, anchor, firstDate);
-      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests });
+      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: (p.data?.autoreg_shift as number | undefined) ?? 0 });
       setBilan(b);
       posthog.capture("bilan_opened", { period: kind, source, slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(",") });
     })();
@@ -286,7 +339,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
           {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>On rassemble tes données…</div>}
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>Impossible de charger ton bilan. Réessaie dans un instant.</div>}
           {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul.</div>}
-          {bilan && slide && <SlideBody s={slide} bilan={bilan} onShare={share} shared={shared} />}
+          {bilan && slide && <SlideBody s={slide} bilan={bilan} onShare={share} shared={shared} recal={recal} />}
         </div>
 
         {slides.length > 0 && (

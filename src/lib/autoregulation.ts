@@ -156,9 +156,12 @@ export function computeAutoregSuggestion(
   plannedDifficulty: number | null,
   baseline?: WellnessBaselineResult | null,
   chronicPenalty = 0,
+  /* Seuil personnel (2026-10-23, « Me recaler » du bilan, profiles.autoreg_shift) : points ajoutés à
+     la récupération effective. Positif = le sportif encaisse mieux, on allège moins souvent. */
+  shift = 0,
 ): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
-  const x = effectiveRecoveryX(wellness, baseline, chronicPenalty)!;
+  const x = Math.max(0, Math.min(100, effectiveRecoveryX(wellness, baseline, chronicPenalty)! + shift));
   const { lo, hi } = autoregBand(x);
 
   let dir: AutoregDir;

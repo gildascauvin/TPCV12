@@ -1,5 +1,6 @@
 "use client";
 import { isEstimated } from "@/lib/watchEstimates";
+import { proposalPersonal } from "@/lib/autoregPersonal";
 import { markPrimingSource } from "@/lib/primingSource";
 import { openInvite } from "@/components/coach/InviteHost";
 import { validDecision } from "@/lib/autoregDecisionRecord";
@@ -463,6 +464,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     return computeDecisionCard({
       wellnessScore: a.wellnessFilledToday === false ? null : a.wellness_score,
       plannedDifficulty: topSession.target_difficulty,
+      personal: proposalPersonal(topSession),
       baseline: baselines[a.id],
       wellnessFilledToday: a.wellnessFilledToday !== false,
       sessions: recentSessions[a.id] ?? [],

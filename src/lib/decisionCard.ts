@@ -1,3 +1,4 @@
+import { personalReason, type PersonalAdjust } from "@/lib/autoregPersonal";
 import type { Session } from "@/types";
 import { daysAgoStr, dailyLoad, partialChargeReady, monotony, strain, acwr, formPercentSeries, fitnessFatigueTrend, type LoadPoint, type TrendDirection, type TrendCode, type TrendInput, type TrendPerspective } from "@/lib/trainingLoad";
 import { sigDimInfo, trendDimInfo, crossTrendInsight, type Severity as PhaseSeverity } from "@/lib/fatigueSignature";
@@ -96,7 +97,7 @@ function chronicContextLine(worst: { text: string } | null): string | null {
 function adviceLine(suggestion: AutoregSuggestion, chronicPenalty: number, params: { wellnessScore: number | null; plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null; subject?: string }): string {
   const planned = params.plannedDifficulty ?? 6;
   if (suggestion.dir === "low" && chronicPenalty !== 0 && suggestion.kind !== "norm_hard") {
-    const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0);
+    const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0);
     if (!base || base.kind === "norm_hard") return chronicOnlyAdvice(planned, params.subject);
   }
   if (suggestion.kind === "norm_hard") {
@@ -250,7 +251,7 @@ function phaseAdviceLine(
 
 function isChronicOnly(suggestion: AutoregSuggestion, chronicPenalty: number, params: { wellnessScore: number | null; plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null }): boolean {
   if (suggestion.dir !== "low" || chronicPenalty === 0 || suggestion.kind === "norm_hard") return false;
-  const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0);
+  const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0);
   return !base || base.kind === "norm_hard";
 }
 
@@ -348,6 +349,10 @@ export function computeDecisionCard(params: {
   /* Comportements cochés au check-in du jour (2026-10-12) : un comportement négatif est le 1er
      signal cité par le conseil après séance (doneAdvice). */
   behaviors?: string[] | null;
+  /* Réglages personnels (2026-10-23, autoregPersonal.ts) : seuil recalé + signal appris. Sportif :
+     calculés en direct ; coach : relus dans la reco figée au check-in (autoreg_proposal), pour que
+     les deux voient la même décision. */
+  personal?: PersonalAdjust | null;
 }): DecisionCard {
   const anchor = params.anchor ?? new Date();
 
@@ -355,12 +360,18 @@ export function computeDecisionCard(params: {
      100% dérivé de l'historique de séances, ZÉRO recouvrement avec le wellness du jour (déjà géré
      directement par computeAutoregSuggestion via wellnessScore/baseline) : jamais un double comptage
      du même signal. */
-  const { chronicPenalty, worstChronic } = chronicPenaltyFor(params.sessions, anchor, params.perspective);
+  const { chronicPenalty: chronicOnlyPenalty, worstChronic } = chronicPenaltyFor(params.sessions, anchor, params.perspective);
+  const shift = params.personal?.shift ?? 0;
+  const personalPenalty = params.personal?.penalty ?? 0;
+  const chronicPenalty = chronicOnlyPenalty + personalPenalty;
 
-  const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty);
+  const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty, shift);
+  /* Le signal appris pèse dans l'alerte « Alléger » : la ligne 2 dit cette cause-là, plus parlante
+     qu'une récup générique (Gildas, 2026-10-23 : « Appris sur toi »). */
+  const personalLine = suggestion?.dir === "low" && personalPenalty ? personalReason(params.personal, params.subject) : null;
   const ctxLine = chronicContextLine(worstChronic);
 
-  if (params.day) return withPhase({ ...params, day: params.day }, suggestion, chronicPenalty);
+  if (params.day) return withPhase({ ...params, day: params.day }, suggestion, chronicPenalty, personalLine, shift);
 
   if (suggestion) {
     /* Allègement déclenché par le seul chronique (2026-09-29) : sans la pénalité, le wellness du jour
@@ -370,7 +381,7 @@ export function computeDecisionCard(params: {
       suggestion, icon: suggestion.icon,
       text: [
         autoregHeadline(suggestion.dir),
-        adviceLine(suggestion, chronicPenalty, params),
+        personalLine ? `Appris sur toi : ${personalLine}` : adviceLine(suggestion, chronicPenalty, params),
         ctxLine,
       ].filter((l): l is string => !!l).join("\n"),
     };
@@ -493,6 +504,8 @@ function withPhase(
   params: Parameters<typeof computeDecisionCard>[0] & { day: DecisionDay },
   suggestion: AutoregSuggestion | null,
   chronicPenalty: number,
+  personalLine: string | null = null,
+  shift = 0,
 ): DecisionCard {
   const anchor = params.anchor ?? new Date();
   const day = params.day;
@@ -592,7 +605,7 @@ function withPhase(
     let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null
       ? { low: rec.zoneLow, high: rec.zoneHigh } : null;
     if (!rec && params.wellnessFilledToday && day.planned !== null) {
-      const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty);
+      const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty, shift);
       if (sug) {
         recoDir = sug.dir;
         const z = zoneRange(Math.round(day.planned + pctToPoints(sug.reco)), sug.dir);
@@ -636,7 +649,7 @@ function withPhase(
   if (suggestion) {
     return {
       suggestion, icon: suggestion.icon, phase,
-      text: `${autoregHeadline(suggestion.dir)}\n${phaseAdviceLine(suggestion, chronicOnly, feel, relative, voice, params)}${physioLine}`,
+      text: `${autoregHeadline(suggestion.dir)}\n${personalLine ? `Appris sur ${voice.subject ? voice.subject : "toi"} : ${personalLine}` : phaseAdviceLine(suggestion, chronicOnly, feel, relative, voice, params)}${physioLine}`,
     };
   }
   return {

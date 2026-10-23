@@ -18,6 +18,7 @@ export interface Profile {
   mode: UserMode;
   subscription_status: SubscriptionStatus;
   first_decision_on?: string | null; // freemium : jour de la 1re décision en clair (migration 025)
+  autoreg_shift?: number | null; // seuil personnel accepté via « Me recaler » (migration 042)
   first_adjustment_at?: string | null; // onboarding in-app : 1re décision prise (migration 027)
   stripe_customer_id: string | null;
   onboarding_done: boolean;
@@ -75,6 +76,8 @@ export interface Session {
   viewed_by_coach_at?: string | null;
   /* Décision d'autorégulation (migration 030), voir autoregDecisionRecord.ts. */
   autoreg_decision?: import("@/lib/autoregDecisionRecord").AutoregDecisionRecord | null;
+  /* Reco du matin figée au check-in (migration 042), voir autoregPersonal.ts. */
+  autoreg_proposal?: import("@/lib/autoregPersonal").AutoregProposal | null;
 }
 
 export interface CoachAthlete {
@@ -168,6 +171,7 @@ export interface CoachViewSession {
   viewed_by_athlete_at?: string | null;
   viewed_by_coach_at?: string | null;
   autoreg_decision?: import("@/lib/autoregDecisionRecord").AutoregDecisionRecord | null;
+  autoreg_proposal?: import("@/lib/autoregPersonal").AutoregProposal | null;
 }
 
 export interface FatigueLog {

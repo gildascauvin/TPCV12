@@ -41,7 +41,7 @@ export async function loadCheckinContext(userId: string, date: string): Promise<
 
 export async function loadSessionContext(userId: string, sessionId: string): Promise<{ session: ResultSession | null; week: WeekSession[] }> {
   const supabase = createClient();
-  const one = await supabase.from("sessions").select("id, date, rpe, duration, target_difficulty, name, autoreg_decision").eq("id", sessionId).maybeSingle();
+  const one = await supabase.from("sessions").select("id, date, rpe, duration, target_difficulty, name, autoreg_decision, autoreg_proposal").eq("id", sessionId).maybeSingle();
   if (one.error) console.error("[résultat séance] lecture:", one.error.message);
   const row = one.data as ResultSession | null;
   if (!row) return { session: null, week: [] };

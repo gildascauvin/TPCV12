@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { proposalPersonal } from "@/lib/autoregPersonal";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -305,6 +306,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
     day: phaseDay,
     wellnessScore: absoluteScore,
     plannedDifficulty: topSession && !topSession.done ? topSession.target_difficulty : null,
+    personal: proposalPersonal(topSession),
     baseline,
     wellnessFilledToday: athlete.wellnessFilledToday !== false,
     trendCode: trend,

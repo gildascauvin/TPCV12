@@ -41,7 +41,8 @@ import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/compone
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import { applyAutoregDifficulty } from "@/lib/autoregulation";
+import { applyAutoregDifficulty, zoneRange, pctToPoints } from "@/lib/autoregulation";
+import { learnSignals, personalAdjust, proposalPersonal, type PersonalSignal, type PersonalAdjust } from "@/lib/autoregPersonal";
 import { aggregateFor } from "@/lib/metricCards";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments, Program } from "@/types";
 import HomeTabs, { type HomeTab } from "@/components/today/HomeTabs";
@@ -358,6 +359,24 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   // jour" reste comparable à l'historique déjà bâti sur base_score dans wellnessBaseline plus bas.
   const score = wellness ? wellnessSignal(wellness) : null;
   const wellnessFilledToday = wellness !== null && wellness.bedtime != null;
+  /* Signaux appris sur le sportif (2026-10-23, autoregPersonal.ts, piste 2) : sur ~6 mois d'historique,
+     jamais le jour même. null = pas encore chargés (la reco du matin attend pour être figée complète). */
+  const [personalSignals, setPersonalSignals] = useState<PersonalSignal[] | null>(sandboxMode ? [] : null);
+  useEffect(() => {
+    if (sandboxMode || !userId) return;
+    let alive = true;
+    const since = format(addDays(new Date(), -200), "yyyy-MM-dd");
+    Promise.all([
+      supabase.from("sessions").select("date, notes, rpe, target_difficulty, done").eq("user_id", userId).eq("done", true).gte("date", since).lt("date", initialDate),
+      supabase.from("wellness_daily").select("date, sleep, stress, recovery, motivation").eq("user_id", userId).gte("date", since).lt("date", initialDate),
+    ]).then(([s, w]) => {
+      if (!alive) return;
+      if (s.error || w.error) { console.error("[autoreg] signaux appris", s.error?.message ?? w.error?.message); setPersonalSignals([]); return; }
+      setPersonalSignals(learnSignals((s.data ?? []) as Session[], (w.data ?? []) as { date: string; sleep: number; stress: number; recovery: number; motivation: number }[]));
+    });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, initialDate, sandboxMode]);
   // Montre (Apple Santé) avant le check-in : affichée dans "Plan à confirmer" pour inviter à le faire.
   const deviceNote = useDeviceNote(userId, selectedDate, !sandboxMode && !wellnessFilledToday);
   /* Plus d'impact fatigue post-séance ici (retiré partout, pas seulement sur ce chart) : le garder
@@ -418,8 +437,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     : autoregTargetTop
     ? { kind: "planned", tomorrowDifficulty }
     : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+  /* Réglages personnels du jour : seuil recalé (profil) + signal appris si la séance à faire est
+     concernée ; séance déjà faite = ceux figés le matin. */
+  const autoregShift = profile.autoreg_shift ?? 0;
+  const personal: PersonalAdjust = autoregTargetTop
+    ? personalAdjust(personalSignals ?? [], autoregShift, autoregTargetTop.notes, wellnessFilledToday ? wellness : null)
+    : proposalPersonal(doneTop) ?? { shift: autoregShift, penalty: 0, dim: null, family: null };
   const decision = computeDecisionCard({
     day: decisionDay,
+    personal,
     behaviors: wellnessFilledToday ? wellness?.behaviors ?? null : null,
     wellnessScore: displayScore,
     plannedDifficulty: autoregTargetTop?.target_difficulty ?? null,
@@ -436,6 +462,24 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     physio: physioDecisionInputs(physio, selectedDate),
   });
   const decisionColor = decisionCardColor(decision.icon);
+  /* Reco du matin figée (piste 1) : dès que le check-in du jour est fait et les signaux chargés, une
+     fois par séance. Le verdict de fin de séance et le bilan la relisent, que le sportif clique ou non. */
+  const proposalKey = wellnessFilledToday && selectedDate === initialDate && autoregTargetTop && personalSignals !== null
+    && proposalPersonal(autoregTargetTop) === null && !autoregTargetTop.autoreg_proposal ? autoregTargetTop.id : null;
+  const proposalSent = useRef<string | null>(null);
+  useEffect(() => {
+    if (!proposalKey || sandboxMode || proposalSent.current === proposalKey || !autoregTargetTop) return;
+    proposalSent.current = proposalKey;
+    const sug = decision.suggestion;
+    const planned = autoregTargetTop.target_difficulty ?? 0;
+    const zone = sug ? zoneRange(Math.round(planned + pctToPoints(sug.reco)), sug.dir) : null;
+    const proposal = { proposed: sug?.dir ?? null, reco: sug?.reco ?? null, zoneLow: zone?.zoneLow ?? null, zoneHigh: zone?.zoneHigh ?? null, original_difficulty: planned, personal };
+    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: autoregTargetTop.id, proposal }) })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(j => { if (j?.proposal) setAllSessions(prev => prev.map(x => x.id === autoregTargetTop.id ? { ...x, autoreg_proposal: j.proposal } : x)); })
+      .catch(e => console.error("[autoreg] reco du matin", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposalKey]);
   /* Freemium (2026-09-30) : 1re vraie décision (check-in fait + séance à ajuster, sur le jour réel)
      en clair, floutée dès le lendemain pour un compte gratuit. */
   const canDecide = useFirstDecision({
