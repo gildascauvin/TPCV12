@@ -57,6 +57,7 @@ import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
+import HomeSheet, { sheetBounds } from "@/components/today/HomeSheet";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -248,6 +249,27 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showWellness, setShowWellness] = useState(false);
+  /* Check-in dans la feuille de l'Accueil (mobile) : « Plus tard » le range jusqu'au prochain passage. */
+  const [checkinDismissed, setCheckinDismissed] = useState(false);
+  const [viewportH, setViewportH] = useState(() => (typeof window === "undefined" ? 800 : window.innerHeight));
+  useEffect(() => {
+    const on = () => setViewportH(window.innerHeight);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const [sheetH, setSheetH] = useState(() => sheetBounds(typeof window === "undefined" ? 800 : window.innerHeight).mid);
+  const [liveScoreSlot, setLiveScoreSlot] = useState<HTMLDivElement | null>(null);
+  const [pageArea, setPageArea] = useState<HTMLDivElement | null>(null);
+  /* Haut du score du check-in dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
+     score qui se construit reste visible (en-tête et onglets prennent déjà ~250 px). */
+  const [liveSlotTop, setLiveSlotTop] = useState<number | null>(null);
+  const [sheetVisibleH, setSheetVisibleH] = useState<number | null>(null);
+  // Un check-in demandé (séance à démarrer, ?checkin=1, Modifier mon ressenti…) remonte la feuille sur l'onglet Aujourd'hui.
+  useEffect(() => {
+    if (!showWellness || isMd) return;
+    setHomeTab("today");
+    setSheetH(h => Math.max(h, sheetBounds(window.innerHeight).mid));
+  }, [showWellness, isMd]);
   const searchParams = useSearchParams();
   /* Checklist d'onboarding : ?checkin=1 (Renseigne ta forme) ouvre le check-in, ?today=1 (Ajuste et
      fais ta séance) ramène sur aujourd'hui — dans les deux cas, la page se recale sur aujourd'hui. */
@@ -742,6 +764,75 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     45,
   );
 
+  /* Accueil mobile (2026-10-22, POC PgTQbMYpsUhqCounWHL28M) : séance du jour dans une feuille en bas ;
+     tant que le check-in du jour n'est pas fait, c'est lui qui est dans la feuille, et son score se
+     construit en haut à la place de l'anneau de décision. Desktop et autres onglets : inchangés. */
+  const sheetMode = !isMd && homeTab === "today";
+  const embeddedCheckin = !isMd && !sandboxMode && selectedDate === initialDate
+    && (showWellness || (!wellnessFilledToday && !checkinDismissed));
+  const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+  // Score du check-in : aussi grand que la place laissée au-dessus de la feuille.
+  const liveScoreSize = Math.max(110, Math.min(230, viewportH - (sheetVisibleH ?? sheetH) - (liveSlotTop ?? 250) - 75));
+  // Check-in fini (ou rangé) : la séance remonte à mi-hauteur.
+  const wasEmbedded = useRef(embeddedCheckin);
+  useEffect(() => {
+    if (wasEmbedded.current && !embeddedCheckin) setSheetH(sheetBounds(window.innerHeight).mid);
+    wasEmbedded.current = embeddedCheckin;
+  }, [embeddedCheckin]);
+  useEffect(() => {
+    if (!embeddedCheckin || !sheetMode || !liveScoreSlot) return;
+    const top = liveScoreSlot.getBoundingClientRect().top + window.scrollY;
+    setLiveSlotTop(top);
+    setSheetH(Math.max(280, Math.round(viewportH - top - 215)));
+  }, [embeddedCheckin, sheetMode, liveScoreSlot, viewportH]);
+
+  const sessionsBlock = (
+              <div id="day-sessions-container">
+                {/* Bandeau programme fusionné dans le bandeau d'activité du header (2026-10-04). */}
+                {/* Jour sans séance (onboarding in-app, 2026-10-01) : programme en attente (départ
+                   futur, rien cette semaine) → encart d'attente ; sinon carte blanche "Aucune séance
+                   aujourd'hui" avec Importer / Séance libre. Plus de séance démo. */}
+                {todaySessions.length === 0 && (
+                    <EmptyDayCard
+                      onAddFree={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
+                      onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
+                    />
+                )}
+                {todaySessions.map((s) => (
+                  <TodaySessionCard
+                    key={s.id}
+                    session={s}
+                    onComplete={(s) => openResult(s)}
+                    onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
+                    onEdit={(s) => setEditing(s)}
+                    previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+                    concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
+                    onReorderExercises={reorderTodayExercises}
+                    authorName={profile.name ?? "Toi"}
+                    hideGauge={!sheetMode && s.id === autoregTargetTop?.id}
+                  />
+                ))}
+                {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx
+                   (Planning) — "'ajouter une séance' doit être dans la carte de séance en bas,
+                   comme le planning" (2026-09-24) : plus une boîte flottante séparée sous toute
+                   la carte wellness, un continuateur de la même liste. */}
+                {todaySessions.length > 0 && (
+                  <div
+                    data-tour="add-session-btn"
+                    onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
+                    style={{
+                      border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
+                      borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
+                      cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
+                      transition: "all .15s",
+                    }}
+                  >
+                    + Ajouter une séance
+                  </div>
+                )}
+              </div>
+  );
+
   return (
     <>
       {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
@@ -764,7 +855,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
          son propre dégradé dark distinct, visible comme une bande séparée au-dessus de ce fond ; en
          `seamless`, il n'a plus de fond propre et ce SEUL dégradé peint continûment le header ET le
          reste de la page, "toute la page qui a le bg" plutôt que 2 fonds dark empilés. */}
-      <div style={{
+      <div ref={setPageArea} style={{
         background: DARK_CARD_BG,
         minHeight: "100vh",
         // (app)/layout.tsx réserve 132px de padding-bottom (clearance bottom nav) SUR L'ANCÊTRE, donc
@@ -773,7 +864,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         // bottom nav flottante. Étend ce fond sombre pour couvrir cette zone au lieu de la laisser
         // apparaître nue.
         // Juste de quoi voir le dernier bouton au-dessus de la navigation (2026-10-04).
-        marginBottom: -132, paddingBottom: 100,
+        marginBottom: -132, paddingBottom: sheetMode ? (sheetVisibleH ?? sheetH) + 24 : 100,
         // Hauteur mini padding compris (2026-10-04) : sans ça, 100vh + 132px de marge faisaient
         // défiler une page même courte, avec un grand vide en bas.
         boxSizing: "border-box",
@@ -794,7 +885,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
-        <HomeTabs
+        {/* Pendant le check-in dans la feuille (mobile), les onglets laissent leur place au score. */}
+        {!(sheetMode && embeddedCheckin) && <HomeTabs
           active={homeTab}
           onChange={setHomeTab}
           previews={{
@@ -806,7 +898,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           }}
           locked={historyLocked}
           lockedTabs={["today"]}
-        />
+        />}
 
         {homeTab === "today" && (
         <>
@@ -841,7 +933,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
              éviter un long scroll sur desktop — plus nécessaire depuis que le ring a disparu : la
              colonne de gauche ne contient plus qu'une ligne de ressenti, la jauge et l'insight. */}
           <div style={{ position: "relative", zIndex: 2 }}>
-            <div>
+            {sheetMode && embeddedCheckin && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0 4px" }}>
+                <div ref={setLiveScoreSlot} />
+              </div>
+            )}
+            <div style={{ display: sheetMode && embeddedCheckin ? "none" : undefined }}>
               {/* Ring de fraîcheur retirée (2026-09-30) : le score est aperçu dans la miniature
                  de l'onglet Récupération, son détail vit dans cet onglet-là. La ligne "Ressenti du
                  jour ✎ + comportements" qui l'avait remplacée un temps est retirée aussi — la jauge
@@ -918,53 +1015,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               )}
             </div>
 
-            {/* ── Séance(s) du jour — imbriquée dans la même carte, TOUJOURS en dessous ── */}
+            {/* Séance(s) du jour : dans la feuille du bas sur mobile (2026-10-22), sous la carte décision sinon. */}
+            {!sheetMode && (
             <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 16 }}>
-              <div id="day-sessions-container">
-                {/* Bandeau programme fusionné dans le bandeau d'activité du header (2026-10-04). */}
-                {/* Jour sans séance (onboarding in-app, 2026-10-01) : programme en attente (départ
-                   futur, rien cette semaine) → encart d'attente ; sinon carte blanche "Aucune séance
-                   aujourd'hui" avec Importer / Séance libre. Plus de séance démo. */}
-                {todaySessions.length === 0 && (
-                    <EmptyDayCard
-                      onAddFree={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
-                      onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
-                    />
-                )}
-                {todaySessions.map((s) => (
-                  <TodaySessionCard
-                    key={s.id}
-                    session={s}
-                    onComplete={(s) => openResult(s)}
-                    onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
-                    onEdit={(s) => setEditing(s)}
-                    previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
-                    concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
-                    onReorderExercises={reorderTodayExercises}
-                    authorName={profile.name ?? "Toi"}
-                    hideGauge={s.id === autoregTargetTop?.id}
-                  />
-                ))}
-                {/* Rattachée à la pile des séances du jour, même traitement que DayColumn.tsx
-                   (Planning) — "'ajouter une séance' doit être dans la carte de séance en bas,
-                   comme le planning" (2026-09-24) : plus une boîte flottante séparée sous toute
-                   la carte wellness, un continuateur de la même liste. */}
-                {todaySessions.length > 0 && (
-                  <div
-                    data-tour="add-session-btn"
-                    onClick={() => { setAddSessionInitialName(undefined); setShowAddSession(true); }}
-                    style={{
-                      border: "0.5px dashed rgba(212,64,0,.32)", color: "#d44000", background: "#fff",
-                      borderRadius: 12, padding: "9px 8px", textAlign: "center", fontSize: 11,
-                      cursor: "pointer", fontWeight: 700, marginTop: todaySessions.length > 0 ? 6 : 0,
-                      transition: "all .15s",
-                    }}
-                  >
-                    + Ajouter une séance
-                  </div>
-                )}
-              </div>
+              {sessionsBlock}
             </div>
+            )}
           </div>
         </div>
         </>
@@ -994,9 +1050,26 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       </div>
       </div>
 
+      {sheetMode && (
+        <HomeSheet height={sheetH} onHeightChange={setSheetH} onVisibleHeight={setSheetVisibleH} contentKey={embeddedCheckin ? "checkin" : "sessions"} dragArea={pageArea} overNav={embeddedCheckin}
+          header={embeddedCheckin && checkinTopSession ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 14px 10px", padding: "9px 12px", borderRadius: 12, background: "#fff" }}>
+              <span style={{ fontSize: 13.5, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{checkinTopSession.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#d44000", flexShrink: 0, fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: ".06em" }}>Plan à confirmer</span>
+            </div>
+          ) : undefined}>
+          {embeddedCheckin ? (
+            <WellnessModal key={`checkin-${selectedDate}`} embedded scoreSlot={liveScoreSlot} scoreSize={liveScoreSize} footerOffset={0}
+              date={selectedDate} askPlan={todaySessions.length === 0} cancelLabel="Plus tard"
+              onSave={data => gateInput(() => saveWellness(data))}
+              onClose={() => { setShowWellness(false); setCheckinDismissed(true); setPendingCompleteSession(null); setPendingStartSession(null); }} />
+          ) : sessionsBlock}
+        </HomeSheet>
+      )}
+
       {/* Modals — ouverture et enregistrement libres depuis le freemium (2026-09-30) : ce sont des
           entrées. gateInput() ne bloque plus que la sandbox (visiteur sans compte). */}
-      {showWellness && (
+      {showWellness && !embeddedCheckin && (
         <WellnessModal date={selectedDate} askPlan={selectedDate === initialDate && todaySessions.length === 0} onSave={data => gateInput(() => saveWellness(data))} onClose={() => { setShowWellness(false); setPendingCompleteSession(null); setPendingStartSession(null); }} />
       )}
       {showAddSession && (

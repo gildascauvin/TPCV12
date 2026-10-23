@@ -93,7 +93,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       onClick={() => { if (!concealed) onEdit(session); }}
     >
       {/* 1. Name + badge */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+      <div data-sheet-peek={hideGauge || !gaugeValue ? "" : undefined} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
           {session.name}
         </span>
@@ -127,7 +127,7 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
       {/* 2. Single difficulty gauge (no label) — masquée pour la séance dont la jauge de décision a
          été promue en tête de l'onglet, voir `hideGauge`. */}
       {!hideGauge && gaugeValue && (
-        <div style={{ marginBottom: 12 }}>
+        <div data-sheet-peek style={{ marginBottom: 12 }}>
           <DiffGauge value={gaugeValue} height={12} />
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { hapticTick } from "@/lib/native";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { invalidatePhysio, requestPhysioReveal } from "@/lib/physioData";
 import { computeWellnessScore, getRecoveryAdvice } from "@/lib/wellness";
@@ -143,6 +144,13 @@ interface Props {
   cancelLabel?: string;
   /** Pas d'écran de résultat après l'enregistrement (onboarding : l'écran suivant montre déjà l'effet du check-in). */
   skipResult?: boolean;
+  /** Accueil mobile (2026-10-22) : rendu dans la feuille de l'Accueil, sans fond ni feuille propre ; le score
+      qui se construit est porté dans `scoreSlot` (haut de la page), à la taille `scoreSize`. */
+  embedded?: boolean;
+  scoreSlot?: HTMLElement | null;
+  scoreSize?: number;
+  /** Hauteur à laisser libre sous le bouton (navigation flottante), mode intégré. */
+  footerOffset?: number;
   /* Wizard onboarding (2026-09-04) : "←" vers l'étape wizard précédente, affiché uniquement au 1er
      step (step>0 a déjà son propre "← Retour" intra-formulaire) — absent = pas de bouton retour
      (usage in-app). */
@@ -155,7 +163,7 @@ interface Props {
   wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0 }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
@@ -274,7 +282,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const [sheetH, setSheetH] = useState(66);
   const sheetDrag = useRef<{ y: number; h: number } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const sheetMode = !isMd && !wizardHero;
+  const sheetMode = !isMd && !wizardHero && !embedded;
   /* Défiler pilote la feuille (2026-10-22) : tant qu'elle n'est pas ouverte en grand, glisser vers le
      haut l'ouvre (le contenu ne défile pas encore) ; ouverte et en haut du contenu, glisser vers le
      bas la rabaisse. Un geste sur la note choisie de la jauge (data-handle) reste un réglage de note. */
@@ -385,6 +393,191 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             {insight.bad ? "↘ " : "↗ "}{insight.text}
           </div>
         )}
+      </div>
+    );
+  }
+
+  const body = (
+    <>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
+            <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
+              💓 Wellness du jour
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {total}</div>
+        </div>
+
+        {/* Progress dots */}
+        <div style={{ display: "flex", gap: 3, marginBottom: 24 }}>
+          {Array.from({ length: total }).map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? "#d44000" : "rgba(0,0,0,0.10)", transition: "background 0.3s" }} />
+          ))}
+        </div>
+
+        {/* Séance prévue (askPlan) : clic = avance direct, aucune valeur présélectionnée. */}
+        {q === -1 && (
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+              Qu&apos;as-tu prévu aujourd&apos;hui ?
+            </div>
+            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
+              Rien n&apos;est encore au planning. On cale ta séance sur ta forme.
+            </div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {PLAN_OPTIONS.map(o => (
+                <button
+                  key={o.key}
+                  onClick={() => { setPlannedIntensity(o.key); setStep(s => s + 1); }}
+                  style={{ display: "flex", alignItems: "center", gap: 14, textAlign: "left", padding: "14px 16px", borderRadius: 16, cursor: "pointer", fontFamily: "inherit", color: "#172018", background: plannedIntensity === o.key ? "rgba(212,64,0,.06)" : "#f7f8f9", border: plannedIntensity === o.key ? "1.5px solid #d44000" : "1.5px solid transparent" }}
+                >
+                  <span style={{ fontSize: 24, width: 30, textAlign: "center" }}>{o.emoji}</span>
+                  <span style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: 16, fontWeight: 800 }}>{o.label}</span>
+                    <span style={{ fontSize: 13, color: "#7b7f82", marginTop: 2 }}>{o.sub}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 0: Sleep + Bedtime — la question avance une fois les deux réponses données. */}
+        {q === 0 && (
+          <div>
+            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
+            {renderScale("sleep", "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 8 }}>
+                Heure de coucher
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {BEDTIME_OPTIONS.map((o) => {
+                  const on = bedtime === o.value;
+                  return (
+                    <button key={o.value} type="button"
+                      onClick={() => { hapticTick(0, 1); setBedtime(o.value); if (sleep != null) autoAdvance(); }}
+                      style={{ padding: "9px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, border: on ? "1.5px solid #2a78d6" : "1.5px solid rgba(0,0,0,0.10)", background: on ? "#eaf2fd" : "#fff", color: on ? "#184f95" : "#3b4046" }}>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 1: Stress */}
+        {q === 1 && renderScale("stress", "🧠 Niveau de stress mental", "Travail, vie personnelle, charge mentale", stress, setStress, () => autoAdvance())}
+
+        {/* Step 2: Physical recovery */}
+        {q === 2 && renderScale("recovery", "💪 État physique aujourd'hui", "Ressenti musculaire, douleurs, lourdeur", recovery, setRecovery, () => autoAdvance())}
+
+        {/* Step 3: Behaviors */}
+        {q === 3 && (
+          <div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
+              🔍 Comportements d'hier
+            </div>
+            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
+              {hasCost ? "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi." : "Coche tout ce qui s'applique"}
+            </div>
+
+            {/* Negative section */}
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
+              Ce qui m'a pénalisé
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
+              {NEGATIVE_BEHAVIORS.map((b) => {
+                const checked = behaviors.includes(b.key);
+                return (
+                  <button
+                    key={b.key}
+                    onClick={() => toggleBehavior(b.key)}
+                    style={{
+                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
+                      border: checked ? "1px solid rgba(200,30,30,0.40)" : "1px solid rgba(0,0,0,0.10)",
+                      background: checked ? "rgba(200,30,30,0.08)" : "#fff",
+                      color: checked ? "#c81e1e" : "#7b7f82",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
+                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Positive section */}
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
+              Ce que j'ai fait de bien
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
+              {POSITIVE_BEHAVIORS.map((b) => {
+                const checked = behaviors.includes(b.key);
+                return (
+                  <button
+                    key={b.key}
+                    onClick={() => toggleBehavior(b.key)}
+                    style={{
+                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
+                      border: checked ? "1px solid rgba(47,158,68,0.40)" : "1px solid rgba(0,0,0,0.10)",
+                      background: checked ? "rgba(47,158,68,0.08)" : "#fff",
+                      color: checked ? "#2f9e44" : "#7b7f82",
+                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
+                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: Motivation — dernière question : le tap enregistre. */}
+        {q === 4 && renderScale("motivation", "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
+
+    </>
+  );
+  const footer = (
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: sheetMode ? "12px 22px max(14px, env(safe-area-inset-bottom))" : embedded ? "10px 14px max(12px, env(safe-area-inset-bottom))" : "20px 34px 20px", background: embedded ? "#f1f0ee" : "#fff" }}>
+          {step > 0 ? (
+            <button
+              onClick={goBack}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#172018", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            >
+              ← Retour
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            >
+              {cancelLabel}
+            </button>
+          )}
+          <button
+            onClick={goNext}
+            disabled={saving || (q === -1 && !plannedIntensity) || !answered}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: (q === -1 && !plannedIntensity) || !answered ? 0.45 : 1 }}
+          >
+            {saving ? "..." : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
+          </button>
+        </div>
+  );
+
+  /* Intégré à la feuille de l'Accueil : questions + boutons collés en bas, score porté en haut de page. */
+  if (embedded) {
+    return (
+      <div style={{ color: "#171b1f", paddingTop: 4 }}>
+        {body}
+        <div style={{ position: "sticky", bottom: footerOffset, margin: "14px -14px 0", background: "#f1f0ee", zIndex: 2 }}>{footer}</div>
+        {scoreSlot && createPortal(renderBuildingScore(scoreSize), scoreSlot)}
       </div>
     );
   }
@@ -534,176 +727,11 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </div>
           </div>
         )}
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
-            <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
-              💓 Wellness du jour
-            </div>
-          </div>
-          <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {total}</div>
-        </div>
-
-        {/* Progress dots */}
-        <div style={{ display: "flex", gap: 3, marginBottom: 24 }}>
-          {Array.from({ length: total }).map((_, i) => (
-            <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= step ? "#d44000" : "rgba(0,0,0,0.10)", transition: "background 0.3s" }} />
-          ))}
-        </div>
-
-        {/* Séance prévue (askPlan) : clic = avance direct, aucune valeur présélectionnée. */}
-        {q === -1 && (
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              Qu&apos;as-tu prévu aujourd&apos;hui ?
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 18 }}>
-              Rien n&apos;est encore au planning. On cale ta séance sur ta forme.
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {PLAN_OPTIONS.map(o => (
-                <button
-                  key={o.key}
-                  onClick={() => { setPlannedIntensity(o.key); setStep(s => s + 1); }}
-                  style={{ display: "flex", alignItems: "center", gap: 14, textAlign: "left", padding: "14px 16px", borderRadius: 16, cursor: "pointer", fontFamily: "inherit", color: "#172018", background: plannedIntensity === o.key ? "rgba(212,64,0,.06)" : "#f7f8f9", border: plannedIntensity === o.key ? "1.5px solid #d44000" : "1.5px solid transparent" }}
-                >
-                  <span style={{ fontSize: 24, width: 30, textAlign: "center" }}>{o.emoji}</span>
-                  <span style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontSize: 16, fontWeight: 800 }}>{o.label}</span>
-                    <span style={{ fontSize: 13, color: "#7b7f82", marginTop: 2 }}>{o.sub}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Step 0: Sleep + Bedtime — la question avance une fois les deux réponses données. */}
-        {q === 0 && (
-          <div>
-            {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
-            {renderScale("sleep", "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
-            <div style={{ marginTop: 18 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 8 }}>
-                Heure de coucher
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                {BEDTIME_OPTIONS.map((o) => {
-                  const on = bedtime === o.value;
-                  return (
-                    <button key={o.value} type="button"
-                      onClick={() => { hapticTick(0, 1); setBedtime(o.value); if (sleep != null) autoAdvance(); }}
-                      style={{ padding: "9px 12px", borderRadius: 12, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, border: on ? "1.5px solid #2a78d6" : "1.5px solid rgba(0,0,0,0.10)", background: on ? "#eaf2fd" : "#fff", color: on ? "#184f95" : "#3b4046" }}>
-                      {o.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 1: Stress */}
-        {q === 1 && renderScale("stress", "🧠 Niveau de stress mental", "Travail, vie personnelle, charge mentale", stress, setStress, () => autoAdvance())}
-
-        {/* Step 2: Physical recovery */}
-        {q === 2 && renderScale("recovery", "💪 État physique aujourd'hui", "Ressenti musculaire, douleurs, lourdeur", recovery, setRecovery, () => autoAdvance())}
-
-        {/* Step 3: Behaviors */}
-        {q === 3 && (
-          <div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: sheetMode ? 27 : 34, fontWeight: 700, lineHeight: 1.02, letterSpacing: "-0.03em", marginBottom: 6, color: "#172018" }}>
-              🔍 Comportements d'hier
-            </div>
-            <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
-              {hasCost ? "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi." : "Coche tout ce qui s'applique"}
-            </div>
-
-            {/* Negative section */}
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
-              Ce qui m'a pénalisé
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
-              {NEGATIVE_BEHAVIORS.map((b) => {
-                const checked = behaviors.includes(b.key);
-                return (
-                  <button
-                    key={b.key}
-                    onClick={() => toggleBehavior(b.key)}
-                    style={{
-                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
-                      border: checked ? "1px solid rgba(200,30,30,0.40)" : "1px solid rgba(0,0,0,0.10)",
-                      background: checked ? "rgba(200,30,30,0.08)" : "#fff",
-                      color: checked ? "#c81e1e" : "#7b7f82",
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
-                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Positive section */}
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
-              Ce que j'ai fait de bien
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-              {POSITIVE_BEHAVIORS.map((b) => {
-                const checked = behaviors.includes(b.key);
-                return (
-                  <button
-                    key={b.key}
-                    onClick={() => toggleBehavior(b.key)}
-                    style={{
-                      display: "flex", flexWrap: "wrap", alignItems: "center", gap: 7, padding: "9px 11px", borderRadius: 12,
-                      border: checked ? "1px solid rgba(47,158,68,0.40)" : "1px solid rgba(0,0,0,0.10)",
-                      background: checked ? "rgba(47,158,68,0.08)" : "#fff",
-                      color: checked ? "#2f9e44" : "#7b7f82",
-                      fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" as const, transition: "all 0.14s",
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>{b.emoji}</span>{b.label}
-                    {behaviorCost[b.key] != null && <CostBadge impact={behaviorCost[b.key]} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Motivation — dernière question : le tap enregistre. */}
-        {q === 4 && renderScale("motivation", "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
-
+        {body}
         </div>
         {/* Navigation — flex item non-scrollable (pas position:sticky, voir convention "Footer
             non-scrollable des modales" déjà établie dans ce repo pour ce genre de carte). */}
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, padding: sheetMode ? "12px 22px max(14px, env(safe-area-inset-bottom))" : "20px 34px 20px", background: "#fff" }}>
-          {step > 0 ? (
-            <button
-              onClick={goBack}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#172018", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-            >
-              ← Retour
-            </button>
-          ) : (
-            <button
-              onClick={onClose}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-            >
-              {cancelLabel}
-            </button>
-          )}
-          <button
-            onClick={goNext}
-            disabled={saving || (q === -1 && !plannedIntensity) || !answered}
-            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: (q === -1 && !plannedIntensity) || !answered ? 0.45 : 1 }}
-          >
-            {saving ? "..." : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
-          </button>
-        </div>
+        {footer}
       </div>
     </div>
   );
