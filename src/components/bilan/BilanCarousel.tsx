@@ -102,7 +102,7 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
       </>);
     case "biais":
       return (<>
-        <h2 style={h2}>Tes séances {s.name} <span style={{ color: "#ffb347" }}>sont plus dures que prévu.</span></h2>
+        <h2 style={h2}>Quand tu prévois {s.planned}/10, <span style={{ color: "#ffb347" }}>c'est plus dur que prévu.</span></h2>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", height: 160 }} role="img" aria-label={`${s.harder} séances sur ${s.total} plus dures que prévu`}>
@@ -118,14 +118,14 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: s.accurate ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
-          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>plus dures que prévu</span></div>
-          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>{s.accurate.name} pas plus dures</span></div>}
+          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}/10 plus dures que prévu</span></div>
+          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>prévues {s.accurate.planned}/10 tombent à 1 point près</span></div>}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Conseil : prévois-les un cran plus haut.{s.accurate ? ` Tes séances ${s.accurate.name}, elles, tombent juste.` : ""}</p>
+        <p style={{ ...body, fontSize: 14 }}>Conseil : quand tu penses à {s.planned}, écris {s.planned + 1}.{s.accurate ? ` Tes séances prévues ${s.accurate.planned}/10, elles, tombent juste.` : ""}</p>
       </>);
     case "fatigue": {
       const bars = [
-        ...(s.hard ? [{ label: "Séance facile", value: s.hard.easy, display: String(round(s.hard.easy)) }, { label: "Séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : [{ label: "Ta norme", value: s.normScore, display: String(round(s.normScore)) }]),
+        ...(s.hard ? [{ label: "Séance normale", value: s.hard.easy, display: String(round(s.hard.easy)) }, { label: "Séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : [{ label: "Ta norme", value: s.normScore, display: String(round(s.normScore)) }]),
         { label: "Soirée", value: s.nextScore, display: String(round(s.nextScore)), highlight: true },
         ...(s.afterScore !== null ? [{ label: "2 jours après une soirée", value: s.afterScore, display: String(round(s.afterScore)) }] : []),
       ];
@@ -133,7 +133,7 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
       const back = s.afterScore !== null && s.normScore - s.afterScore < 5;
       return (<>
         <h2 style={h2}>{hardFree ? <>Une séance très dure ne te coûte rien le lendemain. <span style={{ color: "#c79bf7" }}>Une soirée, si.</span></> : <>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span></>}</h2>
-        <div style={card}><div style={small}>Ta forme le lendemain de…, sur 100</div><Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues /></div>
+        <div style={card}><div style={small}>Ta forme ressentie le lendemain de…, sur 100</div><Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues /></div>
         <p style={body}>{s.hrv ? `Le lendemain d'une soirée (alcool ou sortie), ta VFC tombe de ${round(s.hrv.norm)} à ${round(s.hrv.next)} ms. ` : `Mesuré sur ${s.soirees} soirées (alcool ou sortie). `}{back ? "Le surlendemain, tout est revenu dans ta norme." : ""}</p>
       </>);
     }
@@ -159,7 +159,7 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
         <h2 style={h2}>{s.direction === "down" ? <>Ta forme baisse. {s.lateNights && <span style={{ color: "#8cc4f5" }}>Tes couchers reculent.</span>}</> : s.direction === "up" ? <>Ta forme <span style={{ color: "#7ee08f" }}>remonte.</span></> : <>Ta forme est <span style={{ color: "#8cc4f5" }}>stable.</span></>}</h2>
         <div style={card}><div style={small}>Forme moyenne par mois</div><Bars bars={s.months} height={90} color="#6da7ec" dim="rgba(109,167,236,0.45)" showValues /></div>
         {s.lateNights && <div style={card}><div style={small}>Couchers après minuit</div><Bars bars={s.lateNights} height={50} color="#f28a00" dim="rgba(109,167,236,0.45)" showValues /></div>}
-        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); return peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ton meilleur mois.`; })()} Le signal est lent : tu ne le sens pas d'un jour à l'autre.</p>
+        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : tu tiens ton niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ton meilleur mois.`) + " Le signal est lent : tu ne le sens pas d'un jour à l'autre."; })()}</p>
       </>);
     }
     case "tests": {

@@ -34,7 +34,7 @@ export type BilanSlide =
   | { kind: "charge"; pctInZone: number; daysHigh: number; daysCounted: number }
   | { kind: "ressenti"; sleepBars: Bar[]; crashes: number; crashesSeen: number }
   | { kind: "predit"; blocks: { title: string; rows: Compare[] }[] }
-  | { kind: "biais"; name: string; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { name: string; ok: number; total: number } | null }
+  | { kind: "biais"; planned: number; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { planned: number; ok: number; total: number } | null }
   | { kind: "fatigue"; soirees: number; normScore: number; nextScore: number; afterScore: number | null; hrv: { norm: number; next: number } | null; hard: { easy: number; hard: number } | null }
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
@@ -52,7 +52,11 @@ const daysBetween = (a: string, b: string) => Math.round((new Date(b + "T12:00:0
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const hm = (m: number) => { const t = Math.round(m); return `${Math.floor(t / 60)} h ${String(t % 60).padStart(2, "0")}`; };
 const isSoiree = (c: BilanCheckin) => (c.behaviors ?? []).some(b => SOIREE.has(b));
-const declared = (c: BilanCheckin) => (c.sleep + (11 - c.stress) + c.recovery + c.motivation) / 4;
+const declared = (c: BilanCheckin) => (c.sleep + (10 - c.stress) + c.recovery + c.motivation) / 4;
+/* Forme RESSENTIE sur 100 : les 4 réponses du check-in seules. Ni `score` (qui retire déjà 3 pts par
+   comportement négatif coché : comparer « soirée vs pas soirée » dessus est circulaire), ni
+   `base_score` (qui intègre la VFC et la FC au repos de la montre). */
+const felt = (c: BilanCheckin) => declared(c) * 10;
 
 /* Lundi ISO d'une date. */
 export function mondayOf(iso: string): string {
@@ -77,23 +81,6 @@ export function isSynthetic(row: { date: string; created_at?: string | null }, s
   const signupDay = signupAt.slice(0, 10);
   return row.date < signupDay && new Date(row.created_at).getTime() <= new Date(signupAt).getTime() + 30 * 60000;
 }
-
-const EMOJI = /[\u2600-\u27BF\uFE0F\u200D]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDC00-\uDFFF]/g;
-
-/* Nom de séance normalisé pour regrouper les séances d'un même type (« SN 🏋️🦵 », « SN/ FS »…). */
-function sessionKey(name: string | null): string | null {
-  if (!name) return null;
-  const k = name
-    .replace(/\(.*?\)/g, "")
-    .replace(EMOJI, "")
-    .replace(/\s*[-–·].*$/, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-  if (!k || k.startsWith("séance du jour")) return null;
-  return k;
-}
-const displayName = (name: string) => name.replace(/\(.*?\)/g, "").replace(EMOJI, "").replace(/\s*[-–·].*$/, "").replace(/\s+/g, " ").trim();
 
 type Joined = { s: BilanSession; c: BilanCheckin | undefined; gap: number };
 
@@ -127,13 +114,16 @@ function regularite(period: BilanPeriod, sessions: BilanSession[], checkins: Bil
 
 function charge(period: BilanPeriod, sessions: BilanSession[], today: string): BilanSlide | null {
   const end = period.end < today ? period.end : today;
+  // Pas avant 28 jours d'historique : avant, la charge chronique n'est pas encore construite et l'ACWR sort de la zone pour rien.
+  const first = sessions.reduce((m, s) => (s.date < m ? s.date : m), "9999-12-31");
+  const mature = addDays(first, 28);
   const from = addDays(period.start, -42);
   const series: LoadPoint[] = [];
   for (let d = from; d <= end; d = addDays(d, 1)) {
     series.push({ date: d, load: sessions.filter(s => s.date === d).reduce((a, s) => a + sessionLoad(s), 0) });
   }
   const ac = acwrSeries(series);
-  const inPeriod = ac.filter((_, i) => series[i].date >= period.start && ac[i].value !== null);
+  const inPeriod = ac.filter((_, i) => series[i].date >= period.start && series[i].date >= mature && ac[i].value !== null);
   if (inPeriod.length < (period.kind === "week" ? 5 : 10)) return null;
   const inZone = inPeriod.filter(p => p.value! >= 0.8 && p.value! <= 1.3).length;
   const high = inPeriod.filter(p => p.value! > 1.5).length;
@@ -146,7 +136,7 @@ function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
   const sleepBars: Bar[] = [];
   for (let n = 1; n <= 10; n++) {
     const v = withSleep.filter(c => c.sleep === n).map(c => c.device_sleep_minutes!);
-    if (v.length >= 3) sleepBars.push({ label: `noté ${n}`, value: mean(v), display: hm(mean(v)).replace(" h ", "h") });
+    if (v.length >= 5) sleepBars.push({ label: `noté ${n}`, value: mean(v), display: hm(mean(v)).replace(" h ", "h") });
   }
   if (sleepBars.length < 3) return null;
   // Le claim « ton ressenti vaut une montre » n'est montré que si la note suit vraiment la mesure.
@@ -159,7 +149,8 @@ function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
     const hv = hrv.map(c => c.device_hrv_ms!);
     const m = mean(hv), sd = Math.sqrt(mean(hv.map(x => (x - m) ** 2)));
     const dm = mean(hrv.map(declared));
-    for (const c of hrv) if ((c.device_hrv_ms! - m) / sd < -1) { crashes++; if (declared(c) < dm) crashesSeen++; }
+    // Hors lendemains de soirée : ceux-là, l'écran « ce qui te fatigue » les montre déjà.
+    for (const c of hrv) if ((c.device_hrv_ms! - m) / sd < -1 && !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b))) { crashes++; if (declared(c) < dm) crashesSeen++; }
   }
   return { kind: "ressenti", sleepBars, crashes, crashesSeen };
 }
@@ -181,7 +172,7 @@ function predit(joined: Joined[]): BilanSlide | null {
     const split = (what: string, lowLabel: string, highLabel: string, isLow: (j: Joined) => boolean | null) => {
       const title = `${FAMILY_LABEL[fam]} · ${what}`;
       const lo = usable.filter(j => isLow(j) === true), hi = usable.filter(j => isLow(j) === false);
-      if (lo.length < 5 || hi.length < 5) return;
+      if (lo.length < 8 || hi.length < 8) return;
       const hl = lo.filter(j => j.gap > 0).length, hh = hi.filter(j => j.gap > 0).length;
       const diff = hl / lo.length - hh / hi.length;
       if (diff < 0.2) return;
@@ -201,41 +192,43 @@ function predit(joined: Joined[]): BilanSlide | null {
   return { kind: "predit", blocks: picked.map(({ title, rows }) => ({ title, rows })) };
 }
 
+/* Regroupé par difficulté PRÉVUE, jamais par nom de séance : un nom peut changer chaque semaine
+   (« SN 🏋️🦵 », « SN/ FS », « Snatch / FS » pour la même séance) — demande explicite de Gildas. */
 function biais(joined: Joined[]): BilanSlide | null {
-  const groups = new Map<string, Joined[]>();
-  for (const j of joined) { const k = sessionKey(j.s.name); if (!k) continue; groups.set(k, [...(groups.get(k) ?? []), j]); }
-  let best: { name: string; js: Joined[]; share: number } | null = null;
-  let accurate: { name: string; ok: number; total: number } | null = null;
-  for (const js of Array.from(groups.values())) {
+  const groups = new Map<number, Joined[]>();
+  for (const j of joined) { const k = Math.round(j.s.target_difficulty!); groups.set(k, [...(groups.get(k) ?? []), j]); }
+  let best: { planned: number; js: Joined[]; share: number } | null = null;
+  let accurate: { planned: number; ok: number; total: number } | null = null;
+  for (const [planned, js] of Array.from(groups.entries())) {
     const harder = js.filter(j => j.gap > 0).length;
     const share = harder / js.length;
-    if (js.length >= 3 && harder >= 3 && share >= 0.7 && (!best || share > best.share || (share === best.share && js.length > best.js.length))) best = { name: displayName(js[0].s.name!), js, share };
-    const ok = js.filter(j => j.gap <= 0).length;
-    if (js.length >= 6 && ok / js.length >= 0.8 && (!accurate || js.length > accurate.total)) accurate = { name: displayName(js[0].s.name!), ok, total: js.length };
+    if (js.length >= 5 && share >= 0.7 && (!best || share > best.share || (share === best.share && js.length > best.js.length))) best = { planned, js, share };
+    const ok = js.filter(j => Math.abs(j.gap) <= 1).length;
+    if (js.length >= 8 && ok / js.length >= 0.85 && (!accurate || js.length > accurate.total)) accurate = { planned, ok, total: js.length };
   }
   if (!best) return null;
   const pts = best.js.slice(-9).map(j => ({ label: `${Number(j.s.date.slice(8))}/${Number(j.s.date.slice(5, 7))}`, planned: j.s.target_difficulty!, felt: j.s.rpe! }));
-  if (accurate && accurate.name === best.name) accurate = null;
-  return { kind: "biais", name: best.name, harder: best.js.filter(j => j.gap > 0).length, total: best.js.length, points: pts, accurate };
+  if (accurate && accurate.planned === best.planned) accurate = null;
+  return { kind: "biais", planned: best.planned, harder: best.js.filter(j => j.gap > 0).length, total: best.js.length, points: pts, accurate };
 }
 
 function fatigue(checkins: BilanCheckin[], sessions: BilanSession[]): BilanSlide | null {
   const byDate = new Map(checkins.map(c => [c.date, c]));
-  const soirees = checkins.filter(isSoiree).filter(c => c.score !== null);
+  const soirees = checkins.filter(isSoiree);
   if (soirees.length < 3) return null;
-  const normal = checkins.filter(c => !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)) && c.score !== null);
+  const normal = checkins.filter(c => !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)));
   if (normal.length < 10) return null;
-  const normScore = mean(normal.map(c => c.score!));
-  const nextScore = mean(soirees.map(c => c.score!));
-  const after = soirees.map(c => byDate.get(addDays(c.date, 1))).filter((c): c is BilanCheckin => !!c && c.score !== null && !isSoiree(c));
-  const afterScore = after.length >= 3 ? mean(after.map(c => c.score!)) : null;
+  const normScore = mean(normal.map(c => felt(c)));
+  const nextScore = mean(soirees.map(c => felt(c)));
+  const after = soirees.map(c => byDate.get(addDays(c.date, 1))).filter((c): c is BilanCheckin => !!c && !isSoiree(c));
+  const afterScore = after.length >= 3 ? mean(after.map(c => felt(c))) : null;
   const sh = soirees.filter(c => c.device_hrv_ms), nh = normal.filter(c => c.device_hrv_ms);
   const hrv = sh.length >= 3 && nh.length >= 10 ? { norm: mean(nh.map(c => c.device_hrv_ms!)), next: mean(sh.map(c => c.device_hrv_ms!)) } : null;
   const nextAfter = (rpeOk: (r: number) => boolean) => sessions
     .filter(s => s.rpe !== null && rpeOk(s.rpe))
     .map(s => byDate.get(addDays(s.date, 1)))
-    .filter((c): c is BilanCheckin => !!c && c.score !== null && !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)))
-    .map(c => c.score!);
+    .filter((c): c is BilanCheckin => !!c && !(c.behaviors ?? []).some(b => SOIREE_WIDE.has(b)))
+    .map(felt);
   const hardS = nextAfter(r => r >= 8), easyS = nextAfter(r => r < 8);
   const hard = hardS.length >= 5 && easyS.length >= 5 ? { easy: mean(easyS), hard: mean(hardS) } : null;
   if (normScore - nextScore < 5) return null;
@@ -252,8 +245,8 @@ function leviers(checkins: BilanCheckin[]): BilanSlide | null {
   };
   const withSleep = days.filter(c => c.device_sleep_minutes && c.device_sleep_minutes > 120);
   const useSleep = withSleep.length >= 20;
-  const pool = useSleep ? withSleep : days.filter(c => c.score !== null);
-  const val = (c: BilanCheckin) => useSleep ? c.device_sleep_minutes! : c.score!;
+  const pool = useSleep ? withSleep : days;
+  const val = (c: BilanCheckin) => useSleep ? c.device_sleep_minutes! : felt(c);
   const rows: { label: string; with: string; without: string; delta: string; positive: boolean; d: number }[] = [];
   for (const k of keys) {
     const w = pool.filter(c => (c.behaviors ?? []).includes(k)), wo = pool.filter(c => !(c.behaviors ?? []).includes(k));
@@ -276,10 +269,10 @@ function tendance(period: BilanPeriod, checkins: BilanCheckin[]): BilanSlide | n
   if (period.kind === "week") return null;
   const start = period.kind === "month" ? (() => { const d = new Date(period.start + "T12:00:00"); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10); })() : period.start;
   const by = new Map<string, BilanCheckin[]>();
-  for (const c of checkins) if (c.date >= start && c.date <= period.end && c.score !== null) by.set(c.date.slice(0, 7), [...(by.get(c.date.slice(0, 7)) ?? []), c]);
+  for (const c of checkins) if (c.date >= start && c.date <= period.end) by.set(c.date.slice(0, 7), [...(by.get(c.date.slice(0, 7)) ?? []), c]);
   const keys = Array.from(by.keys()).sort().filter(k => by.get(k)!.length >= 8);
   if (keys.length < 2) return null;
-  const months: Bar[] = keys.map(k => ({ label: MONTHS[Number(k.slice(5)) - 1], value: Math.round(mean(by.get(k)!.map(c => c.score!))), display: String(Math.round(mean(by.get(k)!.map(c => c.score!)))) }));
+  const months: Bar[] = keys.map(k => ({ label: MONTHS[Number(k.slice(5)) - 1], value: Math.round(mean(by.get(k)!.map(c => felt(c)))), display: String(Math.round(mean(by.get(k)!.map(c => felt(c))))) }));
   const last = months[months.length - 1].value, peak = Math.max(...months.slice(0, -1).map(m => m.value)), prev = months[months.length - 2].value;
   const direction = last <= Math.min(peak, prev + 2) - 4 ? "down" : last >= prev + 4 ? "up" : "stable";
   let lateNights: Bar[] | null = keys.map(k => { const n = by.get(k)!.filter(c => c.bedtime === "00to01" || c.bedtime === "after01").length; return { label: MONTHS[Number(k.slice(5)) - 1], value: n, display: String(n) }; });
