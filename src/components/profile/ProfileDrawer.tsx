@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import NotificationToggle from "./NotificationToggle";
 import InstallAppRow from "./InstallAppRow";
+import GarminRow from "./GarminRow";
 import LogoutButton from "@/components/auth/LogoutButton";
 import DeleteAccountButton from "./DeleteAccountButton";
 import CoachAthletesManager from "./CoachAthletesManager";
@@ -330,6 +331,8 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
                 </div>
 
                 <InstallAppRow />
+
+                {!sandboxMode && !isCoach && <GarminRow />}
 
                 {!sandboxMode && <NotificationToggle role={isCoach ? "coach" : "athlete"} initialHour={(profile as { push_hour?: number } | null)?.push_hour ?? 8} />}
 

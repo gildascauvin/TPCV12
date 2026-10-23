@@ -298,6 +298,11 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [ringHint, setRingHint] = useState<string | null>(null);
 
   const [profileOpen, setProfileOpen] = useState(false);
+  // Retour de la connexion Garmin (/api/garmin/callback → /today?garmin=…) : le profil s'ouvre pour
+  // afficher le résultat (lu et nettoyé par GarminRow).
+  useEffect(() => {
+    if (searchParams.get("garmin")) setProfileOpen(true);
+  }, [searchParams]);
 
 
   // Ref pour les closures realtime (évite staleness sur selectedDate)
