@@ -14,6 +14,8 @@
    Wording validé par Gildas : « soirée (alcool ou sortie) », « se paie le lendemain ». */
 
 import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
+import { qualitativeDifficulty, type DifficultyWord } from "@/lib/autoregulation";
+import { SCALE_WORDS } from "@/lib/wellnessWords";
 
 export type BilanPeriodKind = "week" | "month" | "all";
 export type BilanPeriod = { kind: BilanPeriodKind; start: string; end: string };
@@ -34,7 +36,7 @@ export type BilanSlide =
   | { kind: "charge"; pctInZone: number; daysHigh: number; daysCounted: number }
   | { kind: "ressenti"; sleepBars: Bar[]; crashes: number; crashesSeen: number }
   | { kind: "predit"; blocks: { title: string; rows: Compare[] }[] }
-  | { kind: "biais"; planned: number; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { planned: number; ok: number; total: number } | null }
+  | { kind: "biais"; planned: DifficultyWord; feltWord: DifficultyWord; harder: number; total: number; points: { label: string; planned: number; felt: number }[]; accurate: { planned: DifficultyWord; ok: number; total: number } | null }
   | { kind: "fatigue"; soirees: number; normScore: number; nextScore: number; afterScore: number | null; hrv: { norm: number; next: number } | null; hard: { easy: number; hard: number } | null }
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
@@ -136,7 +138,7 @@ function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
   const sleepBars: Bar[] = [];
   for (let n = 1; n <= 10; n++) {
     const v = withSleep.filter(c => c.sleep === n).map(c => c.device_sleep_minutes!);
-    if (v.length >= 5) sleepBars.push({ label: `noté ${n}`, value: mean(v), display: hm(mean(v)).replace(" h ", "h") });
+    if (v.length >= 5) sleepBars.push({ label: SCALE_WORDS.sleep.labels[n], value: mean(v), display: hm(mean(v)).replace(" h ", "h") });
   }
   if (sleepBars.length < 3) return null;
   // Le claim « ton ressenti vaut une montre » n'est montré que si la note suit vraiment la mesure.
@@ -178,10 +180,10 @@ function predit(joined: Joined[]): BilanSlide | null {
       if (diff < 0.2) return;
       cands.push({ title, diff, rows: [{ label: lowLabel, part: hl, total: lo.length, highlight: true }, { label: highLabel, part: hh, total: hi.length }] });
     };
-    split("ton stress mental", "Stress noté 4 ou plus", "Stress noté 3 ou moins", j => j.c!.stress >= 4);
-    split("ton sommeil noté", "Sommeil noté 6 ou moins", "Sommeil noté 7 ou plus", j => j.c!.sleep <= 6);
-    split("ta récup notée", "Récup notée 6 ou moins", "Récup notée 7 ou plus", j => j.c!.recovery <= 6);
-    split("ta motivation", "Motivation 6 ou moins", "Motivation 7 ou plus", j => j.c!.motivation <= 6);
+    split("ton stress mental", "Stress léger ou plus", "Stress calme ou moins", j => j.c!.stress >= 4);
+    split("ton sommeil ressenti", "Sommeil correct ou moins", "Sommeil bon ou mieux", j => j.c!.sleep <= 6);
+    split("ton état physique", "État physique correct ou moins", "État physique bien ou mieux", j => j.c!.recovery <= 6);
+    split("ta motivation", "Motivation correcte ou moins", "Motivation bonne ou plus", j => j.c!.motivation <= 6);
     split("ta nuit mesurée", "Nuit sous 7 h 20", "Nuit de 7 h 20 et plus", j => j.c!.device_sleep_minutes ? j.c!.device_sleep_minutes < 440 : null);
   }
   if (!cands.length) return null;
@@ -192,24 +194,29 @@ function predit(joined: Joined[]): BilanSlide | null {
   return { kind: "predit", blocks: picked.map(({ title, rows }) => ({ title, rows })) };
 }
 
-/* Regroupé par difficulté PRÉVUE, jamais par nom de séance : un nom peut changer chaque semaine
-   (« SN 🏋️🦵 », « SN/ FS », « Snatch / FS » pour la même séance) — demande explicite de Gildas. */
+/* Regroupé par difficulté PRÉVUE en mots (légère, modérée, dure, très dure), jamais par nom de séance
+   (un nom change d'une semaine à l'autre) ni en note /10 (Gildas : des mots, jamais de ratio).
+   « Plus dure que prévu » = le mot ressenti est au-dessus du mot prévu. */
+const WORD_ORDER: DifficultyWord[] = ["légère", "modérée", "dure", "très dure"];
+const wordIdx = (n: number) => WORD_ORDER.indexOf(qualitativeDifficulty(n));
 function biais(joined: Joined[]): BilanSlide | null {
-  const groups = new Map<number, Joined[]>();
-  for (const j of joined) { const k = Math.round(j.s.target_difficulty!); groups.set(k, [...(groups.get(k) ?? []), j]); }
-  let best: { planned: number; js: Joined[]; share: number } | null = null;
-  let accurate: { planned: number; ok: number; total: number } | null = null;
+  const groups = new Map<DifficultyWord, Joined[]>();
+  for (const j of joined) { const k = qualitativeDifficulty(j.s.target_difficulty!); groups.set(k, [...(groups.get(k) ?? []), j]); }
+  const harderWord = (j: Joined) => wordIdx(j.s.rpe!) > wordIdx(j.s.target_difficulty!);
+  let best: { planned: DifficultyWord; js: Joined[]; share: number } | null = null;
+  let accurate: { planned: DifficultyWord; ok: number; total: number } | null = null;
   for (const [planned, js] of Array.from(groups.entries())) {
-    const harder = js.filter(j => j.gap > 0).length;
-    const share = harder / js.length;
-    if (js.length >= 5 && share >= 0.7 && (!best || share > best.share || (share === best.share && js.length > best.js.length))) best = { planned, js, share };
-    const ok = js.filter(j => Math.abs(j.gap) <= 1).length;
-    if (js.length >= 8 && ok / js.length >= 0.85 && (!accurate || js.length > accurate.total)) accurate = { planned, ok, total: js.length };
+    if (planned === "très dure") continue;
+    const share = js.filter(harderWord).length / js.length;
+    if (js.length >= 5 && share >= 0.6 && (!best || share > best.share)) best = { planned, js, share };
+    const ok = js.filter(j => wordIdx(j.s.rpe!) === wordIdx(j.s.target_difficulty!)).length;
+    if (js.length >= 8 && ok / js.length >= 0.8 && (!accurate || js.length > accurate.total)) accurate = { planned, ok, total: js.length };
   }
   if (!best) return null;
+  const felt = WORD_ORDER[Math.min(3, WORD_ORDER.indexOf(best.planned) + 1)];
   const pts = best.js.slice(-9).map(j => ({ label: `${Number(j.s.date.slice(8))}/${Number(j.s.date.slice(5, 7))}`, planned: j.s.target_difficulty!, felt: j.s.rpe! }));
   if (accurate && accurate.planned === best.planned) accurate = null;
-  return { kind: "biais", planned: best.planned, harder: best.js.filter(j => j.gap > 0).length, total: best.js.length, points: pts, accurate };
+  return { kind: "biais", planned: best.planned, feltWord: felt, harder: best.js.filter(harderWord).length, total: best.js.length, points: pts, accurate };
 }
 
 function fatigue(checkins: BilanCheckin[], sessions: BilanSession[]): BilanSlide | null {

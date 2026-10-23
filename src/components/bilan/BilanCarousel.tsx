@@ -91,7 +91,7 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
     case "ressenti":
       return (<>
         <h2 style={h2}>Ton ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
-        <div style={card}><div style={small}>Sommeil mesuré, selon la note que tu donnes au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
+        <div style={card}><div style={small}>Sommeil mesuré, selon ta réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
         {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ta VFC s'est effondrée, ton check-in l'avait vu aussi.` : `Sur les ${s.crashes} matins où ta VFC s'est effondrée, ton check-in l'avait vu ${s.crashesSeen} fois.`}</div></div>}
       </>);
     case "predit":
@@ -102,7 +102,7 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
       </>);
     case "biais":
       return (<>
-        <h2 style={h2}>Quand tu prévois {s.planned}/10, <span style={{ color: "#ffb347" }}>c'est plus dur que prévu.</span></h2>
+        <h2 style={h2}>Tes séances prévues {s.planned}s, <span style={{ color: "#ffb347" }}>tu les ressens {s.feltWord}s.</span></h2>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", height: 160 }} role="img" aria-label={`${s.harder} séances sur ${s.total} plus dures que prévu`}>
@@ -118,10 +118,10 @@ function SlideBody({ s, bilan, onShare, shared }: { s: BilanSlide; bilan: Bilan;
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: s.accurate ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
-          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}/10 plus dures que prévu</span></div>
-          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>prévues {s.accurate.planned}/10 tombent à 1 point près</span></div>}
+          <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
+          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>prévues {s.accurate.planned}s, ressenties comme prévu</span></div>}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Conseil : quand tu penses à {s.planned}, écris {s.planned + 1}.{s.accurate ? ` Tes séances prévues ${s.accurate.planned}/10, elles, tombent juste.` : ""}</p>
+        <p style={{ ...body, fontSize: 14 }}>Conseil : prévois-les un cran plus haut.{s.accurate ? ` Tes séances prévues ${s.accurate.planned}s, elles, tombent juste.` : ""}</p>
       </>);
     case "fatigue": {
       const bars = [
