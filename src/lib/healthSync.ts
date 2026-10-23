@@ -80,10 +80,20 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
   await syncWorkouts(supabase, userId, firstDay.toISOString(), endDate, now, medianValue(rhr.map((x) => x.value))).catch(e => console.error("[health-sync] workouts", e));
   if (!days.length) return 0;
 
-  const { error } = await supabase
-    .from("health_daily")
-    .upsert(days.map((d) => ({ ...d, user_id: userId, updated_at: now })), { onConflict: "user_id,date" });
-  if (error) throw new Error(`health_daily upsert: ${error.message}`);
+  /* Une valeur vide côté Santé n'efface pas celle déjà en base (2026-10-23) : la VFC Garmin arrive par
+     une autre source (scripts/garmin-personal-sync.mts, plus tard l'API Garmin), Santé ne l'a jamais.
+     Les colonnes vides sont retirées de la ligne, et l'upsert ne met à jour que les colonnes envoyées :
+     un upsert par combinaison de colonnes remplies. */
+  const groups = new Map<string, Record<string, unknown>[]>();
+  days.forEach((d) => {
+    const row = Object.fromEntries(Object.entries({ ...d, user_id: userId, updated_at: now }).filter(([, v]) => v != null));
+    const k = Object.keys(row).sort().join(",");
+    groups.set(k, (groups.get(k) ?? []).concat(row));
+  });
+  for (const rows of Array.from(groups.values())) {
+    const { error } = await supabase.from("health_daily").upsert(rows, { onConflict: "user_id,date" });
+    if (error) throw new Error(`health_daily upsert: ${error.message}`);
+  }
   // Les check-ins déjà faits intègrent maintenant la montre (sommeil mesuré + FC au repos).
   await reapplyDeviceToRecentWellness(supabase, userId);
   return days.length;
