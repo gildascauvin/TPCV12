@@ -5197,3 +5197,10 @@ POC : https://claude.ai/artifact/PgTQbMYpsUhqCounWHL28M. Commit `c08e21f`. Mobil
 - Variables Vercel (Production, ajoutées par Gildas le 23/10) : `GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET`, `GARMIN_WEBHOOK_TOKEN`. `GARMIN_REDIRECT_URI` par défaut `https://go.theperfclub.com/api/garmin/callback`.
 - Pas de charge d'entraînement Garmin (absente de l'Activity API). App iPhone : la connexion risque de s'ouvrir dans Safari et de perdre la session au retour, à traiter dans une version iOS.
 - Commit `caa4669`.
+
+## Ressenti et montre dans le même chart (2026-10-23, DÉPLOYÉ)
+Maquettes validées : https://claude.ai/artifact/GoiHozJU7mGYmyv49LJEMp. Commit `3df1ff0`.
+- **Récupération** (`src/lib/watchCompare.ts`, `IndexCards.tsx` `WatchPairChart`) : quand la montre a la donnée, les puces Score, Sommeil, Stress et État physique tracent 2 courbes, déclaré (trait plein bleu) et montre (pointillé orange : Body Battery, sommeil mesuré, stress mesuré, VFC), chacune en écart à sa norme sur la fenêtre affichée (stress et FC repos inversés). Badge « d'accord » (corrélation ≥ 0,4) / « en partie » / « en désaccord » (< 0,15), 5 jours minimum ; plus gros écart cité seulement si signes opposés (chacun ≥ 0,5, écart ≥ 1,5). Puces VFC, Stress mesuré et Body Battery retirées quand elles sont appariées (FC repos gardée).
+- La puce « Ressenti vs physiologie » de la carte Récupération est retirée. Son verdict (nuit, FC repos, VFC face au check-in) s'affiche au-dessus du chart Score seulement quand Score n'a pas de 2e courbe (pas de Body Battery, prop `scoreVerdict`).
+- **Charge** : 2 puces, Charge et Ressenti vs physiologie. La puce « Charge cardiaque » (barres RPE×durée / TRIMP) a été codée puis fusionnée le même jour (Gildas : doublon). Sous le chart ressenti vs FC : `heartFamilyCards()` (PhysioIndexCards.tsx), rapport TRIMP / charge ressentie par type de séance (≥ 3 séances dans 2 types), phrase si écart ≥ 2×, une carte par type (« Cœur ≈ ressenti » / « Cœur N× plus bas », TRIMP moyen).
+- `MetricChart` : 2e série en pointillé (`overlay`), bâtons doubles (`values2`/`color2`), `lineColor`.
