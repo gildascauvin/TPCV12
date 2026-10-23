@@ -9,7 +9,8 @@ export const maxDuration = 30;
 /* Une seule URL pour tous les types de push Garmin (le type est la clé de liste du corps :
    dailies, sleeps, hrv, activities, activityDetails, manuallyUpdatedActivities, deregistrations,
    userPermissionsChange). À configurer dans https://apis.garmin.com/tools/endpoints, avec
-   ?token=GARMIN_WEBHOOK_TOKEN si cette variable est posée.
+   le jeton GARMIN_WEBHOOK_TOKEN dans le chemin (/api/garmin/webhook/<jeton>, voir [token]/route.ts :
+   Garmin retire la query string) ou en ?token= .
    Garmin coupe à 30 s et attend un 200 : on répond toujours 200 (une erreur de notre côté ne doit pas
    faire réessayer Garmin en boucle), seul un appel non authentifié reçoit 401. Le traitement est court
    (quelques upserts par sportif), fait avant de répondre. */

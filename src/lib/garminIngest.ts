@@ -23,7 +23,10 @@ function localDate(r: Row): string | null {
   return new Date((start + (num(r.startTimeOffsetInSeconds) ?? 0)) * 1000).toISOString().slice(0, 10);
 }
 
-type DayPatch = { hrv_ms?: number; resting_hr?: number; sleep_minutes?: number };
+type DayPatch = {
+  hrv_ms?: number; resting_hr?: number; sleep_minutes?: number;
+  stress_avg?: number; stress_max?: number; body_battery_charged?: number; body_battery_drained?: number;
+};
 
 /* Une ligne health_daily par jour : seules les colonnes reçues sont envoyées (une valeur absente ne
    remplace jamais ce qui est déjà en base), et "Garmin" s'ajoute aux sources existantes. */
@@ -163,8 +166,18 @@ export async function ingestGarminPush(admin: SupabaseClient, userId: string, pa
     if (date && v != null) { patch(date, { hrv_ms: v }); count++; }
   }
   for (const d of payload.dailies ?? []) {
-    const date = localDate(d), v = num(d.restingHeartRateInBeatsPerMinute);
-    if (date && v != null) { patch(date, { resting_hr: v }); count++; }
+    const date = localDate(d);
+    if (!date) continue;
+    // Stress : 1-100, -1/-2 = pas assez de mesures (Health API 2.0, Daily Summaries) → jamais écrit.
+    const stress = (v: number | null) => (v != null && v > 0 ? Math.round(v) : undefined);
+    const p: DayPatch = {
+      resting_hr: num(d.restingHeartRateInBeatsPerMinute) ?? undefined,
+      stress_avg: stress(num(d.averageStressLevel)),
+      stress_max: stress(num(d.maxStressLevel)),
+      body_battery_charged: num(d.bodyBatteryChargedValue) ?? undefined,
+      body_battery_drained: num(d.bodyBatteryDrainedValue) ?? undefined,
+    };
+    if (Object.values(p).some((v) => v != null)) { patch(date, p); count++; }
   }
   for (const s of payload.sleeps ?? []) {
     // durationInSeconds = temps de sommeil, éveils exclus (Health API 2.0, Sleep Summaries).

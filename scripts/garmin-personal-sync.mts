@@ -51,19 +51,27 @@ async function sleepChunks(): Promise<Sleep[]> {
   }
   return out;
 }
-type Summary = { calendarDate: string; heartRate?: { restingValue?: number | null } };
+type Summary = { calendarDate: string; heartRate?: { restingValue?: number | null }; stress?: { avgLevel?: number | null; maxLevel?: number | null }; bodyBattery?: { chargedValue?: number | null; drainedValue?: number | null } };
 const [hrv, sleep, summaries] = await Promise.all([
   get<{ hrvSummaries: Hrv[] }>(`/hrv-service/hrv/daily/${from}/${to}`).then(r => r.hrvSummaries ?? []),
   sleepChunks(),
   get<{ data: Summary[] }>(`/usersummary-service/v2/dailysummaries?startDate=${from}&endDate=${to}`).then(r => r.data ?? []),
 ]);
 
-type Garmin = { hrv: number | null; rhr: number | null; sleep: number | null };
+type Garmin = { hrv: number | null; rhr: number | null; sleep: number | null; stressAvg?: number; stressMax?: number; bbCharged?: number; bbDrained?: number };
 const garmin = new Map<string, Garmin>();
 const at = (date: string) => garmin.get(date) ?? garmin.set(date, { hrv: null, rhr: null, sleep: null }).get(date)!;
 hrv.forEach(h => { if (h.lastNightAvg) at(h.calendarDate).hrv = h.lastNightAvg; });
 sleep.forEach(s => { if (s.sleepTimeSeconds) at(s.calendarDate).sleep = Math.round(s.sleepTimeSeconds / 60); });
-summaries.forEach(s => { if (s.heartRate?.restingValue) at(s.calendarDate).rhr = s.heartRate.restingValue; });
+summaries.forEach(s => {
+  const g = at(s.calendarDate);
+  if (s.heartRate?.restingValue) g.rhr = s.heartRate.restingValue;
+  // Stress : -1/-2 = pas de mesure, jamais écrit (même règle que garminIngest.ts).
+  if ((s.stress?.avgLevel ?? 0) > 0) g.stressAvg = s.stress!.avgLevel!;
+  if ((s.stress?.maxLevel ?? 0) > 0) g.stressMax = s.stress!.maxLevel!;
+  if (s.bodyBattery?.chargedValue != null) g.bbCharged = s.bodyBattery.chargedValue;
+  if (s.bodyBattery?.drainedValue != null) g.bbDrained = s.bodyBattery.drainedValue;
+});
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 const { data: existing, error: readError } = await supabase.from("health_daily")
@@ -80,13 +88,17 @@ const rows = Array.from(garmin.entries()).sort(([a], [b]) => a.localeCompare(b))
     hrv_ms: g.hrv ?? (e?.hrv_ms == null ? null : Number(e.hrv_ms)),
     resting_hr: e?.resting_hr != null ? Number(e.resting_hr) : g.rhr,
     sleep_minutes: e?.sleep_minutes ?? g.sleep,
+    stress_avg: g.stressAvg ?? null,
+    stress_max: g.stressMax ?? null,
+    body_battery_charged: g.bbCharged ?? null,
+    body_battery_drained: g.bbDrained ?? null,
     sources: Array.from(new Set([...((e?.sources as string[] | undefined) ?? []), SOURCE])),
     updated_at: now,
   };
 });
 
 console.log(`Garmin ${from} → ${to} : ${hrv.length} nuits VFC, ${sleep.length} nuits, ${summaries.length} jours`);
-console.table(rows.slice(-14).map(r => ({ date: r.date, vfc: r.hrv_ms, fc_repos: r.resting_hr, sommeil: r.sleep_minutes, deja_en_base: byDate.has(r.date) })));
+console.table(rows.slice(-14).map(r => ({ date: r.date, vfc: r.hrv_ms, fc_repos: r.resting_hr, sommeil: r.sleep_minutes, stress: r.stress_avg, bb_plus: r.body_battery_charged, bb_moins: r.body_battery_drained })));
 console.log(`${rows.length} lignes, dont ${rows.filter(r => !byDate.has(r.date)).length} nouvelles, ${rows.filter(r => r.hrv_ms != null).length} avec VFC`);
 
 if (!APPLY) {

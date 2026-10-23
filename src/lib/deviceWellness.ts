@@ -53,7 +53,11 @@ export const RHR_BASELINE_MIN_DAYS = 5;
 const MIN_NIGHT_MINUTES = 180;
 const RHR_BASELINE_WINDOW = 28;
 
-export type HealthRow = { date: string; resting_hr: number | null; sleep_minutes: number | null; hrv_ms?: number | null };
+export type HealthRow = {
+  date: string; resting_hr: number | null; sleep_minutes: number | null; hrv_ms?: number | null;
+  /* Garmin seulement (Daily Summaries, 2026-10-23) : affichage, n'entrent pas dans le score. */
+  stress_avg?: number | null; body_battery_charged?: number | null; body_battery_drained?: number | null;
+};
 
 /* Ce que la montre apporte au jour `date` : sommeil de la nuit, FC au repos, et sa norme = moyenne des
    FC des 28 jours précédents (au moins 5). `days` = lignes health_daily, n'importe quel ordre. */
@@ -116,6 +120,8 @@ export type DeviceDay = {
   /* Nuit mesurée (≥ 3 h, même filtre que le score). `sleepZ` n'est rempli que les jours SANS check-in :
      écart à la norme sommeil calculé sur la durée seule, pour que le chart Sommeil ait son point. */
   sleepMin: number | null; sleepZ: number | null;
+  /* Garmin (2026-10-23) : stress moyen de la journée (1-100) et Body Battery rechargée / dépensée. */
+  stress?: number | null; bbCharged?: number | null; bbDrained?: number | null;
 };
 
 type DeviceCols = { date: string } & DeviceInputs;
@@ -126,9 +132,14 @@ type DeviceCols = { date: string } & DeviceInputs;
 export function buildDeviceSeries(dates: string[], health: HealthRow[] | null | undefined, wellness: DeviceCols[]): DeviceDay[] {
   const num = (v: unknown) => (v == null ? null : Number(v));
   if (health && health.length) {
+    const byDate = new Map(health.map(h => [h.date, h]));
     return dates.map(date => {
       const d = deviceInputsFor(date, health);
-      return { rhr: num(d.device_resting_hr), rhrNorm: num(d.device_rhr_baseline), hrv: num(d.device_hrv_ms), hrvNorm: num(d.device_hrv_baseline), sleepMin: num(d.device_sleep_minutes), sleepZ: null };
+      const h = byDate.get(date);
+      return {
+        rhr: num(d.device_resting_hr), rhrNorm: num(d.device_rhr_baseline), hrv: num(d.device_hrv_ms), hrvNorm: num(d.device_hrv_baseline), sleepMin: num(d.device_sleep_minutes), sleepZ: null,
+        stress: num(h?.stress_avg), bbCharged: num(h?.body_battery_charged), bbDrained: num(h?.body_battery_drained),
+      };
     });
   }
   const byDate = new Map(wellness.map(w => [w.date, w]));

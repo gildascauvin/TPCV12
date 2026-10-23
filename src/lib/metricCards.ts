@@ -568,6 +568,46 @@ export function rhrSpec(device: DeviceDay[], dates: string[]): ChartSpec {
   };
 }
 
+/* Stress mesuré par la montre (Garmin Daily Summaries, 2026-10-23) : moyenne de la journée, échelle
+   Garmin 1-100 et ses 4 zones (repos ≤ 25, faible 26-50, moyen 51-75, élevé ≥ 76). Plus bas = mieux.
+   Distinct du stress DÉCLARÉ du check-in (sous-indicateur "Stress"). Affichage seulement. */
+export function stressSpec(device: DeviceDay[], dates: string[]): ChartSpec {
+  const ramp = WELLNESS_RAMP;
+  const c = [ramp[ramp.length - 1].hex, ramp[3]?.hex ?? ramp[2].hex, ramp[2].hex, ramp[0].hex];
+  const colorOf = (v: number) => (v <= 25 ? c[0] : v <= 50 ? c[1] : v <= 75 ? c[2] : c[3]);
+  return {
+    values: device.map(d => d?.stress ?? null), dates, kind: "line", lo: 0, hi: 100, showTicks: false,
+    zones: [
+      { from: 0, to: 25, color: c[0], label: "REPOS" },
+      { from: 25, to: 50, color: c[1], label: "FAIBLE" },
+      { from: 50, to: 75, color: c[2], label: "MOYEN" },
+      { from: 75, to: 100, color: c[3], label: "ÉLEVÉ" },
+    ],
+    bandZones: ["REPOS", "FAIBLE", "MOYEN", "ÉLEVÉ"],
+    fmt: v => `${Math.round(v)}`,
+    colorAt: colorOf,
+    tooltipExtra: i => (device[i]?.stress == null ? null : `stress moyen ${Math.round(device[i]!.stress!)} / 100`),
+  };
+}
+
+/* Body Battery (Garmin, 2026-10-23) : énergie RECHARGÉE dans la journée (surtout la nuit), en points.
+   Garmin n'envoie pas le niveau au réveil dans les Daily Summaries : la recharge est ce qui dit le
+   mieux "la nuit a-t-elle réparé ?". La dépense est dans le tooltip. Pas de zone officielle : cadrage
+   sur la donnée. Affichage seulement. */
+export function bodyBatterySpec(device: DeviceDay[], dates: string[]): ChartSpec {
+  const mid = WELLNESS_RAMP[2].hex;
+  return {
+    values: device.map(d => d?.bbCharged ?? null), dates, kind: "line", lo: 0, hi: 100, autoScale: true, minSpan: 20, showTicks: false,
+    fmt: v => `+${Math.round(v)}`,
+    colorAt: () => mid,
+    tooltipExtra: i => {
+      const d = device[i];
+      if (d?.bbCharged == null) return null;
+      return d.bbDrained != null ? `rechargée +${Math.round(d.bbCharged)} · dépensée −${Math.round(d.bbDrained)}` : `rechargée +${Math.round(d.bbCharged)}`;
+    },
+  };
+}
+
 /* ── Score agrégé par onglet (2026-09-29, POC charge-variantes.html variante S2, retenue par Gildas)
    ──────────────────────────────────────────────────────────────────────────────────────────────────
    Ce n'est PAS une note de qualité ("72/100, c'est bien ?") mais une POSITION sur un axe qui a deux

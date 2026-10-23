@@ -228,13 +228,14 @@ export async function getConseilsData(
     supabase.from("profiles").select("*").eq("user_id", userId).single(),
     supabase.from("sessions").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
     supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", since42).order("date", { ascending: false }),
-    supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms").eq("user_id", userId).gte("date", sinceHealth).lte("date", referenceDate),
+    supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms, stress_avg, body_battery_charged, body_battery_drained").eq("user_id", userId).gte("date", sinceHealth).lte("date", referenceDate),
   ]);
   if (healthError) console.error("[health_daily] lecture conseils:", healthError.message);
   const health: HealthRow[] = (rawHealth ?? []).map(h => ({
     date: h.date, sleep_minutes: h.sleep_minutes,
     resting_hr: h.resting_hr == null ? null : Number(h.resting_hr),
     hrv_ms: h.hrv_ms == null ? null : Number(h.hrv_ms),
+    stress_avg: h.stress_avg, body_battery_charged: h.body_battery_charged, body_battery_drained: h.body_battery_drained,
   }));
 
   return computeConseilsData(referenceDate, rawProfile as Profile | null, (rawSessions || []) as Session[], (rawWellness || []) as WellnessDaily[], "athlete", health);

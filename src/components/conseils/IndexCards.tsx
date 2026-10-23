@@ -10,7 +10,7 @@ import { displaySeverityOf, type DayPoint } from "@/lib/fatigueSignature";
 import { wellnessColor } from "@/lib/wellness";
 import {
   METRICS, METRIC_GROUPS, TREND_ARROW, TREND_IS_STATUS, AGG_BANDS, aggregateFor,
-  chartSpecFor, DIMENSION_CHART_LABELS, dimensionSpec, rhrSpec, hrvSpec, impactFor, lastOf, prettyStatus,
+  chartSpecFor, DIMENSION_CHART_LABELS, dimensionSpec, rhrSpec, hrvSpec, stressSpec, bodyBatterySpec, impactFor, lastOf, prettyStatus,
   sessionQualifier, sessionReference, seriesOf, statusDisplayColor, trendFor, TREND_STATUS_LABEL,
   type MetricGroup, type MetricKey,
 } from "@/lib/metricCards";
@@ -55,9 +55,16 @@ function statusOf(metric: MetricKey, data: ConseilsData, series: DayPoint[], per
   }
 }
 
+/* Sous-indicateurs montre de la carte Récupération (FC repos, VFC ; stress et Body Battery Garmin,
+   2026-10-23). "Stress mesuré" pour ne pas le confondre avec le stress déclaré du check-in. */
+type DeviceSub = "rhr" | "hrv" | "stressM" | "bb";
+const DEVICE_SUB_LABEL: Record<DeviceSub, string> = { rhr: "FC repos", hrv: "VFC", stressM: "Stress mesuré", bb: "Body Battery" };
+const isDeviceSub = (d: string): d is DeviceSub => d in DEVICE_SUB_LABEL;
+
 /* Carte supplémentaire rendue avec le MÊME gabarit que les cartes d'indice (2026-09-30, Gildas :
    "les comportements dans récupération sous la même forme que les autres : une card, au clic le
    rapport complet"). L'appelant fournit le contenu résumé et le rapport déplié. */
+
 export type ExtraIndexCard = {
   key: string;
   label: string;
@@ -102,7 +109,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const [compareOpen, setCompareOpen] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   /* Sous-jacent affiché DANS la carte Récupération (null = le score composite). */
-  const [subDim, setSubDim] = useState<DimensionKey | "rhr" | "hrv" | null>(null);
+  const [subDim, setSubDim] = useState<DimensionKey | DeviceSub | null>(null);
   const days = rangeMode === "quarter" ? 90 : rangeMode === "month" ? 28 : 7;
   const series = data.timeSeries.slice(-days);
   const sessionRef = sessionReference(data.timeSeries);
@@ -119,6 +126,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const deviceWindow = (data.deviceSeries ?? []).slice(-days);
   const hasRhr = deviceWindow.some(d => d?.rhr != null);
   const hasHrv = deviceWindow.some(d => d?.hrv != null);
+  const hasStress = deviceWindow.some(d => d?.stress != null);
+  const hasBb = deviceWindow.some(d => d?.bbCharged != null);
   const lastB = data.wellnessBaselineSeries.slice(-1)[0] ?? null;
   const deviceToday = (() => {
     if (!lastB) return null;
@@ -310,9 +319,9 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                   )}
                   {metric === "recovery" && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" as const, overflowX: "auto", scrollbarWidth: "none" as const, marginBottom: 12, paddingBottom: 2 }}>
-                      {([null, ...DIMENSION_KEYS, ...(hasRhr ? ["rhr" as const] : []), ...(hasHrv ? ["hrv" as const] : [])] as (DimensionKey | "rhr" | "hrv" | null)[]).map(dim => {
+                      {([null, ...DIMENSION_KEYS, ...(hasRhr ? ["rhr" as const] : []), ...(hasHrv ? ["hrv" as const] : []), ...(hasStress ? ["stressM" as const] : []), ...(hasBb ? ["bb" as const] : [])] as (DimensionKey | DeviceSub | null)[]).map(dim => {
                         const active = !compareOpen && subDim === dim;
-                        const badge = dim && dim !== "rhr" && dim !== "hrv" ? dimBadges?.find(b => b.key === dim) : null;
+                        const badge = dim && !isDeviceSub(dim) ? dimBadges?.find(b => b.key === dim) : null;
                         return (
                           <span
                             key={dim ?? "composite"}
@@ -329,7 +338,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                               color: active ? "#fff" : "rgba(255,255,255,.55)",
                             }}
                           >
-                            {dim === "rhr" ? "FC repos" : dim === "hrv" ? "VFC" : dim ? DIMENSION_CHART_LABELS[dim] : "Score"}
+                            {dim && isDeviceSub(dim) ? DEVICE_SUB_LABEL[dim] : dim ? DIMENSION_CHART_LABELS[dim] : "Score"}
                             {badge && <span style={{ color: dimensionBadgeColor(badge.arrow) }}>{DIMENSION_ARROW[badge.arrow]}</span>}
                           </span>
                         );
@@ -354,7 +363,11 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                       ? rhrSpec(deviceWindow, series.map(p => p.date))
                       : metric === "recovery" && subDim === "hrv"
                       ? hrvSpec(deviceWindow, series.map(p => p.date))
-                      : metric === "recovery" && subDim && subDim !== "rhr" && subDim !== "hrv"
+                      : metric === "recovery" && subDim === "stressM"
+                      ? stressSpec(deviceWindow, series.map(p => p.date))
+                      : metric === "recovery" && subDim === "bb"
+                      ? bodyBatterySpec(deviceWindow, series.map(p => p.date))
+                      : metric === "recovery" && subDim && !isDeviceSub(subDim)
                       ? dimensionSpec(subDim, baselineWindow, series.map(p => p.date), deviceWindow.slice(-baselineWindow.length))
                       : chartSpecFor(metric, series, { sessionRef, recoveryRelative })}
                     weekLabels={days > 7} locked={locked} height={200}
