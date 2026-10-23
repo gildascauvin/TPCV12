@@ -9,7 +9,6 @@ export const GARMIN_AUTHORIZE_URL = "https://connect.garmin.com/oauth2Confirm";
 const TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token";
 const API = "https://apis.garmin.com/partner-gateway/rest";
 
-export const PKCE_COOKIE = "garmin_pkce";
 
 export type GarminConfig = { clientId: string; clientSecret: string; redirectUri: string };
 

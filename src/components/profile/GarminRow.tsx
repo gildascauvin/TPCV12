@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
+import { Capacitor } from "@capacitor/core";
 import { invalidatePhysio } from "@/lib/physioData";
 
 /* Profil (sportif) : liaison au compte Garmin Connect (2026-10-23). Le nom « Garmin » est cité en texte
    simple (charte Garmin : pas de logo modifié ni inventé). Connecter = navigation vers
-   /api/garmin/connect (OAuth2 PKCE côté serveur), retour ici avec ?garmin=connected|denied|error. */
+   /api/garmin/connect (OAuth2 PKCE côté serveur), retour ici avec ?garmin=connected|denied|error.
+   App iPhone : l'app n'ouvre que go.theperfclub.com, la page Garmin part donc dans Safari et le retour
+   s'y affiche ; on relit le statut quand le sportif revient dans l'app. */
 
 type Status = { configured: boolean; connected: boolean; connectedAt: string | null };
 
@@ -15,13 +18,27 @@ export default function GarminRow() {
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const connectedRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/garmin/status", { cache: "no-store" })
+    const load = () => fetch("/api/garmin/status", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((s: Status | null) => { if (alive && s) setStatus(s); })
+      .then((s: Status | null) => {
+        if (!alive || !s) return;
+        // Retour de Safari (app iPhone) : connecté entre-temps.
+        if (connectedRef.current === false && s.connected) {
+          posthog.capture("garmin_connected", { via: "safari" });
+          setMessage("Garmin connecté : tes prochaines nuits et séances arriveront toutes seules.");
+          invalidatePhysio();
+        }
+        connectedRef.current = s.connected;
+        setStatus(s);
+      })
       .catch(() => {});
+    load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", onVisible);
     // Retour d'OAuth : event + message, puis on nettoie l'URL.
     const params = new URLSearchParams(window.location.search);
     const result = params.get("garmin");
@@ -33,15 +50,31 @@ export default function GarminRow() {
       const q = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
     }
-    return () => { alive = false; };
+    return () => { alive = false; document.removeEventListener("visibilitychange", onVisible); };
   }, []);
 
   if (!status) return null;
 
-  function connect() {
-    posthog.capture("garmin_connect_started");
-    // Retour sur l'Accueil, qui rouvre le profil pour afficher le résultat.
-    window.location.href = "/api/garmin/connect?next=/today";
+  async function connect() {
+    posthog.capture("garmin_connect_started", { native: Capacitor.isNativePlatform() });
+    if (!Capacitor.isNativePlatform()) {
+      // Web : retour sur l'Accueil, qui rouvre le profil pour afficher le résultat.
+      window.location.href = "/api/garmin/connect?next=/today";
+      return;
+    }
+    // App : le lien est créé côté serveur (lié au sportif), puis ouvert dans Safari.
+    setBusy(true);
+    try {
+      const res = await fetch("/api/garmin/connect?json=1", { cache: "no-store" });
+      const data = (await res.json()) as { url?: string };
+      if (!res.ok || !data.url) throw new Error();
+      setMessage("Connecte-toi à Garmin dans Safari, puis reviens ici.");
+      if (!window.open(data.url, "_blank")) window.location.href = data.url;
+    } catch {
+      setMessage("La connexion à Garmin a échoué. Réessaie.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function disconnect() {
@@ -50,6 +83,7 @@ export default function GarminRow() {
       const res = await fetch("/api/garmin/disconnect", { method: "POST" });
       if (!res.ok) throw new Error();
       posthog.capture("garmin_disconnected");
+      connectedRef.current = false;
       setStatus((s) => (s ? { ...s, connected: false, connectedAt: null } : s));
       setMessage("Garmin déconnecté : tes données Garmin ont été supprimées.");
       invalidatePhysio();
@@ -88,7 +122,7 @@ export default function GarminRow() {
             <button onClick={() => setConfirm(true)} style={btn(false)}>Déconnecter</button>
           )
         ) : status.configured ? (
-          <button onClick={connect} style={btn(true)}>Connecter</button>
+          <button disabled={busy} onClick={connect} style={btn(true)}>{busy ? "…" : "Connecter"}</button>
         ) : null}
       </div>
       {confirm && (
