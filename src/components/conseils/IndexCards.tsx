@@ -17,6 +17,7 @@ import {
 import AggregateGauge, { aggregateGaugeCenterY } from "@/components/conseils/AggregateGauge";
 import { decisionRingCenterY } from "@/components/sessions/DecisionRing";
 import type { ConseilsData } from "@/lib/conseilsData";
+import { watchPairs, type WatchPair } from "@/lib/watchCompare";
 
 /* Cartes d'indice de l'Accueil (2026-09-28) — variante E1 du POC `charge-variantes.html`, retenue
    par Gildas. Une carte par indice : à gauche titre, tendance chiffrée et impact de cette tendance ;
@@ -80,7 +81,7 @@ export type ExtraIndexCard = {
   rangeToggle?: boolean;
 };
 
-export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false, compare = null }: {
+export default function IndexCards({ data, rangeMode, onRangeModeChange, group, insight, perspective = "athlete", extraCards = [], lockedHistory = null, example = false, compare = null, scoreVerdict = null }: {
   data: ConseilsData;
   /* Le toggle 7/28/90 vit DANS le chart déplié (2026-09-28, arguments de Gildas : les aperçus ne
      sont pas des charts complets, et avec des cartes qui se déplient un contrôle en haut de section
@@ -101,9 +102,14 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      pastille "Exemple" sur la jauge et sur chaque carte, phrase explicite au-dessus de chaque chart. */
   example?: boolean;
   /* « Ressenti vs physiologie » (2026-10-17, Gildas) : une puce DANS la carte de l'indicateur qui lui
-     correspond (Charge : séances vs fréquence cardiaque ; Récupération : nuit vs ressenti) au lieu
+     correspond (Charge : séances vs fréquence cardiaque, avec la lecture par type de séance) au lieu
      d'une carte de plus dans la liste. `body` = le chart de comparaison, rendu à la place du chart. */
   compare?: { metric: "load" | "recovery"; body: React.ReactNode } | null;
+  /* Verdict « Ressenti vs physiologie » de la récupération (nuit, FC repos, VFC face au check-in),
+     affiché au-dessus du chart Score quand celui-ci n'a pas de courbe montre appariée (Apple Watch :
+     pas de Body Battery). Remplace la puce « Ressenti vs physiologie » de la carte Récupération
+     (2026-10-23, Gildas) : les charts appariés font cette comparaison dimension par dimension. */
+  scoreVerdict?: { status: string; text: string; color: string } | null;
 }) {
   const { isMd } = useBreakpoint();
   const [compareOpen, setCompareOpen] = useState(false);
@@ -128,6 +134,20 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const hasHrv = deviceWindow.some(d => d?.hrv != null);
   const hasStress = deviceWindow.some(d => d?.stress != null);
   const hasBb = deviceWindow.some(d => d?.bbCharged != null);
+  /* Ressenti vs montre (2026-10-23) : Score ↔ Body Battery, Sommeil ↔ durée mesurée, Stress ↔ stress
+     mesuré, État physique ↔ VFC (sinon FC au repos). Sportif seulement : le coach ne lit pas health_*. */
+  const pairN = Math.min(baselineWindow.length, deviceWindow.length, series.length);
+  const pairs = perspective === "athlete"
+    ? watchPairs(baselineWindow.slice(-pairN), deviceWindow.slice(-pairN), series.slice(-pairN).map(p => p.date))
+    : {};
+  const pairFor = (dim: DimensionKey | DeviceSub | null): WatchPair | null =>
+    dim === null ? pairs.score ?? null : dim === "sleep" ? pairs.sleep ?? null : dim === "stress" ? pairs.stress ?? null : dim === "recovery" ? pairs.physique ?? null : null;
+  /* Puces montre séparées : fondues dans les charts ressenti vs montre quand la paire existe. La FC au
+     repos garde sa puce si l'État physique est déjà comparé à la VFC. */
+  const showRhr = hasRhr && pairs.physique?.deviceLabel !== "FC au repos";
+  const showHrv = hasHrv && !pairs.physique;
+  const showStressM = hasStress && !pairs.stress;
+  const showBb = hasBb && !pairs.score;
   const lastB = data.wellnessBaselineSeries.slice(-1)[0] ?? null;
   const deviceToday = (() => {
     if (!lastB) return null;
@@ -319,7 +339,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                   )}
                   {metric === "recovery" && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "nowrap" as const, overflowX: "auto", scrollbarWidth: "none" as const, marginBottom: 12, paddingBottom: 2 }}>
-                      {([null, ...DIMENSION_KEYS, ...(hasRhr ? ["rhr" as const] : []), ...(hasHrv ? ["hrv" as const] : []), ...(hasStress ? ["stressM" as const] : []), ...(hasBb ? ["bb" as const] : [])] as (DimensionKey | DeviceSub | null)[]).map(dim => {
+                      {([null, ...DIMENSION_KEYS, ...(showRhr ? ["rhr" as const] : []), ...(showHrv ? ["hrv" as const] : []), ...(showStressM ? ["stressM" as const] : []), ...(showBb ? ["bb" as const] : [])] as (DimensionKey | DeviceSub | null)[]).map(dim => {
                         const active = !compareOpen && subDim === dim;
                         const badge = dim && !isDeviceSub(dim) ? dimBadges?.find(b => b.key === dim) : null;
                         return (
@@ -343,11 +363,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                           </span>
                         );
                       })}
-                      {compare?.metric === "recovery" && <CompareChip active={compareOpen} onPick={() => setCompareOpen(true)} />}
                     </div>
                   )}
                   {metric === "load" && compare?.metric === "load" && (
-                    <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" as const, marginBottom: 12 }}>
                       <ChipBtn active={!compareOpen} onPick={() => setCompareOpen(false)}>Charge</ChipBtn>
                       <CompareChip active={compareOpen} onPick={() => setCompareOpen(true)} />
                     </div>
@@ -355,8 +374,17 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
                   <div style={{ marginBottom: 10, width: "fit-content" }}>
                     <RangeToggle mode={rangeMode} onChange={onRangeModeChange} />
                   </div>
+                  {metric === "recovery" && subDim === null && scoreVerdict && !pairFor(null) && (
+                    <div style={{ marginBottom: 10, ...blurChart }}>
+                      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.55)" }}>RESSENTI VS PHYSIOLOGIE</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 800, color: scoreVerdict.color, marginTop: 2 }}>{scoreVerdict.status}</div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.45, color: "rgba(255,255,255,.75)", marginTop: 2 }}>{scoreVerdict.text}</div>
+                    </div>
+                  )}
                   {compareOpen && compare?.metric === metric ? (
                     <div style={blurChart}>{compare.body}</div>
+                  ) : metric === "recovery" && pairFor(subDim) ? (
+                    <WatchPairChart pair={pairFor(subDim)!} days={days} locked={locked} blurStyle={blurChart} exampleNote={example ? exampleText : undefined} />
                   ) : (
                   <MetricChart
                     spec={metric === "recovery" && subDim === "rhr"
@@ -527,4 +555,40 @@ function ChipBtn({ active, onPick, children, accent = false }: { active: boolean
    des composantes du score (c'est une comparaison, pas une mesure de plus). */
 function CompareChip({ active, onPick }: { active: boolean; onPick: () => void }) {
   return <ChipBtn active={active} onPick={onPick} accent>Ressenti vs physiologie</ChipBtn>;
+}
+
+/* Ressenti vs montre (2026-10-23) : le chart (deux courbes en écart à la norme), sa légende, la phrase
+   d'accord calculée (watchCompare.ts) et les valeurs réelles du jour. */
+function WatchPairChart({ pair, days, locked, blurStyle, exampleNote }: { pair: WatchPair; days: number; locked: boolean; blurStyle: React.CSSProperties; exampleNote?: string }) {
+  const tag = pair.verdict === "agree" ? { t: "D'ACCORD", bg: "rgba(147,197,253,.16)", fg: "#bfdbfe" }
+    : pair.verdict === "disagree" ? { t: "EN DÉSACCORD", bg: "rgba(251,146,60,.18)", fg: "#fdba74" }
+    : pair.verdict === "partial" ? { t: "EN PARTIE", bg: "rgba(255,255,255,.08)", fg: "rgba(255,255,255,.75)" } : null;
+  const mono: React.CSSProperties = { fontFamily: "var(--font-mono), monospace" };
+  return (
+    <div>
+      {pair.sentence && (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 10, ...blurStyle }}>
+          {tag && <span style={{ ...mono, flex: "0 0 auto", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em", padding: "3px 8px", borderRadius: 999, background: tag.bg, color: tag.fg }}>{tag.t}</span>}
+          <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "rgba(255,255,255,.8)" }}>{pair.sentence}</span>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 14, alignItems: "center", ...mono, fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,.75)", marginBottom: 6 }}>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><svg width="20" height="6" aria-hidden="true"><line x1="0" y1="3" x2="20" y2="3" stroke="#93c5fd" strokeWidth="2.5" strokeLinecap="round" /></svg>Ressenti</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><svg width="20" height="6" aria-hidden="true"><line x1="0" y1="3" x2="20" y2="3" stroke="#fb923c" strokeWidth="2.5" strokeDasharray="4 3" strokeLinecap="round" /></svg>{pair.deviceLabel}</span>
+      </div>
+      <MetricChart spec={pair.spec} weekLabels={days > 7} locked={locked} height={200} exampleNote={exampleNote} />
+      {(pair.feltToday || pair.deviceToday) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, marginTop: 10 }}>
+          <div style={{ background: "rgba(147,197,253,.10)", borderRadius: 12, padding: "8px 10px" }}>
+            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "#93c5fd" }}>RESSENTI</div>
+            <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, color: "#fff" }}>{pair.feltToday ?? "—"}</div>
+          </div>
+          <div style={{ background: "rgba(251,146,60,.10)", borderRadius: 12, padding: "8px 10px" }}>
+            <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "#fb923c" }}>{pair.deviceLabel.toUpperCase()}</div>
+            <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, color: "#fff" }}>{pair.deviceToday ?? "—"}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

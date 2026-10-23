@@ -394,6 +394,12 @@ export type ChartSpec = {
      (le verdict). Un jour sans `values2` (calibrage) n'a que son point plein, grisé. */
   values2?: (number | null)[];
   pairColorAt?: (i: number) => string;
+  /* Ressenti vs montre (2026-10-23, maquettes validées par Gildas) : couleur fixe de la courbe
+     principale (sinon `colorAt` de la dernière valeur), et 2e série tracée en POINTILLÉ sur la même
+     échelle (`kind` "line"). Bâtons : avec `values2` + `color2`, deux bâtons côte à côte par jour. */
+  lineColor?: string;
+  overlay?: { values: (number | null)[]; color: string };
+  color2?: string;
   fmt: (v: number) => string;
   colorAt: (v: number) => string;
   tooltipExtra?: (i: number) => string | null;

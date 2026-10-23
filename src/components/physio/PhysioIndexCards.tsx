@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { ExtraIndexCard } from "@/components/conseils/IndexCards";
 import MetricChart from "@/components/conseils/MetricChart";
 import type { ChartSpec } from "@/lib/metricCards";
-import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
+import { HEART_CALIBRATION, HEART_FAMILY_LABEL, PHYSIO_MIN_DAYS, heartFamily, matchWorkout, physioVerdictAt, type HeartFamily, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import { requestPhysioReplay, type PhysioData } from "@/lib/physioData";
 import { canReadHeart } from "@/lib/heartAccess";
 
@@ -94,6 +94,59 @@ export function heartIndexCard(physio: PhysioData | null | undefined, referenceD
     rangeToggle: true,
     body: <HeartPairChart dates={chartDates} byDate={byDate} />,
   };
+}
+
+/* ── Ressenti vs physiologie, par type de séance (2026-10-23) ──
+   Ce qui restait de la puce « Charge cardiaque », fusionnée dans « Ressenti vs physiologie » (Gildas) :
+   la lecture STRUCTURELLE, sous le chart séance par séance. Rapport TRIMP / charge ressentie
+   (RPE × durée) par famille de séance (heartFamily), sur les séances mesurées de la fenêtre. Affiché
+   seulement avec au moins 3 séances dans chacune de 2 familles ; phrase seulement si une famille charge
+   le cœur au moins 2 fois moins que l'autre à ressenti égal. */
+const FAMILY_TITLE: Record<HeartFamily, string> = { force: "FORCE", cardio: "COURSE & CARDIO", autre: "AUTRES" };
+const FAMILY_WORD: Record<HeartFamily, string> = { force: "de force", cardio: "de course et cardio", autre: "autres" };
+
+export function heartFamilyCards(physio: PhysioData | null | undefined, referenceDate: string, chartDays = 28): React.ReactNode | null {
+  if (!physio || !referenceDate) return null;
+  const dates = dayRange(referenceDate, chartDays);
+  const fam = new Map<HeartFamily, { ua: number; trimp: number; n: number }>();
+  physio.sessions
+    .filter(s => s.done && s.rpe != null && s.duration != null && s.date >= dates[0] && s.date <= referenceDate)
+    .forEach(s => {
+      const w = matchWorkout(s, physio.workouts);
+      if (!w || w.trimp == null) return;
+      const k = heartFamily(w.workout_type);
+      const f = fam.get(k) ?? { ua: 0, trimp: 0, n: 0 };
+      f.ua += (s.rpe as number) * (s.duration as number); f.trimp += w.trimp; f.n += 1;
+      fam.set(k, f);
+    });
+  const rows = Array.from(fam.entries()).filter(([, f]) => f.n >= 3 && f.ua > 0)
+    .map(([k, f]) => ({ k, r: f.trimp / f.ua, n: f.n, avg: f.trimp / f.n }))
+    .sort((a, b) => b.r - a.r);
+  if (rows.length < 2) return null;
+  const top = rows[0];
+  const times = (r: number) => (Math.round((top.r / r) * 2) / 2).toString().replace(".", ",");
+  const low = rows[rows.length - 1];
+  const sentence = top.r / low.r >= 2
+    ? `À ressenti égal, tes séances ${FAMILY_WORD[low.k]} chargent ton cœur ${times(low.r)} fois moins que tes séances ${FAMILY_WORD[top.k]}. La fréquence cardiaque mesure mal certains efforts (sprints courts, charges lourdes) : pour ces séances, ton ressenti reste la référence.`
+    : null;
+  const mono: React.CSSProperties = { fontFamily: "var(--font-mono), monospace" };
+  return (
+    <div style={{ marginTop: 14 }}>
+      {sentence && <div style={{ fontSize: 12.5, lineHeight: 1.45, color: "rgba(255,255,255,.8)", marginBottom: 10 }}>{sentence}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+        {rows.map(x => {
+          const k = top.r / x.r;
+          return (
+            <div key={x.k} style={{ background: "rgba(255,255,255,.05)", borderRadius: 12, padding: "8px 10px" }}>
+              <div style={{ ...mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", color: "rgba(255,255,255,.6)" }}>{FAMILY_TITLE[x.k]} · {x.n} SÉANCES</div>
+              <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2, color: "#fff" }}>{x === top || k < 1.5 ? "Cœur ≈ ressenti" : `Cœur ${times(x.r)}× plus bas`}</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,.65)", marginTop: 2 }}>TRIMP moyen {Math.round(x.avg)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 const diffWord = (d: number) => (d >= 7.5 ? "très dure" : d >= 4.5 ? "dure" : d >= 2.5 ? "modérée" : "légère"); // mots de Foster, voir qualitativeDifficulty

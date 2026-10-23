@@ -52,7 +52,8 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
 
   const { values: vals, dates, zones, fmt, colorAt } = spec;
   const n = vals.length;
-  const real = vals.filter((v): v is number => v !== null);
+  const ov = spec.overlay?.values ?? [];
+  const real = [...vals, ...ov].filter((v): v is number => v !== null);
   /* Sans ticks, le tracé démarre juste après le liseré (4, comme ZoneSparkline) : à 8 il restait un
      écart visible entre la légende verticale et le chart sur les indices sans bande de fond. */
   const padL = spec.showTicks ? 34 : zones ? 4 : PAD_L;
@@ -88,6 +89,13 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
     else segments.push([p]);
   }
   const pts = (seg: { i: number; v: number }[]) => seg.map(p => `${toX(p.i).toFixed(1)},${toY(p.v).toFixed(1)}`).join(" ");
+  const ovKnown = ov.map((v, i) => (v !== null ? { i, v } : null)).filter((p): p is { i: number; v: number } => p !== null);
+  const ovSegments: { i: number; v: number }[][] = [];
+  for (const p of ovKnown) {
+    const last = ovSegments[ovSegments.length - 1];
+    if (last && p.i === last[last.length - 1].i + 1) last.push(p);
+    else ovSegments.push([p]);
+  }
 
   /* Pastilles sur chaque jour, à trou au centre — même rendu que la courbe Forme en prod
      (SparkLineClient : fond sombre + bordure colorée). Au-delà de 31 jours on retombe sur les 3
@@ -166,7 +174,19 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
 
         {locked && <defs><filter id={blurId} x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="7" /></filter></defs>}
         <g filter={locked ? `url(#${blurId})` : undefined} opacity={locked ? 0.55 : 1}>
-        {spec.kind === "bars" && vals.map((v, i) => {
+        {spec.kind === "bars" && spec.values2 && spec.color2 && vals.map((v, i) => {
+          const v2 = spec.values2![i] ?? null;
+          if (v === null && v2 === null) return null;
+          const bw = Math.max(1.5, Math.min(9, (plotW / n) * 0.3));
+          const base = toY(lo);
+          return (
+            <g key={i}>
+              {v !== null && <rect x={toX(i) - bw - 0.5} y={toY(v)} width={bw} height={Math.max(1.5, base - toY(v))} rx={1.5} fill={colorAt(v)} opacity={0.9} />}
+              {v2 !== null && <rect x={toX(i) + 0.5} y={toY(v2)} width={bw} height={Math.max(1.5, base - toY(v2))} rx={1.5} fill={spec.color2} opacity={0.9} />}
+            </g>
+          );
+        })}
+        {spec.kind === "bars" && !(spec.values2 && spec.color2) && vals.map((v, i) => {
           if (v === null || (spec.barsFrom == null && v <= lo)) return null;
           const bw = Math.max(2, Math.min(18, (plotW / n) * 0.62));
           // barsFrom : bâtons signés qui partent d'une ligne de base (écarts) au lieu du bas du chart.
@@ -182,10 +202,15 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
           seg.length > 1 ? (
             <polyline
               key={`l${k}`} points={pts(seg)} fill="none"
-              stroke={spec.kind === "dots" ? "rgba(255,255,255,.28)" : spec.gradient && spec.kind === "area" ? `url(#${gradId})` : colorAt(seg[seg.length - 1].v)}
-              strokeWidth={spec.kind === "dots" ? 1.2 : 1.8}
+              stroke={spec.kind === "dots" ? "rgba(255,255,255,.28)" : spec.lineColor ?? (spec.gradient && spec.kind === "area" ? `url(#${gradId})` : colorAt(seg[seg.length - 1].v))}
+              strokeWidth={spec.kind === "dots" ? 1.2 : spec.lineColor ? 2.2 : 1.8}
               strokeLinecap="round" strokeLinejoin="round"
             />
+          ) : null
+        ))}
+        {spec.overlay && ovSegments.map((seg, k) => (
+          seg.length > 1 ? (
+            <polyline key={`o${k}`} points={pts(seg)} fill="none" stroke={spec.overlay!.color} strokeWidth={2.2} strokeDasharray="6 5" strokeLinecap="round" strokeLinejoin="round" />
           ) : null
         ))}
         </g>
@@ -248,7 +273,16 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
             <div key={p.i} style={{
               position: "absolute", left: `calc(${pctX(p.i)}% - ${size / 2}px)`, top: `calc(${pctY(p.v)}% - ${size / 2}px)`,
               width: size, height: size, borderRadius: "50%",
-              background: "#1c1c1c", border: `${hover === p.i ? 3 : markerSize <= 6 ? 2 : 2.5}px solid ${colorAt(p.v)}`,
+              background: spec.lineColor ?? "#1c1c1c", border: `${hover === p.i ? 3 : markerSize <= 6 ? 2 : 2.5}px solid ${spec.lineColor ?? colorAt(p.v)}`,
+            }} />
+          );
+        })}
+        {!locked && spec.overlay && ovKnown.map(p => {
+          const size = hover === p.i ? markerSize + 3 : markerSize;
+          return (
+            <div key={`o${p.i}`} style={{
+              position: "absolute", left: `calc(${pctX(p.i)}% - ${size / 2}px)`, top: `calc(${pctY(p.v)}% - ${size / 2}px)`,
+              width: size, height: size, borderRadius: "50%", background: "#070a0d", border: `${markerSize <= 6 ? 2 : 2.5}px solid ${spec.overlay!.color}`,
             }} />
           );
         })}
@@ -263,10 +297,10 @@ export default function MetricChart({ spec, height, weekLabels, locked = false, 
           );
         })}
 
-        {hover !== null && vals[hover] !== null && (
-          <div style={{ position: "absolute", left: `${pctX(hover)}%`, top: `${pctY(vals[hover] as number)}%`, transform: "translate(-50%, calc(-100% - 10px))", background: "rgba(18,18,18,.92)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.13)", borderRadius: 12, padding: "7px 11px", whiteSpace: "nowrap" as const, boxShadow: "0 8px 24px rgba(0,0,0,.5)", zIndex: 20 }}>
+        {hover !== null && (vals[hover] ?? ov[hover] ?? null) !== null && (
+          <div style={{ position: "absolute", left: `${pctX(hover)}%`, top: `${pctY((vals[hover] ?? ov[hover]) as number)}%`, transform: "translate(-50%, calc(-100% - 10px))", background: "rgba(18,18,18,.92)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,.13)", borderRadius: 12, padding: "7px 11px", whiteSpace: "nowrap" as const, boxShadow: "0 8px 24px rgba(0,0,0,.5)", zIndex: 20 }}>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, color: "rgba(255,255,255,.5)" }}>{formatDateFr(dates[hover])}</div>
-            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: colorAt(vals[hover] as number) }}>{fmt(vals[hover] as number)}</div>
+            {vals[hover] !== null && fmt(vals[hover] as number) !== "" && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 13, fontWeight: 700, color: spec.lineColor ?? colorAt(vals[hover] as number) }}>{fmt(vals[hover] as number)}</div>}
             {spec.tooltipExtra?.(hover) && <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.55)", marginTop: 2 }}>{spec.tooltipExtra(hover)}</div>}
           </div>
         )}
