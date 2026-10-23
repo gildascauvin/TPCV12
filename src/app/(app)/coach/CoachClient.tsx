@@ -109,7 +109,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
 
   const [selectedDate, setSelectedDate] = useState(today);
-  const [bilanFor, setBilanFor] = useState<{ athleteId: string; name: string } | null>(null);
+  const [bilanFor, setBilanFor] = useState<{ subject: { athleteId: string; name: string }; kind: "week" | "month" | "all"; anchor: string } | null>(null);
   /* Freemium (2026-09-30) : programmation, séances et invitations libres (seule la sandbox garde sa
      porte d'inscription). Les décisions ne se lisent qu'avec un abonnement — sauf la 1re décision de
      CHAQUE sportif (2026-10-01, avant : seule celle du sportif démo) : en clair le jour de son 1er
@@ -764,6 +764,14 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
           return freeLabelsFor(selectedAthleteForRings)[mondayIso] || null;
         }) : undefined}
+        /* Bilan du sportif sélectionné (2026-10-24) : mêmes liens que le calendrier du sportif
+           (semaine, mois, depuis le début), carrousel à la 3e personne. Compte gratuit : paywall. */
+        onOpenBilan={selectedAthleteForRings?.user_id && !sandboxMode ? (kind, anchor) => {
+          const a = selectedAthleteForRings;
+          if (!isActive) { setPaywallStep("priming"); return; }
+          posthog.capture("coach_bilan_opened", { from: "calendar", period: kind });
+          setBilanFor({ subject: { athleteId: a.id, name: a.name.split(" ")[0] }, kind, anchor });
+        } : undefined}
       />
       {reconduire && (
         <DuplicateModal
@@ -947,15 +955,6 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
                 onAutoregDecided={() => markAutoregDecided(a.id)}
                 onAutoregUndone={() => unmarkAutoregDecided(a.id)} />
-              {/* Bilan du sportif (2026-10-24) : le même carrousel que le sportif, à la 3e personne. */}
-              {a.user_id && !sandboxMode && (
-                <button
-                  onClick={() => { if (!canDecideFor(a)) { markPrimingSource("decision", { athleteName: a.name.split(" ")[0], ifEmpty: true }); unlock(); return; } posthog.capture("coach_bilan_opened", { from: "coach_control" }); setBilanFor({ athleteId: a.id, name: a.name.split(" ")[0] }); }}
-                  style={{ display: "block", width: "100%", marginTop: 14, height: 46, borderRadius: 14, border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.06)", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-                >
-                  Bilan de {a.name.split(" ")[0]} ›
-                </button>
-              )}
             </div>
           );
         })() : (
@@ -1121,7 +1120,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       </CoachPageBg>
 
       {bilanFor && (
-        <BilanCarousel userId={bilanFor.athleteId} kind="all" anchor={today} today={today} source="coach" subject={bilanFor} onClose={() => setBilanFor(null)} />
+        <BilanCarousel userId={bilanFor.subject.athleteId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={today} source="coach" subject={bilanFor.subject} onClose={() => setBilanFor(null)} />
       )}
       {reviewAthlete && (
         <CoachSessionModal

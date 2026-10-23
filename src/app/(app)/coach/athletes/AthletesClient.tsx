@@ -27,7 +27,6 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
-const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
 import type { AthleteSignature } from "@/lib/fatigueSignature";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
@@ -129,7 +128,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const contentMaxWidth = isLg ? 1000 : isMd ? 720 : 600;
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
-  const [bilanFor, setBilanFor] = useState<{ athleteId: string; name: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [signatures, setSignatures] = useState(initialSignatures);
@@ -371,14 +369,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   {isMd && !isPending && (
                     <TestBadge summary={test} />
                   )}
-                  {a.user_id && !sandboxMode && (
-                    <button
-                      onClick={e => { e.stopPropagation(); if (analysisLocked) { setPaywallStep("priming"); return; } posthog.capture("coach_bilan_opened", { from: "athletes" }); setBilanFor({ athleteId: a.id, name: a.name.split(" ")[0] }); }}
-                      style={{ height: 30, padding: "0 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
-                    >
-                      Bilan ›
-                    </button>
-                  )}
                   {!isPending && (
                     <span style={{ color: "rgba(255,255,255,.45)", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
                   )}
@@ -411,9 +401,6 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       </div>
       </CoachPageBg>
 
-      {bilanFor && (
-        <BilanCarousel userId={bilanFor.athleteId} kind="all" anchor={initialDate} today={initialDate} source="coach" subject={bilanFor} onClose={() => setBilanFor(null)} />
-      )}
       {showInvite && (
         <InviteModal
           onClose={() => setShowInvite(false)}

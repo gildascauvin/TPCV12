@@ -9,6 +9,7 @@ import { validDecision } from "@/lib/autoregDecisionRecord";
 import { useSearchParams, useRouter } from "next/navigation";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
+import posthog from "posthog-js";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -50,6 +51,7 @@ import { computeWellnessBaselineAt, relativeZoneLabel, wellnessSignal, wellnessZ
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
 const WelcomeModal = dynamic(() => import("@/components/onboarding/WelcomeModal"));
 const CoachSessionModal = dynamic(() => import("@/components/coach/CoachSessionModal"));
 const CoachCompleteModal = dynamic(() => import("@/components/coach/CoachCompleteModal"));
@@ -161,6 +163,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     openCoachSession(sess, sessions, name, () => setEditingSession(sess));
   };
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
+  const [bilanFor, setBilanFor] = useState<{ subject: { athleteId: string; name: string }; kind: "week" | "month" | "all"; anchor: string } | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
   const [decisionTick, setDecisionTick] = useState(0);
@@ -477,9 +480,11 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     if (result.ok) {
       const updated: CoachViewSession = { ...completing, done: true, rpe: data.rpe, duration: data.duration };
       setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
+      /* Comme le sportif après sa séance (2026-10-24) : l'écran de résultat s'ouvre tout de suite. */
+      openCoachSession(updated, sessions.map(s => s.id === updated.id ? updated : s), athlete.name.split(" ")[0], () => setEditingSession(updated));
     }
     setCompleting(null);
-  }, [completing, athlete]);
+  }, [completing, athlete, sessions]);
 
   const moveSessionToDate = useCallback(async (session: CoachViewSession, newDate: string) => {
     if (session.date === newDate || !athlete) return;
@@ -818,6 +823,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           if (match) return `${programSportEmoji(match.program.sport)} ${match.program.name} · ${programWeekTag(match)}`;
           return freeLabelsFor(athlete)[mondayIso] || null;
         }}
+        /* Bilan du sportif sélectionné (2026-10-24) : mêmes liens que le calendrier du sportif. */
+        onOpenBilan={athlete?.user_id && !sandboxMode ? (kind, anchor) => {
+          if (!isActive) { setPaywallStep("priming"); return; }
+          posthog.capture("coach_bilan_opened", { from: "planning_calendar", period: kind });
+          setBilanFor({ subject: { athleteId: athlete.id, name: athlete.name.split(" ")[0] }, kind, anchor });
+        } : undefined}
         seamless
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
@@ -1275,6 +1286,9 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
           onSuccess={() => { setPaywallStep("idle"); router.refresh(); }} />
       )}
 
+      {bilanFor && (
+        <BilanCarousel userId={bilanFor.subject.athleteId} kind={bilanFor.kind} anchor={bilanFor.anchor} today={todayStr} source="coach" subject={bilanFor.subject} onClose={() => setBilanFor(null)} />
+      )}
       {completing && athlete && (
         <CoachCompleteModal
           session={{
