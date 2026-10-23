@@ -388,7 +388,7 @@ function NormStreak({ day }: { day: number }) {
 }
 
 /* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). */
-function SessionBlock({ r }: { r: SessionResult }) {
+export function SessionBlock({ r }: { r: SessionResult }) {
   const rows = r.rows;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

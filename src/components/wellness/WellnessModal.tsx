@@ -334,8 +334,11 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     setSaving(true);
     const { base_score, score } = computeWellnessScore(sleep, stress, recovery, motivation_, behaviors);
     await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
-    // Coach prévenu tout de suite si la reco du jour est d'alléger (2026-10-14). Sans effet hors compte lié.
-    fetch("/api/push/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "checkin", date }) }).catch(() => {});
+    /* Reco du matin figée côté serveur (2026-10-23) ; le coach lié est prévenu depuis elle si elle dit
+       d'alléger. Remplace /api/push/event, qui recalculait la reco avec le moteur générique. */
+    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) })
+      .then(r => { if (!r.ok) console.error("[reco du matin]", r.status); })
+      .catch(e => console.error("[reco du matin]", e));
     setSaving(false);
     // Écran de résultat pour tous (2026-10-22) : score, insight, norme ; la comparaison à la nuit s'y ajoute si la montre l'a.
     if (physioReady) invalidatePhysio();

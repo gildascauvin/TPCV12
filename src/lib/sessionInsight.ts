@@ -13,7 +13,9 @@ export interface SessionResult { title: string; sub: string | null; rows: { icon
 
 const ORD = (n: number) => `${n}e`;
 
-export function sessionResult(s: ResultSession, week: WeekSession[]): SessionResult {
+/* `subject` = prénom du sportif : écran côté coach (2026-10-23), à la 3e personne. Le « tu » qui
+   reste désigne le coach quand c'est lui qui a décidé. */
+export function sessionResult(s: ResultSession, week: WeekSession[], subject?: string): SessionResult {
   const planned = s.target_difficulty;
   const gap = planned != null && planned > 0 ? Math.round(s.rpe) - Math.round(planned) : null;
   const how = (g: number) => (Math.abs(g) === 1 ? "Un peu plus " : Math.abs(g) === 2 ? "Modérément plus " : "Beaucoup plus ");
@@ -33,16 +35,21 @@ export function sessionResult(s: ResultSession, week: WeekSession[]): SessionRes
   if (proposed !== undefined && original) {
     const rpe = Math.round(s.rpe);
     const applied = !!d && Math.round(d.applied_difficulty) !== Math.round(d.original_difficulty);
+    const who = subject ?? "Tu";
+    const had = subject ? `${subject} avait` : "Tu avais";
+    // Qui a ajusté : côté coach, « tu » si c'est le coach, sinon le prénom.
+    const adjuster = subject ? (d?.by === "coach" ? "tu as" : `${subject} a`) : "tu as";
+    const kept = subject ? `${who} a gardé sa séance.` : "Tu as gardé ta séance.";
     if (proposed === "low") {
       title = applied
-        ? (rpe - Math.round(d!.applied_difficulty) <= 1 ? "L'ajustement était juste." : "Bien d'avoir allégé : même comme ça, c'était dur.")
-        : (rpe >= Math.round(original) + 1 ? "L'alerte du matin était fondée." : "Tu avais de la marge. Je retiens.");
-      rows.push({ icon: "⬇", text: applied ? "Ce matin, l'app proposait d'alléger, et tu as allégé." : "Ce matin, l'app proposait d'alléger. Tu as gardé ta séance." });
+        ? (rpe - Math.round(d!.applied_difficulty) <= 1 ? (subject && d?.by === "coach" ? "Ton ajustement était juste." : "L'ajustement était juste.") : "Bien d'avoir allégé : même comme ça, c'était dur.")
+        : (rpe >= Math.round(original) + 1 ? "L'alerte du matin était fondée." : `${had} de la marge. Je retiens.`);
+      rows.push({ icon: "⬇", text: applied ? `Ce matin, l'app proposait d'alléger, et ${adjuster} allégé.` : `Ce matin, l'app proposait d'alléger. ${kept}` });
     } else if (proposed === "high") {
       title = applied
-        ? (rpe - Math.round(d!.applied_difficulty) <= 1 ? "Tu avais de quoi pousser." : "Surcharge encaissée, mais dure. La prochaine fois, un cran de moins.")
-        : (rpe <= Math.round(original) - 2 ? "Tu avais de la marge : pousser était possible." : "Séance comme prévu.");
-      rows.push({ icon: "⬆", text: applied ? "Ce matin, l'app proposait de pousser, et tu as poussé." : "Ce matin, l'app proposait de pousser. Tu as gardé ta séance." });
+        ? (rpe - Math.round(d!.applied_difficulty) <= 1 ? `${had} de quoi pousser.` : "Surcharge encaissée, mais dure. La prochaine fois, un cran de moins.")
+        : (rpe <= Math.round(original) - 2 ? `${had} de la marge : pousser était possible.` : "Séance comme prévu.");
+      rows.push({ icon: "⬆", text: applied ? `Ce matin, l'app proposait de pousser, et ${adjuster} poussé.` : `Ce matin, l'app proposait de pousser. ${kept}` });
     } else {
       const g = rpe - Math.round(original);
       if (g >= 2) title = "Plus dure que prévu, je ne l'avais pas vu venir.";
@@ -54,13 +61,15 @@ export function sessionResult(s: ResultSession, week: WeekSession[]): SessionRes
   const others = week.filter(w => w.id !== s.id && w.done && w.rpe != null);
   const hard = others.filter(w => (w.rpe ?? 0) >= 8).length + (s.rpe >= 8 ? 1 : 0);
   if (s.rpe >= 8 && hard >= 2) {
-    rows.push({ icon: "⚡", text: `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain matin, ton check-in en tiendra compte.` });
+    rows.push({ icon: "⚡", text: subject
+      ? `Sa ${ORD(hard)} séance très dure de la semaine : ${subject} enchaîne. Regarde son ressenti demain matin.`
+      : `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain matin, ton check-in en tiendra compte.` });
   } else if (s.duration && others.length > 0) {
     const load = (w: { rpe: number | null; duration: number | null }) => (w.rpe ?? 0) * (w.duration ?? 0);
     const total = load(s) + others.reduce((a, w) => a + load(w), 0);
     const share = total > 0 ? load(s) / total : 0;
     const part = share >= 0.5 ? "plus de la moitié" : share >= 0.4 ? "près de la moitié" : share >= 0.3 ? "presque un tiers" : share >= 0.25 ? "un quart" : null;
-    if (part) rows.push({ icon: "⚡", text: `Elle pèse ${part} de ta charge de la semaine.` });
+    if (part) rows.push({ icon: "⚡", text: `Elle pèse ${part} de ${subject ? "sa" : "ta"} charge de la semaine.` });
   }
   return { title, sub, rows: rows.slice(0, 2) };
 }

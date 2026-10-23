@@ -1,5 +1,6 @@
 "use client";
 import { isEstimated } from "@/lib/watchEstimates";
+import { openCoachSession } from "@/components/coach/CoachResultHost";
 import { proposalPersonal } from "@/lib/autoregPersonal";
 import { markPrimingSource } from "@/lib/primingSource";
 import { openInvite } from "@/components/coach/InviteHost";
@@ -798,6 +799,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
                 onUnlock={() => { markPrimingSource("decision", { athleteName: a.name.split(" ")[0], ifEmpty: true }); setDeck(null); unlock(); }}
                 onDecide={() => { setDeck(null); openEditor(a); }}
+                onEditSession={sess => openCoachSession(sess, sessions, a.name.split(" ")[0], () => { setDeck(null); openEditor(a); })}
                 onAddSession={() => { setDeck(null); openCreator(a); }}
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 programPill={programPillFor(a)}
@@ -936,7 +938,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onSetDifficulty={(session, d) => setSessionDifficulty(a.id, session, d)}
                 onUnlock={() => { markPrimingSource("decision", { athleteName: a.name.split(" ")[0], ifEmpty: true }); unlock(); }}
                 onDecide={() => openEditor(a)}
-                onEditSession={sess => { setReviewAthlete(a); setReviewSession(sess); }}
+                onEditSession={sess => openCoachSession(sess, sessions, a.name.split(" ")[0], () => { setReviewAthlete(a); setReviewSession(sess); })}
                 onAddSession={() => openCreator(a)}
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve((markPrimingSource("decision", { athleteName: a.name.split(" ")[0] }), unlock()))}

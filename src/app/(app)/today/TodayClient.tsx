@@ -41,7 +41,7 @@ import { RestDecisionRing, DoneDecisionRing, decisionRingState } from "@/compone
 import { computeWellnessBaselineAt, wellnessSignal, wellnessZByDate, relativeWellnessByDate, type WellnessBaselineResult } from "@/lib/wellnessBaseline";
 import AlertBox from "@/components/calendar/AlertBox";
 import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
-import { applyAutoregDifficulty, zoneRange, pctToPoints } from "@/lib/autoregulation";
+import { applyAutoregDifficulty } from "@/lib/autoregulation";
 import { learnSignals, personalAdjust, proposalPersonal, type PersonalSignal, type PersonalAdjust } from "@/lib/autoregPersonal";
 import { aggregateFor } from "@/lib/metricCards";
 import type { Profile, WellnessDaily, Session, SubscriptionStatus, ExerciseAttachments, Program } from "@/types";
@@ -462,22 +462,21 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     physio: physioDecisionInputs(physio, selectedDate),
   });
   const decisionColor = decisionCardColor(decision.icon);
-  /* Reco du matin figée (piste 1) : dès que le check-in du jour est fait et les signaux chargés, une
-     fois par séance. Le verdict de fin de séance et le bilan la relisent, que le sportif clique ou non. */
-  const proposalKey = wellnessFilledToday && selectedDate === initialDate && autoregTargetTop && personalSignals !== null
-    && proposalPersonal(autoregTargetTop) === null && !autoregTargetTop.autoreg_proposal ? autoregTargetTop.id : null;
+  /* Reco du matin figée (piste 1) : le check-in l'a déjà demandée au serveur ; secours si la séance a
+     été ajoutée après le check-in, ou si l'appel a échoué. Calcul côté serveur, identique à cette carte. */
+  const proposalKey = wellnessFilledToday && selectedDate === initialDate && autoregTargetTop
+    && !(autoregTargetTop.autoreg_proposal && autoregTargetTop.autoreg_proposal.date === autoregTargetTop.date) ? autoregTargetTop.id : null;
   const proposalSent = useRef<string | null>(null);
   useEffect(() => {
-    if (!proposalKey || sandboxMode || proposalSent.current === proposalKey || !autoregTargetTop) return;
-    proposalSent.current = proposalKey;
-    const sug = decision.suggestion;
-    const planned = autoregTargetTop.target_difficulty ?? 0;
-    const zone = sug ? zoneRange(Math.round(planned + pctToPoints(sug.reco)), sug.dir) : null;
-    const proposal = { proposed: sug?.dir ?? null, reco: sug?.reco ?? null, zoneLow: zone?.zoneLow ?? null, zoneHigh: zone?.zoneHigh ?? null, original_difficulty: planned, personal };
-    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: autoregTargetTop.id, proposal }) })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(j => { if (j?.proposal) setAllSessions(prev => prev.map(x => x.id === autoregTargetTop.id ? { ...x, autoreg_proposal: j.proposal } : x)); })
-      .catch(e => console.error("[autoreg] reco du matin", e));
+    if (!proposalKey || sandboxMode || proposalSent.current === proposalKey) return;
+    const t = setTimeout(() => {
+      proposalSent.current = proposalKey;
+      fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: initialDate }) })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(j => { if (j?.proposal && j.sessionId) setAllSessions(prev => prev.map(x => x.id === j.sessionId ? { ...x, autoreg_proposal: j.proposal } : x)); })
+        .catch(e => console.error("[autoreg] reco du matin", e));
+    }, 1500);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalKey]);
   /* Freemium (2026-09-30) : 1re vraie décision (check-in fait + séance à ajuster, sur le jour réel)

@@ -1,6 +1,7 @@
 "use client";
 
 import type { EstimatedSession } from "@/lib/watchEstimates";
+import { openCoachSession } from "@/components/coach/CoachResultHost";
 import { proposalPersonal } from "@/lib/autoregPersonal";
 import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -153,6 +154,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
   const [monthWellnessMap, setMonthWellnessMap] = useState<Record<string, Record<string, number>>>({});
   const [addingDate, setAddingDate] = useState<string | null>(null);
   const [editingSession, setEditingSession] = useState<CoachViewSession | null>(null);
+  /* Séance faite d'un sportif : l'écran de résultat d'abord (verdict, ressenti vs prévu), l'éditeur
+     derrière « Modifier la séance » (2026-10-23). */
+  const openSessionOrResult = (sess: CoachViewSession) => {
+    const name = athletes.find(x => x.id === sess.athlete_id)?.name?.split(" ")[0] ?? "Ton sportif";
+    openCoachSession(sess, sessions, name, () => setEditingSession(sess));
+  };
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
   const [showReconduire, setShowReconduire] = useState(false);
@@ -950,7 +957,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                             return (
                               <div
                                 key={s.id}
-                                onClick={e => { e.stopPropagation(); setEditingSession(s); }}
+                                onClick={e => { e.stopPropagation(); openSessionOrResult(s); }}
                                 style={{ background: "#f7f8f9", borderRadius: 8, padding: "4px 6px", marginBottom: 3, cursor: "pointer" }}
                               >
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4, marginBottom: 3 }}>
@@ -1156,7 +1163,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     session={s}
                     viewerRole="coach"
                     onComplete={(sess) => setCompleting(sess)}
-                    onEdit={(sess) => setEditingSession(sess)}
+                    onEdit={(sess) => openSessionOrResult(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                   />
@@ -1166,7 +1173,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 emptyPerspective="coach"
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 onComplete={(s) => setCompleting(s)}
-                onEdit={(s) => setEditingSession(s)}
+                onEdit={(s) => openSessionOrResult(s)}
                 onWellness={() => {}}
               />
               </DroppableDay>

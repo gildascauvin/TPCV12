@@ -1,0 +1,71 @@
+"use client";
+
+/* Écran de résultat côté coach (2026-10-23) : toucher une séance faite d'un sportif (Coach Control,
+   Planning) ouvre le même écran que le sportif voit en fin de séance, à la 3e personne : le verdict
+   de la reco du matin (« L'alerte du matin était fondée », « Ton ajustement était juste »…),
+   ressenti vs prévu, sa place dans la semaine. Sans les données de la montre : le coach n'y a pas
+   accès (health_* propriétaire seul). « Modifier la séance » ouvre l'éditeur d'avant. */
+
+import { useEffect, useState } from "react";
+import posthog from "posthog-js";
+import { SessionBlock } from "@/components/physio/PhysioRevealHost";
+import { sessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
+import { RADIUS } from "@/lib/theme";
+
+export const COACH_RESULT = "tpc-coach-result";
+export type CoachResultDetail = { session: ResultSession; week: WeekSession[]; subject: string; onEdit?: () => void };
+
+export function requestCoachResult(detail: CoachResultDetail) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(COACH_RESULT, { detail }));
+}
+
+/* Séance faite et notée → écran de résultat ; sinon l'action d'origine (éditeur). */
+export function openCoachSession<S extends { id: string; date: string; done: boolean; rpe: number | null; duration: number | null; target_difficulty: number | null; name?: string | null; athlete_id?: string }>(
+  s: S, all: S[], subject: string, onEdit: () => void,
+) {
+  if (!s.done || s.rpe == null) { onEdit(); return; }
+  const d = new Date(s.date + "T12:00:00");
+  const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const iso = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const week = all.filter(x => (x.athlete_id ?? null) === (s.athlete_id ?? null) && x.date >= iso(monday) && x.date <= iso(sunday))
+    .map(x => ({ id: x.id, date: x.date, rpe: x.rpe, duration: x.duration, done: x.done }));
+  requestCoachResult({ session: { ...(s as unknown as ResultSession), rpe: s.rpe }, week, subject, onEdit });
+}
+
+export default function CoachResultHost() {
+  const [shown, setShown] = useState<CoachResultDetail | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const detail = (e as CustomEvent<CoachResultDetail>).detail;
+      setShown(detail);
+      const r = sessionResult(detail.session, detail.week, detail.subject);
+      posthog.capture("coach_session_result_shown", { rows: r.rows.length, verdict: !!(detail.session.autoreg_proposal || detail.session.autoreg_decision) });
+    };
+    window.addEventListener(COACH_RESULT, on);
+    return () => window.removeEventListener(COACH_RESULT, on);
+  }, []);
+  if (!shown) return null;
+  const r = sessionResult(shown.session, shown.week, shown.subject);
+  const close = () => setShown(null);
+  const btn: React.CSSProperties = { height: 46, borderRadius: RADIUS.control, fontSize: 14, fontWeight: 800, cursor: "pointer" };
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
+      role="dialog" aria-modal="true" aria-label={`Séance de ${shown.subject}`}
+    >
+      <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+        <div style={{ fontWeight: 800, fontSize: 14, color: "#62686e" }}>{shown.subject}{shown.session.name ? ` · ${shown.session.name}` : ""}</div>
+        <SessionBlock r={r} />
+        <div style={{ display: "grid", gridTemplateColumns: shown.onEdit ? "1fr 1fr" : "1fr", gap: 10 }}>
+          {shown.onEdit && (
+            <button onClick={() => { const fn = shown.onEdit; close(); fn?.(); }} style={{ ...btn, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f" }}>Modifier la séance</button>
+          )}
+          <button onClick={close} style={{ ...btn, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}

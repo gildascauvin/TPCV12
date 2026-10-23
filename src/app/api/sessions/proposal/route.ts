@@ -1,28 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { freezeMorningProposal, notifyCoachesIfLighten } from "@/lib/autoregProposalServer";
 
-/* Fige la reco du matin sur la séance (migration 042, autoregPersonal.ts), que le sportif clique ou
-   non. Écrite une seule fois par jour de séance : un check-in corrigé ensuite ne la réécrit pas
-   (sinon le verdict du soir jugerait une reco que le sportif n'a jamais vue). Sportif seulement :
-   c'est son check-in qui la produit. */
+/* Fige la reco du matin de la séance du jour (migration 042) et prévient le coach si elle dit
+   d'alléger. Appelé juste après le check-in (WellnessModal, partout) et par /today en secours. Le
+   calcul est fait ICI, jamais pris du client : une seule source pour la carte du sportif, celle du
+   coach et la notification. Une seule fois par séance et par jour : un check-in corrigé ensuite ne
+   réécrit pas la reco que le sportif a vue. */
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Non authentifié" }, { status: 401 });
 
-  const { sessionId, proposal } = await req.json();
-  if (typeof sessionId !== "string" || !proposal || typeof proposal !== "object") return Response.json({ error: "Paramètres manquants" }, { status: 400 });
+  const { date } = await req.json().catch(() => ({}));
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ error: "Date invalide" }, { status: 400 });
 
   const admin = createAdminClient();
-  const { data: s, error: readErr } = await admin.from("sessions").select("id, user_id, date, done, autoreg_proposal").eq("id", sessionId).maybeSingle();
-  if (readErr) return Response.json({ error: readErr.message }, { status: 500 });
-  if (!s || s.user_id !== user.id) return Response.json({ error: "Séance introuvable" }, { status: 404 });
-  const existing = s.autoreg_proposal as { date?: string } | null;
-  if (existing && existing.date === s.date) return Response.json({ ok: true, proposal: existing, frozen: true });
-  if (s.done) return Response.json({ ok: true, skipped: "done" });
-
-  const value = { ...proposal, date: s.date, recorded_at: new Date().toISOString() };
-  const { error } = await admin.from("sessions").update({ autoreg_proposal: value }).eq("id", sessionId);
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ ok: true, proposal: value });
+  try {
+    const r = await freezeMorningProposal(admin, user.id, date);
+    if (!r) return Response.json({ ok: true, proposal: null });
+    const sent = r.frozen ? await notifyCoachesIfLighten(admin, user.id, date, r) : 0;
+    return Response.json({ ok: true, sessionId: r.sessionId, proposal: r.proposal, frozen: r.frozen, sent });
+  } catch (e) {
+    console.error("[reco du matin]", e);
+    return Response.json({ error: e instanceof Error ? e.message : "Erreur" }, { status: 500 });
+  }
 }
