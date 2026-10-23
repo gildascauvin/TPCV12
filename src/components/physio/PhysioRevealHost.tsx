@@ -154,7 +154,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
       else { title = "Ton ressenti et ta fréquence cardiaque sont d'accord"; mean = "Séance encaissée comme d'habitude, rien à signaler."; }
       gauge = (
         <TwoMarkGauge
-          eyebrow="Difficulté de la séance"
+          eyebrow={shown.summary ? "Ressenti vs fréquence cardiaque" : "Difficulté de la séance"}
           track="linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)"
           a={{ pos: r.rpe * 10, label: `Ressenti · ${diffWord(r.rpe)}`, color: diffColor(r.rpe) }}
           b={{ pos: r.predicted * 10, label: `Mesuré · ${diffWord(r.predicted)}`, color: "#171b1f" }}
@@ -169,7 +169,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
     gauge = (
       <TwoMarkGauge
-        eyebrow="Ta récupération ce matin"
+        eyebrow={shown.checkin ? "Ressenti vs nuit mesurée" : "Ta récupération ce matin"}
         track="linear-gradient(90deg,#cde2fb,#6da7ec 50%,#184f95)"
         normBand
         a={{ pos: zPos(v.zFeel), label: `Ressenti · ${zShort(v.zFeel)}`, color: "#2a78d6" }}
@@ -179,6 +179,15 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     );
     extra = shown.night;
   }
+
+  /* Check-in (2026-10-23, Gildas : « beaucoup trop d'info ») : score, une phrase, le conseil, et la
+     nuit mesurée en une ligne. Le détail ressenti vs mesuré reste sur la carte Récupération. */
+  const compact = (shown.kind === "wellness" && !!shown.checkin) || (shown.kind === "session" && !!shown.summary);
+  // Séance : le cœur en une ligne, seulement s'il apporte quelque chose (calibrage = rien).
+  // Sous la jauge à 2 points, une phrase seulement quand ressenti et mesure ne disent pas la même chose.
+  const compactNote = shown.kind === "session"
+    ? (shown.result?.kind === "ok" && shown.result.verdict !== "agree" ? mean : null)
+    : (shown.verdict && shown.verdict.kind !== "agree" ? mean : null);
 
   return (
     <div
@@ -198,26 +207,28 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
             <NavArrow dir="next" disabled={nav.idx === nav.keys.length - 1} onClick={() => go(1)} label={nav.kind === "session" ? "Séance suivante" : "Matin suivant"} />
           </div>
         )}
-        {shown.kind === "wellness" && shown.checkin && <CheckinBlock r={shown.checkin} />}
+        {compact && shown.kind === "wellness" && shown.checkin && (
+          <CheckinBlock r={shown.checkin} />
+        )}
         {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} />}
-        {hasPhysio && (
+        {hasPhysio && !compact && (
           <div>
-            {((shown.kind === "wellness" && shown.checkin) || (shown.kind === "session" && shown.summary)) && (
+            {shown.kind === "session" && shown.summary && (
               <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8f94", marginBottom: 6 }}>
-                {shown.kind === "session" ? "Ressenti vs fréquence cardiaque" : "Ressenti vs nuit mesurée"}
+                Ressenti vs fréquence cardiaque
               </div>
             )}
-            <div style={{ fontFamily: "var(--font-display)", fontSize: (shown.kind === "wellness" && shown.checkin) || (shown.kind === "session" && shown.summary) ? 18 : 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: shown.kind === "session" && shown.summary ? 18 : 23, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, textWrap: "balance" }}>{title}</div>
             <div style={{ fontSize: 14, color: "#3d4247", marginTop: 8, lineHeight: 1.45 }}>{mean}</div>
           </div>
         )}
         {gauge && (
           <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             {gauge}
-            {extra && <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>{extra}</div>}
+            {(compact ? compactNote : extra) && <div style={{ fontSize: 13, color: "#62686e", lineHeight: 1.45 }}>{compact ? compactNote : extra}</div>}
           </div>
         )}
-        {hasPhysio && (
+        {hasPhysio && !compact && (
           <div style={{ fontSize: 11.5, color: "#8a8f94", textAlign: "center" }}>
             {shown.kind === "session" ? "Ta note est enregistrée : la comparaison ne la modifie pas." : "Tes réponses sont enregistrées : la comparaison ne les modifie pas."}
           </div>
@@ -338,7 +349,10 @@ function CheckinBlock({ r }: { r: CheckinResult }) {
         <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>Ta récupération ce matin</div>
         <AggregateGauge pos={g.pos} band={g.band} bands={g.bands} size={220} />
       </div>
-      <div style={{ background: "#f4f7fb", color: "#184f95", borderRadius: RADIUS.block, padding: "12px 14px", fontSize: 14.5, fontWeight: 700, lineHeight: 1.4 }}>{r.insight}</div>
+      <div style={{ background: "#f7f8f9", color: "#2b3035", borderRadius: RADIUS.block, padding: "12px 14px", lineHeight: 1.4, fontSize: 14 }}>
+        <div>{r.insight}</div>
+        {r.advice && <div style={{ marginTop: 6 }}>{r.advice}</div>}
+      </div>
       {r.day != null && <NormStreak day={r.day} />}
     </div>
   );
@@ -375,6 +389,7 @@ function NormStreak({ day }: { day: number }) {
 
 /* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). */
 function SessionBlock({ r }: { r: SessionResult }) {
+  const rows = r.rows;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
@@ -382,9 +397,9 @@ function SessionBlock({ r }: { r: SessionResult }) {
         <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, marginTop: 4 }}>{r.title}</div>
         {r.sub && <div style={{ fontSize: 14, color: "#62686e", marginTop: 6 }}>{r.sub}</div>}
       </div>
-      {r.rows.length > 0 && (
+      {rows.length > 0 && (
         <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {r.rows.map(row => (
+          {rows.map(row => (
             <div key={row.text} style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.4, color: "#2b3035" }}>
               <span style={{ width: 18, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{row.icon}</span>
               <span>{row.text}</span>

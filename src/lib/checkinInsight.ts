@@ -28,6 +28,8 @@ export interface CheckinResult {
   /* Numéro du matin tant que la norme se construit (1 à 5), null ensuite. */
   day: number | null;
   insight: string;
+  /* Un conseil hors entraînement sur la question la plus basse du matin (null si tout va bien). */
+  advice: string | null;
 }
 
 /* La question la plus basse, dite comme on la dirait (jamais un libellé d'échelle entre guillemets). */
@@ -38,6 +40,44 @@ function lowPhrase(row: CheckinRow, k: DimensionKey): string {
   if (k === "recovery") return very ? "Tu as de fortes courbatures" : "Tu as des courbatures";
   return very ? "Tu n'as presque pas envie de t'entraîner" : "Ton envie de t'entraîner est basse";
 }
+/* Conseil du jour hors charges (2026-10-23) : une action concrète sur la question la plus basse,
+   jamais sur la séance elle-même (la carte décision s'en charge). Un comportement coché qui touche
+   le sommeil précise le conseil. Rien quand toutes les réponses sont bonnes. */
+const SLEEP_BEHAVIOR_TIP: Record<string, string> = {
+  late_sleep: "Ce soir, vise un coucher avant 23h.",
+  screen_late: "Ce soir, coupe les écrans 30 minutes avant de dormir.",
+  caffeine_late: "Pas de café après 14h aujourd'hui, ta prochaine nuit en dépend.",
+  alcohol: "Bois de l'eau dans la journée et évite l'alcool ce soir.",
+  social_out: "Ce soir, priorise un coucher tôt pour rattraper.",
+};
+const DIMENSION_TIP: Record<DimensionKey, { very: string; low: string }> = {
+  sleep: {
+    very: "Ce soir, couche-toi 30 minutes plus tôt et coupe les écrans avant. Une sieste de 20 minutes en début d'après-midi aide aussi.",
+    low: "Ce soir, vise un coucher à heure fixe et coupe les écrans 30 minutes avant.",
+  },
+  stress: {
+    very: "Prends 5 minutes pour respirer lentement : 4 secondes d'inspiration, 6 d'expiration. Une marche dehors aide aussi.",
+    low: "Glisse une marche de 10 minutes ou quelques respirations lentes dans ta journée.",
+  },
+  recovery: {
+    very: "Bois régulièrement et fais 10 minutes de mobilité douce sur les zones qui tirent.",
+    low: "10 minutes de mobilité ou d'étirements doux ce soir aideront tes muscles.",
+  },
+  motivation: {
+    very: "Fixe-toi un seul objectif simple pour ta séance et prépare tes affaires à l'avance.",
+    low: "Choisis un objectif précis pour ta séance du jour, ça aide à s'y mettre.",
+  },
+};
+function dailyAdvice(row: CheckinRow, k: DimensionKey): string | null {
+  const v = oriented(row, k);
+  if (v > 6) return null;
+  if (k === "sleep") {
+    const hit = (row.behaviors ?? []).find(b => SLEEP_BEHAVIOR_TIP[b]);
+    if (hit) return SLEEP_BEHAVIOR_TIP[hit];
+  }
+  return v <= 3 ? DIMENSION_TIP[k].very : DIMENSION_TIP[k].low;
+}
+
 const POSSESSIVE: Record<DimensionKey, string> = { sleep: "ton sommeil", stress: "ton stress", recovery: "ton état physique", motivation: "ton envie" };
 const NORM_DAYS = 5;
 
@@ -80,7 +120,8 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
   const agg = recoveryAggregate(feel, form)!;
   const zone = agg.band.label;
   const count = prior.filter(h => h.bedtime != null).length + 1;
-  const low = relative ? z! <= -Z_SWC : base < 60;
+  // « Bas » = le score affiché est dans Fatigué : sinon « 42 · Équilibré » côtoyait « sous ta norme ».
+  const low = agg.band.label === AGG_BANDS.recup[0].label;
   const lowest = [...DIMENSION_KEYS].sort((a, c) => oriented(today, a) - oriented(today, c))[0];
 
   const insight = (() => {
@@ -162,7 +203,7 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
       : "Un matin plutôt bon : rien ne te tire vers le bas.";
   })();
 
-  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight };
+  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight, advice: dailyAdvice(today, lowest) };
 }
 
 /* Jauge ouverte du score de récup : la même que l'onglet Récupération (AggregateGauge, mêmes bandes). */

@@ -5204,3 +5204,11 @@ Maquettes validées : https://claude.ai/artifact/GoiHozJU7mGYmyv49LJEMp. Commit 
 - La puce « Ressenti vs physiologie » de la carte Récupération est retirée. Son verdict (nuit, FC repos, VFC face au check-in) s'affiche au-dessus du chart Score seulement quand Score n'a pas de 2e courbe (pas de Body Battery, prop `scoreVerdict`).
 - **Charge** : 2 puces, Charge et Ressenti vs physiologie. La puce « Charge cardiaque » (barres RPE×durée / TRIMP) a été codée puis fusionnée le même jour (Gildas : doublon). Sous le chart ressenti vs FC : `heartFamilyCards()` (PhysioIndexCards.tsx), rapport TRIMP / charge ressentie par type de séance (≥ 3 séances dans 2 types), phrase si écart ≥ 2×, une carte par type (« Cœur ≈ ressenti » / « Cœur N× plus bas », TRIMP moyen).
 - `MetricChart` : 2e série en pointillé (`overlay`), bâtons doubles (`values2`/`color2`), `lineColor`.
+
+## Écrans de résultat allégés + conseil du jour hors charges (2026-10-23, DÉPLOYÉ)
+Retour de Gildas : « beaucoup trop d'info », « ça dit 2 fois la même chose ».
+- **Conseil du jour** (`checkinInsight.ts`, `CheckinResult.advice`, `dailyAdvice()`) : une action hors entraînement sur la question la plus basse (stress = le plus élevé), seulement si elle est ≤ 6 (version « très » ≤ 3). Sommeil précisé par un comportement coché (couché tard, écrans, caféine, alcool, sortie). Jamais sur la séance (rôle de la carte décision).
+- **Fin du check-in** : score, puis un seul bloc gris (`#f7f8f9`, texte `#2b3035`, 14 px, graisse normale, plus de bleu) avec la phrase du jour et le conseil, même style pour les deux. Puis la jauge à 2 points, titrée « Ressenti vs nuit mesurée » ; une phrase sous la jauge seulement en cas de désaccord. Retirés : titres de comparaison, phrase minutes de sommeil / FC repos, « Tes réponses sont enregistrées ».
+- **Fin de séance** : même principe, jauge « Ressenti vs fréquence cardiaque », phrase seulement en désaccord, rien pendant le calibrage.
+- Écrans sans score ni résumé (comparaison seule) inchangés.
+- **Contradiction corrigée** : « sous ta norme », série de matins et « avec ce matin » ne sortent que si le score affiché est dans Fatigué (le score mêle ressenti et Forme ; « 42 · Équilibré » côtoyait « 3e matin sous ta norme »).
