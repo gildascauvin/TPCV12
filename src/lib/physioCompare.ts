@@ -85,6 +85,17 @@ export function heartResults(sessions: PhysioSession[], workouts: PhysioWorkout[
   return out;
 }
 
+/* RPE que la relation apprise sur CE sportif prédit pour un entraînement montre (2026-10-23, séances
+   estimées : watchEstimates.ts). null tant que la famille n'a pas HEART_CALIBRATION séances notées
+   avec FC : l'appelant retombe alors sur la règle générale. */
+export function personalRpeFor(w: PhysioWorkout, sessions: PhysioSession[], workouts: PhysioWorkout[]): number | null {
+  if (w.trimp == null) return null;
+  const family = heartFamily(w.workout_type);
+  const same = pairsOf(sessions, workouts).filter((p) => p.family === family);
+  if (same.length < HEART_CALIBRATION) return null;
+  return predict(same, intensity(w)).predicted;
+}
+
 /* Verdict d'une séance qu'on vient de terminer (avant que l'historique ne la contienne). */
 export function heartResultFor(session: { date: string; duration: number; rpe: number }, history: PhysioSession[], workouts: PhysioWorkout[]): HeartResult | null {
   const w = matchWorkout(session, workouts);

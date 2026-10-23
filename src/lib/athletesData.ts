@@ -1,3 +1,5 @@
+import { withWatchEstimates } from "@/lib/watchEstimates";
+import { dedupeWorkouts } from "@/lib/conseilsData";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CoachAthlete, Session, WellnessDaily, CoachSession } from "@/types";
 import { buildDailyTimeSeries, computeSignature, type AthleteSignature } from "@/lib/fatigueSignature";
@@ -33,7 +35,7 @@ export async function getAthletesSignatures(
   const anchor = new Date(referenceDate + "T12:00:00");
   const since42 = daysAgoStr(CONSEILS_HISTORY_DAYS, anchor);
 
-  const [sessionsRes, wellnessRes, demoSessionsRes] = await Promise.all([
+  const [sessionsRes, wellnessRes, demoSessionsRes, workoutsRes] = await Promise.all([
     realUserIds.length
       ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", since42).lte("date", referenceDate)
       : Promise.resolve({ data: [] as Session[] }),
@@ -43,6 +45,10 @@ export async function getAthletesSignatures(
     demoAthleteIds.length
       ? admin.from("coach_sessions").select("*").in("athlete_id", demoAthleteIds).gte("date", since42).lte("date", referenceDate)
       : Promise.resolve({ data: [] as CoachSession[] }),
+    // Entraînements montre : même charge estimée que le sportif voit (watchEstimates.ts, 2026-10-23).
+    realUserIds.length
+      ? admin.from("health_workouts").select("user_id, platform_id, date, start_at, duration_min, workout_type, trimp").in("user_id", realUserIds).gte("date", since42).lte("date", referenceDate)
+      : Promise.resolve({ data: [] as { user_id: string }[] }),
   ]);
   const allSessions = (sessionsRes.data || []) as Session[];
   const allWellness = (wellnessRes.data || []) as WellnessDaily[];
@@ -86,7 +92,11 @@ export async function getAthletesSignatures(
       continue;
     }
     const myWellness = allWellness.filter(w => w.user_id === a.user_id);
-    const mySessions = allSessions.filter(s => s.user_id === a.user_id);
+    const mySessions = withWatchEstimates(
+      allSessions.filter(s => s.user_id === a.user_id),
+      dedupeWorkouts(((workoutsRes.data ?? []) as { user_id: string }[]).filter(w => w.user_id === a.user_id)),
+      referenceDate,
+    ) as Session[];
     if (myWellness.length === 0) {
       signatures[a.id] = { kind: "no_data" }; baselines[a.id] = null; baselineSeries[a.id] = [];
       continue;

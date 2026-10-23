@@ -2,6 +2,7 @@
 
 import { markPrimingSource } from "@/lib/primingSource";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
+import { withWatchEstimates } from "@/lib/watchEstimates";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono, startLiveSession, openLiveSession, LIVE_SESSION_CHANGED } from "@/lib/liveSession";
@@ -705,7 +706,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
                 wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
                 plannedDifficulty: autoregTarget?.target_difficulty ?? null,
                 baseline, wellnessFilledToday, trendCode, trendInput,
-                sessions: sessionsHistory, anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
+                sessions: withWatchEstimates(sessionsHistory, physio?.workouts, todayStr), anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
                 physio: physioDecisionInputs(physio, todayStr),
               });
               const severityColor = decisionCardColor(decision.icon);

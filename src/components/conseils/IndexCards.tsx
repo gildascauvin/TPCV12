@@ -122,7 +122,10 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const baselineWindow = data.wellnessBaselineSeries.slice(-days);
   /* Même règle que le chart de prod : on ne trace le relatif que si l'historique le permet, sinon
      rien — jamais un score absolu mélangé à une échelle de percentile. */
-  const recoveryRelative = baselineWindow.map(b => (b?.hasEnoughHistory ? b.relativeScore : null));
+  /* Jours avant l'inscription sans check-in : la récupération d'après les mesures importées
+     (measuredRecovery, 2026-10-23). Jamais pour un jour après l'inscription (null côté calcul). */
+  const measuredWindow = (data.measuredRecovery ?? []).slice(-days);
+  const recoveryRelative = baselineWindow.map((b, i) => (b?.hasEnoughHistory ? b.relativeScore : measuredWindow[i] ?? null));
   const dimBadges = dimensionBadgesSeries(data.wellnessBaselineSeries).slice(-1)[0] ?? null;
   /* Montre (Apple Santé, 2026-09-30) : le sommeil mesuré complète le déclaré et la FC au repos entre
      dans le score. Ligne de synthèse sous la carte + sous-jacent "FC repos" dès qu'une FC existe sur
@@ -269,6 +272,18 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         {!example && group === "recup" && lastB?.provisional && (
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
             Norme provisoire · {lastB.historyDays}/12 check-ins
+          </div>
+        )}
+        {/* Données importées de la montre (2026-10-23) : on ne mélange jamais en silence un ressenti et
+            une estimation. */}
+        {!example && group === "charge" && (data.estimatedSessionCount ?? 0) > 0 && (
+          <div style={{ maxWidth: 360, fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.65)" }}>
+            {data.estimatedSessionCount} entraînement{data.estimatedSessionCount > 1 ? "s" : ""} de {perspective === "coach" ? "sa" : "ta"} montre compté{data.estimatedSessionCount > 1 ? "s" : ""} avec une difficulté estimée d&apos;après la fréquence cardiaque. {perspective === "coach" ? "Ses notes de séance les remplacent." : "Note tes séances pour les remplacer."}
+          </div>
+        )}
+        {!example && group === "recup" && (data.measuredRecovery ?? []).some(v => v !== null) && (
+          <div style={{ maxWidth: 360, fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.65)" }}>
+            Avant {perspective === "coach" ? "son" : "ton"} inscription : d&apos;après {perspective === "coach" ? "ses" : "tes"} mesures (nuit, FC au repos, VFC). Le score du jour attend {perspective === "coach" ? "son" : "ton"} check-in.
           </div>
         )}
         {!example && group === "charge" && data.loadInfo.label === "HISTORIQUE INSUFFISANT" && (

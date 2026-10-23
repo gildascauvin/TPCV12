@@ -56,6 +56,8 @@ import { isOffline, notifyQueued, updateOwnSession } from "@/lib/offlineSessions
 import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
+import { withWatchEstimates } from "@/lib/watchEstimates";
+import WatchPrompt from "@/components/conseils/WatchPrompt";
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 import HomeSheet from "@/components/today/HomeSheet";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
@@ -425,7 +427,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     wellnessFilledToday,
     trendCode,
     trendInput,
-    sessions: allSessions,
+    /* + entraînements montre non notés, difficulté estimée (watchEstimates.ts, 2026-10-23). */
+    sessions: withWatchEstimates(allSessions, physio?.workouts, format(new Date(), "yyyy-MM-dd")),
     anchor: trendAnchor,
     perspective: "athlete",
     behaviorTip,
@@ -1046,13 +1049,13 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
             <>
               {homeTab === "charge" && (chargeReady
                 ? <ChargeSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
-                : <AnalyticsCollecting data={analyticsData} group="charge" />)}
+                : <>{!sandboxMode && <WatchPrompt userId={userId} physio={physio} />}<AnalyticsCollecting data={analyticsData} group="charge" /></>)}
               {/* Comportements n'est plus un onglet (2026-09-29) : c'est un déterminant de la
                  récupération, il devient donc le dernier item de ce rapport-là. */}
               {homeTab === "recuperation" && <>
                 {recupReady
                   ? <RecuperationSection data={analyticsData} rangeMode={rangeMode} onRangeModeChange={setRangeMode} lockedHistory={historyLocked ? { onUnlock: unlock } : null} physio={physio} />
-                  : <AnalyticsCollecting data={analyticsData} group="recup" />}
+                  : <>{!sandboxMode && <WatchPrompt userId={userId} physio={physio} />}<AnalyticsCollecting data={analyticsData} group="recup" /></>}
               </>}
             </>
           ) : (

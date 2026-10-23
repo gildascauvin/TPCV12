@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 
+import { withWatchEstimates } from "@/lib/watchEstimates";
+import { dedupeWorkouts } from "@/lib/conseilsData";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -59,7 +61,7 @@ export default async function CoachPage() {
      seulement envers realUserIds/allAthleteIds/sinceHistory, déjà connus ici. Étaient dans 2
      Promise.all séparés l'un après l'autre (2 aller-retours en série) ; fusionnés en un seul
      (2026-09-18). */
-  const [liveWellnessRes, realSessionsRes, demoSessionsRes, historySessionsRes, historyWellnessRes, assignByAthleteRes, assignByUserRes] = await Promise.all([
+  const [liveWellnessRes, realSessionsRes, demoSessionsRes, historySessionsRes, historyWellnessRes, assignByAthleteRes, assignByUserRes, workoutsRes] = await Promise.all([
     realUserIds.length
       ? admin.from("wellness_daily").select("user_id, score, base_score, behaviors").in("user_id", realUserIds).eq("date", today)
       : Promise.resolve({ data: [] as { user_id: string; score: number | null; base_score: number | null; behaviors: string[] | null }[] }),
@@ -83,6 +85,11 @@ export default async function CoachPage() {
     realUserIds.length
       ? admin.from("program_assignments").select("athlete_id, user_id, start_date, acclimatation, programs(*)").eq("status", "active").in("user_id", realUserIds)
       : Promise.resolve({ data: [] as AssignRow[] }),
+    /* Entraînements montre (2026-10-23) : la charge du coach compte les mêmes séances estimées que
+       celle du sportif (watchEstimates.ts). Le coach ne lit pas health_* (RLS) : client admin. */
+    realUserIds.length
+      ? admin.from("health_workouts").select("user_id, platform_id, date, start_at, duration_min, workout_type, trimp").in("user_id", realUserIds).gte("date", sinceHistory).lte("date", today)
+      : Promise.resolve({ data: [] as { user_id: string }[] }),
   ]);
 
   const allAssignments = [...((assignByAthleteRes.data ?? []) as unknown as AssignRow[]), ...((assignByUserRes.data ?? []) as unknown as AssignRow[])];
@@ -141,7 +148,8 @@ export default async function CoachPage() {
     const { code, input } = computeWeekOverWeekTrend(mySessions, myWellness, new Date(), wellnessZByDate(myWellness, 14));
     trends[a.id] = code;
     trendInputs[a.id] = input;
-    recentSessions[a.id] = mySessions;
+    const myWorkouts = dedupeWorkouts(((workoutsRes.data ?? []) as { user_id: string }[]).filter(w => w.user_id === a.user_id));
+    recentSessions[a.id] = withWatchEstimates(mySessions, myWorkouts, today) as Session[];
     wellnessBaselineHistory[a.user_id] = myWellness;
   }
 

@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Session, WellnessDaily, Profile } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
-import { NEGATIVE_BEHAVIOR_TIPS } from "@/lib/wellness";
+import { NEGATIVE_BEHAVIOR_TIPS, wellnessColor } from "@/lib/wellness";
 import { computeSignature, sigDimInfo, trendDimInfo, buildDailyTimeSeries, chargeCrossInsight, recoveryCrossInsight, daysAgoStr, type DayPoint, type Perspective } from "@/lib/fatigueSignature";
 import { fitnessFatigueTrend, dailyLoad } from "@/lib/trainingLoad";
 import { buildDeviceSeries, type DeviceDay, type HealthRow } from "@/lib/deviceWellness";
-import { computeWellnessBaselineAt, computeWellnessBaselineSeries, sleepZFromDeviceOnly, WELLNESS_BASELINE_WINDOW_DAYS, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
+import { withWatchEstimates, isEstimated, type WatchWorkout } from "@/lib/watchEstimates";
+import { computeWellnessBaselineAt, computeWellnessBaselineSeries, sleepZFromDeviceOnly, normalCDF, WELLNESS_BASELINE_WINDOW_DAYS, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 
 /* Calcul pur de tout ce qu'affiche /conseils, paramétré par une date de référence — réutilisé par
    la page (SSR, date = aujourd'hui) et par GET /api/conseils?date=... (sélecteur de calendrier,
@@ -202,6 +203,14 @@ export type ConseilsData = {
      sous-charts FC repos et VFC. Lue dans health_daily quand on y a accès (jours sans check-in
      compris), sinon dans les colonnes device_* des check-ins. */
   deviceSeries: DeviceDay[];
+  /* Séances estimées depuis la montre (watchEstimates.ts) comptées dans la fenêtre : la charge les
+     inclut, l'interface le dit (2026-10-23). */
+  estimatedSessionCount: number;
+  /* Récupération D'APRÈS LES MESURES SEULES (nuit, FC au repos, VFC face à leur norme de 28 jours,
+     en percentile comme le score relatif), uniquement pour les jours AVANT l'inscription sans
+     check-in : l'historique importé remplit le chart dès le 1er jour. Après l'inscription, le score
+     du jour exige un check-in (Gildas, 2026-10-23) : null. Même alignement que `timeSeries`. */
+  measuredRecovery: (number | null)[];
   done7Count: number;
   avgRpe: number | null;
   freqTarget: number;
@@ -231,6 +240,9 @@ export async function getConseilsData(
     supabase.from("health_daily").select("date, resting_hr, sleep_minutes, hrv_ms, stress_avg, body_battery_charged, body_battery_drained").eq("user_id", userId).gte("date", sinceHealth).lte("date", referenceDate),
   ]);
   if (healthError) console.error("[health_daily] lecture conseils:", healthError.message);
+  const { data: rawWorkouts, error: workoutsError } = await supabase.from("health_workouts")
+    .select("platform_id, date, start_at, duration_min, workout_type, trimp").eq("user_id", userId).gte("date", since42).lte("date", referenceDate);
+  if (workoutsError) console.error("[health_workouts] lecture conseils:", workoutsError.message);
   const health: HealthRow[] = (rawHealth ?? []).map(h => ({
     date: h.date, sleep_minutes: h.sleep_minutes,
     resting_hr: h.resting_hr == null ? null : Number(h.resting_hr),
@@ -238,7 +250,50 @@ export async function getConseilsData(
     stress_avg: h.stress_avg, body_battery_charged: h.body_battery_charged, body_battery_drained: h.body_battery_drained,
   }));
 
-  return computeConseilsData(referenceDate, rawProfile as Profile | null, (rawSessions || []) as Session[], (rawWellness || []) as WellnessDaily[], "athlete", health);
+  const sessions = withWatchEstimates((rawSessions || []) as Session[], dedupeWorkouts(rawWorkouts), referenceDate) as Session[];
+  return computeConseilsData(referenceDate, rawProfile as Profile | null, sessions, (rawWellness || []) as WellnessDaily[], "athlete", health);
+}
+
+/* Un même entraînement peut arriver deux fois (Garmin écrit aussi dans Apple Santé) : un par début. */
+export function dedupeWorkouts(rows: unknown[] | null | undefined): WatchWorkout[] {
+  const byStart = new Map<string, WatchWorkout>();
+  (rows ?? []).forEach(r => {
+    const w = r as { platform_id?: string | null; date: string; start_at: string; duration_min: number | string; workout_type: string | null; trimp: number | string | null };
+    const row: WatchWorkout = { platform_id: w.platform_id ?? null, date: w.date, start_at: w.start_at, duration_min: Number(w.duration_min), workout_type: w.workout_type ?? "", trimp: w.trimp == null ? null : Number(w.trimp) };
+    const prev = byStart.get(w.start_at);
+    if (!prev || (prev.trimp == null && row.trimp != null)) byStart.set(w.start_at, row);
+  });
+  return Array.from(byStart.values());
+}
+
+/* Percentile d'un jour d'après les mesures seules (voir `measuredRecovery`). z de chaque mesure face à
+   ses 28 jours précédents (≥ 5 jours, écart-type plancher), FC au repos inversée, moyenne des z
+   disponibles, puis Φ(z) × 100 borné 5-95 : même échelle que le score relatif du ressenti. */
+function measuredRecoverySeries(dates: string[], health: HealthRow[] | null | undefined, checkinDates: Set<string>, before: string | null): (number | null)[] {
+  if (!health?.length || !before) return dates.map(() => null);
+  const sorted = [...health].sort((a, b) => a.date.localeCompare(b.date));
+  const z = (date: string, pick: (h: HealthRow) => number | null, floor: (mean: number) => number, invert: boolean): number | null => {
+    const today = sorted.find(h => h.date === date);
+    const v = today ? pick(today) : null;
+    if (v == null) return null;
+    const from = daysAgoStr(28, new Date(date + "T12:00:00"));
+    const prior = sorted.filter(h => h.date < date && h.date >= from).map(pick).filter((x): x is number => x != null);
+    if (prior.length < 5) return null;
+    const mean = prior.reduce((a, x) => a + x, 0) / prior.length;
+    const sd = Math.max(floor(mean), Math.sqrt(prior.reduce((a, x) => a + (x - mean) ** 2, 0) / prior.length));
+    return ((v - mean) / sd) * (invert ? -1 : 1);
+  };
+  return dates.map(date => {
+    if (date >= before || checkinDates.has(date)) return null;
+    const zs = [
+      z(date, h => (h.sleep_minutes != null && h.sleep_minutes >= 180 ? h.sleep_minutes : null), () => 30, false),
+      z(date, h => h.resting_hr ?? null, () => 2, true),
+      z(date, h => h.hrv_ms ?? null, m => m * 0.08, false),
+    ].filter((x): x is number => x != null);
+    if (!zs.length) return null;
+    const mz = zs.reduce((a, x) => a + x, 0) / zs.length;
+    return Math.round(Math.max(5, Math.min(95, normalCDF(mz) * 100)));
+  });
 }
 
 /* Extrait de getConseilsData() (2026-08-19, chantier sandbox) — pure, ne dépend plus d'un client
@@ -348,7 +403,22 @@ export function computeConseilsData(
     const from = daysAgoStr(WELLNESS_BASELINE_WINDOW_DAYS, new Date(date + "T12:00:00"));
     d.sleepZ = sleepZFromDeviceOnly(allWellness.filter(w => w.date < date && w.date >= from), d.sleepMin);
   });
-  const recoveryInfo = sigDimInfo("recovery", sig.recovery, perspective, wellnessBaseline);
+  const signupDate = (profile as { created_at?: string | null } | null)?.created_at?.slice(0, 10) ?? null;
+  const measuredRecovery = measuredRecoverySeries(timeSeries.map(p => p.date), health, checkinDates, signupDate);
+  const windowStart = timeSeries[0]?.date ?? referenceDate;
+  const estimatedSessionCount = allSessions.filter(s => isEstimated(s) && s.date >= windowStart && s.date <= referenceDate).length;
+  /* Sans check-in du jour mais avec un historique mesuré (2026-10-23) : le statut suit la dernière
+     valeur mesurée, sur les mêmes bandes que la jauge (42/58), au lieu du repli absolu par défaut qui
+     affichait « Bonne récup » à côté d'une jauge « Équilibré ». */
+  const lastMeasured = [...measuredRecovery].reverse().find(v => v !== null) ?? null;
+  const coachP = perspective === "coach";
+  const recoveryInfo = !wellnessBaseline && !refWellness && lastMeasured !== null
+    ? lastMeasured >= 58
+      ? { label: "FRAIS", color: wellnessColor(lastMeasured), text: coachP ? "D'après ses mesures, sa récupération est au-dessus de sa norme." : "D'après tes mesures, ta récupération est au-dessus de ta norme." }
+      : lastMeasured >= 42
+      ? { label: "ÉQUILIBRÉ", color: wellnessColor(lastMeasured), text: coachP ? "D'après ses mesures, sa récupération est dans sa norme." : "D'après tes mesures, ta récupération est dans ta norme." }
+      : { label: "FATIGUÉ", color: wellnessColor(lastMeasured), text: coachP ? "D'après ses mesures, sa récupération est sous sa norme : éviter d'enchaîner les séances dures." : "D'après tes mesures, ta récupération est sous ta norme : évite d'enchaîner les séances dures." }
+    : sigDimInfo("recovery", sig.recovery, perspective, wellnessBaseline);
   const todayForm = timeSeries[timeSeries.length - 1]?.form ?? null;
   const formInfo = todayForm !== null ? sigDimInfo("form", todayForm, perspective) : null;
   const ffTrend = fitnessFatigueTrend(timeSeries);
@@ -386,7 +456,7 @@ export function computeConseilsData(
     referenceDate,
     profile: profile ? { name: profile.name, sport: profile.sport, objective: profile.objective } : null,
     sig, timeSeries, maxLoad, maxMonotony, loadInfo, monotonyInfo, strainInfo, recoveryInfo, formInfo, fitnessTrendInfo, fatigueTrendInfo, chargeInsight, recoveryInsight, zoneAcwr, zoneLoads, zoneDates, zoneMonotony, zoneStrain,
-    recoveryAlert, wellnessBaseline, wellnessBaselineSeries, deviceSeries, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
+    recoveryAlert, wellnessBaseline, wellnessBaselineSeries, deviceSeries, estimatedSessionCount, measuredRecovery, done7Count: done7Sessions.length, avgRpe, freqTarget, sessionStatus, loadTrend,
     loadAdviceShort, correlations, filledDays, recentBehaviors, allRecentBehaviorKeys,
   };
 }

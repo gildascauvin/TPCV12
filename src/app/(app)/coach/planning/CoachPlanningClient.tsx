@@ -1,5 +1,6 @@
 "use client";
 
+import type { EstimatedSession } from "@/lib/watchEstimates";
 import { markPrimingSource } from "@/lib/primingSource";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { validDecision } from "@/lib/autoregDecisionRecord";
@@ -94,9 +95,12 @@ interface Props {
      /coach et /coach/athletes, pas de calcul séparé). Absent/pas d'entrée pour ce jour = repli
      cold-start automatique, comme partout ailleurs. */
   wellnessBaselineHistory?: Record<string, WellnessDaily[]>;
+  /* Entraînements montre non notés, difficulté estimée (watchEstimates.ts) : pour la charge de la
+     décision seulement, jamais affichés comme séances. Clé = athlete.id. */
+  watchEstimates?: Record<string, EstimatedSession[]>;
 }
 
-export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, firstDecisionOn = null }: Props) {
+export default function CoachPlanningClient({ userId, coachName, athletes, initialSessions, initialWellnessMap, subscriptionStatus, initialDate, sandboxMode = false, wellnessBaselineHistory: initialWellnessBaselineHistory = {}, watchEstimates = {}, firstDecisionOn = null }: Props) {
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1071,7 +1075,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 day: decisionDay,
                 wellnessScore: wellness, plannedDifficulty: autoregTarget?.target_difficulty ?? null,
                 baseline, wellnessFilledToday, trendCode, trendInput,
-                sessions: athleteSessionHistory, anchor: trendAnchor, perspective: "coach",
+                sessions: [...athleteSessionHistory, ...(watchEstimates[athlete.id] ?? [])], anchor: trendAnchor, perspective: "coach",
                 subject: athlete.name.split(" ")[0],
               });
               const severityColor = decisionCardColor(decision.icon);

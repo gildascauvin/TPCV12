@@ -344,6 +344,12 @@ export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach, st
           <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
         </div>
       )}
+      {/* Import de la montre (2026-10-23) : la vraie promesse de l'app pour un sportif équipé. */}
+      {!coach && (
+        <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45, margin: "0 0 16px" }}>
+          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans Apple Santé : tes analyses sont pleines dès l&apos;installation.
+        </p>
+      )}
       <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} />
     </div>
   );

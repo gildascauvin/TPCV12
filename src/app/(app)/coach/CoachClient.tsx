@@ -1,4 +1,5 @@
 "use client";
+import { isEstimated } from "@/lib/watchEstimates";
 import { markPrimingSource } from "@/lib/primingSource";
 import { openInvite } from "@/components/coach/InviteHost";
 import { validDecision } from "@/lib/autoregDecisionRecord";
@@ -708,7 +709,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // relativeWellnessByDate() est le seul point qui calcule ce score, jamais wellness_daily.score brut.
   let headerWellnessMap: Record<string, number | null> = {};
   if (selectedAthleteForRings) {
-    for (const s of recentSessions[selectedAthleteForRings.id] ?? []) {
+    // Les entraînements montre estimés (watchEstimates.ts) servent aux calculs, jamais de point « séance ».
+    for (const s of (recentSessions[selectedAthleteForRings.id] ?? []).filter(x => !isEstimated(x))) {
       let cls: "done-light" | "done-med" | "done-high" | "planned";
       if (s.done) {
         const diff = s.rpe ?? s.target_difficulty ?? 5;

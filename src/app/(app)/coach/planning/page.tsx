@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 
+import { watchEstimatedSessions, type EstimatedSession } from "@/lib/watchEstimates";
+import { dedupeWorkouts } from "@/lib/conseilsData";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
@@ -57,7 +59,8 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
   const requestedWeekEnd = format(addDays(requestedWeekStart, 6), "yyyy-MM-dd");
   const sinceBaseline = format(subDays(requestedWeekStart, 42), "yyyy-MM-dd");
 
-  const [realSessionsRes, coachSessionsRes, wellnessRes, wellnessBaselineRes] = await Promise.all([
+  const todayIso = format(new Date(), "yyyy-MM-dd");
+  const [realSessionsRes, coachSessionsRes, wellnessRes, wellnessBaselineRes, workoutsRes] = await Promise.all([
     realUserIds.length
       ? admin.from("sessions").select("*").in("user_id", realUserIds).gte("date", sinceStr).lte("date", untilStr)
       : Promise.resolve({ data: [] as Session[] }),
@@ -73,7 +76,21 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
     realUserIds.length
       ? admin.from("wellness_daily").select("*").in("user_id", realUserIds).gte("date", sinceBaseline).lte("date", requestedWeekEnd)
       : Promise.resolve({ data: [] as WellnessDaily[] }),
+    // Entraînements montre : charge estimée, la même que le sportif et Coach Control (2026-10-23).
+    realUserIds.length
+      ? admin.from("health_workouts").select("user_id, platform_id, date, start_at, duration_min, workout_type, trimp").in("user_id", realUserIds).gte("date", sinceStr).lte("date", todayIso)
+      : Promise.resolve({ data: [] as { user_id: string }[] }),
   ]);
+  const watchEstimates: Record<string, EstimatedSession[]> = {};
+  for (const a of athletes) {
+    if (!a.user_id) continue;
+    const est = watchEstimatedSessions(
+      ((realSessionsRes.data || []) as Session[]).filter(s => s.user_id === a.user_id),
+      dedupeWorkouts(((workoutsRes.data ?? []) as { user_id: string }[]).filter(w => w.user_id === a.user_id)),
+      todayIso,
+    );
+    if (est.length) watchEstimates[a.id] = est;
+  }
 
   const initialSessions: CoachViewSession[] = [
     ...(realSessionsRes.data || []).map(s => realToView(s as Session, athletes)),
@@ -106,6 +123,7 @@ export default async function CoachPlanningPage({ searchParams }: { searchParams
       subscriptionStatus={profile.subscription_status ?? "free"}
       initialDate={searchParams.date}
       wellnessBaselineHistory={wellnessBaselineHistory}
+      watchEstimates={watchEstimates}
       firstDecisionOn={(profile as { first_decision_on?: string | null }).first_decision_on ?? null}
     />
   );

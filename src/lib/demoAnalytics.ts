@@ -17,7 +17,9 @@ import { partialChargeReady } from "@/lib/trainingLoad";
 export function analyticsReady(data: ConseilsData, group: MetricGroup): boolean {
   return group === "charge"
     ? data.loadInfo.label !== "HISTORIQUE INSUFFISANT" || partialChargeReady(data.timeSeries)
-    : !!data.wellnessBaseline?.hasEnoughHistory || data.wellnessBaselineSeries.some(b => !!b?.hasEnoughHistory);
+    : !!data.wellnessBaseline?.hasEnoughHistory || data.wellnessBaselineSeries.some(b => !!b?.hasEnoughHistory)
+      // Historique importé de la montre (jours avant l'inscription, 2026-10-23) : 5 jours mesurés suffisent.
+      || (data.measuredRecovery ?? []).filter(v => v !== null).length >= 5;
 }
 
 export function demoConseilsData(referenceDate: string, perspective: Perspective = "athlete"): ConseilsData {
