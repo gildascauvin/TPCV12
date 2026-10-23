@@ -162,6 +162,12 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const name = athletes.find(x => x.id === sess.athlete_id)?.name?.split(" ")[0] ?? "Ton sportif";
     openCoachSession(sess, sessions, name, () => setEditingSession(sess));
   };
+  /* Bloc difficulté · durée d'une séance faite : l'écran de résultat, « Modifier la séance » rouvre la note. */
+  const completeOrResult = (sess: CoachViewSession) => {
+    if (!sess.done) { setCompleting(sess); return; }
+    const name = athletes.find(x => x.id === sess.athlete_id)?.name?.split(" ")[0] ?? "Ton sportif";
+    openCoachSession(sess, sessions, name, () => setCompleting(sess));
+  };
   const [completing, setCompleting] = useState<CoachViewSession | null>(null);
   const [bilanFor, setBilanFor] = useState<{ subject: { athleteId: string; name: string }; kind: "week" | "month" | "all"; anchor: string } | null>(null);
   const [duplicating, setDuplicating] = useState<CoachViewSession | null>(null);
@@ -1173,7 +1179,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                     key={s.id}
                     session={s}
                     viewerRole="coach"
-                    onComplete={(sess) => setCompleting(sess)}
+                    onComplete={(sess) => completeOrResult(sess)}
                     onEdit={(sess) => openSessionOrResult(sess)}
                     decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
                     previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
@@ -1183,7 +1189,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
                 emptyToday
                 emptyPerspective="coach"
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
-                onComplete={(s) => setCompleting(s)}
+                onComplete={(s) => completeOrResult(s)}
                 onEdit={(s) => openSessionOrResult(s)}
                 onWellness={() => {}}
               />

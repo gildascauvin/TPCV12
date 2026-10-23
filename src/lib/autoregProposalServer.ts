@@ -76,3 +76,24 @@ export async function notifyCoachesIfLighten(admin: SupabaseClient, userId: stri
   }
   return sent;
 }
+
+/* Séance faite sans reco figée (avant le 2026-10-23, ou check-in après la séance) : le moteur
+   générique rejoué ce jour-là, côté serveur, pour l'écran de résultat du coach (qui ne lit pas le
+   check-in du sportif depuis le navigateur). Même calcul que replayProposal (resultContext.ts) côté
+   sportif. Rien n'est écrit. */
+export async function replayProposalServer(admin: SupabaseClient, userId: string, s: { date: string; target_difficulty: number | null }): Promise<AutoregProposal | null> {
+  if (!s.target_difficulty) return null;
+  const [w, d] = await Promise.all([
+    admin.from("wellness_daily").select("date, score, base_score, sleep, stress, recovery, motivation, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline").eq("user_id", userId).gte("date", shift(s.date, -35)).lte("date", s.date),
+    admin.from("sessions").select("date, rpe, duration, done").eq("user_id", userId).eq("done", true).gte("date", shift(s.date, -60)).lt("date", s.date),
+  ]);
+  if (w.error || d.error) throw new Error(w.error?.message ?? d.error?.message);
+  const rows = (w.data ?? []) as { date: string; score: number | null; bedtime: string | null }[];
+  const today = rows.find(r => r.date === s.date);
+  if (!today || today.bedtime == null || today.score == null) return null;
+  const base = computeWellnessBaselineAt(rows.filter(r => r.date < s.date) as never, today as never);
+  const pen = chronicPenaltyFor((d.data ?? []) as { date: string; rpe: number | null; duration: number | null; done: boolean }[], new Date(s.date + "T12:00:00"), "athlete").chronicPenalty;
+  const sug = computeAutoregSuggestion(today.score, s.target_difficulty, base, pen);
+  const zone = sug ? zoneRange(Math.round(s.target_difficulty + pctToPoints(sug.reco)), sug.dir) : null;
+  return { proposed: sug?.dir ?? null, reco: sug?.reco ?? null, zoneLow: zone?.zoneLow ?? null, zoneHigh: zone?.zoneHigh ?? null, original_difficulty: s.target_difficulty, date: s.date };
+}

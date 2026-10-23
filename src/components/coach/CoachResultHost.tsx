@@ -40,6 +40,16 @@ export default function CoachResultHost() {
     const on = (e: Event) => {
       const detail = (e as CustomEvent<CoachResultDetail>).detail;
       setShown(detail);
+      /* Sans décision ni reco figée : la reco rejouée par le serveur, pour que le verdict existe aussi
+         sur les séances d'avant (sportif réel seulement, `_real`). */
+      const ss = detail.session as ResultSession & { _real?: boolean };
+      const fixed = (ss.autoreg_decision && ss.autoreg_decision.date === ss.date) || (ss.autoreg_proposal && ss.autoreg_proposal.date === ss.date);
+      if (!fixed && ss._real !== false) {
+        fetch("/api/coach/session-replay", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: ss.id }) })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => { if (j?.proposal) setShown(cur => cur && cur.session.id === ss.id ? { ...cur, session: { ...cur.session, autoreg_proposal: j.proposal } } : cur); })
+          .catch(err => console.error("[coach] rejeu", err));
+      }
       const r = sessionResult(detail.session, detail.week, detail.subject);
       posthog.capture("coach_session_result_shown", { rows: r.rows.length, verdict: !!(detail.session.autoreg_proposal || detail.session.autoreg_decision) });
     };
