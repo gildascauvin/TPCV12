@@ -1,5 +1,6 @@
 "use client";
 
+import { sessionVerdict, type ResultSession } from "@/lib/sessionInsight";
 import { useState } from "react";
 import { proposalPersonal } from "@/lib/autoregPersonal";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
@@ -327,6 +328,13 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   /* Texte vivant de l'anneau, titre de la carte décision — comme /today (2026-10-12). */
   const [ringHint, setRingHint] = useState<string | null>(null);
   const adjustable = !!topSession && !topSession.done;
+  /* Verdict de la reco du matin (2026-10-24, landing « chaque conseil vérifié ») : même calcul que
+     l'écran de fin de séance du sportif (sessionVerdict), à la 3e personne. Remplace le titre « Dans
+     la zone » de la séance faite ; la ligne dit ce qui était proposé et ce qui a été fait. */
+  const verdict = topSession?.done && topSession.rpe != null && topSession.date
+    ? sessionVerdict({ ...(topSession as unknown as ResultSession), rpe: topSession.rpe }, selfView ? undefined : firstName)
+    : null;
+  const doneDetail = verdict ? [verdict.row?.text, decision.titleDetail].filter(Boolean).join(" ") : decision.titleDetail;
   const effectivePreviewPct = externalPreviewPct !== undefined ? externalPreviewPct : previewPct;
 
   /* Contour statique, pas de point/halo sur cette carte (2026-09, retour de Gildas — retiré, la
@@ -491,7 +499,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
         <AlertBox
           variant="darkColor"
-          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title, adjustable ? undefined : decision.titleDetail) }}
+          alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : (verdict?.title ?? decision.title), adjustable ? undefined : doneDetail) }}
           centered={!!decision.phase}
           actions={adjustable ? (
             /* CTA d'ajustement sous le texte de la reco (portail d'AutoregButtons), puis la Phase. */

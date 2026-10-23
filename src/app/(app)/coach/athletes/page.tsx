@@ -58,11 +58,11 @@ export default async function CoachAthletesPage() {
   // champ de coach_athletes n'est concerné.
   const realUserIds = athletes.map(a => a.user_id).filter((id): id is string => !!id);
   if (realUserIds.length > 0) {
-    const { data: profileRows } = await admin.from("profiles").select("user_id, sexe, poids_kg").in("user_id", realUserIds);
+    const { data: profileRows } = await admin.from("profiles").select("user_id, sexe, poids_kg, autoreg_shift").in("user_id", realUserIds);
     const byUserId = new Map((profileRows || []).map(r => [r.user_id, r]));
     for (const a of athletes) {
       const p = a.user_id ? byUserId.get(a.user_id) : null;
-      if (p) { a.sexe = p.sexe; a.poids_kg = p.poids_kg; }
+      if (p) { a.sexe = p.sexe; a.poids_kg = p.poids_kg; a.autoreg_shift = p.autoreg_shift ?? 0; }
     }
   }
 

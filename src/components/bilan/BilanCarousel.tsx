@@ -16,7 +16,9 @@ type Props = {
   /* Un jour de la période (n'importe lequel) ; pour « depuis le début », la date de fin. */
   anchor: string;
   today: string;
-  source: "home_card" | "date_picker";
+  source: "home_card" | "date_picker" | "coach";
+  /* Coach (2026-10-24) : bilan d'un de ses sportifs, lu via /api/coach/bilan (RLS). */
+  subject?: { athleteId: string; name: string };
   onClose: () => void;
 };
 
@@ -29,6 +31,7 @@ const KICKER: Record<BilanSlide["kind"], string> = {
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
   biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "MES CONSEILS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
+const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI LE PRÉDIT", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS" };
 const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers"]);
 
 const card: React.CSSProperties = { background: "rgba(255,255,255,0.06)", borderRadius: 18, padding: 16, display: "flex", flexDirection: "column", gap: 10 };
@@ -67,23 +70,32 @@ function Rows({ rows, color }: { rows: { label: string; part: number; total: num
 }
 
 type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (shift: number) => void; keep: () => void };
-function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal }) {
+/* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne et l'app
+   parle d'elle-même (« l'app », jamais « je »). Le recalage reste au sportif : le coach voit l'état. */
+function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string }) {
+  const T = <A, B>(you: A, them: B): A | B => (n ? them : you);
   switch (s.kind) {
     case "conseils": {
       const lowWide = s.low.harder / s.low.total < 0.35;
       const seg = (a: number, b: number, t: number) => [`${(a / t) * 100}%`, `${(b / t) * 100}%`, `${((t - a - b) / t) * 100}%`];
       const [n1, n2, n3] = seg(s.none.same, s.none.harder, s.none.total);
       return (<>
-        <h2 style={h2}>{lowWide ? <>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que je ne le pensais.</span></> : <>Mes alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
+        <h2 style={h2}>{lowWide ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que je ne le pensais.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que l'app ne le pensait.</span></>) : T(<>Mes alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>, <>Les alertes de l'app <span style={{ color: "#7ee08f" }}>tombent juste.</span></>)}</h2>
         <div style={card}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Quand je ne disais rien</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{T("Quand je ne disais rien", "Quand l'app ne disait rien")}</div>
           <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: n1, background: "#2f9e44" }} /><div style={{ width: n2, background: "#f28a00" }} /><div style={{ width: n3, background: "rgba(255,255,255,0.25)" }} /></div>
           <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}.</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Quand je disais d'alléger</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>{T("Quand je disais d'alléger", "Quand l'app disait d'alléger")}</div>
           <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.low.harder / s.low.total) * 100}%`, background: "#f28a00" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
-          <div style={small}>Plus dure que prévu {s.low.harder} fois sur {s.low.total}.{lowWide ? ` Les ${s.low.total - s.low.harder} autres fois, tu avais de la marge.` : ""}</div>
+          <div style={small}>Plus dure que prévu {s.low.harder} fois sur {s.low.total}.{lowWide ? ` Les ${s.low.total - s.low.harder} autres fois, ${T("tu avais", `${n} avait`)} de la marge.` : ""}</div>
         </div>
-        {s.recal && recal.state !== "kept" && (
+        {n && (s.currentShift > 0 || s.recal) && (
+          <div style={{ ...card, gap: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{s.currentShift > 0 ? "Seuil recalé" : "Recalage proposé"}</div>
+            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{s.currentShift > 0 ? `${n} a choisi de se recaler : l'app lui propose d'alléger moins souvent, et seulement quand ça compte.` : `Une récup un peu sous sa norme ne pèse presque pas sur ses séances. L'app propose à ${n} d'attendre un signal plus net avant d'alléger. C'est ${n} qui décide.`}</div>
+          </div>
+        )}
+        {!n && s.recal && recal.state !== "kept" && (
           <div style={{ ...card, gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{recal.state === "done" ? "C'est fait" : "Ce que je te propose"}</div>
             <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done" ? "Je te dirai d'alléger moins souvent, et seulement quand ça compte. Ton bilan mesurera si c'était le bon réglage." : "Une récup un peu sous ta norme ne pèse presque pas sur tes séances. J'attends un signal plus net avant de te dire d'alléger."}</div>
@@ -101,12 +113,12 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
     }
     case "suivre": {
       const diff = s.followed.felt - s.ignored.felt;
-      const bars = [{ label: `Tu as allégé (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `Tu as gardé ta séance (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
+      const bars = [{ label: `${T("Tu as allégé", "Allégé")} (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `${T("Tu as gardé ta séance", "Séance gardée")} (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
       return (<>
-        <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>ton lendemain est le même.</span></> : diff > 0 ? <>Quand tu allèges, <span style={{ color: "#c79bf7" }}>ton lendemain est meilleur.</span></> : <>Garder ta séance <span style={{ color: "#c79bf7" }}>ne t'a rien coûté.</span></>}</h2>
-        <div style={card}><div style={small}>Les jours où je proposais d'alléger · ta forme ressentie le lendemain</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
-        <p style={body}>{Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. Ton bilan « Mes conseils » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : je peux alléger moins souvent."}</p>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>Plus tard : ta progression aux tests, les semaines où tu suis et celles où tu ne suis pas.</div>
+        <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est le même.</span></> : diff > 0 ? <>{T("Quand tu allèges,", `Quand ${n} allège,`)} <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est meilleur.</span></> : <>{T("Garder ta séance", "Garder sa séance")} <span style={{ color: "#c79bf7" }}>{T("ne t'a rien coûté.", `n'a rien coûté à ${n}.`)}</span></>}</h2>
+        <div style={card}><div style={small}>{T("Les jours où je proposais d'alléger · ta forme ressentie le lendemain", "Les jours où l'app proposait d'alléger · sa forme ressentie le lendemain")}</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
+        <p style={body}>{n ? (Math.abs(diff) < 5 ? `Garder sa séance ces jours-là n'a rien coûté à ${n}.${s.shifted ? " C'est pour ça que son seuil a été relevé." : ""}` : diff > 0 ? `Suivre l'ajustement fait arriver ${n} plus frais le lendemain.` : `${n} encaisse ces séances : l'app peut alléger moins souvent.`) : Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. Ton bilan « Mes conseils » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : je peux alléger moins souvent."}</p>
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{T("Plus tard : ta progression aux tests, les semaines où tu suis et celles où tu ne suis pas.", "Plus tard : sa progression aux tests, les semaines où l'ajustement est suivi et celles où il ne l'est pas.")}</div>
       </>);
     }
     case "regularite": {
@@ -114,12 +126,12 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
       return (<>
         <h2 style={h2}>{s.sessions} séance{s.sessions > 1 ? "s" : ""}. {s.checkins} check-in{s.checkins > 1 ? "s" : ""}.{s.noGap && <><br /><span style={{ color: "#ff8a5c" }}>Zéro semaine sautée.</span></>}</h2>
         <div style={card}><div style={small}>Charge d'entraînement {bilan.period.kind === "week" ? "par jour" : "par semaine"}</div><Bars bars={s.bars} height={120} /></div>
-        <p style={body}>Ton check-in rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
+        <p style={body}>{T("Ton", "Son")} check-in rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
       </>);
     }
     case "charge":
       return (<>
-        <h2 style={h2}>{s.pctInZone >= 70 ? <>Tu t'entraînes dur, <span style={{ color: "#7ee08f" }}>sans t'enterrer.</span></> : <>Ta charge est sortie de ta zone <span style={{ color: "#ffb347" }}>{100 - s.pctInZone} % du temps.</span></>}</h2>
+        <h2 style={h2}>{s.pctInZone >= 70 ? T(<>Tu t'entraînes dur, <span style={{ color: "#7ee08f" }}>sans t'enterrer.</span></>, <>{n} s'entraîne dur, <span style={{ color: "#7ee08f" }}>sans s'enterrer.</span></>) : <>{T("Ta charge est sortie de ta zone", "Sa charge est sortie de sa zone")} <span style={{ color: "#ffb347" }}>{100 - s.pctInZone} % du temps.</span></>}</h2>
         <div style={{ position: "relative", width: 220, height: 220, alignSelf: "center" }}>
           <svg width="220" height="220" viewBox="0 0 220 220" role="img" aria-label={`${s.pctInZone} % des jours dans la zone de charge`}>
             <circle cx="110" cy="110" r="88" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="20" />
@@ -127,23 +139,23 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
           </svg>
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}><b style={{ fontSize: 48, lineHeight: 1, color: "#fff" }}>{s.pctInZone} %</b><span style={small}>des jours en zone</span></div>
         </div>
-        <p style={body}>Ta charge des 7 derniers jours est restée dans ta zone optimale {s.pctInZone} % du temps{s.daysHigh ? `, et ${s.daysHigh} jour${s.daysHigh > 1 ? "s" : ""} au-dessus de la zone de risque.` : ", sans jamais passer dans la zone de risque."}</p>
+        <p style={body}>{T("Ta charge des 7 derniers jours est restée dans ta zone optimale", "Sa charge des 7 derniers jours est restée dans sa zone optimale")} {s.pctInZone} % du temps{s.daysHigh ? `, et ${s.daysHigh} jour${s.daysHigh > 1 ? "s" : ""} au-dessus de la zone de risque.` : ", sans jamais passer dans la zone de risque."}</p>
       </>);
     case "ressenti":
       return (<>
-        <h2 style={h2}>Ton ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
-        <div style={card}><div style={small}>Sommeil mesuré, selon ta réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
-        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ta VFC s'est effondrée, ton check-in l'avait vu aussi.` : `Sur les ${s.crashes} matins où ta VFC s'est effondrée, ton check-in l'avait vu ${s.crashesSeen} fois.`}</div></div>}
+        <h2 style={h2}>{T("Ton", "Son")} ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
+        <div style={card}><div style={small}>Sommeil mesuré, selon {T("ta", "sa")} réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
+        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} check-in l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} check-in l'avait vu ${s.crashesSeen} fois.`}</div></div>}
       </>);
     case "predit":
       return (<>
-        <h2 style={h2}>Ce qui rend tes séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>
-        {s.blocks.map((b, i) => <div key={i} style={card}><div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{b.title}</div><Rows rows={b.rows} color="#ff6a2b" /></div>)}
-        <p style={{ ...body, fontSize: 14 }}>Séances ressenties plus dures que ce que tu avais prévu, selon ton check-in du matin.</p>
+        <h2 style={h2}>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>
+        {s.blocks.map((b, i) => <div key={i} style={card}><div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{n ? b.title.replace(/\bton /g, "son ").replace(/\bta /g, "sa ") : b.title}</div><Rows rows={b.rows} color="#ff6a2b" /></div>)}
+        <p style={{ ...body, fontSize: 14 }}>{T("Séances ressenties plus dures que ce que tu avais prévu, selon ton check-in du matin.", "Séances ressenties plus dures que prévu, selon son check-in du matin.")}</p>
       </>);
     case "biais":
       return (<>
-        <h2 style={h2}>Tes séances prévues {s.planned}s, <span style={{ color: "#ffb347" }}>tu les ressens {s.feltWord}s.</span></h2>
+        <h2 style={h2}>{T("Tes", "Ses")} séances prévues {s.planned}s, <span style={{ color: "#ffb347" }}>{T("tu les ressens", `${n} les ressent`)} {s.feltWord}s.</span></h2>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", height: 160 }} role="img" aria-label={`${s.harder} séances sur ${s.total} plus dures que prévu`}>
@@ -162,26 +174,26 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
           <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
           {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>prévues {s.accurate.planned}s, ressenties comme prévu</span></div>}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Conseil : prévois-les un cran plus haut.{s.accurate ? ` Tes séances prévues ${s.accurate.planned}s, elles, tombent juste.` : ""}</p>
+        <p style={{ ...body, fontSize: 14 }}>Conseil : {T("prévois-les", "prévoyez-les")} un cran plus haut.{s.accurate ? ` ${T("Tes", "Ses")} séances prévues ${s.accurate.planned}s, elles, tombent juste.` : ""}</p>
       </>);
     case "fatigue": {
       const bars = [
-        ...(s.hard ? [{ label: "Séance normale", value: s.hard.easy, display: String(round(s.hard.easy)) }, { label: "Séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : [{ label: "Ta norme", value: s.normScore, display: String(round(s.normScore)) }]),
+        ...(s.hard ? [{ label: "Séance normale", value: s.hard.easy, display: String(round(s.hard.easy)) }, { label: "Séance très dure", value: s.hard.hard, display: String(round(s.hard.hard)) }] : [{ label: T("Ta norme", "Sa norme"), value: s.normScore, display: String(round(s.normScore)) }]),
         { label: "Soirée", value: s.nextScore, display: String(round(s.nextScore)), highlight: true },
         ...(s.afterScore !== null ? [{ label: "2 jours après une soirée", value: s.afterScore, display: String(round(s.afterScore)) }] : []),
       ];
       const hardFree = s.hard && Math.abs(s.hard.hard - s.hard.easy) < 5;
       const back = s.afterScore !== null && s.normScore - s.afterScore < 5;
       return (<>
-        <h2 style={h2}>{hardFree ? <>Une séance très dure ne te coûte rien le lendemain. <span style={{ color: "#c79bf7" }}>Une soirée, si.</span></> : <>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span></>}</h2>
-        <div style={card}><div style={small}>Ta forme ressentie le lendemain de…, sur 100</div><Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues /></div>
-        <p style={body}>{s.hrv ? `Le lendemain d'une soirée (alcool ou sortie), ta VFC tombe de ${round(s.hrv.norm)} à ${round(s.hrv.next)} ms. ` : `Mesuré sur ${s.soirees} soirées (alcool ou sortie). `}{back ? "Le surlendemain, tout est revenu dans ta norme." : ""}</p>
+        <h2 style={h2}>{hardFree ? <>Une séance très dure ne {T("te", "lui")} coûte rien le lendemain. <span style={{ color: "#c79bf7" }}>Une soirée, si.</span></> : <>Une soirée (alcool ou sortie) <span style={{ color: "#c79bf7" }}>se paie le lendemain.</span></>}</h2>
+        <div style={card}><div style={small}>{T("Ta", "Sa")} forme ressentie le lendemain de…, sur 100</div><Bars bars={bars} height={110} color="#a855f7" dim="rgba(199,155,247,0.35)" showValues /></div>
+        <p style={body}>{s.hrv ? `Le lendemain d'une soirée (alcool ou sortie), ${T("ta", "sa")} VFC tombe de ${round(s.hrv.norm)} à ${round(s.hrv.next)} ms. ` : `Mesuré sur ${s.soirees} soirées (alcool ou sortie). `}{back ? `Le surlendemain, tout est revenu dans ${T("ta", "sa")} norme.` : ""}</p>
       </>);
     }
     case "leviers": {
       const top = s.rows[0];
       return (<>
-        <h2 style={h2}>{top.positive ? <>{top.label} <span style={{ color: "#7ee08f" }}>{s.unit === "sleep" ? `te rend ${top.delta.replace("+", "")} de nuit.` : `te fait gagner ${top.delta.replace("+", "")} de forme.`}</span></> : <>{top.label} <span style={{ color: "#ffb347" }}>{s.unit === "sleep" ? `te coûte ${top.delta.replace("−", "")} de nuit.` : `te coûte ${top.delta.replace("−", "")} de forme.`}</span></>}</h2>
+        <h2 style={h2}>{top.positive ? <>{top.label} <span style={{ color: "#7ee08f" }}>{s.unit === "sleep" ? `${T("te", "lui")} rend ${top.delta.replace("+", "")} de nuit.` : `${T("te", "lui")} fait gagner ${top.delta.replace("+", "")} de forme.`}</span></> : <>{top.label} <span style={{ color: "#ffb347" }}>{s.unit === "sleep" ? `${T("te", "lui")} coûte ${top.delta.replace("−", "")} de nuit.` : `${T("te", "lui")} coûte ${top.delta.replace("−", "")} de forme.`}</span></>}</h2>
         <div style={card}>
           <div style={small}>{s.unit === "sleep" ? "Sommeil mesuré" : "Forme du matin"}, hors soirées (alcool ou sortie)</div>
           {s.rows.map((r, i) => (
@@ -191,16 +203,16 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
             </div>
           ))}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Chacun a ses leviers. Garde ton énergie pour ceux qui marchent chez toi.</p>
+        <p style={{ ...body, fontSize: 14 }}>{T("Chacun a ses leviers. Garde ton énergie pour ceux qui marchent chez toi.", `Chacun a ses leviers. Ceux-là marchent chez ${n}.`)}</p>
       </>);
     }
     case "tendance": {
       const last = s.months[s.months.length - 1];
       return (<>
-        <h2 style={h2}>{s.direction === "down" ? <>Ta forme baisse. {s.lateNights && <span style={{ color: "#8cc4f5" }}>Tes couchers reculent.</span>}</> : s.direction === "up" ? <>Ta forme <span style={{ color: "#7ee08f" }}>remonte.</span></> : <>Ta forme est <span style={{ color: "#8cc4f5" }}>stable.</span></>}</h2>
+        <h2 style={h2}>{s.direction === "down" ? <>{T("Ta", "Sa")} forme baisse. {s.lateNights && <span style={{ color: "#8cc4f5" }}>{T("Tes", "Ses")} couchers reculent.</span>}</> : s.direction === "up" ? <>{T("Ta", "Sa")} forme <span style={{ color: "#7ee08f" }}>remonte.</span></> : <>{T("Ta", "Sa")} forme est <span style={{ color: "#8cc4f5" }}>stable.</span></>}</h2>
         <div style={card}><div style={small}>Forme moyenne par mois</div><Bars bars={s.months} height={90} color="#6da7ec" dim="rgba(109,167,236,0.45)" showValues /></div>
         {s.lateNights && <div style={card}><div style={small}>Couchers après minuit</div><Bars bars={s.lateNights} height={50} color="#f28a00" dim="rgba(109,167,236,0.45)" showValues /></div>}
-        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : tu tiens ton niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ton meilleur mois.`) + " Le signal est lent : tu ne le sens pas d'un jour à l'autre."; })()}</p>
+        <p style={{ ...body, fontSize: 14 }}>{(() => { const peak = s.months.reduce((a, b) => (b.value > a.value ? b : a)); if (s.direction === "stable") { const vs = s.months.map(m => m.value); return `Entre ${Math.min(...vs)} et ${Math.max(...vs)} chaque mois : ${T("tu tiens ton", `${n} tient son`)} niveau.`; } return (peak !== last ? `Au plus haut en ${peak.label.replace(".", "")} (${peak.display}), ${last.display} en ${last.label.replace(".", "")}.` : `${last.display} en ${last.label.replace(".", "")}, ${T("ton", "son")} meilleur mois.`) + T(" Le signal est lent : tu ne le sens pas d'un jour à l'autre.", " Le signal est lent : il ne se sent pas d'un jour à l'autre."); })()}</p>
       </>);
     }
     case "tests": {
@@ -235,7 +247,8 @@ function SlideBody({ s, bilan, onShare, shared, recal }: { s: BilanSlide; bilan:
   }
 }
 
-export default function BilanCarousel({ userId, kind, anchor, today, source, onClose }: Props) {
+export default function BilanCarousel({ userId, kind, anchor, today, source, subject, onClose }: Props) {
+  const n = subject?.name;
   const [bilan, setBilan] = useState<Bilan | null>(null);
   const [failed, setFailed] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -258,12 +271,19 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
     let alive = true;
     (async () => {
       const supabase = createClient();
-      const [p, s, w, t] = await Promise.all([
+      const load = subject
+        ? fetch(`/api/coach/bilan?athleteId=${encodeURIComponent(subject.athleteId)}&today=${today}`).then(async r => {
+            const j = await r.json().catch(() => ({}));
+            const error = r.ok ? null : { message: (j as { error?: string }).error ?? `HTTP ${r.status}` };
+            return [{ data: j.profile, error }, { data: j.sessions, error: null }, { data: j.checkins, error: null }, { data: j.tests, error: null }] as const;
+          })
+        : Promise.all([
         supabase.from("profiles").select("created_at, autoreg_shift").eq("user_id", userId).maybeSingle(),
         supabase.from("sessions").select("date,name,notes,rpe,target_difficulty,duration,done,created_at,autoreg_decision,autoreg_proposal").eq("user_id", userId).eq("done", true).lte("date", today),
         supabase.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,base_score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,device_resting_hr,device_rhr_baseline,device_hrv_baseline,created_at").eq("user_id", userId).lte("date", today),
         supabase.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", userId),
       ]);
+      const [p, s, w, t] = await load;
       if (!alive) return;
       const err = p.error || s.error || w.error || t.error;
       if (err) { console.error("[bilan] lecture", err.message); setFailed(true); return; }
@@ -276,11 +296,13 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
         .filter(r => r.name);
       const period = periodFor(kind, anchor, firstDate);
       const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: (p.data?.autoreg_shift as number | undefined) ?? 0 });
+      // Le coach ne partage pas la carte du sportif à sa place.
+      if (subject) b.slides = b.slides.filter(x => x.kind !== "partage");
       setBilan(b);
       posthog.capture("bilan_opened", { period: kind, source, slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(",") });
     })();
     return () => { alive = false; };
-  }, [userId, kind, anchor, today, source]);
+  }, [userId, kind, anchor, today, source, subject]);
 
   const slides = useMemo(() => bilan?.slides ?? [], [bilan]);
   const slide = slides[idx];
@@ -312,7 +334,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
   const last = idx >= slides.length - 1;
   const content = (
     <div
-      role="dialog" aria-modal="true" aria-label="Ton bilan"
+      role="dialog" aria-modal="true" aria-label={n ? `Bilan de ${n}` : "Ton bilan"}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={e => {
         if (touchX.current === null) return;
@@ -330,22 +352,22 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, onC
           {slides.map((_, i) => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= idx ? "#fff" : "rgba(255,255,255,0.22)" }} />)}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.6)" }}>
-          <span>{bilan ? `TON BILAN · ${slide ? KICKER[slide.kind] : ""}` : "TON BILAN"}</span>
+          <span>{bilan ? `${n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"} · ${slide ? (n ? KICKER_COACH[slide.kind] ?? KICKER[slide.kind] : KICKER[slide.kind]) : ""}` : n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"}</span>
           <button onClick={onClose} aria-label="Fermer le bilan" style={{ background: "none", border: 0, color: "#fff", fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4 }}>×</button>
         </div>
-        {bilan && slide && LEARNED.has(slide.kind) && bilan.period.kind !== "all" && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: -8 }}>Appris sur tout ton historique</div>}
+        {bilan && slide && LEARNED.has(slide.kind) && bilan.period.kind !== "all" && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: -8 }}>Appris sur tout {n ? "son" : "ton"} historique</div>}
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, paddingTop: 12 }}>
-          {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>On rassemble tes données…</div>}
-          {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>Impossible de charger ton bilan. Réessaie dans un instant.</div>}
-          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul.</div>}
-          {bilan && slide && <SlideBody s={slide} bilan={bilan} onShare={share} shared={shared} recal={recal} />}
+          {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
+          {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
+          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son check-in et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul."}</div>}
+          {bilan && slide && <SlideBody s={slide} bilan={bilan} onShare={share} shared={shared} recal={recal} n={n} />}
         </div>
 
         {slides.length > 0 && (
           <div style={{ flexShrink: 0, display: "flex", gap: 10 }}>
             {idx > 0 && <button onClick={() => setIdx(i => i - 1)} style={{ flex: 1, height: 52, borderRadius: 14, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Précédent</button>}
-            <button onClick={() => last ? onClose() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 ? "Voir ce que tes données ont appris" : "Suivant"}</button>
+            <button onClick={() => last ? onClose() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 ? (n ? "Voir ce que ses données ont appris" : "Voir ce que tes données ont appris") : "Suivant"}</button>
           </div>
         )}
       </div>

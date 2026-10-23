@@ -95,6 +95,8 @@ export interface CoachAthlete {
   sexe?: "homme" | "femme" | null; // même principe que free_training_label : réel = profiles.sexe (fusionné), cette colonne ne sert que pour les démo
   poids_kg?: number | null; // idem, profiles.poids_kg pour un vrai sportif
   created_at: string;
+  /* Seuil d'alerte recalé par le sportif (profiles.autoreg_shift, bilan « Mes conseils »), relu par /coach/athletes. */
+  autoreg_shift?: number | null;
 }
 
 export interface CoachSession {

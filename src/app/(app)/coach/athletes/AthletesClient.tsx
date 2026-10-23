@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { buildAthleteFixture, buildTestFixture } from "@/lib/sandboxFixtures";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
+import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader from "@/components/calendar/CalendarHeader";
 import CoachPageBg from "@/components/calendar/CoachPageBg";
@@ -26,6 +27,7 @@ const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJo
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
+const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
 import type { AthleteSignature } from "@/lib/fatigueSignature";
 import type { TrendCode } from "@/lib/trainingLoad";
 import { wellnessColor } from "@/lib/wellness";
@@ -127,6 +129,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
   const contentMaxWidth = isLg ? 1000 : isMd ? 720 : 600;
   const [athletes, setAthletes] = useState(initialAthletes);
   const [showInvite, setShowInvite] = useState(false);
+  const [bilanFor, setBilanFor] = useState<{ athleteId: string; name: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [signatures, setSignatures] = useState(initialSignatures);
@@ -355,6 +358,11 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                       {isPending && (
                         <div style={{ fontFamily: "var(--font-mono), monospace", padding: "2px 7px", borderRadius: 999, background: "rgba(242,138,0,.12)", color: "#f28a00", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em" }}>EN ATTENTE</div>
                       )}
+                      {/* Recalage (2026-10-24) : le sportif a relevé son seuil d'alerte depuis son bilan ;
+                         le coach voit moins d'« Alléger » pour lui et doit savoir pourquoi. */}
+                      {(a.autoreg_shift ?? 0) > 0 && (
+                        <div title="Ce sportif a recalé son seuil : l'app lui propose d'alléger moins souvent." style={{ fontFamily: "var(--font-mono), monospace", padding: "2px 7px", borderRadius: 999, background: "rgba(126,224,143,.12)", color: "#7ee08f", fontSize: 9, fontWeight: 700, letterSpacing: "0.08em" }}>SEUIL RECALÉ</div>
+                      )}
                     </div>
                     {isPending && (
                       <div style={{ fontSize: 11, color: "#f28a00", marginTop: 3 }}>{a.invite_email}</div>
@@ -362,6 +370,14 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                   </div>
                   {isMd && !isPending && (
                     <TestBadge summary={test} />
+                  )}
+                  {a.user_id && !sandboxMode && (
+                    <button
+                      onClick={e => { e.stopPropagation(); if (analysisLocked) { setPaywallStep("priming"); return; } posthog.capture("coach_bilan_opened", { from: "athletes" }); setBilanFor({ athleteId: a.id, name: a.name.split(" ")[0] }); }}
+                      style={{ height: 30, padding: "0 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,.18)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                    >
+                      Bilan ›
+                    </button>
                   )}
                   {!isPending && (
                     <span style={{ color: "rgba(255,255,255,.45)", fontSize: 15, flexShrink: 0 }} title="Voir le rapport de performance">›</span>
@@ -395,6 +411,9 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
       </div>
       </CoachPageBg>
 
+      {bilanFor && (
+        <BilanCarousel userId={bilanFor.athleteId} kind="all" anchor={initialDate} today={initialDate} source="coach" subject={bilanFor} onClose={() => setBilanFor(null)} />
+      )}
       {showInvite && (
         <InviteModal
           onClose={() => setShowInvite(false)}

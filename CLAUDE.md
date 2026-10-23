@@ -5253,3 +5253,10 @@ POC : canvas https://claude.ai/artifact/Qx548NQG7ZrWgwQA28DYpp (rangée « Les 3
 - **Non personnalisé (à savoir)** : les aperçus d'onboarding/paywall appellent le moteur générique, volontairement (aucun historique à ce stade).
 - PostHog : `autoreg_recalibrated` {shift}, `autoreg_recalibration_declined`.
 - Testé : 8 cas de verdict en test unitaire ; au robot (compte de test copié des données de Gildas, supprimé ensuite) : reco figée en base avec le malus stress/force, « Appris sur toi » affiché, pas de réécriture au 2e passage, écrans « Mes conseils »/« Suivre ou pas », « Me recaler » → `autoreg_shift = 15` en base.
+
+## Côté coach : verdict de séance, bilan du sportif, seuil recalé (2026-10-24)
+
+Pour la section landing coach « De la prog au bilan. Et chaque conseil vérifié » (POC https://claude.ai/artifact/6hpkjmcgdJcV4sbj24hfc5).
+- **Verdict** : `sessionVerdict(s, subject?)` extrait de `sessionResult` (`src/lib/sessionInsight.ts`), mêmes textes que l'écran de résultat coach (`CoachResultHost`, « tu as allégé » si le coach a décidé). `CoachCard` (séance du jour faite) : le titre « Dans la zone » devient le verdict, la ligne commence par ce qui était proposé. Pas de rejeu du moteur côté coach : verdict seulement avec une décision cliquée ou une reco figée.
+- **Bilan du sportif** : `BilanCarousel` prop `subject { athleteId, name }` → lecture via `GET /api/coach/bilan` (vérifie le lien coach_athletes, puis client admin), tous les textes en 3e personne (`T(you, them)` dans `SlideBody`, « l'app » au lieu de « je »), écran « partage » retiré, pas de bouton « Me recaler » (le sportif décide ; le coach voit « Seuil recalé » ou « Recalage proposé »). Accès : bouton « Bilan › » sur `/coach/athletes` et « Bilan de {prénom} › » sous la carte pleine page de Coach Control. Compte coach gratuit : ouvre le paywall. PostHog `coach_bilan_opened` {from}, `bilan_opened` source `coach`.
+- **Seuil recalé** : pastille « SEUIL RECALÉ » sur `/coach/athletes` si `profiles.autoreg_shift > 0` (`CoachAthlete.autoreg_shift`).
