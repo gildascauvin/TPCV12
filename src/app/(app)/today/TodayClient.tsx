@@ -57,7 +57,7 @@ import { enqueueOfflineAction, readOfflineQueue } from "@/lib/offlineStore";
 import { computeWellnessScore } from "@/lib/wellness";
 import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/physioData";
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
-import HomeSheet, { sheetBounds } from "@/components/today/HomeSheet";
+import HomeSheet from "@/components/today/HomeSheet";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -257,7 +257,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
-  const [sheetH, setSheetH] = useState(() => sheetBounds(typeof window === "undefined" ? 800 : window.innerHeight).mid);
+  // Repliée par défaut (2026-10-23, Gildas) : nom + jauge de RPE de la séance visibles, la feuille borne à son minimum.
+  const [sheetH, setSheetH] = useState(0);
   const [liveScoreSlot, setLiveScoreSlot] = useState<HTMLDivElement | null>(null);
   const [pageArea, setPageArea] = useState<HTMLDivElement | null>(null);
   /* Haut du score du check-in dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
@@ -268,7 +269,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   useEffect(() => {
     if (!showWellness || isMd) return;
     setHomeTab("today");
-    setSheetH(h => Math.max(h, sheetBounds(window.innerHeight).mid));
+    setSheetH(9999);
   }, [showWellness, isMd]);
   const searchParams = useSearchParams();
   /* Checklist d'onboarding : ?checkin=1 (Renseigne ta forme) ouvre le check-in, ?today=1 (Ajuste et
@@ -773,17 +774,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
   // Score du check-in : aussi grand que la place laissée au-dessus de la feuille.
   const liveScoreSize = Math.max(110, Math.min(230, viewportH - (sheetVisibleH ?? sheetH) - (liveSlotTop ?? 250) - 75));
-  // Check-in fini (ou rangé) : la séance remonte à mi-hauteur.
+  // Check-in fini (ou rangé) : la séance revient repliée.
   const wasEmbedded = useRef(embeddedCheckin);
   useEffect(() => {
-    if (wasEmbedded.current && !embeddedCheckin) setSheetH(sheetBounds(window.innerHeight).mid);
+    if (wasEmbedded.current && !embeddedCheckin) setSheetH(0);
     wasEmbedded.current = embeddedCheckin;
   }, [embeddedCheckin]);
   useEffect(() => {
     if (!embeddedCheckin || !sheetMode || !liveScoreSlot) return;
     const top = liveScoreSlot.getBoundingClientRect().top + window.scrollY;
     setLiveSlotTop(top);
-    setSheetH(Math.max(280, Math.round(viewportH - top - 215)));
+    // Check-in ouvert en grand par défaut (2026-10-23, Gildas) ; replier la feuille découvre le score.
+    setSheetH(9999);
   }, [embeddedCheckin, sheetMode, liveScoreSlot, viewportH]);
 
   const sessionsBlock = (
