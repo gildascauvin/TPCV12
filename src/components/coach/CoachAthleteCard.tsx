@@ -524,6 +524,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               session={s as unknown as Session}
               viewer="coach"
               onEdit={() => (onEditSession ? onEditSession(s) : onDecide())}
+              /* Bloc durée / difficulté d'une séance faite : comme côté sportif, il rouvre l'écran
+                 de résultat (2026-10-24 ; avant, le tap ne faisait rien côté coach). */
+              onComplete={s.done ? () => (onEditSession ? onEditSession(s) : onDecide()) : undefined}
               previewPct={s.id === topSession?.id && !isFutureDate(s.date) ? effectivePreviewPct : null}
               authorName={coachName ?? "Coach"}
               hideGauge={s.id === topSession?.id && adjustable}
@@ -545,7 +548,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       )}
       {!page && programPill && <div style={{ marginTop: 12 }}>{programPill}</div>}
       {!page && topSession && (
-        <div onClick={onDecide} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
+        <div onClick={() => (topSession.done && onEditSession ? onEditSession(topSession) : onDecide())} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
               {topSession.name}
