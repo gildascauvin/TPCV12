@@ -59,6 +59,9 @@ import { usePhysioData, physioDecisionInputs, requestPhysioReplay } from "@/lib/
 import NotificationPrompt from "@/components/notifications/NotificationPrompt";
 import HomeSheet from "@/components/today/HomeSheet";
 const AddSessionModal = dynamic(() => import("@/components/sessions/AddSessionModal"));
+/* Bilan (2026-10-23) : carrousel plein écran, chargé seulement à l'ouverture. */
+const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
+import BilanCard from "@/components/bilan/BilanCard";
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
@@ -133,6 +136,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const unlock = () => setPaywallStep("priming");
 
   const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [bilanOpen, setBilanOpen] = useState<{ kind: "week" | "month" | "all"; anchor: string; source: "home_card" | "date_picker" } | null>(null);
 
   // Onglets Charge/Récupération/Comportements (2026-09-24, "point 1") — même ConseilsData que
   // /conseils ("Performance"), fetchée à la demande (jamais pour un compte qui ne quitte jamais
@@ -882,6 +886,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         selectedDate={selectedDate} onDateChange={handleDateChange} onProfileClick={() => setProfileOpen(true)}
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         /* Programme ou nom de semaine au-dessus de chaque semaine du calendrier (2026-10-04, comme le Planning). */
+        onOpenBilan={sandboxMode ? undefined : (kind, anchor) => setBilanOpen({ kind, anchor, source: "date_picker" })}
+        bilanSince={profile.created_at ? profile.created_at.slice(0, 10) : undefined}
         weekTitleFor={mondayIso => {
           const p = activeProgram?.program;
           const match = activeProgram && p ? findProgramForWeek([{ start_date: activeProgram.start_date, acclimatation: activeProgram.acclimatation, programs: p }], mondayIso) : null;
@@ -889,6 +895,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           return weekLabels[mondayIso] || null;
         }}
       />
+      {bilanOpen && userId && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={initialDate} source={bilanOpen.source} onClose={() => setBilanOpen(null)} />}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
@@ -909,6 +916,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
 
         {homeTab === "today" && (
         <>
+        {!sandboxMode && userId && selectedDate === initialDate && <BilanCard userId={userId} today={initialDate} onOpen={(kind, anchor) => setBilanOpen({ kind, anchor, source: "home_card" })} />}
         {/* Notifications (2026-10-14) : demandées juste après le check-in, avec la promesse du lendemain. */}
         {!sandboxMode && userId && <NotificationPrompt userId={userId} role="athlete" show={wellnessFilledToday && selectedDate === initialDate} />}
         {/* ── Welcome handled by overlay modal below ── */}

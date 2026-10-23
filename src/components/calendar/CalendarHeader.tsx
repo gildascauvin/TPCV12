@@ -72,6 +72,11 @@ interface CalendarHeaderProps {
      icône/pill sombre translucide, pour un header `seamless` posé sur un fond clair. Défaut "dark" =
      comportement inchangé partout ailleurs (headers dark, `/today`/`/week`/`/coach*` avant ce prop). */
   theme?: "dark" | "light";
+  /* Bilan (2026-10-23) : liens « Bilan › » sur chaque semaine passée, « Bilan du mois › » et
+     « Depuis le début › » dans le calendrier popup. Absent = aucun lien (coach, Planning). */
+  onOpenBilan?: (kind: "week" | "month" | "all", anchor: string) => void;
+  /* Premier jour de données réelles du sportif : pas de lien vers une période d'avant. */
+  bilanSince?: string;
 }
 
 function cap(s: string) {
@@ -140,6 +145,8 @@ export default function CalendarHeader({
   weekTitleFor,
   seamless = false,
   theme = "dark",
+  onOpenBilan,
+  bilanSince,
 }: CalendarHeaderProps) {
   const { isMd } = useBreakpoint();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -421,6 +428,16 @@ export default function CalendarHeader({
                 <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#fff" }}>{cap(format(calendarViewDate, "MMMM yyyy", { locale: fr }))}</span>
                 <button onClick={() => setCalendarViewDate(addMonths(calendarViewDate, 1))} className="w-[30px] h-[30px] flex items-center justify-center rounded-[8px] text-white" style={{ background: "#2c2c2e" }}>›</button>
               </div>
+              {onOpenBilan && (() => {
+                const monthStart = format(startOfMonth(calendarViewDate), "yyyy-MM-dd");
+                const monthEnd = format(addDays(addMonths(startOfMonth(calendarViewDate), 1), -1), "yyyy-MM-dd");
+                if (monthStart > today || (bilanSince && monthEnd < bilanSince)) return null;
+                return (
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+                    <button onClick={() => { setCalendarOpen(false); onOpenBilan("month", monthStart); }} style={{ fontSize: 13, fontWeight: 800, color: "#9cc3f2", cursor: "pointer", background: "transparent" }}>Bilan du mois ›</button>
+                  </div>
+                );
+              })()}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>
                 {WEEKDAY_LABELS.map((d, i) => (
                   <div key={i} style={{ textAlign: "center", fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,.4)", padding: "4px 0" }}>{d}</div>
@@ -433,15 +450,21 @@ export default function CalendarHeader({
               {gridWeeks.map((week, gi) => {
                 const mondayIso = format(week[0], "yyyy-MM-dd");
                 const weekLabel = weekTitleFor?.(mondayIso) ?? null;
+                const sundayIso = format(week[6], "yyyy-MM-dd");
+                const weekBilan = !!onOpenBilan && sundayIso < today && (!bilanSince || sundayIso >= bilanSince);
                 return (
                   <div key={gi} style={{ marginBottom: gi < gridWeeks.length - 1 ? 6 : 0 }}>
-                    {weekLabel && (
-                      <div style={{
-                        fontSize: 10, fontWeight: 800, fontFamily: "var(--font-mono), monospace",
-                        color: "rgba(255,255,255,.55)", padding: "2px 4px 3px",
-                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                      }}>
-                        {weekLabel}
+                    {(weekLabel || weekBilan) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px 3px" }}>
+                        <div style={{
+                          flex: 1, minWidth: 0, fontSize: 10, fontWeight: 800, fontFamily: "var(--font-mono), monospace",
+                          color: "rgba(255,255,255,.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        }}>
+                          {weekLabel}
+                        </div>
+                        {weekBilan && (
+                          <button onClick={() => { setCalendarOpen(false); onOpenBilan!("week", mondayIso); }} style={{ flexShrink: 0, fontSize: 11, fontWeight: 800, color: "#9cc3f2", cursor: "pointer", background: "transparent" }}>Bilan ›</button>
+                        )}
                       </div>
                     )}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
@@ -450,8 +473,11 @@ export default function CalendarHeader({
                   </div>
                 );
               })}
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.08)" }}>
+              <div style={{ display: "flex", justifyContent: onOpenBilan ? "space-between" : "center", marginTop: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,.08)" }}>
                 <button onClick={goToday} style={{ fontSize: 14, fontWeight: 800, color: "#ff8a55", cursor: "pointer" }}>Aujourd'hui</button>
+                {onOpenBilan && (
+                  <button onClick={() => { setCalendarOpen(false); onOpenBilan("all", today); }} style={{ fontSize: 14, fontWeight: 800, color: "#9cc3f2", cursor: "pointer", background: "transparent" }}>Depuis le début ›</button>
+                )}
               </div>
             </div>,
             document.body

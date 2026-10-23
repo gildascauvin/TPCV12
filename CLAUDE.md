@@ -5212,3 +5212,15 @@ Retour de Gildas : « beaucoup trop d'info », « ça dit 2 fois la même chose 
 - **Fin de séance** : même principe, jauge « Ressenti vs fréquence cardiaque », phrase seulement en désaccord, rien pendant le calibrage.
 - Écrans sans score ni résumé (comparaison seule) inchangés.
 - **Contradiction corrigée** : « sous ta norme », série de matins et « avec ce matin » ne sortent que si le score affiché est dans Fatigué (le score mêle ressenti et Forme ; « 42 · Équilibré » côtoyait « 3e matin sous ta norme »).
+
+## Bilan en carrousel — semaine, mois, depuis le début (2026-10-23)
+
+POC validé par Gildas : canvas https://claude.ai/artifact/Qx548NQG7ZrWgwQA28DYpp (fusionne les pistes « modèle personnel » et « coût des écarts » dans la piste 8 « Ton bilan » du POC check-in augmenté). Sportif uniquement.
+
+- **`src/lib/bilan.ts`** — calcul pur `computeBilan({ period, today, signupAt, sessions, checkins, tests })`. Un écran par thème, chacun avec son seuil de données ; sous le seuil, l'écran saute (jamais de chiffre creux). Écrans DE LA PÉRIODE : régularité, charge (ACWR via `acwrSeries`, zone 0,8–1,3 = même seuil que `sigDimInfo("load")`), tendance (mois et depuis le début), tests. Écrans APPRIS sur tout l'historique jusqu'à la fin de la période : ressenti vs montre (note de sommeil vs sommeil mesuré, chutes de VFC repérées), ce qui te prédit (par famille sprint/cardio vs force, mots-clés du nom de séance — mélanger les deux dilue tous les signaux), tes biais (type de séance plus dur que prévu ≥ 70 %), ce qui te fatigue (soirée = `alcohol`/`social_out`, séance très dure = RPE ≥ 8), tes leviers (comportement vs sommeil mesuré, hors soirées). La semaine ne garde que 2 écrans appris. Dernier écran = carte à partager (texte via `navigator.share`, sinon copie).
+- **Historique synthétique de l'onboarding exclu** (`isSynthetic`) : ligne datée avant le jour d'inscription ET créée dans la demi-heure qui suit l'inscription. Ne jamais compter ces lignes dans un bilan.
+- **Accès** : `BilanCard.tsx` en haut de l'onglet Aujourd'hui (bilan du mois passé du 1er au 3, sinon de la semaine passée du lundi au mercredi, seulement si ≥ 3 check-ins sur la période, masqué une fois ouvert ou fermé — `localStorage` `tpc_bilan_seen_<kind>_<start>`) ; `CalendarHeader` props `onOpenBilan`/`bilanSince` : « Bilan › » par semaine passée, « Bilan du mois › », « Depuis le début › ». Absent = aucun lien (coach, Planning).
+- **`BilanCarousel.tsx`** (next/dynamic depuis `TodayClient`) : plein écran zIndex modale, segments de progression, swipe/flèches clavier/Échap, footer fixe et contenu qui défile. Lit sessions/wellness/test_results (`subject_user_id`) côté client (RLS propriétaire).
+- **PostHog** : `bilan_card_shown`, `bilan_card_dismissed`, `bilan_opened` {period, source, slides, slide_kinds}, `bilan_slide_viewed` {period, slide, index}, `bilan_shared`.
+- **Wording** (Gildas) : « soirée (alcool ou sortie) », « se paie le lendemain ».
+- Testé au robot (Chromium iPhone 13, compte `cauvingildas+bilantest` créé avec une copie des données de Gildas puis supprimé) : les 3 périodes se parcourent sans erreur console ; chiffres identiques à l'analyse du POC.
