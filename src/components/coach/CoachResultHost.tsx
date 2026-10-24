@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
-import { SessionBlock, loadAccounts, type Accounts } from "@/components/physio/PhysioRevealHost";
+import { SessionBlock, loadAccounts, checkRecalAfter, type Accounts, type RecalNotice } from "@/components/physio/PhysioRevealHost";
 import { sessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
 import { RADIUS } from "@/lib/theme";
 
@@ -38,6 +38,7 @@ export default function CoachResultHost() {
   const [shown, setShown] = useState<CoachResultDetail | null>(null);
   const [accounts, setAccounts] = useState<Accounts | null>(null);
   const currentId = useRef<string | null>(null);
+  const [recal, setRecal] = useState<RecalNotice | null>(null);
   useEffect(() => {
     const on = (e: Event) => {
       const detail = (e as CustomEvent<CoachResultDetail>).detail;
@@ -45,8 +46,13 @@ export default function CoachResultHost() {
       setAccounts(null);
       currentId.current = detail.session.id;
       const athleteId = (detail.session as { athlete_id?: string }).athlete_id;
+      setRecal(null);
       if ((detail.session as { _real?: boolean })._real !== false && athleteId) {
-        loadAccounts({ userId: "", athleteId }).then(a => { if (currentId.current === detail.session.id) setAccounts(a); }).catch(e => console.error("[coach] comptes", e));
+        // Recalage du sportif vérifié aussi quand c'est le coach qui note la séance ; le sportif garde l'annulation.
+        checkRecalAfter(detail.session.id).catch(() => null)
+          .then(rc => { if (currentId.current === detail.session.id) setRecal(rc); return loadAccounts({ userId: "", athleteId }); })
+          .then(a => { if (currentId.current === detail.session.id) setAccounts(a); })
+          .catch(e => console.error("[coach] comptes", e));
       }
       /* Sans décision ni reco figée : la reco rejouée par le serveur, pour que le verdict existe aussi
          sur les séances d'avant (sportif réel seulement, `_real`). */
@@ -87,7 +93,7 @@ export default function CoachResultHost() {
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
         <div style={{ fontWeight: 800, fontSize: 14, color: "#62686e" }}>{shown.subject}{shown.session.name ? ` · ${shown.session.name}` : ""}</div>
-        <SessionBlock r={r} onCorrect={real ? correct : undefined} accounts={accounts} />
+        <SessionBlock r={r} onCorrect={real ? correct : undefined} accounts={accounts} recal={recal} subject={shown.subject} />
         <div style={{ display: "grid", gridTemplateColumns: shown.onEdit ? "1fr 1fr" : "1fr", gap: 10 }}>
           {shown.onEdit && (
             <button onClick={() => { const fn = shown.onEdit; close(); fn?.(); }} style={{ ...btn, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f" }}>Modifier la séance</button>

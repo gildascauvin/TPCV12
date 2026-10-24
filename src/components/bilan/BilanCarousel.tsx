@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
-import { createClient } from "@/lib/supabase/client";
 import { computeBilan, isSynthetic, periodFor, type Bilan, type BilanCheckin, type BilanPeriodKind, type BilanSession, type BilanSlide, type BilanTest } from "@/lib/bilan";
 import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
@@ -102,6 +101,13 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
           </div>
           <VerdictStrip cells={s.strip} onOpen={n ? undefined : id => requestPhysioReplay({ kind: "session", sessionId: id })} />
         </div>
+        {s.trend.length >= 2 && (
+          <div style={card}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Conseils confirmés, mois par mois</div>
+            <Bars bars={s.trend.map((t, i) => ({ label: `${t.label}${t.recal ? " ↻" : ""}`, value: t.rate, display: `${t.rate} %`, highlight: i === s.trend.length - 1 }))} height={90} color="#7ee08f" dim="rgba(126,224,143,0.35)" showValues />
+            {s.trend.some(t => t.recal) && <div style={small}>↻ mois où le seuil a été recalé. Chaque jour est compté avec le seuil en vigueur ce jour-là.</div>}
+          </div>
+        )}
         <div style={card}>
           {s.none.total > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Les jours sans alerte</div>
@@ -133,7 +139,7 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
             <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done"
               ? `Les conseils « ${verb} » seront plus rares, réservés aux signaux nets. Le bilan mesurera si c'était le bon réglage.`
               : r.dir === "high" ? "Quand pousser est conseillé, la séance reste souvent dure. Un signal plus net sera attendu avant de te le proposer." : "Une récup un peu sous ta norme pèse peu sur tes séances. Un signal plus net sera attendu avant de te conseiller d'alléger."}</div>
-            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {r.alertsThen} conseils au lieu de {r.alertsNow}, confirmés {r.justifiedThen} fois au lieu de {r.justifiedNow}.</div>}
+            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {r.rateThen} % de conseils confirmés au lieu de {r.rateNow} %.</div>}
             {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d'enregistrer. Réessaie dans un instant.</div>}
             {(recal.state === "idle" || recal.state === "error" || recal.state === "saving") && (
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
@@ -294,9 +300,10 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
     state: recalState,
     apply: async (dir, shift) => {
       setRecalState("saving");
-      const { data, error } = await createClient().from("profiles").update(dir === "high" ? { autoreg_shift_high: shift } : { autoreg_shift: shift }).eq("user_id", userId).select("user_id");
-      if (error || !data?.length) { console.error("[bilan] recalage", error?.message ?? "aucune ligne"); setRecalState("error"); return; }
-      posthog.capture("autoreg_recalibrated", { shift, dir, period: kind });
+      // Journalisé côté serveur (profiles.autoreg_recal_events), comme le recalage automatique.
+      const r = await fetch("/api/autoreg/recal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apply: { dir, shift } }) }).catch(() => null);
+      if (!r?.ok) { console.error("[bilan] recalage", r?.status); setRecalState("error"); return; }
+      posthog.capture("autoreg_recalibrated", { shift, dir, period: kind, source: "manual" });
       setRecalState("done");
     },
     keep: () => { posthog.capture("autoreg_recalibration_declined", { period: kind }); setRecalState("kept"); },
@@ -319,7 +326,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         .map(r => ({ date: r.date, value: Number(r.value), unit: r.unit, name: (Array.isArray(r.tests) ? r.tests[0]?.name : r.tests?.name) ?? "" }))
         .filter(r => r.name);
       const period = periodFor(kind, anchor, firstDate);
-      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: p.data?.autoreg_shift ?? 0, currentShiftHigh: p.data?.autoreg_shift_high ?? 0 });
+      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: p.data?.autoreg_shift ?? 0, currentShiftHigh: p.data?.autoreg_shift_high ?? 0, recalEvents: p.data?.autoreg_recal_events ?? [] });
       // Le coach ne partage pas la carte du sportif à sa place.
       if (subject) b.slides = b.slides.filter(x => x.kind !== "partage");
       setBilan(b);

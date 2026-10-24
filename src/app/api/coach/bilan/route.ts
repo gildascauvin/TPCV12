@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
   const [p, s, w, t] = await Promise.all([
-    admin.from("profiles").select("created_at, autoreg_shift, autoreg_shift_high").eq("user_id", uid).maybeSingle(),
+    admin.from("profiles").select("created_at, autoreg_shift, autoreg_shift_high, autoreg_recal_events").eq("user_id", uid).maybeSingle(),
     admin.from("sessions").select("id,date,name,notes,rpe,target_difficulty,duration,done,created_at,autoreg_decision,autoreg_proposal,autoreg_followed").eq("user_id", uid).eq("done", true).lte("date", today),
     admin.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,base_score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,device_resting_hr,device_rhr_baseline,device_hrv_baseline,created_at").eq("user_id", uid).lte("date", today),
     admin.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", uid),

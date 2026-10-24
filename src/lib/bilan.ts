@@ -48,14 +48,15 @@ export type BilanSlide =
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
   | { kind: "tests"; main: { name: string; unit: string; points: { date: string; value: number }[]; pct: number }; others: { name: string; from: string; to: string; pct: number }[] }
-  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; recal: Recal | null; currentShift: number; currentShiftHigh: number }
+  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; trend: TrendPoint[]; recal: Recal | null; currentShift: number; currentShiftHigh: number }
   | { kind: "suivre"; followed: { n: number; felt: number }; ignored: { n: number; felt: number }; shifted: boolean }
   | { kind: "partage"; kpis: { value: string; label: string }[]; line: string | null };
 
 /* Une case de la frise des verdicts (« Mes conseils », écran post-séance) : le juge de adviceJudge.ts. */
 export type StripCell = { id?: string; date: string; outcome: Outcome };
 /* Recalage proposé dans un sens : seuil cible, et ce que ça aurait changé sur l'historique rejoué. */
-export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number };
+export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number; rateNow: number; rateThen: number };
+export type TrendPoint = { month: string; label: string; rate: number; judged: number; recal: boolean };
 
 export type Bilan = { period: BilanPeriod; slides: BilanSlide[]; title: string };
 
@@ -219,53 +220,104 @@ function replay(sessions: BilanSession[], checkins: BilanCheckin[]): ReplayRow[]
 
 
 const RECAL_MAX = 15;
-/* Recalage proposé dans un sens si ses conseils jugés (≥ 10) ont été justes moins de 35 % du temps.
-   Pas de 5, plafond 15 : au-delà, le moteur perdrait trop de conseils justes pour un gain incertain.
-   Les jours déjà figés ne bougent pas avec le seuil : seul l'historique rejoué change. */
-function recalFor(rows: ReplayRow[], dir: AutoregDir, lo: number, hi: number): Recal | null {
+
+/* Historique des recalages (2026-10-24, profiles.autoreg_recal_events) : sert à rejouer chaque jour
+   avec le seuil qui était en vigueur ce jour-là (courbe honnête), et à ne pas réappliquer un recalage
+   que le sportif a annulé. Sans historique : les seuils actuels pour tout l'historique (comptes
+   d'avant le 2026-10-24). */
+export type RecalEvent = { at: string; dir: AutoregDir; from: number; to: number; rateBefore?: number; rateAfter?: number; undone?: boolean; source: "auto" | "manual" | "seed" };
+type Shifts = { lo: number; hi: number };
+function shiftsOn(events: RecalEvent[], cur: Shifts): (date: string) => Shifts {
+  const live = events.filter(e => !e.undone).sort((x, y) => x.at.localeCompare(y.at));
+  if (!live.length) return () => cur;
+  return date => {
+    const s = { lo: 0, hi: 0 };
+    for (const e of live) if (e.at <= date) { if (e.dir === "low") s.lo = e.to; else s.hi = e.to; }
+    return s;
+  };
+}
+const histOutcome = (r: ReplayRow, on: (d: string) => Shifts) => { const s = on(r.s.date); return { d: r.dirAt(s.lo, s.hi), o: r.outcomeAt(s.lo, s.hi) }; };
+
+/* Taux global de conseils confirmés si tout l'historique rejoué avait eu ces seuils (jours figés inchangés). */
+function globalRate(rows: ReplayRow[], lo: number, hi: number): { right: number; judged: number; rate: number } {
+  let right = 0, judged = 0;
+  for (const r of rows) { const ok = outcomeRight(r.outcomeAt(lo, hi)); if (ok === null) continue; judged++; if (ok) right++; }
+  return { right, judged, rate: judged ? right / judged : 0 };
+}
+
+/* Recalage dans un sens : déclenché si ses conseils jugés (≥ 10) ont été confirmés moins de 35 % du
+   temps ; le seuil retenu est celui qui fait le plus monter le TAUX GLOBAL de conseils confirmés
+   (celui qu'on affiche et qu'on marketise), d'au moins 1 point. Pas de 5, plafond 15. Un recalage
+   annulé par le sportif n'est jamais reproposé à l'identique. */
+function recalFor(rows: ReplayRow[], dir: AutoregDir, lo: number, hi: number, events: RecalEvent[] = []): Recal | null {
   const want: Outcome = dir === "low" ? "justified" : "push_right";
-  const at = (l: number, h: number) => {
+  const typeAt = (l: number, h: number) => {
     const js = rows.map(r => ({ d: r.dirAt(l, h), o: r.outcomeAt(l, h) })).filter(x => x.d === dir && outcomeRight(x.o) !== null);
-    const j = js.filter(x => x.o === want).length;
-    return { a: js.length, j, v: j - 0.5 * (js.length - j) };
+    return { a: js.length, j: js.filter(x => x.o === want).length };
   };
   const cur = dir === "low" ? lo : hi;
-  const now = at(lo, hi);
+  const now = typeAt(lo, hi);
   if (now.a < 10 || now.j / now.a >= 0.35 || cur >= RECAL_MAX) return null;
-  let best = { sh: cur, ...now };
-  for (let sh = cur + 5; sh <= RECAL_MAX; sh += 5) { const r = dir === "low" ? at(sh, hi) : at(lo, sh); if (r.v > best.v + 0.5) best = { sh, ...r }; }
-  return best.sh !== cur ? { dir, shift: best.sh, alertsNow: now.a, alertsThen: best.a, justifiedNow: now.j, justifiedThen: best.j } : null;
+  const refused = new Set(events.filter(e => e.undone && e.dir === dir).map(e => e.to));
+  const base = globalRate(rows, lo, hi);
+  let best: { sh: number; rate: number } | null = null;
+  for (let sh = cur + 5; sh <= RECAL_MAX; sh += 5) {
+    if (refused.has(sh)) continue;
+    const g = dir === "low" ? globalRate(rows, sh, hi) : globalRate(rows, lo, sh);
+    if (g.rate >= base.rate + 0.01 && (!best || g.rate > best.rate)) best = { sh, rate: g.rate };
+  }
+  if (!best) return null;
+  const then = dir === "low" ? typeAt(best.sh, hi) : typeAt(lo, best.sh);
+  return { dir, shift: best.sh, alertsNow: now.a, alertsThen: then.a, justifiedNow: now.j, justifiedThen: then.j, rateNow: Math.round(base.rate * 100), rateThen: Math.round(best.rate * 100) };
 }
 
-function strip(rows: ReplayRow[], lo: number, hi: number, n = 14): StripCell[] {
-  return rows.map(r => ({ id: r.s.id, date: r.s.date, outcome: r.outcomeAt(lo, hi) })).filter(x => outcomeRight(x.outcome) !== null).slice(-n);
+function strip(rows: ReplayRow[], on: (d: string) => Shifts, n = 14): StripCell[] {
+  return rows.map(r => ({ id: r.s.id, date: r.s.date, outcome: histOutcome(r, on).o })).filter(x => outcomeRight(x.outcome) !== null).slice(-n);
 }
 
-/* « Mes conseils » (2026-10-24) : dès le 1er conseil jugé, avec la frise ; les barres arrivent avec
-   leurs données. Un « Alléger » suivi et bien passé sort des comptes (on ne sait pas ce qu'aurait donné
-   la séance prévue). */
-function conseils(rows: ReplayRow[], lo: number, hi: number): BilanSlide | null {
-  const at = rows.map(r => ({ d: r.dirAt(lo, hi), o: r.outcomeAt(lo, hi) }));
+/* Taux de conseils confirmés mois par mois, avec le seuil de chaque jour (≥ 3 conseils jugés dans le
+   mois). C'est ce qui montre si le calibrage s'améliore avec le temps. */
+function trend(rows: ReplayRow[], on: (d: string) => Shifts, events: RecalEvent[]): TrendPoint[] {
+  const by = new Map<string, { right: number; judged: number }>();
+  for (const r of rows) { const ok = outcomeRight(histOutcome(r, on).o); if (ok === null) continue; const k = r.s.date.slice(0, 7); const m = by.get(k) ?? { right: 0, judged: 0 }; m.judged++; if (ok) m.right++; by.set(k, m); }
+  const recalMonths = new Set(events.filter(e => !e.undone).map(e => e.at.slice(0, 7)));
+  return Array.from(by).filter(([, m]) => m.judged >= 3).sort((x, y) => x[0].localeCompare(y[0]))
+    .map(([k, m]) => ({ month: k, label: MONTHS[Number(k.slice(5, 7)) - 1].replace(".", ""), rate: Math.round((m.right / m.judged) * 100), judged: m.judged, recal: recalMonths.has(k) }));
+}
+
+/* « Conseils vérifiés » (2026-10-24) : dès le 1er conseil jugé, avec la frise ; les barres arrivent
+   avec leurs données. Chaque jour est compté avec le seuil qui était en vigueur ce jour-là. Un
+   « Alléger » suivi et bien passé sort des comptes. */
+function conseils(rows: ReplayRow[], lo: number, hi: number, events: RecalEvent[]): BilanSlide | null {
+  const on = shiftsOn(events, { lo, hi });
+  const at = rows.map(r => histOutcome(r, on));
   const none = at.filter(x => x.d === null), low = at.filter(x => x.d === "low"), high = at.filter(x => x.d === "high");
-  const cells = strip(rows, lo, hi);
+  const cells = strip(rows, on);
   if (!cells.length) return null;
-  const recal = recalFor(rows, "low", lo, hi) ?? recalFor(rows, "high", lo, hi);
+  const recal = recalFor(rows, "low", lo, hi, events) ?? recalFor(rows, "high", lo, hi, events);
   return {
     kind: "conseils",
     none: { same: none.filter(x => x.o === "none_same").length, harder: none.filter(x => x.o === "none_harder").length, total: none.length },
     low: { justified: low.filter(x => x.o === "justified").length, judged: low.filter(x => x.o === "justified" || x.o === "margin").length, followed: low.filter(x => x.o === "followed_ok").length },
     high: { right: high.filter(x => x.o === "push_right").length, judged: high.length },
-    strip: cells, recal, currentShift: lo, currentShiftHigh: hi,
+    strip: cells, trend: trend(rows, on, events), recal, currentShift: lo, currentShiftHigh: hi,
   };
 }
 
-/* Les comptes de l'écran post-séance : les 14 derniers conseils jugés, même règle que « Mes conseils ». */
-export function computeAccounts(input: { sessions: BilanSession[]; checkins: BilanCheckin[]; signupAt: string; shift: number; shiftHigh: number }): { right: number; judged: number; strip: StripCell[] } | null {
-  const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, input.signupAt));
-  const checkins = input.checkins.filter(c => !isSynthetic(c, input.signupAt));
-  const cells = strip(replay(sessions, checkins), input.shift, input.shiftHigh);
+type RecalInput = { sessions: BilanSession[]; checkins: BilanCheckin[]; signupAt: string; shift: number; shiftHigh: number; events?: RecalEvent[] };
+const realRows = (input: RecalInput) => replay(input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, input.signupAt)), input.checkins.filter(c => !isSynthetic(c, input.signupAt)));
+
+/* Les comptes de l'écran post-séance : les 14 derniers conseils jugés, même règle que le bilan. */
+export function computeAccounts(input: RecalInput): { right: number; judged: number; strip: StripCell[] } | null {
+  const cells = strip(realRows(input), shiftsOn(input.events ?? [], { lo: input.shift, hi: input.shiftHigh }));
   if (!cells.length) return null;
   return { right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length, strip: cells };
+}
+
+/* Recalage automatique (2026-10-24) : vérifié après chaque séance notée, côté serveur. */
+export function checkRecal(input: RecalInput): Recal | null {
+  const rows = realRows(input), ev = input.events ?? [];
+  return recalFor(rows, "low", input.shift, input.shiftHigh, ev) ?? recalFor(rows, "high", input.shift, input.shiftHigh, ev);
 }
 
 /* Suivre ou pas (piste 3) : les jours où l'app proposait d'alléger, forme ressentie le lendemain
@@ -416,7 +468,7 @@ function tests(period: BilanPeriod, rows: BilanTest[]): BilanSlide | null {
 export function computeBilan(input: {
   period: BilanPeriod; today: string; signupAt: string;
   sessions: BilanSession[]; checkins: BilanCheckin[]; tests: BilanTest[];
-  currentShift?: number; currentShiftHigh?: number;
+  currentShift?: number; currentShiftHigh?: number; recalEvents?: RecalEvent[];
 }): Bilan {
   const { period, today, signupAt } = input;
   const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, signupAt) && s.date <= period.end);
@@ -427,7 +479,7 @@ export function computeBilan(input: {
   const periodSlides = [regularite(period, sessions, checkins, today), charge(period, sessions, today)];
   const rows = replay(sessions, checkins);
   const shift = input.currentShift ?? 0, shiftHigh = input.currentShiftHigh ?? 0;
-  const learned = [conseils(rows, shift, shiftHigh), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
+  const learned = [conseils(rows, shift, shiftHigh, input.recalEvents ?? []), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
   const late = [tendance(period, checkins), tests(period, input.tests)];
   const slides = [...periodSlides, ...(period.kind === "week" ? learned.slice(0, 2) : learned), ...late].filter((x): x is BilanSlide => !!x);
 

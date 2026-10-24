@@ -26,15 +26,23 @@ import { createClient } from "@/lib/supabase/client";
    étant déjà figée en base. Monté une fois dans le layout de l'app, côté sportif. */
 
 type Shown =
-  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null; session?: ResultSession | null; week?: WeekSession[]; accounts?: Accounts | null }
+  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null; session?: ResultSession | null; week?: WeekSession[]; accounts?: Accounts | null; recal?: RecalNotice | null }
   | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null; checkin?: CheckinResult | null };
 
 /* Comptes de l'écran post-séance (2026-10-24) : les 14 derniers conseils jugés, même règle que le bilan. */
 export type Accounts = { right: number; judged: number; strip: StripCell[] };
+/* Recalage automatique annoncé dans l'écran post-séance (2026-10-24). */
+export type RecalNotice = { dir: "low" | "high"; rateBefore?: number; rateAfter?: number; state: "applied" | "undone" | "saving" };
+export async function checkRecalAfter(sessionId: string): Promise<RecalNotice | null> {
+  const r = await fetch("/api/autoreg/recal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId }) });
+  if (!r.ok) throw new Error(`recalage ${r.status}`);
+  const j = await r.json() as { applied: { dir: "low" | "high"; rateBefore?: number; rateAfter?: number } | null };
+  return j.applied ? { dir: j.applied.dir, rateBefore: j.applied.rateBefore, rateAfter: j.applied.rateAfter, state: "applied" } : null;
+}
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export async function loadAccounts(opts: { userId: string; athleteId?: string }): Promise<Accounts | null> {
   const raw = await loadBilanRaw({ userId: opts.userId, today: todayIso(), athleteId: opts.athleteId });
-  return computeAccounts({ sessions: raw.sessions, checkins: raw.checkins, signupAt: raw.profile?.created_at ?? new Date().toISOString(), shift: raw.profile?.autoreg_shift ?? 0, shiftHigh: raw.profile?.autoreg_shift_high ?? 0 });
+  return computeAccounts({ sessions: raw.sessions, checkins: raw.checkins, signupAt: raw.profile?.created_at ?? new Date().toISOString(), shift: raw.profile?.autoreg_shift ?? 0, shiftHigh: raw.profile?.autoreg_shift_high ?? 0, events: raw.profile?.autoreg_recal_events ?? [] });
 }
 
 /* Relecture (2026-10-17) : liste des séances comparées (ou des matins comparés) et position. */
@@ -139,14 +147,26 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     (async () => {
       const uid = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
       if (!uid) return;
+      // Recalage d'abord (il change les seuils), puis les comptes.
+      const rc = await checkRecalAfter(accountsKey).catch(e => { console.error("[résultat séance] recalage", e); return null; });
+      if (rc) posthog.capture("autoreg_recalibrated", { dir: rc.dir, source: "auto", rate_before: rc.rateBefore, rate_after: rc.rateAfter });
       const a = await loadAccounts({ userId: uid }).catch(e => { console.error("[résultat séance] comptes", e); return null; });
-      if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: a } : cur);
+      if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: a, recal: rc } : cur);
     })();
     return () => { alive = false; };
   }, [accountsKey, userIdProp]);
 
   if (!shown) return null;
   const close = () => { setShown(null); setNav(null); };
+  const undoRecal = async () => {
+    if (shown.kind !== "session" || !shown.recal) return;
+    const id = shown.session?.id;
+    setShown(cur => cur && cur.kind === "session" && cur.recal ? { ...cur, recal: { ...cur.recal, state: "saving" } } : cur);
+    const r = await fetch("/api/autoreg/recal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ undo: true }) }).catch(() => null);
+    if (!r?.ok) { console.error("[résultat séance] annulation recalage", r?.status); setShown(cur => cur && cur.kind === "session" && cur.recal ? { ...cur, recal: { ...cur.recal, state: "applied" } } : cur); return; }
+    posthog.capture("autoreg_recalibration_undone", { dir: shown.recal.dir });
+    setShown(cur => cur && cur.kind === "session" && cur.session?.id === id && cur.recal ? { ...cur, recal: { ...cur.recal, state: "undone" } } : cur);
+  };
   /* « J'ai allégé sans le noter » : le réalisé corrigé en base, le verdict et les comptes recalculés. */
   const correct = async (followed: boolean | null) => {
     if (shown.kind !== "session" || !shown.session) return;
@@ -247,7 +267,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         {compact && shown.kind === "wellness" && shown.checkin && (
           <CheckinBlock r={shown.checkin} />
         )}
-        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} onCorrect={correct} accounts={shown.accounts} />}
+        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} onCorrect={correct} accounts={shown.accounts} recal={shown.recal} onUndoRecal={undoRecal} />}
         {hasPhysio && !compact && (
           <div>
             {shown.kind === "session" && shown.summary && (
@@ -426,7 +446,7 @@ function NormStreak({ day }: { day: number }) {
 
 /* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). Depuis
    le 2026-10-24 : ce que le texte a changé, le lien de correction du réalisé, et les comptes. */
-export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onCorrect?: (followed: boolean | null) => void; accounts?: Accounts | null }) {
+export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subject }: { r: SessionResult; onCorrect?: (followed: boolean | null) => void; accounts?: Accounts | null; recal?: RecalNotice | null; onUndoRecal?: () => void; subject?: string }) {
   const rows = r.rows;
   const changes = r.changes ?? [];
   return (
@@ -453,6 +473,17 @@ export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onC
           )}
           {r.correct && onCorrect && (
             <button type="button" onClick={() => onCorrect(r.correct!.followed)} style={{ alignSelf: "flex-start", marginLeft: 28, background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{r.correct.label}</button>
+          )}
+        </div>
+      )}
+      {recal && (
+        <div style={{ border: "1px solid rgba(47,158,68,.35)", background: "rgba(47,158,68,.06)", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#1f7a33" }}>{recal.state === "undone" ? "Recalage annulé" : subject ? `Seuil de ${subject} recalé` : "Seuil recalé"}</div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.4, color: "#2b3035" }}>{recal.state === "undone"
+            ? "Les seuils d'avant sont rétablis. Ce recalage ne sera pas reproposé."
+            : `${recal.dir === "low" ? "Les alertes d'allègement seront plus rares, réservées aux signaux nets." : "Pousser sera proposé moins souvent."}${recal.rateBefore != null && recal.rateAfter != null ? ` Sur l'historique : ${recal.rateBefore} % de conseils confirmés, ${recal.rateAfter} % avec ce réglage.` : ""}`}</div>
+          {recal.state !== "undone" && onUndoRecal && (
+            <button type="button" onClick={onUndoRecal} disabled={recal.state === "saving"} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Annuler"}</button>
           )}
         </div>
       )}
