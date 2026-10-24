@@ -498,12 +498,7 @@ export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subje
       )}
       {accounts && accounts.judged > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(0,0,0,.08)", paddingTop: 12 }}>
-          {liftLine(accounts.lift, subject) && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#171b1f" }}>{liftLine(accounts.lift, subject)!.title}</span>
-              <span style={{ fontSize: 12.5, color: "#62686e" }}>{liftLine(accounts.lift, subject)!.detail}</span>
-            </div>
-          )}
+
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: "#62686e" }}>Conseils confirmés : {accounts.right} sur {accounts.judged}</span>
             <StripLegend light />

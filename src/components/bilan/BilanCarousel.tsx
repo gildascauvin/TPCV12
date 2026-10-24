@@ -12,7 +12,7 @@ import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
 import { requestPhysioReplay } from "@/lib/physioData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
-import { liftLine, fr1 } from "@/components/physio/PhysioRevealHost";
+import { fr1 } from "@/components/physio/PhysioRevealHost";
 
 type Props = {
   userId: string;
@@ -95,12 +95,6 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
           ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>)
           : s.lift.ratio !== null && s.lift.ratio >= 1.2 ? <>Les alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
           : <>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></>}</h2>
-        {liftLine(s.lift, n) && (
-          <div style={card}>
-            <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.3, color: "#fff" }}>{liftLine(s.lift, n)!.title}</div>
-            <div style={small}>{liftLine(s.lift, n)!.detail}</div>
-          </div>
-        )}
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{right} confirmés sur {s.strip.length}</span>
