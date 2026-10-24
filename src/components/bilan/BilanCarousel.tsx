@@ -73,6 +73,10 @@ function Rows({ rows, color }: { rows: { label: string; part: number; total: num
   );
 }
 
+/* Pluriel des mots de difficulté (« très dure » → « très dures ») ; null si le mot manque : jamais de
+   « s » orphelin ni de « undefineds » à l'écran. */
+const plural = (w: string | null | undefined) => (w ? w.split(" ").map(x => (x === "très" ? x : `${x}s`)).join(" ") : null);
+
 type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (dir: "low" | "high", shift: number) => void; keep: () => void };
 /* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne. Registre
    impersonnel des deux côtés (2026-10-24 soir) : ni « je » ni « l'app ». Le recalage reste au
@@ -184,7 +188,9 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
       </>);
     case "biais":
       return (<>
-        <h2 style={h2}>{T("Tes", "Ses")} séances prévues {s.planned}s, <span style={{ color: "#ffb347" }}>{T("tu les ressens", `${n} les ressent`)} {s.feltWord}s.</span></h2>
+        <h2 style={h2}>{plural(s.planned) && plural(s.feltWord)
+          ? <>{T("Tes", "Ses")} séances prévues {plural(s.planned)}, <span style={{ color: "#ffb347" }}>{T("tu les ressens", `${n} les ressent`)} {plural(s.feltWord)}.</span></>
+          : <>{T("Tes", "Ses")} séances <span style={{ color: "#ffb347" }}>sont plus dures que prévu.</span></>}</h2>
         <div style={card}>
           <div style={small}>Prévu (trait) et ressenti (barre)</div>
           <div style={{ display: "flex", gap: 7, alignItems: "flex-end", height: 160 }} role="img" aria-label={`${s.harder} séances sur ${s.total} plus dures que prévu`}>
@@ -201,9 +207,9 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
         </div>
         <div style={{ display: "grid", gridTemplateColumns: s.accurate ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 10 }}>
           <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#ffb347" }}>{s.harder} / {s.total}</b><span style={small}>prévues {s.planned}s, ressenties plus dures</span></div>
-          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>prévues {s.accurate.planned}s, ressenties comme prévu</span></div>}
+          {s.accurate && <div style={{ ...card, gap: 2 }}><b style={{ fontSize: 26, color: "#fff" }}>{s.accurate.ok} / {s.accurate.total}</b><span style={small}>{plural(s.accurate.planned) ? `prévues ${plural(s.accurate.planned)}, ressenties comme prévu` : "ressenties comme prévu"}</span></div>}
         </div>
-        <p style={{ ...body, fontSize: 14 }}>Conseil : {T("prévois-les", "prévoyez-les")} un cran plus haut.{s.accurate ? ` ${T("Tes", "Ses")} séances prévues ${s.accurate.planned}s, elles, tombent juste.` : ""}</p>
+        <p style={{ ...body, fontSize: 14 }}>Conseil : prévois-les un cran plus haut.{s.accurate && plural(s.accurate.planned) ? ` ${T("Tes", "Ses")} séances prévues ${plural(s.accurate.planned)}, elles, tombent juste.` : ""}</p>
       </>);
     case "fatigue": {
       const bars = [
