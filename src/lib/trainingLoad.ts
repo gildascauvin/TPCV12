@@ -145,8 +145,9 @@ export function acwrSeries(series: LoadPoint[]): { value: number | null; hasEnou
 /**
  * Fitness (chronique)/Fatigue (aiguë) façon Banister/TrainingPeaks CTL-ATL — constantes de temps
  * 7j/42j (pas 7j/28j comme l'ACWR de Gabbett juste au-dessus : deux conventions différentes de la
- * littérature, chacune empruntée à son propre modèle, ne pas les confondre). EWMA (lambda=2/(n+1),
- * même convention que ewmaWellness plus bas) plutôt que moyenne simple : un effet de charge
+ * littérature, chacune empruntée à son propre modèle, ne pas les confondre). EWMA lambda=1/n, la
+ * convention Banister/TrainingPeaks (CTL += (charge − CTL)/42) — pas 2/(n+1), qui faisait oublier la
+ * fitness en ~21 j au lieu de 42 (corrigé le 2026-10-24) — plutôt que moyenne simple : un effet de charge
  * s'estompe progressivement, pas d'un coup quand un jour sort de la fenêtre — voir ewmaLoadAt.
  * Même seuil de disponibilité que acuteChronicAt (14j/4 séances non nulles) pour rester cohérent
  * avec l'ACWR ; la fenêtre chronique s'élargit progressivement vers 42j réels comme acuteChronicAt
@@ -155,11 +156,13 @@ export function acwrSeries(series: LoadPoint[]): { value: number | null; hasEnou
 const ACUTE_EWMA_DAYS = 7;
 const CHRONIC_EWMA_DAYS = 42;
 
+// Poids normalisés sur l'historique disponible (6n jours max, au-delà le poids est négligeable) :
+// équivaut à l'EWMA récursive sur un long historique, sans le biais vers 0 des premières semaines.
 function ewmaLoadAt(series: LoadPoint[], endIdx: number, n: number): number {
-  const lambda = 2 / (n + 1);
+  const lambda = 1 / n;
   let weightedSum = 0;
   let weightTotal = 0;
-  for (let i = 0; i < n && endIdx - i >= 0; i++) {
+  for (let i = 0; i < 6 * n && endIdx - i >= 0; i++) {
     const weight = lambda * Math.pow(1 - lambda, i);
     weightedSum += series[endIdx - i].load * weight;
     weightTotal += weight;

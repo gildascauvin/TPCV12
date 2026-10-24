@@ -127,7 +127,10 @@ function charge(period: BilanPeriod, sessions: BilanSession[], today: string): B
   // Pas avant 28 jours d'historique : avant, la charge chronique n'est pas encore construite et l'ACWR sort de la zone pour rien.
   const first = sessions.reduce((m, s) => (s.date < m ? s.date : m), "9999-12-31");
   const mature = addDays(first, 28);
-  const from = addDays(period.start, -42);
+  // La série part de la 1re séance, jamais avant : des jours vides avant l'inscription comptaient comme
+  // « pas entraîné », tiraient la charge chronique vers 0 et gonflaient l'ACWR (corrigé le 2026-10-24).
+  const lead = addDays(period.start, -42);
+  const from = lead > first ? lead : first;
   const series: LoadPoint[] = [];
   for (let d = from; d <= end; d = addDays(d, 1)) {
     series.push({ date: d, load: sessions.filter(s => s.date === d).reduce((a, s) => a + sessionLoad(s), 0) });
