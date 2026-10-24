@@ -50,7 +50,7 @@ export function StripLegend({ light = false }: { light?: boolean }) {
   const item = (b: React.ReactNode, l: string) => <span key={l} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>{b}{l}</span>;
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 11, color: ink }}>
-      {item(box(HUE["•"], "•"), "comme prévu")}
+      {item(box(HUE["•"], "•"), "dans la zone prévue")}
       {item(box(HUE["↓"], "↓"), "alerte confirmée")}
       {item(box(HUE["↑"], "↑"), "surcharge justifiée")}
       {item(box(null, "↓"), "non confirmé")}

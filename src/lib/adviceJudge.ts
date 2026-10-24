@@ -8,6 +8,9 @@
 
    « Plus dure que prévu » = ressentie au moins 1 point au-dessus du prévu (même seuil que le signal
    appris, autoregPersonal.learnSignals). « De la marge » = au moins 1 point en dessous.
+   Jours sans conseil (choix de Gildas, 2026-10-24, assumé en faveur de l'app) : on juge la DÉCISION
+   « rien à changer », pas la précision au point près. Raté seulement si la séance a changé de
+   catégorie (dure → très dure : un ajustement aurait servi). Sur Gildas : 9 ratés sur 80 au lieu de 32.
 
    Le réalisé : le texte final, comparé ligne par ligne au texte figé le matin, dit si la séance a été
    allégée, gardée ou poussée. Texte inchangé = séance gardée, sauf correction « J'ai allégé sans le
@@ -15,12 +18,13 @@
    tout. Analyse du 24/10 sur 111 séances de Gildas : les jours d'alerte, il n'écrit pas moins
    (charge relative 0,98 contre 0,97) : d'où la correction possible, jamais une question. */
 
-import type { AutoregDir } from "@/lib/autoregulation";
+import { qualitativeDifficulty, type AutoregDir } from "@/lib/autoregulation";
 import { parseLine, type ParsedLine } from "@/lib/exerciseParser";
 import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 import type { AutoregProposal } from "@/lib/autoregPersonal";
 
 export const HARDER_POINTS = 1;
+const WORDS = ["légère", "modérée", "dure", "très dure"];
 export const EASIER_POINTS = 1;
 
 export type Outcome =
@@ -142,7 +146,8 @@ export function judge(proposed: AutoregDir | null, original: number, rpe: number
     }
     return g <= -EASIER_POINTS ? "push_right" : "push_wrong";
   }
-  if (g >= HARDER_POINTS) return "none_harder";
+  const word = (n: number) => WORDS.indexOf(qualitativeDifficulty(n));
+  if (word(rpe) > word(original)) return "none_harder";
   if (g <= -2) return "none_easier";
   return "none_same";
 }

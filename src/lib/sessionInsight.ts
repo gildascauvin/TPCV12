@@ -52,9 +52,10 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
     }
   } else {
     row = { icon: "·", text: "Conseil du matin : rien à changer." };
-    title = outcome === "none_harder" ? `${g >= 2 ? "Plus dure" : "Un peu plus dure"} que prévu, sans alerte ce matin.`
+    title = outcome === "none_harder" ? "Plus dure que prévu, sans alerte ce matin."
       : outcome === "none_easier" ? `Plus facile que prévu : ${had} de la marge.`
-      : "Séance comme prévu, conforme à la lecture du matin.";
+      : g === 0 ? "Séance comme prévu, conforme à la lecture du matin."
+      : "Dans la zone prévue, conforme à la lecture du matin.";
   }
   return { title, row, outcome, changes, correct };
 }

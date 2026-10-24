@@ -104,7 +104,7 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
           {s.none.total > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Les jours sans alerte</div>
             <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.none.same / s.none.total) * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.18)" }} /></div>
-            <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}{s.none.harder ? `, plus dure ${s.none.harder} fois` : ""}.</div>
+            <div style={small}>Dans la zone prévue {s.none.same} fois sur {s.none.total}{s.none.harder ? `, plus dure ${s.none.harder} fois` : ""}.</div>
           </>}
           {s.low.judged > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours d'alerte</div>
