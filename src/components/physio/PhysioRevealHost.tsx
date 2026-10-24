@@ -10,7 +10,7 @@ import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinI
 import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
 import { computeAccounts, type StripCell } from "@/lib/bilan";
 import { loadBilanRaw } from "@/lib/bilanData";
-import { VerdictStrip } from "@/components/bilan/VerdictStrip";
+import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
 import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -148,7 +148,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
   if (!shown) return null;
   const close = () => { setShown(null); setNav(null); };
   /* « J'ai allégé sans le noter » : le réalisé corrigé en base, le verdict et les comptes recalculés. */
-  const correct = async (followed: boolean) => {
+  const correct = async (followed: boolean | null) => {
     if (shown.kind !== "session" || !shown.session) return;
     const ss = shown.session;
     const r = await fetch("/api/sessions/followed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: ss.id, followed }) }).catch(() => null);
@@ -426,7 +426,7 @@ function NormStreak({ day }: { day: number }) {
 
 /* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). Depuis
    le 2026-10-24 : ce que le texte a changé, le lien de correction du réalisé, et les comptes. */
-export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onCorrect?: (followed: boolean) => void; accounts?: Accounts | null }) {
+export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onCorrect?: (followed: boolean | null) => void; accounts?: Accounts | null }) {
   const rows = r.rows;
   const changes = r.changes ?? [];
   return (
@@ -460,6 +460,7 @@ export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onC
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}><span>Conseils confirmés</span><span style={{ color: "#2f9e44" }}>{accounts.right} sur {accounts.judged}</span></div>
           <VerdictStrip cells={accounts.strip} light />
+          <StripLegend light />
         </div>
       )}
     </div>

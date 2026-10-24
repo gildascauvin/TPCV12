@@ -88,7 +88,6 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
       /* Registre impersonnel (2026-10-24) : constats sans « je » ni « l'app ». */
       const lowRate = s.low.judged ? s.low.justified / s.low.judged : null;
       const right = s.strip.filter(c => outcomeRight(c.outcome)).length;
-      const seg = (a: number, b: number, t: number) => [`${(a / t) * 100}%`, `${(b / t) * 100}%`, `${((t - a - b) / t) * 100}%`];
       const r = s.recal;
       const verb = r?.dir === "high" ? "pousser" : "alléger";
       return (<>
@@ -104,17 +103,17 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
         <div style={card}>
           {s.none.total > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Les jours sans alerte</div>
-            {(() => { const [n1, n2, n3] = seg(s.none.same, s.none.harder, s.none.total); return <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: n1, background: "#2f9e44" }} /><div style={{ width: n2, background: "#f28a00" }} /><div style={{ width: n3, background: "rgba(255,255,255,0.25)" }} /></div>; })()}
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.none.same / s.none.total) * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.18)" }} /></div>
             <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}{s.none.harder ? `, plus dure ${s.none.harder} fois` : ""}.</div>
           </>}
           {s.low.judged > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours d'alerte</div>
-            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${lowRate! * 100}%`, background: "#f28a00" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${lowRate! * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
             <div style={small}>Alerte confirmée {s.low.justified} fois sur {s.low.judged}.{s.low.judged - s.low.justified ? ` Les ${s.low.judged - s.low.justified} autres fois, ${T("tu avais", `${n} avait`)} de la marge.` : ""}{s.low.followed ? ` ${s.low.followed} séance${s.low.followed > 1 ? "s" : ""} allégée${s.low.followed > 1 ? "s" : ""} et bien passée${s.low.followed > 1 ? "s" : ""}, hors des comptes.` : ""}</div>
           </>}
           {s.high.judged > 0 && <>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours où pousser était conseillé</div>
-            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.high.right / s.high.judged) * 100}%`, background: "#4c8dff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.high.right / s.high.judged) * 100}%`, background: "#fff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
             <div style={small}>Surcharge justifiée {s.high.right} fois sur {s.high.judged}.</div>
           </>}
         </div>

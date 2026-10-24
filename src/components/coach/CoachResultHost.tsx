@@ -68,7 +68,7 @@ export default function CoachResultHost() {
   const r = sessionResult(shown.session, shown.week, shown.subject);
   const close = () => setShown(null);
   /* Le coach corrige le réalisé (« Léa a allégé sans le noter »), comme le sportif. */
-  const correct = async (followed: boolean) => {
+  const correct = async (followed: boolean | null) => {
     const ss = shown.session;
     const res = await fetch("/api/sessions/followed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: ss.id, followed }) }).catch(() => null);
     if (!res?.ok) { console.error("[coach] correction", res?.status); return; }

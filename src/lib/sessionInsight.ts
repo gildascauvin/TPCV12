@@ -14,7 +14,7 @@ export type WeekSession = { id: string; date: string; rpe: number | null; durati
    noter »). `changes` : ce que le texte final a changé par rapport au texte du matin. */
 export interface SessionResult {
   title: string; sub: string | null; rows: { icon: string; text: string }[];
-  outcome?: Outcome | null; changes?: TextChange[]; correct?: { label: string; followed: boolean } | null;
+  outcome?: Outcome | null; changes?: TextChange[]; correct?: { label: string; followed: boolean | null } | null;
 }
 
 const ORD = (n: number) => `${n}e`;
@@ -44,8 +44,11 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
       : follow.followed ? "Surcharge trop forte : la séance a été dure." : "Séance comme prévu : pousser n'était pas nécessaire.";
     if (!follow.followed && follow.source !== "click" && follow.source !== "answer") {
       correct = { followed: true, label: subject ? `${subject} a ${proposed === "low" ? "allégé" : "poussé"} sans le noter` : `J'ai ${proposed === "low" ? "allégé" : "poussé"} sans le noter` };
-    } else if (follow.followed && follow.source === "answer") {
-      correct = { followed: false, label: "En fait, séance gardée" };
+    } else if (follow.source === "answer") {
+      // Retour arrière toujours possible : null = on revient à ce que dit le texte (séance gardée s'il n'a pas bougé).
+      correct = follow.followed
+        ? { followed: null, label: "En fait, séance gardée" }
+        : { followed: true, label: subject ? `${subject} a ${proposed === "low" ? "allégé" : "poussé"} sans le noter` : `J'ai ${proposed === "low" ? "allégé" : "poussé"} sans le noter` };
     }
   } else {
     row = { icon: "·", text: "Conseil du matin : rien à changer." };
