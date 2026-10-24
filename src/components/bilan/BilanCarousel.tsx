@@ -96,9 +96,11 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
           : s.strip.length >= 5 && right / s.strip.length >= 0.7 ? <>Les conseils <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
           : <>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></>}</h2>
         <div style={card}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#fff" }}><span>Derniers conseils</span><span style={{ color: "#7ee08f" }}>{right} confirmés sur {s.strip.length}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{right} confirmés sur {s.strip.length}</span>
+            <StripLegend />
+          </div>
           <VerdictStrip cells={s.strip} onOpen={n ? undefined : id => requestPhysioReplay({ kind: "session", sessionId: id })} />
-          <StripLegend />
         </div>
         <div style={card}>
           {s.none.total > 0 && <>

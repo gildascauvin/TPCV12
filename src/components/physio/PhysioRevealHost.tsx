@@ -457,10 +457,12 @@ export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onC
         </div>
       )}
       {accounts && accounts.judged > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}><span>Conseils confirmés</span><span style={{ color: "#2f9e44" }}>{accounts.right} sur {accounts.judged}</span></div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(0,0,0,.08)", paddingTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#62686e" }}>Conseils confirmés : {accounts.right} sur {accounts.judged}</span>
+            <StripLegend light />
+          </div>
           <VerdictStrip cells={accounts.strip} light />
-          <StripLegend light />
         </div>
       )}
     </div>
