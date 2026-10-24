@@ -5,8 +5,8 @@ import { BILAN_SESSION_COLS } from "@/lib/bilanCols";
 
 /* Recalage automatique (2026-10-24). Trois usages :
    - { sessionId } : après une séance notée (écran post-séance, sportif ou coach lié) — vérifie les
-     comptes du sportif et applique le recalage s'il est dû (≥ 10 conseils jugés d'un type, confirmés
-     < 35 %, seuil qui fait monter le taux global). Le sportif voit l'annonce et peut annuler.
+     comptes du sportif et applique le recalage s'il est dû (≥ 10 conseils jugés d'un type qui ne font
+     pas mieux que les jours sans conseil ; seuil qui fait monter ce rapport, voir bilan.ts recalFor). Le sportif voit l'annonce et peut annuler.
    - { undo: true } : le sportif annule le dernier recalage (jamais reproposé à l'identique).
    - { apply: { dir, shift } } : « Me recaler » manuel du bilan.
    Chaque changement est journalisé dans profiles.autoreg_recal_events. */
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     if (s.error || w.error) throw new Error(s.error?.message ?? w.error?.message);
     const r = checkRecal({ sessions: (s.data ?? []) as never, checkins: (w.data ?? []) as never, signupAt: prof.created_at as string, shift: cur.low, shiftHigh: cur.high, events });
     if (!r) return Response.json({ applied: null });
-    const e: RecalEvent = { at: today(), dir: r.dir, from: cur[r.dir], to: r.shift, rateBefore: r.rateNow, rateAfter: r.rateThen, source: "auto" };
+    const e: RecalEvent = { at: today(), dir: r.dir, from: cur[r.dir], to: r.shift, liftBefore: r.liftNow, liftAfter: r.liftThen, source: "auto" };
     await save(r.dir, r.shift, [...events, e]);
     return Response.json({ applied: e });
   } catch (err) {

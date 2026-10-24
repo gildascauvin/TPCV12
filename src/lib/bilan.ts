@@ -18,7 +18,7 @@ import { qualitativeDifficulty, computeAutoregSuggestion, type DifficultyWord, t
 import { computeWellnessBaselineAt } from "@/lib/wellnessBaseline";
 import { chronicPenaltyFor } from "@/lib/decisionCard";
 import { type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
-import { adviceOf, resolveFollow, judge, outcomeRight, type Outcome } from "@/lib/adviceJudge";
+import { adviceOf, resolveFollow, judge, outcomeRight, HARDER_POINTS, EASIER_POINTS, type Outcome } from "@/lib/adviceJudge";
 import { learnSignals, FAMILY_LABEL, type AutoregProposal, type PersonalDim } from "@/lib/autoregPersonal";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 
@@ -48,14 +48,14 @@ export type BilanSlide =
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
   | { kind: "tests"; main: { name: string; unit: string; points: { date: string; value: number }[]; pct: number }; others: { name: string; from: string; to: string; pct: number }[] }
-  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; trend: TrendPoint[]; recal: Recal | null; currentShift: number; currentShiftHigh: number }
+  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; trend: TrendPoint[]; lift: Lift; recal: Recal | null; currentShift: number; currentShiftHigh: number }
   | { kind: "suivre"; followed: { n: number; felt: number }; ignored: { n: number; felt: number }; shifted: boolean }
   | { kind: "partage"; kpis: { value: string; label: string }[]; line: string | null };
 
 /* Une case de la frise des verdicts (« Mes conseils », écran post-séance) : le juge de adviceJudge.ts. */
 export type StripCell = { id?: string; date: string; outcome: Outcome };
 /* Recalage proposé dans un sens : seuil cible, et ce que ça aurait changé sur l'historique rejoué. */
-export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number; rateNow: number; rateThen: number };
+export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number; liftNow: number; liftThen: number };
 export type TrendPoint = { month: string; label: string; rate: number; judged: number; recal: boolean };
 
 export type Bilan = { period: BilanPeriod; slides: BilanSlide[]; title: string };
@@ -198,7 +198,7 @@ function predit(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide 
    d'avant (baseline, charge chronique). Les deux curseurs (alléger, pousser) peuvent varier : c'est ce
    qui permet de proposer « Me recaler » avec ce que ça aurait changé. Chaque séance est jugée par la
    règle unique d'adviceJudge.ts, réalisé compris (clic, correction, texte comparé au matin). */
-type ReplayRow = { s: BilanSession; c: BilanCheckin; dirAt: (low: number, high: number) => AutoregDir | null; outcomeAt: (low: number, high: number) => Outcome };
+type ReplayRow = { s: BilanSession; c: BilanCheckin; original: number; dirAt: (low: number, high: number) => AutoregDir | null; outcomeAt: (low: number, high: number) => Outcome };
 function replay(sessions: BilanSession[], checkins: BilanCheckin[]): ReplayRow[] {
   const byDate = new Map(checkins.map(c => [c.date, c]));
   const out: ReplayRow[] = [];
@@ -213,7 +213,7 @@ function replay(sessions: BilanSession[], checkins: BilanCheckin[]): ReplayRow[]
     });
     const dirAt = (lo: number, hi: number) => fixed ? fixed.proposed : computeAutoregSuggestion(c.score, s.target_difficulty, ctx().base, ctx().pen, lo, hi)?.dir ?? null;
     const original = fixed?.original ?? s.target_difficulty;
-    out.push({ s, c, dirAt, outcomeAt: (lo, hi) => { const d = dirAt(lo, hi); return judge(d, original, s.rpe!, resolveFollow(s, d)); } });
+    out.push({ s, c, original, dirAt, outcomeAt: (lo, hi) => { const d = dirAt(lo, hi); return judge(d, original, s.rpe!, resolveFollow(s, d)); } });
   }
   return out;
 }
@@ -225,7 +225,7 @@ const RECAL_MAX = 15;
    avec le seuil qui était en vigueur ce jour-là (courbe honnête), et à ne pas réappliquer un recalage
    que le sportif a annulé. Sans historique : les seuils actuels pour tout l'historique (comptes
    d'avant le 2026-10-24). */
-export type RecalEvent = { at: string; dir: AutoregDir; from: number; to: number; rateBefore?: number; rateAfter?: number; undone?: boolean; source: "auto" | "manual" | "seed" };
+export type RecalEvent = { at: string; dir: AutoregDir; from: number; to: number; liftBefore?: number; liftAfter?: number; undone?: boolean; source: "auto" | "manual" | "seed" };
 type Shifts = { lo: number; hi: number };
 function shiftsOn(events: RecalEvent[], cur: Shifts): (date: string) => Shifts {
   const live = events.filter(e => !e.undone).sort((x, y) => x.at.localeCompare(y.at));
@@ -238,37 +238,48 @@ function shiftsOn(events: RecalEvent[], cur: Shifts): (date: string) => Shifts {
 }
 const histOutcome = (r: ReplayRow, on: (d: string) => Shifts) => { const s = on(r.s.date); return { d: r.dirAt(s.lo, s.hi), o: r.outcomeAt(s.lo, s.hi) }; };
 
-/* Taux global de conseils confirmés si tout l'historique rejoué avait eu ces seuils (jours figés inchangés). */
-function globalRate(rows: ReplayRow[], lo: number, hi: number): { right: number; judged: number; rate: number } {
-  let right = 0, judged = 0;
-  for (const r of rows) { const ok = outcomeRight(r.outcomeAt(lo, hi)); if (ok === null) continue; judged++; if (ok) right++; }
-  return { right, judged, rate: judged ? right / judged : 0 };
+/* Le rapport qui a du sens (2026-10-24, Gildas) : quand l'app conseille, la séance donne-t-elle plus
+   souvent raison que les jours où elle ne dit rien ? Même critère des deux côtés : alléger → séance
+   ≥ 1 point au-dessus du prévu ; pousser → ≥ 1 point en dessous. Les séances suivies (allégées /
+   poussées) sortent du calcul : leur ressenti ne dit plus rien de la séance prévue. Contrairement au
+   taux de conseils confirmés, ce rapport ne monte pas quand l'app se tait (une app muette ferait
+   87 % de conseils confirmés sur les données de Gildas). ratio null = pas assez de données. */
+export type Lift = { dir: AutoregDir; hit: number; total: number; baseHit: number; baseTotal: number; ratio: number | null };
+const LIFT_MIN_ALERTS = 5, LIFT_MIN_BASE = 10;
+function liftOf(rows: ReplayRow[], dir: AutoregDir, on: (d: string) => Shifts): Lift {
+  let hit = 0, total = 0, baseHit = 0, baseTotal = 0;
+  for (const r of rows) {
+    const sh = on(r.s.date), d = r.dirAt(sh.lo, sh.hi);
+    if (d !== dir && d !== null) continue;
+    if (d === dir && resolveFollow(r.s, d).followed) continue;
+    const g = Math.round(r.s.rpe!) - Math.round(r.original);
+    const ev = dir === "low" ? g >= HARDER_POINTS : g <= -EASIER_POINTS;
+    if (d === dir) { total++; if (ev) hit++; } else { baseTotal++; if (ev) baseHit++; }
+  }
+  const ratio = total >= LIFT_MIN_ALERTS && baseTotal >= LIFT_MIN_BASE ? (hit / total) / Math.max(baseHit / baseTotal, 1 / (2 * baseTotal)) : null;
+  return { dir, hit, total, baseHit, baseTotal, ratio };
 }
+const uniform = (lo: number, hi: number) => () => ({ lo, hi });
 
-/* Recalage dans un sens : déclenché si ses conseils jugés (≥ 10) ont été confirmés moins de 35 % du
-   temps ; le seuil retenu est celui qui fait le plus monter le TAUX GLOBAL de conseils confirmés
-   (celui qu'on affiche et qu'on marketise), d'au moins 1 point. Pas de 5, plafond 15. Un recalage
-   annulé par le sportif n'est jamais reproposé à l'identique. */
+/* Recalage dans un sens (2026-10-24 soir : objectif changé) : déclenché quand les conseils de ce type
+   (≥ 10 jugés) ne font pas mieux que les jours sans conseil (rapport < 1,2) ; le seuil retenu est celui
+   qui fait le plus monter le rapport (+ 0,15 au moins), en gardant au moins 5 conseils et un tiers de
+   ceux d'aujourd'hui : il ne peut pas gagner en se taisant. Pas de 5, plafond 15. Un recalage annulé
+   n'est jamais reproposé à l'identique. */
 function recalFor(rows: ReplayRow[], dir: AutoregDir, lo: number, hi: number, events: RecalEvent[] = []): Recal | null {
-  const want: Outcome = dir === "low" ? "justified" : "push_right";
-  const typeAt = (l: number, h: number) => {
-    const js = rows.map(r => ({ d: r.dirAt(l, h), o: r.outcomeAt(l, h) })).filter(x => x.d === dir && outcomeRight(x.o) !== null);
-    return { a: js.length, j: js.filter(x => x.o === want).length };
-  };
   const cur = dir === "low" ? lo : hi;
-  const now = typeAt(lo, hi);
-  if (now.a < 10 || now.j / now.a >= 0.35 || cur >= RECAL_MAX) return null;
+  const now = liftOf(rows, dir, uniform(lo, hi));
+  if (now.total < 10 || now.ratio === null || now.ratio >= 1.2 || cur >= RECAL_MAX) return null;
   const refused = new Set(events.filter(e => e.undone && e.dir === dir).map(e => e.to));
-  const base = globalRate(rows, lo, hi);
-  let best: { sh: number; rate: number } | null = null;
+  let best: { sh: number; l: Lift } | null = null;
   for (let sh = cur + 5; sh <= RECAL_MAX; sh += 5) {
     if (refused.has(sh)) continue;
-    const g = dir === "low" ? globalRate(rows, sh, hi) : globalRate(rows, lo, sh);
-    if (g.rate >= base.rate + 0.01 && (!best || g.rate > best.rate)) best = { sh, rate: g.rate };
+    const l = liftOf(rows, dir, dir === "low" ? uniform(sh, hi) : uniform(lo, sh));
+    if (l.ratio === null || l.total < Math.max(LIFT_MIN_ALERTS, Math.ceil(now.total / 3))) continue;
+    if (l.ratio >= now.ratio + 0.15 && (!best || l.ratio > best.l.ratio!)) best = { sh, l };
   }
   if (!best) return null;
-  const then = dir === "low" ? typeAt(best.sh, hi) : typeAt(lo, best.sh);
-  return { dir, shift: best.sh, alertsNow: now.a, alertsThen: then.a, justifiedNow: now.j, justifiedThen: then.j, rateNow: Math.round(base.rate * 100), rateThen: Math.round(best.rate * 100) };
+  return { dir, shift: best.sh, alertsNow: now.total, alertsThen: best.l.total, justifiedNow: now.hit, justifiedThen: best.l.hit, liftNow: Math.round(now.ratio * 10) / 10, liftThen: Math.round(best.l.ratio! * 10) / 10 };
 }
 
 function strip(rows: ReplayRow[], on: (d: string) => Shifts, n = 14): StripCell[] {
@@ -300,7 +311,7 @@ function conseils(rows: ReplayRow[], lo: number, hi: number, events: RecalEvent[
     none: { same: none.filter(x => x.o === "none_same").length, harder: none.filter(x => x.o === "none_harder").length, total: none.length },
     low: { justified: low.filter(x => x.o === "justified").length, judged: low.filter(x => x.o === "justified" || x.o === "margin").length, followed: low.filter(x => x.o === "followed_ok").length },
     high: { right: high.filter(x => x.o === "push_right").length, judged: high.length },
-    strip: cells, trend: trend(rows, on, events), recal, currentShift: lo, currentShiftHigh: hi,
+    strip: cells, trend: trend(rows, on, events), lift: liftOf(rows, "low", on), recal, currentShift: lo, currentShiftHigh: hi,
   };
 }
 
@@ -308,10 +319,11 @@ type RecalInput = { sessions: BilanSession[]; checkins: BilanCheckin[]; signupAt
 const realRows = (input: RecalInput) => replay(input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, input.signupAt)), input.checkins.filter(c => !isSynthetic(c, input.signupAt)));
 
 /* Les comptes de l'écran post-séance : les 14 derniers conseils jugés, même règle que le bilan. */
-export function computeAccounts(input: RecalInput): { right: number; judged: number; strip: StripCell[] } | null {
-  const cells = strip(realRows(input), shiftsOn(input.events ?? [], { lo: input.shift, hi: input.shiftHigh }));
+export function computeAccounts(input: RecalInput): { right: number; judged: number; strip: StripCell[]; lift: Lift } | null {
+  const rows = realRows(input), on = shiftsOn(input.events ?? [], { lo: input.shift, hi: input.shiftHigh });
+  const cells = strip(rows, on);
   if (!cells.length) return null;
-  return { right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length, strip: cells };
+  return { right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length, strip: cells, lift: liftOf(rows, "low", on) };
 }
 
 /* Recalage automatique (2026-10-24) : vérifié après chaque séance notée, côté serveur. */

@@ -8,7 +8,7 @@ import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
 import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
-import { computeAccounts, type StripCell } from "@/lib/bilan";
+import { computeAccounts, type StripCell, type Lift } from "@/lib/bilan";
 import { loadBilanRaw } from "@/lib/bilanData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
 import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
@@ -30,14 +30,23 @@ type Shown =
   | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null; checkin?: CheckinResult | null };
 
 /* Comptes de l'écran post-séance (2026-10-24) : les 14 derniers conseils jugés, même règle que le bilan. */
-export type Accounts = { right: number; judged: number; strip: StripCell[] };
+export type Accounts = { right: number; judged: number; strip: StripCell[]; lift: Lift };
+/* Le rapport jours d'alerte / autres jours (bilan.ts liftOf), en mots. null = pas assez de données. */
+export const fr1 = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
+export function liftLine(l: Lift | null | undefined, subject?: string): { title: string; detail: string } | null {
+  if (!l || l.ratio === null) return null;
+  const detail = `Séance plus dure que prévu ${l.hit} fois sur ${l.total} les jours d'alerte, ${l.baseHit} sur ${l.baseTotal} les autres jours.`;
+  if (l.ratio >= 1.2) return { title: `Les jours d'alerte, séance plus dure ${fr1(l.ratio)} fois plus souvent.`, detail };
+  return { title: subject ? `Les alertes ne repèrent pas encore mieux les séances dures de ${subject}.` : "Les alertes ne repèrent pas encore mieux tes séances dures.", detail };
+}
+
 /* Recalage automatique annoncé dans l'écran post-séance (2026-10-24). */
-export type RecalNotice = { dir: "low" | "high"; rateBefore?: number; rateAfter?: number; state: "applied" | "undone" | "saving" };
+export type RecalNotice = { dir: "low" | "high"; liftBefore?: number; liftAfter?: number; state: "applied" | "undone" | "saving" };
 export async function checkRecalAfter(sessionId: string): Promise<RecalNotice | null> {
   const r = await fetch("/api/autoreg/recal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId }) });
   if (!r.ok) throw new Error(`recalage ${r.status}`);
-  const j = await r.json() as { applied: { dir: "low" | "high"; rateBefore?: number; rateAfter?: number } | null };
-  return j.applied ? { dir: j.applied.dir, rateBefore: j.applied.rateBefore, rateAfter: j.applied.rateAfter, state: "applied" } : null;
+  const j = await r.json() as { applied: { dir: "low" | "high"; liftBefore?: number; liftAfter?: number } | null };
+  return j.applied ? { dir: j.applied.dir, liftBefore: j.applied.liftBefore, liftAfter: j.applied.liftAfter, state: "applied" } : null;
 }
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 export async function loadAccounts(opts: { userId: string; athleteId?: string }): Promise<Accounts | null> {
@@ -149,7 +158,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
       if (!uid) return;
       // Recalage d'abord (il change les seuils), puis les comptes.
       const rc = await checkRecalAfter(accountsKey).catch(e => { console.error("[résultat séance] recalage", e); return null; });
-      if (rc) posthog.capture("autoreg_recalibrated", { dir: rc.dir, source: "auto", rate_before: rc.rateBefore, rate_after: rc.rateAfter });
+      if (rc) posthog.capture("autoreg_recalibrated", { dir: rc.dir, source: "auto", lift_before: rc.liftBefore, lift_after: rc.liftAfter });
       const a = await loadAccounts({ userId: uid }).catch(e => { console.error("[résultat séance] comptes", e); return null; });
       if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: a, recal: rc } : cur);
     })();
@@ -481,7 +490,7 @@ export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subje
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1f7a33" }}>{recal.state === "undone" ? "Recalage annulé" : subject ? `Seuil de ${subject} recalé` : "Seuil recalé"}</div>
           <div style={{ fontSize: 13.5, lineHeight: 1.4, color: "#2b3035" }}>{recal.state === "undone"
             ? "Les seuils d'avant sont rétablis. Ce recalage ne sera pas reproposé."
-            : `${recal.dir === "low" ? "Les alertes d'allègement seront plus rares, réservées aux signaux nets." : "Pousser sera proposé moins souvent."}${recal.rateBefore != null && recal.rateAfter != null ? ` Sur l'historique : ${recal.rateBefore} % de conseils confirmés, ${recal.rateAfter} % avec ce réglage.` : ""}`}</div>
+            : `${recal.dir === "low" ? "Les alertes d'allègement seront plus rares, réservées aux signaux nets." : "Pousser sera proposé moins souvent."}${recal.liftBefore != null && recal.liftAfter != null ? ` Sur l'historique, les jours de conseil donnaient raison ${fr1(recal.liftBefore)} fois plus souvent que les autres jours ; ${fr1(recal.liftAfter)} fois avec ce réglage.` : ""}`}</div>
           {recal.state !== "undone" && onUndoRecal && (
             <button type="button" onClick={onUndoRecal} disabled={recal.state === "saving"} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Annuler"}</button>
           )}
@@ -489,6 +498,12 @@ export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subje
       )}
       {accounts && accounts.judged > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(0,0,0,.08)", paddingTop: 12 }}>
+          {liftLine(accounts.lift, subject) && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#171b1f" }}>{liftLine(accounts.lift, subject)!.title}</span>
+              <span style={{ fontSize: 12.5, color: "#62686e" }}>{liftLine(accounts.lift, subject)!.detail}</span>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: "#62686e" }}>Conseils confirmés : {accounts.right} sur {accounts.judged}</span>
             <StripLegend light />

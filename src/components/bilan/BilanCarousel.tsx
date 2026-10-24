@@ -12,6 +12,7 @@ import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
 import { requestPhysioReplay } from "@/lib/physioData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
+import { liftLine, fr1 } from "@/components/physio/PhysioRevealHost";
 
 type Props = {
   userId: string;
@@ -92,8 +93,14 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
       return (<>
         <h2 style={h2}>{s.low.judged >= 5 && lowRate! < 0.35
           ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>)
-          : s.strip.length >= 5 && right / s.strip.length >= 0.7 ? <>Les conseils <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
+          : s.lift.ratio !== null && s.lift.ratio >= 1.2 ? <>Les alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
           : <>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></>}</h2>
+        {liftLine(s.lift, n) && (
+          <div style={card}>
+            <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1.3, color: "#fff" }}>{liftLine(s.lift, n)!.title}</div>
+            <div style={small}>{liftLine(s.lift, n)!.detail}</div>
+          </div>
+        )}
         <div style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{right} confirmés sur {s.strip.length}</span>
@@ -139,7 +146,7 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
             <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done"
               ? `Les conseils « ${verb} » seront plus rares, réservés aux signaux nets. Le bilan mesurera si c'était le bon réglage.`
               : r.dir === "high" ? "Quand pousser est conseillé, la séance reste souvent dure. Un signal plus net sera attendu avant de te le proposer." : "Une récup un peu sous ta norme pèse peu sur tes séances. Un signal plus net sera attendu avant de te conseiller d'alléger."}</div>
-            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {r.rateThen} % de conseils confirmés au lieu de {r.rateNow} %.</div>}
+            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : les jours de conseil donnent raison {fr1(r.liftThen)} fois plus souvent que les autres jours, au lieu de {fr1(r.liftNow)}.</div>}
             {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d'enregistrer. Réessaie dans un instant.</div>}
             {(recal.state === "idle" || recal.state === "error" || recal.state === "saving") && (
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
