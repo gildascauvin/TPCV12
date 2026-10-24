@@ -19,7 +19,7 @@ import { computeWellnessBaselineAt } from "@/lib/wellnessBaseline";
 import { chronicPenaltyFor } from "@/lib/decisionCard";
 import { type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
 import { adviceOf, resolveFollow, judge, outcomeRight, type Outcome } from "@/lib/adviceJudge";
-import { learnSignals, type AutoregProposal, type PersonalDim, type SessionFamily } from "@/lib/autoregPersonal";
+import { learnSignals, FAMILY_LABEL, type AutoregProposal, type PersonalDim } from "@/lib/autoregPersonal";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 
 export type BilanPeriodKind = "week" | "month" | "all";
@@ -176,7 +176,6 @@ function ressenti(checkins: BilanCheckin[]): BilanSlide | null {
 
 /* Même calcul que la décision du jour (autoregPersonal.learnSignals) : la famille vient des
    catégories du parseur, jamais du nom de séance. Ce que le bilan montre ici est ce qui ajuste. */
-const FAMILY_LABEL: Record<SessionFamily, string> = { force: "Force", vitesse: "Vitesse et explosivité" };
 const DIM_TEXT: Record<PersonalDim, [string, string, string]> = {
   stress: ["ton stress mental", "Stress léger ou plus", "Stress calme ou moins"],
   sleep: ["ton sommeil ressenti", "Sommeil correct ou moins", "Sommeil bon ou mieux"],
