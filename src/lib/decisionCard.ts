@@ -97,7 +97,7 @@ function chronicContextLine(worst: { text: string } | null): string | null {
 function adviceLine(suggestion: AutoregSuggestion, chronicPenalty: number, params: { wellnessScore: number | null; plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null; subject?: string }): string {
   const planned = params.plannedDifficulty ?? 6;
   if (suggestion.dir === "low" && chronicPenalty !== 0 && suggestion.kind !== "norm_hard") {
-    const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0);
+    const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0, (params as { personal?: PersonalAdjust | null }).personal?.shiftHigh ?? 0);
     if (!base || base.kind === "norm_hard") return chronicOnlyAdvice(planned, params.subject);
   }
   if (suggestion.kind === "norm_hard") {
@@ -251,7 +251,7 @@ function phaseAdviceLine(
 
 function isChronicOnly(suggestion: AutoregSuggestion, chronicPenalty: number, params: { wellnessScore: number | null; plannedDifficulty: number | null; baseline?: WellnessBaselineResult | null }): boolean {
   if (suggestion.dir !== "low" || chronicPenalty === 0 || suggestion.kind === "norm_hard") return false;
-  const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0);
+  const base = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, 0, (params as { personal?: PersonalAdjust | null }).personal?.shift ?? 0, (params as { personal?: PersonalAdjust | null }).personal?.shiftHigh ?? 0);
   return !base || base.kind === "norm_hard";
 }
 
@@ -362,16 +362,17 @@ export function computeDecisionCard(params: {
      du même signal. */
   const { chronicPenalty: chronicOnlyPenalty, worstChronic } = chronicPenaltyFor(params.sessions, anchor, params.perspective);
   const shift = params.personal?.shift ?? 0;
+  const shiftHigh = params.personal?.shiftHigh ?? 0;
   const personalPenalty = params.personal?.penalty ?? 0;
   const chronicPenalty = chronicOnlyPenalty + personalPenalty;
 
-  const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty, shift);
+  const suggestion = computeAutoregSuggestion(params.wellnessScore, params.plannedDifficulty, params.baseline, chronicPenalty, shift, shiftHigh);
   /* Le signal appris pèse dans l'alerte « Alléger » : la ligne 2 dit cette cause-là, plus parlante
      qu'une récup générique (Gildas, 2026-10-23 : « Appris sur toi »). */
   const personalLine = suggestion?.dir === "low" && personalPenalty ? personalReason(params.personal, params.subject) : null;
   const ctxLine = chronicContextLine(worstChronic);
 
-  if (params.day) return withPhase({ ...params, day: params.day }, suggestion, chronicPenalty, personalLine, shift);
+  if (params.day) return withPhase({ ...params, day: params.day }, suggestion, chronicPenalty, personalLine, shift, shiftHigh);
 
   if (suggestion) {
     /* Allègement déclenché par le seul chronique (2026-09-29) : sans la pénalité, le wellness du jour
@@ -506,6 +507,7 @@ function withPhase(
   chronicPenalty: number,
   personalLine: string | null = null,
   shift = 0,
+  shiftHigh = 0,
 ): DecisionCard {
   const anchor = params.anchor ?? new Date();
   const day = params.day;
@@ -605,7 +607,7 @@ function withPhase(
     let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null
       ? { low: rec.zoneLow, high: rec.zoneHigh } : null;
     if (!rec && params.wellnessFilledToday && day.planned !== null) {
-      const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty, shift);
+      const sug = computeAutoregSuggestion(params.wellnessScore, day.planned, params.baseline, chronicPenalty, shift, shiftHigh);
       if (sug) {
         recoDir = sug.dir;
         const z = zoneRange(Math.round(day.planned + pctToPoints(sug.reco)), sug.dir);

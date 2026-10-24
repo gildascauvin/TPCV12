@@ -159,10 +159,16 @@ export function computeAutoregSuggestion(
   /* Seuil personnel (2026-10-23, « Me recaler » du bilan, profiles.autoreg_shift) : points ajoutés à
      la récupération effective. Positif = le sportif encaisse mieux, on allège moins souvent. */
   shift = 0,
+  /* Curseur « pousser » séparé (2026-10-24, profiles.autoreg_shift_high) : points RETIRÉS de la
+     récupération effective pour la seule décision de pousser. Positif = pousser moins souvent. Avant,
+     `shift` déplaçait les deux bornes : recaler « Alléger » faisait aussi pousser plus souvent. */
+  shiftHigh = 0,
 ): AutoregSuggestion | null {
   if (wellness === null || plannedDifficulty === null || plannedDifficulty <= 0) return null;
-  const x = Math.max(0, Math.min(100, effectiveRecoveryX(wellness, baseline, chronicPenalty)! + shift));
-  const { lo, hi } = autoregBand(x);
+  const x0 = effectiveRecoveryX(wellness, baseline, chronicPenalty)!;
+  const clampX = (v: number) => Math.max(0, Math.min(100, v));
+  const { hi } = autoregBand(clampX(x0 + shift));
+  const { lo } = autoregBand(clampX(x0 - shiftHigh));
 
   let dir: AutoregDir;
   let magnitude: number;

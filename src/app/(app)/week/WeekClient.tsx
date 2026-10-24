@@ -406,6 +406,13 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     const { data: saved, error } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (error) throw error;
     if (saved) setSessions(prev => [...prev, saved as Session]);
+    // Rattrapage (2026-10-24) : séance du jour ajoutée après le check-in → conseil figé tout de suite.
+    if (saved && saved.date === format(new Date(), "yyyy-MM-dd")) {
+      fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: saved.date }) })
+        .then(r => r.ok ? r.json() : null)
+        .then(j => { if (j?.proposal && j.sessionId) setSessions(prev => prev.map(x => x.id === j.sessionId ? { ...x, autoreg_proposal: j.proposal } : x)); })
+        .catch(e => console.error("[autoreg] reco du matin", e));
+    }
     return saved ? { id: saved.id } : undefined;
   }, [supabase, userId]);
 

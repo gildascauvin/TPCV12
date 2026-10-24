@@ -23,13 +23,13 @@ const OPENED_KEY = "tpc_onb_opened_session";
    pas faite. Panneau élargi et fond flouté pour leur laisser la place. */
 const WHY: Record<"athlete" | "coach", Partial<Record<OnboardingStepKey, string>>> = {
   athlete: {
-    form: "30 secondes chaque matin : c'est ce qui cale ta séance sur ton état réel, pas sur un plan figé.",
+    form: "10 secondes chaque matin : c'est ce qui cale ta séance sur ton état réel, pas sur un plan figé.",
     build: "Un programme ou une séance libre : sans séance prévue, il n'y a rien à ajuster.",
     adjust: "Ta 1re décision : alléger, maintenir ou pousser selon ta forme du jour. Puis note ton ressenti.",
     unlock: "Garde la décision chaque jour, tes tendances de charge et de récup, et l'analyse de tes tests.",
   },
   coach: {
-    invite: "Ils renseignent leur forme en 30 secondes. Tu la vois chaque matin, sans leur écrire.",
+    invite: "Ils renseignent leur forme en 10 secondes. Tu la vois chaque matin, sans leur écrire.",
     build: "Assigne un programme : chaque séance devient une décision à prendre au bon moment.",
     adjust: "Coach Control te dit qui alléger, qui pousser. Une décision prend un clic.",
     unlock: "Garde Coach Control pour tout ton groupe, avec la charge, la récup et les tests de chacun.",

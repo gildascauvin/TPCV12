@@ -48,7 +48,7 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
   const planned = (sessions ?? []).filter((s) => !s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0));
   const main = planned[0];
   let title = "Comment tu te sens ce matin ?";
-  let body = "30 secondes de check-in et ThePerfClub t'aide à ajuster ta séance.";
+  let body = "10 secondes de check-in et ThePerfClub t'aide à ajuster ta séance.";
   if (first?.date === shiftDate(today, -1) && main) {
     title = "Ta 1re séance ajustée t'attend";
     body = "Fais ton check-in : ta séance s'adapte à ta forme du jour.";
@@ -61,11 +61,14 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
 }
 
 async function athleteEvening(admin: Admin, p: Profile, today: string) {
-  const { data: sessions } = await admin.from("sessions").select("id, done").eq("user_id", p.user_id).eq("date", today);
+  const { data: sessions } = await admin.from("sessions").select("id, done, autoreg_proposal").eq("user_id", p.user_id).eq("date", today);
   if (!sessions?.length || sessions.every((s) => s.done)) return false;
+  /* Jour de conseil (2026-10-24) : la notif annonce le verdict, qui n'existe que si la séance est
+     notée. Registre impersonnel, comme l'écran post-séance. */
+  const dir = sessions.map(s => s.autoreg_proposal as { proposed?: string | null; date?: string } | null).find(x => x?.date === today && (x.proposed === "low" || x.proposed === "high"))?.proposed;
   return sendOnce(admin, p.user_id, "evening", today, {
-    title: "Ta séance du jour, c'est fait ?",
-    body: "Note-la en 10 secondes pour ajuster la suite.",
+    title: dir ? `${dir === "low" ? "Alléger" : "Pousser"}, conseillé ce matin` : "Ta séance du jour, c'est fait ?",
+    body: dir ? "Note ta séance en 10 secondes pour vérifier le conseil." : "Note-la en 10 secondes pour ajuster la suite.",
     url: "/today",
     tag: "evening",
   });

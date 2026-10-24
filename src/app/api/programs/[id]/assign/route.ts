@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { freezeMorningProposal, notifyCoachesIfLighten } from "@/lib/autoregProposalServer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ProgramTemplate } from "@/types";
 import { mediaForAssignment } from "@/lib/programMedia";
@@ -144,6 +145,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         await admin.from("sessions").delete().eq("program_assignment_id", assignment.id);
         await admin.from("program_assignments").delete().eq("id", assignment.id);
         return Response.json({ error: error.message }, { status: 500 });
+      }
+    }
+
+    /* Rattrapage (2026-10-24) : programme assigné après le check-in du jour → conseil figé tout de
+       suite sur la séance du jour (rien à figer sans check-in). Autour d'aujourd'hui seulement :
+       le fuseau du sportif n'est pas connu ici. */
+    if (sessionsToInsert.length > 0) {
+      const now = new Date();
+      const near = new Set([-1, 0, 1].map(d => { const x = new Date(now); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10); }));
+      const pairs = new Map<string, string>();
+      for (const r of sessionsToInsert as { user_id: string; date: string }[]) if (near.has(r.date)) pairs.set(`${r.user_id}|${r.date}`, r.user_id);
+      for (const [k, uid] of Array.from(pairs)) {
+        const date = k.split("|")[1];
+        try { const r = await freezeMorningProposal(admin, uid, date); if (r?.frozen) await notifyCoachesIfLighten(admin, uid, date, r); }
+        catch (e) { console.error("[assign] figeage", e); }
       }
     }
 

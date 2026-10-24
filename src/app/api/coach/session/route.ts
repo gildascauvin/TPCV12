@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyCoachUpdate } from "@/lib/pushSend";
+import { freezeMorningProposal, notifyCoachesIfLighten } from "@/lib/autoregProposalServer";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -40,7 +41,17 @@ export async function POST(req: Request) {
         .select().single();
       if (error) return Response.json({ error: error.message }, { status: 500 });
       await notifyAthlete(row?.date);
-      return Response.json({ ok: true, session: row, _real: true });
+      /* Rattrapage (2026-10-24) : séance envoyée après le check-in du sportif → conseil figé tout de
+         suite (sans check-in ce jour-là, rien à figer), coach prévenu s'il dit d'alléger. */
+      let proposal = null;
+      if (row?.date) {
+        try {
+          const r = await freezeMorningProposal(admin, athlete.user_id!, row.date);
+          if (r?.frozen) await notifyCoachesIfLighten(admin, athlete.user_id!, row.date, r);
+          if (r && r.sessionId === row.id) proposal = r.proposal;
+        } catch (e) { console.error("[coach] figeage", e); }
+      }
+      return Response.json({ ok: true, session: proposal ? { ...row, autoreg_proposal: proposal } : row, _real: true });
     } else {
       const { data: row, error } = await admin
         .from("coach_sessions")

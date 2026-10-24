@@ -9,6 +9,10 @@ import { createPortal } from "react-dom";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import { computeBilan, isSynthetic, periodFor, type Bilan, type BilanCheckin, type BilanPeriodKind, type BilanSession, type BilanSlide, type BilanTest } from "@/lib/bilan";
+import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
+import { outcomeRight } from "@/lib/adviceJudge";
+import { requestPhysioReplay } from "@/lib/physioData";
+import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
 
 type Props = {
   userId: string;
@@ -29,7 +33,7 @@ const GLOW: Record<BilanSlide["kind"], string> = {
 };
 const KICKER: Record<BilanSlide["kind"], string> = {
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
-  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "MES CONSEILS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
+  biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "CONSEILS VÉRIFIÉS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
 const KICKER_COACH: Partial<Record<BilanSlide["kind"], string>> = { predit: "CE QUI LE PRÉDIT", biais: "SES BIAIS", fatigue: "CE QUI LE FATIGUE", leviers: "SES LEVIERS" };
 const LEARNED = new Set<BilanSlide["kind"]>(["conseils", "ressenti", "predit", "biais", "fatigue", "suivre", "leviers"]);
@@ -69,42 +73,67 @@ function Rows({ rows, color }: { rows: { label: string; part: number; total: num
   );
 }
 
-type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (shift: number) => void; keep: () => void };
-/* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne et l'app
-   parle d'elle-même (« l'app », jamais « je »). Le recalage reste au sportif : le coach voit l'état. */
+type Recal = { state: "idle" | "saving" | "done" | "kept" | "error"; apply: (dir: "low" | "high", shift: number) => void; keep: () => void };
+/* Bilan vu par le coach (2026-10-24) : `n` = prénom du sportif, tout passe à la 3e personne. Registre
+   impersonnel des deux côtés (2026-10-24 soir) : ni « je » ni « l'app ». Le recalage reste au
+   sportif : le coach voit l'état. */
 function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bilan: Bilan; onShare: () => void; shared: boolean; recal: Recal; n?: string }) {
   const T = <A, B>(you: A, them: B): A | B => (n ? them : you);
   switch (s.kind) {
     case "conseils": {
-      const lowWide = s.low.harder / s.low.total < 0.35;
+      /* Registre impersonnel (2026-10-24) : constats sans « je » ni « l'app ». */
+      const lowRate = s.low.judged ? s.low.justified / s.low.judged : null;
+      const right = s.strip.filter(c => outcomeRight(c.outcome)).length;
       const seg = (a: number, b: number, t: number) => [`${(a / t) * 100}%`, `${(b / t) * 100}%`, `${((t - a - b) / t) * 100}%`];
-      const [n1, n2, n3] = seg(s.none.same, s.none.harder, s.none.total);
+      const r = s.recal;
+      const verb = r?.dir === "high" ? "pousser" : "alléger";
       return (<>
-        <h2 style={h2}>{lowWide ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que je ne le pensais.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que l'app ne le pensait.</span></>) : T(<>Mes alertes <span style={{ color: "#7ee08f" }}>tombent juste.</span></>, <>Les alertes de l'app <span style={{ color: "#7ee08f" }}>tombent juste.</span></>)}</h2>
+        <h2 style={h2}>{s.low.judged >= 5 && lowRate! < 0.35
+          ? T(<>Tu encaisses mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>, <>{n} encaisse mieux <span style={{ color: "#7ee08f" }}>que prévu.</span></>)
+          : s.strip.length >= 5 && right / s.strip.length >= 0.7 ? <>Les conseils <span style={{ color: "#7ee08f" }}>tombent juste.</span></>
+          : <>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></>}</h2>
         <div style={card}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{T("Quand je ne disais rien", "Quand l'app ne disait rien")}</div>
-          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: n1, background: "#2f9e44" }} /><div style={{ width: n2, background: "#f28a00" }} /><div style={{ width: n3, background: "rgba(255,255,255,0.25)" }} /></div>
-          <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}.</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>{T("Quand je disais d'alléger", "Quand l'app disait d'alléger")}</div>
-          <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.low.harder / s.low.total) * 100}%`, background: "#f28a00" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
-          <div style={small}>Plus dure que prévu {s.low.harder} fois sur {s.low.total}.{lowWide ? ` Les ${s.low.total - s.low.harder} autres fois, ${T("tu avais", `${n} avait`)} de la marge.` : ""}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#fff" }}><span>Derniers conseils</span><span style={{ color: "#7ee08f" }}>{right} confirmés sur {s.strip.length}</span></div>
+          <VerdictStrip cells={s.strip} onOpen={n ? undefined : id => requestPhysioReplay({ kind: "session", sessionId: id })} />
+          <StripLegend />
         </div>
-        {n && (s.currentShift > 0 || s.recal) && (
+        <div style={card}>
+          {s.none.total > 0 && <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Les jours sans alerte</div>
+            {(() => { const [n1, n2, n3] = seg(s.none.same, s.none.harder, s.none.total); return <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: n1, background: "#2f9e44" }} /><div style={{ width: n2, background: "#f28a00" }} /><div style={{ width: n3, background: "rgba(255,255,255,0.25)" }} /></div>; })()}
+            <div style={small}>Séance comme prévu {s.none.same} fois sur {s.none.total}{s.none.harder ? `, plus dure ${s.none.harder} fois` : ""}.</div>
+          </>}
+          {s.low.judged > 0 && <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours d'alerte</div>
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${lowRate! * 100}%`, background: "#f28a00" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
+            <div style={small}>Alerte confirmée {s.low.justified} fois sur {s.low.judged}.{s.low.judged - s.low.justified ? ` Les ${s.low.judged - s.low.justified} autres fois, ${T("tu avais", `${n} avait`)} de la marge.` : ""}{s.low.followed ? ` ${s.low.followed} séance${s.low.followed > 1 ? "s" : ""} allégée${s.low.followed > 1 ? "s" : ""} et bien passée${s.low.followed > 1 ? "s" : ""}, hors des comptes.` : ""}</div>
+          </>}
+          {s.high.judged > 0 && <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginTop: 6 }}>Les jours où pousser était conseillé</div>
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden" }}><div style={{ width: `${(s.high.right / s.high.judged) * 100}%`, background: "#4c8dff" }} /><div style={{ flex: 1, background: "rgba(255,255,255,0.25)" }} /></div>
+            <div style={small}>Surcharge justifiée {s.high.right} fois sur {s.high.judged}.</div>
+          </>}
+        </div>
+        {n && (s.currentShift > 0 || s.currentShiftHigh > 0 || r) && (
           <div style={{ ...card, gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{s.currentShift > 0 ? "Seuil recalé" : "Recalage proposé"}</div>
-            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{s.currentShift > 0 ? `${n} a choisi de se recaler : l'app lui propose d'alléger moins souvent, et seulement quand ça compte.` : `Une récup un peu sous sa norme ne pèse presque pas sur ses séances. L'app propose à ${n} d'attendre un signal plus net avant d'alléger. C'est ${n} qui décide.`}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{s.currentShift > 0 || s.currentShiftHigh > 0 ? "Seuil recalé" : "Recalage proposé"}</div>
+            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{s.currentShift > 0 || s.currentShiftHigh > 0
+              ? `${n} a choisi de se recaler : ${[s.currentShift > 0 ? "les alertes d'allègement sont plus rares" : null, s.currentShiftHigh > 0 ? "pousser est proposé moins souvent" : null].filter(Boolean).join(", ")}.`
+              : `Les conseils « ${verb} » de ${n} ont rarement été confirmés. Un seuil plus net lui est proposé. C'est ${n} qui décide.`}</div>
           </div>
         )}
-        {!n && s.recal && recal.state !== "kept" && (
+        {!n && r && recal.state !== "kept" && (
           <div style={{ ...card, gap: 8 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{recal.state === "done" ? "C'est fait" : "Ce que je te propose"}</div>
-            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done" ? "Je te dirai d'alléger moins souvent, et seulement quand ça compte. Ton bilan mesurera si c'était le bon réglage." : "Une récup un peu sous ta norme ne pèse presque pas sur tes séances. J'attends un signal plus net avant de te dire d'alléger."}</div>
-            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {s.recal.alertsThen} alertes au lieu de {s.recal.alertsNow}, fondées {s.recal.justifiedThen} fois au lieu de {s.recal.justifiedNow}.</div>}
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#7ee08f" }}>{recal.state === "done" ? "Recalage enregistré" : "Recalage proposé"}</div>
+            <div style={{ fontSize: 15, lineHeight: 1.45, color: "#fff" }}>{recal.state === "done"
+              ? `Les conseils « ${verb} » seront plus rares, réservés aux signaux nets. Le bilan mesurera si c'était le bon réglage.`
+              : r.dir === "high" ? "Quand pousser est conseillé, la séance reste souvent dure. Un signal plus net sera attendu avant de te le proposer." : "Une récup un peu sous ta norme pèse peu sur tes séances. Un signal plus net sera attendu avant de te conseiller d'alléger."}</div>
+            {recal.state !== "done" && <div style={small}>Rejoué sur ton historique : {r.alertsThen} conseils au lieu de {r.alertsNow}, confirmés {r.justifiedThen} fois au lieu de {r.justifiedNow}.</div>}
             {recal.state === "error" && <div style={{ ...small, color: "#ffb59a" }}>Impossible d'enregistrer. Réessaie dans un instant.</div>}
             {(recal.state === "idle" || recal.state === "error" || recal.state === "saving") && (
               <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
                 <button onClick={recal.keep} style={{ flex: 1, height: 46, borderRadius: 12, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Garder l'ancien</button>
-                <button onClick={() => recal.apply(s.recal!.shift)} disabled={recal.state === "saving"} style={{ flex: 1.4, height: 46, borderRadius: 12, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Me recaler"}</button>
+                <button onClick={() => recal.apply(r.dir === "high" ? "high" : "low", r.shift)} disabled={recal.state === "saving"} style={{ flex: 1.4, height: 46, borderRadius: 12, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{recal.state === "saving" ? "…" : "Me recaler"}</button>
               </div>
             )}
           </div>
@@ -116,8 +145,8 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
       const bars = [{ label: `${T("Tu as allégé", "Allégé")} (${s.followed.n} fois)`, value: s.followed.felt, display: String(round(s.followed.felt)), highlight: true }, { label: `${T("Tu as gardé ta séance", "Séance gardée")} (${s.ignored.n} fois)`, value: s.ignored.felt, display: String(round(s.ignored.felt)) }];
       return (<>
         <h2 style={h2}>{Math.abs(diff) < 5 ? <>Alléger ou pas, <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est le même.</span></> : diff > 0 ? <>{T("Quand tu allèges,", `Quand ${n} allège,`)} <span style={{ color: "#c79bf7" }}>{T("ton", "son")} lendemain est meilleur.</span></> : <>{T("Garder ta séance", "Garder sa séance")} <span style={{ color: "#c79bf7" }}>{T("ne t'a rien coûté.", `n'a rien coûté à ${n}.`)}</span></>}</h2>
-        <div style={card}><div style={small}>{T("Les jours où je proposais d'alléger · ta forme ressentie le lendemain", "Les jours où l'app proposait d'alléger · sa forme ressentie le lendemain")}</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
-        <p style={body}>{n ? (Math.abs(diff) < 5 ? `Garder sa séance ces jours-là n'a rien coûté à ${n}.${s.shifted ? " C'est pour ça que son seuil a été relevé." : ""}` : diff > 0 ? `Suivre l'ajustement fait arriver ${n} plus frais le lendemain.` : `${n} encaisse ces séances : l'app peut alléger moins souvent.`) : Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. Ton bilan « Mes conseils » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : je peux alléger moins souvent."}</p>
+        <div style={card}><div style={small}>{T("Les jours d'alerte · ta forme ressentie le lendemain", "Les jours d'alerte · sa forme ressentie le lendemain")}</div><Bars bars={bars} height={100} color="#a855f7" dim="rgba(199,155,247,0.4)" showValues /></div>
+        <p style={body}>{n ? (Math.abs(diff) < 5 ? `Garder sa séance ces jours-là n'a rien coûté à ${n}.${s.shifted ? " C'est pour ça que son seuil a été relevé." : ""}` : diff > 0 ? `Suivre l'ajustement fait arriver ${n} plus frais le lendemain.` : `${n} encaisse ces séances : les alertes peuvent être plus rares.`) : Math.abs(diff) < 5 ? (s.shifted ? "Garder ta séance ces jours-là ne t'a rien coûté : c'est pour ça que ton seuil a été relevé." : "Garder ta séance ces jours-là ne t'a rien coûté. L'écran « Conseils vérifiés » propose d'en tenir compte.") : diff > 0 ? "Suivre l'ajustement te fait arriver plus frais le lendemain." : "Tu encaisses ces séances : les alertes peuvent être plus rares."}</p>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>{T("Plus tard : ta progression aux tests, les semaines où tu suis et celles où tu ne suis pas.", "Plus tard : sa progression aux tests, les semaines où l'ajustement est suivi et celles où il ne l'est pas.")}</div>
       </>);
     }
@@ -256,11 +285,11 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   const [recalState, setRecalState] = useState<Recal["state"]>("idle");
   const recal: Recal = {
     state: recalState,
-    apply: async (shift) => {
+    apply: async (dir, shift) => {
       setRecalState("saving");
-      const { data, error } = await createClient().from("profiles").update({ autoreg_shift: shift }).eq("user_id", userId).select("user_id");
+      const { data, error } = await createClient().from("profiles").update(dir === "high" ? { autoreg_shift_high: shift } : { autoreg_shift: shift }).eq("user_id", userId).select("user_id");
       if (error || !data?.length) { console.error("[bilan] recalage", error?.message ?? "aucune ligne"); setRecalState("error"); return; }
-      posthog.capture("autoreg_recalibrated", { shift, period: kind });
+      posthog.capture("autoreg_recalibrated", { shift, dir, period: kind });
       setRecalState("done");
     },
     keep: () => { posthog.capture("autoreg_recalibration_declined", { period: kind }); setRecalState("kept"); },
@@ -270,23 +299,11 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   useEffect(() => {
     let alive = true;
     (async () => {
-      const supabase = createClient();
-      const load = subject
-        ? fetch(`/api/coach/bilan?athleteId=${encodeURIComponent(subject.athleteId)}&today=${today}`).then(async r => {
-            const j = await r.json().catch(() => ({}));
-            const error = r.ok ? null : { message: (j as { error?: string }).error ?? `HTTP ${r.status}` };
-            return [{ data: j.profile, error }, { data: j.sessions, error: null }, { data: j.checkins, error: null }, { data: j.tests, error: null }] as const;
-          })
-        : Promise.all([
-        supabase.from("profiles").select("created_at, autoreg_shift").eq("user_id", userId).maybeSingle(),
-        supabase.from("sessions").select("date,name,notes,rpe,target_difficulty,duration,done,created_at,autoreg_decision,autoreg_proposal").eq("user_id", userId).eq("done", true).lte("date", today),
-        supabase.from("wellness_daily").select("date,sleep,stress,recovery,motivation,score,base_score,behaviors,bedtime,device_sleep_minutes,device_hrv_ms,device_resting_hr,device_rhr_baseline,device_hrv_baseline,created_at").eq("user_id", userId).lte("date", today),
-        supabase.from("test_results").select("date,value,unit,tests(name)").eq("subject_user_id", userId),
-      ]);
-      const [p, s, w, t] = await load;
+      let raw: BilanRaw;
+      try { raw = await loadBilanRaw({ userId, today, athleteId: subject?.athleteId }); }
+      catch (e) { if (alive) { console.error("[bilan] lecture", e instanceof Error ? e.message : e); setFailed(true); } return; }
       if (!alive) return;
-      const err = p.error || s.error || w.error || t.error;
-      if (err) { console.error("[bilan] lecture", err.message); setFailed(true); return; }
+      const p = { data: raw.profile }, s = { data: raw.sessions }, w = { data: raw.checkins }, t = { data: raw.tests };
       const signupAt = (p.data?.created_at as string | undefined) ?? new Date().toISOString();
       const checkins = (w.data ?? []) as BilanCheckin[];
       const sessions = (s.data ?? []) as BilanSession[];
@@ -295,7 +312,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         .map(r => ({ date: r.date, value: Number(r.value), unit: r.unit, name: (Array.isArray(r.tests) ? r.tests[0]?.name : r.tests?.name) ?? "" }))
         .filter(r => r.name);
       const period = periodFor(kind, anchor, firstDate);
-      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: (p.data?.autoreg_shift as number | undefined) ?? 0 });
+      const b = computeBilan({ period, today, signupAt, sessions, checkins, tests, currentShift: p.data?.autoreg_shift ?? 0, currentShiftHigh: p.data?.autoreg_shift_high ?? 0 });
       // Le coach ne partage pas la carte du sportif à sa place.
       if (subject) b.slides = b.slides.filter(x => x.kind !== "partage");
       setBilan(b);

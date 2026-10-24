@@ -7,7 +7,10 @@ import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt,
 import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
-import { sessionResult, type SessionResult } from "@/lib/sessionInsight";
+import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
+import { computeAccounts, type StripCell } from "@/lib/bilan";
+import { loadBilanRaw } from "@/lib/bilanData";
+import { VerdictStrip } from "@/components/bilan/VerdictStrip";
 import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -23,8 +26,16 @@ import { createClient } from "@/lib/supabase/client";
    étant déjà figée en base. Monté une fois dans le layout de l'app, côté sportif. */
 
 type Shown =
-  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null }
+  | { kind: "session"; detail: Extract<PhysioRevealDetail, { kind: "session" }>; result: HeartResult | null; summary?: SessionResult | null; session?: ResultSession | null; week?: WeekSession[]; accounts?: Accounts | null }
   | { kind: "wellness"; verdict: PhysioVerdict | null; night: string | null; checkin?: CheckinResult | null };
+
+/* Comptes de l'écran post-séance (2026-10-24) : les 14 derniers conseils jugés, même règle que le bilan. */
+export type Accounts = { right: number; judged: number; strip: StripCell[] };
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+export async function loadAccounts(opts: { userId: string; athleteId?: string }): Promise<Accounts | null> {
+  const raw = await loadBilanRaw({ userId: opts.userId, today: todayIso(), athleteId: opts.athleteId });
+  return computeAccounts({ sessions: raw.sessions, checkins: raw.checkins, signupAt: raw.profile?.created_at ?? new Date().toISOString(), shift: raw.profile?.autoreg_shift ?? 0, shiftHigh: raw.profile?.autoreg_shift_high ?? 0 });
+}
 
 /* Relecture (2026-10-17) : liste des séances comparées (ou des matins comparés) et position. */
 type Nav = { kind: "session" | "wellness"; keys: string[]; idx: number; data: PhysioData | null; editKey: string; onEdit?: () => void; userId: string };
@@ -52,7 +63,7 @@ async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | nul
     const result = heart && heart.kind === "ok" ? heart : null;
     const summary = s ? sessionResult(s, ctx!.week) : null;
     if (!s || (!result && !summary)) return null;
-    return { kind: "session", detail: { kind: "session", sessionId: key, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result, summary };
+    return { kind: "session", detail: { kind: "session", sessionId: key, date: s.date, rpe: s.rpe, duration: s.duration ?? 0 }, result, summary, session: s, week: ctx!.week };
   }
   const ctx = await loadCheckinContext(userId, key).catch(() => null);
   const checkins = data?.checkins.filter(c => c.bedtime != null) ?? [];
@@ -83,7 +94,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         const summary = ctx?.session ? sessionResult(ctx.session, ctx.week) : null;
         if (!result && !summary) return;
         setNav(null);
-        setShown({ kind: "session", detail, result, summary });
+        setShown({ kind: "session", detail, result, summary, session: ctx?.session ?? null, week: ctx?.week ?? [] });
         posthog.capture("session_result_shown", { rows: summary?.rows.length ?? 0, heart: result ? (result.kind === "ok" ? result.verdict : "calibrating") : null });
         if (result) posthog.capture("physio_reveal_shown", { kind: "session", result: result.kind === "ok" ? result.verdict : "calibrating" });
       } else {
@@ -120,8 +131,34 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     return () => { window.removeEventListener(PHYSIO_REVEAL, onReveal); window.removeEventListener(PHYSIO_REPLAY, onReplay); };
   }, [userIdProp]);
 
+  /* Comptes chargés après l'affichage (l'écran n'attend pas) : seulement s'il y a un verdict. */
+  const accountsKey = shown?.kind === "session" && shown.summary?.outcome && shown.accounts === undefined ? shown.session?.id ?? null : null;
+  useEffect(() => {
+    if (!accountsKey) return;
+    let alive = true;
+    (async () => {
+      const uid = userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
+      if (!uid) return;
+      const a = await loadAccounts({ userId: uid }).catch(e => { console.error("[résultat séance] comptes", e); return null; });
+      if (alive) setShown(cur => cur && cur.kind === "session" && cur.session?.id === accountsKey ? { ...cur, accounts: a } : cur);
+    })();
+    return () => { alive = false; };
+  }, [accountsKey, userIdProp]);
+
   if (!shown) return null;
   const close = () => { setShown(null); setNav(null); };
+  /* « J'ai allégé sans le noter » : le réalisé corrigé en base, le verdict et les comptes recalculés. */
+  const correct = async (followed: boolean) => {
+    if (shown.kind !== "session" || !shown.session) return;
+    const ss = shown.session;
+    const r = await fetch("/api/sessions/followed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: ss.id, followed }) }).catch(() => null);
+    if (!r?.ok) { console.error("[résultat séance] correction", r?.status); return; }
+    const next = { ...ss, autoreg_followed: followed };
+    posthog.capture("autoreg_followed_corrected", { followed, side: "athlete" });
+    setShown(cur => cur && cur.kind === "session" && cur.session?.id === ss.id ? { ...cur, session: next, summary: sessionResult(next, cur.week ?? []) } : cur);
+    const uid = nav?.userId ?? userIdProp ?? (await createClient().auth.getUser()).data.user?.id;
+    if (uid) loadAccounts({ userId: uid }).then(a => setShown(cur => cur && cur.kind === "session" && cur.session?.id === ss.id ? { ...cur, accounts: a } : cur)).catch(() => {});
+  };
   const go = async (delta: number) => {
     if (!nav) return;
     const idx = nav.idx + delta;
@@ -191,7 +228,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483150, padding: 18 }}
       onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
@@ -210,7 +247,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         {compact && shown.kind === "wellness" && shown.checkin && (
           <CheckinBlock r={shown.checkin} />
         )}
-        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} />}
+        {shown.kind === "session" && shown.summary && <SessionBlock r={shown.summary} onCorrect={correct} accounts={shown.accounts} />}
         {hasPhysio && !compact && (
           <div>
             {shown.kind === "session" && shown.summary && (
@@ -387,9 +424,11 @@ function NormStreak({ day }: { day: number }) {
   );
 }
 
-/* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). */
-export function SessionBlock({ r }: { r: SessionResult }) {
+/* Résultat de séance : ressentie vs prévu, puis au plus 2 lignes (décision du matin, semaine). Depuis
+   le 2026-10-24 : ce que le texte a changé, le lien de correction du réalisé, et les comptes. */
+export function SessionBlock({ r, onCorrect, accounts }: { r: SessionResult; onCorrect?: (followed: boolean) => void; accounts?: Accounts | null }) {
   const rows = r.rows;
+  const changes = r.changes ?? [];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
@@ -397,7 +436,7 @@ export function SessionBlock({ r }: { r: SessionResult }) {
         <div style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.12, marginTop: 4 }}>{r.title}</div>
         {r.sub && <div style={{ fontSize: 14, color: "#62686e", marginTop: 6 }}>{r.sub}</div>}
       </div>
-      {rows.length > 0 && (
+      {(rows.length > 0 || changes.length > 0 || (r.correct && onCorrect)) && (
         <div style={{ background: "#f7f8f9", borderRadius: RADIUS.block, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
           {rows.map(row => (
             <div key={row.text} style={{ display: "flex", gap: 10, fontSize: 14, lineHeight: 1.4, color: "#2b3035" }}>
@@ -405,6 +444,22 @@ export function SessionBlock({ r }: { r: SessionResult }) {
               <span>{row.text}</span>
             </div>
           ))}
+          {changes.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontFamily: "var(--font-mono), monospace", fontSize: 11.5, lineHeight: 1.45, color: "#3d4247", paddingLeft: 28 }}>
+              {changes.map((c, i) => (
+                <div key={i}>{c.before && <span style={{ textDecoration: "line-through", color: "#a3a8ad" }}>{c.before}</span>}{c.before && c.after ? " → " : ""}{c.after && <span style={{ color: "#d44000", fontWeight: 700 }}>{c.after}</span>}</div>
+              ))}
+            </div>
+          )}
+          {r.correct && onCorrect && (
+            <button type="button" onClick={() => onCorrect(r.correct!.followed)} style={{ alignSelf: "flex-start", marginLeft: 28, background: "none", border: 0, padding: 0, fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "#d44000", textDecoration: "underline", cursor: "pointer" }}>{r.correct.label}</button>
+          )}
+        </div>
+      )}
+      {accounts && accounts.judged > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}><span>Conseils confirmés</span><span style={{ color: "#2f9e44" }}>{accounts.right} sur {accounts.judged}</span></div>
+          <VerdictStrip cells={accounts.strip} light />
         </div>
       )}
     </div>

@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (typeof sessionId !== "string") return Response.json({ error: "sessionId manquant" }, { status: 400 });
 
   const admin = createAdminClient();
-  const { data: s, error } = await admin.from("sessions").select("user_id, date, target_difficulty, done, rpe").eq("id", sessionId).maybeSingle();
+  const { data: s, error } = await admin.from("sessions").select("id, user_id, date, notes, target_difficulty, done, rpe").eq("id", sessionId).maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
   if (!s) return Response.json({ proposal: null });
   const { data: link } = await admin.from("coach_athletes").select("id").eq("coach_id", user.id).eq("user_id", s.user_id).limit(1).maybeSingle();

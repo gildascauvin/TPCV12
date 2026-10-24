@@ -26,7 +26,7 @@ export function planFeatures(role: "athlete" | "coach", sportDe: string | null):
   return role === "athlete" ? {
     free: [
       { title: "Construis ton entraînement", text: `Un programme${de} sur mesure, importé, ou un modèle.` },
-      { title: "Renseigne ta forme", text: "Ton ressenti en 30 secondes, ta montre synchronisée." },
+      { title: "Renseigne ta forme", text: "Ton ressenti en 10 secondes, ta montre synchronisée." },
       { title: "Fais tes séances", text: "Chrono, charges, difficulté ressentie." },
     ],
     elite: [

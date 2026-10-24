@@ -6,9 +6,9 @@
    ressenti vs prévu, sa place dans la semaine. Sans les données de la montre : le coach n'y a pas
    accès (health_* propriétaire seul). « Modifier la séance » ouvre l'éditeur d'avant. */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import posthog from "posthog-js";
-import { SessionBlock } from "@/components/physio/PhysioRevealHost";
+import { SessionBlock, loadAccounts, type Accounts } from "@/components/physio/PhysioRevealHost";
 import { sessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
 import { RADIUS } from "@/lib/theme";
 
@@ -36,10 +36,18 @@ export function openCoachSession<S extends { id: string; date: string; done: boo
 
 export default function CoachResultHost() {
   const [shown, setShown] = useState<CoachResultDetail | null>(null);
+  const [accounts, setAccounts] = useState<Accounts | null>(null);
+  const currentId = useRef<string | null>(null);
   useEffect(() => {
     const on = (e: Event) => {
       const detail = (e as CustomEvent<CoachResultDetail>).detail;
       setShown(detail);
+      setAccounts(null);
+      currentId.current = detail.session.id;
+      const athleteId = (detail.session as { athlete_id?: string }).athlete_id;
+      if ((detail.session as { _real?: boolean })._real !== false && athleteId) {
+        loadAccounts({ userId: "", athleteId }).then(a => { if (currentId.current === detail.session.id) setAccounts(a); }).catch(e => console.error("[coach] comptes", e));
+      }
       /* Sans décision ni reco figée : la reco rejouée par le serveur, pour que le verdict existe aussi
          sur les séances d'avant (sportif réel seulement, `_real`). */
       const ss = detail.session as ResultSession & { _real?: boolean };
@@ -59,6 +67,17 @@ export default function CoachResultHost() {
   if (!shown) return null;
   const r = sessionResult(shown.session, shown.week, shown.subject);
   const close = () => setShown(null);
+  /* Le coach corrige le réalisé (« Léa a allégé sans le noter »), comme le sportif. */
+  const correct = async (followed: boolean) => {
+    const ss = shown.session;
+    const res = await fetch("/api/sessions/followed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: ss.id, followed }) }).catch(() => null);
+    if (!res?.ok) { console.error("[coach] correction", res?.status); return; }
+    posthog.capture("autoreg_followed_corrected", { followed, side: "coach" });
+    setShown(cur => cur && cur.session.id === ss.id ? { ...cur, session: { ...cur.session, autoreg_followed: followed } } : cur);
+    const athleteId = (ss as { athlete_id?: string }).athlete_id;
+    if (athleteId) loadAccounts({ userId: "", athleteId }).then(setAccounts).catch(() => {});
+  };
+  const real = (shown.session as { _real?: boolean })._real !== false;
   const btn: React.CSSProperties = { height: 46, borderRadius: RADIUS.control, fontSize: 14, fontWeight: 800, cursor: "pointer" };
   return (
     <div
@@ -68,7 +87,7 @@ export default function CoachResultHost() {
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
         <div style={{ fontWeight: 800, fontSize: 14, color: "#62686e" }}>{shown.subject}{shown.session.name ? ` · ${shown.session.name}` : ""}</div>
-        <SessionBlock r={r} />
+        <SessionBlock r={r} onCorrect={real ? correct : undefined} accounts={accounts} />
         <div style={{ display: "grid", gridTemplateColumns: shown.onEdit ? "1fr 1fr" : "1fr", gap: 10 }}>
           {shown.onEdit && (
             <button onClick={() => { const fn = shown.onEdit; close(); fn?.(); }} style={{ ...btn, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f" }}>Modifier la séance</button>

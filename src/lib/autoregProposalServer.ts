@@ -18,21 +18,20 @@ const shift = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00Z
 
 type Result = { sessionId: string; proposal: AutoregProposal; frozen: boolean } | null;
 
-export async function freezeMorningProposal(admin: SupabaseClient, userId: string, date: string): Promise<Result> {
-  const [planned, done, wellness, workouts, profile] = await Promise.all([
-    admin.from("sessions").select("id, date, notes, target_difficulty, done, autoreg_proposal").eq("user_id", userId).eq("date", date).eq("done", false),
+type TopSession = { id: string; date: string; notes: string | null; target_difficulty: number | null; autoreg_proposal?: unknown };
+
+/* Le calcul de la carte de /today pour une séance donnée, avec les seules données d'avant ce jour-là.
+   Partagé par le figeage du matin et par le rejeu des séances faites sans reco figée (2026-10-24 :
+   avant, le rejeu prenait le moteur générique, sans seuils personnels ni signal appris). */
+export async function computeProposalFor(admin: SupabaseClient, userId: string, date: string, top: TopSession): Promise<AutoregProposal | null> {
+  if (!top.target_difficulty) return null;
+  const [done, wellness, workouts, profile] = await Promise.all([
     admin.from("sessions").select("id, date, notes, rpe, duration, target_difficulty, done").eq("user_id", userId).eq("done", true).gte("date", shift(date, -200)).lt("date", date),
     admin.from("wellness_daily").select("date, score, base_score, sleep, stress, recovery, motivation, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline").eq("user_id", userId).gte("date", shift(date, -200)).lte("date", date),
     admin.from("health_workouts").select("date, start_at, duration_min, workout_type, trimp").eq("user_id", userId).gte("date", shift(date, -60)).lte("date", date),
-    admin.from("profiles").select("autoreg_shift").eq("user_id", userId).maybeSingle(),
+    admin.from("profiles").select("autoreg_shift, autoreg_shift_high").eq("user_id", userId).maybeSingle(),
   ]);
-  for (const r of [planned, done, wellness, workouts, profile]) if (r.error) throw new Error(r.error.message);
-
-  // Séance à ajuster = la plus dure du jour pas encore faite (même règle que /today).
-  const top = [...(planned.data ?? [])].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-  if (!top || !top.target_difficulty) return null;
-  const existing = top.autoreg_proposal as AutoregProposal | null;
-  if (existing && existing.date === date) return { sessionId: top.id, proposal: existing, frozen: false };
+  for (const r of [done, wellness, workouts, profile]) if (r.error) throw new Error(r.error.message);
 
   type Row = { date: string; score: number | null; base_score: number | null; bedtime: string | null; sleep: number; stress: number; recovery: number; motivation: number };
   const rows = (wellness.data ?? []) as Row[];
@@ -46,13 +45,27 @@ export async function freezeMorningProposal(admin: SupabaseClient, userId: strin
   const chronic = chronicPenaltyFor(recent, anchor, "athlete").chronicPenalty;
 
   const signals = learnSignals(doneRows, rows);
-  const personal = personalAdjust(signals, (profile.data?.autoreg_shift as number | undefined) ?? 0, top.notes, today);
-  const sug = computeAutoregSuggestion(wellnessSignal(today), top.target_difficulty, baseline, chronic + personal.penalty, personal.shift);
+  const prof = profile.data as { autoreg_shift?: number | null; autoreg_shift_high?: number | null } | null;
+  const personal = personalAdjust(signals, prof?.autoreg_shift ?? 0, top.notes, today, prof?.autoreg_shift_high ?? 0);
+  const sug = computeAutoregSuggestion(wellnessSignal(today), top.target_difficulty, baseline, chronic + personal.penalty, personal.shift, personal.shiftHigh ?? 0);
   const zone = sug ? zoneRange(Math.round(top.target_difficulty + pctToPoints(sug.reco)), sug.dir) : null;
-  const proposal: AutoregProposal = {
+  return {
     proposed: sug?.dir ?? null, reco: sug?.reco ?? null, zoneLow: zone?.zoneLow ?? null, zoneHigh: zone?.zoneHigh ?? null,
-    original_difficulty: top.target_difficulty, personal, date, recorded_at: new Date().toISOString(),
+    original_difficulty: top.target_difficulty, original_notes: top.notes ?? null, personal, date,
   };
+}
+
+export async function freezeMorningProposal(admin: SupabaseClient, userId: string, date: string): Promise<Result> {
+  const planned = await admin.from("sessions").select("id, date, notes, target_difficulty, done, autoreg_proposal").eq("user_id", userId).eq("date", date).eq("done", false);
+  if (planned.error) throw new Error(planned.error.message);
+  // Séance à ajuster = la plus dure du jour pas encore faite (même règle que /today).
+  const top = [...(planned.data ?? [])].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
+  if (!top || !top.target_difficulty) return null;
+  const existing = top.autoreg_proposal as AutoregProposal | null;
+  if (existing && existing.date === date) return { sessionId: top.id, proposal: existing, frozen: false };
+  const computed = await computeProposalFor(admin, userId, date, top);
+  if (!computed) return null;
+  const proposal: AutoregProposal = { ...computed, recorded_at: new Date().toISOString() };
   const { error } = await admin.from("sessions").update({ autoreg_proposal: proposal }).eq("id", top.id);
   if (error) throw new Error(error.message);
   return { sessionId: top.id, proposal, frozen: true };
@@ -77,23 +90,12 @@ export async function notifyCoachesIfLighten(admin: SupabaseClient, userId: stri
   return sent;
 }
 
-/* Séance faite sans reco figée (avant le 2026-10-23, ou check-in après la séance) : le moteur
-   générique rejoué ce jour-là, côté serveur, pour l'écran de résultat du coach (qui ne lit pas le
-   check-in du sportif depuis le navigateur). Même calcul que replayProposal (resultContext.ts) côté
-   sportif. Rien n'est écrit. */
-export async function replayProposalServer(admin: SupabaseClient, userId: string, s: { date: string; target_difficulty: number | null }): Promise<AutoregProposal | null> {
+/* Séance faite sans reco figée (avant le 2026-10-23, ou check-in après la séance) : le calcul du
+   matin rejoué ce jour-là, côté serveur, avec les réglages personnels (computeProposalFor). Pas de
+   texte figé : le réalisé ne peut pas être comparé au prévu (séance gardée par défaut). Rien n'est
+   écrit. Utilisé par l'écran de résultat du coach et du sportif. */
+export async function replayProposalServer(admin: SupabaseClient, userId: string, s: { id?: string; date: string; notes?: string | null; target_difficulty: number | null }): Promise<AutoregProposal | null> {
   if (!s.target_difficulty) return null;
-  const [w, d] = await Promise.all([
-    admin.from("wellness_daily").select("date, score, base_score, sleep, stress, recovery, motivation, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline").eq("user_id", userId).gte("date", shift(s.date, -35)).lte("date", s.date),
-    admin.from("sessions").select("date, rpe, duration, done").eq("user_id", userId).eq("done", true).gte("date", shift(s.date, -60)).lt("date", s.date),
-  ]);
-  if (w.error || d.error) throw new Error(w.error?.message ?? d.error?.message);
-  const rows = (w.data ?? []) as { date: string; score: number | null; bedtime: string | null }[];
-  const today = rows.find(r => r.date === s.date);
-  if (!today || today.bedtime == null || today.score == null) return null;
-  const base = computeWellnessBaselineAt(rows.filter(r => r.date < s.date) as never, today as never);
-  const pen = chronicPenaltyFor((d.data ?? []) as { date: string; rpe: number | null; duration: number | null; done: boolean }[], new Date(s.date + "T12:00:00"), "athlete").chronicPenalty;
-  const sug = computeAutoregSuggestion(today.score, s.target_difficulty, base, pen);
-  const zone = sug ? zoneRange(Math.round(s.target_difficulty + pctToPoints(sug.reco)), sug.dir) : null;
-  return { proposed: sug?.dir ?? null, reco: sug?.reco ?? null, zoneLow: zone?.zoneLow ?? null, zoneHigh: zone?.zoneHigh ?? null, original_difficulty: s.target_difficulty, date: s.date };
+  const p = await computeProposalFor(admin, userId, s.date, { id: s.id ?? "", date: s.date, notes: s.notes ?? null, target_difficulty: s.target_difficulty });
+  return p ? { ...p, original_notes: null } : null;
 }

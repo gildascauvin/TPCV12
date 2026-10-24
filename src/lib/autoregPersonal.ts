@@ -24,7 +24,9 @@ export type PersonalDim = "stress" | "sleep" | "recovery" | "motivation";
 
 export type PersonalSignal = { family: SessionFamily; dim: PersonalDim; low: { part: number; total: number }; high: { part: number; total: number } };
 
-export type PersonalAdjust = { shift: number; penalty: number; dim: PersonalDim | null; family: SessionFamily | null };
+/* shiftHigh (2026-10-24) : curseur « pousser » séparé (profiles.autoreg_shift_high), absent des recos
+   figées avant cette date (lu comme 0). */
+export type PersonalAdjust = { shift: number; shiftHigh?: number; penalty: number; dim: PersonalDim | null; family: SessionFamily | null };
 
 export type AutoregProposal = {
   proposed: AutoregDir | null;
@@ -32,6 +34,9 @@ export type AutoregProposal = {
   zoneLow: number | null;
   zoneHigh: number | null;
   original_difficulty: number;
+  /* Texte de la séance au moment du conseil (2026-10-24) : comparé au texte final (le réalisé) pour
+     savoir si la séance a été allégée, gardée ou poussée. Absent des recos d'avant. */
+  original_notes?: string | null;
   personal?: PersonalAdjust | null;
   date: string;
   recorded_at?: string;
@@ -91,10 +96,10 @@ export function learnSignals(sessions: HistSession[], checkins: (CheckinDims & {
 }
 
 /* Ajustement du jour : malus si la séance prévue est d'une famille dont le signal est bas ce matin. */
-export function personalAdjust(signals: PersonalSignal[], shift: number, notes: string | null | undefined, checkin: CheckinDims | null): PersonalAdjust {
+export function personalAdjust(signals: PersonalSignal[], shift: number, notes: string | null | undefined, checkin: CheckinDims | null, shiftHigh = 0): PersonalAdjust {
   const family = sessionFamily(notes);
   const sig = checkin && family ? signals.find(s => s.family === family && DIM_LOW[s.dim](checkin)) : undefined;
-  return { shift, penalty: sig ? PERSONAL_PENALTY : 0, dim: sig?.dim ?? null, family: sig ? family : null };
+  return { shift, shiftHigh, penalty: sig ? PERSONAL_PENALTY : 0, dim: sig?.dim ?? null, family: sig ? family : null };
 }
 
 const OPENING: Record<PersonalDim, [string, string]> = {

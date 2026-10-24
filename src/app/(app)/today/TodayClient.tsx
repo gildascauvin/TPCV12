@@ -440,9 +440,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Réglages personnels du jour : seuil recalé (profil) + signal appris si la séance à faire est
      concernée ; séance déjà faite = ceux figés le matin. */
   const autoregShift = profile.autoreg_shift ?? 0;
+  const autoregShiftHigh = profile.autoreg_shift_high ?? 0;
   const personal: PersonalAdjust = autoregTargetTop
-    ? personalAdjust(personalSignals ?? [], autoregShift, autoregTargetTop.notes, wellnessFilledToday ? wellness : null)
-    : proposalPersonal(doneTop) ?? { shift: autoregShift, penalty: 0, dim: null, family: null };
+    ? personalAdjust(personalSignals ?? [], autoregShift, autoregTargetTop.notes, wellnessFilledToday ? wellness : null, autoregShiftHigh)
+    : proposalPersonal(doneTop) ?? { shift: autoregShift, shiftHigh: autoregShiftHigh, penalty: 0, dim: null, family: null };
   const decision = computeDecisionCard({
     day: decisionDay,
     personal,

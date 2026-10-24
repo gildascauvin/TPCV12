@@ -17,14 +17,15 @@ import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
 import { qualitativeDifficulty, computeAutoregSuggestion, type DifficultyWord, type AutoregDir } from "@/lib/autoregulation";
 import { computeWellnessBaselineAt } from "@/lib/wellnessBaseline";
 import { chronicPenaltyFor } from "@/lib/decisionCard";
-import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
+import { type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
+import { adviceOf, resolveFollow, judge, outcomeRight, type Outcome } from "@/lib/adviceJudge";
 import { learnSignals, type AutoregProposal, type PersonalDim, type SessionFamily } from "@/lib/autoregPersonal";
 import { SCALE_WORDS } from "@/lib/wellnessWords";
 
 export type BilanPeriodKind = "week" | "month" | "all";
 export type BilanPeriod = { kind: BilanPeriodKind; start: string; end: string };
 
-export type BilanSession = { date: string; name: string | null; notes?: string | null; rpe: number | null; target_difficulty: number | null; duration: number | null; done: boolean; created_at?: string | null; autoreg_decision?: AutoregDecisionRecord | null; autoreg_proposal?: AutoregProposal | null };
+export type BilanSession = { id?: string; date: string; name: string | null; notes?: string | null; rpe: number | null; target_difficulty: number | null; duration: number | null; done: boolean; created_at?: string | null; autoreg_decision?: AutoregDecisionRecord | null; autoreg_proposal?: AutoregProposal | null; autoreg_followed?: boolean | null };
 export type BilanCheckin = {
   date: string; sleep: number; stress: number; recovery: number; motivation: number;
   score: number | null; behaviors: string[] | null; bedtime: string | null;
@@ -47,9 +48,14 @@ export type BilanSlide =
   | { kind: "leviers"; rows: { label: string; with: string; without: string; delta: string; positive: boolean }[]; unit: "sleep" | "score" }
   | { kind: "tendance"; months: Bar[]; lateNights: Bar[] | null; direction: "down" | "up" | "stable" }
   | { kind: "tests"; main: { name: string; unit: string; points: { date: string; value: number }[]; pct: number }; others: { name: string; from: string; to: string; pct: number }[] }
-  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { harder: number; total: number }; recal: { shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number } | null; currentShift: number }
+  | { kind: "conseils"; none: { same: number; harder: number; total: number }; low: { justified: number; judged: number; followed: number }; high: { right: number; judged: number }; strip: StripCell[]; recal: Recal | null; currentShift: number; currentShiftHigh: number }
   | { kind: "suivre"; followed: { n: number; felt: number }; ignored: { n: number; felt: number }; shifted: boolean }
   | { kind: "partage"; kpis: { value: string; label: string }[]; line: string | null };
+
+/* Une case de la frise des verdicts (« Mes conseils », écran post-séance) : le juge de adviceJudge.ts. */
+export type StripCell = { id?: string; date: string; outcome: Outcome };
+/* Recalage proposé dans un sens : seuil cible, et ce que ça aurait changé sur l'historique rejoué. */
+export type Recal = { dir: AutoregDir; shift: number; alertsNow: number; alertsThen: number; justifiedNow: number; justifiedThen: number };
 
 export type Bilan = { period: BilanPeriod; slides: BilanSlide[]; title: string };
 
@@ -189,67 +195,98 @@ function predit(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide 
 /* ── Le moteur rejoué sur l'historique (pistes 1 et 3) ──────────────────────────────────────────
    Pour chaque séance faite avec un check-in le même jour : la reco cliquée (autoreg_decision), sinon
    celle figée le matin (autoreg_proposal), sinon le moteur rejoué ce jour-là avec les seules données
-   d'avant (baseline, charge chronique). Le seuil peut varier : c'est ce qui permet de proposer « Me
-   recaler » avec ce que ça aurait changé. */
-type ReplayRow = { s: BilanSession; c: BilanCheckin; fixed: AutoregDir | null | undefined; applied: boolean | null; dirAt: (shift: number) => AutoregDir | null };
+   d'avant (baseline, charge chronique). Les deux curseurs (alléger, pousser) peuvent varier : c'est ce
+   qui permet de proposer « Me recaler » avec ce que ça aurait changé. Chaque séance est jugée par la
+   règle unique d'adviceJudge.ts, réalisé compris (clic, correction, texte comparé au matin). */
+type ReplayRow = { s: BilanSession; c: BilanCheckin; dirAt: (low: number, high: number) => AutoregDir | null; outcomeAt: (low: number, high: number) => Outcome };
 function replay(sessions: BilanSession[], checkins: BilanCheckin[]): ReplayRow[] {
   const byDate = new Map(checkins.map(c => [c.date, c]));
   const out: ReplayRow[] = [];
-  for (const s of sessions) {
+  for (const s of [...sessions].sort((a, b) => a.date.localeCompare(b.date))) {
     const c = byDate.get(s.date);
     if (!c || !s.target_difficulty || s.rpe === null) continue;
-    const d = validDecision(s as { date: string; autoreg_decision?: AutoregDecisionRecord | null });
-    const p = s.autoreg_proposal && s.autoreg_proposal.date === s.date ? s.autoreg_proposal : null;
-    const fixed = d ? d.proposed : p ? p.proposed : undefined;
-    const applied = d ? Math.round(d.applied_difficulty) !== Math.round(d.original_difficulty) : null;
+    const fixed = adviceOf(s);
     let cache: { base: ReturnType<typeof computeWellnessBaselineAt>; pen: number } | null = null;
     const ctx = () => cache ?? (cache = {
       base: computeWellnessBaselineAt(checkins.filter(x => x.date < s.date && x.date >= addDays(s.date, -35)) as never, c as never),
       pen: chronicPenaltyFor(sessions.filter(x => x.date < s.date && x.date >= addDays(s.date, -60)), new Date(s.date + "T12:00:00"), "athlete").chronicPenalty,
     });
-    out.push({ s, c, fixed, applied, dirAt: shift => fixed !== undefined ? fixed : computeAutoregSuggestion(c.score, s.target_difficulty, ctx().base, ctx().pen, shift)?.dir ?? null });
+    const dirAt = (lo: number, hi: number) => fixed ? fixed.proposed : computeAutoregSuggestion(c.score, s.target_difficulty, ctx().base, ctx().pen, lo, hi)?.dir ?? null;
+    const original = fixed?.original ?? s.target_difficulty;
+    out.push({ s, c, dirAt, outcomeAt: (lo, hi) => { const d = dirAt(lo, hi); return judge(d, original, s.rpe!, resolveFollow(s, d)); } });
   }
   return out;
 }
 
-const harderWord = (s: BilanSession) => wordIdx(s.rpe!) > wordIdx(s.target_difficulty!);
-const sameWord = (s: BilanSession) => wordIdx(s.rpe!) === wordIdx(s.target_difficulty!);
 
 const RECAL_MAX = 15;
-function conseils(rows: ReplayRow[], currentShift: number): BilanSlide | null {
-  const none = rows.filter(r => r.dirAt(currentShift) === null), low = rows.filter(r => r.dirAt(currentShift) === "low");
-  if (low.length < 5 || none.length < 10) return null;
-  const justified = (rs: ReplayRow[]) => rs.filter(r => harderWord(r.s)).length;
-  let recal: Extract<BilanSlide, { kind: "conseils" }>["recal"] = null;
-  // Recalage proposé seulement si les alertes ont souvent été de trop, et sur l'historique rejoué
-  // (les jours déjà figés ne bougent pas avec le seuil).
-  // Plafond +15 au total : au-delà, le moteur perdrait trop d'alertes fondées pour un gain incertain.
-  if (low.length >= 10 && justified(low) / low.length < 0.35 && currentShift < RECAL_MAX) {
-    const score = (sh: number) => { const a = rows.filter(r => r.dirAt(sh) === "low"); const j = justified(a); return { a: a.length, j, v: j - 0.5 * (a.length - j) }; };
-    const now = score(currentShift);
-    let best = { sh: currentShift, ...now };
-    for (let sh = currentShift + 5; sh <= RECAL_MAX; sh += 5) { const r = score(sh); if (r.v > best.v + 0.5) best = { sh, ...r }; }
-    if (best.sh !== currentShift) recal = { shift: best.sh, alertsNow: now.a, alertsThen: best.a, justifiedNow: now.j, justifiedThen: best.j };
-  }
-  return { kind: "conseils", none: { same: none.filter(r => sameWord(r.s)).length, harder: justified(none), total: none.length }, low: { harder: justified(low), total: low.length }, recal, currentShift };
+/* Recalage proposé dans un sens si ses conseils jugés (≥ 10) ont été justes moins de 35 % du temps.
+   Pas de 5, plafond 15 : au-delà, le moteur perdrait trop de conseils justes pour un gain incertain.
+   Les jours déjà figés ne bougent pas avec le seuil : seul l'historique rejoué change. */
+function recalFor(rows: ReplayRow[], dir: AutoregDir, lo: number, hi: number): Recal | null {
+  const want: Outcome = dir === "low" ? "justified" : "push_right";
+  const at = (l: number, h: number) => {
+    const js = rows.map(r => ({ d: r.dirAt(l, h), o: r.outcomeAt(l, h) })).filter(x => x.d === dir && outcomeRight(x.o) !== null);
+    const j = js.filter(x => x.o === want).length;
+    return { a: js.length, j, v: j - 0.5 * (js.length - j) };
+  };
+  const cur = dir === "low" ? lo : hi;
+  const now = at(lo, hi);
+  if (now.a < 10 || now.j / now.a >= 0.35 || cur >= RECAL_MAX) return null;
+  let best = { sh: cur, ...now };
+  for (let sh = cur + 5; sh <= RECAL_MAX; sh += 5) { const r = dir === "low" ? at(sh, hi) : at(lo, sh); if (r.v > best.v + 0.5) best = { sh, ...r }; }
+  return best.sh !== cur ? { dir, shift: best.sh, alertsNow: now.a, alertsThen: best.a, justifiedNow: now.j, justifiedThen: best.j } : null;
+}
+
+function strip(rows: ReplayRow[], lo: number, hi: number, n = 14): StripCell[] {
+  return rows.map(r => ({ id: r.s.id, date: r.s.date, outcome: r.outcomeAt(lo, hi) })).filter(x => outcomeRight(x.outcome) !== null).slice(-n);
+}
+
+/* « Mes conseils » (2026-10-24) : dès le 1er conseil jugé, avec la frise ; les barres arrivent avec
+   leurs données. Un « Alléger » suivi et bien passé sort des comptes (on ne sait pas ce qu'aurait donné
+   la séance prévue). */
+function conseils(rows: ReplayRow[], lo: number, hi: number): BilanSlide | null {
+  const at = rows.map(r => ({ d: r.dirAt(lo, hi), o: r.outcomeAt(lo, hi) }));
+  const none = at.filter(x => x.d === null), low = at.filter(x => x.d === "low"), high = at.filter(x => x.d === "high");
+  const cells = strip(rows, lo, hi);
+  if (!cells.length) return null;
+  const recal = recalFor(rows, "low", lo, hi) ?? recalFor(rows, "high", lo, hi);
+  return {
+    kind: "conseils",
+    none: { same: none.filter(x => x.o === "none_same").length, harder: none.filter(x => x.o === "none_harder").length, total: none.length },
+    low: { justified: low.filter(x => x.o === "justified").length, judged: low.filter(x => x.o === "justified" || x.o === "margin").length, followed: low.filter(x => x.o === "followed_ok").length },
+    high: { right: high.filter(x => x.o === "push_right").length, judged: high.length },
+    strip: cells, recal, currentShift: lo, currentShiftHigh: hi,
+  };
+}
+
+/* Les comptes de l'écran post-séance : les 14 derniers conseils jugés, même règle que « Mes conseils ». */
+export function computeAccounts(input: { sessions: BilanSession[]; checkins: BilanCheckin[]; signupAt: string; shift: number; shiftHigh: number }): { right: number; judged: number; strip: StripCell[] } | null {
+  const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, input.signupAt));
+  const checkins = input.checkins.filter(c => !isSynthetic(c, input.signupAt));
+  const cells = strip(replay(sessions, checkins), input.shift, input.shiftHigh);
+  if (!cells.length) return null;
+  return { right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length, strip: cells };
 }
 
 /* Suivre ou pas (piste 3) : les jours où l'app proposait d'alléger, forme ressentie le lendemain
-   selon que le sportif a allégé ou gardé sa séance. Allégé = décision cliquée ; sans clic (beaucoup
-   s'ajustent pendant la séance), séance ressentie sous le prévu ou nettement plus courte que ses
-   séances de même difficulté. */
+   selon que le sportif a allégé ou gardé sa séance. Allégé = clic, correction ou texte allégé ; sinon
+   (beaucoup s'ajustent pendant la séance sans rien écrire), séance ressentie sous le prévu ou
+   nettement plus courte que ses séances de même difficulté. */
 function suivre(rows: ReplayRow[], checkins: BilanCheckin[], currentShift: number): BilanSlide | null {
   const byDate = new Map(checkins.map(c => [c.date, c]));
   const durBy = new Map<number, number[]>();
   for (const r of rows) if (r.s.duration) { const k = wordIdx(r.s.target_difficulty!); durBy.set(k, [...(durBy.get(k) ?? []), r.s.duration]); }
   const median = (xs: number[]) => { const a = [...xs].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
-  const low = rows.filter(r => r.dirAt(0) === "low");
+  const low = rows.filter(r => r.dirAt(0, 0) === "low");
   const f: number[] = [], g: number[] = [];
   for (const r of low) {
     const next = byDate.get(addDays(r.s.date, 1));
     if (!next || (next.behaviors ?? []).some(b => SOIREE_WIDE.has(b))) continue;
     const md = durBy.get(wordIdx(r.s.target_difficulty!));
-    const followed = r.applied ?? (r.s.rpe! < r.s.target_difficulty! || (!!r.s.duration && !!md && r.s.duration < 0.9 * median(md)));
+    const fo = resolveFollow(r.s, "low");
+    const known = fo.source === "click" || fo.source === "answer" || (fo.source === "text" && fo.followed);
+    const followed = known ? fo.followed : (r.s.rpe! < r.s.target_difficulty! || (!!r.s.duration && !!md && r.s.duration < 0.9 * median(md)));
     (followed ? f : g).push(felt(next));
   }
   if (f.length < 5 || g.length < 5) return null;
@@ -380,7 +417,7 @@ function tests(period: BilanPeriod, rows: BilanTest[]): BilanSlide | null {
 export function computeBilan(input: {
   period: BilanPeriod; today: string; signupAt: string;
   sessions: BilanSession[]; checkins: BilanCheckin[]; tests: BilanTest[];
-  currentShift?: number;
+  currentShift?: number; currentShiftHigh?: number;
 }): Bilan {
   const { period, today, signupAt } = input;
   const sessions = input.sessions.filter(s => s.done && s.rpe !== null && !isSynthetic(s, signupAt) && s.date <= period.end);
@@ -390,8 +427,8 @@ export function computeBilan(input: {
 
   const periodSlides = [regularite(period, sessions, checkins, today), charge(period, sessions, today)];
   const rows = replay(sessions, checkins);
-  const shift = input.currentShift ?? 0;
-  const learned = [conseils(rows, shift), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
+  const shift = input.currentShift ?? 0, shiftHigh = input.currentShiftHigh ?? 0;
+  const learned = [conseils(rows, shift, shiftHigh), ressenti(checkins), predit(sessions, checkins), biais(joined), fatigue(checkins, sessions), suivre(rows, checkins, shift), leviers(checkins)].filter((x): x is BilanSlide => !!x);
   const late = [tendance(period, checkins), tests(period, input.tests)];
   const slides = [...periodSlides, ...(period.kind === "week" ? learned.slice(0, 2) : learned), ...late].filter((x): x is BilanSlide => !!x);
 

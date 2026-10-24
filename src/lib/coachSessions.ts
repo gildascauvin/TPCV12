@@ -19,6 +19,7 @@ export function realToView(s: Session, athletes: CoachAthlete[]): CoachViewSessi
     viewed_by_coach_at: s.viewed_by_coach_at,
     autoreg_decision: (s as { autoreg_decision?: CoachViewSession["autoreg_decision"] }).autoreg_decision ?? null,
     autoreg_proposal: (s as { autoreg_proposal?: CoachViewSession["autoreg_proposal"] }).autoreg_proposal ?? null,
+    autoreg_followed: (s as { autoreg_followed?: boolean | null }).autoreg_followed ?? null,
   };
 }
 
