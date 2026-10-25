@@ -17,18 +17,20 @@ function shiftDate(date: string, days: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export async function loadCheckinContext(userId: string, date: string): Promise<{ today: CheckinRow | null; history: CheckinRow[]; sessions: DoneSession[]; tomorrowDifficulty: number | null; form: number | null }> {
+export async function loadCheckinContext(userId: string, date: string): Promise<{ today: CheckinRow | null; history: CheckinRow[]; sessions: DoneSession[]; tomorrowDifficulty: number | null; form: number | null; restDay: boolean }> {
   const supabase = createClient();
   const since = shiftDate(date, -HISTORY_DAYS), tomorrow = shiftDate(date, 1);
-  const [w, s, t] = await Promise.all([
+  const [w, s, t, d] = await Promise.all([
     supabase.from("wellness_daily")
       .select("date, sleep, stress, recovery, motivation, score, base_score, behaviors, bedtime, device_sleep_minutes, device_resting_hr, device_rhr_baseline, device_hrv_ms, device_hrv_baseline")
       .eq("user_id", userId).gte("date", since).lte("date", date),
     // Séances faites sur la fenêtre de l'onglet Récupération : la Forme du score agrégé en dépend.
     supabase.from("sessions").select("date, rpe, duration, done").eq("user_id", userId).eq("done", true).gte("date", shiftDate(date, -120)).lte("date", date),
     supabase.from("sessions").select("target_difficulty").eq("user_id", userId).eq("date", tomorrow).eq("done", false),
+    // Séance prévue ou faite ce jour-là : sans elle, le conseil ne parle pas de « ta séance du jour ».
+    supabase.from("sessions").select("id").eq("user_id", userId).eq("date", date).limit(1),
   ]);
-  [w, s, t].forEach(r => { if (r.error) console.error("[résultat check-in] lecture:", r.error.message); });
+  [w, s, t, d].forEach(r => { if (r.error) console.error("[résultat check-in] lecture:", r.error.message); });
   const rows = (w.data ?? []) as CheckinRow[];
   const tomorrowDifficulty = ((t.data ?? []) as { target_difficulty: number | null }[]).reduce((m, x) => Math.max(m, x.target_difficulty ?? 0), 0) || null;
   const done = (s.data ?? []) as (DoneSession & { duration: number | null })[];
@@ -38,6 +40,8 @@ export async function loadCheckinContext(userId: string, date: string): Promise<
     history: rows.filter(r => r.date < date),
     sessions: done,
     tomorrowDifficulty,
+    // Lecture en échec : on garde le conseil séance plutôt que d'annoncer un repos à tort.
+    restDay: !d.error && (d.data ?? []).length === 0,
   };
 }
 

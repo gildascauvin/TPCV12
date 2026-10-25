@@ -86,7 +86,7 @@ async function buildShown(kind: Nav["kind"], key: string, data: PhysioData | nul
   const checkins = data?.checkins.filter(c => c.bedtime != null) ?? [];
   const c = checkins.find(x => x.date === key);
   const verdict = c && data ? physioVerdictAt(key, c, checkins, data.health) : null;
-  const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form) : null;
+  const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
   if (!verdict && !checkin) return null;
   return { kind: "wellness", verdict, night: data && verdict ? nightSentence(key, data.health) : null, checkin };
 }
@@ -120,7 +120,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
           loadCheckinContext(userId, detail.date).catch(() => null),
         ]);
         const verdict = data ? physioVerdictAt(detail.date, detail, data.checkins, data.health) : null;
-        const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form) : null;
+        const checkin = ctx?.today ? checkinResult(ctx.today, ctx.history, ctx.sessions, ctx.tomorrowDifficulty, ctx.form, ctx.restDay) : null;
         if (!verdict && !checkin) return;
         setNav(null);
         setShown({ kind: "wellness", verdict, night: data && verdict ? nightSentence(detail.date, data.health) : null, checkin });
@@ -231,7 +231,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
   } else if (shown.kind === "wellness" && shown.verdict) {
     const v = shown.verdict;
     if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
-    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = "La fatigue ne se voit pas dans ta nuit : le stress ou la motivation, plutôt que les jambes ?"; }
+    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = v.reason ?? ""; }
     else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
     gauge = (
       <TwoMarkGauge

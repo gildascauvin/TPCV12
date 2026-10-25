@@ -68,9 +68,12 @@ const DIMENSION_TIP: Record<DimensionKey, { very: string; low: string }> = {
     low: "Choisis un objectif précis pour ta séance du jour, ça aide à s'y mettre.",
   },
 };
-function dailyAdvice(row: CheckinRow, k: DimensionKey): string | null {
+// Jour sans séance (2026-10-25, Gildas) : les conseils motivation parlent de « ta séance ».
+const REST_MOTIVATION_TIP = "Jour de repos : coupe vraiment, l'envie revient souvent avec.";
+function dailyAdvice(row: CheckinRow, k: DimensionKey, restDay: boolean): string | null {
   const v = oriented(row, k);
   if (v > 6) return null;
+  if (k === "motivation" && restDay) return REST_MOTIVATION_TIP;
   if (k === "sleep") {
     const hit = (row.behaviors ?? []).find(b => SLEEP_BEHAVIOR_TIP[b]);
     if (hit) return SLEEP_BEHAVIOR_TIP[hit];
@@ -110,7 +113,7 @@ export function recoveryAggregate(feel: number | null, form: number | null) {
   return pos == null ? null : { pos, band: bandFor("recup", pos), score: Math.round(pos * 100) };
 }
 
-export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions: DoneSession[], tomorrowDifficulty: number | null, form: number | null = null): CheckinResult {
+export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions: DoneSession[], tomorrowDifficulty: number | null, form: number | null = null, restDay = false): CheckinResult {
   const prior = history.filter(h => h.date < today.date).sort((a, b) => a.date.localeCompare(b.date));
   const b = baselineFor(today, prior);
   const base = today.base_score ?? today.score ?? 0;
@@ -203,7 +206,7 @@ export function checkinResult(today: CheckinRow, history: CheckinRow[], sessions
       : "Un matin plutôt bon : rien ne te tire vers le bas.";
   })();
 
-  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight, advice: dailyAdvice(today, lowest) };
+  return { score: agg.score, zone, relative, day: count <= NORM_DAYS ? count : null, insight, advice: dailyAdvice(today, lowest, restDay) };
 }
 
 /* Jauge ouverte du score de récup : la même que l'onglet Récupération (AggregateGauge, mêmes bandes). */

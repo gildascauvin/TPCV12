@@ -142,6 +142,8 @@ export type PhysioVerdict = {
   zFeel: number; zPhysio: number; diff: number;
   kind: "less" | "more" | "agree";
   status: string; title: string; text: string;
+  /* Phrase sous la jauge de l'écran de résultat (sportif), seulement quand le ressenti est sous la nuit. */
+  reason?: string;
 };
 
 export const PHYSIO_NORM_DAYS = 28;
@@ -149,6 +151,24 @@ export const PHYSIO_MIN_DAYS = 5;
 const DIFF_THRESHOLD = 1;   // écart entre les deux écarts, en écarts-types
 const SD_FLOOR = 5;         // points sur 100 : une norme très stable ne doit pas grossir le moindre écart
 
+/* Ressenti sous la nuit mesurée (2026-10-25, Gildas) : la nuit (HRV, pouls) ne voit pas la fatigue
+   musculaire, donc on ne l'écarte jamais d'office. On nomme la réponse la plus basse du matin ; à
+   égalité, les courbatures d'abord (cause la plus fréquente chez un sportif). */
+function moreCause(c: PhysioCheckin): "recovery" | "sleep" | "head" {
+  const order = [["recovery", c.recovery], ["sleep", c.sleep], ["stress", 10 - c.stress], ["motivation", c.motivation]] as const;
+  const k = [...order].sort((a, b) => a[1] - b[1])[0][0];
+  return k === "recovery" || k === "sleep" ? k : "head";
+}
+const MORE_CAUSE_SHORT = {
+  recovery: "c'est sans doute de la fatigue musculaire, qui ne se voit pas dans la nuit",
+  sleep: "un sommeil peu réparateur ne se voit pas toujours dans les mesures",
+  head: "c'est plutôt la tête que le corps",
+};
+const MORE_CAUSE_LONG = {
+  recovery: "Ta nuit est bonne : c'est la fatigue musculaire, et elle ne se voit pas dans la nuit. Échauffe-toi plus longtemps et écoute tes jambes.",
+  sleep: "Ta nuit mesurée est correcte, mais tu te sens mal reposé : un sommeil peu réparateur ne se voit pas toujours dans les mesures.",
+  head: "Ta nuit est bonne : aujourd'hui, c'est plutôt la tête que le corps.",
+};
 const feelRaw = (c: PhysioCheckin) => ((c.sleep + (10 - c.stress) + c.recovery + c.motivation) / 4) * 10;
 
 function physioRaw(d: DeviceInputs | null | undefined): number | null {
@@ -207,7 +227,7 @@ export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: 
     text: `${detail} ${compare} : ${coach ? "son" : "ton"} corps récupère peut-être moins bien ${coach ? "qu'il ne le sent" : "que tu ne le sens"}.` };
   if (diff >= DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
     title: `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
-    text: `${detail} ${compare} : la fatigue ressentie ne se voit pas dans ${coach ? "son" : "ton"} corps (stress, motivation ?).` };
+    text: `${detail} ${compare} : ${MORE_CAUSE_SHORT[moreCause(answers)]}.`, reason: MORE_CAUSE_LONG[moreCause(answers)] };
   return { zFeel, zPhysio, diff, kind: "agree", status: "D'accord",
     title: `${P} données physiologiques confirment ${coach ? "son" : "ton"} ressenti`, text: `${detail} ${compare}.` };
 }
