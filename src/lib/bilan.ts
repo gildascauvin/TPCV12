@@ -326,6 +326,12 @@ export function computeAccounts(input: RecalInput): { right: number; judged: num
   return { right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length, strip: cells, lift: liftOf(rows, "low", on) };
 }
 
+/* Tous les conseils jugés d'un sportif, sans limite (bilan du groupe, 2026-10-26) : même règle et
+   mêmes seuils du jour que la frise. */
+export function allVerdicts(input: RecalInput): StripCell[] {
+  return strip(realRows(input), shiftsOn(input.events ?? [], { lo: input.shift, hi: input.shiftHigh }), Infinity);
+}
+
 /* Recalage automatique (2026-10-24) : vérifié après chaque séance notée, côté serveur. */
 export function checkRecal(input: RecalInput): Recal | null {
   const rows = realRows(input), ev = input.events ?? [];

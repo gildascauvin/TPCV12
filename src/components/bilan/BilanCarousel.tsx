@@ -13,6 +13,7 @@ import { outcomeRight } from "@/lib/adviceJudge";
 import { requestPhysioReplay } from "@/lib/physioData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
 import { fr1 } from "@/components/physio/PhysioRevealHost";
+import { computeGroupBilan, type GroupAthlete, type GroupBilan, type GroupSlide, type DayMark } from "@/lib/groupBilan";
 
 type Props = {
   userId: string;
@@ -23,15 +24,20 @@ type Props = {
   source: "home_card" | "date_picker" | "coach";
   /* Coach (2026-10-24) : bilan d'un de ses sportifs, lu via /api/coach/bilan (RLS). */
   subject?: { athleteId: string; name: string };
+  /* Coach, vue Groupe (2026-10-26) : bilan de tous ses sportifs inscrits (GET /api/coach/group-bilan). */
+  group?: boolean;
   onClose: () => void;
 };
+type AnySlide = BilanSlide | GroupSlide;
 
-const GLOW: Record<BilanSlide["kind"], string> = {
+const GLOW: Record<AnySlide["kind"], string> = {
+  g_decroche: "rgba(212,64,0,0.45)", g_seances: "rgba(242,138,0,0.40)", g_conseils: "rgba(47,158,68,0.38)", g_charge: "rgba(56,189,248,0.36)",
   regularite: "rgba(212,64,0,0.45)", charge: "rgba(47,158,68,0.40)", ressenti: "rgba(56,189,248,0.38)",
   predit: "rgba(212,64,0,0.40)", biais: "rgba(242,138,0,0.40)", fatigue: "rgba(168,85,247,0.38)",
   leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", conseils: "rgba(47,158,68,0.38)", suivre: "rgba(168,85,247,0.36)", partage: "rgba(56,189,248,0.20)",
 };
-const KICKER: Record<BilanSlide["kind"], string> = {
+const KICKER: Record<AnySlide["kind"], string> = {
+  g_decroche: "QUI DÉCROCHE", g_seances: "TES SÉANCES", g_conseils: "CONSEILS VÉRIFIÉS", g_charge: "CHARGE",
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
   biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "CONSEILS VÉRIFIÉS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
@@ -290,9 +296,89 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
   }
 }
 
-export default function BilanCarousel({ userId, kind, anchor, today, source, subject, onClose }: Props) {
+/* Écrans du bilan du groupe (2026-10-26). Jamais de moyenne du groupe : des prénoms, triés. Formes
+   distinctes pour le daltonisme (plein, demi-hauteur, pointillé), toujours doublées de mots. */
+const names = (xs: string[]) => xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} et ${xs[xs.length - 1]}`;
+const pl = (k: number, w: string) => `${k} ${w}${k > 1 ? "s" : ""}`;
+function Marks({ marks }: { marks: DayMark[] }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 16 }} role="img" aria-label={marks.map(m => (m === "ok" ? "fait" : m === "tired" ? "fait, fatigué" : "manqué")).join(", ")}>
+      {marks.map((m, i) => <div key={i} style={{ flex: 1, boxSizing: "border-box", borderRadius: 3, height: m === "tired" ? 8 : 16, background: m === "ok" ? "#fff" : m === "tired" ? "#f28a00" : "transparent", border: m === "missed" ? "1.5px dashed rgba(255,255,255,0.55)" : "none" }} />)}
+    </div>
+  );
+}
+function GroupSlideBody({ s }: { s: GroupSlide }) {
+  switch (s.kind) {
+    case "g_decroche": {
+      const flagged = s.rows.filter(r => r.flag);
+      return (<>
+        <h2 style={h2}>{flagged.length ? <>{names(flagged.map(r => r.name))} <span style={{ color: "#ff8a5c" }}>{flagged.length > 1 ? "sont" : "est"} à surveiller.</span></> : <>Tout le groupe <span style={{ color: "#7ee08f" }}>suit.</span></>}</h2>
+        <p style={body}>Les jours de séance : check-in fait, fait mais fatigué, ou manqué.</p>
+        {s.rows.map((r, i) => (
+          <div key={i} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{r.name}</span>
+              {r.flag && <span style={{ fontSize: 13, fontWeight: 700, color: "#ffb38a" }}>{r.flag}</span>}
+            </div>
+            <Marks marks={r.marks} />
+            <div style={small}>{r.missed ? `${pl(r.missed, "check-in")} manqué${r.missed > 1 ? "s" : ""}` : "Aucun check-in manqué"} sur {pl(r.days, "séance")}{r.tired ? `, fatigué ${pl(r.tired, "jour")}` : ""}.</div>
+          </div>
+        ))}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, background: "#fff" }} />fait</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 6, borderRadius: 2, background: "#f28a00" }} />fait, fatigué</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 12, height: 12, borderRadius: 3, boxSizing: "border-box", border: "1.5px dashed rgba(255,255,255,0.6)" }} />manqué</span>
+        </div>
+        {flagged.length > 0 && s.regular > 0 && <div style={small}>{s.regular > 1 ? `Les ${s.regular} autres sportifs sont réguliers.` : "L'autre sportif est régulier."}</div>}
+      </>);
+    }
+    case "g_seances": {
+      const top = s.rows[0];
+      const hard = top.harder / top.total >= 0.6;
+      return (<>
+        <h2 style={h2}>{hard ? <>« {top.name} » est plus dure <span style={{ color: "#ffb35c" }}>que tu ne l&apos;écris.</span></> : <>Tes séances <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
+        <p style={body}>Difficulté que tu as prévue, comparée à ce que chaque sportif a ressenti.</p>
+        <div style={card}>
+          <Rows rows={s.rows.map((r, i) => ({ label: `${r.name} · prévue ${r.planned}`, part: r.harder, total: r.total, highlight: i === 0 && hard }))} color="#f28a00" />
+          <div style={small}>Plus dure que prévu, sur l&apos;ensemble des sportifs qui l&apos;ont faite.</div>
+        </div>
+        {hard && <p style={{ ...body, fontSize: 14 }}>Ressentie au-dessus de « {top.planned} » {top.harder} fois sur {top.total}, chez {top.athletes} sportifs. La noter un cran plus haut, ou l&apos;alléger.</p>}
+      </>);
+    }
+    case "g_conseils":
+      return (<>
+        <h2 style={h2}>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></h2>
+        <div style={card}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{s.right} confirmés sur {s.judged}</div>
+          <Rows rows={s.rows.map((r, i) => ({ label: r.name, part: r.right, total: r.judged, highlight: i === 0 }))} color="#7ee08f" />
+        </div>
+        <p style={{ ...body, fontSize: 14 }}>Le sportif le moins bien lu apparaît en premier. Son seuil se recale tout seul avec ses séances.</p>
+      </>);
+    case "g_charge": {
+      const up = s.rows.filter(r => r.above / r.days >= 0.3), down = s.rows.filter(r => r.below / r.days >= 0.3);
+      return (<>
+        <h2 style={h2}>{up.length ? <>{names(up.map(r => r.name))} <span style={{ color: "#ff8a5c" }}>{up.length > 1 ? "montent" : "monte"} trop vite.</span></> : down.length ? <>{names(down.map(r => r.name))} <span style={{ color: "#8cc4f5" }}>{down.length > 1 ? "manquent" : "manque"} de charge.</span></> : s.rows.some(r => r.above || r.below) ? <>Le groupe reste dans sa zone, <span style={{ color: "#7ee08f" }}>à quelques jours près.</span></> : <>Le groupe reste <span style={{ color: "#7ee08f" }}>dans sa zone.</span></>}</h2>
+        <p style={body}>Chaque jour, la charge des 7 derniers jours comparée à celle des 4 dernières semaines.</p>
+        {s.rows.filter(r => r.above || r.below).slice(0, 4).map((r, i) => (
+          <div key={i} style={card}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{r.name}</div>
+            <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", gap: 2 }}>
+              {r.below > 0 && <div style={{ width: `${(r.below / r.days) * 100}%`, background: "rgba(140,196,245,0.55)" }} />}
+              <div style={{ flex: 1, background: "#fff" }} />
+              {r.above > 0 && <div style={{ width: `${(r.above / r.days) * 100}%`, background: "#ff6a2b" }} />}
+            </div>
+            <div style={small}>{[r.below ? `En dessous de sa zone ${pl(r.below, "jour")}` : null, r.above ? `${r.below ? "au-dessus" : "Au-dessus de sa zone"} ${pl(r.above, "jour")}` : null].filter(Boolean).join(", ")} sur {r.days}.</div>
+          </div>
+        ))}
+        {(() => { const rest = s.rows.filter(r => !r.above && !r.below).length; return rest ? <div style={small}>{rest === s.rows.length ? `Les ${rest} sportifs suivis sont restés dans leur zone tous les jours.` : rest > 1 ? `Les ${rest} autres sportifs sont restés dans leur zone tous les jours.` : "L'autre sportif est resté dans sa zone tous les jours."}</div> : null; })()}
+      </>);
+    }
+  }
+}
+
+export default function BilanCarousel({ userId, kind, anchor, today, source, subject, group = false, onClose }: Props) {
   const n = subject?.name;
-  const [bilan, setBilan] = useState<Bilan | null>(null);
+  const [bilan, setBilan] = useState<Bilan | GroupBilan | null>(null);
   const [failed, setFailed] = useState(false);
   const [idx, setIdx] = useState(0);
   const [shared, setShared] = useState(false);
@@ -312,6 +398,29 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   const touchX = useRef<number | null>(null);
 
   useEffect(() => {
+    if (!group) return;
+    let alive = true;
+    (async () => {
+      const r = await fetch(`/api/coach/group-bilan?today=${today}`).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : {};
+      if (!alive) return;
+      if (!r?.ok) { console.error("[bilan groupe] lecture", j.error ?? r?.status); setFailed(true); return; }
+      type RawAthlete = { id: string; name: string; profile: BilanRaw["profile"]; sessions: BilanSession[]; checkins: BilanCheckin[] };
+      const athletes: GroupAthlete[] = ((j.athletes ?? []) as RawAthlete[]).map(a => ({
+        id: a.id, name: a.name, signupAt: a.profile?.created_at ?? new Date().toISOString(),
+        shift: a.profile?.autoreg_shift ?? 0, shiftHigh: a.profile?.autoreg_shift_high ?? 0, events: a.profile?.autoreg_recal_events ?? [],
+        sessions: a.sessions, checkins: a.checkins,
+      }));
+      const firstDate = athletes.flatMap(a => [...a.sessions, ...a.checkins].filter(x => !isSynthetic(x, a.signupAt)).map(x => x.date)).sort()[0] ?? today;
+      const b = computeGroupBilan({ period: periodFor(kind, anchor, firstDate), today, athletes });
+      setBilan(b);
+      posthog.capture("bilan_opened", { period: kind, source: "coach_group", slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(","), athletes: athletes.length });
+    })();
+    return () => { alive = false; };
+  }, [group, kind, anchor, today]);
+
+  useEffect(() => {
+    if (group) return;
     let alive = true;
     (async () => {
       let raw: BilanRaw;
@@ -334,9 +443,9 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
       posthog.capture("bilan_opened", { period: kind, source, slides: b.slides.length, slide_kinds: b.slides.map(x => x.kind).join(",") });
     })();
     return () => { alive = false; };
-  }, [userId, kind, anchor, today, source, subject]);
+  }, [userId, kind, anchor, today, source, subject, group]);
 
-  const slides = useMemo(() => bilan?.slides ?? [], [bilan]);
+  const slides = useMemo<AnySlide[]>(() => bilan?.slides ?? [], [bilan]);
   const slide = slides[idx];
 
   useEffect(() => {
@@ -354,7 +463,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   }, [slides.length, onClose]);
 
   async function share() {
-    if (!bilan || slide?.kind !== "partage") return;
+    if (!bilan || !slide || slide.kind !== "partage") return;
     const text = [`Mon bilan ThePerfClub · ${bilan.title}`, ...slide.kpis.map(k => `${k.value} ${k.label}`), slide.line ?? "", "https://theperfclub.com"].filter(Boolean).join("\n");
     posthog.capture("bilan_shared", { period: kind });
     try {
@@ -366,7 +475,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   const last = idx >= slides.length - 1;
   const content = (
     <div
-      role="dialog" aria-modal="true" aria-label={n ? `Bilan de ${n}` : "Ton bilan"}
+      role="dialog" aria-modal="true" aria-label={group ? "Bilan du groupe" : n ? `Bilan de ${n}` : "Ton bilan"}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={e => {
         if (touchX.current === null) return;
@@ -384,22 +493,24 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
           {slides.map((_, i) => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= idx ? "#fff" : "rgba(255,255,255,0.22)" }} />)}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.6)" }}>
-          <span>{bilan ? `${n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"} · ${slide ? (n ? KICKER_COACH[slide.kind] ?? KICKER[slide.kind] : KICKER[slide.kind]) : ""}` : n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"}</span>
+          <span>{(() => { const who = group ? "BILAN DU GROUPE" : n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"; return bilan && slide ? `${who} · ${n ? KICKER_COACH[slide.kind as BilanSlide["kind"]] ?? KICKER[slide.kind] : KICKER[slide.kind]}` : who; })()}</span>
           <button onClick={onClose} aria-label="Fermer le bilan" style={{ background: "none", border: 0, color: "#fff", fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4 }}>×</button>
         </div>
-        {bilan && slide && LEARNED.has(slide.kind) && bilan.period.kind !== "all" && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: -8 }}>Appris sur tout {n ? "son" : "ton"} historique</div>}
+        {bilan && slide && LEARNED.has(slide.kind as BilanSlide["kind"]) && bilan.period.kind !== "all" && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: -8 }}>Appris sur tout {n ? "son" : "ton"} historique</div>}
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, paddingTop: 12 }}>
-          {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
-          {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
-          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son check-in et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul."}</div>}
-          {bilan && slide && <SlideBody s={slide} bilan={bilan} onShare={share} shared={shared} recal={recal} n={n} />}
+          {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "On rassemble les données du groupe…" : n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
+          {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
+          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur check-in et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son check-in et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul."}</div>}
+          {bilan && slide && (slide.kind.startsWith("g_")
+            ? <GroupSlideBody s={slide as GroupSlide} />
+            : <SlideBody s={slide as BilanSlide} bilan={bilan as Bilan} onShare={share} shared={shared} recal={recal} n={n} />)}
         </div>
 
         {slides.length > 0 && (
           <div style={{ flexShrink: 0, display: "flex", gap: 10 }}>
             {idx > 0 && <button onClick={() => setIdx(i => i - 1)} style={{ flex: 1, height: 52, borderRadius: 14, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Précédent</button>}
-            <button onClick={() => last ? onClose() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 ? (n ? "Voir ce que ses données ont appris" : "Voir ce que tes données ont appris") : "Suivant"}</button>
+            <button onClick={() => last ? onClose() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 && !group ? (n ? "Voir ce que ses données ont appris" : "Voir ce que tes données ont appris") : "Suivant"}</button>
           </div>
         )}
       </div>
