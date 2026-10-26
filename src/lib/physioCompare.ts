@@ -152,13 +152,27 @@ const DIFF_THRESHOLD = 1;   // écart entre les deux écarts, en écarts-types
 const SD_FLOOR = 5;         // points sur 100 : une norme très stable ne doit pas grossir le moindre écart
 
 /* Ressenti sous la nuit mesurée (2026-10-25, Gildas) : la nuit (HRV, pouls) ne voit pas la fatigue
-   musculaire, donc on ne l'écarte jamais d'office. On nomme la réponse la plus basse du matin ; à
-   égalité, les courbatures d'abord (cause la plus fréquente chez un sportif). */
-function moreCause(c: PhysioCheckin): "recovery" | "sleep" | "head" {
-  const order = [["recovery", c.recovery], ["sleep", c.sleep], ["stress", 10 - c.stress], ["motivation", c.motivation]] as const;
-  const k = [...order].sort((a, b) => a[1] - b[1])[0][0];
-  return k === "recovery" || k === "sleep" ? k : "head";
+   musculaire, donc on ne l'écarte jamais d'office. On nomme les réponses du matin nettement sous leur
+   norme des 28 jours (2026-10-26 : le 25/10, courbatures ET motivation basses, l'ancienne règle « la
+   plus basse » ne disait que « la tête ») ; sans norme ou sans écart net, la réponse la plus basse ;
+   à égalité, les courbatures d'abord (cause la plus fréquente chez un sportif). */
+type FeelKey = keyof PhysioCheckin;
+const ITEM_SD_FLOOR = 0.75; // points sur 10 : un item très stable ne doit pas signaler un écart d'un point par hasard
+function lowItems(c: PhysioCheckin, prior: PhysioCheckin[]): FeelKey[] {
+  if (prior.length < PHYSIO_MIN_DAYS) return [];
+  return (["recovery", "sleep", "stress", "motivation"] as FeelKey[]).filter(k => {
+    const xs = prior.map(p => p[k]);
+    const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const sd = Math.max(ITEM_SD_FLOOR, Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length));
+    const z = (c[k] - m) / sd;
+    return k === "stress" ? z >= 0.5 : z <= -0.5; // stress : 10 = mauvais
+  });
 }
+function lowestItem(c: PhysioCheckin): FeelKey {
+  const order = [["recovery", c.recovery], ["sleep", c.sleep], ["stress", 10 - c.stress], ["motivation", c.motivation]] as const;
+  return [...order].sort((a, b) => a[1] - b[1])[0][0];
+}
+const causeOf = (k: FeelKey) => (k === "recovery" || k === "sleep" ? k : "head");
 const MORE_CAUSE_SHORT = {
   recovery: "c'est sans doute de la fatigue musculaire, qui ne se voit pas dans la nuit",
   sleep: "un sommeil peu réparateur ne se voit pas toujours dans les mesures",
@@ -169,6 +183,20 @@ const MORE_CAUSE_LONG = {
   sleep: "Ta nuit mesurée est correcte, mais tu te sens mal reposé : un sommeil peu réparateur ne se voit pas toujours dans les mesures.",
   head: "Ta nuit est bonne : aujourd'hui, c'est plutôt la tête que le corps.",
 };
+const FEEL_WORD: Record<FeelKey, string> = { recovery: "courbatures", sleep: "sommeil", stress: "stress", motivation: "motivation" };
+const FEEL_YOUR: Record<FeelKey, string> = { recovery: "tes courbatures", sleep: "ton sommeil", stress: "ton stress", motivation: "ta motivation" };
+const andList = (w: string[]) => (w.length === 1 ? w[0] : `${w.slice(0, -1).join(", ")} et ${w[w.length - 1]}`);
+function moreCause(c: PhysioCheckin, prior: PhysioCheckin[]): { short: string; long: string } {
+  const low = lowItems(c, prior);
+  // Une seule cause (ou stress + motivation, la tête) : les phrases dédiées.
+  const causes = Array.from(new Set((low.length ? low : [lowestItem(c)]).map(causeOf)));
+  if (causes.length === 1) return { short: MORE_CAUSE_SHORT[causes[0]], long: MORE_CAUSE_LONG[causes[0]] };
+  return {
+    short: `${andList(low.map(k => FEEL_WORD[k]))} sous la norme, ce que la nuit ne montre pas`,
+    long: `Ta nuit est bonne. Ce qui te freine ce matin : ${andList(low.map(k => FEEL_YOUR[k]))}, et ça ne se voit pas dans la nuit.`
+      + (low.includes("recovery") ? " Échauffe-toi plus longtemps et écoute tes jambes." : ""),
+  };
+}
 const feelRaw = (c: PhysioCheckin) => ((c.sleep + (10 - c.stress) + c.recovery + c.motivation) / 4) * 10;
 
 function physioRaw(d: DeviceInputs | null | undefined): number | null {
@@ -225,9 +253,10 @@ export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: 
   if (diff <= -DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "less", status: "Moins optimistes",
     title: `${P} données physiologiques sont moins optimistes que ${coach ? "lui" : "toi"}`,
     text: `${detail} ${compare} : ${coach ? "son" : "ton"} corps récupère peut-être moins bien ${coach ? "qu'il ne le sent" : "que tu ne le sens"}.` };
-  if (diff >= DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
+  const cause = diff >= DIFF_THRESHOLD ? moreCause(answers, prior) : null;
+  if (cause) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
     title: `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
-    text: `${detail} ${compare} : ${MORE_CAUSE_SHORT[moreCause(answers)]}.`, reason: MORE_CAUSE_LONG[moreCause(answers)] };
+    text: `${detail} ${compare} : ${cause.short}.`, reason: cause.long };
   return { zFeel, zPhysio, diff, kind: "agree", status: "D'accord",
     title: `${P} données physiologiques confirment ${coach ? "son" : "ton"} ressenti`, text: `${detail} ${compare}.` };
 }
