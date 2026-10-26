@@ -5341,3 +5341,9 @@ Maquette validée : artifact `9t5rLydc67SrpDSReD93SF`.
 - **Changements du texte affichés seulement s'il y avait un conseil** (alléger/pousser). Avec « rien à changer », la liste n'explique rien et n'est plus affichée.
 - **Cas laissé tel quel** : conseil alléger, séance gardée et ressentie comme prévu → point loin au-dessus de la zone conseillée + « Alerte de trop : tu avais de la marge. » C'est cohérent, la zone était celle de la séance allégée et la ligne « séance gardée » l'explique.
 - Vérifié : `tsc`, rejeu en lecture seule des 23 séances notées de Gildas depuis le 25/09 (titre vs position du point), `compareNotes` sur le cas du 26/10 et deux vrais changements. Rendu visuel testé par Gildas en local.
+
+## Check-in et résultat de séance saisis par le coach (2026-10-26)
+Usage en salle (tablette sur le compte coach) : dans Coach Control, sportif inscrit sélectionné (vue pleine page de `CoachCard`, `page`), deux boutons comme sur l'Accueil du sportif, à la 3e personne.
+- **Check-in** : « Faire le check-in de X » (ou « Modifier son check-in » s'il est fait) ouvre `WellnessModal` avec la prop `subject` (questions à la 3e personne, historique lu via `GET /api/coach/bilan` à cause de la RLS, pas de teaser/écran montre, pas d'écran de résultat). Enregistrement via `POST /api/coach/checkin` (lien coach vérifié, client admin, `withDeviceScore` pour la montre du sportif, `.error` vérifié), puis la modale appelle `/api/sessions/proposal` avec `athleteUserId` : le conseil du matin est figé pour le sportif comme s'il avait fait le check-in lui-même.
+- **Séance** : `onComplete` de `TodaySessionCard` (bouton Terminer) ouvre `CoachCompleteModal` (le même que le Planning), `action: "complete"` sur `/api/coach/session`, puis `openCoachSession` (écran de résultat).
+- **Sportifs sans compte** (`user_id` null) : exclus, choix de Gildas (pas de `wellness_daily` possible sans compte). Aucun bouton non plus en sandbox.
