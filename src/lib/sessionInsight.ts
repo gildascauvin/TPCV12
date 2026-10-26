@@ -1,4 +1,5 @@
-import type { AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
+import { validDecision, type AutoregDecisionRecord } from "@/lib/autoregDecisionRecord";
+import { zoneRange } from "@/lib/autoregulation";
 import type { AutoregProposal } from "@/lib/autoregPersonal";
 import { judgeSession, type Outcome, type TextChange } from "@/lib/adviceJudge";
 
@@ -18,6 +19,19 @@ export interface SessionResult {
 }
 
 const ORD = (n: number) => `${n}e`;
+const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/* Points entre le ressenti et la zone de la jauge (sessionZone) : > 0 au-dessus, < 0 en dessous,
+   0 dedans. null sans zone. Les mots suivent la distance réelle (2026-10-26, Gildas : « un peu »
+   affiché pour un point loin de la zone). */
+function zoneGap(s: ResultSession): number | null {
+  const z = sessionZone(s);
+  if (!z) return null;
+  const r = Math.round(s.rpe);
+  return r > z.high ? r - z.high : r < z.low ? r - z.low : 0;
+}
+const vsZone = (n: number, ref: string) =>
+  `${Math.abs(n) === 1 ? "un peu plus" : Math.abs(n) === 2 ? "plus" : "beaucoup plus"} ${n > 0 ? "dure" : "facile"} que ${ref}`;
 
 /* Verdict du conseil du matin (piste 1 le 2026-10-23 ; règle unique et réalisé le 2026-10-24, voir
    adviceJudge.ts) : à chaque séance notée qui avait un conseil (clic, reco figée ou rejouée), y compris
@@ -30,17 +44,23 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
   const { proposed, original, follow, outcome } = j;
   const had = subject ? `${subject} avait` : "tu avais";
   const g = Math.round(s.rpe) - Math.round(original);
-  const changes = follow.source === "text" && follow.text ? follow.text.changes.slice(0, 3) : [];
+  // Changements du texte affichés seulement s'il y avait un conseil à suivre (alléger/pousser) :
+  // avec « rien à changer », ils n'expliquent rien.
+  const changes = proposed && follow.source === "text" && follow.text ? follow.text.changes.slice(0, 3) : [];
   let title: string, row: Verdict["row"] = null, correct: Verdict["correct"] = null;
+  /* Titre calé sur la zone de la jauge (2026-10-26, Gildas) : jamais « dans la zone » ou « juste »
+     quand le ressenti est hors de la zone dessinée (celle de la jauge de décision), et l'écart dit en
+     mots selon la distance. Le verdict (outcome, compté dans « Conseils confirmés ») ne change pas. */
+  const zg = zoneGap(s);
   if (proposed === "low" || proposed === "high") {
     const verb = proposed === "low" ? "alléger" : "pousser";
     const doneWord = proposed === "low" ? "allégée" : "poussée";
     row = { icon: proposed === "low" ? "⬇" : "⬆", text: `Conseil du matin : ${verb} · séance ${follow.followed ? doneWord : "gardée"}.` };
     title =
       outcome === "justified" ? (follow.followed ? "Allègement justifié : même allégée, la séance a été dure." : "Alerte du matin confirmée.")
-      : outcome === "followed_ok" ? "Ajustement juste."
+      : outcome === "followed_ok" ? (zg ? `Allégée, ${vsZone(zg, "la zone conseillée")}.` : "Ajustement juste.")
       : outcome === "margin" ? `Alerte de trop : ${had} de la marge.`
-      : outcome === "push_right" ? (follow.followed ? "Surcharge validée." : `Surcharge justifiée : ${had} de la marge.`)
+      : outcome === "push_right" ? (follow.followed ? (zg ? `Poussée, ${vsZone(zg, "la zone conseillée")}.` : "Surcharge validée.") : `Surcharge justifiée : ${had} de la marge.`)
       : follow.followed ? "Surcharge trop forte : la séance a été dure." : "Séance comme prévu : pousser n'était pas nécessaire.";
     if (!follow.followed && follow.source !== "click" && follow.source !== "answer") {
       correct = { followed: true, label: subject ? `${subject} a ${proposed === "low" ? "allégé" : "poussé"} sans le noter` : `J'ai ${proposed === "low" ? "allégé" : "poussé"} sans le noter` };
@@ -54,6 +74,7 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
     row = { icon: "·", text: "Conseil du matin : rien à changer." };
     title = outcome === "none_harder" ? "Plus dure que prévu, sans alerte ce matin."
       : outcome === "none_easier" ? `Plus facile que prévu : ${had} de la marge.`
+      : zg ? `${cap(vsZone(zg, "prévu"))}, sans alerte ce matin.`
       : g === 0 ? "Séance comme prévu, conforme à la lecture du matin."
       : "Dans la zone prévue, conforme à la lecture du matin.";
   }
@@ -65,8 +86,9 @@ export function sessionVerdict(s: ResultSession, subject?: string): Verdict | nu
 export function sessionResult(s: ResultSession, week: WeekSession[], subject?: string): SessionResult {
   const planned = s.target_difficulty;
   const gap = planned != null && planned > 0 ? Math.round(s.rpe) - Math.round(planned) : null;
-  const how = (g: number) => (Math.abs(g) === 1 ? "Un peu plus " : Math.abs(g) === 2 ? "Modérément plus " : "Beaucoup plus ");
-  let title = gap == null ? "Séance enregistrée." : gap === 0 ? "Ressentie comme prévu." : `${how(gap)}${gap > 0 ? "dure" : "facile"} que prévu.`;
+  // Écart compté depuis la zone de la jauge quand elle existe (le point dans la zone = comme prévu).
+  const zg = zoneGap(s) ?? gap;
+  let title = zg == null ? "Séance enregistrée." : zg === 0 ? "Ressentie comme prévu." : `${cap(vsZone(zg, "prévu"))}.`;
   /* Pas de ligne « « Très dur » pour une séance prévue modérée » : elle mélangeait les mots de Foster
      (la note) et les zones de l'app (le prévu). Le titre compare des chiffres, il reste juste. */
   const sub = null;
@@ -90,4 +112,18 @@ export function sessionResult(s: ResultSession, week: WeekSession[], subject?: s
     if (part) rows.push({ icon: "⚡", text: `Elle pèse ${part} de ${subject ? "sa" : "ta"} charge de la semaine.` });
   }
   return { title, sub, rows: rows.slice(0, 2), outcome: v?.outcome ?? null, changes: v?.changes ?? [], correct: v?.correct ?? null };
+}
+
+/* Zone de la jauge de fin de séance (2026-10-26, Gildas : « la même zone que la decision ring ») :
+   même règle que doneZone (decisionCard.ts) : la zone proposée ce matin-là (décision enregistrée,
+   sinon reco figée ou rejouée), sinon la zone par défaut de l'anneau (le prévu et le point en dessous).
+   `advised` = il y avait un conseil (alléger/pousser) : étiquette « Conseillé », sinon « Prévu ». */
+export function sessionZone(s: ResultSession): { low: number; high: number; advised: boolean } | null {
+  const d = validDecision(s);
+  if (d?.proposed && d.zoneLow != null && d.zoneHigh != null) return { low: d.zoneLow, high: d.zoneHigh, advised: true };
+  const p = s.autoreg_proposal;
+  if (!d && p?.proposed && p.date === s.date && p.zoneLow != null && p.zoneHigh != null) return { low: p.zoneLow, high: p.zoneHigh, advised: true };
+  if (!s.target_difficulty) return null;
+  const z = zoneRange(Math.round(s.target_difficulty), "low");
+  return { low: z.zoneLow, high: z.zoneHigh, advised: false };
 }

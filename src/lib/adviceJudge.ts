@@ -80,11 +80,24 @@ export function compareNotes(planned: string | null | undefined, done: string | 
   const usedB = new Set<number>();
   let lighter = 0, heavier = 0;
   const changes: TextChange[] = [];
+  // Appariement : texte identique, sinon même exercice ; puis, pour les lignes restantes, même
+  // prescription (séries, reps, charge, distance, temps) sous un autre nom = ligne renommée, pas un
+  // changement (2026-10-26, « 3x10m Lesté » devenu « 3x10m sprint Lesté » affiché barré).
+  const match: number[] = pa.map(() => -1);
   pa.forEach((a, i) => {
     let j = B.findIndex((t, k) => !usedB.has(k) && t === A[i]);
     if (j < 0) j = pb.findIndex((b, k) => !usedB.has(k) && keyOf(b) && keyOf(b) === keyOf(a));
+    if (j >= 0) { usedB.add(j); match[i] = j; }
+  });
+  pa.forEach((a, i) => {
+    if (match[i] >= 0 || a.kind !== "full") return;
+    const ma = measures(a).join();
+    const j = pb.findIndex((b, k) => !usedB.has(k) && b.kind === "full" && measures(b).join() === ma);
+    if (j >= 0) { usedB.add(j); match[i] = j; }
+  });
+  pa.forEach((a, i) => {
+    const j = match[i];
     if (j < 0) { if (a.kind === "full") { lighter++; changes.push({ before: A[i], after: null }); } return; }
-    usedB.add(j);
     if (B[j] === A[i] || a.kind !== "full" || pb[j].kind !== "full") return;
     const d = lineDir(a, pb[j]);
     if (d === "same") return;

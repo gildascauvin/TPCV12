@@ -7,7 +7,7 @@ import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt,
 import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
-import { sessionResult, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
+import { sessionResult, sessionZone, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
 import { computeAccounts, type StripCell, type Lift } from "@/lib/bilan";
 import { loadBilanRaw } from "@/lib/bilanData";
 import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
@@ -228,6 +228,11 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
         />
       );
     }
+  }
+  // Séance notée : la jauge à zone remplace la jauge à 2 points, avec ou sans montre.
+  const zone = shown.kind === "session" && shown.summary && shown.session ? sessionZone(shown.session) : null;
+  if (shown.kind === "session" && shown.session && zone) {
+    gauge = <ZoneGauge zone={zone} felt={shown.session.rpe} watch={shown.result?.kind === "ok" ? shown.result.predicted : null} />;
   } else if (shown.kind === "wellness" && shown.verdict) {
     const v = shown.verdict;
     if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
@@ -387,6 +392,44 @@ function TwoMarkGauge({ eyebrow, track, a, b, ticks, normBand }: { eyebrow: stri
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "#8a8f94" }}>
         {ticks.map(t => <span key={t}>{t}</span>)}
+      </div>
+    </div>
+  );
+}
+
+/* Fin de séance (2026-10-26, maquette 9t5rLydc67SrpDSReD93SF) : la zone de la jauge de décision
+   (pointillés, débord de 0,35 point, bouts ronds comme DecisionRing), le ressenti en rond et la montre
+   en carré quand elle existe. Formes différentes : lisible sans les couleurs. Une rangée par étiquette,
+   rien ne se chevauche. Les mots du bas sont centrés sur leur vraie zone (seuils de diffWord). */
+const ZONE_PAD = 0.35;
+function ZoneGauge({ zone, felt, watch }: { zone: { low: number; high: number; advised: boolean }; felt: number; watch: number | null }) {
+  const at = (v: number) => clamp(v * 10, 3, 97);
+  const zl = at(Math.max(0, zone.low - ZONE_PAD)), zr = at(Math.min(10, zone.high + ZONE_PAD)), zm = (zl + zr) / 2;
+  const pf = at(felt), pw = watch != null ? at(watch) : null;
+  const shift = (p: number) => (p < 25 ? "translateX(-12px)" : p > 75 ? "translateX(calc(-100% + 12px))" : "translateX(-50%)");
+  const pill = (p: number, bg: string): React.CSSProperties => ({ position: "absolute", top: 0, left: `${p}%`, transform: shift(p), fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap", padding: "3px 8px", borderRadius: RADIUS.pill, color: "#fff", background: bg });
+  const mono: React.CSSProperties = { fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", whiteSpace: "nowrap" };
+  const label = zone.advised ? "Conseillé" : "Prévu";
+  return (
+    <div>
+      <div style={{ ...mono, fontSize: 10, fontWeight: 700, letterSpacing: ".1em", color: "#8a8f94" }}>{watch != null ? `${label}, ressenti, montre` : `${label} vs ressenti`}</div>
+      <div style={{ margin: "12px 6px 0" }}>
+        <div style={{ position: "relative", height: 24 }}><span style={pill(pf, diffColor(felt))}>Ressenti · {diffWord(felt)}</span></div>
+        <div style={{ position: "relative", height: 18 }}>
+          <span style={{ ...mono, position: "absolute", bottom: 4, left: `${zm}%`, transform: shift(zm), fontSize: 9.5, fontWeight: 700, letterSpacing: ".06em", color: "#171b1f" }}>{label}</span>
+        </div>
+        <div style={{ position: "relative", height: 10, margin: "6px 0", borderRadius: RADIUS.pill, background: "linear-gradient(90deg,#bfeec8,#ffe0a0 45%,#ffb5a7)" }}>
+          <span style={{ position: "absolute", top: -7, bottom: -7, left: `${zl}%`, width: `${zr - zl}%`, border: "2px dashed rgba(0,0,0,.55)", borderRadius: RADIUS.pill }} />
+          {pw != null && <span style={{ position: "absolute", top: "50%", left: `${pw}%`, width: 13, height: 13, borderRadius: 3, transform: "translate(-50%,-50%)", background: "#171b1f", border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.28)" }} />}
+          <span style={{ position: "absolute", top: "50%", left: `${pf}%`, width: 15, height: 15, borderRadius: "50%", transform: "translate(-50%,-50%)", background: diffColor(felt), border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,.28)" }} />
+        </div>
+        {pw != null && <div style={{ position: "relative", height: 24 }}><span style={pill(pw, "#171b1f")}>Montre · {diffWord(watch!)}</span></div>}
+        <div style={{ ...mono, position: "relative", height: 14, marginTop: 8, fontSize: 10, fontWeight: 600, letterSpacing: ".04em", color: "#8a8f94" }}>
+          <span style={{ position: "absolute", left: 0 }}>Légère</span>
+          <span style={{ position: "absolute", left: "35%", transform: "translateX(-50%)" }}>Modérée</span>
+          <span style={{ position: "absolute", left: "60%", transform: "translateX(-50%)" }}>Dure</span>
+          <span style={{ position: "absolute", right: 0 }}>Très dure</span>
+        </div>
       </div>
     </div>
   );
