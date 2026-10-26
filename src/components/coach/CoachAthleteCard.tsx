@@ -175,7 +175,7 @@ function zoneLabelFor(score: number | null, baseline: WellnessBaselineResult | n
   return zoneLabel(score);
 }
 
-export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, onProgram, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null }: {
+export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide, onApplyAdjust, onUndoAdjust, onAutoregDecided, onAutoregUndone, tourId, trend, trendInput, recentSessions = [], coachName, selfView, isActive, baseline, externalPreviewPct, showPhase = false, onAddSession, onProgram, programPill, locked = false, onUnlock, lockedBare = false, collect = null, onSetDifficulty, page = false, onEditSession, actionRequest = null, onCheckin, onCompleteSession }: {
   athlete: CoachAthlete;
   sessions: CoachViewSession[];
   isPriority: boolean;
@@ -234,6 +234,10 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   page?: boolean;
   /* Pleine page : ouvrir une séance précise (sinon onDecide, qui ouvre la séance principale). */
   onEditSession?: (s: CoachViewSession) => void;
+  /* Pleine page, sportif inscrit (2026-10-26) : le coach fait le check-in du sportif et note sa
+     séance (RPE + durée), mêmes boutons que l'Accueil du sportif. Absent = pas de bouton. */
+  onCheckin?: () => void;
+  onCompleteSession?: (s: CoachViewSession) => void;
   /* Collecte (2026-10-02) : sportif sans assez d'historique, carte lisible → progression à la place de la phase. */
   collect?: CollectProgress | null;
   /* Gratuit : change le seul RPE prévu de la séance (jauge sans zone). */
@@ -511,6 +515,21 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
 
       </LockedBlur>
 
+      {page && onCheckin && (
+        athlete.wellnessFilledToday === false ? (
+          <button type="button" onClick={onCheckin}
+            style={{ width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none", marginTop: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
+            Faire le check-in de {firstName}
+          </button>
+        ) : (
+          <div style={{ textAlign: "center", marginTop: 10 }}>
+            <button type="button" onClick={onCheckin} style={{ border: "none", background: "none", color: "rgba(255,255,255,.6)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
+              Modifier son check-in
+            </button>
+          </div>
+        )
+      )}
+
       {/* Carte séance imbriquée — mise à jour en live (surbrillance orange) quand une décharge/
          surcharge est en cours de sélection ou déjà appliquée (effectivePreviewPct : previewPct
          interne, ou externalPreviewPct si le parent le pilote — voir sa doc plus haut). */}
@@ -526,7 +545,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               onEdit={() => (onEditSession ? onEditSession(s) : onDecide())}
               /* Bloc durée / difficulté d'une séance faite : comme côté sportif, il rouvre l'écran
                  de résultat (2026-10-24 ; avant, le tap ne faisait rien côté coach). */
-              onComplete={s.done ? () => (onEditSession ? onEditSession(s) : onDecide()) : undefined}
+              onComplete={s.done ? () => (onEditSession ? onEditSession(s) : onDecide()) : onCompleteSession ? () => onCompleteSession(s) : undefined}
               previewPct={s.id === topSession?.id && !isFutureDate(s.date) ? effectivePreviewPct : null}
               authorName={coachName ?? "Coach"}
               hideGauge={s.id === topSession?.id && adjustable}

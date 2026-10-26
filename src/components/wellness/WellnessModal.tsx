@@ -73,6 +73,13 @@ const INSIGHT_WORDS: Record<ScaleKey, { bad: string; good: string }> = {
   recovery: { bad: "Ton état physique le plus bas", good: "Ton meilleur état physique" },
   motivation: { bad: "Ton envie la plus basse", good: "Ton envie la plus haute" },
 };
+// Check-in saisi par le coach (subject) : même insight à la 3e personne.
+const INSIGHT_WORDS_THIRD: Record<ScaleKey, { bad: string; good: string }> = {
+  sleep: { bad: "Sa pire nuit", good: "Sa meilleure nuit" },
+  stress: { bad: "Son stress le plus haut", good: "Son stress le plus bas" },
+  recovery: { bad: "Son état physique le plus bas", good: "Son meilleur état physique" },
+  motivation: { bad: "Son envie la plus basse", good: "Son envie la plus haute" },
+};
 /* Badge du coût d'un comportement : mêmes seuils et couleurs que la carte Comportements
    (behaviorStatus, HomeAnalyticsSections.tsx), en version fond clair, sans les mots Aide / Pénalise
    (demande de Gildas, la couleur suffit). */
@@ -97,7 +104,7 @@ function sinceText(days: number) {
   if (days >= 14) return `depuis ${Math.floor(days / 7)} semaines`;
   return `depuis ${days} jours`;
 }
-export function notableInsight(key: ScaleKey, value: number, history: HistoryRow[], today: string): { text: string; bad: boolean } | null {
+export function notableInsight(key: ScaleKey, value: number, history: HistoryRow[], today: string, third = false): { text: string; bad: boolean } | null {
   const rows = history.filter(h => h.date < today && h[key] != null).sort((a, b) => b.date.localeCompare(a.date));
   const recent = rows.filter(h => daysBetween(h.date, today) <= 28);
   if (recent.length < INSIGHT_MIN_DAYS) return null;
@@ -112,9 +119,9 @@ export function notableInsight(key: ScaleKey, value: number, history: HistoryRow
   const since = last ? daysBetween(last.date, today) : daysBetween(rows[rows.length - 1].date, today) + 1;
   if (since < 7) return null;
   const bad = key === "stress" ? higher : !higher;
-  const w = INSIGHT_WORDS[key];
+  const w = (third ? INSIGHT_WORDS_THIRD : INSIGHT_WORDS)[key];
   // L'historique lu s'arrête à 90 jours : au-delà, on ne peut pas dire « depuis le début ».
-  const beyond = since >= 85 ? "depuis plus de 3 mois" : "depuis le début de ton suivi";
+  const beyond = since >= 85 ? "depuis plus de 3 mois" : third ? "depuis le début de son suivi" : "depuis le début de ton suivi";
   const text = `${bad ? w.bad : w.good} ${last ? sinceText(since) : beyond}.`;
   return { text, bad };
 }
@@ -161,9 +168,14 @@ interface Props {
      saisie, au lieu du seul repli absolu. Absent = comportement inchangé (usage in-app, où ce
      composant ne connaît de toute façon aucune vraie baseline en dehors de son propre payload). */
   wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
+  /** Check-in saisi par le coach pour un sportif inscrit (2026-10-26) : questions à la 3e personne,
+      historique lu via /api/coach/bilan (RLS), conseil figé pour ce sportif, pas d'écran de résultat
+      (la carte Coach Control se met à jour). L'enregistrement reste à `onSave` (/api/coach/checkin). */
+  subject?: { athleteId: string; userId: string; name: string };
 }
 
-export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0 }: Props) {
+export default function WellnessModal({ date, onSave, onClose, wizardHero, cancelLabel = "Annuler", onBack, wellnessHistory, askPlan = false, skipResult = false, embedded = false, scoreSlot, scoreSize = 200, footerOffset = 0, subject }: Props) {
+  const who = subject ? subject.name.split(" ")[0] : null;
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   const [step, setStep] = useState(0);
@@ -188,22 +200,32 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   useEffect(() => {
     let alive = true;
     (async () => {
+      const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - CONSEILS_HISTORY_DAYS);
+      const sinceS = new Date(`${date}T12:00:00`); sinceS.setDate(sinceS.getDate() - 120);
+      if (subject) {
+        const r = await fetch(`/api/coach/bilan?athleteId=${encodeURIComponent(subject.athleteId)}&today=${date}`);
+        if (!r.ok) return;
+        const j = await r.json();
+        const s0 = since.toISOString().slice(0, 10), s1 = sinceS.toISOString().slice(0, 10);
+        if (!alive) return;
+        setHistory(((j.checkins ?? []) as HistoryRow[]).filter(h => h.date < date && h.date >= s0));
+        setForm(formAt(((j.sessions ?? []) as { date: string; rpe: number | null; duration: number | null; done: boolean }[]).filter(x => x.date >= s1), date));
+        return;
+      }
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const since = new Date(`${date}T12:00:00`); since.setDate(since.getDate() - CONSEILS_HISTORY_DAYS);
       const { data } = await supabase.from("wellness_daily")
         .select("date, sleep, stress, recovery, motivation, score, base_score, behaviors")
         .eq("user_id", user.id).lt("date", date).gte("date", since.toISOString().slice(0, 10));
       if (alive && data) setHistory(data as HistoryRow[]);
       // Forme du jour (charge) : la part fixe du score agrégé, la même que l'onglet Récupération.
-      const sinceS = new Date(`${date}T12:00:00`); sinceS.setDate(sinceS.getDate() - 120);
       const { data: done } = await supabase.from("sessions").select("date, rpe, duration, done")
         .eq("user_id", user.id).eq("done", true).gte("date", sinceS.toISOString().slice(0, 10)).lte("date", date);
       if (alive && done) setForm(formAt(done as { date: string; rpe: number | null; duration: number | null; done: boolean }[], date));
     })().catch(() => {});
     return () => { alive = false; };
-  }, [date]);
+  }, [date, subject?.athleteId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setInsight(null); }, [step]);
   /* Coût réel de chaque comportement, sur son historique (même calcul que la carte Comportements).
      Rien tant qu'il n'y a pas au moins 12 check-ins : un compte neuf ne voit aucun chiffre. */
@@ -262,9 +284,9 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   function renderBuildingScore(size: number) {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", color: "#fff" }}>
-        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>Ta récupération ce matin</div>
+        <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>{who ? `Récupération de ${who} ce matin` : "Ta récupération ce matin"}</div>
         <AggregateGauge pos={buildGauge.pos} band={buildGauge.band} bands={buildGauge.bands} size={size} />
-        {buildScore == null && <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 4 }}>Réponds, ton score se construit</div>}
+        {buildScore == null && <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 4 }}>{who ? "Réponds, son score se construit" : "Réponds, ton score se construit"}</div>}
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 10, maxWidth: 360 }}>
           {answerChips.map(c => (
             <span key={c.k} style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: c.word ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.04)", color: c.word ? "#fff" : "rgba(255,255,255,.35)", transition: "background .2s" }}>
@@ -314,7 +336,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
      validation (PhysioRevealHost), réponses déjà enregistrées. Jamais dans le wizard. */
   const [physioReady, setPhysioReady] = useState(false);
   useEffect(() => {
-    if (wizardHero) return;
+    if (wizardHero || subject) return;
     let alive = true;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
@@ -325,7 +347,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         });
     });
     return () => { alive = false; };
-  }, [date, wizardHero]);
+  }, [date, wizardHero, subject]);
 
   async function handleSave(override: { motivation?: number } = {}) {
     const m = override.motivation ?? motivation;
@@ -336,13 +358,13 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
     await onSave({ sleep, stress, recovery, motivation: motivation_, behaviors, bedtime, base_score, score, plannedIntensity: askPlan ? plannedIntensity : null });
     /* Reco du matin figée côté serveur (2026-10-23) ; le coach lié est prévenu depuis elle si elle dit
        d'alléger. Remplace /api/push/event, qui recalculait la reco avec le moteur générique. */
-    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date }) })
+    fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subject ? { date, athleteUserId: subject.userId } : { date }) })
       .then(r => { if (!r.ok) console.error("[reco du matin]", r.status); })
       .catch(e => console.error("[reco du matin]", e));
     setSaving(false);
     // Écran de résultat pour tous (2026-10-22) : score, insight, norme ; la comparaison à la nuit s'y ajoute si la montre l'a.
     if (physioReady) invalidatePhysio();
-    if (!skipResult) requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation: motivation_ });
+    if (!skipResult && !subject) requestPhysioReveal({ kind: "wellness", date, sleep, stress, recovery, motivation: motivation_ });
   }
 
   function goNext() {
@@ -384,7 +406,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         </div>
         <ScaleBars value={value} onChange={onPick} palette={palette} labels={w.labels}
           onRelease={(n) => {
-            const ins = notableInsight(key, n, history, date);
+            const ins = notableInsight(key, n, history, date, !!who);
             setInsight(ins ? { key, ...ins } : null);
             // Le temps de lire la ligne avant de passer à la question suivante.
             advanceDelay.current = ins ? 3000 : null;
@@ -407,7 +429,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
             <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
-              💓 Wellness du jour
+              {who ? `💓 Check-in de ${who}` : "💓 Wellness du jour"}
             </div>
           </div>
           <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {total}</div>
@@ -451,7 +473,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {q === 0 && (
           <div>
             {physioReady && <PhysioTeaser label="⌚ Nuit mesurée" text="Renseigne ton ressenti pour le comparer à tes mesures de la nuit." chips={["7h30", "48 bpm", "Zone"]} />}
-            {renderScale("sleep", "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
+            {renderScale("sleep", who ? `😴 Comment a dormi ${who} ?` : "😴 Comment as-tu dormi ?", "Qualité et récupération pendant le sommeil", sleep, setSleep, () => { if (bedtime != null) autoAdvance(); })}
             <div style={{ marginTop: 18 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#7b7f82", marginBottom: 8 }}>
                 Heure de coucher
@@ -485,12 +507,12 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
               🔍 Comportements d'hier
             </div>
             <div style={{ fontSize: 16, lineHeight: 1.5, color: "#7b7f82", marginBottom: 14 }}>
-              {hasCost ? "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi." : "Coche tout ce qui s'applique"}
+              {hasCost ? (who ? `Coche tout ce qui s'applique. Le chiffre : son effet moyen sur la récupération de ${who}.` : "Coche tout ce qui s'applique. Le chiffre : son effet moyen sur ta récupération, chez toi.") : "Coche tout ce qui s'applique"}
             </div>
 
             {/* Negative section */}
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#c81e1e", marginBottom: 8 }}>
-              Ce qui m'a pénalisé
+              {who ? `Ce qui a pénalisé ${who}` : "Ce qui m'a pénalisé"}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 14 }}>
               {NEGATIVE_BEHAVIORS.map((b) => {
@@ -516,7 +538,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
 
             {/* Positive section */}
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, color: "#2f9e44", marginBottom: 8 }}>
-              Ce que j'ai fait de bien
+              {who ? `Ce que ${who} a fait de bien` : "Ce que j'ai fait de bien"}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
               {POSITIVE_BEHAVIORS.map((b) => {
@@ -543,7 +565,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         )}
 
         {/* Step 4: Motivation — dernière question : le tap enregistre. */}
-        {q === 4 && renderScale("motivation", "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
+        {q === 4 && renderScale("motivation", who ? `⚡ ${who} a envie de s'entraîner ?` : "⚡ As-tu envie de t'entraîner ?", "Motivation intrinsèque du moment", motivation, setMotivation, (n) => autoAdvance({ motivation: n }))}
 
     </>
   );

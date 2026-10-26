@@ -49,6 +49,8 @@ const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer")
 const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
 const CoachDecisionDeck = dynamic(() => import("@/components/coach/CoachDecisionDeck"));
 const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
+const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
+const CoachCompleteModal = dynamic(() => import("@/components/coach/CoachCompleteModal"));
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { programWeekIndex, findProgramForWeek, type AthleteActiveProgram, programWeekTag } from "@/lib/programAssignment";
@@ -160,6 +162,9 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // avance auto au sportif suivant) a été retiré (2026-09-26) : devenu redondant depuis que la jauge
   // de décision vit directement dans la carte séance (2026-09-24).
   const [reviewAthlete, setReviewAthlete] = useState<CoachAthlete | null>(null);
+  /* Check-in et résultat de séance saisis par le coach pour un sportif inscrit (2026-10-26). */
+  const [checkinFor, setCheckinFor] = useState<CoachAthlete | null>(null);
+  const [completingFor, setCompletingFor] = useState<{ athlete: CoachAthlete; session: CoachViewSession } | null>(null);
   const [reviewSession, setReviewSession] = useState<CoachViewSession | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
@@ -380,6 +385,29 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       body: JSON.stringify(body),
     });
     return res.json();
+  }
+
+  async function saveCoachCheckin(a: CoachAthlete, data: object) {
+    const res = await fetch("/api/coach/checkin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ athleteId: a.id, date: selectedDate, data }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.ok) { console.error("[check-in coach]", j.error ?? res.status); alert("Check-in non enregistré, réessaie."); return; }
+    setCheckinFor(null);
+    await handleDateChange(selectedDate);
+  }
+
+  async function completeForAthlete(a: CoachAthlete, s: CoachViewSession, data: { rpe: number; duration: number }) {
+    const result = await callSessionAPI({ action: "complete", athleteId: a.id, sessionId: s.id, data });
+    setCompletingFor(null);
+    if (!result.ok) { alert("Résultat non enregistré, réessaie."); return; }
+    const updated: CoachViewSession = { ...s, done: true, rpe: data.rpe, duration: data.duration };
+    const next = sessions.map(x => x.id === updated.id ? updated : x);
+    setSessions(next);
+    // Comme le sportif après sa séance et comme au Planning : l'écran de résultat s'ouvre tout de suite.
+    openCoachSession(updated, next, a.name.split(" ")[0], () => { setReviewAthlete(a); setReviewSession(updated); });
   }
 
   async function handleEmptyInvite() {
@@ -783,6 +811,34 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
           onClose={() => setReconduire(null)}
         />
       )}
+      {checkinFor && checkinFor.user_id && (
+        <WellnessModal
+          date={selectedDate}
+          subject={{ athleteId: checkinFor.id, userId: checkinFor.user_id, name: checkinFor.name }}
+          onSave={data => saveCoachCheckin(checkinFor, data)}
+          onClose={() => setCheckinFor(null)}
+        />
+      )}
+      {completingFor && (
+        <CoachCompleteModal
+          session={{
+            id: completingFor.session.id,
+            coach_id: userId,
+            athlete_id: completingFor.session.athlete_id,
+            date: completingFor.session.date,
+            name: completingFor.session.name,
+            notes: completingFor.session.notes,
+            done: completingFor.session.done,
+            rpe: completingFor.session.rpe,
+            duration: completingFor.session.duration,
+            target_difficulty: completingFor.session.target_difficulty,
+            created_at: completingFor.session.created_at,
+          }}
+          athleteName={completingFor.athlete.name}
+          onSave={data => completeForAthlete(completingFor.athlete, completingFor.session, data)}
+          onClose={() => setCompletingFor(null)}
+        />
+      )}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="coach" />}
       {deck && (
         <CoachDecisionDeck
@@ -950,6 +1006,8 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
                 onDecide={() => openEditor(a)}
                 onEditSession={sess => openCoachSession(sess, sessions, a.name.split(" ")[0], () => { setReviewAthlete(a); setReviewSession(sess); })}
                 onAddSession={() => openCreator(a)}
+                onCheckin={a.user_id && !sandboxMode ? () => setCheckinFor(a) : undefined}
+                onCompleteSession={a.user_id && !sandboxMode ? sess => setCompletingFor({ athlete: a, session: sess }) : undefined}
                 onProgram={sandboxMode ? undefined : () => router.push("/coach/programmes")}
                 onApplyAdjust={(session, pct) => canDecideFor(a) ? applyAutoregAdjust(a.id, session, pct) : Promise.resolve((markPrimingSource("decision", { athleteName: a.name.split(" ")[0] }), unlock()))}
                 onUndoAdjust={(session, original) => undoAutoregAdjust(a.id, session, original)}
