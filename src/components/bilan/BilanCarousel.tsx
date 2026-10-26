@@ -342,7 +342,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
           <Rows rows={s.rows.map((r, i) => ({ label: `${r.name} · prévue ${r.planned}`, part: r.harder, total: r.total, highlight: i === 0 && hard }))} color="#f28a00" />
           <div style={small}>Plus dure que prévu, sur l&apos;ensemble des sportifs qui l&apos;ont faite.</div>
         </div>
-        {hard && <p style={{ ...body, fontSize: 14 }}>Ressentie au-dessus de « {top.planned} » {top.harder} fois sur {top.total}, chez {top.athletes} sportifs. La noter un cran plus haut, ou l&apos;alléger.</p>}
+        {hard && <p style={{ ...body, fontSize: 14 }}>Ressentie au-dessus de « {top.planned} » {top.harder} fois sur {top.total}{top.athletes > 1 ? ", " : ""}{top.athletes > 1 ? `chez ${top.athletes} sportifs` : ""}. La noter un cran plus haut, ou l&apos;alléger.</p>}
       </>);
     }
     case "g_conseils":
@@ -370,7 +370,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
             <div style={small}>{[r.below ? `En dessous de sa zone ${pl(r.below, "jour")}` : null, r.above ? `${r.below ? "au-dessus" : "Au-dessus de sa zone"} ${pl(r.above, "jour")}` : null].filter(Boolean).join(", ")} sur {r.days}.</div>
           </div>
         ))}
-        {(() => { const rest = s.rows.filter(r => !r.above && !r.below).length; return rest ? <div style={small}>{rest === s.rows.length ? `Les ${rest} sportifs suivis sont restés dans leur zone tous les jours.` : rest > 1 ? `Les ${rest} autres sportifs sont restés dans leur zone tous les jours.` : "L'autre sportif est resté dans sa zone tous les jours."}</div> : null; })()}
+        {(() => { const rest = s.rows.filter(r => !r.above && !r.below).length; return rest ? <div style={small}>{rest === s.rows.length ? (rest > 1 ? `Les ${rest} sportifs suivis sont restés dans leur zone tous les jours.` : "Resté dans sa zone tous les jours.") : rest > 1 ? `Les ${rest} autres sportifs sont restés dans leur zone tous les jours.` : "L'autre sportif est resté dans sa zone tous les jours."}</div> : null; })()}
       </>);
     }
   }

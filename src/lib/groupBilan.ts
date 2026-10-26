@@ -5,7 +5,8 @@
    - tes séances plus dures que prévu : même séance (même nom) sur plusieurs sportifs ;
    - les conseils au groupe : conseils confirmés, sportif par sportif (juge d'adviceJudge.ts) ;
    - la charge hors zone : jours au-dessus / en dessous de la zone de charge (ACWR).
-   Jamais de moyenne du groupe : elle cache justement le sportif qui décroche. Sportifs sans compte
+   Un seul sportif avec des données suffit (2026-10-26, Gildas) : un coach qui débute n'en a souvent
+   qu'un actif. Jamais de moyenne du groupe : elle cache justement le sportif qui décroche. Sportifs sans compte
    exclus (pas de check-in). Historique synthétique de l'onboarding exclu, comme partout. */
 
 import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
@@ -67,7 +68,7 @@ function decroche(period: BilanPeriod, end: string, athletes: GroupAthlete[]): G
       : null;
     rows.push({ name: first(a.name), flag, marks: marks.slice(-12), missed, tired, days: days.length });
   }
-  if (rows.length < 2) return null;
+  if (!rows.length) return null;
   const score = (r: typeof rows[number]) => (r.flag ? 100 : 0) + (r.missed + r.tired) / r.days;
   rows.sort((x, y) => score(y) - score(x));
   const flagged = rows.filter(r => r.flag);
@@ -88,7 +89,7 @@ function seances(period: BilanPeriod, end: string, athletes: GroupAthlete[]): Gr
       by.set(k, g);
     }
   }
-  const groups = Array.from(by.values()).filter(g => g.total >= 5 && g.who.size >= 2);
+  const groups = Array.from(by.values()).filter(g => g.total >= 5);
   if (!groups.length) return null;
   groups.sort((x, y) => y.harder / y.total - x.harder / x.total || y.total - x.total);
   const modeWord = (xs: number[]) => {
@@ -132,7 +133,7 @@ function charge(period: BilanPeriod, end: string, athletes: GroupAthlete[]): Gro
     if (inP.length < (period.kind === "week" ? 5 : 10)) continue;
     rows.push({ name: first(a.name), above: inP.filter(p => p.value! > 1.3).length, below: inP.filter(p => p.value! < 0.8).length, days: inP.length });
   }
-  if (rows.length < 2) return null;
+  if (!rows.length) return null;
   const out = (r: typeof rows[number]) => (r.above + r.below) / r.days;
   rows.sort((x, y) => out(y) - out(x));
   return { kind: "g_charge", rows };
