@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { RADIUS } from "@/lib/theme";
 import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type PhysioRevealDetail, type PhysioReplayDetail } from "@/lib/physioData";
-import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
+import { HEART_CALIBRATION, HEART_FAMILY_LABEL, feelList, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
 import posthog from "posthog-js";
 import { deviceInputsFor, type HealthRow } from "@/lib/deviceWellness";
 import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinInsight";
@@ -165,7 +165,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
   } else if (shown.kind === "wellness" && shown.verdict) {
     const v = shown.verdict;
     if (v.kind === "less") { title = "Tes mesures de la nuit sont moins bonnes que ton ressenti"; mean = "Vas-y progressivement aujourd'hui : ton ressenti est bon, mais ta nuit dit le contraire."; }
-    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; mean = "La fatigue ne se voit pas dans ta nuit : le stress ou la motivation, plutôt que les jambes ?"; }
+    else if (v.kind === "more") { title = "Tes mesures de la nuit sont meilleures que ton ressenti"; const low = feelList(v.lowFeel); mean = low ? `Ta nuit ne montre pas de fatigue. Ce qui te freine ce matin : ${low}, et ta montre ne le voit pas.` : "La fatigue ne se voit pas dans ta nuit : stress, courbatures ou motivation ?"; }
     else { title = "Tes mesures de la nuit confirment ton ressenti"; mean = "Tes deux signaux vont dans le même sens : tu peux te fier à ce que tu ressens."; }
     gauge = (
       <TwoMarkGauge

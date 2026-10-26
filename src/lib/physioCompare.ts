@@ -142,7 +142,33 @@ export type PhysioVerdict = {
   zFeel: number; zPhysio: number; diff: number;
   kind: "less" | "more" | "agree";
   status: string; title: string; text: string;
+  /* Réponses du jour nettement sous leur norme (28 j) : ce que le ressenti voit et la nuit pas. */
+  lowFeel: FeelKey[];
 };
+
+export type FeelKey = keyof PhysioCheckin;
+const FEEL_WORD: Record<FeelKey, [string, string]> = {
+  sleep: ["ton sommeil", "son sommeil"], stress: ["ton stress", "son stress"],
+  recovery: ["tes courbatures", "ses courbatures"], motivation: ["ta motivation", "sa motivation"],
+};
+/* « tes courbatures et ta motivation » ; liste vide → null. */
+export function feelList(keys: FeelKey[], coach = false): string | null {
+  const w = keys.map(k => FEEL_WORD[k][coach ? 1 : 0]);
+  return w.length ? (w.length === 1 ? w[0] : `${w.slice(0, -1).join(", ")} et ${w[w.length - 1]}`) : null;
+}
+
+const ITEM_SD_FLOOR = 0.75; // points sur 10 : un item très stable ne doit pas signaler un écart d'un point par hasard
+/* Items du check-in à au moins 0,5 écart-type sous leur norme (stress : au-dessus, 10 = mauvais). */
+function lowItems(c: PhysioCheckin, prior: PhysioCheckin[]): FeelKey[] {
+  if (prior.length < PHYSIO_MIN_DAYS) return [];
+  return (["recovery", "motivation", "stress", "sleep"] as FeelKey[]).filter(k => {
+    const xs = prior.map(p => p[k]);
+    const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const sd = Math.max(ITEM_SD_FLOOR, Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length));
+    const z = (c[k] - m) / sd;
+    return k === "stress" ? z >= 0.5 : z <= -0.5;
+  });
+}
 
 export const PHYSIO_NORM_DAYS = 28;
 export const PHYSIO_MIN_DAYS = 5;
@@ -202,13 +228,15 @@ export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: 
   const detail = nightDetail(today);
   const P = coach ? "Ses" : "Tes", feelWord = coach ? "son ressenti" : "ton ressenti", norm = coach ? "sa norme" : "ta norme";
   const compare = `${P} données sont ${level(zPhysio)} leur norme, ${feelWord} ${level(zFeel)} ${norm}`;
-  if (diff <= -DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "less", status: "Moins optimistes",
+  const lowFeel = lowItems(answers, prior);
+  const low = feelList(lowFeel, coach);
+  if (diff <= -DIFF_THRESHOLD) return { zFeel, zPhysio, diff, lowFeel, kind: "less", status: "Moins optimistes",
     title: `${P} données physiologiques sont moins optimistes que ${coach ? "lui" : "toi"}`,
     text: `${detail} ${compare} : ${coach ? "son" : "ton"} corps récupère peut-être moins bien ${coach ? "qu'il ne le sent" : "que tu ne le sens"}.` };
-  if (diff >= DIFF_THRESHOLD) return { zFeel, zPhysio, diff, kind: "more", status: "Plus optimistes",
+  if (diff >= DIFF_THRESHOLD) return { zFeel, zPhysio, diff, lowFeel, kind: "more", status: "Plus optimistes",
     title: `${coach ? "Son" : "Ton"} corps a mieux récupéré ${coach ? "qu'il ne le sent" : "que tu ne le sens"}`,
-    text: `${detail} ${compare} : la fatigue ressentie ne se voit pas dans ${coach ? "son" : "ton"} corps (stress, motivation ?).` };
-  return { zFeel, zPhysio, diff, kind: "agree", status: "D'accord",
+    text: `${detail} ${compare} : la fatigue ressentie ne se voit pas dans ${coach ? "sa" : "ta"} nuit${low ? `. Elle vient de ${low}` : " (stress, courbatures, motivation ?)"}.` };
+  return { zFeel, zPhysio, diff, lowFeel, kind: "agree", status: "D'accord",
     title: `${P} données physiologiques confirment ${coach ? "son" : "ton"} ressenti`, text: `${detail} ${compare}.` };
 }
 
