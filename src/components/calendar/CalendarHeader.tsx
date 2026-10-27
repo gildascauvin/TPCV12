@@ -75,7 +75,7 @@ interface CalendarHeaderProps {
      comportement inchangé partout ailleurs (headers dark, `/today`/`/week`/`/coach*` avant ce prop). */
   theme?: "dark" | "light";
   /* Bilan (2026-10-23) : liens « Bilan › » sur chaque semaine passée, « Bilan du mois › » et
-     « Depuis le début › » dans le calendrier popup. Absent = aucun lien (coach, Planning). */
+     « Depuis le début › » dans le calendrier popup (Accueil, Planning sportif et coach). Absent = aucun lien. */
   onOpenBilan?: (kind: "week" | "month" | "all", anchor: string) => void;
   /* Premier jour de données réelles du sportif : pas de lien vers une période d'avant. */
   bilanSince?: string;

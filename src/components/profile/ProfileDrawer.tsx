@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import NotificationToggle from "./NotificationToggle";
 import InstallAppRow from "./InstallAppRow";
 import GarminRow from "./GarminRow";
@@ -76,9 +77,10 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
      aussi des pages coach, qui gardent leur liste en state : on recharge à la fermeture. */
   const [tab, setTab] = useState<"profile" | "athletes">("profile");
   const [removedAthlete, setRemovedAthlete] = useState(false);
+  const { close: animatedClose, exitClass } = useExitAnimation(onClose);
   function close() {
     if (removedAthlete) window.location.reload();
-    else onClose();
+    else animatedClose();
   }
 
   useEffect(() => {
@@ -151,6 +153,7 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   return (
     <>
       <div
+        className={exitClass}
         style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,.72)",
           backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",

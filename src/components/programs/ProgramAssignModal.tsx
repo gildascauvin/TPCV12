@@ -4,6 +4,7 @@ import { useState } from "react";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import type { CoachAthlete } from "@/types";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { WellnessCardPreview, CoachSelectedAthletesPreview } from "@/components/paywall/FrisePreviews";
@@ -68,6 +69,7 @@ function fmtDate(iso: string): string {
 
 export default function ProgramAssignModal({ programId, programName, athletes, selfUserId, onClose, onAssigned, initialSelectedIds, wizardHero, hideClose, onBack, defaultStartDate = "nextMonday", onSkip, skipLabel, athleteWellness }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const heroOnLeft = !!wizardHero && isMd;
   const isSelfMode = athletes.length === 0 && !!selfUserId;
   const monNext = nextMonday();
@@ -140,13 +142,14 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
      l'usage in-app, demande explicite de Gildas : "onboarding comme inapp"). */
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
@@ -190,7 +193,7 @@ export default function ProgramAssignModal({ programId, programName, athletes, s
               {onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 20, padding: "4px 6px", borderRadius: 8, flexShrink: 0, marginLeft: -6 }}>←</button>}
               <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Assigner le programme</div>
             </div>
-            {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
+            {!hideClose && <button onClick={close} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#999" }}>✕</button>}
           </div>
           <div style={{ fontSize: 12.5, color: "#8a8f94", marginBottom: 22 }}>{programName}</div>
 

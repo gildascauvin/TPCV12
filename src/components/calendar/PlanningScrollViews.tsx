@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { format, addDays, subDays, startOfWeek } from "date-fns";
 import { fr } from "date-fns/locale";
-import { DndContext, type DragEndEvent, type SensorDescriptor, type SensorOptions } from "@dnd-kit/core";
+import { type DragEndEvent, type SensorDescriptor, type SensorOptions } from "@dnd-kit/core";
+import { PlanningDnd } from "@/components/calendar/DraggablePlanning";
 
 /* Vues "défilantes" du planning (POC 2026-10-26), partagées par /week et /coach/planning :
    - mobile/tablette (< 1024px) : vue Colonne, jours empilés de haut en bas, on descend vers le futur ;
@@ -205,7 +206,7 @@ export function PlanningScrollViews({ view, bloc, todayStr, weekTitleFor, render
   const day = (date: Date) => renderDay(date, iso(subDays(date, 1)), iso(addDays(date, 1)));
 
   return (
-    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+    <PlanningDnd sensors={sensors} onDragEnd={onDragEnd}>
       {bloc ? (
         <div style={{ padding: `12px ${padX}px 24px` }}>
           <div ref={view.blocScrollRef} style={{ overflowX: "auto", scrollbarWidth: "thin", paddingBottom: 8 }}>
@@ -248,6 +249,6 @@ export function PlanningScrollViews({ view, bloc, todayStr, weekTitleFor, render
           )}
         </div>
       )}
-    </DndContext>
+    </PlanningDnd>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DARK_CARD_BG } from "@/lib/theme";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 /* Revue du jour en swipe (2026-10-05, POC https://claude.ai/artifact/LJKJb4nx5xuvPSFGUcCcP8).
    Plein écran, une vraie carte Coach Control à la fois (rendue par le parent via renderCard).
@@ -23,6 +24,7 @@ export default function CoachDecisionDeck({ items, startId, title, isDecided, re
   renderCard: (id: string, action: DeckAction | null) => React.ReactNode;
   onClose: () => void;
 }) {
+  const { close, exitClass } = useExitAnimation(onClose);
   const [queue, setQueue] = useState<DeckItem[]>(() => {
     const i = startId ? items.findIndex(x => x.id === startId) : -1;
     return i > 0 ? [items[i], ...items.slice(0, i), ...items.slice(i + 1)] : items;
@@ -81,7 +83,7 @@ export default function CoachDecisionDeck({ items, startId, title, isDecided, re
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close();
       if (!top?.verb || topDecided) return;
       if (e.key === "ArrowRight") act("apply");
       if (e.key === "ArrowLeft") act("maintain");
@@ -120,11 +122,11 @@ export default function CoachDecisionDeck({ items, startId, title, isDecided, re
   const stampOpacity = (sign: 1 | -1) => Math.max(0, Math.min(1, (sign * dx) / 90));
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: DARK_CARD_BG, display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)" }}>
+    <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: DARK_CARD_BG, display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top,0px) + 14px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)" }}>
       <div style={{ maxWidth: 460, width: "100%", margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
         <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, color: "#fff", flex: 1, letterSpacing: "-0.02em" }}>{title}</span>
         {top && total.current > 1 && <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, color: "rgba(255,255,255,.55)" }}>{done.length + 1} / {shown}</span>}
-        <button type="button" onClick={onClose} aria-label="Fermer" style={{ width: 38, height: 38, borderRadius: "50%", border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 16, cursor: "pointer" }}>✕</button>
+        <button type="button" onClick={close} aria-label="Fermer" style={{ width: 38, height: 38, borderRadius: "50%", border: "1px solid rgba(255,255,255,.16)", background: "rgba(255,255,255,.06)", color: "#fff", fontSize: 16, cursor: "pointer" }}>✕</button>
       </div>
       {total.current > 1 && (
         <div style={{ maxWidth: 460, width: "100%", margin: "10px auto 0", display: "flex", gap: 4 }}>
@@ -162,7 +164,7 @@ export default function CoachDecisionDeck({ items, startId, title, isDecided, re
                 <button type="button" onClick={() => { setDx(140); act("apply"); }} style={deckBtn(top.color)}>{top.verb} →</button>
               </>
             ) : (
-              <button type="button" onClick={queue.length > 1 ? next : onClose} style={deckBtn("rgba(255,255,255,.08)")}>{queue.length > 1 ? "Suivant →" : "Fermer"}</button>
+              <button type="button" onClick={queue.length > 1 ? next : close} style={deckBtn("rgba(255,255,255,.08)")}>{queue.length > 1 ? "Suivant →" : "Fermer"}</button>
             )}
           </div>
           {canSwipe && (
@@ -185,7 +187,7 @@ export default function CoachDecisionDeck({ items, startId, title, isDecided, re
               </div>
             ))}
           </div>
-          <button type="button" onClick={onClose} style={deckBtn("linear-gradient(180deg,#f04a08,#d44000)")}>Voir le Coach Control</button>
+          <button type="button" onClick={close} style={deckBtn("linear-gradient(180deg,#f04a08,#d44000)")}>Voir le Coach Control</button>
         </div>
       )}
     </div>

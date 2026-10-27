@@ -4,6 +4,7 @@ import { useState } from "react";
 import posthog from "posthog-js";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 /* Mêmes composants que la liste /coach/athletes, réutilisés tels quels (2026-09-14) — exportés
@@ -54,6 +55,7 @@ export interface InviteRow {
 
 export default function InviteModal({ onClose, onLinked, onSent, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack, readyMessage = false }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const heroOnLeft = !!wizardHero && isMd;
   // Prénom + email ensemble, une ligne = un sportif — plus deux blocs déconnectés (un pour
   // nommer, un pour l'email) : l'invitation part et le sportif apparaît immédiatement dans le
@@ -106,13 +108,14 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
      que pour l'usage in-app, demande explicite de Gildas : "onboarding comme inapp"). */
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
@@ -208,7 +211,7 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
               }
             </div>
             <button
-              onClick={onClose}
+              onClick={close}
               style={{ width: "100%", height: 46, borderRadius: 16, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", border: "none", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}
             >
               Fermer
@@ -240,7 +243,7 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
             </button>
 
             <button
-              onClick={onClose}
+              onClick={close}
               style={{ width: "100%", height: 44, borderRadius: 16, background: "none", border: "1px solid rgba(0,0,0,.10)", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               {cancelLabel}

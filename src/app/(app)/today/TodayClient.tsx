@@ -2,6 +2,9 @@
 
 import { markPrimingSource } from "@/lib/primingSource";
 import { Skel } from "@/components/ui/Skeleton";
+import { toast } from "@/lib/toast";
+import { morphOpen, MORPH_SESSION } from "@/lib/morph";
+import { undoableDelete, isPendingDelete } from "@/lib/undoable";
 import { haptic } from "@/lib/native";
 import { useState, useCallback, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
@@ -299,6 +302,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   /* Séance en direct : Démarrer sans check-in du jour ouvre d'abord le check-in, puis démarre. */
   const [pendingStartSession, setPendingStartSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
+  // Tiroir ouvert par la carte elle-même (lib/morph.ts) : il saute alors son animation d'entrée.
+  const [editingMorph, setEditingMorph] = useState(false);
   const [autoregPreview, setAutoregPreview] = useState<{ sessionId: string; pct: number } | null>(null);
   /* Nœud des CTA d'ajustement, dans la carte décision (portail d'AutoregButtons, 2026-09-30). */
   const [autoregActionsSlot, setAutoregActionsSlot] = useState<HTMLDivElement | null>(null);
@@ -614,7 +619,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       // Hors ligne : la base est injoignable, on rejoue les modifications en attente sur l'état affiché.
       if (isOffline()) { await applyOfflinePending(); return; }
       const { data } = await supabase.from("sessions").select("*").eq("user_id", userId).eq("date", initialDate);
-      if (data) setAllSessions(prev => [...prev.filter(x => x.date !== initialDate), ...(data as Session[])]);
+      if (data) setAllSessions(prev => [...prev.filter(x => x.date !== initialDate), ...(data as Session[]).filter(x => !isPendingDelete(`session:${x.id}`))]);
       refreshAnalyticsSoon();
     };
     window.addEventListener(LIVE_SESSION_CHANGED, onChanged);
@@ -662,6 +667,9 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return saved ? { id: saved.id } : undefined;
   }, [supabase, userId]);
 
+  /* Check-in envoyé (2026-10-27) : l'anneau et la carte décision se rejouent (remontage par clé),
+     pour qu'on voie que la décision vient de répondre. 0 = premier affichage, sans rejeu. */
+  const [checkinReplay, setCheckinReplay] = useState(0);
   const saveWellness = useCallback(async (data: {
     sleep: number; stress: number; recovery: number; motivation: number;
     behaviors: string[]; bedtime: string; base_score: number; score: number;
@@ -680,6 +688,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       });
       notifyQueued();
       setWellness(localWellness(data, selectedDate));
+      setCheckinReplay(n => n + 1);
       setShowWellness(false);
       if (pendingStartSession) {
         const toStart = pendingStartSession;
@@ -699,6 +708,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (saved) {
       setWellness(saved as WellnessDaily);
       setBaselineHistory(prev => [...prev.filter(x => x.date !== (saved as WellnessDaily).date), saved as WellnessDaily]);
+      setCheckinReplay(n => n + 1);
     }
     refreshAnalyticsSoon();
     /* Séance prévue déclarée au check-in (2026-10-01) : une vraie séance, comme une autre, pour que
@@ -735,11 +745,19 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (!isOffline()) router.refresh();
   }, [supabase, completing, router, refreshAnalyticsSoon]);
 
+  // Annulable 5 s (lib/undoable.ts) : retirée de l'écran tout de suite, effacée en base ensuite.
   const deleteSession = useCallback(async (session: Session) => {
-    await supabase.from("sessions").delete().eq("id", session.id);
     setAllSessions((prev) => prev.filter((s) => s.id !== session.id));
-    refreshAnalyticsSoon();
-    if (!isOffline()) router.refresh();
+    undoableDelete({
+      key: `session:${session.id}`,
+      message: "Séance supprimée",
+      commit: async () => {
+        await supabase.from("sessions").delete().eq("id", session.id);
+        refreshAnalyticsSoon();
+        if (!isOffline()) router.refresh();
+      },
+      undo: () => setAllSessions((prev) => prev.some((s) => s.id === session.id) ? prev : [...prev, session]),
+    });
   }, [supabase, router, refreshAnalyticsSoon]);
 
   // Dupliquer une séance — même mécanique que WeekClient.tsx (DuplicateModal, décharge/maintien/
@@ -770,7 +788,16 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       target_difficulty,
       done: false,
     }).select().single();
-    if (saved) setAllSessions((prev) => [...prev, saved as Session]);
+    if (saved) {
+      setAllSessions((prev) => [...prev, saved as Session]);
+      toast("Séance dupliquée", {
+        action: { label: "Annuler", onClick: async () => {
+          setAllSessions((prev) => prev.filter((s) => s.id !== saved.id));
+          await supabase.from("sessions").delete().eq("id", saved.id);
+          if (!isOffline()) router.refresh();
+        } },
+      });
+    }
     setDuplicating(null);
     if (!isOffline()) router.refresh();
   }, [supabase, userId, duplicating, router]);
@@ -864,7 +891,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                     session={s}
                     onComplete={(s) => openResult(s)}
                     onStart={!sandboxMode && s.date === initialDate && !s.done ? (s) => gateInput(() => handleStart(s)) : undefined}
-                    onEdit={(s) => setEditing(s)}
+                    onEdit={(s) => { setEditingMorph(morphOpen(document.querySelector(`[data-session-id="${s.id}"]`), MORPH_SESSION, () => setEditing(s))); }}
                     previewPct={!futureDay && autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
                     concealed={!sandboxMode && s.program_assignment_id && revealAssignmentIds.includes(s.program_assignment_id) ? revealLabel(s.date, initialDate) : null}
                     onReorderExercises={reorderTodayExercises}
@@ -1022,7 +1049,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                   reste net (difficulté prévue seule, sans zone ni sens ; repos et séance faite tels
                   quels), seule la carte décision est floutée. */}
               {decisionGaugeSlot && decisionLocked && (
-                <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
+                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
                   {decisionGaugeSlot}
                 </div>
               )}
@@ -1035,14 +1062,14 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
                 radius={16}
               >
               {decisionGaugeSlot && !decisionLocked && (
-                <div onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14 }}>
+                <div key={`ring-${checkinReplay}`} onClick={e => e.stopPropagation()} style={{ position: "relative", zIndex: 2, marginBottom: 14, animation: checkinReplay ? "tpcFadeUp .35s cubic-bezier(.2,0,0,1)" : undefined }}>
                   {decisionGaugeSlot}
                 </div>
               )}
 
               {/* Carte décision, toujours affichée (2026-09, decisionCard.ts) — jour × tendance ×
                  monotonie/contrainte combinés, le signal le plus sévère gagne. Insight seul ici. */}
-              <div style={{ position: "relative", zIndex: 2 }} onClick={e => e.stopPropagation()}>
+              <div key={`card-${checkinReplay}`} style={{ position: "relative", zIndex: 2, animation: checkinReplay ? "tpcFadeUp .4s .45s cubic-bezier(.2,0,0,1) both" : undefined }} onClick={e => e.stopPropagation()}>
                 {/* Ligne Phase (2026-09-29) : son CTA flouté "Renseigner mon ressenti" remplace
                    l'ancien bouton "Comment tu vas ? →" sous la carte. */}
                 <AlertBox
@@ -1147,6 +1174,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
           date={editing.date}
           session={editing}
           sport={profile.sport}
+          morphName={editingMorph ? MORPH_SESSION : undefined}
           userName={profile.name ?? "Toi"}
           onSave={(data, id) => gateInput(() => saveSession(data, id ?? editing.id))}
           onDelete={() => gateInput(async () => { await deleteSession(editing); setEditing(null); })}

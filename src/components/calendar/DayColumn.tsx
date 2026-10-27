@@ -10,6 +10,7 @@ import AlertBox from "@/components/calendar/AlertBox";
 import { loadRule, ruleTagColors, type LoadContext } from "@/lib/loadRule";
 import type { DayAlert } from "@/lib/alerts";
 import type { ExerciseAttachments } from "@/types";
+import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
 /* Seul le score est lu ici — un objet minimal suffit, permet à /coach/planning (qui n'a qu'un
    score déjà résolu par jour, pas une ligne wellness_daily complète) de passer directement sans
    fabriquer un faux WellnessDaily. `zoneLabel` (optionnel) : libellé de zone déjà résolu par
@@ -98,19 +99,24 @@ export function WeekSessionCard<T extends SessionLike>({ session, onComplete, on
   const concealed = session.concealed ?? null;
   // Single gauge: rpe if done, target_difficulty if planned
   const gaugeValue = session.done ? (session.rpe ?? null) : (session.target_difficulty ?? null);
+  const justDone = useJustDone(session.done);
 
   return (
     <div
       ref={cardRef}
+      className="tpc-press"
       style={{
+        position: "relative",
         border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
         background: "#fff", borderRadius: 16, padding: "10px 11px",
         cursor: concealed ? "default" : "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.045)",
-        transition: "transform .2s ease, box-shadow .2s ease",
+        transition: "transform .14s ease, box-shadow .2s ease, filter .14s ease",
+        animation: justDone ? "sessionDone 0.7s ease" : undefined,
         ...cardStyle,
       }}
       onClick={() => { if (!concealed) onEdit(session); }}
     >
+      {justDone && <DoneBurst radius={16} size={48} />}
       {/* 1. Name + badge */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
         {dragHandleProps && !concealed && (

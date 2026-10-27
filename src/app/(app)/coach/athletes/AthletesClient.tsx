@@ -312,6 +312,7 @@ export default function AthletesClient({ userId, initialAthletes, initialDate, i
                 boxShadow: "0 10px 26px rgba(0,0,0,.22)",
               }}>
                 <div
+                  className={isPending ? undefined : "tpc-press"}
                   onClick={isPending ? undefined : () => selectAthleteFilter(a.id)}
                   style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14, flexWrap: "wrap", cursor: isPending ? "default" : "pointer" }}
                 >

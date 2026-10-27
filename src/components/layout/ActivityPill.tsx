@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { OPEN_QUICKADD } from "@/lib/onboardingProgress";
 import { COACH_ATHLETE_FILTER_EVENT, useCoachAthleteFilterStorage } from "@/components/coach/AthleteFilterBar";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 /* Bandeau d'activité (2026-10-04, POC poc-element-activation-v5.html v14) : pilule du header et
    bannière du Planning fusionnées en un bandeau pleine largeur, tout en haut de l'écran, identique
@@ -440,6 +441,8 @@ export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: nu
   const { status, loading, role, basePath, pathname } = useActivityData(period, coachPath ? filterId : null);
   const { isMd } = useBreakpoint();
   const [open, setOpen] = useState(false);
+  // Fermeture animée du tiroir (fond, croix) ; une action ferme sans animation.
+  const { close: closeDrawer, exitClass } = useExitAnimation(() => setOpen(false));
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -524,7 +527,7 @@ export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: nu
         <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>{title}</div>
         <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>{sub}</div>
       </div>
-      <button onClick={() => setOpen(false)} aria-label="Fermer" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20, alignSelf: "flex-start" }}>✕</button>
+      <button onClick={closeDrawer} aria-label="Fermer" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20, alignSelf: "flex-start" }}>✕</button>
     </div>
   );
   const rows = (children: React.ReactNode) => <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>;
@@ -615,7 +618,8 @@ export default function ActivityPill({ contentMaxWidth }: { contentMaxWidth?: nu
           convention que les autres tiroirs — docké à droite en desktop, plein écran en mobile. */}
       {mounted && open && createPortal(
         <div
-          onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
+          className={exitClass}
+          onClick={e => { if (e.target === e.currentTarget) closeDrawer(); }}
           style={{
             position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "stretch",
             justifyContent: isMd ? "flex-end" : "stretch", overflow: "hidden",

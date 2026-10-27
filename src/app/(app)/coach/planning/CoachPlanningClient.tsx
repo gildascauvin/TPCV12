@@ -12,7 +12,10 @@ import dynamic from "next/dynamic";
 import posthog from "posthog-js";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { toast } from "@/lib/toast";
+import { haptic } from "@/lib/native";
+import { undoableDelete } from "@/lib/undoable";
+import { PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
 import { realToView, demoToView, buildWellnessMap } from "@/lib/coachSessions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
@@ -26,7 +29,7 @@ import CoachPageBg from "@/components/calendar/CoachPageBg";
 import PlanningRingShared from "@/components/calendar/PlanningRing";
 import DiffGaugeShared from "@/components/calendar/DiffGauge";
 import DayColumn from "@/components/calendar/DayColumn";
-import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
+import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler, PlanningDnd } from "@/components/calendar/DraggablePlanning";
 import EmptySessionState from "@/components/sessions/EmptySessionState";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
@@ -486,17 +489,25 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     return created[0] ? { id: created[0].id } : undefined;
   }, [athletes]);
 
+  // Annulable 5 s (lib/undoable.ts), comme côté sportif : retirée de l'écran tout de suite, effacée ensuite.
   const deleteSession = useCallback(async () => {
     if (!editingSession || !athlete) return;
-    await callSessionAPI({ action: "delete", athleteId: athlete.id, sessionId: editingSession.id });
-    setSessions(prev => prev.filter(s => s.id !== editingSession.id));
+    const removed = editingSession, athleteId = athlete.id;
+    setSessions(prev => prev.filter(s => s.id !== removed.id));
     setEditingSession(null);
+    undoableDelete({
+      key: `session:${removed.id}`,
+      message: "Séance supprimée",
+      commit: () => callSessionAPI({ action: "delete", athleteId, sessionId: removed.id }),
+      undo: () => setSessions(prev => prev.some(s => s.id === removed.id) ? prev : [...prev, removed]),
+    });
   }, [editingSession, athlete]);
 
   const completeSession = useCallback(async (data: { rpe: number; duration: number }) => {
     if (!completing || !athlete) return;
     const result = await callSessionAPI({ action: "complete", athleteId: athlete.id, sessionId: completing.id, data });
     if (result.ok) {
+      haptic("success");
       const updated: CoachViewSession = { ...completing, done: true, rpe: data.rpe, duration: data.duration };
       setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
       /* Comme le sportif après sa séance (2026-10-24) : l'écran de résultat s'ouvre tout de suite. */
@@ -505,11 +516,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     setCompleting(null);
   }, [completing, athlete, sessions]);
 
-  const moveSessionToDate = useCallback(async (session: CoachViewSession, newDate: string) => {
+  const moveSessionToDate = useCallback(async (session: CoachViewSession, newDate: string, silent = false) => {
     if (session.date === newDate || !athlete) return;
     setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: newDate } : s));
     const result = await callSessionAPI({ action: "update", athleteId: athlete.id, sessionId: session.id, data: { date: newDate } });
-    if (!result.ok) setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s));
+    if (!result.ok) { setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s)); return; }
+    // Confirmation + retour arrière (2026-10-27, même toast que /week).
+    if (!silent) toast(`Séance déplacée au ${format(new Date(newDate + "T12:00:00"), "EEEE d", { locale: fr })}`, {
+      action: { label: "Annuler", onClick: () => { void moveSessionToDate({ ...session, date: newDate }, session.date, true); } },
+    });
   }, [athlete]);
 
   /* Déplace une ligne d'exercice — réordonnancement dans la même séance, ou drag cross-séance
@@ -566,6 +581,14 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       .filter(r => r.ok && r.session)
       .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
     setSessions(prev => [...prev, ...created]);
+    if (created.length > 0) toast(created.length > 1 ? `Séance dupliquée pour ${created.length} sportifs` : "Séance dupliquée", {
+      action: { label: "Annuler", onClick: async () => {
+        const ids = new Set(created.map(c => c.id));
+        setSessions(prev => prev.filter(s => !ids.has(s.id)));
+        // Chaque copie est effacée chez son propre sportif (résultats dans l'ordre de recipientIds).
+        await Promise.all(results.map((r, i) => r.ok && r.session ? callSessionAPI({ action: "delete", athleteId: recipientIds[i], sessionId: r.session.id }) : null));
+      } },
+    });
     setDuplicating(null);
   }, [duplicating, athlete, athletes]);
 
@@ -1219,7 +1242,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
       {/* 7-column scrollable grid — semaine — même DayColumn générique que /week (WeekClient.tsx) */}
       {viewMode === "week" && !planning.active && (
         <div className={planning.ready ? undefined : "planning-pending"} style={{ position: "relative" }}>
-        <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
+        <PlanningDnd sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
@@ -1243,7 +1266,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
             </div>
           ))}
         </div>
-        </DndContext>
+        </PlanningDnd>
         </div>
       )}
 
@@ -1302,6 +1325,15 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
               .map(r => r._real ? realToView(r.session as Session, athletes) : demoToView(r.session as CoachSession));
             setSessions(prev => [...prev, ...created]);
             setShowReconduire(false);
+            // Confirmation + retour arrière (2026-10-27) : chaque copie est effacée chez son sportif.
+            const aidOf = recipientIds.flatMap(aid => allRows.map(() => aid));
+            if (created.length > 0) toast(`${created.length} séance${created.length > 1 ? "s" : ""} reconduite${created.length > 1 ? "s" : ""}`, {
+              action: { label: "Annuler", onClick: async () => {
+                const ids = new Set(created.map(c => c.id));
+                setSessions(prev => prev.filter(s => !ids.has(s.id)));
+                await Promise.all(results.map((r, i) => r.ok && r.session ? callSessionAPI({ action: "delete", athleteId: aidOf[i], sessionId: r.session.id }) : null));
+              } },
+            });
           })}
         />
       )}

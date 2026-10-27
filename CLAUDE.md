@@ -5397,3 +5397,22 @@ Coach Control, **vue Groupe** (aucun sportif sélectionné) : les liens « Bilan
 - **En-tête de semaine** : « Cette semaine » / « Sem. du 3 nov. » + titre programme, non sticky (`overflow-x:hidden` sur `html, body` casse `position:sticky`), sans compteur de séances (retiré à la demande).
 - **Non fait** : suivi PostHog de la bascule (pas d'événement, adoption non mesurable pour l'instant).
 - Vérifié : `tsc`. Rendu testé par Gildas en local.
+
+## Qualité perçue : animations, transitions, toasts (DÉPLOYÉ 2026-10-27)
+Aucune dépendance ajoutée (pas de framer-motion), tout en CSS et React.
+- **Briques** :
+  - `globals.css` : enfoncement global des `button` à l'appui (`:where`, exclusion `data-no-press` / `aria-roledescription`), `.tpc-press` pour les cartes (ne s'enfonce pas quand on presse un bouton ou un élément glissable à l'intérieur), `.tpc-exit` pour les sorties, `.tpc-page-in`, `prefers-reduced-motion` global.
+  - `hooks/useExitAnimation.ts` : `className={exitClass}` sur le fond de la modale ; seules les fermetures faites par l'utilisateur passent par `close()`.
+  - `hooks/useCountUp.ts` : dans `AggregateGauge`.
+  - `lib/toast.ts` + `components/layout/ToastHost.tsx` : monté dans le layout `(app)` et dans celui de la sandbox.
+  - `lib/undoable.ts` : suppression annulable 5 s, timers au niveau du module, exécutés tout de suite sur `pagehide` ou quand la page passe en arrière-plan ; `isPendingDelete()` pour filtrer une liste relue pendant ce délai.
+  - `lib/morph.ts` : View Transition carte → tiroir, sur /today uniquement.
+  - `components/sessions/DoneBurst.tsx` : coche de séance validée.
+  - `PlanningDnd` (`DraggablePlanning.tsx`) : DndContext + `DragOverlay` rendu dans `<body>`, sinon la carte glissée restait coupée par la zone de défilement de son jour.
+- **Toasts avec Annuler** : supprimer, dupliquer, déplacer et reconduire une séance (/today, /week, /coach/planning, Coach Control) ; supprimer ou arrêter un programme (les `confirm()` sont retirés).
+- **Onglets** : les View Transitions ont été essayées puis abandonnées (l'écran restait figé pendant le chargement). À la place, l'onglet s'allume dès le clic (`pendingHref` dans BottomNav) et la page apparaît en fondu (`template.tsx`, opacité seule : un `transform` décalerait les éléments fixes de la page).
+- **Écrans de chargement** : les 8 `loading.tsx` reprennent la vraie mise en page de leur page. `PageSkeleton` (`Skeleton.tsx`) n'est plus utilisé.
+- **Autres changements du même jour** :
+  - « Conseils confirmés : X sur Y » retiré de l'écran de fin de séance (le suivi reste dans le Bilan).
+  - Liens Bilan ajoutés au calendrier du Planning sportif (`source: "planning"`).
+  - En-tête « 💓 Wellness du jour · 1 / 5 » retiré du check-in.

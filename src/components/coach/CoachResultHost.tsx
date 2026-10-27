@@ -7,6 +7,7 @@
    accès (health_* propriétaire seul). « Modifier la séance » ouvre l'éditeur d'avant. */
 
 import { useEffect, useRef, useState } from "react";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import posthog from "posthog-js";
 import { SessionBlock, loadAccounts, checkRecalAfter, type Accounts, type RecalNotice } from "@/components/physio/PhysioRevealHost";
 import { sessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
@@ -39,6 +40,8 @@ export default function CoachResultHost() {
   const [accounts, setAccounts] = useState<Accounts | null>(null);
   const currentId = useRef<string | null>(null);
   const [recal, setRecal] = useState<RecalNotice | null>(null);
+  // Fermeture animée (fond, Fermer) ; « Modifier la séance » enchaîne sans animation.
+  const { close: dismiss, exitClass } = useExitAnimation(() => setShown(null));
   useEffect(() => {
     const on = (e: Event) => {
       const detail = (e as CustomEvent<CoachResultDetail>).detail;
@@ -87,8 +90,9 @@ export default function CoachResultHost() {
   const btn: React.CSSProperties = { height: 46, borderRadius: RADIUS.control, fontSize: 14, fontWeight: 800, cursor: "pointer" };
   return (
     <div
+      className={exitClass}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483100, padding: 18 }}
-      onClick={e => { if (e.target === e.currentTarget) close(); }}
+      onClick={e => { if (e.target === e.currentTarget) dismiss(); }}
       role="dialog" aria-modal="true" aria-label={`Séance de ${shown.subject}`}
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
@@ -98,7 +102,7 @@ export default function CoachResultHost() {
           {shown.onEdit && (
             <button onClick={() => { const fn = shown.onEdit; close(); fn?.(); }} style={{ ...btn, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#171b1f" }}>Modifier la séance</button>
           )}
-          <button onClick={close} style={{ ...btn, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}>Fermer</button>
+          <button onClick={dismiss} style={{ ...btn, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}>Fermer</button>
         </div>
       </div>
     </div>

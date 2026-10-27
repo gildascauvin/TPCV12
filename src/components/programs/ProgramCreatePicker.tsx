@@ -1,6 +1,7 @@
 "use client";
 
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
@@ -40,6 +41,7 @@ const OPTIONS = [
 
 export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onTemplate, onBlank, wizardHero, hideClose }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const handlers: Record<typeof OPTIONS[number]["key"], () => void> = {
     generate: onGenerate, import: onImport, template: onTemplate, blank: onBlank,
   };
@@ -47,13 +49,14 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
@@ -86,7 +89,7 @@ export default function ProgramCreatePicker({ onClose, onGenerate, onImport, onT
               <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, color: "#171b1f", letterSpacing: "-0.02em" }}>Créer un programme</div>
               <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Choisis comment démarrer</div>
             </div>
-            {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
+            {!hideClose && <button onClick={close} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

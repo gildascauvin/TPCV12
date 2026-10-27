@@ -16,6 +16,7 @@ import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerci
 import { syncTestResultsFromSession } from "@/lib/testResults";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 export interface ReviewContext {
   wellness: number | null;
@@ -97,6 +98,7 @@ function scoreColor(s: number) { return wellnessColor(s); }
 
 export default function CoachSessionModal({ athleteName, coachName, date, session, athletes = [], initialAthleteId, reviewContext, onSave, onDelete, onDuplicate, onClose, onMarkViewed }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
 
   useEffect(() => {
     if (session?.id) onMarkViewed?.();
@@ -224,7 +226,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
 
   function flushAndClose() {
     if (autosaveEnabled && autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
-    onClose();
+    close();
   }
 
   // Bouton unique du footer : en erreur, un clic relance l'enregistrement plutôt que de fermer —
@@ -272,6 +274,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
@@ -569,7 +572,7 @@ export default function CoachSessionModal({ athleteName, coachName, date, sessio
               </div>
             )}
             <button
-              onClick={onClose}
+              onClick={close}
               style={{ height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               Annuler

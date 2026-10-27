@@ -1,5 +1,6 @@
 "use client";
 
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { hapticTick } from "@/lib/native";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -238,6 +239,8 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   /* Aperçu du wizard seulement : valeurs neutres tant que la question n'a pas de réponse. */
   const pv = { sleep: sleep ?? 7, stress: stress ?? 5, recovery: recovery ?? 7, motivation: motivation ?? 8 };
   const [saving, setSaving] = useState(false);
+  // Fermeture animée (croix, fond, Annuler) ; l'enregistrement, lui, ferme tout de suite.
+  const { close: closeAnimated, exitClass } = useExitAnimation(onClose);
 
   /* Aha réactif (2026-09-14, wizard uniquement — voir wizardHero ci-dessous) : la vraie fonction
      de score, recalculée à chaque frappe. Ring/zone pilotés par `base_score` (jamais `score`,
@@ -424,16 +427,15 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
 
   const body = (
     <>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {/* En-tête « 💓 Wellness du jour · 1 / 5 » retiré (2026-10-27, Gildas : les barres disent déjà où
+            on en est). Reste seulement ce qui informe : le retour à l'étape 0, et le nom du sportif quand
+            le coach saisit pour lui. */}
+        {((step === 0 && onBack) || who) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 14 }}>
             {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
-            <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, color: "#172018" }}>
-              {who ? `💓 Check-in de ${who}` : "💓 Wellness du jour"}
-            </div>
+            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>Check-in de {who}</div>}
           </div>
-          <div style={{ fontSize: 11, color: "#7b7f82" }}>{step + 1} / {total}</div>
-        </div>
+        )}
 
         {/* Progress dots */}
         <div style={{ display: "flex", gap: 3, marginBottom: 24 }}>
@@ -580,7 +582,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             </button>
           ) : (
             <button
-              onClick={onClose}
+              onClick={closeAnimated}
               style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "#fff", color: "#7b7f82", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               {cancelLabel}
@@ -591,7 +593,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
             disabled={saving || (q === -1 && !plannedIntensity) || !answered}
             style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "13px 16px", borderRadius: 16, border: "1px solid rgba(212,64,0,0.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 14px 28px rgba(212,64,0,0.20)", opacity: (q === -1 && !plannedIntensity) || !answered ? 0.45 : 1 }}
           >
-            {saving ? "..." : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
+            {saving ? <span aria-label="Enregistrement" style={{ width: 16, height: 16, border: "2px solid currentColor", borderTopColor: "transparent", borderRadius: "50%", display: "inline-block", animation: "spinBtn 0.7s linear infinite" }} /> : step === total - 1 ? "Valider ✓" : q === 3 && behaviors.length === 0 ? "Rien de particulier →" : "Suivant →"}
           </button>
         </div>
   );
@@ -619,11 +621,12 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         display: "flex", flexDirection: sheetMode ? "column" : "row", alignItems: "stretch", justifyContent: heroOnLeft || (isMd && !wizardHero) ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className={exitClass}
+      onClick={(e) => { if (e.target === e.currentTarget) closeAnimated(); }}
     >
       {isMd && !wizardHero && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 48, background: DARK_CARD_BG }}
-          onClick={onClose}>
+          onClick={closeAnimated}>
           <div onClick={e => e.stopPropagation()}>{renderBuildingScore(260)}</div>
         </div>
       )}

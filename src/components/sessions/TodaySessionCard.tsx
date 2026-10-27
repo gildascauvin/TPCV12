@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import DiffGauge from "@/components/calendar/DiffGauge";
@@ -11,6 +11,7 @@ import { ExerciseLinesBox, SessionSynthesis, exerciseViews } from "@/components/
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import { isLive, liveElapsedMs, formatChrono } from "@/lib/liveSession";
 import type { Session } from "@/types";
+import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
 
 /* ─── Today session card — reste CLAIRE (2026-09-24, redesign "bg dark, plus de card" — voir POC
    `poc-coach-context_4.html`) : le "plus de card" ne s'applique qu'à l'en-tête ring/décision (voir
@@ -67,31 +68,25 @@ export default function TodaySessionCard({ session, onComplete, onEdit, previewP
     if (activeData?.type !== "exercise" || overData?.type !== "exercise" || overData.sessionId !== activeData.sessionId) return;
     onReorderExercises?.(activeData.sessionId!, activeData.index!, overData.index!);
   }
-  const [justDone, setJustDone] = useState(false);
-  const prevDoneRef = useRef(session.done);
-  useEffect(() => {
-    if (!prevDoneRef.current && session.done) {
-      setJustDone(true);
-      const t = setTimeout(() => setJustDone(false), 700);
-      return () => clearTimeout(t);
-    }
-    prevDoneRef.current = session.done;
-  }, [session.done]);
+  const justDone = useJustDone(session.done);
 
   return (
     <div
       data-tour="session-card"
-      className="mb-2 cursor-pointer"
+      data-session-id={session.id}
+      className="mb-2 cursor-pointer tpc-press"
       style={{
+        position: "relative",
         background: "#fff",
         border: session.done ? "1px solid rgba(45,125,22,0.16)" : "1px solid rgba(212,64,0,0.16)",
         boxShadow: "0 10px 28px rgba(0,0,0,0.06)",
         padding: 18, borderRadius: 24,
-        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        transition: "transform 0.14s ease, box-shadow 0.2s ease, filter 0.14s ease",
         animation: justDone ? "sessionDone 0.7s ease" : undefined,
       }}
       onClick={() => { if (!concealed) onEdit(session); }}
     >
+      {justDone && <DoneBurst />}
       {/* 1. Name + badge */}
       <div data-sheet-peek={hideGauge || !gaugeValue ? "" : undefined} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#171b1f", lineHeight: 1.2, letterSpacing: "-0.02em" }}>

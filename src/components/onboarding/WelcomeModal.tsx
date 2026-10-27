@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import posthog from "posthog-js";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 interface Props {
   mode: "athlete" | "coach";
@@ -9,17 +10,18 @@ interface Props {
 }
 
 export default function WelcomeModal({ mode, onClose }: Props) {
+  const { close, exitClass } = useExitAnimation(onClose);
   useEffect(() => {
     posthog.capture("welcome_modal_viewed", { mode });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleClose() {
     posthog.capture("welcome_modal_closed", { mode });
-    onClose();
+    close();
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}>
+    <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)" }}>
       <div style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 42px 120px rgba(0,0,0,.34)" }}>
         {mode === "athlete" ? (
           <>

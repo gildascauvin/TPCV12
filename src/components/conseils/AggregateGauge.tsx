@@ -17,6 +17,7 @@
    viewBox — un <text> scale avec la largeur rendue (voir MetricChart.tsx / ZoneSparkline.tsx). */
 
 import type { AggBand } from "@/lib/metricCards";
+import { useCountUp } from "@/hooks/useCountUp";
 
 const A0 = -120, A1 = 120;   // 240° ouverts en bas, même géométrie que les jauges contrainte/monotonie
 
@@ -53,6 +54,8 @@ export default function AggregateGauge({
      toute l'app, du 26px de la nav au ring de la page" (retour de Gildas sur le POC). */
   bare?: boolean;
 }) {
+  /* Curseur et chiffre qui montent jusqu'à leur valeur (2026-10-27, useCountUp). Miniature : direct. */
+  const shownPos = useCountUp(pos, bare ? 0 : 700);
   const r = Math.round(size * 0.36);
   const sw = Math.max(bare ? 3 : 4, Math.round(size * (bare ? 0.17 : 0.075)));
   const cx = size / 2;
@@ -86,8 +89,8 @@ export default function AggregateGauge({
             </>;
           })()}
         </g>
-        {pos !== null && (() => {
-          const [mx, my] = polar(cx, cy, r, at(pos));
+        {shownPos !== null && (() => {
+          const [mx, my] = polar(cx, cy, r, at(shownPos));
           return <circle cx={mx.toFixed(2)} cy={my.toFixed(2)} r={(sw * 0.62).toFixed(1)} fill={color} stroke="#0f1318" strokeWidth={Math.max(2, Math.round(sw * 0.24))} />;
         })()}
       </svg>
@@ -101,7 +104,7 @@ export default function AggregateGauge({
           fontFamily: "var(--font-mono), monospace", fontWeight: 700, lineHeight: 1,
           letterSpacing: "-0.02em", fontSize: Math.round(size * 0.215), color,
         }}>
-          {pos === null ? "—" : Math.round(pos * 100)}
+          {shownPos === null ? "—" : Math.round(shownPos * 100)}
         </span>
         {showLabel && band && (
           <span style={{

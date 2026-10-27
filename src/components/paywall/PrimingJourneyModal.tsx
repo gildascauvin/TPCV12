@@ -7,6 +7,7 @@ import posthog from "posthog-js";
 import { ElitePlanCard, FreePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { DARK_CARD_BG } from "@/lib/theme";
 import {
   clearPrimingSource, getCachedPrimingContext, loadPrimingContext, peekPrimingSource,
@@ -38,6 +39,7 @@ interface Props {
    coach, ses sportifs. */
 export default function PrimingJourneyModal({ mode, billing, setBilling, allowDismiss, onContinue, onDismiss, onPurchased, headline, sub, name, athleteSelfId }: Props) {
   const { isMd, w } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
   const [ctx, setCtx] = useState<PrimingContext | null>(getCachedPrimingContext);
 
@@ -84,7 +86,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     </>
   );
   const freeBtn = allowDismiss ? (
-    <button onClick={onDismiss} style={{ width: "100%", height: 46, borderRadius: 16, border: "1px solid rgba(255,255,255,.16)", background: "transparent", color: "rgba(255,255,255,.8)", fontSize: 13.5, fontWeight: 800, cursor: "pointer" }}>
+    <button onClick={close} style={{ width: "100%", height: 46, borderRadius: 16, border: "1px solid rgba(255,255,255,.16)", background: "transparent", color: "rgba(255,255,255,.8)", fontSize: 13.5, fontWeight: 800, cursor: "pointer" }}>
       Continuer en Gratuit
     </button>
   ) : undefined;
@@ -98,13 +100,13 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     </div>
   );
   const closeBtn = allowDismiss && (
-    <button onClick={onDismiss} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
+    <button onClick={close} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
   );
 
   /* Mobile : plein écran, Elite puis Gratuit, achat dans le bas fixe. */
   if (!isMd) {
     return (
-      <div style={backdrop}>
+      <div className={exitClass} style={backdrop}>
         <div style={{ position: "relative", width: "100%", height: "100dvh", background: DARK_CARD_BG, color: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
           {closeBtn}
           <div style={{ flex: 1, overflowY: "auto" }}>
@@ -118,7 +120,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
           <div style={{ flexShrink: 0, padding: "12px 16px 16px", background: "rgba(7,10,13,.88)", borderTop: "1px solid rgba(255,255,255,.08)", display: "flex", flexDirection: "column", gap: 8 }}>
             {cta}
             {allowDismiss && (
-              <button onClick={onDismiss} style={{ border: "none", background: "none", color: "rgba(255,255,255,.75)", fontSize: 13, fontWeight: 700, textDecoration: "underline", cursor: "pointer", alignSelf: "center", padding: 2 }}>
+              <button onClick={close} style={{ border: "none", background: "none", color: "rgba(255,255,255,.75)", fontSize: 13, fontWeight: 700, textDecoration: "underline", cursor: "pointer", alignSelf: "center", padding: 2 }}>
                 Continuer en Gratuit
               </button>
             )}
@@ -130,7 +132,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
   /* Desktop : modale centrée, les 2 offres côte à côte (empilées si la fenêtre est étroite). */
   return (
-    <div style={backdrop} onClick={e => { if (allowDismiss && e.target === e.currentTarget) onDismiss(); }}>
+    <div className={exitClass} style={backdrop} onClick={e => { if (allowDismiss && e.target === e.currentTarget) close(); }}>
       <div style={{
         position: "relative", width: "min(980px, 100%)", maxHeight: "calc(100dvh - 48px)",
         background: DARK_CARD_BG, color: "#fff", border: "1px solid rgba(255,255,255,.16)", borderRadius: 24,

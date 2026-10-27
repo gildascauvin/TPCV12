@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { alternativesFor, ytFrame, ytThumb, type LineMedia, type DemoItem } from "@/lib/exerciseDemos";
 import type { DemoSheetDetail } from "@/lib/demoSheetEvent";
 import { DEMO_SHEET_EVENT, LINE_MEDIA_EVENT, demoKeyOf, imageKeyOf, openDemoSheet, resolveLineMedia, setDemoPref, useDemoPrefs } from "@/lib/demoPrefs";
@@ -155,6 +156,8 @@ export function DemoSheetHost({ initial = null }: { initial?: DemoSheetDetail | 
   const [mounted, setMounted] = useState(false);
   const { isMd } = useBreakpoint();
   useDemoPrefs();
+  // Fermeture animée (fond, Fermer, Échap) ; « Masquer » / choix d'une vidéo ferment sans animation.
+  const { close: dismiss, exitClass } = useExitAnimation(() => setState(null));
   useEffect(() => {
     setMounted(true);
     const fn = (e: Event) => setState((e as CustomEvent).detail);
@@ -163,10 +166,10 @@ export function DemoSheetHost({ initial = null }: { initial?: DemoSheetDetail | 
   }, []);
   useEffect(() => {
     if (!state) return;
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setState(null); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") dismiss(); };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
-  }, [state]);
+  }, [state, dismiss]);
   if (!mounted || !state) return null;
   const media = resolveLineMedia(state.text);
   const close = () => setState(null);
@@ -194,7 +197,7 @@ export function DemoSheetHost({ initial = null }: { initial?: DemoSheetDetail | 
   const inFrame = typeof window !== "undefined" && window.self !== window.top && state.anchorY != null;
   const sheet = !isMd && !inFrame;
   return createPortal(
-    <div onClick={close} style={{ position: inFrame ? "absolute" : "fixed", top: 0, left: 0, right: 0, bottom: inFrame ? undefined : 0, minHeight: inFrame ? document.documentElement.scrollHeight : undefined, zIndex: 2147483300, background: "rgba(0,0,0,.55)", display: "flex", alignItems: inFrame ? "flex-start" : isMd ? "center" : "flex-end", justifyContent: "center", padding: inFrame ? `${Math.max(8, (state.anchorY ?? 0) - 120)}px 12px 0` : isMd ? 24 : 0 }}>
+    <div className={exitClass} onClick={dismiss} style={{ position: inFrame ? "absolute" : "fixed", top: 0, left: 0, right: 0, bottom: inFrame ? undefined : 0, minHeight: inFrame ? document.documentElement.scrollHeight : undefined, zIndex: 2147483300, background: "rgba(0,0,0,.55)", display: "flex", alignItems: inFrame ? "flex-start" : isMd ? "center" : "flex-end", justifyContent: "center", padding: inFrame ? `${Math.max(8, (state.anchorY ?? 0) - 120)}px 12px 0` : isMd ? 24 : 0 }}>
       <div onClick={e => e.stopPropagation()}
         style={{
           width: "100%", maxWidth: sheet ? "100%" : 640, maxHeight: inFrame ? undefined : isMd ? "86vh" : "88dvh", background: "#fff", color: "#171b1f",
@@ -205,7 +208,7 @@ export function DemoSheetHost({ initial = null }: { initial?: DemoSheetDetail | 
         <div style={{ overflowY: "auto", padding: sheet ? "14px 14px 8px" : "22px 22px 12px" }}>{body}</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: `10px ${isMd ? 22 : 14}px calc(${isMd ? 16 : 18}px + env(safe-area-inset-bottom,0px))`, flexShrink: 0, fontSize: 12.5, color: "#62686e" }}>
           <span>{media.kind === "demo" && media.items.length > 1 ? `${media.items.length} mouvements` : ""}</span>
-          <button type="button" onClick={close} style={{ border: 0, background: "#f1f1f1", borderRadius: 999, padding: "9px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
+          <button type="button" onClick={dismiss} style={{ border: 0, background: "#f1f1f1", borderRadius: 999, padding: "9px 16px", fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>Fermer</button>
         </div>
       </div>
     </div>,

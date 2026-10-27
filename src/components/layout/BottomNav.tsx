@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { haptic } from "@/lib/native";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 
 const athleteTabs = [
@@ -149,19 +151,31 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
   const { isMd } = useBreakpoint();
   const tabs = role === "coach" ? coachTabs : athleteTabs;
 
-  function renderTab(tab: (typeof tabs)[number]) {
+  /* Onglet allumé dès le clic (2026-10-27) : sans attendre que la nouvelle page arrive, sinon le
+     premier clic semble ne rien faire. Remis à zéro quand la route a changé. La page, elle, apparaît
+     en fondu (template.tsx). Remplace un essai de View Transitions qui figeait l'écran le temps du
+     chargement. */
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  useEffect(() => { setPendingHref(null); }, [pathname]);
+
+  function isTabActive(tab: (typeof tabs)[number]) {
     const href = basePath ? sandboxHref(tab.href, basePath) : tab.href;
-    const isCoachTab = "matchExact" in tab;
+    if (pendingHref) return pendingHref === href;
     /* Sandbox : le tab "home" (Aujourd'hui/Dashboard) a pour href basePath lui-même, qui est
        aussi le préfixe de TOUTES les autres sous-routes de ce rôle (/sandbox/athlete/week,
        /sandbox/athlete/conseils...) — un simple startsWith(href+"/") le faisait donc matcher
        en permanence, quelle que soit la page réellement affichée. Toujours exact pour ce cas. */
     const isSandboxHomeTab = !!basePath && href === basePath;
-    const active = isSandboxHomeTab
+    return isSandboxHomeTab
       ? pathname === href
-      : isCoachTab
+      : "matchExact" in tab
       ? (tab.matchExact ? pathname === href : pathname.startsWith(href))
       : (pathname === href || pathname.startsWith(href + "/"));
+  }
+
+  function renderTab(tab: (typeof tabs)[number]) {
+    const href = basePath ? sandboxHref(tab.href, basePath) : tab.href;
+    const active = isTabActive(tab);
     const tourId = "tourId" in tab ? tab.tourId : undefined;
         // Libellé court sur mobile pour ne jamais tronquer ("Programmes" → "Prog.").
     const label = !isMd && "shortLabel" in tab && tab.shortLabel ? tab.shortLabel : tab.label;
@@ -169,6 +183,8 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
       <Link
         key={tab.href}
         href={href}
+        className="tpc-press"
+        onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !active) { haptic("light"); setPendingHref(href); } }}
         {...(tourId ? { "data-tour": tourId } : {})}
         style={{
           display: "flex",
@@ -184,7 +200,7 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
           background: active ? "rgba(255,138,85,.12)" : "transparent",
           color: "#fff",
           textDecoration: "none",
-          transition: "color 0.18s ease, background 0.18s ease",
+          transition: "color 0.18s ease, background 0.18s ease, transform .14s ease",
         }}
       >
         {tab.icon(active)}
@@ -213,6 +229,7 @@ export default function BottomNav({ role = "athlete", basePath }: Props) {
       width: isMd ? "min(560px,calc(100vw - 28px))" : "min(400px,calc(100vw - 24px))",
       zIndex: 2147483000,
       pointerEvents: "none",
+      viewTransitionName: "tpc-nav",
     }}>
       <nav style={{
         position: "relative",

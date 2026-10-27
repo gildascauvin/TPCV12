@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import type { Session } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { fetchWorkoutsForDay, workoutLabel, workoutTime, type HealthWorkout } from "@/lib/healthWorkouts";
@@ -21,6 +22,7 @@ interface CompleteModalProps {
 export default function CompleteModal({ session, onSave, onClose }: CompleteModalProps) {
   /* Note en un tap (2026-10-17) : jamais de valeur par défaut pour une 1re note (le 6 d'avant
      était enregistré tel quel si on validait sans toucher). Une séance déjà notée garde sa note. */
+  const { close, exitClass } = useExitAnimation(onClose);
   const [rpe, setRpe] = useState<number | null>(session.rpe ?? null);
   /* Séance démarrée avec le chrono (2026-10-02) : sa durée, pauses déduites, est pré-remplie. */
   const chrono = session.duration == null ? chronoMinutes(session) : null;
@@ -82,7 +84,8 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 2147483100, padding: 18,
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className={exitClass}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       <div style={{
         background: "#fff", color: "#171b1f",
@@ -174,7 +177,7 @@ export default function CompleteModal({ session, onSave, onClose }: CompleteModa
         {/* Actions */}
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={onClose}
+            onClick={close}
             style={{ flex: 1, height: 46, borderRadius: 16, border: "1px solid rgba(0,0,0,.12)", background: "#fff", color: "#62686e", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
           >
             Annuler

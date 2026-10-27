@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { RADIUS } from "@/lib/theme";
 import { loadPhysioData, PHYSIO_REVEAL, PHYSIO_REPLAY, type PhysioData, type PhysioRevealDetail, type PhysioReplayDetail } from "@/lib/physioData";
 import { HEART_CALIBRATION, HEART_FAMILY_LABEL, heartResultFor, physioVerdictAt, type HeartResult, type PhysioVerdict } from "@/lib/physioCompare";
@@ -10,7 +11,6 @@ import { checkinResult, recoveryGauge, type CheckinResult } from "@/lib/checkinI
 import { sessionResult, sessionZone, type SessionResult, type ResultSession, type WeekSession } from "@/lib/sessionInsight";
 import { computeAccounts, type StripCell, type Lift } from "@/lib/bilan";
 import { loadBilanRaw } from "@/lib/bilanData";
-import { VerdictStrip, StripLegend } from "@/components/bilan/VerdictStrip";
 import { loadCheckinContext, loadSessionContext } from "@/lib/resultContext";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { DARK_CARD_BG } from "@/lib/theme";
@@ -158,6 +158,8 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     })();
     return () => { alive = false; };
   }, [accountsKey, userIdProp]);
+  // Fermeture animée (fond, Fermer) ; « Modifier » enchaîne sans animation.
+  const { close: dismiss, exitClass } = useExitAnimation(() => { setShown(null); setNav(null); });
 
   if (!shown) return null;
   const close = () => { setShown(null); setNav(null); };
@@ -256,8 +258,9 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
 
   return (
     <div
+      className={exitClass}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2147483150, padding: 18 }}
-      onClick={e => { if (e.target === e.currentTarget) close(); }}
+      onClick={e => { if (e.target === e.currentTarget) dismiss(); }}
     >
       <div style={{ background: "#fff", color: "#171b1f", border: "1px solid rgba(0,0,0,.10)", boxShadow: "0 42px 120px rgba(0,0,0,.34)", borderRadius: RADIUS.card, padding: 26, width: "100%", maxWidth: 400, maxHeight: "calc(100dvh - 36px)", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16, animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
         {nav && nav.keys.length > 1 && (
@@ -308,7 +311,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
               {shown.kind === "session" ? "Modifier ma note" : "Modifier mes réponses"}
             </button>
             <button
-              onClick={close}
+              onClick={dismiss}
               style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
             >
               Fermer
@@ -316,7 +319,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
           </div>
         ) : (
           <button
-            onClick={close}
+            onClick={dismiss}
             style={{ height: 46, borderRadius: RADIUS.control, border: "1px solid rgba(212,64,0,.20)", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 10px 24px rgba(212,64,0,.22)" }}
           >
             Fermer
@@ -533,16 +536,8 @@ export function SessionBlock({ r, onCorrect, accounts, recal, onUndoRecal, subje
           )}
         </div>
       )}
-      {accounts && accounts.judged > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(0,0,0,.08)", paddingTop: 12 }}>
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: "#62686e" }}>Conseils confirmés : {accounts.right} sur {accounts.judged}</span>
-            <StripLegend light />
-          </div>
-          <VerdictStrip cells={accounts.strip} light />
-        </div>
-      )}
+      {/* « Conseils confirmés : X sur Y » retiré de l'écran de fin de séance (2026-10-27, Gildas). Le
+          suivi reste dans le Bilan (BilanCarousel). `accounts` reste chargé pour le recalage. */}
     </div>
   );
 }

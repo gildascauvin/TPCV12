@@ -25,6 +25,7 @@ import {
 } from "@/lib/wellnessBaseline";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import type { CoachAthlete, CoachViewSession, Session } from "@/types";
+import DoneBurst, { useJustDone } from "@/components/sessions/DoneBurst";
 
 /* Séance future : la jauge ne touche que la difficulté prévue, l'aperçu ne modifie pas les charges. */
 const isFutureDate = (date: string) => date > new Date().toLocaleDateString("sv-SE");
@@ -331,6 +332,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   /* Texte vivant de l'anneau, titre de la carte décision — comme /today (2026-10-12). */
   const [ringHint, setRingHint] = useState<string | null>(null);
   const adjustable = !!topSession && !topSession.done;
+  const topDoneBurst = useJustDone(topSession?.done);
   const effectivePreviewPct = externalPreviewPct !== undefined ? externalPreviewPct : previewPct;
 
   /* Contour statique, pas de point/halo sur cette carte (2026-09, retour de Gildas — retiré, la
@@ -567,7 +569,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
       )}
       {!page && programPill && <div style={{ marginTop: 12 }}>{programPill}</div>}
       {!page && topSession && (
-        <div onClick={() => (topSession.done && onEditSession ? onEditSession(topSession) : onDecide())} style={{ background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
+        <div className="tpc-press" onClick={() => (topSession.done && onEditSession ? onEditSession(topSession) : onDecide())} style={{ position: "relative", background: "#fff", borderRadius: 16, padding: "11px 13px", boxShadow: "0 2px 10px rgba(0,0,0,0.1)", cursor: "pointer" }}>
+          {topDoneBurst && <DoneBurst radius={16} size={40} />}
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 5, marginBottom: 8 }}>
             <div style={{ fontSize: 12.5, fontWeight: 800, lineHeight: 1.25, color: "#171b1f", letterSpacing: "-0.025em", wordBreak: "break-word" }}>
               {topSession.name}

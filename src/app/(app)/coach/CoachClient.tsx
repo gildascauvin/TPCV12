@@ -60,6 +60,8 @@ import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import type { TrendCode, TrendInput } from "@/lib/trainingLoad";
 import { computeWellnessBaselineAt, wellnessSignal, dimensionRaw, DIMENSION_KEYS, DIMENSION_LABELS, relativeWellnessByDate, type WellnessBaselineResult, type DimensionKey } from "@/lib/wellnessBaseline";
 import type { CoachAthlete, CoachViewSession, Session, CoachSession, SubscriptionStatus, ExerciseAttachments, WellnessDaily } from "@/types";
+import { toast } from "@/lib/toast";
+import { haptic } from "@/lib/native";
 
 interface Props {
   firstDecisionOn?: string | null;
@@ -404,6 +406,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const result = await callSessionAPI({ action: "complete", athleteId: a.id, sessionId: s.id, data });
     setCompletingFor(null);
     if (!result.ok) { alert("Résultat non enregistré, réessaie."); return; }
+    haptic("success");
     const updated: CoachViewSession = { ...s, done: true, rpe: data.rpe, duration: data.duration };
     const next = sessions.map(x => x.id === updated.id ? updated : x);
     setSessions(next);
@@ -629,8 +632,13 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
     const notes = src.notes ? src.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : (src.notes ?? "");
     const target_difficulty = adjustDifficulty(src.target_difficulty ?? 6, pct);
     const ids = targetAthleteIds?.length ? targetAthleteIds : [reconduire.athlete.id];
-    await Promise.all(ids.map(athleteId => callSessionAPI({ action: "add", athleteId, data: { name: src.name, notes, target_difficulty, date: newDate } })));
+    const results = await Promise.all(ids.map(athleteId => callSessionAPI({ action: "add", athleteId, data: { name: src.name, notes, target_difficulty, date: newDate } })));
     setReconduire(null);
+    // Confirmation + retour arrière (2026-10-27) : chaque copie est effacée chez son propre sportif.
+    const made = results.filter(r => r.ok && r.session).length;
+    if (made > 0) toast(made > 1 ? `Séance reconduite pour ${made} sportifs` : "Séance reconduite", {
+      action: { label: "Annuler", onClick: () => { void Promise.all(results.map((r, i) => r.ok && r.session ? callSessionAPI({ action: "delete", athleteId: ids[i], sessionId: r.session.id }) : null)); } },
+    });
   }
   /* Libellé "Séances libres" par sportif et par semaine — même stockage et même route que le
      Planning coach (athlete.free_training_label, POST /api/coach/free-label). */

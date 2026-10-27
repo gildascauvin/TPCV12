@@ -203,6 +203,24 @@ export default function DecisionRing({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
+  /* Remplissage à l'arrivée (2026-10-27, qualité perçue) : l'arc et le curseur partent du bas de
+     l'échelle et montent jusqu'à la valeur en 650 ms, une seule fois au montage. Les changements
+     suivants (glisser, nouvelle reco) restent directs. */
+  const [intro, setIntro] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setIntro(1); return; }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / 650);
+      setIntro(p);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const introRunning = intro < 1;
+  const drawValue = introRunning ? MIN + (value - MIN) * (1 - Math.pow(1 - intro, 3)) : value;
 
   const r = Math.round(size * 0.36), sw = Math.round(size * 0.085);
   const rOut = r + sw * 0.95, rIn = r - sw * 0.95;
@@ -257,13 +275,13 @@ export default function DecisionRing({
   /* Le dégradé suit l'arc : découpé en petits segments dont la couleur est interpolée (un
      linearGradient SVG suivrait la corde, pas la courbe). */
   const [c0, c1] = DIFF_STOPS[roundedValue >= 8 ? "hard" : roundedValue >= 5 ? "moderate" : "easy"];
-  const fillEnd = ang(value);
+  const fillEnd = ang(drawValue);
   const SEGS = 28;
-  const fills = value > MIN ? Array.from({ length: SEGS }, (_, i) => ({
+  const fills = drawValue > MIN ? Array.from({ length: SEGS }, (_, i) => ({
     d: arcPath(cx, cy, r, A0 + ((fillEnd - A0) * i) / SEGS, A0 + ((fillEnd - A0) * (i + 1.02)) / SEGS),
     color: mixHex(c0, c1, (i + 0.5) / SEGS),
   })) : [];
-  const [mx, my] = polar(cx, cy, r, ang(value));
+  const [mx, my] = polar(cx, cy, r, ang(drawValue));
   const showMarker = plannedMarker != null && Math.round(plannedMarker) !== roundedValue;
 
   const k = recoDir ?? "flat";
@@ -310,7 +328,7 @@ export default function DecisionRing({
           {/* Même curseur que la jauge horizontale du Planning (DecisionGauge.tsx) : 19px, sombre,
               vert dans la zone, halo doux et poignée à 3 traits. Liseré blanc sur fond sombre
               seulement, sinon le curseur sombre se perd sur le track sombre. */}
-          <g style={{ transform: `translate(${mx}px, ${my}px)`, transition: dragging ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
+          <g style={{ transform: `translate(${mx}px, ${my}px)`, transition: dragging || introRunning ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
             <circle r={12.5} fill={inZone ? "rgba(42,128,69,.25)" : (light ? "rgba(24,24,27,.1)" : "rgba(255,255,255,.14)")} />
             <circle r={9.5} fill={inZone ? "#2a8045" : "#18181b"} stroke={light ? "none" : "rgba(255,255,255,.9)"} strokeWidth={1.5} />
             {[-3, 0, 3].map(dy => <line key={dy} x1={-3.5} x2={3.5} y1={dy} y2={dy} stroke="#fff" strokeWidth={2} strokeLinecap="round" />)}

@@ -342,5 +342,48 @@ html.native input, html.native textarea, html.native [contenteditable="true"] { 
 /* Page Programmes (2026-10-04) : cartes qui se soulèvent au survol, squelette de chargement. */
 .tpc-lift { transition: transform .18s ease, box-shadow .18s ease; }
 @media (hover: hover) { .tpc-lift:hover { transform: translateY(-3px); } }
+/* Appui (2026-10-27) : la carte s'enfonce, au survol comme sur mobile. */
+.tpc-lift:active { transform: scale(.98); }
+@media (hover: hover) { .tpc-lift:hover:active { transform: translateY(-1px) scale(.98); } }
 /* Fantôme clair (pages claires) ; le fantôme sombre est .tpc-skel, défini plus haut (AnalyticsCollecting). */
 .tpc-skel-light { background: linear-gradient(90deg, rgba(0,0,0,.06) 0%, rgba(0,0,0,.11) 50%, rgba(0,0,0,.06) 100%); background-size: 200% 100%; animation: tpcShim 1.4s linear infinite; }
+
+/* Qualité perçue (2026-10-27) : réaction au doigt, sorties de modales, toasts, compteurs.
+   - Boutons : léger enfoncement à l'appui partout (spécificité nulle via :where, un transform inline
+     l'emporte, data-no-press pour s'exclure, ex. poignées de glisser). Cartes cliquables : .tpc-press.
+   - .tpc-exit posé sur le fond d'une modale pendant sa fermeture (useExitAnimation) : le fond
+     s'efface et le panneau (enfant direct) redescend. !important pour passer devant l'animation
+     d'entrée posée en style inline. */
+:where(button:not(:disabled):not([data-no-press]):not([aria-roledescription])) { transition: transform .12s ease, filter .12s ease; }
+:where(button:not(:disabled):not([data-no-press]):not([aria-roledescription])):active { transform: scale(.97); filter: brightness(.94); }
+.tpc-press { transition: transform .14s ease, filter .14s ease; -webkit-tap-highlight-color: transparent; }
+/* Pas d'enfoncement de la carte quand c'est un bouton ou un élément glissable à l'intérieur qu'on presse. */
+.tpc-press:active:not(:has(button:active, a:active, input:active, textarea:active, [data-no-press]:active, [aria-roledescription]:active)) { transform: scale(.985); filter: brightness(.96); }
+.tpc-exit { animation: tpcFadeOut .18s ease forwards !important; pointer-events: none; }
+.tpc-exit > * { animation: tpcPanelOut .18s cubic-bezier(.4,0,1,1) forwards !important; }
+@keyframes tpcFadeOut { to { opacity: 0; } }
+@keyframes tpcPanelOut { to { opacity: 0; transform: translateY(14px) scale(.98); } }
+@keyframes tpcToastIn { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
+/* Coche dessinée (séance validée, check-in envoyé). */
+@keyframes tpcCheckDraw { to { stroke-dashoffset: 0; } }
+@keyframes tpcPop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes tpcFadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* Arrivée d'une page (template.tsx des layouts app et sandbox) : fondu seul. Pas de transform, qui
+   décalerait les éléments fixes de la page (feuille du bas, boutons flottants) pendant l'animation.
+   La barre du bas porte un nom de transition (tpc-nav) : elle reste immobile pendant l'ouverture
+   morphée d'une carte (lib/morph.ts). */
+@keyframes tpcPageIn { from { opacity: 0; } }
+.tpc-page-in { animation: tpcPageIn .16s ease-out; }
+::view-transition-group(tpc-nav) { animation: none; }
+::view-transition-old(tpc-nav) { display: none; }
+::view-transition-new(tpc-nav) { animation: none; }
+
+/* Mouvement réduit demandé par le système : plus aucune animation ni transition nulle part. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+/* Carte de séance → tiroir (lib/morph.ts) : un peu plus lent que la navigation, la carte doit se lire. */
+::view-transition-group(tpc-session) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,0,0,1); }
+::view-transition-old(tpc-session), ::view-transition-new(tpc-session) { animation-duration: .32s; height: 100%; object-fit: cover; }

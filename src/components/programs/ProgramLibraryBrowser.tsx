@@ -8,6 +8,7 @@ import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
 import { PlanningPreview } from "@/components/paywall/FrisePreviews";
 import { SPORT_CATEGORIES, EXTRA_CATEGORIES, OTHER_CATEGORY, guessSportChip, programSportEmoji } from "@/lib/sportCategories";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Bibliothèque publique, native (2026-09-04) — remplace le lien externe vers la page WordPress
@@ -84,6 +85,7 @@ interface Props {
 
 export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wizardHero, onSelect }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const heroOnLeft = !!wizardHero && isMd;
   const [programs, setPrograms] = useState<LibraryProgram[] | null>(null);
   const [error, setError] = useState(false);
@@ -147,13 +149,14 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", top: wizardHero ? WIZARD_BANNER_H : 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: heroOnLeft ? "flex-start" : (isMd ? "flex-end" : "stretch"),
         zIndex: 2147483100, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       {heroOnLeft && (
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "64px 48px 0", background: DARK_CARD_BG }}>
@@ -185,7 +188,7 @@ export default function ProgramLibraryBrowser({ onClose, onBack, hideClose, wiza
                 <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>Choisis un programme existant comme point de départ</div>
               </div>
             </div>
-            {!hideClose && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
+            {!hideClose && <button onClick={close} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "#8a8f94", fontSize: 20 }}>✕</button>}
           </div>
 
           <input

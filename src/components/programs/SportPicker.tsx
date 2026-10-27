@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import {
   SPORT_CATALOG, SPORT_FAMILIES, GROUPED_FAMILIES, TOP_SPORTS,
   catalogEntry, entryLabel, findCatalogEntry, searchSports, fold,
@@ -41,6 +42,8 @@ export default function SportPicker({ value, customLabel, profileSport, analyzin
   const [query, setQuery] = useState(initialQuery ?? "");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [openFam, setOpenFam] = useState<string | null>(null);
+  // Fermeture animée du catalogue (fond / croix) ; pick() ferme sans animation.
+  const { close: closeSheet, exitClass } = useExitAnimation(() => setSheetOpen(false));
 
   // Couche 1 : sport du profil en tête s'il est hors des 8 (pousse la dernière carte).
   const profileEntry = findCatalogEntry(profileSport);
@@ -110,12 +113,12 @@ export default function SportPicker({ value, customLabel, profileSport, analyzin
 
       {/* Couche 3 : catalogue complet par famille. */}
       {sheetOpen && (
-        <div onClick={() => setSheetOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 2147483300, background: "rgba(7,10,13,.4)", display: "flex", alignItems: isMd ? "center" : "flex-end", justifyContent: "center", padding: isMd ? 24 : 0 }}>
+        <div className={exitClass} onClick={closeSheet} style={{ position: "fixed", inset: 0, zIndex: 2147483300, background: "rgba(7,10,13,.4)", display: "flex", alignItems: isMd ? "center" : "flex-end", justifyContent: "center", padding: isMd ? 24 : 0 }}>
           <div role="dialog" aria-label="Tous les sports" onClick={e => e.stopPropagation()}
             style={{ width: "100%", maxWidth: 560, maxHeight: isMd ? "80dvh" : "82dvh", background: "#fff", borderRadius: isMd ? 24 : "24px 24px 0 0", boxShadow: isMd ? "0 42px 120px rgba(0,0,0,.34)" : undefined, display: "flex", flexDirection: "column", animation: isMd ? "modalIn .2s ease-out" : "sheetInUp .22s ease-out", paddingBottom: isMd ? 0 : "env(safe-area-inset-bottom, 0px)" }}>
             <div style={{ padding: "14px 20px 12px", borderBottom: "1px solid rgba(0,0,0,.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <b style={{ fontFamily: "var(--font-display)", fontSize: 18 }}>Tous les sports</b>
-              <button type="button" onClick={() => setSheetOpen(false)} aria-label="Fermer" style={{ width: 32, height: 32, borderRadius: 999, border: 0, background: "#f4f3f1", cursor: "pointer", color: "#5f656b" }}>✕</button>
+              <button type="button" onClick={closeSheet} aria-label="Fermer" style={{ width: 32, height: 32, borderRadius: 999, border: 0, background: "#f4f3f1", cursor: "pointer", color: "#5f656b" }}>✕</button>
             </div>
             <div style={{ overflowY: "auto", padding: "4px 20px 20px" }}>
               {SPORT_FAMILIES.map(fam => {

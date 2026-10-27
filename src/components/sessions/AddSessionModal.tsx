@@ -13,6 +13,7 @@ import { buildUserHistory, setUserHistory, resetUserHistory } from "@/lib/exerci
 import { syncTestResultsFromSession } from "@/lib/testResults";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 interface AddSessionModalProps {
   date: string;
@@ -44,10 +45,14 @@ interface AddSessionModalProps {
   /* Éditeur de programme (2026-10-08) : un coach qui commente un exercice de son programme signe en
      coach (le commentaire suit le programme chez chaque sportif assigné). Défaut : sportif. */
   authorRole?: "athlete" | "coach";
+  /* Ouvert depuis une carte qui se transforme en panneau (lib/morph.ts) : le panneau porte le même
+     nom de transition et saute son animation d'entrée, c'est la carte qui fait le mouvement. */
+  morphName?: string;
 }
 
-export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport, authorRole = "athlete" }: AddSessionModalProps) {
+export default function AddSessionModal({ date, session, initialName, hideDate, userId, userName, onSave, onDelete, onDuplicate, onClose, topOffset, sport, authorRole = "athlete", morphName }: AddSessionModalProps) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
 
   /* Éditeur de programme (2026-10-08) : aucun userId/nom n'est passé par ProgramBuilderModal. On lit
      l'utilisateur connecté pour signer les commentaires de son vrai nom et nourrir l'autocomplete
@@ -167,7 +172,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
   // fermeture — jamais bloquante, le flush part en arrière-plan sans attendre sa résolution.
   function flushAndClose() {
     if (autosaveTimer.current) { clearTimeout(autosaveTimer.current); persist(); }
-    onClose();
+    close();
   }
 
 
@@ -197,6 +202,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", top: topOffset ?? 0, right: 0, bottom: 0, left: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
@@ -212,7 +218,8 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
         width: isMd ? "50vw" : "100%", maxWidth: isMd ? "50vw" : "100%",
         height: topOffset ? `calc(100dvh - ${topOffset}px)` : "100dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
-        animation: isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+        animation: morphName ? undefined : isMd ? "drawerInRight 0.22s cubic-bezier(0.2,0,0,1)" : "modalIn 0.18s cubic-bezier(0.2,0,0,1)",
+        viewTransitionName: morphName,
       }}>
         <div style={{ flex: 1, overflowY: "auto", padding: 28, overscrollBehavior: "contain", scrollbarWidth: "thin" as const }}>
           {/* Nom + date — champs éditables directement, pas de titre ni de doublon */}

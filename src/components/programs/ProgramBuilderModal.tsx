@@ -10,6 +10,7 @@ import { parseAndApply, adjustDifficulty } from "@/lib/loadAdjust";
 import { ExerciseLineView, type ExerciseLineViewData } from "@/components/sessions/ExerciseLineView";
 import { moveExerciseLine } from "@/lib/exerciseMediaReindex";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { SessionTemplateCard, avgWeekRpe, loadBarColor } from "@/components/programs/SessionTemplateCard";
 import AlertBox from "@/components/calendar/AlertBox";
 import { computeAutoregSuggestion, suggestionSeverityColor, autoregHeadline, autoregAdvice, formatAutoregPoints, applyAutoregDifficulty } from "@/lib/autoregulation";
@@ -129,6 +130,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
   onConfirm: (sourceIdx: number, targetWeekIdx: number, targetDay: string, pct: number) => void;
 }) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const [sourceIdx, setSourceIdx] = useState(0);
   const [targetWeek, setTargetWeek] = useState(defaultWeekIdx);
   const [targetDay, setTargetDay] = useState(defaultDay);
@@ -148,13 +150,14 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
         display: "flex", alignItems: "stretch", justifyContent: isMd ? "flex-end" : "stretch",
         zIndex: 2147483200, overflow: "hidden",
       }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) close(); }}
     >
       <div style={{
         background: "#fff", color: "#171b1f",
@@ -166,7 +169,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
       }}>
         <div style={{ padding: "24px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>Dupliquer</div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
+          <button onClick={close} style={{ width: 32, height: 32, borderRadius: 12, background: "#f0efed", border: "none", cursor: "pointer", fontSize: 15, color: "#62686e", flexShrink: 0 }}>✕</button>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "16px 24px 20px" }}>
@@ -273,7 +276,7 @@ function DuplicateTemplateModal({ sessions, weeksCount, defaultWeekIdx, defaultD
           flexShrink: 0, display: "flex", gap: 10, alignItems: "center",
           padding: "16px 24px 20px", borderTop: "1px solid #f0f0f0", background: "#fff",
         }}>
-          <button onClick={onClose} style={{ background: "#f5f5f5", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, cursor: "pointer", color: "#666" }}>
+          <button onClick={close} style={{ background: "#f5f5f5", border: "none", borderRadius: 12, padding: "11px 20px", fontSize: 14, cursor: "pointer", color: "#666" }}>
             Annuler
           </button>
           <button

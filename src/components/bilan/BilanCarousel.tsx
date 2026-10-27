@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import posthog from "posthog-js";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { computeBilan, isSynthetic, periodFor, type Bilan, type BilanCheckin, type BilanPeriodKind, type BilanSession, type BilanSlide, type BilanTest } from "@/lib/bilan";
 import { loadBilanRaw, type BilanRaw } from "@/lib/bilanData";
 import { outcomeRight } from "@/lib/adviceJudge";
@@ -21,7 +22,7 @@ type Props = {
   /* Un jour de la période (n'importe lequel) ; pour « depuis le début », la date de fin. */
   anchor: string;
   today: string;
-  source: "home_card" | "date_picker" | "coach";
+  source: "home_card" | "date_picker" | "planning" | "coach";
   /* Coach (2026-10-24) : bilan d'un de ses sportifs, lu via /api/coach/bilan (RLS). */
   subject?: { athleteId: string; name: string };
   /* Coach, vue Groupe (2026-10-26) : bilan de tous ses sportifs inscrits (GET /api/coach/group-bilan). */
@@ -406,6 +407,7 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
 
 export default function BilanCarousel({ userId, kind, anchor, today, source, subject, group = false, onClose }: Props) {
   const n = subject?.name;
+  const { close, exitClass } = useExitAnimation(onClose);
   const [bilan, setBilan] = useState<Bilan | GroupBilan | null>(null);
   const [drill, setDrill] = useState<{ athleteId: string; name: string } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -485,13 +487,13 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
     function onKey(e: KeyboardEvent) {
       // Bilan d'un sportif ouvert par-dessus : c'est lui qui écoute le clavier.
       if (drill) return;
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close();
       if (e.key === "ArrowRight") setIdx(i => Math.min(i + 1, slides.length - 1));
       if (e.key === "ArrowLeft") setIdx(i => Math.max(i - 1, 0));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [slides.length, onClose, drill]);
+  }, [slides.length, close, drill]);
 
   async function share() {
     if (!bilan || !slide || slide.kind !== "partage") return;
@@ -506,6 +508,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
   const last = idx >= slides.length - 1;
   const content = (
     <div
+      className={exitClass}
       role="dialog" aria-modal="true" aria-label={group ? "Bilan du groupe" : n ? `Bilan de ${n}` : "Ton bilan"}
       onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
       onTouchEnd={e => {
@@ -525,7 +528,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.6)" }}>
           <span>{(() => { const who = group ? "BILAN DU GROUPE" : n ? `BILAN DE ${n.toUpperCase()}` : "TON BILAN"; return bilan && slide ? `${who} · ${n ? KICKER_COACH[slide.kind as BilanSlide["kind"]] ?? KICKER[slide.kind] : KICKER[slide.kind]}` : who; })()}</span>
-          <button onClick={onClose} aria-label="Fermer le bilan" style={{ background: "none", border: 0, color: "#fff", fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4 }}>×</button>
+          <button onClick={close} aria-label="Fermer le bilan" style={{ background: "none", border: 0, color: "#fff", fontSize: 26, lineHeight: 1, cursor: "pointer", padding: 4 }}>×</button>
         </div>
         {bilan && slide && LEARNED.has(slide.kind as BilanSlide["kind"]) && bilan.period.kind !== "all" && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: -8 }}>Appris sur tout {n ? "son" : "ton"} historique</div>}
 
@@ -541,7 +544,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         {slides.length > 0 && (
           <div style={{ flexShrink: 0, display: "flex", gap: 10 }}>
             {idx > 0 && <button onClick={() => setIdx(i => i - 1)} style={{ flex: 1, height: 52, borderRadius: 14, border: 0, background: "rgba(255,255,255,0.1)", color: "#fff", fontFamily: "inherit", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>Précédent</button>}
-            <button onClick={() => last ? onClose() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 && !group ? (n ? "Voir ce que ses données ont appris" : "Voir ce que tes données ont appris") : "Suivant"}</button>
+            <button onClick={() => last ? close() : setIdx(i => i + 1)} style={{ flex: 1.6, height: 52, borderRadius: 14, border: 0, background: "#fff", color: "#14181b", fontFamily: "inherit", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>{last ? "Fermer" : idx === 0 && !group ? (n ? "Voir ce que ses données ont appris" : "Voir ce que tes données ont appris") : "Suivant"}</button>
           </div>
         )}
       </div>

@@ -18,6 +18,9 @@ import ProgramBuilderModal from "./ProgramBuilderModal";
 import ProgramAssignModal from "./ProgramAssignModal";
 import type { ProgramTemplate } from "@/types";
 import { programSportEmoji } from "@/lib/sportCategories";
+import { toast } from "@/lib/toast";
+import { undoableDelete, isPendingDelete } from "@/lib/undoable";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -99,6 +102,8 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
   const gate = (fn: () => void) => requireSubscription ? requireSubscription(fn) : fn();
   const router = useRouter();
   const { isMd } = useBreakpoint();
+  // Fermeture animée de la bibliothèque en modale (flèche retour), jamais en standalone.
+  const { close, exitClass } = useExitAnimation(onClose);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [assignments, setAssignments] = useState<ProgramAssignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,8 +151,9 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     const res = await fetch(sandboxMode ? "/api/sandbox/library" : "/api/programs");
     if (res.ok) {
       const d = await res.json();
-      setPrograms(d.programs ?? []);
-      setAssignments(d.assignments ?? []);
+      // Une suppression en attente (Annuler encore possible) reste masquée si la liste est relue.
+      setPrograms(((d.programs ?? []) as Program[]).filter(x => !isPendingDelete(`program:${x.id}`)));
+      setAssignments(((d.assignments ?? []) as ProgramAssignment[]).filter(a => !isPendingDelete(`assignment:${a.id}`)));
     }
     setLoading(false);
   }
@@ -185,16 +191,30 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
     fetchPrograms();
   }
 
+  /* Suppression et arrêt annulables 5 s (2026-10-27, lib/undoable.ts) à la place des confirm() du
+     navigateur : retirés de l'écran tout de suite, écrits côté serveur ensuite. */
   async function deleteProgram(id: string) {
-    if (!confirm("Supprimer ce programme ?")) return;
-    await fetch(`/api/programs/${id}`, { method: "DELETE" });
+    const removed = programs.find(x => x.id === id);
+    if (!removed) return;
     setPrograms(p => p.filter(x => x.id !== id));
+    undoableDelete({
+      key: `program:${id}`,
+      message: "Programme supprimé",
+      commit: () => fetch(`/api/programs/${id}`, { method: "DELETE" }),
+      undo: () => setPrograms(p => p.some(x => x.id === id) ? p : [...p, removed]),
+    });
   }
 
   async function stopAssignment(assignmentId: string) {
-    if (!confirm("Arrêter ce programme ? Les séances futures non terminées seront supprimées.")) return;
-    await fetch(`/api/program-assignments/${assignmentId}`, { method: "DELETE" });
-    fetchPrograms();
+    const stopped = assignments.find(a => a.id === assignmentId);
+    if (!stopped) return;
+    setAssignments(prev => prev.filter(a => a.id !== assignmentId));
+    undoableDelete({
+      key: `assignment:${assignmentId}`,
+      message: "Programme arrêté, séances à venir retirées",
+      commit: async () => { await fetch(`/api/program-assignments/${assignmentId}`, { method: "DELETE" }); fetchPrograms(); },
+      undo: () => setAssignments(prev => prev.some(a => a.id === assignmentId) ? prev : [...prev, stopped]),
+    });
   }
 
   /* Noms des sportifs qui suivent un programme (en cours ou à venir) — "Moi" pour le sportif lui-même. */
@@ -224,6 +244,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ athlete_id: a.user_id ? undefined : a.athlete_id, user_id: a.user_id ?? undefined, start_date: newDate, align_first_session: newDate === todayStr }),
       });
+      toast("Date de départ changée", { tone: "success" });
     } finally {
       setRowBusy(null);
       setDateEdit(null);
@@ -462,7 +483,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
        "Pour toi" et tous les modèles (ProgramStoreSections.tsx). ─── */
   const sortedPrograms = [...programs].sort((x, y) => Number(!!selfProgress(y)) - Number(!!selfProgress(x)));
   return (
-    <div style={standalone
+    <div className={standalone ? undefined : exitClass} style={standalone
       /* Fond clair étendu sous la marge réservée à la navigation (même procédé que les autres pages),
          sinon le fond sombre de l'app apparaît en bas. */
       ? { background: "#f1f0ee", minHeight: "100vh", marginBottom: -132, paddingBottom: 132 }
@@ -475,7 +496,7 @@ export default function ProgramLibraryPage({ athletes, selfUserId, activeProgram
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
             {/* Flèche retour seulement en modale : /programmes est une vraie page (bottom nav). */}
             {!standalone && (
-              <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.7)", fontSize: 18, padding: "4px 8px 4px 0" }}>←</button>
+              <button onClick={close} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,.7)", fontSize: 18, padding: "4px 8px 4px 0" }}>←</button>
             )}
             <div>
               <h1 style={{ fontFamily: "var(--font-display)", fontSize: isMd ? 30 : 26, fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0 }}>Programmes</h1>

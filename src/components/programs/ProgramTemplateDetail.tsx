@@ -5,6 +5,7 @@ import { fetchLibraryTemplate, type LibraryProgram } from "./ProgramLibraryBrows
 import type { ProgramTemplate } from "@/types";
 import { Cover } from "./ProgramStoreSections";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 /* Fiche d'un modèle de programme (2026-10-03, V2 de la page Programmes, POC
    poc-programme-header-v3.html) : comme une page produit — photo, ce que ça change, la
@@ -28,6 +29,7 @@ interface Props {
 
 export default function ProgramTemplateDetail({ program: p, role, onBack, onStart, onCustomize }: Props) {
   const { isMd } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onBack);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -83,13 +85,13 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto", overflowX: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
+    <div className={exitClass} style={{ position: "fixed", inset: 0, zIndex: 2147483100, background: "#f1f0ee", overflowY: "auto", overflowX: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
       <div style={{ maxWidth: 760, margin: "0 auto", paddingBottom: 130 }}>
         {/* Héros : photo WordPress du programme, sinon dégradé de la famille + emoji. */}
         <Cover id={p.id} sport={p.sport} sizes="(min-width: 760px) 760px, 100vw" emojiSize={120} priority style={{ height: isMd ? 360 : 300, borderRadius: isMd ? "0 0 28px 28px" : 0 }}>
           <div style={{ position: "absolute", inset: 0, background: "linear-gradient(rgba(0,0,0,.25), transparent 30%, rgba(0,0,0,.78))" }} />
           <div style={{ position: "absolute", top: "calc(14px + env(safe-area-inset-top,0px))", left: 14, right: 14, display: "flex", justifyContent: "space-between" }}>
-            <button onClick={onBack} aria-label="Retour" style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(0,0,0,.4)", color: "#fff", fontSize: 18, cursor: "pointer" }}>←</button>
+            <button onClick={close} aria-label="Retour" style={{ width: 38, height: 38, borderRadius: "50%", border: "none", background: "rgba(0,0,0,.4)", color: "#fff", fontSize: 18, cursor: "pointer" }}>←</button>
             <button onClick={share} style={{ height: 38, padding: "0 14px", borderRadius: 999, border: "none", background: copied ? "#d44000" : "rgba(0,0,0,.4)", color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
               {copied ? "✓ Lien copié" : "🔗 Partager"}
             </button>

@@ -13,12 +13,12 @@ import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import dynamic from "next/dynamic";
 import { format, addDays, subDays, addMonths, subMonths, startOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval } from "date-fns";
 import { fr } from "date-fns/locale";
-import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
 import { usePlanningScroll, PlanningScrollViews, PlanningLayoutToggle } from "@/components/calendar/PlanningScrollViews";
-import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
+import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler, PlanningDnd } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
@@ -43,6 +43,9 @@ import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { scrollIntoViewX } from "@/lib/scrollIntoViewX";
 import { ACTIVITY_RECONDUIRE, ACTIVITY_LABEL_CHANGED } from "@/components/layout/ActivityPill";
+import { toast } from "@/lib/toast";
+import { haptic } from "@/lib/native";
+import { undoableDelete } from "@/lib/undoable";
 
 /* Modales/drawers ouverts sur demande (état local, jamais montés au premier rendu) — next/dynamic
    déplace leur JS (dont AddSessionModal → ExerciseBlockEditor 1500+ lignes + dnd-kit d'autocomplete,
@@ -59,6 +62,7 @@ const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 const ProgramLibraryPage = dynamic(() => import("@/components/programs/ProgramLibraryPage"));
+const BilanCarousel = dynamic(() => import("@/components/bilan/BilanCarousel"));
 import type { Session, WellnessDaily, SubscriptionStatus, Program, ExerciseAttachments } from "@/types";
 
 /* ─── helpers ─── */
@@ -68,7 +72,9 @@ function getWeekDates(base: Date): Date[] {
 }
 
 /* ─── Main ─── */
-interface Props { firstDecisionOn?: string | null; userId: string; userName?: string | null; userSport?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
+interface Props { firstDecisionOn?: string | null;
+  /* Inscription du sportif : pas de lien Bilan vers une période d'avant (CalendarHeader). */
+  bilanSince?: string; userId: string; userName?: string | null; userSport?: string | null; initialSessions: Session[]; initialWellness: WellnessDaily[]; subscriptionStatus: SubscriptionStatus; hasCoach?: boolean; hasActiveCoach?: boolean; initialDate?: string; sandboxMode?: boolean; initialFreeLabels?: Record<string, string>;
   /* Historique wellness (~42j glissants avant aujourd'hui, indépendant de la semaine affichée) pour
      la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) — carte "Aujourd'hui" uniquement.
      Absent par défaut (sandbox, données synthétiques) = repli cold-start automatique. */
@@ -81,7 +87,7 @@ interface Props { firstDecisionOn?: string | null; userId: string; userName?: st
   sessionsHistory?: Session[];
 }
 
-export default function WeekClient({ userId, userName, userSport = null, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [], firstDecisionOn = null }: Props) {
+export default function WeekClient({ userId, userName, userSport = null, initialSessions, initialWellness, subscriptionStatus, hasCoach = false, hasActiveCoach = false, initialDate, sandboxMode = false, initialFreeLabels = {}, wellnessBaselineHistory: initialWellnessBaselineHistory = [], sessionsHistory = [], firstDecisionOn = null, bilanSince }: Props) {
   const physio = usePhysioData(userId, !sandboxMode);
   const supabase = createClient();
   const router = useRouter();
@@ -140,6 +146,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   // jamais affichée depuis cette modale, seule /programmes — via la bottom nav — la montre).
   const [showLibrary, setShowLibrary] = useState(false);
   const [showReconduire, setShowReconduire] = useState(false);
+  const [bilanOpen, setBilanOpen] = useState<{ kind: "week" | "month" | "all"; anchor: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [decisionTick, setDecisionTick] = useState(0);
   // Aperçu live de la décharge/surcharge en cours de sélection sur la jauge de décision (2026-09-24,
@@ -402,6 +409,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   });
 
   const saveComplete = useCallback(async (data: { rpe: number; duration: number }) => {
+    haptic("success");
     notifyOnboardingProgressSoon();
     if (!completing) return;
     const { data: saved } = await supabase.from("sessions").update({ done: true, ...data }).eq("id", completing.id).select().single();
@@ -434,14 +442,19 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return saved ? { id: saved.id } : undefined;
   }, [supabase, userId]);
 
+  // Annulable 5 s (lib/undoable.ts) : retirée de l'écran tout de suite, effacée en base ensuite.
   const deleteSession = useCallback(async (session: Session) => {
-    await supabase.from("sessions").delete().eq("id", session.id);
     setSessions(prev => prev.filter(s => s.id !== session.id));
     setEditing(null);
-    router.refresh();
+    undoableDelete({
+      key: `session:${session.id}`,
+      message: "Séance supprimée",
+      commit: async () => { await supabase.from("sessions").delete().eq("id", session.id); router.refresh(); },
+      undo: () => setSessions(prev => prev.some(s => s.id === session.id) ? prev : [...prev, session]),
+    });
   }, [supabase, router]);
 
-  const moveSessionToDate = useCallback(async (session: Session, newDate: string) => {
+  const moveSessionToDate = useCallback(async (session: Session, newDate: string, silent = false) => {
     if (session.date === newDate) return;
     setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: newDate } : s));
     const { error } = await supabase.from("sessions").update({ date: newDate }).eq("id", session.id);
@@ -449,6 +462,10 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       setSessions(prev => prev.map(s => s.id === session.id ? { ...s, date: session.date } : s));
       return;
     }
+    // Confirmation + retour arrière (2026-10-27) : un glisser raté se rattrape en un tap.
+    if (!silent) toast(`Séance déplacée au ${format(new Date(newDate + "T12:00:00"), "EEEE d", { locale: fr })}`, {
+      action: { label: "Annuler", onClick: () => { void moveSessionToDate({ ...session, date: newDate }, session.date, true); } },
+    });
     router.refresh();
   }, [supabase, router]);
 
@@ -510,7 +527,16 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       target_difficulty,
       done: false,
     }).select().single();
-    if (saved) setSessions(prev => [...prev, saved as Session]);
+    if (saved) {
+      setSessions(prev => [...prev, saved as Session]);
+      toast("Séance dupliquée", {
+        action: { label: "Annuler", onClick: async () => {
+          setSessions(prev => prev.filter(s => s.id !== saved.id));
+          await supabase.from("sessions").delete().eq("id", saved.id);
+          router.refresh();
+        } },
+      });
+    }
     setDuplicating(null);
     router.refresh();
   }, [supabase, userId, duplicating, router]);
@@ -822,7 +848,11 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         weekTitleFor={weekTitleForPopup}
         seamless
         leftControls={<PlanningLayoutToggle alt={planning.active} bloc={isLg} onChange={on => planning.enable(on, selectedDate)} />}
+        /* Bilans aussi depuis le Planning (2026-10-27, Gildas), mêmes liens que le calendrier de l'Accueil. */
+        onOpenBilan={sandboxMode ? undefined : (kind, anchor) => setBilanOpen({ kind, anchor })}
+        bilanSince={bilanSince}
       />
+      {bilanOpen && <BilanCarousel userId={userId} kind={bilanOpen.kind} anchor={bilanOpen.anchor} today={todayStr} source="planning" onClose={() => setBilanOpen(null)} />}
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
       {/* Bannière programme fusionnée dans le bandeau d'activité du header (2026-10-04). */}
@@ -844,7 +874,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
 
       {viewMode === "week" && !planning.active && (
         <div className={planning.ready ? undefined : "planning-pending"} style={{ position: "relative" }}>
-        <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
+        <PlanningDnd sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, var(--wk-col, 280px))",
@@ -867,7 +897,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
             </div>
           ))}
         </div>
-        </DndContext>
+        </PlanningDnd>
         </div>
       )}
 
@@ -1048,6 +1078,15 @@ export default function WeekClient({ userId, userName, userSport = null, initial
             const { data: saved } = await supabase.from("sessions").insert(inserts).select();
             if (saved) setSessions(prev => [...prev, ...(saved as Session[])]);
             setShowReconduire(false);
+            // Confirmation + retour arrière (2026-10-27).
+            if (saved && saved.length > 0) toast(`${saved.length} séance${saved.length > 1 ? "s" : ""} reconduite${saved.length > 1 ? "s" : ""}`, {
+              action: { label: "Annuler", onClick: async () => {
+                const ids = (saved as Session[]).map(x => x.id);
+                setSessions(prev => prev.filter(x => !ids.includes(x.id)));
+                await supabase.from("sessions").delete().in("id", ids);
+                router.refresh();
+              } },
+            });
             if (inserts.length) handleDateChange(inserts[0].date);
             router.refresh();
           })}

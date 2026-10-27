@@ -10,6 +10,7 @@ import { Elements, PaymentElement, PaymentRequestButtonElement, useStripe, useEl
 import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 
@@ -242,6 +243,7 @@ export function CheckoutForm({
 
 export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuccess, initialBilling, headline, abVariant }: PaywallModalProps) {
   const { isMd, w } = useBreakpoint();
+  const { close, exitClass } = useExitAnimation(onClose);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loadingIntent, setLoadingIntent] = useState(true);
   const [setupError, setSetupError] = useState<string | null>(null);
@@ -335,7 +337,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
     </div>
   );
   const backBtn = allowDismiss && onClose && (
-    <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0, alignSelf: "flex-start" }}>
+    <button onClick={close} style={{ background: "none", border: "none", color: "rgba(255,255,255,.6)", fontSize: 13, fontWeight: 700, cursor: "pointer", padding: 0, alignSelf: "flex-start" }}>
       ← Retour aux offres
     </button>
   );
@@ -367,18 +369,19 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
     </div>
   );
   const closeBtn = allowDismiss && onClose && (
-    <button onClick={onClose} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
+    <button onClick={close} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
   );
   const footer = <div ref={setFooterPortalNode} style={{ flexShrink: 0 }} />;
 
   return (
     <div
+      className={exitClass}
       style={{
         position: "fixed", inset: 0, zIndex: 2147483100,
         background: "rgba(0,0,0,.62)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: isMd ? 24 : 0,
       }}
-      onClick={e => { if (isMd && allowDismiss && onClose && e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (isMd && allowDismiss && onClose && e.target === e.currentTarget) close(); }}
     >
       <div style={{
         position: "relative", color: "#fff", background: DARK_CARD_BG, overflow: "hidden",
