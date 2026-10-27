@@ -339,16 +339,21 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
       </>);
     }
     case "g_seances": {
-      const top = s.rows[0];
+      const top = [...s.words].sort((x, y) => y.harder / y.total - x.harder / x.total)[0];
       const hard = top.harder / top.total >= 0.6;
+      const up = (w: string) => ["légère", "modérée", "dure", "très dure"][Math.min(3, ["légère", "modérée", "dure", "très dure"].indexOf(w) + 1)];
       return (<>
-        <h2 style={h2}>{hard ? <>« {top.name} » est plus dure <span style={{ color: "#ffb35c" }}>que tu ne l&apos;écris.</span></> : <>Tes séances <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
-        <p style={body}>Difficulté que tu as prévue, comparée à ce que chaque sportif a ressenti.</p>
+        <h2 style={h2}>{hard ? <>Tes séances {plural(top.planned)} <span style={{ color: "#ffb35c" }}>sont ressenties {plural(up(top.planned))}.</span></> : <>Tes séances <span style={{ color: "#7ee08f" }}>tombent juste.</span></>}</h2>
+        <p style={body}>Ce que tu prévois, comparé à ce que tes sportifs ressentent, par niveau de difficulté prévue.</p>
         <div style={card}>
-          <Rows rows={s.rows.map((r, i) => ({ label: `${r.name} · prévue ${r.planned}`, part: r.harder, total: r.total, highlight: i === 0 && hard }))} color="#f28a00" />
-          <div style={small}>Plus dure que prévu, sur l&apos;ensemble des sportifs qui l&apos;ont faite.</div>
+          {s.words.map((w, i) => (
+            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <Rows rows={[{ label: `Prévues ${plural(w.planned)} · plus dures que prévu`, part: w.harder, total: w.total, highlight: w === top && hard }]} color="#f28a00" />
+              {w.who.length > 0 && <div style={small}>Surtout {names(w.who)}.</div>}
+            </div>
+          ))}
         </div>
-        {hard && <p style={{ ...body, fontSize: 14 }}>Ressentie au-dessus de « {top.planned} » {top.harder} fois sur {top.total}{top.athletes > 1 ? ", " : ""}{top.athletes > 1 ? `chez ${top.athletes} sportifs` : ""}. La noter un cran plus haut, ou l&apos;alléger.</p>}
+        {s.same && <p style={{ ...body, fontSize: 14 }}>« {s.same.name} » en particulier : ressentie au-dessus de « {s.same.planned} » {s.same.harder} fois sur {s.same.total}, chez {s.same.athletes} sportifs. La noter un cran plus haut, ou l&apos;alléger.</p>}
       </>);
     }
     case "g_appris":

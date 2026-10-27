@@ -2,7 +2,7 @@
    depuis les liens « Bilan › » du calendrier en vue Groupe. Quatre écrans, chacun avec son seuil de
    données (sous le seuil, l'écran saute, comme le bilan individuel) :
    - qui décroche : check-ins manqués les jours de séance, jours fatigué ;
-   - tes séances plus dures que prévu : même séance (même nom) sur plusieurs sportifs ;
+   - tes séances : prévu vs ressenti par niveau de difficulté prévue (+ la même séance si elle existe) ;
    - appris sur chacun : l'enseignement le plus fort du bilan de chaque sportif ;
    - les conseils au groupe : conseils confirmés, sportif par sportif (juge d'adviceJudge.ts) ;
    - la charge hors zone : jours au-dessus / en dessous de la zone de charge (ACWR).
@@ -26,7 +26,7 @@ export type GroupAthlete = {
 export type DayMark = "ok" | "tired" | "missed";
 export type GroupSlide =
   | { kind: "g_decroche"; rows: { id: string; name: string; flag: string | null; marks: DayMark[]; missed: number; tired: number; days: number }[]; regular: number }
-  | { kind: "g_seances"; rows: { name: string; planned: DifficultyWord; harder: number; total: number; athletes: number }[] }
+  | { kind: "g_seances"; words: { planned: DifficultyWord; harder: number; total: number; athletes: number; who: string[] }[]; same: { name: string; planned: DifficultyWord; harder: number; total: number; athletes: number } | null }
   | { kind: "g_appris"; rows: { id: string; name: string; topic: string; text: string }[] }
   | { kind: "g_conseils"; right: number; judged: number; rows: { id: string; name: string; right: number; judged: number }[] }
   | { kind: "g_charge"; rows: { id: string; name: string; above: number; below: number; days: number }[] };
@@ -77,29 +77,51 @@ function decroche(period: BilanPeriod, end: string, athletes: GroupAthlete[]): G
   return { kind: "g_decroche", rows: (flagged.length ? flagged : rows).slice(0, 4), regular: rows.length - flagged.length };
 }
 
-/* Même séance = même nom (casse et espaces ignorés) : c'est le cas quand le coach envoie une séance
-   ou un programme au groupe. Plus dure = mot ressenti au-dessus du mot prévu (règle du bilan). */
+/* Tes séances (2026-10-27, Gildas : « un truc général plutôt qu'au nom de séance ») : ce que le coach
+   prévoit comparé à ce que les sportifs ressentent, par mot de difficulté PRÉVUE (légère, modérée,
+   dure), quel que soit le nom de la séance. Même règle que l'écran « Tes biais » du bilan sportif :
+   plus dure = mot ressenti au-dessus du mot prévu ; « très dure » exclue (rien au-dessus). Un mot
+   compte à partir de 5 séances notées. En plus, si elle existe, la même séance (même nom, casse et
+   espaces ignorés) faite par au moins 2 sportifs et souvent plus dure : l'info la plus actionnable. */
+const WORD_ORDER_PLANNED: DifficultyWord[] = ["légère", "modérée", "dure"];
 function seances(period: BilanPeriod, end: string, athletes: GroupAthlete[]): GroupSlide | null {
-  const by = new Map<string, { name: string; harder: number; total: number; planned: number[]; who: Set<string> }>();
+  const byWord = new Map<DifficultyWord, { harder: number; total: number; per: Map<string, { name: string; harder: number; total: number }> }>();
+  const byName = new Map<string, { name: string; harder: number; total: number; planned: number[]; who: Set<string> }>();
   for (const a of athletes) {
     for (const s of clean(a, end).sessions) {
-      if (s.date < period.start || !s.done || s.rpe === null || !s.target_difficulty || !s.name) continue;
+      if (s.date < period.start || !s.done || s.rpe === null || !s.target_difficulty) continue;
+      const planned = qualitativeDifficulty(s.target_difficulty);
+      const harder = wordIdx(s.rpe) > wordIdx(s.target_difficulty);
+      if (planned !== "très dure") {
+        const w = byWord.get(planned) ?? { harder: 0, total: 0, per: new Map() };
+        const p = w.per.get(a.id) ?? { name: first(a.name), harder: 0, total: 0 };
+        w.total++; p.total++; if (harder) { w.harder++; p.harder++; }
+        w.per.set(a.id, p); byWord.set(planned, w);
+      }
+      if (!s.name) continue;
       const k = s.name.trim().toLowerCase().replace(/\s+/g, " ");
-      const g = by.get(k) ?? { name: s.name.trim(), harder: 0, total: 0, planned: [], who: new Set<string>() };
+      const g = byName.get(k) ?? { name: s.name.trim(), harder: 0, total: 0, planned: [], who: new Set<string>() };
       g.total++; g.planned.push(s.target_difficulty); g.who.add(a.id);
-      if (wordIdx(s.rpe) > wordIdx(s.target_difficulty)) g.harder++;
-      by.set(k, g);
+      if (harder) g.harder++;
+      byName.set(k, g);
     }
   }
-  const groups = Array.from(by.values()).filter(g => g.total >= 5);
-  if (!groups.length) return null;
-  groups.sort((x, y) => y.harder / y.total - x.harder / x.total || y.total - x.total);
+  const words = WORD_ORDER_PLANNED.filter(w => (byWord.get(w)?.total ?? 0) >= 5).map(w => {
+    const g = byWord.get(w)!;
+    // Les sportifs les plus concernés : au moins 2 séances de ce niveau, plus dures une fois sur deux.
+    const who = Array.from(g.per.values()).filter(p => p.total >= 2 && p.harder / p.total >= 0.5)
+      .sort((x, y) => y.harder / y.total - x.harder / x.total || y.total - x.total).slice(0, 3).map(p => p.name);
+    return { planned: w, harder: g.harder, total: g.total, athletes: g.per.size, who };
+  });
+  if (!words.length) return null;
   const modeWord = (xs: number[]) => {
     const c = new Map<DifficultyWord, number>();
     for (const x of xs) { const w = qualitativeDifficulty(x); c.set(w, (c.get(w) ?? 0) + 1); }
     return Array.from(c.entries()).sort((p, q) => q[1] - p[1])[0][0];
   };
-  return { kind: "g_seances", rows: groups.slice(0, 3).map(g => ({ name: g.name, planned: modeWord(g.planned), harder: g.harder, total: g.total, athletes: g.who.size })) };
+  const same = Array.from(byName.values()).filter(g => g.total >= 5 && g.who.size >= 2 && g.harder / g.total >= 0.6)
+    .sort((x, y) => y.harder / y.total - x.harder / x.total || y.total - x.total)[0];
+  return { kind: "g_seances", words, same: same ? { name: same.name, planned: modeWord(same.planned), harder: same.harder, total: same.total, athletes: same.who.size } : null };
 }
 
 /* Appris sur chacun (2026-10-27) : l'enseignement le plus fort du bilan de chaque sportif, à la
