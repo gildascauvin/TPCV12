@@ -41,6 +41,7 @@ export default function InviteHost({ sandboxMode = false }: { sandboxMode?: bool
     <InviteModal
       inviteCode={inviteCode}
       sandboxMode={sandboxMode}
+      readyMessage
       onSent={() => setSent(true)}
       onLinked={() => setSent(true)}
       onClose={() => { if (sent) window.location.reload(); else setOpen(false); }}

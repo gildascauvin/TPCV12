@@ -450,6 +450,8 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obFinishing, setObFinishing] = useState(false);
   const [obError, setObError] = useState<string | null>(null);
   const savedProgramIdRef = useRef<string | null>(null);
+  // Décision prise sur Thomas (démo) à l'écran Coach Control : null = continué sans décider.
+  const obControlPctRef = useRef<number | null>(null);
 
   /* Parcours Elite (2026-10-17, voir src/lib/onboardingPath.ts). */
   const [elite] = useState(readEliteFlag);
@@ -2042,12 +2044,12 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const hard = pick(week1.filter(p => p.s.target_difficulty >= 7), 1) ?? pick(pool, 1) ?? { name: demoHardest.name, notes: demoHardest.notes ?? null, target_difficulty: demoHardest.target_difficulty ?? 8 };
       const easy = pick(week1.filter(p => p.s.target_difficulty <= 4), -1) ?? pick(pool, -1) ?? { name: demoLightest.name, notes: demoLightest.notes ?? null, target_difficulty: demoLightest.target_difficulty ?? 3 };
       return (
-        <QuestionShell {...common} dark eyebrow="Coach Control · demain matin"
+        <QuestionShell {...common} dark eyebrow="Coach Control · ce matin"
           title="Une séance, ajustée à la forme de chacun."
-          sub="Sportifs de démo : les tiens les remplacent dès leur premier check-in."
-          onSkip={() => obAdvance()}
-          cta={{ label: "Je veux ça pour mon groupe", onClick: () => obAdvance(), busy: !ready }}>
-          {ready ? <ControlStepBody hard={hard} easy={easy} /> : <div style={{ minHeight: 320 }} />}
+          sub="Thomas vient de faire son check-in : nuit courte, jambes lourdes. À toi de décider."
+          onSkip={() => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current, skipped: true }); obAdvance(); }}
+          cta={{ label: "Continuer", onClick: () => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current }); obAdvance(); }, busy: !ready }}>
+          {ready ? <ControlStepBody hard={hard} easy={easy} onDecided={pct => { obControlPctRef.current = pct; }} /> : <div style={{ minHeight: 320 }} />}
         </QuestionShell>
       );
     }
@@ -2125,12 +2127,16 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     if (currentStep === "ob_week") {
       const today = localTodayStr();
       const monday = (new Date(`${today}T12:00:00`).getDay() + 6) % 7 === 0;
-      const de = sessionsComplement(builtRef.current?.sport || obChosenSport() || sport);
+      // « Programme Hyrox » → « Hyrox » ; un programme claimé garde un titre sans sport.
+      const sportName = builtRef.current && !hasClaimedProgram ? builtRef.current.name.replace(/^(mon )?programme\s*/i, "").trim() : "";
+      const weeks = builtRef.current?.template.weeks.length ?? 0;
+      const until = obGoal === "competition" && obDeadline ? new Date(`${obDeadline}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "";
       return (
-        <QuestionShell {...common} dark eyebrow={de ? `Ta semaine ${de}` : "Ta semaine"}
-          title="Le même programme. Trois matins différents."
+        <QuestionShell {...common} dark eyebrow="Ton programme est prêt"
+          title={sportName ? `Ton programme ${sportName}, ajusté chaque matin.` : "Ton programme, ajusté chaque matin."}
+          sub={weeks ? `${weeks} semaine${weeks > 1 ? "s" : ""}${until ? ` jusqu'au ${until}` : ""}, construit sur tes réponses.` : undefined}
           onSkip={() => obAdvance()}
-          cta={{ label: "Continuer avec ce programme", onClick: () => obAdvance() }}>
+          cta={{ label: "C'est parti", onClick: () => obAdvance() }}>
           <WeekStepBody sessions={obWeekSessions} program={builtRef.current} checkinScore={obCheckinScore} acclimatation={!monday} today={today} />
         </QuestionShell>
       );
@@ -2218,7 +2224,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           sub="Tu peux leur créer des séances avant même qu'ils arrivent."
           onSkip={() => { setObInvites([{ name: "", email: "" }]); obAdvance(); }}
           cta={{ label: hasEmail ? "Envoyer les invitations" : "Continuer", onClick: () => { if (elite && hasEmail) void sendObInvites(); obAdvance(); } }}>
-          <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} />
+          <InviteForm inviteCode={obInviteCode} invites={obInvites} setInvites={setObInvites} error={obError} readyMessage />
         </QuestionShell>
       );
     }

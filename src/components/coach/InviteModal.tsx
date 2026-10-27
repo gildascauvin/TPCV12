@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import posthog from "posthog-js";
 import { notifyOnboardingProgressSoon } from "@/lib/onboardingProgress";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { WIZARD_BANNER_H } from "@/components/paywall/UnsavedBanner";
@@ -40,6 +41,10 @@ interface Props {
   /* Wizard onboarding (2026-09-04) : "←" vers l'étape wizard précédente — absent = pas de bouton
      retour (usage in-app, ce composant n'a jamais eu besoin de reculer d'une étape). */
   onBack?: () => void;
+  /* Message prêt à envoyer (2026-10-27) : remplace le bloc « Lien d'invitation » par un message
+     WhatsApp déjà rédigé au prénom du sportif, modifiable, sous le prénom + email. Absent = bloc
+     lien inchangé. */
+  readyMessage?: boolean;
 }
 
 export interface InviteRow {
@@ -47,7 +52,7 @@ export interface InviteRow {
   email: string;
 }
 
-export default function InviteModal({ onClose, onLinked, onSent, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack }: Props) {
+export default function InviteModal({ onClose, onLinked, onSent, inviteCode, sandboxMode = false, wizardHero, cancelLabel = "Annuler", onBack, readyMessage = false }: Props) {
   const { isMd } = useBreakpoint();
   const heroOnLeft = !!wizardHero && isMd;
   // Prénom + email ensemble, une ligne = un sportif — plus deux blocs déconnectés (un pour
@@ -218,7 +223,7 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
               </div>
             </div>
 
-            <InviteForm inviteCode={inviteCode} invites={invites} setInvites={setInvites} error={error} sandboxMode={sandboxMode} onSubmit={handleInvite} />
+            <InviteForm inviteCode={inviteCode} invites={invites} setInvites={setInvites} error={error} sandboxMode={sandboxMode} onSubmit={handleInvite} readyMessage={readyMessage} />
           </>
         )}
         </div>
@@ -249,7 +254,12 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
 
 /* Contenu du formulaire d'invitation (lien + WhatsApp, prénom + email, « + Inviter un autre
    sportif ») — partagé par cette modale et l'étape d'invitation de l'onboarding (2026-10-05). */
-export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode = false, onSubmit }: {
+export function readyInviteText(name: string, inviteCode: string) {
+  return `Salut${name ? ` ${name}` : ""} ! J'utilise ThePerfClub pour adapter tes séances à ta forme du jour. Chaque matin tu fais ton check-in en 10 secondes, je vois comment tu vas et j'ajuste ta séance si besoin. Ton accès : https://go.theperfclub.com/join/${inviteCode}`;
+}
+
+export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode = false, onSubmit, readyMessage = false }: {
+  readyMessage?: boolean;
   inviteCode?: string | null;
   invites: InviteRow[];
   setInvites: (fn: (arr: InviteRow[]) => InviteRow[]) => void;
@@ -258,11 +268,14 @@ export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode
   onSubmit?: () => void;
 }) {
   const [linkCopied, setLinkCopied] = useState(false);
+  // Texte modifié à la main : il ne suit plus le prénom tapé plus bas.
+  const [editedMsg, setEditedMsg] = useState<string | null>(null);
   function handleInvite() { onSubmit?.(); }
+  const msg = inviteCode ? (editedMsg ?? readyInviteText(invites[0]?.name.trim() ?? "", inviteCode)) : "";
   return (
     <>
     {/* Lien d'invitation */}
-    {inviteCode && (
+    {inviteCode && !readyMessage && (
       <div style={{ background: "rgba(212,64,0,.05)", border: "1.5px solid rgba(212,64,0,.18)", borderRadius: 16, padding: "14px 16px", marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 900, color: "#d44000", letterSpacing: "0.08em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, marginBottom: 8 }}>
           Lien d'invitation
@@ -294,11 +307,11 @@ export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode
       </div>
     )}
 
-    <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
+    {!readyMessage && <div style={{ fontSize: 13, color: "#8a8f94", lineHeight: 1.5, marginBottom: 14 }}>
       {sandboxMode
         ? "Il recevra un email avec un lien pour créer son compte."
         : "Ou invite par email — le sportif sera lié dès qu'il créera son compte."}
-    </div>
+    </div>}
 
     {error && (
       <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 14 }}>
@@ -346,6 +359,25 @@ export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode
     >
       + Inviter un autre sportif
     </button>
+    {inviteCode && readyMessage && (
+      <div style={{ marginTop: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#8a8f94", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 7 }}>
+          Ou par WhatsApp, message prêt et modifiable
+        </div>
+        <textarea value={msg} onChange={e => setEditedMsg(e.target.value)} rows={7}
+          style={{ width: "100%", boxSizing: "border-box" as const, background: "#e7f8dd", border: "none", borderRadius: "16px 16px 16px 6px", padding: "12px 14px", fontSize: 14, lineHeight: 1.45, color: "#172018", fontFamily: "inherit", resize: "none", outline: "none" }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={() => { posthog.capture("invite_ready_message", { action: "whatsapp", edited: editedMsg != null }); window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank"); }}
+            style={{ flex: 1.3, height: 42, borderRadius: 12, border: "none", background: "#25d366", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            Envoyer sur WhatsApp
+          </button>
+          <button onClick={() => { posthog.capture("invite_ready_message", { action: "copy", edited: editedMsg != null }); navigator.clipboard.writeText(msg); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2500); }}
+            style={{ flex: 1, height: 42, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: linkCopied ? "#2f9e44" : "#fff", color: linkCopied ? "#fff" : "#171b1f", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            {linkCopied ? "✓ Copié" : "Copier"}
+          </button>
+        </div>
+      </div>
+    )}
     </>
   );
 }

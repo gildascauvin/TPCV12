@@ -132,9 +132,12 @@ interface Props {
   storedDecision?: AutoregDecisionRecord | null;
   /* Qui regarde, pour le texte "Surcharge proposée, tu as maintenu / Léa a maintenu". */
   viewer?: DecisionViewer;
+  /* Démo (onboarding, 2026-10-27) : décision sur un sportif de démo. Ni suivi autoreg_adjust, ni
+     « 1re décision » (qui ouvrirait le priming), ni enregistrement : seul l'affichage change. */
+  demo?: boolean;
 }
 
-export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest }: Props) {
+export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest, demo = false }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -258,6 +261,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
   /* Suivi (2026-10-07) : aperçu (1er glisser), appliquer, annuler, maintenir, avec le nombre de
      lignes modifiées et non ajustées par le moteur unique (sessionLevers). */
   function track(action: "preview" | "apply" | "undo" | "maintain", pct: number | null) {
+    if (demo) return;
     const a = pct ? adjustNotes(notes ?? "", pct) : null;
     posthog.capture("autoreg_adjust", {
       action, pct, viewer: viewer.role, suggested: dir ?? null, reco: reco || null,
@@ -289,7 +293,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
     // disparaître quand même (il n'a plus rien à représenter).
     onPreviewChange?.(null);
     onMaintenir?.();
-    markFirstAdjustment();
+    if (!demo) markFirstAdjustment();
   }
 
   async function apply() {
@@ -342,7 +346,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
     track("apply", pctToApply);
     // Plus de barré une fois validé — voir le commentaire de l'effet de montage ci-dessus.
     onPreviewChange?.(null);
-    if (!free) markFirstAdjustment();
+    if (!free && !demo) markFirstAdjustment();
   }
 
   useEffect(() => {

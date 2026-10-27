@@ -1,14 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import DecisionRing, { decisionRingState } from "@/components/sessions/DecisionRing";
+import { decisionRingState } from "@/components/sessions/DecisionRing";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
 import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import ProgramBanner from "@/components/programs/ProgramBanner";
 import { SessionTemplateCard } from "@/components/programs/SessionTemplateCard";
-import { computeAutoregSuggestion, zoneRange } from "@/lib/autoregulation";
+import { computeAutoregSuggestion, zoneRange, suggestionSeverityColor, autoregHeadline, autoregAdvice, applyAutoregDifficulty, formatAutoregPoints } from "@/lib/autoregulation";
+import AutoregButtons from "@/components/sessions/AutoregButtons";
+import AlertBox from "@/components/calendar/AlertBox";
+import DecisionGauge from "@/components/sessions/DecisionGauge";
+import WellnessRing from "@/components/wellness/WellnessRing";
+import { relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { adjustDifficulty } from "@/lib/loadAdjust";
-import { wellnessColor } from "@/lib/wellness";
+import { WELLNESS_RAMP } from "@/lib/wellness";
 import { DARK_CARD_BG } from "@/lib/theme";
 import type { Program, ProgramTemplate, SessionTemplate } from "@/types";
 
@@ -164,10 +169,11 @@ export function HealthStepBody({ error }: { error?: string | null }) {
   );
 }
 
-/* ── ob_week : le déclic. Le même programme, trois matins différents (vraie règle de reco). ── */
+/* ── ob_week : l'aperçu du programme (2026-10-27, POC https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu).
+   Bannière, simulateur de forme de /p/ (même rampe, même vocabulaire de zone) calé sur son vrai
+   check-in, puis ses séances de la semaine en cartes complètes, recalculées au glisser. ── */
 export interface WeekSession { id: string; date: string; name: string; notes: string | null; target_difficulty: number | null }
-type Morning = "cuit" | "today" | "forme";
-const MORNING_SCORE: Record<Exclude<Morning, "today">, number> = { cuit: 28, forme: 92 };
+const WELLNESS_TRACK_GRADIENT = `linear-gradient(to right, ${WELLNESS_RAMP.map(x => `${x.hex} ${x.stop * 100}%`).join(", ")})`;
 
 function dayLabel(date: string, today: string): string {
   if (date === today) return "Aujourd'hui";
@@ -183,72 +189,80 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
   acclimatation: boolean;
   today: string;
 }) {
-  const [morning, setMorning] = useState<Morning>(checkinScore != null ? "today" : "cuit");
-  const score = morning === "today" ? (checkinScore ?? 60) : MORNING_SCORE[morning];
-  const shown = sessions.filter(s => (s.target_difficulty ?? 0) > 0).slice(0, 3);
-  const first = shown[0];
-  const tabs: { key: Morning; label: string }[] = [
-    { key: "cuit", label: "Cuit" },
-    ...(checkinScore != null ? [{ key: "today" as Morning, label: "Aujourd'hui" }] : []),
-    { key: "forme", label: "En forme" },
-  ];
-
-  const adjust = (planned: number) => {
-    const sug = computeAutoregSuggestion(score, planned);
-    const pct = sug?.reco ?? 0;
-    const value = adjustDifficulty(planned, pct);
-    const zone = sug ? zoneRange(value, sug.dir) : zoneRange(planned, "low");
-    return { sug, pct, value, zone, points: value - planned };
-  };
-  /* L'anneau montre la 1re séance que ce matin-là fait vraiment bouger (une séance légère ne
-     s'allège pas même cuit, une séance dure ne se surcharge pas même en forme) ; sinon la 1re. */
-  const pool = sessions.filter(s => (s.target_difficulty ?? 0) > 0);
-  const focus = pool.find(s => adjust(s.target_difficulty ?? 5).points !== 0) ?? first;
-  const a0 = focus ? adjust(focus.target_difficulty ?? 5) : null;
-
+  const start = checkinScore ?? 60;
+  const [sim, setSim] = useState(start);
+  const [moved, setMoved] = useState(false);
+  const base = syntheticBaselineFor(sim);
+  // Les 7 prochains jours : sa première semaine.
+  const end = new Date(`${today}T12:00:00`); end.setDate(end.getDate() + 6);
+  const endStr = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+  const week = sessions.filter(s => (s.target_difficulty ?? 0) > 0 && s.date <= endStr).map(s => {
+    const planned = s.target_difficulty ?? 5;
+    return { s, planned, sug: computeAutoregSuggestion(sim, planned, base) };
+  });
+  const impacted = week.filter(w => w.sug);
+  const firstName = (d: string) => dayLabel(d, today).split(" ")[0];
   return (
     <div>
       {program && (
-        <div style={{ margin: "0 -20px 16px" }}>
+        <div style={{ margin: "0 -20px 8px" }}>
           <ProgramBanner
             program={{ id: "", name: program.name, sport: program.sport, weeks_count: program.template.weeks.length, template: program.template } as unknown as Program}
             currentWeek={acclimatation ? -1 : 0} acclimatation={acclimatation} dark
           />
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, padding: 4, borderRadius: 999, background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.10)", marginBottom: 16 }}>
-        {tabs.map(t => (
-          <button key={t.key} type="button" onClick={() => setMorning(t.key)}
-            style={{ flex: 1, padding: "10px 8px", borderRadius: 999, border: 0, cursor: "pointer", fontFamily: "inherit", fontWeight: 800, fontSize: 14,
-              background: morning === t.key ? "#fff" : "transparent", color: morning === t.key ? "#171b1f" : "rgba(255,255,255,.7)" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {focus && a0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 24, background: DARK_CARD_BG, border: "1px solid rgba(255,255,255,.10)", marginBottom: 16 }}>
-          <div style={{ flexShrink: 0 }}>
-            <DecisionRing zoneLow={a0.zone.zoneLow} zoneHigh={a0.zone.zoneHigh} recoDir={a0.sug?.dir} value={a0.value}
-              plannedMarker={focus.target_difficulty} readOnly onChange={() => {}} size={132} hideHint />
+      <div style={{ position: "sticky", top: 0, zIndex: 5, background: "rgba(23,27,31,.82)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 16, padding: "13px 14px", marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 9 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: "rgba(255,255,255,.65)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {checkinScore != null && !moved ? "Ta forme ce matin" : "Simule ta forme"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.45)", marginTop: 2 }}>Glisse pour voir ta semaine bouger</div>
           </div>
-          <div style={{ fontSize: 14, lineHeight: 1.5, color: "rgba(255,255,255,.8)" }}>
-            <b style={{ display: "block", fontSize: 16, color: wellnessColor(score), marginBottom: 4 }}>Forme {score}/100</b>
-            {dayLabel(focus.date, today)} : {focus.name}.<br />
-            {a0.points < 0 ? (a0.points < -1 ? "On l'allège nettement." : "On l'allège un peu.")
-              : a0.points > 0 ? (a0.points > 1 ? "On la pousse nettement." : "On la pousse un peu.")
-              : morning === "forme" ? "Le plan tient : en forme, seules les séances légères se surchargent."
-              : morning === "cuit" ? "Le plan tient : cette séance est déjà légère."
-              : "Le plan tient tel quel."}
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flexShrink: 0 }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 15, fontWeight: 700, color: "#fff" }}>{relativeZoneLabel(base)}</div>
+            <WellnessRing score={base?.relativeScore ?? sim} size={50} strokeWidth={5} dark />
           </div>
         </div>
-      )}
-      {shown.map(s => {
-        const a = adjust(s.target_difficulty ?? 5);
-        const tpl = { name: s.name, notes: s.notes, target_difficulty: s.target_difficulty ?? 5, load: 2, type: "volume" } as unknown as SessionTemplate;
+        <input type="range" min={0} max={100} value={sim} aria-label="Simule ta forme"
+          onChange={e => { setSim(parseInt(e.target.value, 10)); setMoved(true); }} className="tpc-autoreg-slider"
+          style={{ width: "100%", height: 7, borderRadius: 8, WebkitAppearance: "none", appearance: "none", background: WELLNESS_TRACK_GRADIENT, outline: "none", cursor: "pointer" }} />
+        <style>{`
+          .tpc-autoreg-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
+          .tpc-autoreg-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #d44000; box-shadow: 0 2px 6px rgba(0,0,0,.3); cursor: grab; }
+        `}</style>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9.5, fontWeight: 800, color: "rgba(255,255,255,.4)", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          <span>Fatigué</span><span>Frais</span>
+        </div>
+        <div style={{ marginTop: 9, fontSize: 12.5, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
+          {!impacted.length ? "Aucun écart marqué : la semaine reste comme prévu." : (
+            <>{impacted[0].sug!.dir === "low" ? "Alléger" : "Augmenter la charge"} recommandé {impacted.length > 1 ? "sur" : "pour"}{" "}
+              {impacted.map((w, i) => <span key={w.s.id}>{i > 0 && ", "}<b>{firstName(w.s.date)}</b></span>)}.</>
+          )}
+        </div>
+      </div>
+      {week.length > 0 && <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 8 }}>Ta première semaine</div>}
+      {week.map(({ s, planned, sug }) => {
+        const color = sug ? suggestionSeverityColor(sug) : null;
+        const tpl = { name: s.name, notes: s.notes, target_difficulty: planned, load: 2, type: "volume" } as unknown as SessionTemplate;
+        const adjusted = sug ? applyAutoregDifficulty(planned, sug.reco) : planned;
         return (
-          <div key={s.id} style={{ marginBottom: 12 }}>
+          <div key={s.id} style={{ marginBottom: 16 }}>
             <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", marginBottom: 6 }}>{dayLabel(s.date, today)}</div>
-            <SessionTemplateCard session={tpl} adjustPct={a.pct || null} gaugeOverride={a.value} cardStyle={{ cursor: "default" }} />
+            {sug && color && (
+              <div style={{ marginBottom: 8 }}>
+                <AlertBox variant="darkColor" alert={{ border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned)}` }} />
+              </div>
+            )}
+            <SessionTemplateCard session={tpl} cardStyle={{ cursor: "default" }}
+              gaugeOverride={sug ? adjusted : undefined}
+              gaugeSlot={sug ? (() => {
+                const { zoneLow, zoneHigh } = zoneRange(adjusted, sug.dir);
+                return <DecisionGauge light readOnly dir={sug.dir} zoneLow={zoneLow} zoneHigh={zoneHigh} value={planned} onChange={() => {}} />;
+              })() : undefined}
+              badgeOverride={sug && color ? { label: formatAutoregPoints(sug.reco), bg: `${color}22`, color } : undefined}
+              adjustPct={sug ? sug.reco : null} />
           </div>
         );
       })}
@@ -355,67 +369,59 @@ export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach, st
   );
 }
 
-/* ── ob_control (coach) : le déclic. Son programme appliqué à 4 sportifs de démo, chacun avec la
-   décision du VRAI moteur (syntheticBaselineFor + computeAutoregSuggestion), sur le radar du Coach
-   Control. Sportifs de démo, présentés comme tels ; les siens les remplacent dès leur check-in. ── */
+/* ── ob_control (coach) : le déclic (2026-10-27, POC https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu).
+   Son programme appliqué à 4 sportifs de démo sur le radar du Coach Control ; Thomas vient de faire
+   son check-in et c'est au coach de décider, avec le vrai anneau de décision (mode démo : rien
+   d'enregistré, pas de « 1re décision »). Les siens remplacent les démos dès leur check-in. ── */
 export interface ControlSession { name: string; notes: string | null; target_difficulty: number }
-const CONTROL_TEAM: { id: string; name: string; score: number | null; pick: "hard" | "easy" }[] = [
-  { id: "thomas", name: "Thomas M.", score: 30, pick: "hard" },
-  { id: "ines", name: "Inès R.", score: 84, pick: "easy" },
-  { id: "hugo", name: "Hugo B.", score: 80, pick: "hard" },
-  { id: "lea", name: "Léa P.", score: null, pick: "hard" },
-];
+const THOMAS_SCORE = 30;
 
-export function ControlStepBody({ hard, easy }: { hard: ControlSession; easy: ControlSession }) {
-  const team = CONTROL_TEAM.map(a => {
-    const s = a.pick === "hard" ? hard : easy;
-    const baseline = a.score == null ? null : syntheticBaselineFor(a.score);
-    const sug = a.score == null ? null : computeAutoregSuggestion(a.score, s.target_difficulty, baseline);
-    const x = a.score == null ? null : Math.round(baseline?.relativeScore ?? a.score);
-    return { ...a, s, sug, x };
-  });
-  const [open, setOpen] = useState(team.find(t => t.sug)?.id ?? team[0].id);
-  const o = team.find(t => t.id === open) ?? team[0];
-  // Léa (sans check-in) va dans la bande « Sans séance ou sans check-in » sous le radar, comme en prod.
-  const points: RadarPoint[] = team.map(t => ({
-    id: t.id, name: t.name, score: t.x, diff: t.s.target_difficulty,
-    ring: t.x == null ? null : decisionRingState([{ done: false, target_difficulty: t.s.target_difficulty }], t.sug), hideZone: !t.sug,
-  }));
-  const pill = (t: typeof team[number]) => !t.sug ? null : t.sug.dir === "low"
-    ? { label: "⬇ Alléger", bg: "#d44000", fg: "#fff" } : { label: "⬆ Surcharger", bg: "rgba(47,158,68,.18)", fg: "#8fe0b0" };
-  const decide = team.filter(t => t.sug);
-  const inPlan = team.filter(t => !t.sug);
-  const row = (t: typeof team[number], k: number) => {
-    const p = pill(t);
-    return (
-      <button key={t.id} type="button" onClick={() => setOpen(t.id)}
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", padding: "11px 14px", border: 0, borderTop: k ? "1px solid rgba(255,255,255,.08)" : 0,
-          background: open === t.id ? "rgba(255,255,255,.06)" : "transparent", color: "#fff", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
-        <span style={{ minWidth: 0 }}>
-          <b style={{ display: "block", fontSize: 14 }}>{t.name}</b>
-          <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.55)", marginTop: 2 }}>{t.x == null ? "Pas encore de check-in" : t.s.name}</span>
-        </span>
-        {p && <span style={{ flexShrink: 0, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", padding: "4px 8px", borderRadius: 6, background: p.bg, color: p.fg }}>{p.label}</span>}
-      </button>
-    );
+function controlPoint(id: string, name: string, score: number | null, s: ControlSession, decided?: number | null): RadarPoint {
+  const baseline = score == null ? null : syntheticBaselineFor(score);
+  const sug = score == null ? null : computeAutoregSuggestion(score, s.target_difficulty, baseline);
+  const x = score == null ? null : Math.round(baseline?.relativeScore ?? score);
+  return {
+    id, name, score: x, diff: decided ?? s.target_difficulty,
+    ring: x == null ? null : decisionRingState([{ done: false, target_difficulty: s.target_difficulty }], decided != null ? null : sug, null),
+    hideZone: !sug || decided != null,
   };
-  const box = (label: string, list: typeof team) => list.length === 0 ? null : (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 8 }}>{label}</div>
-      <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, overflow: "hidden" }}>{list.map(row)}</div>
-    </div>
-  );
-  const tpl = { name: o.s.name, notes: o.s.notes, target_difficulty: o.s.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
-  const pct = o.sug?.reco ?? 0;
+}
+
+export function ControlStepBody({ hard, easy, onDecided }: { hard: ControlSession; easy: ControlSession; onDecided?: (pct: number) => void }) {
+  const [preview, setPreview] = useState<number | null>(null);
+  const [applied, setApplied] = useState<number | null>(null);
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  const base = syntheticBaselineFor(THOMAS_SCORE);
+  const sug = computeAutoregSuggestion(THOMAS_SCORE, hard.target_difficulty, base);
+  const decidedDiff = applied != null ? adjustDifficulty(hard.target_difficulty, applied) : null;
+  const points: RadarPoint[] = [
+    controlPoint("ines", "Inès R.", 84, easy),
+    controlPoint("hugo", "Hugo B.", 80, hard),
+    controlPoint("lea", "Léa P.", null, hard),
+    controlPoint("thomas", "Thomas M.", THOMAS_SCORE, hard, decidedDiff),
+  ];
+  const tpl = { name: hard.name, notes: hard.notes, target_difficulty: hard.target_difficulty, load: 2, type: "volume" } as unknown as SessionTemplate;
+  const decide = (pct: number) => { setApplied(pct); onDecided?.(pct); };
   return (
     <div>
-      <CoachRadar points={points} onSelect={setOpen} />
-      {box("À décider maintenant", decide)}
-      {box("Dans le plan", inPlan)}
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.55)", margin: "20px 0 8px" }}>
-        La séance de {o.name.split(" ")[0]}{o.x == null ? ", en attente de son check-in" : pct ? ", ajustée" : ", telle que prévue"}
+      <CoachRadar points={points} onSelect={() => {}} />
+      {sug && (
+        <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <AutoregButtons demo notes={hard.notes} sessionId="ob-control-demo-thomas" advice="" sessionLabel={hard.name} dir={sug.dir} reco={sug.reco}
+              plannedDifficulty={hard.target_difficulty} onPreviewChange={setPreview} shape="ring" ringSize={160} actionsSlot={slot}
+              severityColor={suggestionSeverityColor(sug)} isActive viewer={{ role: "coach", subjectName: "Thomas" }}
+              onApply={async pct => { decide(pct); return { notes: hard.notes ?? "", target_difficulty: hard.target_difficulty }; }}
+              onMaintenir={() => decide(0)} />
+          </div>
+          <AlertBox variant="darkColor" centered
+            alert={{ border: `${suggestionSeverityColor(sug)}66`, glow: suggestionSeverityColor(sug), text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, hard.target_difficulty, "Thomas", base)}` }}
+            actions={<div ref={setSlot} className="autoreg-slot" />} />
+        </div>
+      )}
+      <div style={{ marginTop: 12 }}>
+        <SessionTemplateCard session={tpl} adjustPct={(applied ?? preview) || null} cardStyle={{ cursor: "default" }} />
       </div>
-      <SessionTemplateCard session={tpl} adjustPct={pct || null} gaugeOverride={pct ? adjustDifficulty(o.s.target_difficulty, pct) : undefined} cardStyle={{ cursor: "default" }} />
     </div>
   );
 }
