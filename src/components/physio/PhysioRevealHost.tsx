@@ -33,12 +33,6 @@ type Shown =
 export type Accounts = { right: number; judged: number; strip: StripCell[]; lift: Lift };
 /* Le rapport jours d'alerte / autres jours (bilan.ts liftOf), en mots. null = pas assez de données. */
 export const fr1 = (n: number) => String(Math.round(n * 10) / 10).replace(".", ",");
-export function liftLine(l: Lift | null | undefined, subject?: string): { title: string; detail: string } | null {
-  if (!l || l.ratio === null) return null;
-  const detail = `Séance plus dure que prévu ${l.hit} fois sur ${l.total} les jours d'alerte, ${l.baseHit} sur ${l.baseTotal} les autres jours.`;
-  if (l.ratio >= 1.2) return { title: `Les jours d'alerte, séance plus dure ${fr1(l.ratio)} fois plus souvent.`, detail };
-  return { title: subject ? `Les alertes ne repèrent pas encore mieux les séances dures de ${subject}.` : "Les alertes ne repèrent pas encore mieux tes séances dures.", detail };
-}
 
 /* Recalage automatique annoncé dans l'écran post-séance (2026-10-24). */
 export type RecalNotice = { dir: "low" | "high"; liftBefore?: number; liftAfter?: number; state: "applied" | "undone" | "saving" };

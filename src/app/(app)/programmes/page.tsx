@@ -1,12 +1,12 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import ProgramLibraryStandalone from "@/components/programs/ProgramLibraryStandalone";
 
 export default async function ProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string } }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   const { data: profile } = await supabase
     .from("profiles")

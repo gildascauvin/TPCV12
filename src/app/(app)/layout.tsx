@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/layout/BottomNav";
 import HealthSyncOnOpen from "@/components/layout/HealthSyncOnOpen";
@@ -17,7 +17,7 @@ import CoachResultHost from "@/components/coach/CoachResultHost";
    part désormais, aucun risque à les laisser. */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase

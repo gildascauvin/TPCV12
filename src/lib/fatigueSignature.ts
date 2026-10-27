@@ -209,25 +209,6 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const CHARGE_METRIC_NAME: Record<"load" | "monotony" | "strain", { coach: string; athlete: string }> = {
-  load: { coach: "sa charge (ACWR)", athlete: "ta charge (ACWR)" },
-  monotony: { coach: "sa monotonie", athlete: "ta monotonie" },
-  strain: { coach: "son strain", athlete: "ton strain" },
-};
-
-/* Exportée (2026-09, decisionCard.ts) — même format "{métrique nommée} est en zone de risque :
-   {action}" que la branche alerts.length===1 de chargeCrossInsight() ci-dessous, plutôt que le texte
-   observationnel de sigDimInfo() seul ("Diminution de la capacité de performance probable au-delà de
-   2 (Foster, 1998)."), qui ne nomme jamais la métrique concernée et ne dit jamais quoi faire —
-   retour explicite de Gildas : "on sait même pas que ça parle de monotonie, il faudrait plutôt
-   conseiller de varier que constater". */
-export function chargeMetricAttribution(dim: "load" | "monotony" | "strain", perspective: Perspective = "athlete"): string {
-  const coach = perspective === "coach";
-  const name = CHARGE_METRIC_NAME[dim][coach ? "coach" : "athlete"];
-  const action = CHARGE_METRIC_ACTION[dim][coach ? "coach" : "athlete"];
-  return `${cap(name)} est en zone de risque : ${action}`;
-}
-
 /* Fitness et Fatigue ne sont PLUS ici (2026-09-29, décision de Gildas). Elles étaient AFFICHÉES
    comme cartes dans l'onglet Récupération mais RACONTÉES dans l'insight de la charge — d'où les
    deux incohérences qu'il a relevées en prod : l'insight de récup ne pouvait structurellement pas

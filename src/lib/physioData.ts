@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { deviceInputsFor, type DeviceInputs, type HealthRow } from "@/lib/deviceWellness";
+import { type DeviceInputs, type HealthRow } from "@/lib/deviceWellness";
 import { heartResults, physioVerdictAt, HEART_FAMILY_LABEL, type HeartResult, type PhysioSession, type PhysioWorkout } from "@/lib/physioCompare";
 
 /* Données de "Ressenti vs physiologie" (2026-10-11), lues côté client par le sportif lui-même (RLS :
@@ -40,17 +40,6 @@ export function requestPhysioReveal(detail: PhysioRevealDetail) {
    l'élément ouvert seulement). */
 export const PHYSIO_REPLAY = "tpc-physio-replay";
 export type PhysioReplayDetail = ({ kind: "session"; sessionId: string } | { kind: "wellness"; date: string }) & { onEdit?: () => void };
-
-/* Vrai si l'écran de résultat a quelque chose à montrer pour cette séance / ce matin. */
-export function hasSessionResult(data: PhysioData | null, sessionId: string) {
-  return data?.heart[sessionId]?.kind === "ok";
-}
-export function hasWellnessResult(data: PhysioData | null, date: string) {
-  if (!data) return false;
-  const checkins = data.checkins.filter(c => c.bedtime != null);
-  const c = checkins.find(x => x.date === date);
-  return !!c && !!physioVerdictAt(date, c, checkins, data.health);
-}
 export function requestPhysioReplay(detail: PhysioReplayDetail) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(PHYSIO_REPLAY, { detail }));
@@ -98,19 +87,6 @@ export function loadPhysioData(userId: string, fresh = false): Promise<PhysioDat
 export function invalidatePhysio() {
   cache = null;
   if (typeof window !== "undefined") window.dispatchEvent(new Event(PHYSIO_CHANGED));
-}
-
-/* Données de la nuit pour une date : composantes physiologiques déjà calculées comme dans le score
-   (norme FC/VFC sur les 28 jours précédents). null si rien d'exploitable. */
-export function physioInputsFor(date: string, health: HealthRow[]): DeviceInputs | null {
-  const d = deviceInputsFor(date, health);
-  return d.device_sleep_minutes != null || d.device_resting_hr != null ? d : null;
-}
-
-/* Vrai si l'entraînement montre de ce jour porte une FC exploitable (le tiroir "Terminer la séance"
-   passe alors en RPE à l'aveugle). */
-export function hasHeartForDay(data: PhysioData | null, date: string) {
-  return !!data?.workouts.some((w) => w.date === date && w.trimp != null && w.duration_min >= 10);
 }
 
 export function usePhysioData(userId: string | null | undefined, enabled = true): PhysioData | null {

@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ProgramLibraryStandalone from "@/components/programs/ProgramLibraryStandalone";
 import type { CoachAthlete } from "@/types";
 
 export default async function CoachProgrammesPage({ searchParams }: { searchParams?: { step?: string; focus?: string } }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase.from("profiles").select("mode, subscription_status, sport").eq("user_id", user.id).maybeSingle();

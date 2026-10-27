@@ -23,44 +23,6 @@ import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import type { CoachAthlete } from "@/types";
 import { AthleteRing } from "@/app/(app)/coach/athletes/AthletesClient";
 
-/* Pastille "Exemple" (sandbox, sportif démo) — seul reste de CrossInsightBanner, retiré le
-   2026-09-29 : l'insight croisé vit désormais dans la ligne Phase de la carte décision
-   (/today, Coach Control), le répéter en tête des onglets Charge/Récupération faisait doublon. */
-export function DemoDataChip() {
-  return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-      <div style={{ fontFamily: "var(--font-mono), monospace", background: "rgba(255,255,255,.10)", border: "1px solid rgba(255,255,255,.18)", color: "rgba(255,255,255,.85)", borderRadius: 999, padding: "6px 11px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" as const }}>
-        🔎 Exemple
-      </div>
-    </div>
-  );
-}
-
-/* Bandeau des données d'exemple (2026-09-30, freemium) : en tête d'onglet, pas un petit badge — le
-   risque est qu'on prenne l'exemple pour ses propres données. Dit quand les vraies arrivent (après
-   ~1 semaine de check-ins et de séances, jamais "dans 14 jours" : ça dépend de ce qu'il remplit).
-   Compte gratuit : rappelle que l'essai couvre exactement ce délai. */
-export function DemoAnalyticsBanner({ perspective = "athlete", free = false, onActivate, demoAthlete = false }: { perspective?: Perspective; free?: boolean; onActivate?: () => void; /** Sportif de démo du coach (2026-10-01) : ses données sont un exemple, quel que soit leur volume. */ demoAthlete?: boolean }) {
-  const coach = perspective === "coach";
-  return (
-    <div style={{ background: "rgba(125,211,252,.08)", border: "1px solid rgba(125,211,252,.28)", borderRadius: 16, padding: "12px 14px", marginBottom: 14, display: "grid", gap: 8 }}>
-      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" as const, color: "#7dd3fc" }}>🔎 Exemple</div>
-      <div style={{ fontSize: 13.5, fontWeight: 600, color: "rgba(255,255,255,.9)", lineHeight: 1.45 }}>
-        {demoAthlete
-          ? "Sportif de démo : ces analyses sont un exemple. Celles de tes vrais sportifs s'afficheront ici après ~1 semaine de check-ins et de séances."
-          : coach
-          ? "Ces analyses sont un exemple. Ses analyses arrivent après ~1 semaine de check-ins et de séances."
-          : "Ces analyses sont un exemple. Tes analyses arrivent après ~1 semaine de check-ins et de séances."}
-      </div>
-      {free && onActivate && !demoAthlete && (
-        <button onClick={onActivate} style={{ justifySelf: "start", border: "none", cursor: "pointer", color: "#fff", fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 14px", background: "linear-gradient(180deg,#f04a08,#d44000)" }}>
-          Active tes 14 jours offerts pour les avoir en entier
-        </button>
-      )}
-    </div>
-  );
-}
-
 const rangeDays = (m: RangeMode) => (m === "quarter" ? 90 : m === "month" ? 28 : 7);
 
 /* Cartes d'indice (2026-09-28, POC `charge-variantes.html` variante E1, retenue par Gildas) —

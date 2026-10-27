@@ -114,12 +114,6 @@ export function sessionTypes(notes: string | null | undefined): { quality: Sessi
   return { quality: majority(qs), group: majority(qs.map(q => GROUP_OF[q] ?? q)) };
 }
 
-/* Qualité dominante, sinon groupe : ce qui s'affiche quand on parle du type de la séance. */
-export function sessionFamily(notes: string | null | undefined): SessionFamily | null {
-  const t = sessionTypes(notes);
-  return t.quality ?? t.group;
-}
-
 type HistSession = { date: string; notes: string | null; rpe: number | null; target_difficulty: number | null; done: boolean };
 
 /* Signaux appris : pour chaque famille (≥ 12 séances notées avec check-in), la dimension dont le

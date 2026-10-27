@@ -4,7 +4,7 @@
 // détecter le signal et proposer la décision, jamais de modification automatique.
 
 import {
-  Z_SWC, Z_MODERATE, Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE, autoregDimensionLabel,
+  Z_SEVERE, WELLNESS_ABSOLUTE_GUARD_SCORE, autoregDimensionLabel,
   type WellnessBaselineResult,
 } from "@/lib/wellnessBaseline";
 
@@ -23,11 +23,6 @@ export function absoluteFeel(score: number): "bad" | "mid" | "good" {
   if (score >= ABSOLUTE_NEUTRAL_SCORE + ABSOLUTE_DEAD_ZONE) return "good";
   return "mid";
 }
-/* Difficulté au-delà de laquelle une séance n'est plus un jour de récupération programmé — le
-   générateur sort toujours `recuperation` dans 1-3 (generate/route.ts, sessionDifficulty()). */
-// Même seuil que qualitativeDifficulty() "très dure" (DiffGauge, loadRule.ts).
-const HARD_MIN_DIFFICULTY = 8;
-
 
 export interface AutoregSuggestion {
   dir: AutoregDir;
@@ -306,14 +301,6 @@ export function autoregHeadline(dir: AutoregDir): string {
 
 export function autoregCtaLabel(dir: AutoregDir): string {
   return dir === "low" ? "⬇ Alléger →" : "⬆ Surcharger →";
-}
-
-/* Même format que autoregCtaLabel() (flèche + verbe + →) mais avec un verbe précis (ex. "Réduire",
-   "Récupérer", "Augmenter") — decisionCard.ts l'utilise quand une tendance nomme une action plus
-   spécifique qu'"Alléger"/"Surcharger" générique. Le titre de la carte porte le diagnostic
-   (statut/tendance), le CTA porte le verbe — jamais les deux à la fois dans le titre. */
-export function autoregCtaWordLabel(dir: AutoregDir, word: string): string {
-  return `${dir === "low" ? "⬇" : "⬆"} ${word} →`;
 }
 
 /* Décision "traitée" pour la journée — persistée en localStorage (pas de colonne DB, V1 assumée

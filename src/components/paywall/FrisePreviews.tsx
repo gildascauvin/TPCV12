@@ -3,7 +3,6 @@
 import { ExerciseLineView, exerciseViews } from "@/components/sessions/ExerciseLineView";
 import { addDays, format as formatDate } from "date-fns";
 import DiffGauge from "@/components/calendar/DiffGauge";
-import PlanningRing from "@/components/calendar/PlanningRing";
 import WellnessRing from "@/components/wellness/WellnessRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import SparkLineClient, { WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
@@ -121,28 +120,6 @@ export function PlanningPreview({ sport }: { sport?: string }) {
       <div style={{ display: "flex", gap: 8, width: "max-content" }}>
         {previews.map((p, i) => <SessionMiniCard key={i} preview={p} width={150} />)}
       </div>
-    </div>
-  );
-}
-
-/* Variante avec ring de forme au-dessus de chaque séance — le VRAI `PlanningRing` (calendar/
-   PlanningRing.tsx), le même composant que /week et /coach/planning, pas une réinvention (demande
-   explicite de Gildas, 2026-09-04 : "prog avec les wellness rings, le même composant que le
-   planning"). Scores illustratifs statiques (aucun historique n'existe à ce stade du funnel) —
-   variés pour montrer que la forme change d'un jour à l'autre, jamais une valeur plate répétée. */
-const PROGRAM_RING_DAYS = ["Lun", "Mer", "Ven"];
-const PROGRAM_RING_SCORES = [78, 52, 88];
-export function ProgramWithRingsPreview({ sport }: { sport?: string }) {
-  const previews = (sport && SPORT_SESSION_PREVIEW[sport]) || DEFAULT_SESSIONS;
-  return (
-    <div style={{ width: "100%", display: "flex", gap: 10 }}>
-      {previews.map((p, i) => (
-        <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, color: "#8a8f94" }}>{PROGRAM_RING_DAYS[i]}</div>
-          <PlanningRing score={PROGRAM_RING_SCORES[i]} size={44} />
-          <SessionMiniCard preview={p} />
-        </div>
-      ))}
     </div>
   );
 }

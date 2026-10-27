@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { watchEstimatedSessions, type EstimatedSession } from "@/lib/watchEstimates";
 import { dedupeWorkouts } from "@/lib/conseilsData";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import CoachPlanningClient from "./CoachPlanningClient";
@@ -13,7 +13,7 @@ import type { CoachAthlete, CoachViewSession, Session, CoachSession, WellnessDai
 
 export default async function CoachPlanningPage({ searchParams }: { searchParams: { date?: string } }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const admin = createAdminClient();

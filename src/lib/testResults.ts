@@ -323,15 +323,6 @@ export async function listOwnStrengthReps(subject: TestSubject): Promise<Strengt
   return (data ?? []) as StrengthRepRow[];
 }
 
-export async function listStrengthReps(testId: string, subject: TestSubject): Promise<StrengthRepRow[]> {
-  const supabase = createClient();
-  let q = supabase.from("strength_reps").select("id,test_id,date,reps,weight").eq("test_id", testId);
-  q = "subjectUserId" in subject ? q.eq("subject_user_id", subject.subjectUserId) : q.eq("subject_coach_athlete_id", subject.subjectCoachAthleteId);
-  const { data, error } = await q.order("date");
-  if (error) { console.error("[strength_reps] liste a échoué", error); return []; }
-  return (data ?? []) as StrengthRepRow[];
-}
-
 export async function upsertStrengthRep(
   ownerId: string,
   subject: TestSubject,

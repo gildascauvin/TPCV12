@@ -22,9 +22,10 @@ const nextConfig = {
     // opengraph-image.tsx lit public/fonts/*.woff via fs.readFile() a l'execution — Next.js ne
     // peut pas detecter cette dependance par analyse statique, donc la fonction serverless deployee
     // ne contenait jamais ces fichiers (ENOENT en prod, jamais reproduit en dev ou le filesystem
-    // local est complet). Inclusion explicite requise pour ce cas precis.
+    // local est complet). Inclusion explicite requise pour ce cas precis, limitee a /share : les
+    // autres fonctions n'en ont pas besoin.
     outputFileTracingIncludes: {
-      "/**/*": ["./public/fonts/**/*"],
+      "/share/**": ["./public/fonts/**/*"],
     },
   },
 };

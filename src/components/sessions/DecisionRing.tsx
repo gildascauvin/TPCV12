@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { hapticTick } from "@/lib/native";
-import { type AutoregDir, zoneRange, pctToPoints, qualitativeDifficulty } from "@/lib/autoregulation";
+import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
 
 /* Jauge de décision en ANNEAU (2026-09-30, variante R2 du POC "Onglet Charge, version retenue" :
    https://claude.ai/artifact/McRwVAu86X9vArN2JRHBGF). Même contrat que DecisionGauge.tsx (la barre
@@ -172,21 +172,6 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
       size={size} light={light} hideHint={hideHint}
       centerLabel={{ arrow: "✓", verb: "Faite" }}
       hint={hint}
-    />
-  );
-}
-
-/* Difficulté prévue seule (freemium 2026-10-02, « les mesures sont gratuites, les décisions
-   payantes ») : la séance planifiée est une entrée, elle reste lisible ; la zone conseillée et le
-   sens sont la décision, absents ici. */
-export function PlannedDecisionRing({ planned, size, light }: { planned: number; size?: number; light?: boolean }) {
-  const v = Math.round(planned);
-  return (
-    <DecisionRing
-      zoneLow={v} zoneHigh={v} value={planned} readOnly hideZone onChange={() => {}}
-      size={size} light={light}
-      centerLabel={{ arrow: String(v), verb: "Prévue" }}
-      hint={`Séance ${qualitativeDifficulty(v)} prévue`}
     />
   );
 }

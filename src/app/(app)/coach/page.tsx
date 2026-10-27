@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { withWatchEstimates } from "@/lib/watchEstimates";
 import { dedupeWorkouts } from "@/lib/conseilsData";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { pickRelevantAssignment, type AthleteActiveProgram } from "@/lib/programAssignment";
@@ -19,7 +19,7 @@ type AssignRow = { athlete_id: string | null; user_id: string | null; start_date
 
 export default async function CoachPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
   if (!user) redirect("/login");
 
   const today = new Date().toISOString().split("T")[0];

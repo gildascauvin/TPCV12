@@ -21,11 +21,6 @@ export function markPrimingSource(source: PrimingSource, opts?: { athleteName?: 
   pending = source;
 }
 
-/** Sportif concerné (coach), noté indépendamment de la source. */
-export function markPrimingAthlete(name: string | null | undefined) {
-  if (name) pendingAthlete = name;
-}
-
 /** Lu à l'ouverture de la modale (initialiseur de state), effacé dans un effet : un initialiseur
     peut être appelé 2 fois en StrictMode, il ne doit donc rien consommer. */
 export function peekPrimingSource(): { source: PrimingSource; athleteName: string | null } {

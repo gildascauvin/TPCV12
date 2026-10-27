@@ -1,5 +1,5 @@
 import { isThePerfClubProgram } from "@/lib/programReveal";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import { pickRelevantAssignment } from "@/lib/programAssignment";
 import { daysAgoStr } from "@/lib/trainingLoad";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function TodayPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   const today = format(new Date(), "yyyy-MM-dd");
   /* Fenêtre glissante pour la baseline personnelle (Z-score, src/lib/wellnessBaseline.ts) ET pour la

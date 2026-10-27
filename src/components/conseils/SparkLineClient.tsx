@@ -97,14 +97,6 @@ function zone2For(zones: Zone2[], v: number): Zone2 {
   return zones.find(z => v < z.max) ?? zones[zones.length - 1];
 }
 
-/* Mappe un Form% (échelle fixe, ~-50 à +50 en pratique) sur l'espace d'affichage 0-100 partagé
-   avec le wellness — 50 = 0%, plafonné aux bords pour les cas extrêmes plutôt que de sortir du
-   chart. Fixe (pas relatif au pic de la fenêtre) : contrairement à l'ancienne normalisation, un
-   même % tombe toujours à la même hauteur, quelle que soit la semaine affichée. */
-export function formToChartPosition(pct: number): number {
-  return Math.max(0, Math.min(100, 50 + pct));
-}
-
 /* wellnessColor()/WELLNESS_RAMP vivent dans src/lib/wellness.ts (source unique, réutilisée par les
    WellnessRing partout dans l'app depuis leur unification — voir ce fichier pour la doc complète
    de la rampe et du choix d'ancrage sur fond sombre). */

@@ -89,14 +89,6 @@ export function useOnboardingProgress(enabled = true): OnboardingProgress | null
   return enabled ? value : null;
 }
 
-/** Vrai si `key` est LA prochaine étape à faire (un seul tag "À faire" visible à la fois).
-    Faux tant que la progression n'est pas chargée. */
-export function useStepTodo(key: OnboardingStepKey, enabled = true): boolean {
-  const p = useOnboardingProgress(enabled);
-  if (!p || p.complete) return false;
-  return p.steps.find(s => !s.done)?.key === key;
-}
-
 /* 1re décision d'autorégulation prise (Appliquer ou Maintenir), quelle que soit la surface :
    enregistrée une seule fois (profiles.first_adjustment_at), coche l'étape "Ajuste" côté coach et
    ouvre le priming une seule fois si le compte n'est pas abonné. Sans compte (sandbox) : rien. */

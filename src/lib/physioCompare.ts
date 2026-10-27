@@ -104,30 +104,6 @@ export function heartResultFor(session: { date: string; duration: number; rpe: n
   return judge(prior, heartFamily(w.workout_type), intensity(w), session.rpe);
 }
 
-export function heartVerdictText(r: HeartResult, perspective: "athlete" | "coach" = "athlete"): { title: string; text: string } {
-  const coach = perspective === "coach";
-  if (r.kind === "calibrating") {
-    const left = HEART_CALIBRATION - r.have, fam = HEART_FAMILY_LABEL[r.family];
-    return {
-      title: coach ? "Son cœur apprend son profil" : "Ton cœur apprend ton profil",
-      text: `Encore ${left} séance${left > 1 ? "s" : ""}${fam ? ` ${fam}` : ""} avec FC et on pourra comparer ${coach ? "son" : "ton"} ressenti à ce que dit ${coach ? "son" : "ton"} cœur.`,
-    };
-  }
-  const p = Math.round(r.predicted), fam = HEART_FAMILY_LABEL[r.family];
-  if (r.verdict === "harder") return {
-    title: coach ? "Séance plus dure pour lui que pour son cœur" : "Ta séance t'a paru plus dure que ce que dit ton cœur",
-    text: `Pour ${coach ? "son" : "ton"} cœur, c'était une séance${fam ? ` ${fam}` : ""} habituelle (environ ${p}). ${coach ? "Il" : "Tu"} l'a${coach ? "" : "s"} notée ${r.rpe}. Quand ça se répète, c'est souvent de la fatigue qui s'installe.`,
-  };
-  if (r.verdict === "easier") return {
-    title: coach ? "Son cœur a travaillé plus qu'il ne l'a senti" : "Ton cœur a travaillé plus que tu ne l'as senti",
-    text: `${coach ? "Son" : "Ton"} cœur dit environ ${p}, ${coach ? "il l'a" : "tu l'as"} notée ${r.rpe}. Signe de forme, ou effort sous-estimé. La charge retenue reste le ressenti.`,
-  };
-  return {
-    title: coach ? "Son ressenti et son cœur sont d'accord" : "Ton ressenti et ton cœur sont d'accord",
-    text: `Environ ${p} pour ${coach ? "son" : "ton"} cœur, ${r.rpe} pour ${coach ? "lui" : "toi"}. Séance encaissée comme d'habitude.`,
-  };
-}
-
 /* ── 2. Check-in vs données physiologiques ───────────────────────────────────────── */
 
 /* Comparer le ressenti et la physiologie en ABSOLU était faux (1re version, 2026-10-11) : une nuit

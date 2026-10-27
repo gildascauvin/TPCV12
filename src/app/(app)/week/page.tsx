@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import { startOfWeek, endOfWeek, format, subDays } from "date-fns";
 import WeekClient from "./WeekClient";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WeekPage({ searchParams }: { searchParams: { date?: string } }) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   const base = searchParams.date ? new Date(searchParams.date + "T12:00:00") : new Date();
   const weekStart = startOfWeek(base, { weekStartsOn: 1 });

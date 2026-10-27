@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthUser } from "@/lib/supabase/server";
 import { coachIsPaying } from "@/lib/access";
 import type { Profile, SubscriptionStatus } from "@/types";
 import ConseilsClient from "./ConseilsClient";
@@ -13,7 +13,7 @@ import { buildTestFixture, buildAthleteFixture } from "@/lib/sandboxFixtures";
    TestsPanel (sport/sexe/poids) et le statut d'abonnement. */
 export default async function ConseilsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthUser();
 
   /* Perf (2026-10-04) : profil, tests, résultats et séries lus en parallèle, et passés à TestsPanel
      (initialData) pour un affichage immédiat, au lieu d'attendre le composant puis ses requêtes. */

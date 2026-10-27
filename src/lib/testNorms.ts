@@ -1357,15 +1357,3 @@ export function buildVerdict(insights: CardInsight[]): Verdict {
 }
 
 export type ScoredInsight = CardInsight & { score: number; status: CardStatus };
-
-/* Répartit toutes les cartes notées en 2 colonnes (faible/fort) — remplace l'ancien "top 3 à
-   maintenir" : couvre l'intégralité du profil plutôt qu'un extrait, sans avoir besoin d'une
-   araignée pour visualiser la répartition d'ensemble. "Dans la norme" (amber) n'est ni un point
-   faible ni un point fort — exclu des deux colonnes (reste visible sur la carte de test elle-même,
-   juste pas remonté dans les recommandations, qui doivent rester une liste de priorités réelles). */
-export function splitByStrength(insights: CardInsight[]): { weak: ScoredInsight[]; strong: ScoredInsight[] } {
-  const scored = insights.filter((i): i is ScoredInsight => i.score != null);
-  const weak = scored.filter(i => i.status === "red").sort((a, b) => a.score - b.score);
-  const strong = scored.filter(i => i.status === "green").sort((a, b) => b.score - a.score);
-  return { weak, strong };
-}

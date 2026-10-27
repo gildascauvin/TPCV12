@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -25,3 +26,11 @@ export async function createClient() {
     }
   );
 }
+
+/* Utilisateur de la requête, mémorisé pour le rendu en cours : le layout (app) et la page
+   l'appelaient chacun, soit deux allers-retours vers Supabase Auth par navigation au lieu d'un. */
+export const getAuthUser = cache(async () => {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+});

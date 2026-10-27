@@ -1,7 +1,5 @@
-import { buildAthleteFixture } from "@/lib/sandboxFixtures";
-import { computeConseilsData, type ConseilsData } from "@/lib/conseilsData";
+import { type ConseilsData } from "@/lib/conseilsData";
 import type { MetricGroup } from "@/lib/metricCards";
-import type { Perspective } from "@/lib/fatigueSignature";
 import { partialChargeReady } from "@/lib/trainingLoad";
 
 /* Données d'exemple pour les onglets Charge/Récupération (2026-09-30, freemium) : tant qu'un compte
@@ -20,9 +18,4 @@ export function analyticsReady(data: ConseilsData, group: MetricGroup): boolean 
     : !!data.wellnessBaseline?.hasEnoughHistory || data.wellnessBaselineSeries.some(b => !!b?.hasEnoughHistory)
       // Historique importé de la montre (jours avant l'inscription, 2026-10-23) : 5 jours mesurés suffisent.
       || (data.measuredRecovery ?? []).filter(v => v !== null).length >= 5;
-}
-
-export function demoConseilsData(referenceDate: string, perspective: Perspective = "athlete"): ConseilsData {
-  const fx = buildAthleteFixture(new Date(referenceDate + "T12:00:00"));
-  return computeConseilsData(referenceDate, fx.profile, fx.sessions, Object.values(fx.wellnessByDate), perspective);
 }
