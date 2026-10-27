@@ -5,8 +5,7 @@ import { useEffect, useRef, useState } from "react";
 /* Accueil mobile (2026-10-22, POC « séance en sheet » PgTQbMYpsUhqCounWHL28M) : la séance du jour, ou
    le check-in tant qu'il n'est pas fait, vit dans une feuille posée en bas de l'écran, au-dessus de la
    navigation. Glisser la poignée la monte ou la descend, elle reste où on la lâche (bornée) ; un tap
-   sur la poignée passe au cran suivant. Tant qu'elle n'est pas ouverte en grand, glisser le contenu
-   vers le haut l'ouvre ; ouverte et en haut du contenu, glisser vers le bas la ramène au milieu. Le
+   sur la poignée passe au cran suivant. Glisser le contenu la pilote aussi (voir plus bas). Le
    haut de la page reste visible et défile au-dessus d'elle (le parent réserve sa hauteur en bas). */
 
 export const NAV_CLEAR = 104;   // place réservée sous le contenu pour la navigation flottante
@@ -155,20 +154,76 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   // sinon le nom et la jauge de la séance resteraient hors champ.
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [contentKey]);
   useEffect(() => { if (!atMax && scrollRef.current) scrollRef.current.scrollTop = 0; }, [atMax]);
-  const swipe = useRef<{ y: number; used: boolean; skip: boolean } | null>(null);
-  function touchStart(e: React.TouchEvent) {
-    // Un geste sur la note choisie d'une jauge (data-handle) ou sur l'anneau reste un réglage.
-    const skip = !!(e.target as HTMLElement).closest?.("[data-handle]");
-    swipe.current = { y: e.touches[0].clientY, used: false, skip };
-  }
-  function touchMove(e: React.TouchEvent) {
-    const sw = swipe.current;
-    if (!sw || sw.used || sw.skip) return;
-    const dy = sw.y - e.touches[0].clientY;
-    const top = (scrollRef.current?.scrollTop ?? 0) <= 0;
-    if (dy > 14 && !atMax) { sw.used = true; onHeightChange(b.max); }
-    else if (dy < -14 && top && atMax) { sw.used = true; onHeightChange(b.mid); }
-  }
+  /* Le contenu pilote la feuille (2026-10-27, Gildas : « si je scroll up au maximum il se replie sans
+     avoir à trouver la poignée ») : en haut du contenu, le doigt qui descend (ou la molette vers le
+     haut) fait descendre la feuille en le suivant, jusqu'en bas ; tant qu'elle n'est pas ouverte en
+     grand, le doigt qui monte la fait monter. Au lâcher, elle se cale sur le cran suivant dans le sens
+     du geste (min / milieu / haut). Remplace un saut haut → milieu, qui laissait la feuille bloquée
+     au milieu. Écouteurs natifs non passifs : on empêche le contenu de défiler pendant ce temps. */
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let g: { y: number; h: number; taken: boolean; skip: boolean; dir: number } | null = null;
+    const snap = (cur: number, dir: number) => {
+      const bb = boundsRef.current;
+      const order = [bb.min, bb.mid, bb.max];
+      const next = dir < 0 ? [...order].reverse().find(x => x < cur - 2) ?? bb.min : order.find(x => x > cur + 2) ?? bb.max;
+      changeRef.current(next);
+    };
+    const onStart = (e: TouchEvent) => {
+      const t = e.target as HTMLElement;
+      const skip = !!t.closest?.("[data-handle]") || (t instanceof SVGElement && getComputedStyle(t).touchAction === "none");
+      g = { y: e.touches[0].clientY, h: hRef.current, taken: false, skip, dir: 0 };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!g || g.skip) return;
+      const y = e.touches[0].clientY, bb = boundsRef.current;
+      const dy = g.y - y; // > 0 : le doigt monte
+      if (!g.taken) {
+        const atTop = el.scrollTop <= 0, cur = hRef.current;
+        const down = dy < -6 && atTop && cur > bb.min + 1;
+        const up = dy > 6 && cur < bb.max - 1;
+        if (!down && !up) { if (Math.abs(dy) > 6) g.y = y; return; }
+        g = { ...g, y, h: cur, taken: true };
+        setDragging(true);
+      }
+      e.preventDefault();
+      const next = Math.max(bb.min, Math.min(bb.max, g.h + (g.y - y)));
+      // Sens du dernier mouvement : c'est lui qui choisit le cran au lâcher.
+      g.dir = next > hRef.current ? 1 : next < hRef.current ? -1 : g.dir;
+      changeRef.current(next);
+    };
+    const onEnd = () => {
+      if (g?.taken) { setDragging(false); snap(hRef.current, g.dir); }
+      g = null;
+    };
+    let wheelTimer = 0, wheelDir = 0;
+    const onWheel = (e: WheelEvent) => {
+      const bb = boundsRef.current, cur = hRef.current;
+      const down = e.deltaY < 0 && el.scrollTop <= 0 && cur > bb.min + 1;
+      const up = e.deltaY > 0 && cur < bb.max - 1;
+      if (!down && !up) return;
+      e.preventDefault();
+      setDragging(true);
+      wheelDir = down ? -1 : 1;
+      changeRef.current(Math.max(bb.min, Math.min(bb.max, cur + e.deltaY)));
+      window.clearTimeout(wheelTimer);
+      wheelTimer = window.setTimeout(() => { setDragging(false); snap(hRef.current, wheelDir); }, 140);
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.clearTimeout(wheelTimer);
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   const grab = { onPointerDown: down, onPointerMove: move, onPointerUp: up, onPointerCancel: up };
   return (
@@ -184,7 +239,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
         <span style={{ width: 42, height: 5, borderRadius: 999, background: "rgba(0,0,0,.18)" }} />
       </div>
       <div ref={headRef} {...grab} style={{ flexShrink: 0, touchAction: "none", cursor: "grab" }}>{header}</div>
-      <div ref={scrollRef} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={() => { swipe.current = null; }}
+      <div ref={scrollRef}
         style={{ flex: 1, minHeight: 0, overflowY: atMax ? "auto" : "hidden", padding: `0 14px ${navClear}px`, overscrollBehavior: "contain" }}>
         <div ref={bodyRef}>{children}</div>
       </div>
