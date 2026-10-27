@@ -3,6 +3,7 @@
    données (sous le seuil, l'écran saute, comme le bilan individuel) :
    - qui décroche : check-ins manqués les jours de séance, jours fatigué ;
    - tes séances plus dures que prévu : même séance (même nom) sur plusieurs sportifs ;
+   - appris sur chacun : l'enseignement le plus fort du bilan de chaque sportif ;
    - les conseils au groupe : conseils confirmés, sportif par sportif (juge d'adviceJudge.ts) ;
    - la charge hors zone : jours au-dessus / en dessous de la zone de charge (ACWR).
    Un seul sportif avec des données suffit (2026-10-26, Gildas) : un coach qui débute n'en a souvent
@@ -13,7 +14,7 @@ import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
 import { qualitativeDifficulty, type DifficultyWord } from "@/lib/autoregulation";
 import { computeWellnessBaselineAt, relativeZoneLabel } from "@/lib/wellnessBaseline";
 import { outcomeRight } from "@/lib/adviceJudge";
-import { allVerdicts, isSynthetic, type BilanCheckin, type BilanPeriod, type BilanSession, type RecalEvent } from "@/lib/bilan";
+import { allVerdicts, computeBilan, isSynthetic, type BilanCheckin, type BilanPeriod, type BilanSession, type BilanSlide, type RecalEvent } from "@/lib/bilan";
 
 export type GroupAthlete = {
   id: string; name: string; signupAt: string;
@@ -26,6 +27,7 @@ export type DayMark = "ok" | "tired" | "missed";
 export type GroupSlide =
   | { kind: "g_decroche"; rows: { name: string; flag: string | null; marks: DayMark[]; missed: number; tired: number; days: number }[]; regular: number }
   | { kind: "g_seances"; rows: { name: string; planned: DifficultyWord; harder: number; total: number; athletes: number }[] }
+  | { kind: "g_appris"; rows: { name: string; topic: string; text: string }[] }
   | { kind: "g_conseils"; right: number; judged: number; rows: { name: string; right: number; judged: number }[] }
   | { kind: "g_charge"; rows: { name: string; above: number; below: number; days: number }[] };
 
@@ -100,6 +102,47 @@ function seances(period: BilanPeriod, end: string, athletes: GroupAthlete[]): Gr
   return { kind: "g_seances", rows: groups.slice(0, 3).map(g => ({ name: g.name, planned: modeWord(g.planned), harder: g.harder, total: g.total, athletes: g.who.size })) };
 }
 
+/* Appris sur chacun (2026-10-27) : l'enseignement le plus fort du bilan de chaque sportif, à la
+   3e personne. Même calcul que son bilan (computeBilan), sur tout son historique jusqu'à la fin de la
+   période ; dans l'ordre : ce qui le prédit, ce qui le fatigue, ses biais, ses leviers, ressenti vs
+   montre. Rien sans assez d'historique : le sportif n'apparaît pas. */
+const pluralWord = (w: string) => w.split(" ").map(x => (x === "très" ? x : `${x}s`)).join(" ");
+function insightOf(slides: BilanSlide[], name: string): { topic: string; text: string } | null {
+  for (const kind of ["predit", "fatigue", "biais", "leviers", "ressenti"] as const) {
+    const sl = slides.find(x => x.kind === kind);
+    if (!sl) continue;
+    if (sl.kind === "predit" && sl.blocks.length) {
+      const family = sl.blocks[0].title.split(" · ")[0];
+      const [low, high] = sl.blocks[0].rows;
+      return { topic: "Signal appris", text: `${family} : plus dure que prévu ${low.part} fois sur ${low.total} les jours « ${low.label.toLowerCase()} », ${high.part} sur ${high.total} les autres jours.` };
+    }
+    if (sl.kind === "fatigue") {
+      return { topic: "Fatigue", text: `Une soirée (alcool ou sortie) se paie le lendemain : forme ressentie ${Math.round(sl.nextScore)} contre ${Math.round(sl.normScore)} d'habitude.` };
+    }
+    if (sl.kind === "biais") {
+      return { topic: "Biais", text: `Séances prévues ${pluralWord(sl.planned)}, ${name} les ressent ${pluralWord(sl.feltWord)} : ${sl.harder} fois sur ${sl.total}.` };
+    }
+    if (sl.kind === "leviers" && sl.rows.length) {
+      const r = sl.rows[0];
+      return { topic: "Levier", text: `${r.label} la veille : ${r.delta} ${sl.unit === "sleep" ? "de sommeil mesuré" : "de forme ressentie"} (${r.with} contre ${r.without}).` };
+    }
+    if (sl.kind === "ressenti" && sl.sleepBars.length >= 2) {
+      const a = sl.sleepBars[0], b = sl.sleepBars[sl.sleepBars.length - 1];
+      return { topic: "Ressenti vs montre", text: `Son sommeil ressenti suit sa montre : ${a.display} les nuits « ${a.label.toLowerCase()} », ${b.display} les nuits « ${b.label.toLowerCase()} ».` };
+    }
+  }
+  return null;
+}
+function appris(period: BilanPeriod, today: string, end: string, athletes: GroupAthlete[]): GroupSlide | null {
+  const rows: Extract<GroupSlide, { kind: "g_appris" }>["rows"] = [];
+  for (const a of athletes) {
+    const b = computeBilan({ period: { kind: "all", start: period.start, end }, today, signupAt: a.signupAt, sessions: a.sessions, checkins: a.checkins, tests: [], currentShift: a.shift, currentShiftHigh: a.shiftHigh, recalEvents: a.events });
+    const ins = insightOf(b.slides, first(a.name));
+    if (ins) rows.push({ name: first(a.name), ...ins });
+  }
+  return rows.length ? { kind: "g_appris", rows } : null;
+}
+
 function conseils(period: BilanPeriod, end: string, athletes: GroupAthlete[]): GroupSlide | null {
   const rows: Extract<GroupSlide, { kind: "g_conseils" }>["rows"] = [];
   for (const a of athletes) {
@@ -142,7 +185,7 @@ function charge(period: BilanPeriod, end: string, athletes: GroupAthlete[]): Gro
 export function computeGroupBilan(input: { period: BilanPeriod; today: string; athletes: GroupAthlete[] }): GroupBilan {
   const { period, today, athletes } = input;
   const end = period.end < today ? period.end : today;
-  const slides = [decroche(period, end, athletes), seances(period, end, athletes), conseils(period, end, athletes), charge(period, end, athletes)]
+  const slides = [decroche(period, end, athletes), seances(period, end, athletes), appris(period, today, end, athletes), conseils(period, end, athletes), charge(period, end, athletes)]
     .filter((x): x is GroupSlide => !!x);
   const fmtD = (iso: string) => `${Number(iso.slice(8))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
   const title = period.kind === "week" ? `Semaine du ${fmtD(period.start)}` : period.kind === "month" ? (MONTHS[Number(period.start.slice(5, 7)) - 1].replace(".", "") + " " + period.start.slice(0, 4)) : `Depuis le ${fmtD(period.start)}`;

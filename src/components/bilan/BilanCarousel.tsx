@@ -31,13 +31,13 @@ type Props = {
 type AnySlide = BilanSlide | GroupSlide;
 
 const GLOW: Record<AnySlide["kind"], string> = {
-  g_decroche: "rgba(212,64,0,0.45)", g_seances: "rgba(242,138,0,0.40)", g_conseils: "rgba(47,158,68,0.38)", g_charge: "rgba(56,189,248,0.36)",
+  g_decroche: "rgba(212,64,0,0.45)", g_seances: "rgba(242,138,0,0.40)", g_appris: "rgba(168,85,247,0.38)", g_conseils: "rgba(47,158,68,0.38)", g_charge: "rgba(56,189,248,0.36)",
   regularite: "rgba(212,64,0,0.45)", charge: "rgba(47,158,68,0.40)", ressenti: "rgba(56,189,248,0.38)",
   predit: "rgba(212,64,0,0.40)", biais: "rgba(242,138,0,0.40)", fatigue: "rgba(168,85,247,0.38)",
   leviers: "rgba(47,158,68,0.38)", tendance: "rgba(56,189,248,0.36)", tests: "rgba(212,64,0,0.45)", conseils: "rgba(47,158,68,0.38)", suivre: "rgba(168,85,247,0.36)", partage: "rgba(56,189,248,0.20)",
 };
 const KICKER: Record<AnySlide["kind"], string> = {
-  g_decroche: "QUI DÉCROCHE", g_seances: "TES SÉANCES", g_conseils: "CONSEILS VÉRIFIÉS", g_charge: "CHARGE",
+  g_decroche: "QUI DÉCROCHE", g_seances: "TES SÉANCES", g_appris: "APPRIS SUR CHACUN", g_conseils: "CONSEILS VÉRIFIÉS", g_charge: "CHARGE",
   regularite: "RÉGULARITÉ", charge: "CHARGE", ressenti: "RESSENTI VS MONTRE", predit: "CE QUI TE PRÉDIT",
   biais: "TES BIAIS", fatigue: "CE QUI TE FATIGUE", leviers: "TES LEVIERS", tendance: "TENDANCE", tests: "TESTS", conseils: "CONSEILS VÉRIFIÉS", suivre: "SUIVRE OU PAS", partage: "EN UNE CARTE",
 };
@@ -345,6 +345,21 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
         {hard && <p style={{ ...body, fontSize: 14 }}>Ressentie au-dessus de « {top.planned} » {top.harder} fois sur {top.total}{top.athletes > 1 ? ", " : ""}{top.athletes > 1 ? `chez ${top.athletes} sportifs` : ""}. La noter un cran plus haut, ou l&apos;alléger.</p>}
       </>);
     }
+    case "g_appris":
+      return (<>
+        <h2 style={h2}>Ce que leurs données <span style={{ color: "#c9a2ff" }}>ont appris.</span></h2>
+        <p style={body}>{s.rows.length > 1 ? "Pour chaque sportif, l'enseignement le plus net de son historique." : "L'enseignement le plus net de son historique."}</p>
+        {s.rows.map((r, i) => (
+          <div key={i} style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{r.name}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#c9a2ff" }}>{r.topic}</span>
+            </div>
+            <div style={{ fontSize: 15, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{r.text}</div>
+          </div>
+        ))}
+        <div style={small}>Le détail est dans le bilan de chaque sportif.</div>
+      </>);
     case "g_conseils":
       return (<>
         <h2 style={h2}>Chaque conseil, <span style={{ color: "#7ee08f" }}>vérifié.</span></h2>
