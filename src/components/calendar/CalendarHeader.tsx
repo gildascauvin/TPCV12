@@ -36,6 +36,8 @@ interface CalendarHeaderProps {
      lui-même (ex. RangeToggle.tsx : 7j/28j/90j des graphiques Charge/Récupération). Ignoré si
      onViewModeChange est fourni (jamais les deux en même temps). */
   extraControls?: React.ReactNode;
+  /* Contrôle au bord gauche du header, en miroir du bouton profil — ex. bascule Semaine/Colonne de /week. */
+  leftControls?: React.ReactNode;
   onProfileClick?: () => void;
   /* Alignement — même largeur de colonne que le sélecteur de sportif (AthleteFilterBar) et le
      contenu de la page en dessous. Chaque page passe sa propre valeur (déjà calculée pour son
@@ -137,6 +139,7 @@ export default function CalendarHeader({
   viewMode = "week",
   onViewModeChange,
   extraControls,
+  leftControls,
   onProfileClick,
   contentMaxWidth,
   showRings,
@@ -504,6 +507,7 @@ export default function CalendarHeader({
             a pris la place de la pilule tout en haut). */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 40 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>
+            {leftControls}
             <OnboardingChecklist />
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, minWidth: 0, maxWidth: sideRoom ?? undefined }}>

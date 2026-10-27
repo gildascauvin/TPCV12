@@ -211,6 +211,12 @@ select:focus {
   }
 }
 
+/* Grille semaine du Planning, mobile : masquée jusqu'au choix de la vue (colonne par défaut,
+   PlanningScrollViews.tsx) pour ne jamais l'entrevoir avant la bascule. */
+@media (max-width: 639px) {
+  .planning-pending { visibility: hidden; }
+}
+
 /* ─── Week column items — width driven by grid track, not the item ─── */
 .week-col-width {
   min-width: 0;

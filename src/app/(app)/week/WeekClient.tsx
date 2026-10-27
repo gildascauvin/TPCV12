@@ -17,6 +17,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } f
 import { createClient } from "@/lib/supabase/client";
 import CalendarHeader, { type ViewMode } from "@/components/calendar/CalendarHeader";
 import DayColumn from "@/components/calendar/DayColumn";
+import { usePlanningScroll, PlanningScrollViews, PlanningLayoutToggle } from "@/components/calendar/PlanningScrollViews";
 import { DroppableDay, DraggableSessionCard, makePlanningDragEndHandler } from "@/components/calendar/DraggablePlanning";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import PlanningRing from "@/components/calendar/PlanningRing";
@@ -85,7 +86,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const supabase = createClient();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isMd } = useBreakpoint();
+  const { isMd, isLg } = useBreakpoint();
   useRefreshOnFocus();
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
@@ -331,10 +332,25 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     await supabase.from("profiles").update({ free_training_label: next }).eq("user_id", userId);
   }
 
+  // Vue colonne : fetch d'une plage arbitraire, fusionnée comme loadWeek (la liste couvre plusieurs semaines).
+  async function loadRange(start: string, end: string) {
+    if (sandboxMode) return;
+    const [{ data: s }, { data: w }] = await Promise.all([
+      supabase.from("sessions").select("*").eq("user_id", userId).gte("date", start).lte("date", end).order("created_at"),
+      supabase.from("wellness_daily").select("*").eq("user_id", userId).gte("date", start).lte("date", end),
+    ]);
+    if (s) setSessions(prev => [...prev.filter(x => x.date < start || x.date > end), ...s]);
+    if (w) setWellnessList(prev => [...prev.filter(x => x.date < start || x.date > end), ...w]);
+  }
+
+  // Vues défilantes (colonne mobile / bloc desktop, POC 2026-10-26) — PlanningScrollViews.tsx.
+  const planning = usePlanningScroll({ selectedDate, isLg, loadRange, onVisibleDate: d => { setSelectedDate(d); setWeekBase(new Date(d + "T12:00:00")); } });
+
   function handleDateChange(date: string) {
     setSelectedDate(date);
     const nb = new Date(date + "T12:00:00");
     setWeekBase(nb);
+    planning.onDateChange(date);
     if (viewMode === "week") loadWeek(nb);
     else loadMonth(date);
   }
@@ -356,7 +372,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   // Scroll vers le jour sélectionné (ring du header cliqué, ou "Aujourd'hui" par défaut au montage/
   // changement de semaine — selectedDate vaut todayStr initialement et à chaque navigation).
   useEffect(() => {
-    if (viewMode !== "week") return;
+    if (viewMode !== "week" || planning.active) return;
     const idx = dates.findIndex(d => format(d, "yyyy-MM-dd") === selectedDate);
     if (idx >= 0) {
       scrollIntoViewX(dayRefs.current[idx]);
@@ -372,6 +388,8 @@ export default function WeekClient({ userId, userName, userSport = null, initial
       // modale (session référencée par id) devient alors incohérent avec la semaine affichée
       // dessous, provoquant un "saut" visuel de la modale.
       if (addingDate || completing || pendingCompleteSession || editing || duplicating || showReconduire) return;
+      // Vue colonne : la molette fait défiler la liste, jamais changer de semaine.
+      if (planning.active) return;
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (Math.abs(e.deltaY) < 60) return;
       const now = Date.now();
@@ -573,6 +591,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   // Plus de flou S2+ (freemium 2026-09-30) : la programmation est une entrée, tout le planning est lisible.
   const weekLocked = false;
 
+
   // Rings + points de séance + titre semaine/programme dans le calendrier popup (2026-09-26,
   // "revoir le design du datepicker pour que ça fasse comme la vue mois quand on est dans le
   // planning") — même principe déjà en place sur /today/CoachClient.tsx/CoachPlanningClient.tsx,
@@ -608,6 +627,172 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return freeLabels[mondayIso] || null;
   }
 
+  /* Rendu d'un jour (carte DayColumn complète, avec la décision du jour sur "Aujourd'hui") —
+     partagé par la vue semaine (grille horizontale) et la vue colonne (POC 2026-10-26). `prevStr`/
+     `nextStr` : voisins lus par loadRule ; la vue semaine garde null aux bords de semaine
+     (comportement inchangé), la vue colonne passe les vrais voisins (la liste est continue). */
+  function renderDay(date: Date, prevStr: string | null, nextStr: string | null) {
+    /* Vues défilantes : `wellnessBaselineHistory` est ancré sur la semaine choisie au calendrier, alors
+       que la liste couvre plusieurs semaines — chaque jour lit donc l'historique complet
+       (popupWellnessHistory) pour être comparé à SES 21 check-ins précédents. La décision du jour
+       garde la fenêtre de la vue semaine en cours (−42 j → dimanche), pour rester identique. */
+    const curMonday = startOfWeek(new Date(todayStr + "T12:00:00"), { weekStartsOn: 1 });
+    const curSince = format(subDays(curMonday, 42), "yyyy-MM-dd");
+    const curSun = format(addDays(curMonday, 6), "yyyy-MM-dd");
+    const dayHistory = planning.active ? popupWellnessHistory : wellnessBaselineHistory;
+    const todayHistory = planning.active ? popupWellnessHistory.filter(w => w.date >= curSince && w.date <= curSun) : wellnessBaselineHistory;
+    const dstr = format(date, "yyyy-MM-dd");
+    const prevSess = prevStr ? sessions.filter(s => s.date === prevStr) : [];
+    const nextSess = nextStr ? sessions.filter(s => s.date === nextStr) : [];
+    const ctx: LoadContext = {
+      prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+      nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
+    };
+    // Carte décision unifiée (2026-09, decisionCard.ts) — uniquement sur la carte "Aujourd'hui",
+    // même moteur que /today et Coach Control (jour × tendance 7j/7j × monotonie/contrainte),
+    // jamais vide. `sessionsHistory` (≥14j avant aujourd'hui, indépendant de la semaine
+    // affichée) alimente la tendance/monotonie ; l'aperçu onboarding n'a jamais de valeur forcée.
+    let alert;
+    let decisionGaugeNode: React.ReactNode;
+    let autoregTargetId: string | null = null;
+    if (dstr === todayStr) {
+      const todaySessions = sessions.filter(s => s.date === todayStr);
+      const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
+      const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
+      const baseline = wellnessFilledToday
+        ? computeWellnessBaselineAt(todayHistory.filter(w => w.date < todayStr), wellnessToday)
+        : null;
+      const autoregTarget = [...todaySessions].filter(s => !s.done)
+        .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+      const trendAnchor = new Date(todayStr + "T12:00:00");
+      const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
+        sessionsHistory, todayHistory, trendAnchor, wellnessZByDate(todayHistory, 14, trendAnchor),
+      );
+      const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellnessToday?.behaviors, todayHistory, sessionsHistory) : null;
+      /* État de la journée (2026-09-30) : mêmes libellés que /today et Coach Control
+         ("Jour de repos / Aucune séance prévue. Demain : …", "Séance faite", "Plan à
+         confirmer") au lieu d'un "Plan cohérent" générique. `sessions` = semaine affichée,
+         qui contient demain sauf un dimanche : dans ce cas on ne dit rien de demain. */
+      const tomorrowD = new Date(todayStr + "T12:00:00"); tomorrowD.setDate(tomorrowD.getDate() + 1);
+      const tomorrowStr = `${tomorrowD.getFullYear()}-${String(tomorrowD.getMonth() + 1).padStart(2, "0")}-${String(tomorrowD.getDate()).padStart(2, "0")}`;
+      const tomorrowList = sessions.filter(s => s.date === tomorrowStr);
+      const tomorrowDifficulty = tomorrowD.getDay() === 1 && tomorrowList.length === 0
+        ? undefined
+        : tomorrowList.length ? Math.max(...tomorrowList.map(s => s.target_difficulty ?? 0)) : null;
+      const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
+      const decisionDay: DecisionDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
+        : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
+        : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
+      const decision = computeDecisionCard({
+        day: decisionDay,
+        wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
+        plannedDifficulty: autoregTarget?.target_difficulty ?? null,
+        personal: proposalPersonal(autoregTarget),
+        baseline, wellnessFilledToday, trendCode, trendInput,
+        sessions: withWatchEstimates(sessionsHistory, physio?.workouts, todayStr), anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
+        physio: physioDecisionInputs(physio, todayStr),
+      });
+      const severityColor = decisionCardColor(decision.icon);
+      const decisionLocked = !canDecideToday;
+      alert = decisionLocked
+        /* Freemium : le sens reste dit, le contenu de la décision non. */
+        ? { border: `${severityColor}66`, glow: severityColor, text: "Analyse du jour prête\nActive l'ajustement pour la lire." }
+        : { border: `${severityColor}66`, glow: severityColor, text: decision.text };
+      if (autoregTarget) {
+        autoregTargetId = autoregTarget.id;
+        // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
+        // itération — plus de modale AdjustSessionModal pour ce flux : "l'ajustement se fait
+        // directement sur la carte", retour de Gildas) — même écriture Supabase que l'ancien
+        // onConfirm de la modale, gatée par isActive comme /today/Coach Control. Montée même
+        // sans suggestion (2026-09-25, "même quand ya pas de reco, je veux pouvoir bouger la
+        // jauge et avoir le range") — dir/reco undefined = mode libre, voir AutoregButtons.tsx.
+        decisionGaugeNode = (
+          <LockedBlur locked={decisionLocked} surface="week_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer l'ajustement" light compact radius={12}>
+          <AutoregButtons
+            key={`${autoregTarget.id}-${decisionTick}`}
+            sessionId={autoregTarget.id}
+            notes={autoregTarget.notes}
+            storedDecision={validDecision(autoregTarget)}
+            viewer={{ role: "athlete" }}
+            actionsSlot={autoregActionsSlot}
+            dir={decision.suggestion?.dir}
+            reco={decision.suggestion?.reco}
+            advice=""
+            plannedDifficulty={autoregTarget.target_difficulty ?? 6}
+            sessionLabel={autoregTarget.name}
+            variant="light"
+            severityColor={decision.suggestion ? severityColor : undefined}
+            isActive={canDecideToday}
+            onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
+            onMaintenir={() => setDecisionTick(t => t + 1)}
+            onApply={async (pct) => {
+              if (!canDecideToday) { markPrimingSource("decision"); setPaywallStep("priming"); return; }
+              const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
+              const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
+              const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
+              const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
+              if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+              setAutoregPreview(null);
+              return original;
+            }}
+            onUndo={async (original) => {
+              if (!original) return;
+              const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
+              if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
+              setAutoregPreview(null);
+              setDecisionTick(t => t + 1);
+            }}
+          />
+          </LockedBlur>
+        );
+      }
+    }
+    // Score + zone relatifs ("Équilibré"...) sur CHAQUE jour de la semaine affichée, pas
+    // seulement "Aujourd'hui" — réutilise le même historique déjà rechargé par semaine
+    // (wellnessBaselineHistory, voir loadWeek/loadMonth) ; un jour sans historique suffisant
+    // retombe silencieusement sur le score/libellé absolus (DayColumn, comportement inchangé).
+    // Le ring affiché ici doit rester identique au ring de /today et de CalendarHeader pour
+    // le même jour — un seul calcul (computeWellnessBaselineAt), jamais 3 chiffres différents.
+    const dayRow = wellnessList.find(w => w.date === dstr) ?? null;
+    const dayBaseline = dayRow?.bedtime != null
+      ? computeWellnessBaselineAt(dayHistory.filter(w => w.date < dstr), dayRow)
+      : null;
+    const dayZoneLabel = dayBaseline?.hasEnoughHistory ? relativeZoneLabel(dayBaseline, "athlete") : undefined;
+    const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : (dayRow ? wellnessSignal(dayRow) : null);
+    return (
+      <DroppableDay dstr={dstr}>
+      <DayColumn
+        date={date}
+        sessions={withReveal(sessions.filter(s => s.date === dstr))}
+        wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
+        todayStr={todayStr}
+        ctx={ctx}
+        alert={alert}
+        alertActions={autoregTargetId && canDecideToday ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
+        renderSession={(s) => (
+          <DraggableSessionCard
+            key={s.id}
+            session={s}
+            viewerRole="athlete"
+            onComplete={(sess) => openResult(sess)}
+            onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
+            liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
+            onEdit={(sess) => setEditing(sess)}
+            decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
+            previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
+          />
+        )}
+        onAddSession={(d) => setAddingDate(d)}
+        onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
+        emptyToday
+        onComplete={(s) => openResult(s)}
+        onEdit={(s) => setEditing(s)}
+        onWellness={editWellness}
+      />
+      </DroppableDay>
+    );
+  }
+
   return (
     <>
       {/* Bannière du haut retirée hors sandbox (onboarding in-app, 2026-10-01) : l'étape "Débloque…"
@@ -636,6 +821,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         showRings dotMap={headerDotMap} wellnessMap={headerWellnessMap}
         weekTitleFor={weekTitleForPopup}
         seamless
+        leftControls={<PlanningLayoutToggle alt={planning.active} bloc={isLg} onChange={on => planning.enable(on, selectedDate)} />}
       />
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
 
@@ -649,8 +835,15 @@ export default function WeekClient({ userId, userName, userSport = null, initial
         }}>
 
       {/* ── Vue semaine ── */}
-      {viewMode === "week" && (
-        <div style={{ position: "relative" }}>
+      {viewMode === "week" && planning.active && (
+        <PlanningScrollViews
+          view={planning.view} bloc={isLg} todayStr={todayStr} weekTitleFor={weekTitleForPopup}
+          renderDay={renderDay} sensors={dndSensors} onDragEnd={handleDragEnd} padX={isMd ? 20 : 14}
+        />
+      )}
+
+      {viewMode === "week" && !planning.active && (
+        <div className={planning.ready ? undefined : "planning-pending"} style={{ position: "relative" }}>
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
         <div style={{
           display: "grid",
@@ -664,162 +857,15 @@ export default function WeekClient({ userId, userName, userSport = null, initial
           pointerEvents: weekLocked ? "none" : "auto",
           userSelect: weekLocked ? "none" : "auto",
         }}>
-          {dates.map((date, idx) => {
-            const dstr = format(date, "yyyy-MM-dd");
-            const prevStr = idx > 0 ? format(dates[idx - 1], "yyyy-MM-dd") : null;
-            const nextStr = idx < dates.length - 1 ? format(dates[idx + 1], "yyyy-MM-dd") : null;
-            const prevSess = prevStr ? sessions.filter(s => s.date === prevStr) : [];
-            const nextSess = nextStr ? sessions.filter(s => s.date === nextStr) : [];
-            const ctx: LoadContext = {
-              prevMax: prevSess.length ? Math.max(...prevSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
-              nextMax: nextSess.length ? Math.max(...nextSess.map(s => s.rpe ?? s.target_difficulty ?? 6)) : 0,
-            };
-            // Carte décision unifiée (2026-09, decisionCard.ts) — uniquement sur la carte "Aujourd'hui",
-            // même moteur que /today et Coach Control (jour × tendance 7j/7j × monotonie/contrainte),
-            // jamais vide. `sessionsHistory` (≥14j avant aujourd'hui, indépendant de la semaine
-            // affichée) alimente la tendance/monotonie ; l'aperçu onboarding n'a jamais de valeur forcée.
-            let alert;
-            let decisionGaugeNode: React.ReactNode;
-            let autoregTargetId: string | null = null;
-            if (dstr === todayStr) {
-              const todaySessions = sessions.filter(s => s.date === todayStr);
-              const wellnessToday = wellnessList.find(w => w.date === todayStr) ?? null;
-              const wellnessFilledToday = wellnessToday !== null && wellnessToday.bedtime != null;
-              const baseline = wellnessFilledToday
-                ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < todayStr), wellnessToday)
-                : null;
-              const autoregTarget = [...todaySessions].filter(s => !s.done)
-                .sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-              const trendAnchor = new Date(todayStr + "T12:00:00");
-              const { code: trendCode, input: trendInput } = computeWeekOverWeekTrend(
-                sessionsHistory, wellnessBaselineHistory, trendAnchor, wellnessZByDate(wellnessBaselineHistory, 14, trendAnchor),
-              );
-              const behaviorTip = wellnessFilledToday ? personalizedBehaviorTip(wellnessToday?.behaviors, wellnessBaselineHistory, sessionsHistory) : null;
-              /* État de la journée (2026-09-30) : mêmes libellés que /today et Coach Control
-                 ("Jour de repos / Aucune séance prévue. Demain : …", "Séance faite", "Plan à
-                 confirmer") au lieu d'un "Plan cohérent" générique. `sessions` = semaine affichée,
-                 qui contient demain sauf un dimanche : dans ce cas on ne dit rien de demain. */
-              const tomorrowD = new Date(todayStr + "T12:00:00"); tomorrowD.setDate(tomorrowD.getDate() + 1);
-              const tomorrowStr = `${tomorrowD.getFullYear()}-${String(tomorrowD.getMonth() + 1).padStart(2, "0")}-${String(tomorrowD.getDate()).padStart(2, "0")}`;
-              const tomorrowList = sessions.filter(s => s.date === tomorrowStr);
-              const tomorrowDifficulty = tomorrowD.getDay() === 1 && tomorrowList.length === 0
-                ? undefined
-                : tomorrowList.length ? Math.max(...tomorrowList.map(s => s.target_difficulty ?? 0)) : null;
-              const doneTop = [...todaySessions].filter(s => s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-              const decisionDay: DecisionDay = todaySessions.length === 0 ? { kind: "rest", tomorrowDifficulty }
-                : todaySessions.some(s => !s.done) ? { kind: "planned", tomorrowDifficulty }
-                : { kind: "done", rpe: doneTop?.rpe ?? null, planned: doneTop?.target_difficulty ?? null, tomorrowDifficulty, decision: validDecision(doneTop) };
-              const decision = computeDecisionCard({
-                day: decisionDay,
-                wellnessScore: wellnessToday ? wellnessSignal(wellnessToday) : null,
-                plannedDifficulty: autoregTarget?.target_difficulty ?? null,
-                personal: proposalPersonal(autoregTarget),
-                baseline, wellnessFilledToday, trendCode, trendInput,
-                sessions: withWatchEstimates(sessionsHistory, physio?.workouts, todayStr), anchor: trendAnchor, perspective: "athlete", behaviorTip, deviceNote,
-                physio: physioDecisionInputs(physio, todayStr),
-              });
-              const severityColor = decisionCardColor(decision.icon);
-              const decisionLocked = !canDecideToday;
-              alert = decisionLocked
-                /* Freemium : le sens reste dit, le contenu de la décision non. */
-                ? { border: `${severityColor}66`, glow: severityColor, text: "Analyse du jour prête\nActive l'ajustement pour la lire." }
-                : { border: `${severityColor}66`, glow: severityColor, text: decision.text };
-              if (autoregTarget) {
-                autoregTargetId = autoregTarget.id;
-                // Jauge de décision montée DIRECTEMENT dans la carte séance ciblée (2026-09, 2e
-                // itération — plus de modale AdjustSessionModal pour ce flux : "l'ajustement se fait
-                // directement sur la carte", retour de Gildas) — même écriture Supabase que l'ancien
-                // onConfirm de la modale, gatée par isActive comme /today/Coach Control. Montée même
-                // sans suggestion (2026-09-25, "même quand ya pas de reco, je veux pouvoir bouger la
-                // jauge et avoir le range") — dir/reco undefined = mode libre, voir AutoregButtons.tsx.
-                decisionGaugeNode = (
-                  <LockedBlur locked={decisionLocked} surface="week_decision" onUnlock={() => setPaywallStep("priming")} cta="Activer l'ajustement" light compact radius={12}>
-                  <AutoregButtons
-                    key={`${autoregTarget.id}-${decisionTick}`}
-                    sessionId={autoregTarget.id}
-                    notes={autoregTarget.notes}
-                    storedDecision={validDecision(autoregTarget)}
-                    viewer={{ role: "athlete" }}
-                    actionsSlot={autoregActionsSlot}
-                    dir={decision.suggestion?.dir}
-                    reco={decision.suggestion?.reco}
-                    advice=""
-                    plannedDifficulty={autoregTarget.target_difficulty ?? 6}
-                    sessionLabel={autoregTarget.name}
-                    variant="light"
-                    severityColor={decision.suggestion ? severityColor : undefined}
-                    isActive={canDecideToday}
-                    onPreviewChange={pct => setAutoregPreview(pct != null ? { sessionId: autoregTarget.id, pct } : null)}
-                    onMaintenir={() => setDecisionTick(t => t + 1)}
-                    onApply={async (pct) => {
-                      if (!canDecideToday) { markPrimingSource("decision"); setPaywallStep("priming"); return; }
-                      const original = { notes: autoregTarget.notes, target_difficulty: autoregTarget.target_difficulty };
-                      const notes = autoregTarget.notes ? autoregTarget.notes.split("\n").map(l => parseAndApply(l, pct)).join("\n") : autoregTarget.notes;
-                      const target_difficulty = applyAutoregDifficulty(autoregTarget.target_difficulty ?? 6, pct);
-                      const { data: saved } = await supabase.from("sessions").update({ notes, target_difficulty }).eq("id", autoregTarget.id).select().single();
-                      if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                      setAutoregPreview(null);
-                      return original;
-                    }}
-                    onUndo={async (original) => {
-                      if (!original) return;
-                      const { data: saved } = await supabase.from("sessions").update({ notes: original.notes, target_difficulty: original.target_difficulty }).eq("id", autoregTarget.id).select().single();
-                      if (saved) setSessions(prev => prev.map(s => s.id === saved.id ? saved as Session : s));
-                      setAutoregPreview(null);
-                      setDecisionTick(t => t + 1);
-                    }}
-                  />
-                  </LockedBlur>
-                );
-              }
-            }
-            // Score + zone relatifs ("Équilibré"...) sur CHAQUE jour de la semaine affichée, pas
-            // seulement "Aujourd'hui" — réutilise le même historique déjà rechargé par semaine
-            // (wellnessBaselineHistory, voir loadWeek/loadMonth) ; un jour sans historique suffisant
-            // retombe silencieusement sur le score/libellé absolus (DayColumn, comportement inchangé).
-            // Le ring affiché ici doit rester identique au ring de /today et de CalendarHeader pour
-            // le même jour — un seul calcul (computeWellnessBaselineAt), jamais 3 chiffres différents.
-            const dayRow = wellnessList.find(w => w.date === dstr) ?? null;
-            const dayBaseline = dayRow?.bedtime != null
-              ? computeWellnessBaselineAt(wellnessBaselineHistory.filter(w => w.date < dstr), dayRow)
-              : null;
-            const dayZoneLabel = dayBaseline?.hasEnoughHistory ? relativeZoneLabel(dayBaseline, "athlete") : undefined;
-            const dayRelativeScore = dayBaseline?.hasEnoughHistory ? dayBaseline.relativeScore : (dayRow ? wellnessSignal(dayRow) : null);
-            return (
-              <div key={dstr} ref={el => { dayRefs.current[idx] = el; }}>
-              <DroppableDay dstr={dstr}>
-              <DayColumn
-                date={date}
-                sessions={withReveal(sessions.filter(s => s.date === dstr))}
-                wellness={dayRow ? { ...dayRow, score: dayRelativeScore, zoneLabel: dayZoneLabel } : null}
-                todayStr={todayStr}
-                ctx={ctx}
-                alert={alert}
-                alertActions={autoregTargetId && canDecideToday ? <div ref={setAutoregActionsSlot} className="autoreg-slot" /> : undefined}
-                renderSession={(s) => (
-                  <DraggableSessionCard
-                    key={s.id}
-                    session={s}
-                    viewerRole="athlete"
-                    onComplete={(sess) => openResult(sess)}
-                    onStart={!sandboxMode && s.date === todayStr && !s.done ? (sess) => gateInput(() => handleStart(sess)) : undefined}
-                    liveLabel={isLive(s) ? `En cours · ${formatChrono(liveElapsedMs(s))}` : null}
-                    onEdit={(sess) => setEditing(sess)}
-                    decisionGauge={s.id === autoregTargetId ? decisionGaugeNode : undefined}
-                    previewPct={autoregPreview?.sessionId === s.id ? autoregPreview.pct : null}
-                  />
-                )}
-                onAddSession={(d) => setAddingDate(d)}
-                onProgram={sandboxMode ? undefined : () => router.push("/programmes")}
-                emptyToday
-                onComplete={(s) => openResult(s)}
-                onEdit={(s) => setEditing(s)}
-                onWellness={editWellness}
-              />
-              </DroppableDay>
-              </div>
-            );
-          })}
+          {dates.map((date, idx) => (
+            <div key={format(date, "yyyy-MM-dd")} ref={el => { dayRefs.current[idx] = el; }}>
+              {renderDay(
+                date,
+                idx > 0 ? format(dates[idx - 1], "yyyy-MM-dd") : null,
+                idx < dates.length - 1 ? format(dates[idx + 1], "yyyy-MM-dd") : null,
+              )}
+            </div>
+          ))}
         </div>
         </DndContext>
         </div>
