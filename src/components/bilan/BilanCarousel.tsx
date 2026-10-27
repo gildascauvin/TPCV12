@@ -307,7 +307,12 @@ function Marks({ marks }: { marks: DayMark[] }) {
     </div>
   );
 }
-function GroupSlideBody({ s }: { s: GroupSlide }) {
+/* Prénom → bilan complet du sportif (2026-10-27), à la 3e personne, par-dessus le bilan du groupe. */
+type OpenAthlete = (id: string, name: string) => void;
+function AthleteLink({ id, name, open }: { id: string; name: string; open: OpenAthlete }) {
+  return <button onClick={() => open(id, name)} style={{ alignSelf: "flex-start", background: "none", border: 0, padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.7)", textDecoration: "underline", textUnderlineOffset: 3 }}>Bilan de {name} ›</button>;
+}
+function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
   switch (s.kind) {
     case "g_decroche": {
       const flagged = s.rows.filter(r => r.flag);
@@ -322,6 +327,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
             </div>
             <Marks marks={r.marks} />
             <div style={small}>{r.missed ? `${pl(r.missed, "check-in")} manqué${r.missed > 1 ? "s" : ""}` : "Aucun check-in manqué"} sur {pl(r.days, "séance")}{r.tired ? `, fatigué ${pl(r.tired, "jour")}` : ""}.</div>
+            <AthleteLink id={r.id} name={r.name} open={open} />
           </div>
         ))}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 14, fontSize: 12, color: "rgba(255,255,255,0.65)" }}>
@@ -356,9 +362,9 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
               <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#c9a2ff" }}>{r.topic}</span>
             </div>
             <div style={{ fontSize: 15, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{r.text}</div>
+            <AthleteLink id={r.id} name={r.name} open={open} />
           </div>
         ))}
-        <div style={small}>Le détail est dans le bilan de chaque sportif.</div>
       </>);
     case "g_conseils":
       return (<>
@@ -366,6 +372,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
         <div style={card}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{s.right} confirmés sur {s.judged}</div>
           <Rows rows={s.rows.map((r, i) => ({ label: r.name, part: r.right, total: r.judged, highlight: i === 0 }))} color="#7ee08f" />
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 4 }}>{s.rows.map(r => <AthleteLink key={r.id} id={r.id} name={r.name} open={open} />)}</div>
         </div>
         <p style={{ ...body, fontSize: 14 }}>Le sportif le moins bien lu apparaît en premier. Son seuil se recale tout seul avec ses séances.</p>
       </>);
@@ -383,6 +390,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
               {r.above > 0 && <div style={{ width: `${(r.above / r.days) * 100}%`, background: "#ff6a2b" }} />}
             </div>
             <div style={small}>{[r.below ? `En dessous de sa zone ${pl(r.below, "jour")}` : null, r.above ? `${r.below ? "au-dessus" : "Au-dessus de sa zone"} ${pl(r.above, "jour")}` : null].filter(Boolean).join(", ")} sur {r.days}.</div>
+            <AthleteLink id={r.id} name={r.name} open={open} />
           </div>
         ))}
         {(() => { const rest = s.rows.filter(r => !r.above && !r.below).length; return rest ? <div style={small}>{rest === s.rows.length ? (rest > 1 ? `Les ${rest} sportifs suivis sont restés dans leur zone tous les jours.` : "Resté dans sa zone tous les jours.") : rest > 1 ? `Les ${rest} autres sportifs sont restés dans leur zone tous les jours.` : "L'autre sportif est resté dans sa zone tous les jours."}</div> : null; })()}
@@ -394,6 +402,7 @@ function GroupSlideBody({ s }: { s: GroupSlide }) {
 export default function BilanCarousel({ userId, kind, anchor, today, source, subject, group = false, onClose }: Props) {
   const n = subject?.name;
   const [bilan, setBilan] = useState<Bilan | GroupBilan | null>(null);
+  const [drill, setDrill] = useState<{ athleteId: string; name: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const [idx, setIdx] = useState(0);
   const [shared, setShared] = useState(false);
@@ -469,13 +478,15 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Bilan d'un sportif ouvert par-dessus : c'est lui qui écoute le clavier.
+      if (drill) return;
       if (e.key === "Escape") onClose();
       if (e.key === "ArrowRight") setIdx(i => Math.min(i + 1, slides.length - 1));
       if (e.key === "ArrowLeft") setIdx(i => Math.max(i - 1, 0));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [slides.length, onClose]);
+  }, [slides.length, onClose, drill]);
 
   async function share() {
     if (!bilan || !slide || slide.kind !== "partage") return;
@@ -518,7 +529,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
           {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur check-in et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son check-in et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul."}</div>}
           {bilan && slide && (slide.kind.startsWith("g_")
-            ? <GroupSlideBody s={slide as GroupSlide} />
+            ? <GroupSlideBody s={slide as GroupSlide} open={(id, name) => { posthog.capture("coach_bilan_opened", { from: "group_bilan", period: kind, slide: slide.kind }); setDrill({ athleteId: id, name }); }} />
             : <SlideBody s={slide as BilanSlide} bilan={bilan as Bilan} onShare={share} shared={shared} recal={recal} n={n} />)}
         </div>
 
@@ -531,5 +542,9 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
       </div>
     </div>
   );
-  return typeof document === "undefined" ? null : createPortal(content, document.body);
+  if (typeof document === "undefined") return null;
+  return (<>
+    {createPortal(content, document.body)}
+    {drill && <BilanCarousel userId={drill.athleteId} kind={kind} anchor={anchor} today={today} source="coach" subject={drill} onClose={() => setDrill(null)} />}
+  </>);
 }

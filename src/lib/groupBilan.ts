@@ -25,11 +25,11 @@ export type GroupAthlete = {
 /* Jour de séance du sportif : check-in fait (frais/équilibré), fait mais fatigué, ou manqué. */
 export type DayMark = "ok" | "tired" | "missed";
 export type GroupSlide =
-  | { kind: "g_decroche"; rows: { name: string; flag: string | null; marks: DayMark[]; missed: number; tired: number; days: number }[]; regular: number }
+  | { kind: "g_decroche"; rows: { id: string; name: string; flag: string | null; marks: DayMark[]; missed: number; tired: number; days: number }[]; regular: number }
   | { kind: "g_seances"; rows: { name: string; planned: DifficultyWord; harder: number; total: number; athletes: number }[] }
-  | { kind: "g_appris"; rows: { name: string; topic: string; text: string }[] }
-  | { kind: "g_conseils"; right: number; judged: number; rows: { name: string; right: number; judged: number }[] }
-  | { kind: "g_charge"; rows: { name: string; above: number; below: number; days: number }[] };
+  | { kind: "g_appris"; rows: { id: string; name: string; topic: string; text: string }[] }
+  | { kind: "g_conseils"; right: number; judged: number; rows: { id: string; name: string; right: number; judged: number }[] }
+  | { kind: "g_charge"; rows: { id: string; name: string; above: number; below: number; days: number }[] };
 
 export type GroupBilan = { period: BilanPeriod; slides: GroupSlide[]; title: string };
 
@@ -68,7 +68,7 @@ function decroche(period: BilanPeriod, end: string, athletes: GroupAthlete[]): G
       : missed >= 3 && missed / days.length >= 0.4 ? "Check-ins manqués"
       : tired >= 3 && tired / (days.length - missed || 1) >= 0.4 ? "Souvent fatigué"
       : null;
-    rows.push({ name: first(a.name), flag, marks: marks.slice(-12), missed, tired, days: days.length });
+    rows.push({ id: a.id, name: first(a.name), flag, marks: marks.slice(-12), missed, tired, days: days.length });
   }
   if (!rows.length) return null;
   const score = (r: typeof rows[number]) => (r.flag ? 100 : 0) + (r.missed + r.tired) / r.days;
@@ -138,7 +138,7 @@ function appris(period: BilanPeriod, today: string, end: string, athletes: Group
   for (const a of athletes) {
     const b = computeBilan({ period: { kind: "all", start: period.start, end }, today, signupAt: a.signupAt, sessions: a.sessions, checkins: a.checkins, tests: [], currentShift: a.shift, currentShiftHigh: a.shiftHigh, recalEvents: a.events });
     const ins = insightOf(b.slides, first(a.name));
-    if (ins) rows.push({ name: first(a.name), ...ins });
+    if (ins) rows.push({ id: a.id, name: first(a.name), ...ins });
   }
   return rows.length ? { kind: "g_appris", rows } : null;
 }
@@ -150,7 +150,7 @@ function conseils(period: BilanPeriod, end: string, athletes: GroupAthlete[]): G
     const cells = allVerdicts({ sessions, checkins, signupAt: a.signupAt, shift: a.shift, shiftHigh: a.shiftHigh, events: a.events })
       .filter(c => c.date >= period.start && c.date <= end);
     if (!cells.length) continue;
-    rows.push({ name: first(a.name), right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length });
+    rows.push({ id: a.id, name: first(a.name), right: cells.filter(c => outcomeRight(c.outcome)).length, judged: cells.length });
   }
   const judged = rows.reduce((t, r) => t + r.judged, 0);
   if (judged < 5) return null;
@@ -174,7 +174,7 @@ function charge(period: BilanPeriod, end: string, athletes: GroupAthlete[]): Gro
     const ac = acwrSeries(series);
     const inP = ac.filter((p, i) => series[i].date >= period.start && series[i].date >= mature && p.value !== null);
     if (inP.length < (period.kind === "week" ? 5 : 10)) continue;
-    rows.push({ name: first(a.name), above: inP.filter(p => p.value! > 1.3).length, below: inP.filter(p => p.value! < 0.8).length, days: inP.length });
+    rows.push({ id: a.id, name: first(a.name), above: inP.filter(p => p.value! > 1.3).length, below: inP.filter(p => p.value! < 0.8).length, days: inP.length });
   }
   if (!rows.length) return null;
   const out = (r: typeof rows[number]) => (r.above + r.below) / r.days;
