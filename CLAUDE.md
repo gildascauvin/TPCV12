@@ -531,6 +531,18 @@ Même chantier que ci-dessus, causes identifiées sur `/register` (LCP 4551ms) e
 
 **Non fait, volontairement** : split structurel de `TodayClient.tsx` (747 lignes, 11 `useState` sans mémoïsation — cause la plus probable de l'INP 2017ms) et `OnboardingFlow.tsx` (2626 lignes). Jugé trop risqué sans suite de tests automatisée sur des fichiers aussi centraux (funnel de conversion, dashboard principal) — à ne déclencher que si les fixes ci-dessus s'avèrent insuffisants une fois mesurés sur PostHog (1-2 semaines de données p90 pour lisser le bruit). Mémoïsation ciblée (`useMemo` sur `buildDotMap`) et fix CLS du bandeau d'activation (`showActivation`, résolu par `localStorage` dans un `useEffect` post-montage) identifiés mais pas implémentés — voir le plan pour le détail.
 
+## Poids des bundles + code mort (2026-10-27)
+Deux commits : `65d2a0d` (nettoyage) et `f70666b` (bundles). Mesure = JS au premier chargement, gzip, build de prod : layout racine 294→255 Ko (toutes les pages), `/register` 485→459, `/today` 537→506, `/coach/athletes` 410→381, `/programmes` 574→537.
+
+- **Un import statique annule un `next/dynamic`** : si un composant chargé d'office importe la modale (ou n'importe quel export de son module, même une constante), elle repart dans le bundle initial. Cas trouvés : `ProfileDrawer` importé d'office dans `TodayClient` (il embarquait `PaywallModal`/Stripe), `PAYWALL_AVATARS` importé depuis `PaywallModal` par `OnboardingFlow` (Stripe dès le 1er écran d'inscription → déplacé dans `paywall/paywallAvatars.ts`), `athleteStatus`/`AthleteRing` importés depuis la page `AthletesClient` (toute la page coach dans l'inscription → `athleteStatus` vit dans `components/coach/AthleteRing.tsx`). **Règle : ne jamais importer depuis un fichier de page (`app/**/XClient.tsx`) ni depuis une modale lourde ; sortir le morceau partagé dans un petit module.**
+- **Lecteur de démos** : `DemoSheetLauncher` (layout racine) écoute `DEMO_SHEET_EVENT` (`lib/demoSheetEvent.ts`, module sans dépendance) et ne charge `DemoSheetHost` (base Catalyst, parseur, banque d'exercices) qu'au premier tap, en lui passant ce tap via `initial`.
+- **Auth** : `getAuthUser()` (`lib/supabase/server.ts`, `React.cache`) partagé par le layout `(app)` et ses pages, un `auth.getUser()` par rendu au lieu de deux.
+- **Polices OG** : `outputFileTracingIncludes` limité à `/share/**` (vérifié dans les `.nft.json` du build : les fonctions `/share` contiennent toujours `DMSans-*.woff`).
+- **Code mort retiré** (repéré avec knip) : 21 exports sans appelant, `driver.js`/`react-hot-toast`/`zustand`, 4 scripts ponctuels déjà exécutés (bibliothèque, patch de difficulté).
+- **Limite hors ligne** : un chunk différé jamais ouvert en ligne n'est pas dans le cache du service worker (cache-first à la demande, pas de précache). Concerne désormais aussi `ProfileDrawer`/`DuplicateModal` sur `/today` (déjà le cas avant pour check-in, ajout de séance, RPE).
+- **Non fait** : posthog-js ≈ 96 Ko gzip sur toutes les pages (28 fichiers l'importent directement) ; données de démos encore chargées par l'inscription via les aperçus de séance (`EliteSteps` → `SessionTemplateCard`), usage légitime.
+- **Mesurer** : builder dans une copie hors du repo (un `next build` écrase le `.next` du serveur de dev), puis sommer la taille gzip des chunks de `app-build-manifest.json` pour `/layout` + la page.
+
 ## Analytics PostHog — tracking onboarding
 Provider : `src/providers/PostHogProvider.tsx`, clé : `NEXT_PUBLIC_POSTHOG_KEY`
 

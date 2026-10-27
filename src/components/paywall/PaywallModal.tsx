@@ -11,6 +11,7 @@ import type { PaymentRequest } from "@stripe/stripe-js";
 import posthog from "posthog-js";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
+import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 
 let _stripePromise: ReturnType<typeof loadStripe> | null = null;
 export function getStripePromise() {
@@ -53,13 +54,7 @@ const TRIAL_DAYS = 14;
 
 /* Preuve sociale — partagée entre l'onboarding (paywall_form) et le paywall in-app
    (usePaywall/PrimingJourneyModal), pour rester "exactement les mêmes écrans". */
-export const PAYWALL_AVATARS = [
-  "https://www.theperfclub.com/wp-content/uploads/2021/10/rugby-1024x820.png",
-  "https://www.theperfclub.com/wp-content/uploads/2022/02/Rond_SC.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/07/rugby-club-tarbes-768x768.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2022/05/2toiles-92-natation.jpeg",
-  "https://www.theperfclub.com/wp-content/uploads/2021/03/halte%CC%81rophilie-Thibault-cortes.png",
-];
+export { PAYWALL_AVATARS };
 
 export const PAYWALL_TESTIMONIALS = {
   athlete: {

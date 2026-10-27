@@ -9,7 +9,7 @@ import { DARK_CARD_BG } from "@/lib/theme";
    depuis AthletesClient.tsx pour cet usage précis, déjà le même principe que l'illustration
    pré-signup CoachAthleteRowsPreview (FrisePreviews.tsx) : jamais de ring/statut réinventés à la
    main pour une préview, même avec des données factices. */
-import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
+import { AthleteRing, athleteStatus } from "@/components/coach/AthleteRing";
 
 /* Variété de scores factices (2026-09-14, retour explicite de Gildas — "mets une variété de score
    de forme aux sportifs") : le 1er reste PLACEHOLDER_WELLNESS_SCORE (35, /api/invite/create/

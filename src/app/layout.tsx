@@ -3,7 +3,7 @@ import { DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import NativeShell from "@/components/NativeShell";
-import { DemoSheetHost } from "@/components/sessions/ExerciseDemo";
+import DemoSheetLauncher from "@/components/sessions/DemoSheetLauncher";
 import { PHProvider } from "@/providers/PostHogProvider";
 import { PostHogPageview } from "@/components/PostHogPageview";
 
@@ -68,7 +68,7 @@ export default function RootLayout({
         </PHProvider>
         <ServiceWorkerRegister />
         <NativeShell />
-        <DemoSheetHost />
+        <DemoSheetLauncher />
       </body>
     </html>
   );

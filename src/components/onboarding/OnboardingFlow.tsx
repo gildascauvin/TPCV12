@@ -20,7 +20,7 @@ import Link from "next/link";
 import Image from "next/image";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import DecisionStep from "@/components/onboarding/DecisionStep";
-import { PAYWALL_AVATARS } from "@/components/paywall/PaywallModal";
+import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { wellnessColor } from "@/lib/wellness";

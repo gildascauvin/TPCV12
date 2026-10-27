@@ -11,10 +11,11 @@ import InstallAppRow from "./InstallAppRow";
 import GarminRow from "./GarminRow";
 import LogoutButton from "@/components/auth/LogoutButton";
 import DeleteAccountButton from "./DeleteAccountButton";
-import CoachAthletesManager from "./CoachAthletesManager";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
+import dynamic from "next/dynamic";
+const CoachAthletesManager = dynamic(() => import("./CoachAthletesManager"));
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 import { buildAthleteFixture, buildCoachFixture } from "@/lib/sandboxFixtures";
 import type { Profile } from "@/types";
 

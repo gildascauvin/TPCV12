@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { alternativesFor, ytFrame, ytThumb, type LineMedia, type DemoItem } from "@/lib/exerciseDemos";
+import type { DemoSheetDetail } from "@/lib/demoSheetEvent";
 import { DEMO_SHEET_EVENT, LINE_MEDIA_EVENT, demoKeyOf, imageKeyOf, openDemoSheet, resolveLineMedia, setDemoPref, useDemoPrefs } from "@/lib/demoPrefs";
 
 function stop(e: React.SyntheticEvent) { e.stopPropagation(); e.preventDefault(); }
@@ -148,8 +149,9 @@ function VideoBlock({ it, index, count, autoplay, editable, onDone, lineText }: 
   );
 }
 
-export function DemoSheetHost() {
-  const [state, setState] = useState<{ text: string; editable: boolean; anchorY?: number } | null>(null);
+/* `initial` : le tap qui a déclenché le chargement (DemoSheetLauncher), arrivé avant ce montage. */
+export function DemoSheetHost({ initial = null }: { initial?: DemoSheetDetail | null }) {
+  const [state, setState] = useState<DemoSheetDetail | null>(initial);
   const [mounted, setMounted] = useState(false);
   const { isMd } = useBreakpoint();
   useDemoPrefs();

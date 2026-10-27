@@ -7,7 +7,7 @@ import WellnessRing from "@/components/wellness/WellnessRing";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import SparkLineClient, { WELLNESS_ZONES } from "@/components/conseils/SparkLineClient";
 import DayColumn, { WeekSessionCard, type SessionLike } from "@/components/calendar/DayColumn";
-import { AthleteRing, athleteStatus } from "@/app/(app)/coach/athletes/AthletesClient";
+import { AthleteRing, athleteStatus } from "@/components/coach/AthleteRing";
 import { zoneLabel, getRecoveryAdvice } from "@/lib/wellness";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor } from "@/lib/autoregulation";

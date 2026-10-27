@@ -28,27 +28,8 @@ const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateM
 const TestsPanel = dynamic(() => import("@/components/tests/TestsPanel"));
 import type { CoachAthlete, SubscriptionStatus } from "@/types";
 import type { AthleteSignature } from "@/lib/fatigueSignature";
-import type { TrendCode } from "@/lib/trainingLoad";
-import { wellnessColor } from "@/lib/wellness";
 import type { LastTestByAthlete, AthleteTestVerdictByAthlete } from "@/lib/testSummary";
 import type { Verdict } from "@/lib/testNorms";
-
-// Reste en Status (rouge/orange/vert) — colore le badge d'état "Disponible"/"Stable"/"À
-// surveiller", pas un ring : job Status légitime (texte+couleur = état, pas magnitude).
-// AthleteRing plus bas utilise wellnessColor (Sequential bleu) pour le ring lui-même.
-// Label ET couleur dans une seule fonction (pas 2 séparées) — bug réel trouvé par Gildas sinon :
-// l'ancienne scoreColor(s) ignorait le paramètre trend, donc un score élevé (vert) avec un trend
-// "accumulation"/"fatigue_persistante" affichait "À surveiller" en vert au lieu de rouge.
-const TREND_WATCH: ReadonlySet<TrendCode> = new Set<TrendCode>(["accumulation", "fatigue_persistante"]);
-// Exportée : réutilisée telle quelle par l'illustration onboarding "3 sportifs" (DecisionStep,
-// via FrisePreviews.tsx) — même règle produit, pas une réimplémentation locale (2026-09-04).
-export function athleteStatus(s: number | null, trend?: TrendCode | null): { label: string; color: string } {
-  if (s === null) return { label: "Non renseigné", color: "#8a8f94" };
-  if (trend && TREND_WATCH.has(trend)) return { label: "À surveiller", color: "#d10000" };
-  if (s >= 75) return { label: "Disponible", color: "#2f9e44" };
-  if (s >= 60) return { label: "Stable", color: "#f28a00" };
-  return { label: "À surveiller", color: "#d10000" };
-}
 
 /* Bug réel signalé par Gildas : la ring affichait `coach_athletes.wellness_score`, une colonne
    dénormalisée qui garde la dernière valeur jamais écrite pour ce sportif, sans lien garanti avec
@@ -62,9 +43,6 @@ function todayRecovery(athlete: CoachAthlete, signature: AthleteSignature): numb
   if (signature.kind !== "ok") return null;
   return signature.series[signature.series.length - 1]?.recovery ?? null;
 }
-
-// Exportée pour la même raison qu'athleteStatus ci-dessus.
-export { AthleteRing };
 
 /* Badge "Dernier test" visible même carte repliée (principe POC : scan rapide sans ouvrir la
    carte) — nom du test + tendance ↑/↓/→, couleur dérivée de "amélioration" (tient déjà compte du

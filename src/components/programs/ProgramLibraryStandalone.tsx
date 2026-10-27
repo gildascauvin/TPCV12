@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import ProgramLibraryPage from "./ProgramLibraryPage";
-import PaywallModal from "@/components/paywall/PaywallModal";
-import PrimingJourneyModal from "@/components/paywall/PrimingJourneyModal";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
+import dynamic from "next/dynamic";
+const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
+const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
 import type { CoachAthlete, SubscriptionStatus } from "@/types";

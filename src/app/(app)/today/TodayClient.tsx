@@ -26,11 +26,8 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useRefreshOnFocus } from "@/hooks/useRefreshOnFocus";
 import { usePaywall } from "@/hooks/usePaywall";
 import { useSandboxGate } from "@/hooks/useSandboxGate";
-import SandboxGateModal from "@/components/paywall/SandboxGateModal";
 import UnsavedBanner from "@/components/paywall/UnsavedBanner";
 import EmptyDayCard from "@/components/sessions/EmptyDayCard";
-import ProfileDrawer from "@/components/profile/ProfileDrawer";
-import DuplicateModal from "@/components/sessions/DuplicateModal";
 import AutoregButtons from "@/components/sessions/AutoregButtons";
 import TodaySessionCard from "@/components/sessions/TodaySessionCard";
 import { findProgramForWeek, programWeekTag } from "@/lib/programAssignment";
@@ -68,6 +65,11 @@ import BilanCard from "@/components/bilan/BilanCard";
 const CompleteModal = dynamic(() => import("@/components/sessions/CompleteModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
+const SandboxGateModal = dynamic(() => import("@/components/paywall/SandboxGateModal"));
+/* Le tiroir profil importe lui-même les modales de paiement (Stripe) : importé d'office, il les
+   embarquait dans le premier chargement de /today malgré leur import différé ci-dessus. */
+const ProfileDrawer = dynamic(() => import("@/components/profile/ProfileDrawer"));
+const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModal"));
 
 /* ─── helpers ─── */
 /* Jauge de difficulté statique — mêmes paliers/couleurs que la constante de design du projet. */

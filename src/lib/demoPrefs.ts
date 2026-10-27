@@ -80,12 +80,6 @@ export function resolveLineMedia(text: string): LineMedia | null {
   return items.length ? { ...m, items } : null;
 }
 
-/* Ouverture du lecteur depuis n'importe quelle ligne (DemoSheetHost, monté dans le layout racine). */
-export const DEMO_SHEET_EVENT = "tpc-demo-sheet";
-/** `anchorY` (position du tap dans la page) : utilisé quand la page est en iframe (/p/ sur WordPress),
-    où l'iframe fait toute la hauteur du programme et un lecteur « fixed » s'ouvrirait loin du doigt. */
-export function openDemoSheet(text: string, editable: boolean, anchorY?: number) {
-  window.dispatchEvent(new CustomEvent(DEMO_SHEET_EVENT, { detail: { text, editable, anchorY } }));
-}
+export { DEMO_SHEET_EVENT, openDemoSheet } from "@/lib/demoSheetEvent";
 /* « Mettre ma vidéo » : ouvre le bloc vidéo de la carte d'exercice correspondante dans l'éditeur. */
 export const LINE_MEDIA_EVENT = "tpc-line-media";

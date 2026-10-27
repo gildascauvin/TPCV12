@@ -21,7 +21,7 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { markPrimingSource } from "@/lib/primingSource";
 import type { ConseilsData, BehaviorCorrelation } from "@/lib/conseilsData";
 import type { CoachAthlete } from "@/types";
-import { AthleteRing } from "@/app/(app)/coach/athletes/AthletesClient";
+import { AthleteRing } from "@/components/coach/AthleteRing";
 
 const rangeDays = (m: RangeMode) => (m === "quarter" ? 90 : m === "month" ? 28 : 7);
 
