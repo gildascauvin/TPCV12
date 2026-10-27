@@ -124,7 +124,11 @@ export function adviceOf(s: JudgedSession): { proposed: AutoregDir | null; origi
   const d = validDecision(s);
   const p = s.autoreg_proposal && s.autoreg_proposal.date === s.date ? s.autoreg_proposal : null;
   const proposed = d ? d.proposed : p ? p.proposed : undefined;
-  const original = d?.original_difficulty ?? p?.original_difficulty ?? s.target_difficulty ?? null;
+  // Sans clic, le prévu est la difficulté actuelle de la séance, pas celle figée au check-in : un prévu
+  // mal estimé puis corrigé ne doit pas compter un raté (2026-10-27, SN/FS figée 6, corrigée en 8,
+  // ressentie 8 : la jauge disait « dans la zone », le compte disait « raté »). Avec un clic, la
+  // difficulté actuelle est celle appliquée, d'où l'original du clic.
+  const original = d?.original_difficulty ?? s.target_difficulty ?? p?.original_difficulty ?? null;
   if (proposed === undefined || !original) return null;
   return { proposed, original };
 }
