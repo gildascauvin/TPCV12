@@ -20,11 +20,10 @@ import Link from "next/link";
 import Image from "next/image";
 import OnboardingBackground from "@/components/onboarding/OnboardingBackground";
 import DecisionStep from "@/components/onboarding/DecisionStep";
+import { AhaMorningCard } from "@/components/onboarding/AhaPreviews";
 import { PAYWALL_AVATARS } from "@/components/paywall/paywallAvatars";
 import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
-import { wellnessColor } from "@/lib/wellness";
-import { BEHAVIOR_META } from "@/lib/behaviors";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, StreakTitle, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
 import { APP_STORE_URL } from "@/lib/pwaInstall";
@@ -164,85 +163,9 @@ const DARK_STEPS: StepId[] = ["value_intro"];
    indicateur de progression (dots 1/2/3, voir WizardHero juste en dessous). */
 
 
-/* Illustration "Signal du jour" sur value_intro (2026-09-03, demande explicite de Gildas — 2
-   benchmarks publicitaires fournis, "qui marchent pas mal") : reprend la structure de la 1re pub
-   (petite carte compacte, ring + zone + conseil court), placée en `position:fixed` en haut de
-   l'écran (2e passe, même jour — en flux normal elle ajoutait de la hauteur au document, poussant le
-   bloc titre sous le footer CTA sur les viewports courts ; en fixed, elle ne participe plus au
-   calcul de hauteur du reste de l'écran).
-   2e passe également sur le contenu, pour rester fidèle au vrai produit plutôt qu'au rouge d'alerte
-   de la pub d'origine — retour explicite de Gildas :
-   - Ring : VRAI `wellnessColor()` (@/lib/wellness, le même dégradé séquentiel bleu que
-     `PlanningRing.tsx` en prod) au lieu d'une couleur rouge inventée pour l'effet pub.
-   - Comportements : VRAIS badges `BEHAVIOR_META` (@/lib/behaviors, même style exact que
-     `CoachAthleteCard.tsx` — fond teinté vert/orange selon `positive`) au lieu d'un texte "Fatigue
-     élevée" fixe.
-   - "Fatigué" reprend le vocabulaire réel des zones relatives (`relativeZoneLabel()`,
-     wellnessBaseline.ts — Fatigué/Équilibré/Frais), pas "Zone basse" (wording pub, absent du
-     vocabulaire produit).
-   Rétrécit sur mobile (`isMd`, prop dérivé de `colIsMd` déjà résolu plus haut dans le composant) —
-   padding/tailles réduits, jamais juste zoomé/dézoomé en bloc.
-   4e passe (même jour) : carte poussée SOUS le voile dégradé de la photo (retour explicite,
-   "sous l'overlay de l'image") — la rendre plus lisible sans toucher au voile lui-même s'est donc
-   fait uniquement en renforçant la carte : fond plus opaque (.6→.85), bordure plus visible
-   (.16→.28), + une ombre portée propre pour la détacher visuellement du fond assombri. */
-function SignalDuJourCard({ isMd }: { isMd: boolean }) {
-  const score = 52;
-  const ringSize = isMd ? 52 : 42;
-  const r = isMd ? 20 : 16, sw = isMd ? 5 : 4;
-  const circ = +(2 * Math.PI * r).toFixed(1);
-  const offset = +(circ * (1 - score / 100)).toFixed(1);
-  const ringColor = wellnessColor(score);
-  const behaviorKeys = ["late_sleep", "stretching"];
-
-  return (
-    <div style={{
-      display: "inline-block", background: "rgba(24,24,24,.85)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
-      border: "1.5px solid rgba(255,255,255,.28)", borderRadius: isMd ? 16 : 16, padding: isMd ? "14px 16px" : "10px 12px",
-      maxWidth: isMd ? 270 : 208, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
-    }}>
-      <div style={{ fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "#ff8a70", marginBottom: isMd ? 10 : 7 }}>
-        Signal du jour
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: isMd ? 12 : 9, marginBottom: isMd ? 12 : 9 }}>
-        <div style={{ position: "relative", width: ringSize, height: ringSize, flexShrink: 0 }}>
-          <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ transform: "rotate(-90deg)", display: "block" }}>
-            <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke="rgba(255,255,255,.16)" strokeWidth={sw} />
-            <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke={ringColor} strokeWidth={sw} strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" />
-          </svg>
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: isMd ? 15 : 12, fontWeight: 700, color: "#fff" }}>{score}</span>
-          </div>
-        </div>
-        <div>
-          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: isMd ? 15 : 13, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em", marginBottom: 3 }}>Fatigué</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {behaviorKeys.map(b => {
-              const meta = BEHAVIOR_META[b];
-              return (
-                <span key={b} style={{
-                  fontSize: isMd ? 9 : 8, padding: "2px 6px", borderRadius: 999,
-                  background: meta.positive ? "rgba(47,158,68,.18)" : "rgba(212,64,0,.22)",
-                  color: meta.positive ? "#bfeec8" : "#ffd2bf",
-                }}>
-                  {meta.emoji} {meta.label}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      <div style={{ height: 1, background: "rgba(255,255,255,.12)", marginBottom: isMd ? 10 : 7 }} />
-      <div style={{ fontSize: isMd ? 9.5 : 8.5, fontWeight: 900, letterSpacing: "0.09em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase", color: "rgba(255,255,255,.5)", marginBottom: 5 }}>
-        ⚠ Conseil séance
-      </div>
-      <div style={{ fontSize: isMd ? 12 : 11, color: "rgba(255,255,255,.8)", lineHeight: 1.45 }}>
-        Allège modérément la séance.
-      </div>
-    </div>
-  );
-}
-
+/* Carte du haut de value_intro : AhaMorningCard (AhaPreviews.tsx) depuis le 2026-10-28, à la place
+   de « Signal du jour » (score 52) — plus de score de forme avant l'inscription. Même placement :
+   position absolue sous le voile de la photo, hors du calcul de hauteur de l'écran. */
 /* Programme claimé (2026-09-02, retour à l'architecture POC — "aucune exception", décision
    explicite de Gildas) : "sport_2a" est SAUTÉ (contrairement au 2026-08-29 → 2026-09-01, où il
    restait accessible pour changer de sport/importer avant signup) — value_intro montre déjà le nom
@@ -509,6 +432,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [name, setName]         = useState(pendingData?.name || "");
   const [email, setEmail]       = useState("");
   const [saving, setSaving]     = useState(false);
+  const [accountFieldFocus, setAccountFieldFocus] = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [emailSent, setEmailSent]   = useState(false);
 
@@ -1648,10 +1572,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
        bas ne sert plus qu'à l'email (`handleFinish`), désactivé tant que Prénom OU Email est
        vide — même garde qu'avant le 09-04. */
     const emailValid = name.trim().length > 0 && email.trim().length > 0;
+    const manualSignup = accountFieldFocus || name.trim().length > 0 || email.trim().length > 0;
 
     const content = (
       <>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--font-display)", fontSize: 27, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 28, lineHeight: "normal", textAlign: "center", color: "#fff" }}>
           {(() => {
             // Programme claimé : le sport est connu (fetch du claim), on le nomme. Sinon titre générique.
             const comp = hasClaimedProgram ? sessionsComplement(sport) : null;
@@ -1660,18 +1585,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
           })()}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "14px 16px", background: "#fff7f2", border: "1px solid rgba(212,64,0,.14)", borderRadius: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, padding: "14px 16px", background: "rgba(255,255,255,.06)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 16 }}>
           <div style={{ display: "flex" }}>
             {PAYWALL_AVATARS.slice(0, 3).map((src, i) => (
-              <div key={i} style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #fff7f2", marginLeft: i > 0 ? -10 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i, boxShadow: "0 1px 3px rgba(0,0,0,.12)" }}>
+              <div key={i} style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #10161b", marginLeft: i > 0 ? -10 : 0, overflow: "hidden", flexShrink: 0, position: "relative", zIndex: 5 - i, boxShadow: "0 1px 3px rgba(0,0,0,.12)" }}>
                 <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               </div>
             ))}
-            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #fff7f2", marginLeft: -10, background: "#1f2428", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0, position: "relative", zIndex: 1 }}>+</div>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid #10161b", marginLeft: -10, background: "#2a3138", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0, position: "relative", zIndex: 1 }}>+</div>
           </div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 900, color: "#1f2428", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
-            <div style={{ fontSize: 11, color: "#8a8f94", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ fontSize: 13, fontWeight: 900, color: "#fff", lineHeight: 1.2 }}>+600 sportifs, coachs et clubs</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ color: "#f28a00", letterSpacing: 1 }}>★★★★★</span>
               <span>font confiance à ThePerfClub</span>
             </div>
@@ -1679,59 +1604,68 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         </div>
 
         {error && (
-          <div style={{ fontSize: 13, color: "#c81e1e", background: "rgba(200,30,30,.08)", border: "1px solid rgba(200,30,30,.18)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: "#ffb3a7", background: "rgba(200,30,30,.18)", border: "1px solid rgba(255,120,100,.3)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
             {error}{" "}
             {(error.toLowerCase().includes("déjà") || error.toLowerCase().includes("already") || error.toLowerCase().includes("registered")) && (
-              <Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Me connecter</Link>
+              <Link href="/login" style={{ color: "#ff8a5c", fontWeight: 700, textDecoration: "none" }}>Me connecter</Link>
             )}
           </div>
         )}
 
         <div style={{ background: "#fff", borderRadius: 24, padding: 24, boxShadow: "0 2px 16px rgba(0,0,0,.06)" }}>
-          {nativeShell && (
-            <button
-              type="button"
-              onClick={() => { if (!saving) handleAppleRegister(); }}
-              disabled={saving}
-              style={{
-                width: "100%", height: 48, borderRadius: 16, border: "none", background: "#000",
-                color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
-                opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
-                gap: 10, marginBottom: 10,
-              }}
-            >
-              <svg width="16" height="18" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true">
-                <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-157 124s-87-40-166-40c-77 0-104 41-167 41s-107-57-157-127C42 790 0 677 0 569c0-173 112-265 223-265 59 0 108 39 145 39 35 0 90-41 157-41 25 0 117 2 177 89zM554 159c28-33 48-79 48-125 0-6-1-13-2-18-45 2-99 30-131 68-25 29-49 75-49 122 0 7 1 14 2 16 3 1 8 1 12 1 41 0 92-27 120-64z"/>
-              </svg>
-              Continuer avec Apple
-            </button>
-          )}
+          {/* Un champ actif ou rempli = l'utilisateur a choisi l'inscription par email : Apple/Google
+              et le séparateur disparaissent (2026-10-28, demande de Gildas). */}
+          {/* Repli animé (grille 1fr → 0fr, ~200 ms) plutôt qu'une disparition sèche : la carte remonte
+              en douceur. `visibility` (basculée en fin de transition) sort les boutons cachés du clavier
+              et des lecteurs d'écran ; pas `inert`, mal géré par React 18. */}
+          <div style={{ display: "grid", gridTemplateRows: manualSignup ? "0fr" : "1fr", opacity: manualSignup ? 0 : 1, visibility: manualSignup ? "hidden" : "visible", transition: "grid-template-rows .2s ease, opacity .15s ease, visibility .2s" }}>
+            <div style={{ overflow: "hidden", minHeight: 0 }}>
+              {nativeShell && (
+                <button
+                  type="button"
+                  onClick={() => { if (!saving) handleAppleRegister(); }}
+                  disabled={saving}
+                  style={{
+                    width: "100%", height: 48, borderRadius: 16, border: "none", background: "#000",
+                    color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
+                    opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
+                    gap: 10, marginBottom: 10,
+                  }}
+                >
+                  <svg width="16" height="18" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true">
+                    <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-157 124s-87-40-166-40c-77 0-104 41-167 41s-107-57-157-127C42 790 0 677 0 569c0-173 112-265 223-265 59 0 108 39 145 39 35 0 90-41 157-41 25 0 117 2 177 89zM554 159c28-33 48-79 48-125 0-6-1-13-2-18-45 2-99 30-131 68-25 29-49 75-49 122 0 7 1 14 2 16 3 1 8 1 12 1 41 0 92-27 120-64z"/>
+                  </svg>
+                  Continuer avec Apple
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={() => { if (!saving) handleGoogleRegister(); }}
-            disabled={saving}
-            style={{
-              width: "100%", height: 48, borderRadius: 16, border: "none", background: "#171b1f",
-              color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
-              opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 10, marginBottom: 18,
-            }}
-          >
-            <GoogleIcon />
-            Continuer avec Google
-          </button>
+              <button
+                type="button"
+                onClick={() => { if (!saving) handleGoogleRegister(); }}
+                disabled={saving}
+                style={{
+                  width: "100%", height: 48, borderRadius: 16, border: "none", background: "#171b1f",
+                  color: "#fff", fontSize: 14, fontWeight: 800, cursor: saving ? "default" : "pointer",
+                  opacity: saving ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  gap: 10, marginBottom: 18,
+                }}
+              >
+                <GoogleIcon />
+                Continuer avec Google
+              </button>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
-            <span style={{ fontSize: 11, color: "#8a8f94" }}>ou avec email</span>
-            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+                <span style={{ fontSize: 11, color: "#8a8f94" }}>ou avec email</span>
+                <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,.08)" }} />
+              </div>
+            </div>
           </div>
 
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Prénom</div>
-          <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="ex : Alex" style={inputStyle} />
+          <input type="text" value={name} onChange={e => setName(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="ex : Alex" style={inputStyle} />
           <div style={{ fontSize: 11, color: "#62686e", fontWeight: 700, marginBottom: 6 }}>Email</div>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} onFocus={() => setAccountFieldFocus(true)} onBlur={() => setAccountFieldFocus(false)} placeholder="toi@exemple.com" style={{ ...inputStyle, marginBottom: 0 }} />
         </div>
       </>
     );
@@ -1769,11 +1703,11 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     return (
       <div>
         {content}
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#f1f0ee" }}>
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 20, padding: "14px 20px 24px", background: "#070a0d" }}>
           <div style={{ maxWidth: colMaxWidth, margin: "0 auto", display: "flex", gap: 10 }}>{ctaButtons}</div>
         </div>
-        <div style={{ textAlign: "center", fontSize: 11, color: "#8a8f94", marginTop: 14, lineHeight: 1.6 }}>
-          Déjà un compte ?{" "}<Link href="/login" style={{ color: "#d44000", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
+        <div style={{ textAlign: "center", fontSize: 11, color: "rgba(255,255,255,.55)", marginTop: 14, lineHeight: 1.6 }}>
+          Déjà un compte ?{" "}<Link href="/login" style={{ color: "#ff8a5c", fontWeight: 700, textDecoration: "none" }}>Se connecter</Link>
         </div>
       </div>
     );
@@ -2233,7 +2167,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const isDarkStep = DARK_STEPS.includes(currentStep);
 
   return (
-    <OnboardingBackground variant={isDarkStep ? "dark" : "light"}>
+    /* Inscription (2026-10-28) : fond sombre de l'app, dans la continuité de l'AHA. Pas l'écran
+       « vérifie tes emails » (EmailSentScreen), resté en clair. */
+    <OnboardingBackground variant={isDarkStep ? "dark" : currentStep === "account" && !emailSent ? "glow" : "light"}>
       <div>
 
         <div key={currentStep} style={{ animation: "stepIn 0.22s ease" }}>
@@ -2256,9 +2192,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             ? <>Ton coach <em>{coachInviteName}</em> t&apos;attend.</>
             : isClaimed
             ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
-            : "Un programme qui s'adapte enfin à toi, pas l'inverse.";
+            : <>Ton programme ne sait pas que tu as mal dormi. <span style={{ color: "#ff8a5c" }}>ThePerfClub, si.</span></>;
 
-          const subhead = "Sommeil, stress, courbatures — ta forme du jour ajuste la charge de tes séances. Le plan, lui, ne bouge pas.";
+          const subhead = "Sommeil, stress, courbatures : ta forme du jour ajuste la charge de tes séances. Le plan, lui, ne bouge pas.";
 
           function chooseRole(r: Role) {
             if (advancingRef.current) return;
@@ -2269,7 +2205,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
 
           const roleCards = [
             { r: "athlete" as Role, icon: "🏃", label: "Pour moi",         sub: "Un programme qui s'ajuste à ta forme du jour.", badgeBg: "linear-gradient(145deg, #fff0e8, #ffe0d0)" },
-            { r: "coach"   as Role, icon: "🧑‍🏫", label: "Pour mes sportifs", sub: "Fais progresser toute ton équipe sans t'épuiser à tout replanifier.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
+            { r: "coach"   as Role, icon: "🧑‍🏫", label: "Pour mes sportifs", sub: "Fais progresser tout ton groupe sans t'épuiser à tout replanifier.", badgeBg: "linear-gradient(145deg, #eef1ff, #dde3ff)" },
           ];
 
           return (
@@ -2281,7 +2217,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                   l'overlay de l'image". Toujours en flux propre à ce calque `position:fixed, inset:0`
                   (donc `position:absolute` ici, pas `fixed` — plus besoin de son propre `position:
                   fixed`, elle hérite déjà du calque photo qui couvre tout le viewport), donc aucun
-                  impact sur la hauteur du reste de l'écran (voir doc de SignalDuJourCard plus haut :
+                  impact sur la hauteur du reste de l'écran (voir doc d'AhaMorningCard plus haut :
                   la raison d'être du passage en position hors-flux). Même colonne que le footer
                   "Comment vas-tu l'utiliser ?" (padding 20 + maxWidth:colMaxWidth) mais poussée à
                   droite via `justifyContent:"flex-end"` au lieu du texte, aligné à gauche, juste en
@@ -2303,7 +2239,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                 />
                 <div style={{ position: "absolute", left: 0, right: 0, top: colIsMd ? 72 : 56, padding: "0 20px", display: "flex", pointerEvents: "none" }}>
                   <div style={{ maxWidth: colMaxWidth, margin: "0 auto", width: "100%", display: "flex", justifyContent: "flex-end" }}>
-                    <SignalDuJourCard isMd={colIsMd} />
+                    <AhaMorningCard isMd={colIsMd} />
                   </div>
                 </div>
                 <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(10,10,10,.6) 0%, rgba(10,10,10,.75) 40%, rgba(8,8,8,.95) 85%)" }} />

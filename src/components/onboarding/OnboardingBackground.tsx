@@ -1,6 +1,7 @@
 "use client";
 
 import { useBreakpoint } from "@/hooks/useBreakpoint";
+import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Fond plein-page de l'onboarding — pas de carte flottante, pas de faux aperçu d'app flouté.
    dark = steps value/concept/célébration, light = steps de questions/formulaire.
@@ -13,7 +14,9 @@ import { useBreakpoint } from "@/hooks/useBreakpoint";
    (GenerationLoadingScreen, ReconductionTeaserScreen) — contenu court, centré verticalement dans
    le viewport plutôt que plaqué en haut avec le padding 36/120 habituel (pensé pour du contenu
    scrollable). N'affecte aucun autre écran (prop optionnelle, défaut inchangé). */
-export default function OnboardingBackground({ variant, center, children }: { variant: "dark" | "light"; center?: boolean; children: React.ReactNode }) {
+/* `glow` (2026-10-28) : le fond sombre de l'app (DARK_CARD_BG, halo cyan), pour l'écran
+   d'inscription qui suit l'AHA (lui-même sur ce fond). */
+export default function OnboardingBackground({ variant, center, children }: { variant: "dark" | "light" | "glow"; center?: boolean; children: React.ReactNode }) {
   const { isMd, isLg } = useBreakpoint();
   const maxWidth = isLg ? 720 : isMd ? 640 : 560;
   return (
@@ -21,7 +24,7 @@ export default function OnboardingBackground({ variant, center, children }: { va
       position: "fixed", inset: 0, overflowY: "auto",
       background: variant === "dark"
         ? "linear-gradient(135deg,#161616 0%,#303030 54%,#111 100%)"
-        : "#f1f0ee",
+        : variant === "glow" ? DARK_CARD_BG : "#f1f0ee",
       transition: "background .25s ease",
     }}>
       <div style={{ minHeight: "100%", display: "flex", justifyContent: "center", alignItems: center ? "center" : undefined }}>

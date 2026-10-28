@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import DecisionRing, { decisionRingState } from "@/components/sessions/DecisionRing";
 import AggregateGauge from "@/components/conseils/AggregateGauge";
 import MetricChart from "@/components/conseils/MetricChart";
-import HomeTabs from "@/components/today/HomeTabs";
 import AlertBox from "@/components/calendar/AlertBox";
 import DiffGauge from "@/components/calendar/DiffGauge";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
@@ -12,17 +11,19 @@ import { syntheticBaselineFor } from "@/lib/sandboxFixtures";
 import { computeAutoregSuggestion, autoregAdvice, autoregHeadline, suggestionSeverityColor, pctToPoints, zoneRange } from "@/lib/autoregulation";
 import { adjustDifficulty } from "@/lib/loadAdjust";
 import { ExerciseLineView, SessionSynthesis, exerciseViews } from "@/components/sessions/ExerciseLineView";
+import { adjustNotes } from "@/lib/sessionLevers";
 import { AGG_BANDS, chartSpecFor, type AggBand } from "@/lib/metricCards";
-import { BEHAVIOR_META } from "@/lib/behaviors";
 import type { DayPoint } from "@/lib/fatigueSignature";
 import { DARK_CARD_BG } from "@/lib/theme";
 
 /* Illustrations de l'AHA (DecisionStep, 2026-10-07, POC https://claude.ai/artifact/QpGXUusZ3mTYRPB63WDrK3) :
-   les composants ACTUELS de l'app (onglet Récupération, jauge de décision ronde, ligne Phase, chart
-   de Forme, radar et liste Charge du Coach Control), alimentés par des données d'exemple passées
+   les composants ACTUELS de l'app (jauge de décision ronde, ligne Phase, chart de Forme, jauge de
+   Charge, radar du Coach Control), alimentés par des données d'exemple passées
    dans le VRAI moteur de reco (syntheticBaselineFor + computeAutoregSuggestion) — jamais une reco
    écrite à la main. Lecture seule, rien n'est cliquable. Scores calibrés le 2026-10-07 :
-   55 (relatif ~22, Fatigué) + séance à 8 → Alléger −2 ; 50 + séance à 9 → Alléger −2. */
+   55 (relatif ~22, Fatigué) + séance à 8 → Alléger −2 ; 50 + séance à 9 → Alléger −2.
+   2026-10-28 : le score de forme (onglet Récupération) et la liste Charge du groupe sont retirés,
+   remplacés par les bilans en écran de synthèse (voir plus bas). */
 
 const noop = () => {};
 const bandAt = (bands: AggBand[], pos: number) => bands.find(b => pos >= b.from && pos < b.to) ?? bands[bands.length - 1];
@@ -56,51 +57,8 @@ function useProgress(ms: number, delay = 200) {
   return k;
 }
 
-const chip: React.CSSProperties = {
-  fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
-  padding: "6px 9px", borderRadius: 999, border: "1px solid rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)", color: "rgba(255,255,255,.85)",
-};
-
-/* ── Sportif 1 · ta forme du jour : l'onglet Récupération ──────────────────────────────────── */
 const ATHLETE_SCORE = 55;
 const ATHLETE_PLANNED = 8;
-
-export function AhaRecoveryPreview() {
-  const k = useProgress(1100);
-  const rel = (syntheticBaselineFor(ATHLETE_SCORE)?.relativeScore ?? 22) / 100;
-  const pos = 0.5 + (rel - 0.5) * k;
-  const recup = AGG_BANDS.recup, charge = AGG_BANDS.charge;
-  return (
-    <Panel>
-      <HomeTabs active="recuperation" onChange={noop} previews={{
-        today: { value: ATHLETE_PLANNED, zoneLow: ATHLETE_PLANNED, zoneHigh: ATHLETE_PLANNED, planned: true },
-        charge: { pos: 0.52, band: bandAt(charge, 0.52) },
-        recuperation: { pos: rel, band: bandAt(recup, rel) },
-      }} />
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <AggregateGauge pos={pos} band={bandAt(recup, pos)} bands={recup} />
-      </div>
-      <p style={{ fontSize: 17.5, lineHeight: 1.35, fontWeight: 600, textAlign: "center", maxWidth: 420, margin: "12px auto 0" }}>
-        Ta récupération est sous ta norme : ton sommeil tire vers le bas.
-      </p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 16 }}>
-        {["Sommeil ↓", "Stress →", "État physique ↓", "Motivation →"].map(l => <span key={l} style={chip}>{l}</span>)}
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 8 }}>
-        {(["late_sleep", "alcohol", "hydration"] as const).map(b => {
-          const m = BEHAVIOR_META[b];
-          return (
-            <span key={b} style={{ ...chip, ...(m.positive
-              ? { background: "rgba(47,158,68,.16)", borderColor: "rgba(47,158,68,.4)", color: "#8fe0b0" }
-              : { background: "rgba(212,64,0,.16)", borderColor: "rgba(212,64,0,.4)", color: "#ffb38e" }) }}>
-              {m.emoji} {m.label}
-            </span>
-          );
-        })}
-      </div>
-    </Panel>
-  );
-}
 
 /* ── Sportif 2 / Coach 2 · l'ajustement : jauge de décision ronde ──────────────────────────── */
 const DEMO_SESSION_LINES = ["Back squat — 5×5 @ 120 kg", "Fentes bulgares — 3×8 @ 24 kg", "Sprint 30 m — 6 reps", "Planche — 3×45 s"];
@@ -184,6 +142,8 @@ export function AhaFormPeakPreview() {
     return { date, form: i < Math.max(1, Math.round(FORM_DEMO.length * k)) ? v : null } as unknown as DayPoint;
   });
   const spec = chartSpecFor("form", series, { sessionRef: null });
+  const chargePos = 0.5 + (0.52 - 0.5) * k;
+  const chargeBand = bandAt(AGG_BANDS.charge, chargePos);
   return (
     <Panel>
       <AlertBox variant="darkColor" alert={{ border: "#2f9e4466", glow: "#2f9e44", text: "Phase · Supercompensation\nTa charge chronique monte et ta récupération suit : tu encaisses le travail, ta forme progresse." }} />
@@ -198,7 +158,131 @@ export function AhaFormPeakPreview() {
         </div>
         <div style={{ marginTop: 12 }}><MetricChart spec={spec} height={170} weekLabels /></div>
       </div>
+      <div style={{ marginTop: 12, background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: "12px 16px", display: "grid", gridTemplateColumns: "auto minmax(0,1fr)", gap: 12, alignItems: "center" }}>
+        <AggregateGauge pos={chargePos} band={chargeBand} bands={AGG_BANDS.charge} size={58} showLabel={false} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,.45)" }}>Charge · risque de blessure</div>
+          <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12.5, fontWeight: 700, color: chargeBand.color, marginTop: 3 }}>{chargeBand.label} · 1,05</div>
+          <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 3 }}>Ta charge récente suit ta charge habituelle : tu progresses sans t&apos;exposer. Une alerte arrive si elle s&apos;emballe.</div>
+        </div>
+      </div>
     </Panel>
+  );
+}
+
+/* ── Écran 1 (value_intro) · la séance du matin réécrite (2026-10-28) ─────────────────────────
+   Remplace « Signal du jour » (score 52) : plus de score de forme avant l'inscription. Mêmes
+   données que AhaDecisionPreview (même reco du vrai moteur, mêmes lignes réécrites par le vrai
+   parseur), pour que l'écran 2 montre la même séance. */
+export function AhaMorningCard({ isMd }: { isMd: boolean }) {
+  const sug = computeAutoregSuggestion(ATHLETE_SCORE, ATHLETE_PLANNED, syntheticBaselineFor(ATHLETE_SCORE));
+  if (!sug) return null;
+  const lines = DEMO_SESSION_LINES.map(l => {
+    const [name, rx] = l.split(" — ");
+    return { name, before: rx, after: adjustNotes(l, sug.reco).text.split(" — ")[1] ?? rx };
+  }).filter(l => l.after !== l.before).slice(0, 2);
+  const kicker: React.CSSProperties = { fontSize: isMd ? 10 : 9, fontWeight: 900, letterSpacing: "0.12em", fontFamily: "var(--font-mono), monospace", textTransform: "uppercase" };
+  return (
+    <div style={{
+      display: "inline-block", background: "rgba(24,24,24,.85)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+      border: "1.5px solid rgba(255,255,255,.28)", borderRadius: 16, padding: isMd ? "14px 16px" : "10px 12px",
+      maxWidth: isMd ? 270 : 214, boxShadow: "0 10px 28px rgba(0,0,0,.4)",
+    }}>
+      <div style={{ ...kicker, color: "#ff8a70", marginBottom: isMd ? 9 : 7 }}>Ce matin</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: isMd ? 10 : 8 }}>
+        {["😴 Mal dormi", "💼 Stressé"].map(t => (
+          <span key={t} style={{ fontSize: isMd ? 10 : 9, padding: "2px 7px", borderRadius: 999, background: "rgba(212,64,0,.22)", color: "#ffd2bf" }}>{t}</span>
+        ))}
+      </div>
+      <div style={{ height: 1, background: "rgba(255,255,255,.12)", marginBottom: isMd ? 9 : 7 }} />
+      <div style={{ ...kicker, color: "rgba(255,255,255,.5)", marginBottom: 5 }}>⬇ Séance allégée</div>
+      {lines.map(l => (
+        <div key={l.name} style={{ fontSize: isMd ? 12 : 11, color: "rgba(255,255,255,.85)", lineHeight: 1.45 }}>
+          {l.name} <s style={{ color: "rgba(255,255,255,.4)" }}>{l.before}</s> <b style={{ color: "#ffb38e" }}>{l.after}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Bilans en écran de synthèse (2026-10-28, POC H5zyp9dymAYsk3v1ZoTtGG) ─────────────────────
+   Pas de story qui défile : les 3 étapes de l'AHA sont déjà minutées. Un seul écran, au style du
+   BilanCarousel (cartes rgba .06, kickers mono) sans l'importer (module lourd, inscription). Textes
+   et chiffres = ceux de la landing (sportif) et de la landing coach (groupe, au tutoiement). */
+type SynthBlock = { kicker: string; color: string; text: string; extra?: React.ReactNode };
+
+function BilanSynthesis({ title, kicker, headline, blocks }: { title: string; kicker: string; headline: React.ReactNode; blocks: SynthBlock[] }) {
+  return (
+    <Panel>
+      <div style={{ fontSize: 12, color: "rgba(255,255,255,.55)", marginBottom: 8 }}>{title}</div>
+      <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "rgba(255,255,255,.62)" }}>{kicker}</div>
+      <div style={{ fontFamily: "var(--font-display)", fontSize: 24, lineHeight: 1.14, fontWeight: 700, margin: "6px 0 14px" }}>
+        {headline}
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {blocks.map(b => (
+          <div key={b.kicker} style={{ background: "rgba(255,255,255,.06)", borderRadius: 18, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: b.color }}>{b.kicker}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.35 }}>{b.text}</div>
+            {b.extra}
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function SynthBar({ label, value, pct, color, k }: { label: string; value: string; pct: number; color: string; k: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,.78)" }}><span>{label}</span><b style={{ color: "#fff" }}>{value}</b></div>
+      <div style={{ height: 10, borderRadius: 5, background: "rgba(255,255,255,.1)", overflow: "hidden" }}><div style={{ width: `${pct * k}%`, height: "100%", borderRadius: 5, background: color }} /></div>
+    </div>
+  );
+}
+
+/* Même codage que les Marks du bilan de groupe : plein = fait, demi-hauteur = fatigué, pointillé = manqué. */
+function SynthMarks({ name, marks }: { name: string; marks: ("ok" | "tired" | "missed")[] }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "48px minmax(0,1fr)", gap: 8, alignItems: "center", fontSize: 12, color: "rgba(255,255,255,.78)" }}>
+      <span>{name}</span>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 14 }} role="img" aria-label={marks.map(m => (m === "ok" ? "fait" : m === "tired" ? "fait, fatigué" : "manqué")).join(", ")}>
+        {marks.map((m, i) => <div key={i} style={{ flex: 1, boxSizing: "border-box", borderRadius: 3, height: m === "tired" ? 7 : 14, background: m === "ok" ? "#fff" : m === "tired" ? "#f28a00" : "transparent", border: m === "missed" ? "1.5px dashed rgba(255,255,255,.55)" : "none" }} />)}
+      </div>
+    </div>
+  );
+}
+
+export function AhaBilanPreview() {
+  const k = useProgress(900);
+  return (
+    <BilanSynthesis title="Ton bilan du mois" kicker="APPRIS SUR TOI" headline={<>Ce qui pèse vraiment <span style={{ color: "#c79bf7" }}>sur tes séances.</span></>} blocks={[
+      { kicker: "Ce qui te fatigue", color: "#c79bf7", text: "Une soirée te coûte plus qu'une séance très dure.", extra: <>
+        <SynthBar k={k} label="Lendemain de séance très dure" value="68" pct={92} color="rgba(199,155,247,.4)" />
+        <SynthBar k={k} label="Lendemain de soirée" value="62" pct={84} color="#a855f7" />
+      </> },
+      { kicker: "Ce qui te prédit", color: "#ff8a5c", text: "Le stress pèse sur tes séances de force.", extra:
+        <SynthBar k={k} label="Plus dures que prévu, stressé" value="7 sur 9" pct={78} color="#ff6a2b" /> },
+      { kicker: "Tes leviers", color: "#7ee08f", text: "Le stretching du soir te rend 24 min de nuit.", extra:
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,.6)" }}>Avec : 7h59 · Sans : 7h35</div> },
+    ]} />
+  );
+}
+
+export function AhaGroupBilanPreview() {
+  const k = useProgress(900);
+  return (
+    <BilanSynthesis title="Bilan du groupe · semaine" kicker="BILAN DU GROUPE" headline={<>Ce qui se passe <span style={{ color: "#ff8a5c" }}>dans ton groupe.</span></>} blocks={[
+      { kicker: "Qui décroche", color: "#ff8a5c", text: "Chloé ne fait plus son check-in. Hugo est souvent fatigué.", extra: <>
+        <SynthMarks name="Chloé" marks={["ok", "ok", "ok", "missed", "missed", "missed", "missed"]} />
+        <SynthMarks name="Hugo" marks={["tired", "ok", "tired", "tired", "ok", "tired", "ok"]} />
+      </> },
+      { kicker: "Tes séances", color: "#ffb347", text: "Tes séances modérées sont ressenties dures.", extra:
+        <SynthBar k={k} label="Prévues modérées, plus dures" value="14 sur 20" pct={70} color="#f28a00" /> },
+      { kicker: "Appris sur chacun", color: "#c79bf7", text: "Hugo : le stress pèse sur ses séances de force. Léa : une soirée se paie le lendemain." },
+      { kicker: "Charge", color: "#8cc4f5", text: "Yanis monte trop vite. Allège avant la blessure.", extra:
+        <SynthBar k={k} label="Jours au-dessus de sa zone" value="12 sur 26" pct={46} color="#38bdf8" /> },
+    ]} />
   );
 }
 
@@ -239,49 +323,6 @@ export function AhaRadarPreview() {
       <div style={{ marginTop: 14, display: "flex", justifyContent: "center", borderRadius: 16, padding: "15px 18px", background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", fontSize: 15, fontWeight: 800, boxShadow: "0 10px 28px rgba(212,64,0,.35)", opacity: withReco ? 1 : 0, transition: "opacity .4s" }}>
         Passer en revue · {decisions} décision{decisions > 1 ? "s" : ""}
       </div>
-    </Panel>
-  );
-}
-
-/* ── Coach 3 · risques de l'équipe : onglet Charge en vue Groupe ───────────────────────────── */
-const CHARGE_TEAM: { name: string; pos: number; value: string; insight: string; bars: number[] }[] = [
-  { name: "Karim Haddad", pos: 0.82, value: "1,42", insight: "Charge récente très au-dessus de sa charge chronique : réduis le volume cette semaine.", bars: [3, 5, 6, 7, 8, 9, 9] },
-  { name: "Léa Girard", pos: 0.7, value: "1,34", insight: "Sa charge monte vite depuis 5 jours : surveille sa récupération.", bars: [4, 4, 6, 6, 7, 8, 8] },
-  { name: "Thomas Morel", pos: 0.52, value: "1,05", insight: "Sa charge récente suit sa charge chronique : il progresse sans s'exposer.", bars: [5, 4, 6, 5, 6, 5, 6] },
-  { name: "Sofia Renard", pos: 0.3, value: "0,72", insight: "En dessous de sa zone optimale : elle a de la marge pour recharger.", bars: [3, 2, 0, 3, 2, 0, 3] },
-];
-
-export function AhaTeamChargePreview() {
-  const k = useProgress(900);
-  const bands = AGG_BANDS.charge;
-  const sections = [...bands].reverse().map(b => ({ band: b, list: CHARGE_TEAM.filter(a => bandAt(bands, a.pos).label === b.label) })).filter(s => s.list.length);
-  return (
-    <Panel>
-      {sections.map(({ band, list }) => (
-        <div key={band.label} style={{ marginBottom: 14 }}>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em", color: band.color, marginBottom: 8 }}>{band.label}</div>
-          <div style={{ background: "rgba(255,255,255,.055)", border: "1px solid rgba(255,255,255,.10)", borderRadius: 24, padding: "4px 0" }}>
-            {list.map((a, i) => {
-              const pos = 0.5 + (a.pos - 0.5) * k;
-              return (
-                <div key={a.name} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 12, alignItems: "start", padding: "11px 16px", borderTop: i ? "1px solid rgba(255,255,255,.08)" : "none", boxShadow: `inset 3px 0 0 ${band.color}` }}>
-                  <AggregateGauge pos={pos} band={bandAt(bands, pos)} bands={bands} size={58} showLabel={false} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700 }}>{a.name}</div>
-                    <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: band.color, marginTop: 3 }}>{band.label} · {a.value}</div>
-                    <div style={{ fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.6)", marginTop: 4 }}>{a.insight}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 30, paddingTop: 6 }}>
-                    {a.bars.map((v, j) => (
-                      <i key={j} style={{ display: "block", width: 6, borderRadius: 2, background: band.color, opacity: v ? 0.85 : 0.2, height: Math.max(2, (v / 9) * 24 * k) }} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
     </Panel>
   );
 }

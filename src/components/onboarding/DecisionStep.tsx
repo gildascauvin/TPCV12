@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { DARK_CARD_BG } from "@/lib/theme";
-import { AhaRecoveryPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaTeamChargePreview } from "@/components/onboarding/AhaPreviews";
+import { AhaBilanPreview, AhaDecisionPreview, AhaFormPeakPreview, AhaRadarPreview, AhaGroupBilanPreview } from "@/components/onboarding/AhaPreviews";
 import type { SessionTemplate } from "@/types";
 
 /* Écran de décision — 9e itération (2026-09-02, dernière refonte de la journée) : garde le split
@@ -49,6 +49,11 @@ import type { SessionTemplate } from "@/types";
          d'alerte.
      3 → CombinedInsightPreview({perspective}) — un seul vrai SparkLineClient, ligne wellness +
          ligne charge, avec l'insight croisé (TrendInsight) au-dessus. Inchangée.
+   2026-10-28 (POC https://claude.ai/artifact/H5zyp9dymAYsk3v1ZoTtGG, validé par Gildas) : plus de
+   score de forme côté sportif (« on vend pas ça »). Sportif : 1 bilan (synthèse) → 2 ajustement →
+   3 forme + charge, titres orientés bénéfice. Coach : seule l'étape 3 change (bilan du groupe en
+   synthèse, au lieu de la liste Charge). Bilans en écran de synthèse, jamais en story qui défile :
+   les 3 étapes sont déjà minutées.
    `role` déjà connu à ce stade (choisi sur `value_intro`, qui précède ce step et reste inchangé) :
    wording role-aware normal. Toujours sans geste interactif réel (Alléger/Surcharger + célébration)
    — décision de Gildas plus tôt le même jour, reportée post-signup ; les boutons visibles dans les
@@ -96,25 +101,25 @@ export default function DecisionStep({ sport, role, athleteName, onNext, onBack 
 
   const items = [
     {
-      title: coach ? "Vois qui est vraiment en forme" : "Découvre ta vraie forme du jour",
+      title: coach ? "Vois qui est vraiment en forme" : "Découvre ce qui pèse sur tes séances",
       desc: coach
         ? "Sommeil, stress, courbatures et comportements de chacun de tes sportifs : un score calculé chaque matin."
-        : "Sommeil, stress, courbatures et comportements de la veille : ton score est calculé chaque matin.",
-      illustration: coach ? <AhaRadarPreview /> : <AhaRecoveryPreview />,
+        : "Soirée, stress, sommeil, séances trop dures : ton bilan montre ce qui pèse vraiment sur tes séances. Chez toi, pas en moyenne.",
+      illustration: coach ? <AhaRadarPreview /> : <AhaBilanPreview />,
     },
     {
-      title: coach ? "Ajuste les séances en un clic" : "Ajuste tes séances intelligemment",
+      title: coach ? "Ajuste les séances en un clic" : "Ta séance s'ajuste chaque matin",
       desc: coach
         ? "Surcharge ou allège les séances de tes sportifs pour optimiser leurs gains de performance et éviter les blessures."
         : "Surcharge ou allège tes séances pour optimiser tes gains de performance et éviter les blessures.",
       illustration: coach ? <AhaDecisionPreview name="Karim Haddad" /> : <AhaDecisionPreview />,
     },
     {
-      title: coach ? "Anticipe les risques de ton équipe" : "Anticipe tes pics de forme",
+      title: coach ? "Vois qui décroche avant qu'il lâche" : "Arrive en forme le jour J, sans te blesser",
       desc: coach
-        ? "Sache ce qui freine ou aide la performance de tes sportifs, prédit leurs pics de forme et évite le sur-entraînement."
-        : "Sache ce qui te freine et ce qui t'aide, prédit tes pics de forme et évite le sur-entraînement.",
-      illustration: coach ? <AhaTeamChargePreview /> : <AhaFormPeakPreview />,
+        ? "Chaque semaine, le bilan de ton groupe : qui décroche, les séances que tu écris trop légères, ce que l'app apprend de chacun, qui monte trop vite."
+        : "Ta forme et ta charge suivies semaine après semaine : tu sais quand viser un record, et quand lever le pied avant la blessure.",
+      illustration: coach ? <AhaGroupBilanPreview /> : <AhaFormPeakPreview />,
     },
   ];
   const active = items[activeIdx];
