@@ -15,6 +15,9 @@ import { isIOS, isStandalone } from "@/lib/push";
 /** Lien App Store, vide tant que l'app n'est pas publiée (rien n'est affiché sur iOS d'ici là). */
 export const APP_STORE_URL = "https://apps.apple.com/fr/app/theperfclub/id6817809833";
 
+/** Lien Google Play, vide tant que l'app Android n'est pas publique (Android garde alors l'installation web). */
+export const PLAY_STORE_URL = "";
+
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -37,10 +40,11 @@ if (typeof window !== "undefined" && !Capacitor.isNativePlatform()) {
   });
 }
 
-export type InstallMode = "prompt" | "app_store" | null;
+export type InstallMode = "prompt" | "app_store" | "play_store" | null;
 
 function getMode(): InstallMode {
   if (typeof window === "undefined" || Capacitor.isNativePlatform() || isStandalone()) return null;
+  if (PLAY_STORE_URL && /Android/.test(navigator.userAgent)) return "play_store";
   if (deferred) return "prompt";
   if (isIOS() && APP_STORE_URL) return "app_store";
   return null;
@@ -62,6 +66,11 @@ export async function runInstall(surface: string) {
   if (mode === "app_store") {
     posthog.capture("pwa_install_clicked", { surface, mode });
     window.open(APP_STORE_URL, "_blank");
+    return;
+  }
+  if (mode === "play_store") {
+    posthog.capture("pwa_install_clicked", { surface, mode });
+    window.open(PLAY_STORE_URL, "_blank");
     return;
   }
   if (mode !== "prompt" || !deferred) return;

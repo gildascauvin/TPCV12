@@ -20,7 +20,7 @@ export default function InstallAppRow() {
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 14, fontWeight: 700, color: "#171b1f" }}>📲 Application</div>
           <div style={{ fontSize: 12, color: "#8a8f94", marginTop: 2 }}>
-            {mode === "app_store" ? "Télécharge ThePerfClub sur l'App Store" : "Installe ThePerfClub sur ton écran d'accueil"}
+            {mode === "app_store" ? "Télécharge ThePerfClub sur l'App Store" : mode === "play_store" ? "Télécharge ThePerfClub sur Google Play" : "Installe ThePerfClub sur ton écran d'accueil"}
           </div>
         </div>
         <button

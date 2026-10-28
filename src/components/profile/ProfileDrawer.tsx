@@ -2,6 +2,7 @@
 
 import { Skel, SkelLines } from "@/components/ui/Skeleton";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import { isAndroidApp } from "@/lib/native";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -130,9 +131,11 @@ export default function ProfileDrawer({ onClose, sandboxMode = false, sandboxRol
   }
 
   async function handlePortal() {
-    // Abonné via l'App Store (pas de client Stripe) : la gestion se fait chez Apple.
+    // Abonné via la boutique (pas de client Stripe) : la gestion se fait chez Apple ou Google.
     if (isNativeApp() && !profile?.stripe_customer_id) {
-      window.location.href = "https://apps.apple.com/account/subscriptions";
+      window.location.href = isAndroidApp()
+        ? "https://play.google.com/store/account/subscriptions?package=com.theperfclub.app"
+        : "https://apps.apple.com/account/subscriptions";
       return;
     }
     setPortalLoading(true);
