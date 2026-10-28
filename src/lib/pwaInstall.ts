@@ -12,11 +12,8 @@ import { isIOS, isStandalone } from "@/lib/push";
    l'événement peut partir tôt, avant le montage des composants qui affichent le bouton.
    iOS Safari n'a pas cet événement : on y renverra vers l'App Store dès que APP_STORE_URL est posé. */
 
-/** Lien App Store, vide tant que l'app n'est pas publiée (rien n'est affiché sur iOS d'ici là). */
-export const APP_STORE_URL = "https://apps.apple.com/fr/app/theperfclub/id6817809833";
-
-/** Lien Google Play, vide tant que l'app Android n'est pas publique (Android garde alors l'installation web). */
-export const PLAY_STORE_URL = "";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
+export { APP_STORE_URL, PLAY_STORE_URL };
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;

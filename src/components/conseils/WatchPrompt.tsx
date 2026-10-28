@@ -5,7 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
 import { signupPlatform, isAndroidApp, healthAppName } from "@/lib/native";
-import { APP_STORE_URL } from "@/lib/pwaInstall";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
 import { syncHealthData } from "@/lib/healthSync";
 import { invalidatePhysio, type PhysioData } from "@/lib/physioData";
 
@@ -17,7 +17,7 @@ import { invalidatePhysio, type PhysioData } from "@/lib/physioData";
    - Garmin connecté sans mesure encore : « tes données arrivent après ta prochaine nuit » ;
    - app iPhone sans aucune donnée Santé : « Autoriser Apple Santé » ;
    - app iPhone avec Santé mais sans FC/VFC : pas de montre, rien ;
-   - web iPhone : App Store ; web Android : Garmin ; ordinateur : QR de l'app + Garmin ;
+   - web iPhone : App Store ; web Android : Google Play dès la publication (Garmin avant) ; ordinateur : QR de l'app + Garmin ;
    - « Je n'ai pas de montre » : masqué pour de bon sur cet appareil.
    Sportif seulement (le coach ne lit pas health_*). */
 
@@ -110,7 +110,15 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
         <a href={APP_STORE_URL} onClick={() => posthog.capture("watch_prompt_clicked", { case: kase, action: "app_store" })} style={{ ...primary, background: "#fff", color: "#070a0d" }}>Télécharger l&apos;app iPhone · gratuit</a>
         <span style={foot}>{brands}</span>
       </>}
-      {kase === "web_android" && <>
+      {kase === "web_android" && PLAY_STORE_URL && <>
+        <span style={eyebrow}>Tu as une montre ?</span>
+        <span style={title}>Ramène tes 30 derniers jours : tes charts se remplissent dès aujourd&apos;hui.</span>
+        <span style={text}>L&apos;app Android relit Health Connect : nuits, FC au repos, VFC et entraînements avec leur fréquence cardiaque.</span>
+        <a href={PLAY_STORE_URL} onClick={() => posthog.capture("watch_prompt_clicked", { case: kase, action: "play_store" })} style={{ ...primary, background: "#fff", color: "#070a0d" }}>Télécharger l&apos;app Android · gratuit</a>
+        <button type="button" onClick={connectGarmin} style={secondary}>Connecter Garmin</button>
+        <span style={foot}>{brands}</span>
+      </>}
+      {kase === "web_android" && !PLAY_STORE_URL && <>
         <span style={eyebrow}>Tu as une Garmin ?</span>
         <span style={title}>Connecte-la : tes données arrivent après ta prochaine nuit.</span>
         <span style={text}>Nuit, VFC, FC au repos, Body Battery, stress et entraînements. Garmin ne nous transmet que ce qui vient, pas ton historique.</span>
@@ -120,11 +128,13 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
       {kase === "web_desktop" && <>
         <span style={eyebrow}>Tu as une montre ?</span>
         <span style={title}>Tes 30 derniers jours peuvent remplir ces charts dès aujourd&apos;hui.</span>
-        <span style={text}>Avec un iPhone : télécharge l&apos;app, elle relit Apple Santé. Avec une Garmin : connecte-la ici, tes données arrivent dès ta prochaine nuit.</span>
+        <span style={text}>{PLAY_STORE_URL
+          ? "Avec un iPhone ou un Android : télécharge l'app, elle relit Apple Santé ou Health Connect. Avec une Garmin : connecte-la ici, tes données arrivent dès ta prochaine nuit."
+          : "Avec un iPhone : télécharge l'app, elle relit Apple Santé. Avec une Garmin : connecte-la ici, tes données arrivent dès ta prochaine nuit."}</span>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/app-store-qr.svg" alt="QR code de l'app ThePerfClub sur l'App Store" width={76} height={76} style={{ borderRadius: 10, background: "#fff", padding: 4, flexShrink: 0 }} />
-          <span style={{ ...text, fontSize: 12.5 }}>Scanne avec ton iPhone pour télécharger l&apos;app.</span>
+          <img src={PLAY_STORE_URL ? "/app-qr.svg" : "/app-store-qr.svg"} alt="QR code pour télécharger l'app ThePerfClub" width={76} height={76} style={{ borderRadius: 10, background: "#fff", padding: 4, flexShrink: 0 }} />
+          <span style={{ ...text, fontSize: 12.5 }}>Scanne avec ton {PLAY_STORE_URL ? "téléphone" : "iPhone"} pour télécharger l&apos;app.</span>
         </div>
         <button type="button" onClick={connectGarmin} style={secondary}>Connecter Garmin</button>
         <span style={foot}>{brands}</span>

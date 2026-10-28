@@ -4,14 +4,15 @@ import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
-import { isIOS, isStandalone } from "@/lib/push";
-import { APP_STORE_URL } from "@/lib/pwaInstall";
+import { isStandalone } from "@/lib/push";
+import { storeForUserAgent, type Store } from "@/lib/storeLinks";
 
 /* Bannière « Télécharger l'app » (2026-10-14) : la nôtre plutôt que la Smart App Banner d'Apple,
    qui ne s'affiche que dans Safari (ni Chrome iOS, ni le navigateur intégré d'Instagram, d'où vient le
-   trafic des réels) et n'envoie aucun événement. Visible sur iPhone seulement, jamais dans l'app ni
+   trafic des réels) et n'envoie aucun événement. Visible sur iPhone (et Android dès que l'app est sur
+   Google Play, 2026-10-28), jamais dans l'app ni
    en PWA installée, ni pour un compte qui utilise déjà l'app : une page web ne sait pas si l'app est
-   installée, on le déduit d'un jeton APNs ou de données Apple Santé (deux choses que seule l'app écrit).
+   installée, on le déduit d'un jeton APNs/Firebase ou de données santé (deux choses que seule l'app écrit).
    Fermée = silence 14 jours. Rendue dans le flux de la page (pas en position fixe) : chaque page la
    place en haut de sa propre colonne, les pages de l'app étant presque toutes en plein écran fixe. */
 
@@ -31,7 +32,7 @@ async function usesApp(): Promise<boolean> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return false;
     const [{ data: apns }, { data: health }] = await Promise.all([
-      supabase.from("push_subscriptions").select("id").eq("user_id", user.id).eq("kind", "apns").limit(1),
+      supabase.from("push_subscriptions").select("id").eq("user_id", user.id).in("kind", ["apns", "fcm"]).limit(1),
       supabase.from("health_daily").select("id").eq("user_id", user.id).limit(1),
     ]);
     return (apns?.length ?? 0) > 0 || (health?.length ?? 0) > 0;
@@ -39,34 +40,35 @@ async function usesApp(): Promise<boolean> {
 }
 
 export default function AppBanner({ source, variant = "bar" }: { source: string; variant?: "bar" | "card" }) {
-  const [show, setShow] = useState(false);
+  const [store, setStore] = useState<Store | null>(null);
 
   useEffect(() => {
-    if (!APP_STORE_URL || !isIOS() || Capacitor.isNativePlatform() || isStandalone() || dismissedRecently()) return;
+    const st = storeForUserAgent(navigator.userAgent);
+    if (!st || Capacitor.isNativePlatform() || isStandalone() || dismissedRecently()) return;
     let alive = true;
     usesApp().then(has => {
       if (!alive || has) return;
-      setShow(true);
-      posthog.capture("app_banner_viewed", { source });
+      setStore(st);
+      posthog.capture("app_banner_viewed", { source, os: st.os });
     });
     return () => { alive = false; };
   }, [source]);
 
-  if (!show) return null;
+  if (!store) return null;
 
   const close = () => {
     try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch { /* stockage bloqué : on masque quand même */ }
     posthog.capture("app_banner_dismissed", { source });
-    setShow(false);
+    setStore(null);
   };
   const open = () => {
-    posthog.capture("app_banner_clicked", { source });
-    window.location.href = APP_STORE_URL;
+    posthog.capture("app_banner_clicked", { source, os: store.os });
+    window.location.href = store.url;
   };
 
   const card = variant === "card";
   return (
-    <div role="region" aria-label="Application iPhone" style={{
+    <div role="region" aria-label="Application ThePerfClub" style={{
       display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
       padding: card ? "10px 12px" : "9px 12px",
       background: card ? "rgba(255,255,255,.96)" : "#fff",

@@ -26,7 +26,7 @@ import Actions from "@/components/onboarding/Actions";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { buildOnboardingPath, isInvitedAthlete, readEliteFlag, ELITE_STEPS, PROGRAM_QUESTION_STEPS, type Role, type StepId } from "@/lib/onboardingPath";
 import { WHEN_OPTIONS, WHEN_OPTIONS_COACH, COUNT_OPTIONS, MirrorBody, mirrorTitle, mirrorTitleCoach, HealthStepBody, WeekStepBody, NotifStepBody, AppPushStepBody, ControlStepBody, StreakTitle, type ObWhen, type ObWhenCoach, type ObCount, type ControlSession, type WeekSession } from "@/components/onboarding/EliteSteps";
-import { APP_STORE_URL } from "@/lib/pwaInstall";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import dynamic from "next/dynamic";
@@ -385,14 +385,20 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      seulement), "app" (iPhone dans Safari ou ordinateur : on pousse l'app iPhone), null (rien). */
   const [notifMode, setNotifMode] = useState<"native" | "web" | "app" | null>(null);
   const [webIphone, setWebIphone] = useState(false);
+  const [webAndroid, setWebAndroid] = useState(false);
   const pushAvailable = notifMode !== null;
   useEffect(() => {
     setHealthAvailable(isNativeApp());
     const n = notificationSupport();
     const ua = navigator.userAgent;
     setWebIphone(/iPhone|iPad|iPod/.test(ua));
+    /* Android dans le navigateur (2026-10-28) : l'app Google Play dès sa publication, comme l'iPhone ;
+       avant, notification du navigateur. */
+    const android = /Android/.test(ua) && !isNativeApp();
+    setWebAndroid(android && !!PLAY_STORE_URL);
     if (isNativeApp()) setNotifMode(n === "native" ? "native" : null);
-    else if (/Android/.test(ua)) setNotifMode(n === "web" ? "web" : null);
+    else if (android && PLAY_STORE_URL) setNotifMode("app");
+    else if (android) setNotifMode(n === "web" ? "web" : null);
     else setNotifMode("app");
   }, []);
   const [obWhen, setObWhen] = useState<ObWhen | null>(null);
@@ -2096,7 +2102,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       if (notifMode === "app") {
         // L'heure choisie est gardée sur le profil : l'app iPhone s'en sert dès l'activation des notifs.
         const saveHour = () => {
-          posthog.capture("onboarding_app_push", { hour: obNotifHour, device: webIphone ? "iphone" : "desktop" });
+          posthog.capture("onboarding_app_push", { hour: obNotifHour, device: webIphone ? "iphone" : webAndroid ? "android" : "desktop" });
           if (eliteUid) {
             let tz = "Europe/Paris"; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* repli */ }
             supabase.from("profiles").update({ push_hour: obNotifHour, push_tz: tz }).eq("user_id", eliteUid)
@@ -2105,13 +2111,15 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         };
         return (
           <QuestionShell {...common}
-            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : "Reçois ta séance chaque matin sur ton iPhone."}
+            title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : `Reçois ta séance chaque matin sur ton ${webAndroid ? "téléphone" : PLAY_STORE_URL ? "téléphone" : "iPhone"}.`}
             sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. Télécharge l'app pour être prévenu chaque matin." : invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
             onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
-              ? { label: "Télécharger dans l'App Store", store: true, onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
+              ? { label: "Télécharger dans l'App Store", store: "apple", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }
+              : webAndroid
+              ? { label: "Disponible sur Google Play", store: "google", onClick: () => { saveHour(); window.open(PLAY_STORE_URL, "_blank"); obAdvance(); } }
               : { label: "C'est fait, continuer", onClick: () => { saveHour(); obAdvance(); } }}>
-            <AppPushStepBody desktop={!webIphone} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} />
+            <AppPushStepBody desktop={!webIphone && !webAndroid} android={webAndroid} hour={obNotifHour} setHour={setObNotifHour} sessionName={obWeekSessions[0]?.name ?? null} coach={coach} streak={streak} />
           </QuestionShell>
         );
       }

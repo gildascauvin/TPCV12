@@ -1,5 +1,6 @@
 "use client";
 
+import { PLAY_STORE_URL } from "@/lib/storeLinks";
 import { healthAppName, isAndroidApp } from "@/lib/native";
 import { useState } from "react";
 import { decisionRingState } from "@/components/sessions/DecisionRing";
@@ -346,23 +347,24 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
 
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
    navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
-   l'app iPhone, avec sa montre : l'app lit Apple Santé. ── */
-export function AppPushStepBody({ desktop, hour, setHour, sessionName, coach, streak }: {
-  desktop: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean;
+   l'app iPhone, avec sa montre : l'app lit Apple Santé. Android dans le navigateur : l'app Android
+   (Health Connect) dès qu'elle est sur Google Play (2026-10-28). ── */
+export function AppPushStepBody({ desktop, android = false, hour, setHour, sessionName, coach, streak }: {
+  desktop: boolean; android?: boolean; hour: number; setHour: (h: number) => void; sessionName: string | null; coach?: boolean; streak?: boolean;
 }) {
   return (
     <div>
       {desktop && (
         <div style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 16, border: `1px solid ${LINE}`, background: "#fff", marginBottom: 18 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/app-store-qr.svg" alt="QR code de l'App Store" width={92} height={92} style={{ flexShrink: 0, borderRadius: 8 }} />
-          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton iPhone et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
+          <img src={PLAY_STORE_URL ? "/app-qr.svg" : "/app-store-qr.svg"} alt="QR code pour télécharger l'app" width={92} height={92} style={{ flexShrink: 0, borderRadius: 8 }} />
+          <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45 }}>Scanne avec ton {PLAY_STORE_URL ? "téléphone" : "iPhone"} et connecte-toi avec le même compte : {coach ? "ton Coach Control" : "ton plan"} t&apos;attend.</span>
         </div>
       )}
       {/* Import de la montre (2026-10-23) : la vraie promesse de l'app pour un sportif équipé. */}
       {!coach && (
         <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45, margin: "0 0 16px" }}>
-          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans Apple Santé : tes analyses sont pleines dès l&apos;installation.
+          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans {android ? "Health Connect" : "Apple Santé"} : tes analyses sont pleines dès l&apos;installation.
         </p>
       )}
       <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} />
