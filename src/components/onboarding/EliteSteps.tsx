@@ -1,5 +1,6 @@
 "use client";
 
+import { healthAppName, isAndroidApp } from "@/lib/native";
 import { useState } from "react";
 import { decisionRingState } from "@/components/sessions/DecisionRing";
 import CoachRadar, { type RadarPoint } from "@/components/coach/CoachRadar";
@@ -152,7 +153,7 @@ export function HealthStepBody({ error }: { error?: string | null }) {
   return (
     <div>
       <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.5, marginBottom: 14 }}>
-        <b style={{ color: "#171b1f" }}>Via Apple Santé</b> · Apple Watch · Garmin · Whoop · Oura · Polar · Coros · Suunto
+        <b style={{ color: "#171b1f" }}>Via {healthAppName()}</b> · {isAndroidApp() ? "Samsung · Pixel Watch" : "Apple Watch"} · Garmin · Whoop · Oura · Polar · Coros · Suunto
       </div>
       {HEALTH_ROWS.map(r => (
         <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderRadius: 16, border: `1px solid ${LINE}`, background: "#fff", marginBottom: 8 }}>

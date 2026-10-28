@@ -39,7 +39,7 @@ async function fetchSubscriber(appUserId: string): Promise<RcSubscriber | null> 
 }
 
 export function statusFromSubscriber(sub: RcSubscriber): "athlete" | "coach" | "expired" | null {
-  const appStoreSubs = Object.entries(sub.subscriptions ?? {}).filter(([, s]) => !s.store || s.store === "app_store");
+  const appStoreSubs = Object.entries(sub.subscriptions ?? {}).filter(([, s]) => !s.store || s.store === "app_store" || s.store === "play_store");
   if (appStoreSubs.length === 0) return null;
 
   for (const plan of ["coach", "athlete"] as const) {

@@ -36,6 +36,13 @@ type SocialLoginPlugin = typeof import("@capgo/capacitor-social-login").SocialLo
 // Initialisé une seule fois pour les deux fournisseurs (Google et Apple).
 async function initSocialLogin(SocialLogin: SocialLoginPlugin) {
   if (initialized) return;
+  /* Android (2026-10-28) : le Credential Manager émet l'idToken pour le client Web (webClientId) ;
+     le client Android (package + SHA-1) doit juste exister dans la console Google Cloud. Pas d'Apple. */
+  if (Capacitor.getPlatform() === "android") {
+    await SocialLogin.initialize({ google: { webClientId: GOOGLE_WEB_CLIENT_ID, mode: "online" } });
+    initialized = true;
+    return;
+  }
   await SocialLogin.initialize({
     google: { iOSClientId: GOOGLE_IOS_CLIENT_ID, iOSServerClientId: GOOGLE_WEB_CLIENT_ID, mode: "online" },
     // iOS : Sign in with Apple passe par le système ; clientId sert juste à activer le fournisseur,

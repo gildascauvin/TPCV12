@@ -31,6 +31,11 @@ const config: CapacitorConfig = {
        (Accueil rouvert hors ligne). Domaines listés dans WKAppBoundDomains (Info.plist). */
     limitsNavigationsToAppBoundDomains: true,
   },
+  /* App Android (2026-10-28) : même coque. Marqueur TPCHeart dès le 1er build (texte Health Connect
+     prévu pour la FC des séances), voir src/lib/heartAccess.ts. */
+  android: {
+    appendUserAgent: "TPCHeart",
+  },
   plugins: {
     // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.
     /* Écran de lancement (2026-10-03) : fond de l'app + logo, gardé jusqu'à ce que la page soit
@@ -38,6 +43,9 @@ const config: CapacitorConfig = {
     SplashScreen: { launchAutoHide: false, backgroundColor: "#070a0d", showSpinner: false },
     // Notifications reçues app ouverte : affichées quand même (bannière + son), comme app fermée.
     PushNotifications: { presentationOptions: ["badge", "sound", "alert"] },
+    /* Android : la WebView est décalée sous la barre d'état et au-dessus de la barre de navigation
+       (équivalent de ios.contentInset "always"), sans injecter de variables CSS. */
+    SystemBars: { insetsHandling: "native" },
     SocialLogin: { providers: { google: true, apple: true, facebook: false, twitter: false } },
   },
 };

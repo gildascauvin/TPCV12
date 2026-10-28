@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import AuthBackground from "@/components/auth/AuthBackground";
 import BrandLogoStacked from "@/components/brand/BrandLogo";
 import { isNativeApp, nativeGoogleSignIn, nativeAppleSignIn } from "@/lib/nativeGoogleAuth";
+import { isAndroidApp } from "@/lib/native";
 import AppBanner from "@/components/AppBanner";
 
 function EyeOn() {
@@ -71,7 +72,7 @@ export default function LoginPage() {
 
   // Bouton Apple : app iOS uniquement (guideline 4.8), résolu après montage pour éviter un écart SSR.
   const [native, setNative] = useState(false);
-  useEffect(() => { setNative(isNativeApp()); }, []);
+  useEffect(() => { setNative(isNativeApp() && !isAndroidApp()); }, []);
 
   async function handleApple() {
     setLoading(true);

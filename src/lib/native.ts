@@ -42,3 +42,10 @@ export function signupPlatform(): SignupPlatform {
   if (/Android/.test(ua)) return "ANDROID";
   return "DESKTOP";
 }
+
+/* App Android (2026-10-28) : même coque que l'iOS, mais Apple Santé devient Health Connect, l'App Store
+   devient Google Play, et pas de Sign in with Apple (exigé par Apple seulement sur iOS). */
+export const isAndroidApp = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
+export const isIosApp = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+export const healthAppName = () => (isAndroidApp() ? "Health Connect" : "Apple Santé");
+export const storeName = () => (isAndroidApp() ? "Google Play" : "l'App Store");

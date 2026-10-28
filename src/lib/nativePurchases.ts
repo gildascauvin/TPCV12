@@ -1,3 +1,4 @@
+import { Capacitor } from "@capacitor/core";
 import type { PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 
 /* Abonnement Apple dans l'app iOS (2026-10-01). Apple interdit de vendre un abonnement numérique
@@ -21,8 +22,10 @@ export const PRODUCT_IDS: Record<Plan, Record<Billing, string>> = {
   coach:   { monthly: "tpc_coach_monthly",   annual: "tpc_coach_annual" },
 };
 
-// Clé publique iOS RevenueCat (pas un secret).
+// Clés publiques RevenueCat (pas des secrets). Android (Google Play) : 2026-10-28, mêmes IDs produits.
 const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "appl_vhcyRQNdfWsPRCBPsjRpfuBxgcj";
+const REVENUECAT_ANDROID_KEY = process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
+const revenueCatKey = () => (Capacitor.getPlatform() === "android" ? REVENUECAT_ANDROID_KEY : REVENUECAT_IOS_KEY);
 
 let configuredFor: string | null = null;
 
@@ -40,10 +43,10 @@ function withTimeout<T>(p: Promise<T>, ms: number, step: string): Promise<T> {
 }
 
 async function ensureConfigured(userId: string) {
-  if (!REVENUECAT_IOS_KEY) throw new Error("Achat indisponible dans l'app pour le moment.");
+  if (!revenueCatKey()) throw new Error("Achat indisponible dans l'app pour le moment.");
   const { Purchases } = await withTimeout(plugin(), 10000, "chargement du module");
   if (configuredFor === null) {
-    await withTimeout(Purchases.configure({ apiKey: REVENUECAT_IOS_KEY, appUserID: userId }), 10000, "configuration RevenueCat");
+    await withTimeout(Purchases.configure({ apiKey: revenueCatKey(), appUserID: userId }), 10000, "configuration RevenueCat");
   } else if (configuredFor !== userId) {
     await withTimeout(Purchases.logIn({ appUserID: userId }), 10000, "connexion RevenueCat");
   }
@@ -76,7 +79,7 @@ export async function purchasePlan(userId: string, plan: Plan, billing: Billing)
   try {
     const products = await getStoreProducts(userId);
     const product = products[PRODUCT_IDS[plan][billing]];
-    if (!product) return { ok: false, error: "Offre introuvable sur l'App Store. Réessaie plus tard." };
+    if (!product) return { ok: false, error: "Offre introuvable dans la boutique. Réessaie plus tard." };
     const { Purchases } = await ensureConfigured(userId);
     await Purchases.purchaseStoreProduct({ product });
   } catch (e) {

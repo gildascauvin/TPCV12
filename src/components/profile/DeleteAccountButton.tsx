@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { isNativeApp } from "@/lib/nativeGoogleAuth";
+import { isAndroidApp } from "@/lib/native";
 
 /* Suppression de compte (2026-10-01, exigée par Apple, guideline 5.1.1(v)). Lien discret en bas du
    profil → confirmation explicite → POST /api/account/delete → déconnexion. Un abonnement Apple ne
@@ -53,7 +54,9 @@ export default function DeleteAccountButton({ hasStripeSub }: { hasStripeSub: bo
             )}
             {native && (
               <div style={{ fontSize: 13, color: "#b42318", lineHeight: 1.5, marginTop: 10, padding: "10px 12px", background: "rgba(180,35,24,.06)", borderRadius: 12 }}>
-                Si tu t&apos;es abonné via l&apos;App Store, résilie aussi ton abonnement dans Réglages → ton nom → Abonnements : Apple continuerait sinon de le facturer.
+                {isAndroidApp()
+                  ? <>Si tu t&apos;es abonné via Google Play, résilie aussi ton abonnement dans Play Store → ton profil → Paiements et abonnements : Google continuerait sinon de le facturer.</>
+                  : <>Si tu t&apos;es abonné via l&apos;App Store, résilie aussi ton abonnement dans Réglages → ton nom → Abonnements : Apple continuerait sinon de le facturer.</>}
               </div>
             )}
             {error && <div style={{ fontSize: 13, color: "#b42318", marginTop: 10 }}>{error}</div>}

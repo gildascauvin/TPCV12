@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import posthog from "posthog-js";
 import { createClient } from "@/lib/supabase/client";
-import { signupPlatform } from "@/lib/native";
+import { signupPlatform, isAndroidApp, healthAppName } from "@/lib/native";
 import { APP_STORE_URL } from "@/lib/pwaInstall";
 import { syncHealthData } from "@/lib/healthSync";
 import { invalidatePhysio, type PhysioData } from "@/lib/physioData";
@@ -61,7 +61,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
   else if (dismissed) kase = null;
   else if (platform === "IOS_APP") kase = health.length === 0 ? "ios_no_health" : null;
   else if (platform === "IPHONE") kase = "web_iphone";
-  else if (platform === "ANDROID") kase = Capacitor.isNativePlatform() ? null : "web_android";
+  else if (platform === "ANDROID") kase = Capacitor.isNativePlatform() ? (health.length === 0 ? "ios_no_health" : null) : "web_android";
   else kase = "web_desktop";
   if (!kase) return null;
 
@@ -79,10 +79,10 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
     setBusy(true); setError(null);
     try {
       const n = await syncHealthData(createClient(), userId);
-      if (n == null) setError("Apple Santé n'a pas pu être lu. Vérifie l'autorisation dans Réglages, Santé.");
+      if (n == null) setError(isAndroidApp() ? "Health Connect n'a pas pu être lu. Vérifie l'autorisation dans les paramètres de Health Connect." : "Apple Santé n'a pas pu être lu. Vérifie l'autorisation dans Réglages, Santé.");
       invalidatePhysio();
     } catch {
-      setError("Apple Santé n'a pas pu être lu. Réessaie.");
+      setError(`${healthAppName()} n'a pas pu être lu. Réessaie.`);
     } finally {
       setBusy(false);
     }
@@ -130,10 +130,10 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
         <span style={foot}>{brands}</span>
       </>}
       {kase === "ios_no_health" && <>
-        <span style={eyebrow}>Apple Santé</span>
-        <span style={title}>Autorise Apple Santé : tes 30 derniers jours remplissent ces charts tout de suite.</span>
+        <span style={eyebrow}>{healthAppName()}</span>
+        <span style={title}>Autorise {healthAppName()} : tes 30 derniers jours remplissent ces charts tout de suite.</span>
         <span style={text}>Nuits, FC au repos, VFC et entraînements. Lecture seule, jamais revendu ni utilisé pour de la publicité.</span>
-        <button type="button" onClick={allowHealth} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Lecture d'Apple Santé…" : "Autoriser Apple Santé"}</button>
+        <button type="button" onClick={allowHealth} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Lecture en cours…" : `Autoriser ${healthAppName()}`}</button>
         {error && <span style={{ ...text, color: "#fca5a5" }}>{error}</span>}
         <span style={foot}>{brands}</span>
       </>}

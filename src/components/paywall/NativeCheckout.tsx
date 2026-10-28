@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import posthog from "posthog-js";
 import type { PurchasesStoreProduct } from "@revenuecat/purchases-capacitor";
 import { createClient } from "@/lib/supabase/client";
+import { isAndroidApp, storeName } from "@/lib/native";
 import { getStoreProducts, purchasePlan, restorePurchases, PRODUCT_IDS, type Billing } from "@/lib/nativePurchases";
 
 /* Pendant iOS de CheckoutForm (PaywallModal.tsx) : même emplacement (footer porté dans le drawer),
@@ -61,12 +62,12 @@ export function NativePurchasePanel({
         if (alive) setProduct(products[PRODUCT_IDS[mode][billing]]);
         if (alive && !products[PRODUCT_IDS[mode][billing]]) {
           const found = Object.keys(products);
-          setLoadError(`Offre indisponible sur l'App Store pour le moment (${PRODUCT_IDS[mode][billing]} absent ; Apple a renvoyé ${found.length} produit(s)${found.length ? " : " + found.join(", ") : ""}).`);
+          setLoadError(`Offre indisponible sur ${storeName()} pour le moment (${PRODUCT_IDS[mode][billing]} absent ; la boutique a renvoyé ${found.length} produit(s)${found.length ? " : " + found.join(", ") : ""}).`);
         }
       } catch (e) {
         console.error("[iap] products", e);
         const detail = e instanceof Error ? e.message : String(e);
-        if (alive) setLoadError(`Impossible de charger l'offre App Store (${detail}).`);
+        if (alive) setLoadError(`Impossible de charger l'offre ${isAndroidApp() ? "Google Play" : "App Store"} (${detail}).`);
       }
     })();
     return () => { alive = false; };
@@ -90,7 +91,7 @@ export function NativePurchasePanel({
     setBusy(null);
     if (res.error) { setError(res.error); return; }
     if (res.restored) { onSuccess(); return; }
-    setInfo("Aucun abonnement App Store actif à restaurer sur ce compte Apple.");
+    setInfo(isAndroidApp() ? "Aucun abonnement Google Play actif à restaurer sur ce compte Google." : "Aucun abonnement App Store actif à restaurer sur ce compte Apple.");
   }
 
   const days = trialDays(product);

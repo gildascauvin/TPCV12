@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ThePerfClub</string>
+    <string name="title_activity_main">ThePerfClub</string>
+    <string name="package_name">com.theperfclub.app</string>
+    <string name="custom_url_scheme">com.theperfclub.app</string>
+    <string name="health_connect_privacy_policy_url">https://www.theperfclub.com/politique-de-confidentialite/</string>
+</resources>

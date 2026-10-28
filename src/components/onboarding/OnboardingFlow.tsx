@@ -34,7 +34,7 @@ import dynamic from "next/dynamic";
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
-import { signupPlatform } from "@/lib/native";
+import { signupPlatform, isAndroidApp, healthAppName } from "@/lib/native";
 
 type Level = "beginner" | "intermediate" | "elite";
 
@@ -1620,7 +1620,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
               et des lecteurs d'écran ; pas `inert`, mal géré par React 18. */}
           <div style={{ display: "grid", gridTemplateRows: manualSignup ? "0fr" : "1fr", opacity: manualSignup ? 0 : 1, visibility: manualSignup ? "hidden" : "visible", transition: "grid-template-rows .2s ease, opacity .15s ease, visibility .2s" }}>
             <div style={{ overflow: "hidden", minHeight: 0 }}>
-              {nativeShell && (
+              {nativeShell && !isAndroidApp() && (
                 <button
                   type="button"
                   onClick={() => { if (!saving) handleAppleRegister(); }}
@@ -2015,9 +2015,9 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       return (
         <QuestionShell {...common}
           title="Ta montre sait déjà comment tu as dormi."
-          sub="Connecte Apple Santé : ton ressenti et tes mesures donnent une forme du jour bien plus juste."
+          sub={`Connecte ${healthAppName()} : ton ressenti et tes mesures donnent une forme du jour bien plus juste.`}
           onSkip={() => { posthog.capture("onboarding_health_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
-          cta={{ label: "Connecter Apple Santé", onClick: connect, busy: obHealthBusy }}>
+          cta={{ label: `Connecter ${healthAppName()}`, onClick: connect, busy: obHealthBusy }}>
           <HealthStepBody />
         </QuestionShell>
       );

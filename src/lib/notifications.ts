@@ -11,6 +11,8 @@ export type NotifSupport = "native" | "web" | "install-needed" | "unsupported";
 
 export function notificationSupport(): NotifSupport {
   if (typeof window === "undefined") return "unsupported";
+  /* App Android (2026-10-28) : pas encore de Firebase (FCM), register() ferait planter l'app. */
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") return "unsupported";
   if (Capacitor.isNativePlatform()) return Capacitor.isPluginAvailable("PushNotifications") ? "native" : "unsupported";
   if (!isPushSupported()) return "unsupported";
   if (needsInstallForPush()) return "install-needed";
