@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { hapticTick } from "@/lib/native";
 import { type AutoregDir, zoneRange, pctToPoints } from "@/lib/autoregulation";
 
@@ -33,6 +33,8 @@ function mixHex(a: string, b: string, t: number) {
 }
 const VERB = { low: "Alléger", high: "Surcharger", flat: "Maintenir" } as const;
 const ARROW = { low: "⬇", high: "⬆", flat: "→" } as const;
+
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 const clampDiff = (v: number) => Math.max(MIN, Math.min(MAX, v));
 const ang = (d: number) => A0 + ((clampDiff(d) - MIN) / (MAX - MIN)) * (A1 - A0);
@@ -141,11 +143,17 @@ export function decisionRingCenterY(size = 188) {
   return Math.round(r + sw * 0.95 + sw / 2 + 3);
 }
 
-export function RestDecisionRing({ size, light, hideHint }: { size?: number; light?: boolean; hideHint?: boolean }) {
+/* Anneau en grand (2026-10-28, POC https://claude.ai/artifact/5wmJBpxrMaMthAvi1qVeUm) : toute la
+   largeur disponible (210 à 300 px, et ≤ 34 % de la hauteur d'écran), trait affiné, le titre de la décision AU CENTRE à la place de
+   la flèche + verbe (déjà dits par le CTA, le titre ou la séance), halo de la couleur de sévérité.
+   La carte décision disparaît : conseil, CTA et Phase sont posés sous l'anneau par l'appelant. */
+type BigRingProps = { fluid?: boolean; centerTitle?: string; titleLocked?: boolean; glow?: string };
+
+export function RestDecisionRing({ size, light, hideHint, ...big }: { size?: number; light?: boolean; hideHint?: boolean } & BigRingProps) {
   return (
     <DecisionRing
       zoneLow={1} zoneHigh={2} value={1} readOnly hideZone onChange={() => {}}
-      size={size} light={light} hideHint={hideHint}
+      size={size} light={light} hideHint={hideHint} {...big}
       centerLabel={{ arrow: "→", verb: "Repos" }}
       hint="Jour de repos"
     />
@@ -155,7 +163,7 @@ export function RestDecisionRing({ size, light, hideHint }: { size?: number; lig
 /* Séance déjà faite (2026-09-30, Gildas : "dans le passé, je veux voir la jauge qu'il y ait une
    séance de faite ou non") — lecture seule, curseur sur le RPE réellement ressenti, repère blanc sur
    le prévu, zone = la difficulté prévue. Sans RPE noté, le curseur reste sur le prévu. */
-export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, zone, hideHint }: { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean; hideHint?: boolean;
+export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, zone, hideHint, ...big }: BigRingProps & { rpe: number | null; planned: number | null; size?: number; light?: boolean; hideZone?: boolean; hideHint?: boolean;
   /* Zone proposée ce jour-là (decisionCard.doneZone, 2026-10-04) : le RPE réel se lit par rapport à
      elle, plus seulement par rapport au plan. */
   zone?: { low: number; high: number } | null }) {
@@ -169,7 +177,7 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
     <DecisionRing
       zoneLow={zone ? zone.low : Math.round(target)} zoneHigh={zone ? zone.high : Math.round(target)} value={value} readOnly hideZone={hideZone} onChange={() => {}}
       plannedMarker={planned}
-      size={size} light={light} hideHint={hideHint}
+      size={size} light={light} hideHint={hideHint} {...big}
       centerLabel={{ arrow: "✓", verb: "Faite" }}
       hint={hint}
     />
@@ -177,8 +185,9 @@ export function DoneDecisionRing({ rpe, planned, size, light, hideZone = false, 
 }
 
 export default function DecisionRing({
-  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
-}: {
+  zoneLow, zoneHigh, recoDir, value, onChange, readOnly, plannedMarker, hint: hintOverride, size: sizeProp = 188, light, centerLabel, hideZone = false, hideHint = false, onHint,
+  fluid = false, centerTitle, titleLocked = false, glow,
+}: BigRingProps & {
   /* Texte sous l'anneau masqué (2026-10-12, Gildas) : il devient le titre de la carte décision
      (Premium, /today + Coach Control), remonté par `onHint`. Le gratuit le garde sous l'anneau. */
   hideHint?: boolean;
@@ -203,6 +212,24 @@ export default function DecisionRing({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [fluidSize, setFluidSize] = useState<number | null>(null);
+  useIsoLayoutEffect(() => {
+    if (!fluid || !wrapRef.current) return;
+    const el = wrapRef.current;
+    /* Plafonné aussi par la hauteur d'écran (2026-10-28, Gildas) : sur mobile, la feuille de séance
+       du bas recouvre ce qui suit l'anneau, il doit laisser voir conseil + CTA au-dessus d'elle. */
+    const measure = () => setFluidSize(Math.max(210, Math.min(300, Math.round(el.clientWidth), Math.round(window.innerHeight * 0.34))));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [fluid]);
+  const size = fluid ? (fluidSize ?? 300) : sizeProp;
+  /* Titre du centre sur 2 lignes maximum (2026-10-28, Gildas) : la police descend jusqu'à tenir. */
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const [titleShrink, setTitleShrink] = useState(0);
   /* Remplissage à l'arrivée (2026-10-27, qualité perçue) : l'arc et le curseur partent du bas de
      l'échelle et montent jusqu'à la valeur en 650 ms, une seule fois au montage. Les changements
      suivants (glisser, nouvelle reco) restent directs. */
@@ -222,10 +249,12 @@ export default function DecisionRing({
   const introRunning = intro < 1;
   const drawValue = introRunning ? MIN + (value - MIN) * (1 - Math.pow(1 - intro, 3)) : value;
 
-  const r = Math.round(size * 0.36), sw = Math.round(size * 0.085);
+  const r = Math.round(size * 0.36), sw = Math.round(size * (fluid ? 0.055 : 0.085));
   const rOut = r + sw * 0.95, rIn = r - sw * 0.95;
   const cx = size / 2, cy = Math.round(rOut + sw / 2 + 3);
   const h = Math.round(cy + rOut * 0.5 + sw / 2 + 3);
+  // Le curseur suit l'épaisseur du trait, pas le diamètre (16 = trait de l'anneau de 188 px).
+  const knob = fluid ? Math.max(1, sw / 16) : 1;
 
   const roundedValue = Math.round(value);
   const inZone = !hideZone && roundedValue >= zoneLow && roundedValue <= zoneHigh;
@@ -287,13 +316,22 @@ export default function DecisionRing({
   const k = recoDir ?? "flat";
   const zonePos = roundedValue < zoneLow ? "Sous la zone" : roundedValue > zoneHigh ? "Au-dessus de la zone" : "Dans la zone";
   const hintText = hintOverride ?? zonePos;
+  const fitKey = fluid ? `${size}|${centerTitle ?? hintText}` : "";
+  useIsoLayoutEffect(() => { setTitleShrink(0); }, [fitKey]);
+  useIsoLayoutEffect(() => {
+    const el = titleRef.current;
+    if (!fluid || !el) return;
+    const font = parseFloat(getComputedStyle(el).fontSize);
+    if (el.offsetHeight > font * 1.05 * 2 + 1 && font > 14) setTitleShrink(v => v + 1);
+  });
   const onHintRef = useRef(onHint);
   onHintRef.current = onHint;
   useEffect(() => { onHintRef.current?.(hintText); }, [hintText]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+    <div ref={wrapRef} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: fluid ? "100%" : undefined }}>
       <div style={{ position: "relative", width: size, height: h }}>
+        {fluid && glow && <div aria-hidden style={{ position: "absolute", left: "50%", top: cy, width: size * 1.15, height: size * 1.15, transform: "translate(-50%, -50%)", borderRadius: "50%", background: `radial-gradient(circle, ${glow}38 0%, ${glow}12 45%, transparent 70%)`, pointerEvents: "none" }} />}
         <svg
           ref={svgRef}
           width={size} height={h} viewBox={`0 0 ${size} ${h}`}
@@ -302,7 +340,7 @@ export default function DecisionRing({
           onPointerMove={handlePointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          style={{ display: "block", cursor: readOnly ? "default" : "pointer", touchAction: readOnly ? "auto" : "pan-y" }}
+          style={{ position: "relative", display: "block", cursor: readOnly ? "default" : "pointer", touchAction: readOnly ? "auto" : "pan-y" }}
         >
           <path d={arcPath(cx, cy, r, A0, A1)} fill="none" stroke="#1d2226" strokeWidth={sw} strokeLinecap="round" />
           {fills.map((f, i) => <path key={i} d={f.d} fill="none" stroke={f.color} strokeWidth={sw} strokeLinecap="butt" />)}
@@ -328,7 +366,7 @@ export default function DecisionRing({
           {/* Même curseur que la jauge horizontale du Planning (DecisionGauge.tsx) : 19px, sombre,
               vert dans la zone, halo doux et poignée à 3 traits. Liseré blanc sur fond sombre
               seulement, sinon le curseur sombre se perd sur le track sombre. */}
-          <g style={{ transform: `translate(${mx}px, ${my}px)`, transition: dragging || introRunning ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
+          <g style={{ transform: `translate(${mx}px, ${my}px)${knob !== 1 ? ` scale(${knob.toFixed(2)})` : ""}`, transition: dragging || introRunning ? "none" : "transform .35s cubic-bezier(.22,1,.36,1)" }}>
             <circle r={12.5} fill={inZone ? "rgba(42,128,69,.25)" : (light ? "rgba(24,24,27,.1)" : "rgba(255,255,255,.14)")} />
             <circle r={9.5} fill={inZone ? "#2a8045" : "#18181b"} stroke={light ? "none" : "rgba(255,255,255,.9)"} strokeWidth={1.5} />
             {[-3, 0, 3].map(dy => <line key={dy} x1={-3.5} x2={3.5} y1={dy} y2={dy} stroke="#fff" strokeWidth={2} strokeLinecap="round" />)}
@@ -338,7 +376,26 @@ export default function DecisionRing({
         </svg>
         {/* Arc ouvert en bas : le centre du cercle n'est pas celui de la boîte, on ancre sur cy.
             Mêmes tailles relatives qu'AggregateGauge (.215 valeur, .063 libellé). */}
-        <div style={{
+        {fluid ? (() => {
+          const t = centerTitle ?? hintText;
+          const titleFont = Math.round(size * (t.length > 16 ? 0.1 : 0.12)) - titleShrink;
+          return (
+            <div style={{
+              position: "absolute", left: 0, right: 0, top: cy, transform: "translateY(-50%)",
+              display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", pointerEvents: "none",
+            }}>
+              {/* Gratuit : le chiffre + son mot restent lisibles, le titre (la décision) est flouté. */}
+              {titleLocked && centerLabel && (
+                <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, fontSize: 12, letterSpacing: "0.09em", textTransform: "uppercase", color: light ? "rgba(23,27,31,.75)" : "rgba(255,255,255,.78)", marginBottom: 8 }}>
+                  {centerLabel.arrow} · {centerLabel.verb}
+                </span>
+              )}
+              <span ref={titleRef} style={{ fontWeight: 900, fontSize: titleFont, lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: Math.round(rIn * 1.85), textWrap: "balance", color: light ? "#171b1f" : "#fff", filter: titleLocked ? "blur(7px)" : undefined, userSelect: titleLocked ? "none" : undefined } as React.CSSProperties}>
+                {t}
+              </span>
+            </div>
+          );
+        })() : <div style={{
           position: "absolute", left: 0, right: 0, top: cy, transform: "translateY(-50%)",
           display: "flex", flexDirection: "column", alignItems: "center", pointerEvents: "none",
         }}>
@@ -348,7 +405,7 @@ export default function DecisionRing({
           <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", lineHeight: 1.15, marginTop: 4, color: light ? "#171b1f" : "#fff", fontSize: Math.max(9, Math.round(size * 0.063)) }}>
             {centerLabel?.verb ?? VERB[k]}
           </span>
-        </div>
+        </div>}
       </div>
       {!hideHint && <div style={{ marginTop: 8, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: inZone ? (light ? "#2a8045" : "#4ade80") : (light ? "rgba(0,0,0,.5)" : "rgba(255,255,255,.5)") }}>
         {hintText}

@@ -103,13 +103,17 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   const changeRef = useRef(onHeightChange); changeRef.current = onHeightChange;
   useEffect(() => {
     if (!dragArea) return;
-    let start: { x: number; y: number; h: number; axis: "x" | "y" | null } | null = null;
+    let start: { x: number; y: number; h: number; axis: "x" | "y" | null; lastY: number } | null = null;
+    const pageCanScrollDown = () => {
+      const el = document.scrollingElement ?? document.documentElement;
+      return window.scrollY + window.innerHeight < el.scrollHeight - 2;
+    };
     const onStart = (e: TouchEvent) => {
       const t = e.target as HTMLElement;
       // Un geste qui règle quelque chose (note d'une jauge, arc de l'anneau de décision) n'est pas un défilement.
       const grabsTouch = t.closest?.("[data-handle]") || (t instanceof SVGElement && getComputedStyle(t).touchAction === "none");
       if (!dragArea.contains(t) || grabsTouch) { start = null; return; }
-      start = { x: e.touches[0].clientX, y: e.touches[0].clientY, h: hRef.current, axis: null };
+      start = { x: e.touches[0].clientX, y: e.touches[0].clientY, h: hRef.current, axis: null, lastY: e.touches[0].clientY };
     };
     const onMove = (e: TouchEvent) => {
       if (!start) return;
@@ -119,10 +123,19 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
         start.axis = Math.abs(dy) > Math.abs(dx) ? "y" : "x";
       }
       if (start.axis !== "y") return;
+      const step = start.lastY - e.touches[0].clientY;
+      /* La page défile d'abord (2026-10-28, Gildas : « si je vois pas la Phase je dois pouvoir
+         scroller ») : doigt qui monte et contenu encore caché sous la feuille, ou doigt qui descend et
+         page déjà défilée. Seulement feuille repliée dans le sens montant, sinon page et feuille
+         s'alterneraient (ouvrir la feuille rallonge la page). La feuille ne repart qu'ensuite, depuis là où le doigt se trouve. */
+      if ((step > 0 && hRef.current <= boundsRef.current.min + 1 && pageCanScrollDown()) || (step < 0 && window.scrollY > 0)) {
+        start.y = e.touches[0].clientY; start.h = hRef.current; start.lastY = e.touches[0].clientY;
+        return;
+      }
+      start.lastY = e.touches[0].clientY;
       const bb = boundsRef.current, next = Math.max(bb.min, Math.min(bb.max, start.h + dy));
-      // Feuille ouverte en grand et le doigt monte, ou page déjà défilée et le doigt descend : la page défile.
+      // Feuille ouverte en grand et le doigt monte : la page défile.
       if (dy > 0 && hRef.current >= bb.max - 1 && next >= bb.max - 1) return;
-      if (dy < 0 && window.scrollY > 0) return;
       if (next === hRef.current && ((dy > 0 && next >= bb.max) || (dy < 0 && next <= bb.min))) return;
       e.preventDefault();
       setDragging(true);
@@ -132,7 +145,7 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
     const onWheel = (e: WheelEvent) => {
       if (!dragArea.contains(e.target as HTMLElement)) return;
       const bb = boundsRef.current, cur = hRef.current;
-      if (e.deltaY > 0 && cur < bb.max - 1) { e.preventDefault(); changeRef.current(Math.min(bb.max, cur + e.deltaY)); }
+      if (e.deltaY > 0 && cur < bb.max - 1 && !(cur <= bb.min + 1 && pageCanScrollDown())) { e.preventDefault(); changeRef.current(Math.min(bb.max, cur + e.deltaY)); }
       else if (e.deltaY < 0 && window.scrollY <= 0 && cur > bb.min + 1) { e.preventDefault(); changeRef.current(Math.max(bb.min, cur + e.deltaY)); }
     };
     window.addEventListener("touchstart", onStart, { passive: true });

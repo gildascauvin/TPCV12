@@ -543,6 +543,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       sessionLabel={autoregTargetTop.name}
       variant="dark"
       shape="ring"
+      ringFluid
+      ringGlow={decisionColor}
       onHint={setRingHint}
       actionsSlot={decisionLocked ? undefined : autoregActionsSlot}
       severityColor={decision.suggestion && !decisionLocked ? decisionColor : undefined}
@@ -569,12 +571,12 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     />
   ) : todaySessions.length === 0 ? (
     /* Jour de repos : l'anneau reste affiché, en lecture seule, dans sa zone (2026-09-30). */
-    <div style={{ display: "flex", justifyContent: "center" }}><RestDecisionRing hideHint /></div>
+    <RestDecisionRing hideHint fluid glow={decisionColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />
   ) : (() => {
     /* Séance(s) déjà faite(s), aujourd'hui ou dans le passé : anneau en lecture seule sur le RPE
        réel de la plus dure (2026-09-30). */
     const doneTop = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0];
-    return <div style={{ display: "flex", justifyContent: "center" }}><DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={decision.doneZone} /></div>;
+    return <DoneDecisionRing rpe={doneTop.rpe ?? null} planned={doneTop.target_difficulty ?? null} hideZone={decisionLocked} hideHint zone={decision.doneZone} fluid glow={decisionColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked={decisionLocked} />;
   })();
 
   useEffect(() => {
@@ -1072,9 +1074,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
               <div key={`card-${checkinReplay}`} style={{ position: "relative", zIndex: 2, animation: checkinReplay ? "tpcFadeUp .4s .45s cubic-bezier(.2,0,0,1) both" : undefined }} onClick={e => e.stopPropagation()}>
                 {/* Ligne Phase (2026-09-29) : son CTA flouté "Renseigner mon ressenti" remplace
                    l'ancien bouton "Comment tu vas ? →" sous la carte. */}
+                {/* Plus d'encart (2026-10-28, anneau en grand) : le titre est au centre de l'anneau,
+                    seuls le conseil, le CTA et la Phase restent dessous. */}
                 <AlertBox
-                  variant="darkColor"
-                  centered
+                  variant="bare"
                   alert={{ border: `${decisionColor}66`, glow: decisionColor, text: withTitle(decision.text, autoregTargetTop ? ringHint : decision.title, autoregTargetTop ? undefined : decision.titleDetail) }}
                   /* CTA d'ajustement juste sous le texte de la reco (2026-09-30), puis la ligne Phase. */
                   actions={(autoregTargetTop || decision.phase) ? (

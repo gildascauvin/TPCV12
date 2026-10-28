@@ -121,6 +121,9 @@ interface Props {
   actionsSlot?: HTMLElement | null;
   /* Taille de l'anneau (shape="ring"), défaut 188 sur fond sombre / 150 sur fond clair. */
   ringSize?: number;
+  /* Anneau en grand, titre au centre (2026-10-28, voir DecisionRing `fluid`) + couleur du halo. */
+  ringFluid?: boolean;
+  ringGlow?: string;
   /* Gratuit (2026-10-02) : réglage MANUEL de la difficulté, une entrée — jauge sans zone ni
      recommandation, bouton Appliquer seulement après un déplacement. Ce n'est pas une décision :
      pas de « 1re décision » ni de priming déclenchés. */
@@ -137,7 +140,7 @@ interface Props {
   demo?: boolean;
 }
 
-export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest, demo = false }: Props) {
+export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice, plannedDifficulty = 6, onPreviewChange, onApply, onMaintenir, onUndo, isActive, variant = "dark", severityColor, shape = "bar", actionsSlot, ringSize, ringFluid = false, ringGlow, free = false, onHint, onSetDifficulty, storedDecision, viewer = { role: "athlete" }, actionRequest, demo = false }: Props) {
   const light = variant === "light";
   const hasSuggestion = dir !== undefined;
   // Neutre (ni rouge "Alléger" ni vert "Surcharger") en mode libre — il n'y a pas de recommandation
@@ -419,6 +422,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                 recoDir={dir}
                 light={light}
                 size={ringSize ?? (light ? 150 : 188)}
+                fluid={ringFluid} glow={ringGlow} titleLocked={free}
                 hideZone={free}
                 /* Gratuit (2026-10-12) : le chiffre + son mot (légère / modérée / dure) au centre, plus
                    rien dessous — le RPE seul ne parle pas à tout le monde. */
@@ -484,6 +488,7 @@ export default function AutoregButtons({ notes, sessionId, dir, reco = 0, advice
                   recoDir={decidedPct ? dir : undefined}
                   light={light}
                   size={ringSize ?? (light ? 150 : 188)}
+                  fluid={ringFluid} glow={ringGlow} titleLocked={free}
                   zoneLow={appliedZone.zoneLow}
                   zoneHigh={appliedZone.zoneHigh}
                   hideZone={free}

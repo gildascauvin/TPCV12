@@ -70,7 +70,25 @@ function AlertText({ text, size }: { text: string; size?: number }) {
   );
 }
 
-export default function AlertBox({ alert, actions, variant = "light", centered = false }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor"; centered?: boolean }) {
+export default function AlertBox({ alert, actions, variant = "light", centered = false }: { alert: DayAlert; actions?: React.ReactNode; variant?: "dark" | "light" | "darkColor" | "bare"; centered?: boolean }) {
+  /* "bare" (2026-10-28, anneau en grand) : sans encart, posé sous l'anneau qui porte déjà le titre.
+     La 1re ligne de `text` (le titre) n'est donc pas affichée, seulement le détail. */
+  if (variant === "bare") {
+    const rest = alert.text.split("\n").slice(1);
+    return (
+      <div style={{ margin: "0 0 12px", textAlign: "center", color: "#fff" }}>
+        {rest.length > 0 && (
+          <div style={{ maxWidth: 560, margin: "0 auto", textWrap: "pretty" } as React.CSSProperties}>
+            {rest.map((line, i) => (
+              <div key={i} style={{ fontSize: 15, fontWeight: 500, lineHeight: 1.45, opacity: 0.85, marginTop: i > 0 ? 3 : 0 }}>{line.replace(/ ([:;!?])/g, "\u00a0$1")}</div>
+            ))}
+          </div>
+        )}
+        {actions && <div style={{ marginTop: rest.length ? 12 : 0 }} onClick={e => e.stopPropagation()}>{actions}</div>}
+      </div>
+    );
+  }
+
   if (variant === "light") {
     const { bg, border, text } = lightColors(alert.glow);
     return (

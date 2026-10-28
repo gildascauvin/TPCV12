@@ -400,7 +400,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
           {adjustable ? (
             /* Réglage manuel (entrée) : jauge sans zone ni reco, Appliquer après un déplacement. */
-            <div onClick={e => e.stopPropagation()}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%" }}>
               <AutoregButtons
                 free
                 sessionId={topSession!.id}
@@ -410,13 +410,15 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 variant="dark"
                 shape="ring"
                 ringSize={ringSz}
+                ringFluid
+                ringGlow={badgeColor}
                 onSetDifficulty={async d => { await onSetDifficulty?.(topSession!, d); }}
                 isActive
               />
             </div>
           )
-            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint />
-            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint />}
+            : todaySessions.length === 0 || !topSession ? <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />
+            : <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} hideZone hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} titleLocked />}
         </div>
       )}
       <LockedBlur locked={!!locked} bare={lockedBare} surface="coach_card" onUnlock={() => onUnlock?.()} title="Décision prête" sub="Vois quoi faire de cette séance." cta="Activer le Coach Control" radius={24}>
@@ -426,7 +428,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
              décision juste en dessous explique déjà la forme ; le ring ne reste que sans séance
              ajustable (repos, séance déjà faite). */}
           {adjustable ? (
-            <div onClick={e => e.stopPropagation()}>
+            <div onClick={e => e.stopPropagation()} style={{ width: "100%" }}>
               <AutoregButtons
                 actionRequest={actionRequest}
                 sessionId={topSession!.id}
@@ -441,6 +443,8 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
                 variant="dark"
                 shape="ring"
                 ringSize={ringSz}
+                ringFluid
+                ringGlow={badgeColor}
                 onHint={setRingHint}
                 actionsSlot={actionsSlot}
                 severityColor={decision.suggestion ? badgeColor : undefined}
@@ -462,9 +466,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
               />
             </div>
           ) : todaySessions.length === 0 || !topSession ? (
-            <RestDecisionRing size={ringSz} hideHint />
+            <RestDecisionRing size={ringSz} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           ) : (
-            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint />
+            <DoneDecisionRing size={ringSz} rpe={topSession.rpe ?? null} planned={topSession.target_difficulty ?? null} zone={decision.doneZone} hideHint fluid glow={badgeColor} centerTitle={decision.title ?? decision.text.split("\n")[0]} />
           )}
         </div>}
         {(!!athlete.invite_email || showBadge || showReviewed) && (
@@ -495,8 +499,9 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
          "Décider/Revoir/Voir" (ouvre l'éditeur libre) reste ici, seul cas où l'encart garde une
          action, quand aucune séance du jour n'est ajustable. */}
       <div style={{ marginBottom: todaySessions.length > 0 ? 12 : 0 }}>
+        {/* Plus d'encart (2026-10-28, anneau en grand) : le titre est au centre de l'anneau. */}
         <AlertBox
-          variant="darkColor"
+          variant="bare"
           alert={{ border: `${badgeColor}66`, glow: badgeColor, text: locked ? decision.text : withTitle(decision.text, adjustable ? ringHint : decision.title, adjustable ? undefined : decision.titleDetail) }}
           centered={!!decision.phase}
           actions={adjustable ? (
