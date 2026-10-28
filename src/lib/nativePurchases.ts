@@ -24,7 +24,7 @@ export const PRODUCT_IDS: Record<Plan, Record<Billing, string>> = {
 
 // Clés publiques RevenueCat (pas des secrets). Android (Google Play) : 2026-10-28, mêmes IDs produits.
 const REVENUECAT_IOS_KEY = process.env.NEXT_PUBLIC_REVENUECAT_IOS_KEY ?? "appl_vhcyRQNdfWsPRCBPsjRpfuBxgcj";
-const REVENUECAT_ANDROID_KEY = process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY ?? "";
+const REVENUECAT_ANDROID_KEY = process.env.NEXT_PUBLIC_REVENUECAT_ANDROID_KEY ?? "goog_apYGqaPtuRafehtlkkWuymTJdox";
 const revenueCatKey = () => (Capacitor.getPlatform() === "android" ? REVENUECAT_ANDROID_KEY : REVENUECAT_IOS_KEY);
 
 let configuredFor: string | null = null;
