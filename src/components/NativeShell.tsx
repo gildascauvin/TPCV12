@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { useRouter } from "next/navigation";
 import { hideSplash } from "@/lib/native";
 import { initNativeNotifications } from "@/lib/notifications";
@@ -20,6 +20,9 @@ export default function NativeShell() {
     const vp = document.querySelector('meta[name="viewport"]');
     if (vp) vp.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
     hideSplash();
+    /* Android (2026-10-28) : barres système toujours sombres, mais en mode clair du téléphone les
+       icônes (heure, batterie) passaient en gris foncé, invisibles. On force les icônes claires. */
+    if (Capacitor.getPlatform() === "android") SystemBars.setStyle({ style: SystemBarsStyle.Dark }).catch(() => {});
     // Notifications (2026-10-14) : tap sur une notif → sa page ; jeton APNs renvoyé s'il a changé.
     initNativeNotifications((url) => router.push(url)).catch(() => {});
   }, [router]);
