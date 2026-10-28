@@ -11,8 +11,9 @@ export type NotifSupport = "native" | "web" | "install-needed" | "unsupported";
 
 export function notificationSupport(): NotifSupport {
   if (typeof window === "undefined") return "unsupported";
-  /* App Android (2026-10-28) : pas encore de Firebase (FCM), register() ferait planter l'app. */
-  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") return "unsupported";
+  /* App Android (2026-10-28) : notifications via Firebase (FCM) à partir du build 2, marqué TPCFcm
+     dans l'user agent. Sur le build 1, sans Firebase, register() ferait planter l'app. */
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android" && !navigator.userAgent.includes("TPCFcm")) return "unsupported";
   if (Capacitor.isNativePlatform()) return Capacitor.isPluginAvailable("PushNotifications") ? "native" : "unsupported";
   if (!isPushSupported()) return "unsupported";
   if (needsInstallForPush()) return "install-needed";
@@ -23,15 +24,17 @@ const localTz = () => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return "Europe/Paris"; }
 };
 
+/* Jeton de l'appareil : APNs sur iPhone, Firebase (FCM) sur Android. */
 async function postApnsToken(token: string, hour?: number) {
+  const key = Capacitor.getPlatform() === "android" ? "fcmToken" : "apnsToken";
   await fetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apnsToken: token, hour, tz: localTz() }),
+    body: JSON.stringify({ [key]: token, hour, tz: localTz() }),
   });
 }
 
-/* Enregistre l'appareil auprès d'Apple et renvoie le jeton (ou null en cas d'échec / délai). */
+/* Enregistre l'appareil auprès d'Apple (ou de Firebase sur Android) et renvoie le jeton (ou null en cas d'échec / délai). */
 async function registerNative(): Promise<string | null> {
   const { PushNotifications } = await import("@capacitor/push-notifications");
   return new Promise((resolve) => {

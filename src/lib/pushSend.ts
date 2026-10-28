@@ -1,9 +1,10 @@
 import webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendApns, apnsConfigured } from "@/lib/apns";
+import { sendFcm, fcmConfigured } from "@/lib/fcm";
 
 /* Envoi d'une notification à un utilisateur, tous appareils confondus (2026-10-14) : web push (PWA,
-   navigateur) et APNs (app iOS). Serveur uniquement, client admin. Les jetons morts sont supprimés. */
+   navigateur), APNs (app iOS) et Firebase (app Android). Serveur uniquement, client admin. Les jetons morts sont supprimés. */
 
 export type PushPayload = { title: string; body: string; url: string; tag: string };
 
@@ -26,6 +27,13 @@ export async function sendToUser(admin: SupabaseClient, userId: string, payload:
     if (sub.kind === "apns") {
       if (!apnsConfigured()) return;
       const r = await sendApns(sub.endpoint, payload);
+      if (r === "ok") delivered = true;
+      if (r === "gone") await admin.from("push_subscriptions").delete().eq("id", sub.id);
+      return;
+    }
+    if (sub.kind === "fcm") {
+      if (!fcmConfigured()) return;
+      const r = await sendFcm(sub.endpoint, payload);
       if (r === "ok") delivered = true;
       if (r === "gone") await admin.from("push_subscriptions").delete().eq("id", sub.id);
       return;

@@ -34,7 +34,9 @@ const config: CapacitorConfig = {
   /* App Android (2026-10-28) : même coque. Marqueur TPCHeart dès le 1er build (texte Health Connect
      prévu pour la FC des séances), voir src/lib/heartAccess.ts. */
   android: {
-    appendUserAgent: "TPCHeart",
+    /* TPCFcm (build 2, 2026-10-28) : Firebase est embarqué, le site peut activer les notifications
+       (un build sans Firebase planterait à l'enregistrement). */
+    appendUserAgent: "TPCHeart TPCFcm",
   },
   plugins: {
     // Google natif (connexion) ; Apple gardé pour Sign in with Apple, exigé par l'App Store.

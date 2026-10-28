@@ -34,6 +34,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notify" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notify_accent" />
     </application>
 
     <!-- Permissions -->
@@ -85,6 +92,6 @@
     <uses-permission android:name="android.permission.health.WRITE_HYDRATION" tools:node="remove" />
     <uses-permission android:name="android.permission.health.READ_NUTRITION" tools:node="remove" />
     <uses-permission android:name="android.permission.health.WRITE_NUTRITION" tools:node="remove" />
-    <!-- Notifications push : pas en V1 (pas de Firebase), voir src/lib/notifications.ts. -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:node="remove" />
+    <!-- Notifications push via Firebase (FCM) depuis le build 2, voir src/lib/notifications.ts. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

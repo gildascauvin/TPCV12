@@ -2,11 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* Abonnement aux notifications : web push (PWA/navigateur, { subscription }) ou app iOS
-   ({ apnsToken }, 2026-10-14). Optionnel : heure du rappel du matin (0-23) et fuseau. */
+   ({ apnsToken }, 2026-10-14) ou app Android ({ fcmToken }, 2026-10-28). Optionnel : heure du rappel du matin (0-23) et fuseau. */
 export async function POST(req: Request) {
-  const { subscription, apnsToken, hour, tz } = await req.json();
+  const { subscription, apnsToken, fcmToken, hour, tz } = await req.json();
   const isApns = typeof apnsToken === "string" && /^[0-9a-f]{32,200}$/i.test(apnsToken);
-  if (!isApns && (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth)) {
+  // Jeton Firebase de l'app Android (2026-10-28).
+  const isFcm = typeof fcmToken === "string" && /^[\w:-]{100,400}$/.test(fcmToken);
+  if (!isApns && !isFcm && (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth)) {
     return Response.json({ error: "Requête invalide" }, { status: 400 });
   }
 
@@ -18,6 +20,8 @@ export async function POST(req: Request) {
   const { error } = await admin.from("push_subscriptions").upsert(
     isApns
       ? { user_id: user.id, kind: "apns", endpoint: apnsToken, p256dh: null, auth: null }
+      : isFcm
+      ? { user_id: user.id, kind: "fcm", endpoint: fcmToken, p256dh: null, auth: null }
       : { user_id: user.id, kind: "web", endpoint: subscription.endpoint, p256dh: subscription.keys.p256dh, auth: subscription.keys.auth },
     { onConflict: "endpoint" },
   );
