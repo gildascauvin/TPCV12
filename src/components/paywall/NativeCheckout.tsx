@@ -16,9 +16,18 @@ import { getStoreProducts, purchasePlan, restorePurchases, PRODUCT_IDS, type Bil
    abonnement auto-renouvelable. */
 
 const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+// Android : nos CGU (pas de contrat de licence standard imposé comme le EULA Apple).
+const ANDROID_TERMS_URL = "https://www.theperfclub.com/conditions-generales-dutilisation/";
 const PRIVACY_URL = "https://www.theperfclub.com/politique-de-confidentialite/";
 
 function trialDays(p: PurchasesStoreProduct | undefined): number | null {
+  // Google Play (2026-10-28) : l'essai est la phase gratuite de l'offre par défaut du forfait.
+  const free = p?.defaultOption?.freePhase;
+  if (free) {
+    const n = free.billingPeriod.value * (free.billingCycleCount || 1);
+    const u = free.billingPeriod.unit;
+    return u === "DAY" ? n : u === "WEEK" ? n * 7 : u === "MONTH" ? n * 30 : null;
+  }
   const intro = p?.introPrice;
   if (!intro || intro.price !== 0) return null;
   const n = intro.periodNumberOfUnits * (intro.cycles || 1);
@@ -139,7 +148,7 @@ export function NativePurchasePanel({
           style={{ background: "none", border: "none", padding: 0, color: "rgba(255,255,255,.5)", fontSize: 11, textDecoration: "underline", cursor: "pointer" }}>
           {busy === "restore" ? "..." : "Restaurer mes achats"}
         </button>
-        <a href={TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,.5)" }}>Conditions</a>
+        <a href={isAndroidApp() ? ANDROID_TERMS_URL : TERMS_URL} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,.5)" }}>Conditions</a>
         <a href={PRIVACY_URL} target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,.5)" }}>Confidentialité</a>
       </div>
     </div>

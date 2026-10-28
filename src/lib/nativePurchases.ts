@@ -63,7 +63,9 @@ export async function getStoreProducts(userId: string): Promise<Record<string, P
   const ids = Object.values(PRODUCT_IDS).flatMap(p => Object.values(p));
   if (ids.some(id => !productCache.has(id))) {
     const { products } = await withTimeout(Purchases.getProducts({ productIdentifiers: ids }), 45000, "produits App Store");
-    products.forEach(p => productCache.set(p.identifier, p));
+    /* Google Play renvoie « abonnement:forfait » (tpc_athlete_monthly:monthly) : on range sous l'ID
+       de l'abonnement, comme sur l'App Store. */
+    products.forEach(p => productCache.set(p.identifier.split(":")[0], p));
   }
   return Object.fromEntries(productCache);
 }
