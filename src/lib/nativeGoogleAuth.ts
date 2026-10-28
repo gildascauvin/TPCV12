@@ -64,7 +64,10 @@ export async function nativeGoogleSignIn(supabase: SupabaseClient): Promise<{ ok
   const nonce = await makeNonce();
   let idToken: string | null = null;
   try {
-    const res = await SocialLogin.login({ provider: "google", options: { scopes: ["email", "profile"], nonce: nonce.hashed, forcePrompt: true } });
+    /* Android (2026-10-28) : le plugin rejette toute connexion qui passe des scopes sans MainActivity
+       modifiée ; il demande déjà email, profil et openid par défaut. */
+    const android = Capacitor.getPlatform() === "android";
+    const res = await SocialLogin.login({ provider: "google", options: android ? { nonce: nonce.hashed, forcePrompt: true } : { scopes: ["email", "profile"], nonce: nonce.hashed, forcePrompt: true } });
     idToken = res.result && "idToken" in res.result ? res.result.idToken : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
