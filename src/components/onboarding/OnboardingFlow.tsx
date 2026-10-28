@@ -2193,13 +2193,18 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         {currentStep === "value_intro" && (() => {
           const isClaimed = !!(hasClaimedProgram && claimedProgramName);
           const roleKnownUpfront = !!(pendingData?.role || initialRole);
+          // Nom court du programme claimé pour l'accroche : on coupe avant le tiret
+          // (« Tendons & Ligaments — Renforcement 6 semaines » → « Tendons & Ligaments »),
+          // et au-delà de 28 caractères on retombe sur l'accroche générique (titre trop long sur mobile).
+          const claimedShortName = isClaimed ? claimedProgramName!.split(/\s[—–-]\s/)[0].trim() : "";
+          const showClaimedName = claimedShortName.length > 0 && claimedShortName.length <= 28;
 
           const headline = claimedAthleteName
             ? <>Ton sportif <em>{claimedAthleteName}</em> t&apos;attend.</>
             : coachInviteName
             ? <>Ton coach <em>{coachInviteName}</em> t&apos;attend.</>
-            : isClaimed
-            ? <>Ton programme <em>{claimedProgramName}</em> est prêt à être personnalisé.</>
+            : showClaimedName
+            ? <>Ton programme <em>{claimedShortName}</em> ne sait pas que tu as mal dormi. <span style={{ color: "#ff8a5c" }}>ThePerfClub, si.</span></>
             : <>Ton programme ne sait pas que tu as mal dormi. <span style={{ color: "#ff8a5c" }}>ThePerfClub, si.</span></>;
 
           const subhead = "Sommeil, stress, courbatures : ta forme du jour ajuste la charge de tes séances. Le plan, lui, ne bouge pas.";
