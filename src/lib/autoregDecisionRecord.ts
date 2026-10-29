@@ -11,7 +11,7 @@ import type { AutoregDir, AutoregOriginal } from "@/lib/autoregulation";
 
 export interface AutoregDecisionRecord {
   /* Sens de la reco au moment de la décision, null = pas de reco ("plan cohérent"). Figée : un
-     check-in modifié après coup ne la réécrit pas. */
+     point forme modifié après coup ne la réécrit pas. */
   proposed: AutoregDir | null;
   zoneLow: number | null;
   zoneHigh: number | null;
@@ -25,7 +25,7 @@ export interface AutoregDecisionRecord {
   decided_at?: string;
 }
 
-/* Une séance déplacée à un autre jour repart de zéro (la reco dépend du check-in du jour). */
+/* Une séance déplacée à un autre jour repart de zéro (la reco dépend du point forme du jour). */
 export function validDecision(s: { date: string; autoreg_decision?: AutoregDecisionRecord | null } | null | undefined): AutoregDecisionRecord | null {
   const d = s?.autoreg_decision;
   if (!d) return null;

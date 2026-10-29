@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /* Accueil mobile (2026-10-22, POC « séance en sheet » PgTQbMYpsUhqCounWHL28M) : la séance du jour, ou
-   le check-in tant qu'il n'est pas fait, vit dans une feuille posée en bas de l'écran, au-dessus de la
+   le point forme tant qu'il n'est pas fait, vit dans une feuille posée en bas de l'écran, au-dessus de la
    navigation. Glisser la poignée la monte ou la descend, elle reste où on la lâche (bornée) ; un tap
    sur la poignée passe au cran suivant. Glisser le contenu la pilote aussi (voir plus bas). Le
    haut de la page reste visible et défile au-dessus d'elle (le parent réserve sa hauteur en bas). */
@@ -27,9 +27,9 @@ export default function HomeSheet({ height, onHeightChange, onVisibleHeight, chi
   /** Zone de la page dont le défilement pilote la feuille : faire défiler l'Accueil vers le bas la fait
       monter en suivant le doigt, remonter (en haut de page) la fait redescendre. */
   dragArea?: HTMLElement | null;
-  /** Passe par-dessus la navigation (check-in : ses boutons restent en bas de l'écran). */
+  /** Passe par-dessus la navigation (point forme : ses boutons restent en bas de l'écran). */
   overNav?: boolean;
-  /** Change quand le contenu est remplacé (check-in → séance) : le contenu repart en haut. */
+  /** Change quand le contenu est remplacé (point forme → séance) : le contenu repart en haut. */
   contentKey?: string;
 }) {
   const navClear = overNav ? 0 : NAV_CLEAR;

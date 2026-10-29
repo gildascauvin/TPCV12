@@ -24,7 +24,7 @@ export type LifecycleKind = keyof typeof LIFECYCLE_TEMPLATES;
 
 const RECUP_READY_DAYS = 5;      // même seuil que la norme provisoire de récupération
 const CHARGE_READY_DAYS = 7;     // même seuil que partialChargeReady (trainingLoad.ts)
-const NO_CHECKIN_GAP = 3;        // jours sans check-in avant la relance
+const NO_CHECKIN_GAP = 3;        // jours sans point forme avant la relance
 const NO_CHECKIN_COOLDOWN = 21;  // une relance au plus toutes les 3 semaines
 
 function parisDate(offsetDays = 0): string {
@@ -147,7 +147,7 @@ export async function runLifecycleEmails(admin: Admin): Promise<Record<Lifecycle
       && await sendOnce(admin, apiKey, emails, p.user_id, "no_checkin", last, params)) sent.no_checkin++;
   }
 
-  // Coach : premier check-in d'un vrai sportif lié (hier ou aujourd'hui), une fois par sportif.
+  // Coach : premier point forme d'un vrai sportif lié (hier ou aujourd'hui), une fois par sportif.
   const coaches = profiles.filter(p => p.mode === "coach");
   if (coaches.length) {
     const { data: links } = await admin.from("coach_athletes")

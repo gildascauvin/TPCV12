@@ -61,7 +61,7 @@ export function refreshOnboardingProgress(): Promise<void> {
   return inflight;
 }
 
-/** À appeler après une action qui peut cocher une étape (check-in, séance, décision, invitation…). */
+/** À appeler après une action qui peut cocher une étape (point forme, séance, décision, invitation…). */
 export function notifyOnboardingProgress() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(ONBOARDING_REFRESH));
 }

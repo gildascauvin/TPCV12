@@ -85,7 +85,7 @@ const SCIENCE_COACH: Record<CoachScienceKey, { title: string; n: string; text: s
     n: "27",
     text: "études le montrent : coach et sportif ne jugent pas la même séance de la même façon. Le plus souvent, la séance « facile » ne l'est pas pour le sportif.",
     source: "Inoue et al. · Sports Medicine Open, 2022",
-    quote: "Ce qu'il te dit, c'est quand il y pense. Son check-in, c'est chaque matin.",
+    quote: "Ce qu'il te dit, c'est quand il y pense. Son point forme, c'est chaque matin.",
   },
   c_vu: {
     title: "Tu prévois une séance. Ils en vivent une autre.",
@@ -142,7 +142,7 @@ export function MirrorBody({ when, coach }: { when: ObWhen | ObWhenCoach | null;
   );
 }
 
-/* ── ob_health : Apple Santé, juste avant le check-in. Marques en texte, jamais de logos (refus App
+/* ── ob_health : Apple Santé, juste avant le point forme. Marques en texte, jamais de logos (refus App
    Store possible) : l'icône Santé n'est permise que dans le badge officiel. ── */
 const HEALTH_ROWS = [
   { icon: "🌙", label: "Sommeil", hint: "Durée et régularité, chaque nuit" },
@@ -173,7 +173,7 @@ export function HealthStepBody({ error }: { error?: string | null }) {
 
 /* ── ob_week : l'aperçu du programme (2026-10-27, POC https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu).
    Bannière, simulateur de forme de /p/ (même rampe, même vocabulaire de zone) calé sur son vrai
-   check-in, puis ses séances de la semaine en cartes complètes, recalculées au glisser. ── */
+   point forme, puis ses séances de la semaine en cartes complètes, recalculées au glisser. ── */
 export interface WeekSession { id: string; date: string; name: string; notes: string | null; target_difficulty: number | null }
 const WELLNESS_TRACK_GRADIENT = `linear-gradient(to right, ${WELLNESS_RAMP.map(x => `${x.hex} ${x.stop * 100}%`).join(", ")})`;
 
@@ -276,7 +276,7 @@ export function WeekStepBody({ sessions, program, checkinScore, acclimatation, t
 export const NOTIF_HOURS = [6, 7, 8, 9];
 /* Série des 5 premiers matins (2026-10-22), fusionnée dans le titre de l'écran notifications :
    5 petits ronds (jour 1 plein, demain cerclé) devant « Jour 1 sur 5 ». Même repère que l'écran de
-   fin du check-in in-app (« Jour n sur 5 ») ; ici l'argument des notifications : ne pas casser la série. */
+   fin du point forme in-app (« Jour n sur 5 ») ; ici l'argument des notifications : ne pas casser la série. */
 export function StreakTitle({ day = 1 }: { day?: number }) {
   return (
     <>
@@ -295,7 +295,7 @@ export function StreakTitle({ day = 1 }: { day?: number }) {
 
 export function NotifStepBody({ hour, setHour, sessionName, coachName, error, coach, streak }: {
   hour: number; setHour: (h: number) => void; sessionName: string | null; coachName: string | null; error?: string | null;
-  /** Le sportif vient de faire son 1er check-in : les notifs servent à continuer sa série. */
+  /** Le sportif vient de faire son 1er point forme : les notifs servent à continuer sa série. */
   streak?: boolean;
   /** Coach : alerte récup fragile + résumé du matin (notifs de prod depuis iOS 1.1). */
   coach?: boolean;
@@ -306,14 +306,14 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
     { title: "2 sportifs à regarder ce matin", body: "Thomas M. · Léa P.", when: clock },
   ] : streak ? [
     { title: "Jour 2 sur 5 · Comment tu te sens ?", body: "10 secondes pour continuer ta série et ajuster ta séance.", when: "demain" },
-    { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton check-in pour l'ajuster.` : "Fais ton check-in pour ajuster ta séance.", when: "après-demain" },
+    { title: "Jour 3 sur 5 · Ta norme se précise", body: sessionName ? `${sessionName} : fais ton point forme pour l'ajuster.` : "Fais ton point forme pour ajuster ta séance.", when: "après-demain" },
   ] : [
-    { title: "Ta 1re séance ajustée t'attend", body: "Fais ton check-in : ta séance s'adapte à ta forme du jour.", when: "demain" },
+    { title: "Ta 1re séance ajustée t'attend", body: "Fais ton point forme : ta séance s'ajuste en conséquence.", when: "demain" },
     { title: sessionName ?? "Comment tu te sens ce matin ?", body: "10 secondes pour l'ajuster à ta forme.", when: "après-demain" },
   ];
   return (
     <div>
-      {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit ta forme dès ton check-in.</p>}
+      {coachName && <p style={{ fontSize: 15, color: MUTED, lineHeight: 1.5, margin: "0 0 16px" }}>{coachName} voit comment tu vas dès ton point forme.</p>}
       {/* L'heure d'abord : c'est le seul choix de l'écran, il doit être visible sans défiler. */}
       <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 8 }}>{coach ? "Le résumé du matin, à quelle heure ?" : streak ? "À quelle heure on te le rappelle ?" : "À quelle heure ?"}</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
@@ -346,7 +346,7 @@ export function NotifStepBody({ hour, setHour, sessionName, coachName, error, co
 }
 
 /* ── ob_notif sur le web hors Android (iPhone dans Safari, ordinateur) : pas de notification du
-   navigateur (impossible dans Safari hors app, et le check-in se vit sur le téléphone). On pousse
+   navigateur (impossible dans Safari hors app, et le point forme se vit sur le téléphone). On pousse
    l'app iPhone, avec sa montre : l'app lit Apple Santé. Android dans le navigateur : l'app Android
    (Health Connect) dès qu'elle est sur Google Play (2026-10-28). ── */
 export function AppPushStepBody({ desktop, android = false, hour, setHour, sessionName, coach, streak }: {
@@ -374,8 +374,8 @@ export function AppPushStepBody({ desktop, android = false, hour, setHour, sessi
 
 /* ── ob_control (coach) : le déclic (2026-10-27, POC https://claude.ai/artifact/LeydVcBfSZF8osutKTvNWu).
    Son programme appliqué à 4 sportifs de démo sur le radar du Coach Control ; Thomas vient de faire
-   son check-in et c'est au coach de décider, avec le vrai anneau de décision (mode démo : rien
-   d'enregistré, pas de « 1re décision »). Les siens remplacent les démos dès leur check-in. ── */
+   son point forme et c'est au coach de décider, avec le vrai anneau de décision (mode démo : rien
+   d'enregistré, pas de « 1re décision »). Les siens remplacent les démos dès leur point forme. ── */
 export interface ControlSession { name: string; notes: string | null; target_difficulty: number }
 const THOMAS_SCORE = 30;
 

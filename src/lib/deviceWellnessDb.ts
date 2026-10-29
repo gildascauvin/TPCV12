@@ -28,7 +28,7 @@ const hasDevice = (d: DeviceInputs) => d.device_sleep_minutes != null || d.devic
 
 type WellnessInput = { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[] };
 
-/* Au moment d'enregistrer un check-in : complète le payload avec les données montre du jour et recalcule
+/* Au moment d'enregistrer un point forme : complète le payload avec les données montre du jour et recalcule
    le score. Renvoie le payload tel quel s'il n'y a pas de montre. */
 export async function withDeviceScore<T extends WellnessInput & { base_score: number; score: number }>(
   supabase: SupabaseClient, userId: string, date: string, data: T,
@@ -39,7 +39,7 @@ export async function withDeviceScore<T extends WellnessInput & { base_score: nu
   return { ...data, ...device, base_score, score };
 }
 
-/* Après une synchro Santé : la montre écrit souvent en retard, donc les check-ins déjà enregistrés des
+/* Après une synchro Santé : la montre écrit souvent en retard, donc les points forme déjà enregistrés des
    derniers jours peuvent gagner (ou voir changer) leurs données montre. Recalcule et réécrit ceux qui
    ont bougé. Renvoie le nombre de jours mis à jour. */
 export async function reapplyDeviceToRecentWellness(supabase: SupabaseClient, userId: string, days = 35): Promise<number> {
@@ -70,7 +70,7 @@ export async function reapplyDeviceToRecentWellness(supabase: SupabaseClient, us
   return updated;
 }
 
-/* Données montre d'un jour (avec leurs normes), sans check-in — pour la carte "Plan à confirmer". */
+/* Données montre d'un jour (avec leurs normes), sans point forme — pour la carte "Plan à confirmer". */
 export async function fetchDeviceInputs(supabase: SupabaseClient, userId: string, date: string): Promise<DeviceInputs> {
   return deviceInputsFor(date, await fetchHealth(supabase, userId, date));
 }

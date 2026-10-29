@@ -1,6 +1,6 @@
 import { DARK_CARD_BG } from "@/lib/theme";
 
-/* Teaser à l'aveugle (2026-10-14, POC variante B fond dark) : annonce en tête du check-in et du tiroir
+/* Teaser à l'aveugle (2026-10-14, POC variante B fond dark) : annonce en tête du point forme et du tiroir
    "Terminer la séance" que des données physiologiques existent, sans aucune valeur lisible (les
    chiffres floutés sont factices). La comparaison n'apparaît qu'après Valider. */
 export default function PhysioTeaser({ label, text, chips }: { label: string; text: string; chips: string[] }) {

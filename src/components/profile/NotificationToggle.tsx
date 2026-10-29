@@ -33,7 +33,7 @@ export default function NotificationToggle({ role = "athlete", initialHour = 8 }
   const usable = support === "native" || support === "web";
   const desc = role === "coach"
     ? "Alerte quand un sportif a besoin de toi, résumé chaque matin"
-    : "Rappel du check-in chaque matin, séance ajustée à ta forme";
+    : "Rappel du point forme chaque matin, séance ajustée à ta réponse";
 
   return (
     <div style={{ background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 24, padding: "16px 16px", marginBottom: 22 }}>

@@ -7,7 +7,7 @@
    - `penalty` (piste 2) : signal appris sur le sportif. Par type de séance (depuis le 2026-10-24 :
      la qualité physique dominante de ses lignes, les 8 qualités des tests (testQualities.ts) + la
      technique de son sport ; avant : force vs vitesse-explosivité, l'endurance n'avait aucun type),
-     jamais le nom de séance qui change d'une semaine à l'autre, la dimension du check-in qui rend
+     jamais le nom de séance qui change d'une semaine à l'autre, la dimension du point forme qui rend
      ses séances plus dures que prévu. Quand elle est
      basse ce matin et que la séance du jour est de cette famille : même malus que la charge
      chronique « à surveiller » (−10).
@@ -15,7 +15,7 @@
    quand le signal se déclenche, séance plus dure que prévu 11 fois sur 18 (61 %), contre 8 sur 30
    pour les « Alléger » du moteur générique (27 %).
 
-   La reco du matin est figée au check-in dans sessions.autoreg_proposal (avec ces réglages), pour
+   La reco du matin est figée au point forme dans sessions.autoreg_proposal (avec ces réglages), pour
    que le coach voie la même décision et que le verdict de fin de séance la relise. */
 
 import { bestExerciseMatch, type ExerciseCategory } from "@/lib/exerciseBank";
@@ -67,7 +67,7 @@ export const PERSONAL_PENALTY = -10;
 
 type CheckinDims = { sleep: number; stress: number; recovery: number; motivation: number };
 
-/* Bas = la moitié « moins bien » de l'échelle du check-in, aux mêmes seuils que le bilan. */
+/* Bas = la moitié « moins bien » de l'échelle du point forme, aux mêmes seuils que le bilan. */
 export const DIM_LOW: Record<PersonalDim, (c: CheckinDims) => boolean> = {
   stress: c => c.stress >= 4,
   sleep: c => c.sleep <= 6,
@@ -116,7 +116,7 @@ export function sessionTypes(notes: string | null | undefined): { quality: Sessi
 
 type HistSession = { date: string; notes: string | null; rpe: number | null; target_difficulty: number | null; done: boolean };
 
-/* Signaux appris : pour chaque famille (≥ 12 séances notées avec check-in), la dimension dont le
+/* Signaux appris : pour chaque famille (≥ 12 séances notées avec point forme), la dimension dont le
    « bas » rend les séances plus dures que prévu (≥ 8 séances de chaque côté, écart ≥ 20 points). */
 export function learnSignals(sessions: HistSession[], checkins: (CheckinDims & { date: string })[], before?: string): PersonalSignal[] {
   const byDate = new Map(checkins.map(c => [c.date, c]));

@@ -1,4 +1,4 @@
-/* Reco du matin calculée et figée CÔTÉ SERVEUR (2026-10-23), juste après le check-in, d'où qu'il
+/* Reco du matin calculée et figée CÔTÉ SERVEUR (2026-10-23), juste après le point forme, d'où qu'il
    vienne (Accueil, Planning, onboarding). Même calcul que la carte décision de /today
    (computeDecisionCard) : score du matin (wellnessSignal), norme personnelle (42 j), charge chronique
    avec les entraînements montre non notés, seuil personnel (profiles.autoreg_shift) et signal appris
@@ -90,7 +90,7 @@ export async function notifyCoachesIfLighten(admin: SupabaseClient, userId: stri
   return sent;
 }
 
-/* Séance faite sans reco figée (avant le 2026-10-23, ou check-in après la séance) : le calcul du
+/* Séance faite sans reco figée (avant le 2026-10-23, ou point forme après la séance) : le calcul du
    matin rejoué ce jour-là, côté serveur, avec les réglages personnels (computeProposalFor). Pas de
    texte figé : le réalisé ne peut pas être comparé au prévu (séance gardée par défaut). Rien n'est
    écrit. Utilisé par l'écran de résultat du coach et du sportif. */

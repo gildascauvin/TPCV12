@@ -103,7 +103,7 @@ export function sessionResult(s: ResultSession, week: WeekSession[], subject?: s
   if (s.rpe >= 8 && hard >= 2) {
     rows.push({ icon: "⚡", text: subject
       ? `Sa ${ORD(hard)} séance très dure de la semaine : ${subject} enchaîne. Regarde son ressenti demain matin.`
-      : `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain matin, ton check-in en tiendra compte.` });
+      : `Ta ${ORD(hard)} séance très dure de la semaine : tu enchaînes. Demain matin, ton point forme en tiendra compte.` });
   } else if (s.duration && others.length > 0) {
     const load = (w: { rpe: number | null; duration: number | null }) => (w.rpe ?? 0) * (w.duration ?? 0);
     const total = load(s) + others.reduce((a, w) => a + load(w), 0);

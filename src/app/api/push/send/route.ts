@@ -8,7 +8,7 @@ import { qualitativeDifficulty } from "@/lib/autoregulation";
    (profiles.push_hour / push_tz) et une seule fois par jour (push_log, sendOnce) : relancer ce
    passage ne renvoie jamais rien. Au plus 2 notifs programmées par jour et par personne (matin, soir).
 
-   Sportif : matin = check-in (1re séance ajustée à J1) ; 20 h = séance du jour pas encore notée.
+   Sportif : matin = point forme (1re séance ajustée à J1) ; 20 h = séance du jour pas encore notée.
    Coach : matin = résumé (séances trop dures hier, sportifs inactifs, programmes qui finissent) ;
    20 h = relance d'un coach gratuit qui n'a encore aucun vrai sportif (3 max). */
 
@@ -48,10 +48,10 @@ async function athleteMorning(admin: Admin, p: Profile, today: string) {
   const planned = (sessions ?? []).filter((s) => !s.done).sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0));
   const main = planned[0];
   let title = "Comment tu te sens ce matin ?";
-  let body = "10 secondes de check-in et ThePerfClub t'aide à ajuster ta séance.";
+  let body = "Ton point forme en 10 secondes, et ThePerfClub ajuste ta séance.";
   if (first?.date === shiftDate(today, -1) && main) {
     title = "Ta 1re séance ajustée t'attend";
-    body = "Fais ton check-in : ta séance s'adapte à ta forme du jour.";
+    body = "Fais ton point forme : ta séance s'ajuste en conséquence.";
   } else if (main) {
     // « Aujourd'hui : {nom} » : pas d'accord à faire, le nom d'une séance est souvent masculin.
     title = `Aujourd'hui : ${main.name || `séance ${main.target_difficulty ? qualitativeDifficulty(main.target_difficulty) : "prévue"}`}`;

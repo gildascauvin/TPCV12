@@ -70,7 +70,7 @@ const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const hm = (m: number) => { const t = Math.round(m); return `${Math.floor(t / 60)} h ${String(t % 60).padStart(2, "0")}`; };
 const isSoiree = (c: BilanCheckin) => (c.behaviors ?? []).some(b => SOIREE.has(b));
 const declared = (c: BilanCheckin) => (c.sleep + (10 - c.stress) + c.recovery + c.motivation) / 4;
-/* Forme RESSENTIE sur 100 : les 4 réponses du check-in seules. Ni `score` (qui retire déjà 3 pts par
+/* Forme RESSENTIE sur 100 : les 4 réponses du point forme seules. Ni `score` (qui retire déjà 3 pts par
    comportement négatif coché : comparer « soirée vs pas soirée » dessus est circulaire), ni
    `base_score` (qui intègre la VFC et la FC au repos de la montre). */
 const felt = (c: BilanCheckin) => declared(c) * 10;
@@ -193,7 +193,7 @@ function predit(sessions: BilanSession[], checkins: BilanCheckin[]): BilanSlide 
 }
 
 /* ── Le moteur rejoué sur l'historique (pistes 1 et 3) ──────────────────────────────────────────
-   Pour chaque séance faite avec un check-in le même jour : la reco cliquée (autoreg_decision), sinon
+   Pour chaque séance faite avec un point forme le même jour : la reco cliquée (autoreg_decision), sinon
    celle figée le matin (autoreg_proposal), sinon le moteur rejoué ce jour-là avec les seules données
    d'avant (baseline, charge chronique). Les deux curseurs (alléger, pousser) peuvent varier : c'est ce
    qui permet de proposer « Me recaler » avec ce que ça aurait changé. Chaque séance est jugée par la
@@ -506,7 +506,7 @@ export function computeBilan(input: {
     if (s.kind === "regularite") kpis.push({ value: String(s.sessions), label: s.noGap ? "séances, zéro semaine sautée" : "séances" });
     if (s.kind === "charge") kpis.push({ value: `${s.pctInZone} %`, label: "des jours en zone de charge" });
     if (s.kind === "tests") kpis.push({ value: `+${s.main.pct} %`, label: s.main.name });
-    if (s.kind === "ressenti" && s.crashes >= 3) kpis.push({ value: `${s.crashesSeen} / ${s.crashes}`, label: "chutes de VFC vues par le check-in" });
+    if (s.kind === "ressenti" && s.crashes >= 3) kpis.push({ value: `${s.crashesSeen} / ${s.crashes}`, label: "chutes de VFC vues par le point forme" });
   }
   const f = slides.find(s => s.kind === "fatigue");
   const line = f && f.kind === "fatigue" && f.afterScore !== null && f.normScore - f.afterScore < 5 ? "Une soirée (alcool ou sortie) se paie le lendemain, pas plus." : null;

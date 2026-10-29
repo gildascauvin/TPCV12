@@ -103,7 +103,7 @@ export function usePhysioData(userId: string | null | undefined, enabled = true)
   return data;
 }
 
-/* Entrées de la carte décision pour un jour (2026-10-11) : désaccord du check-in (ligne 2) et écart
+/* Entrées de la carte décision pour un jour (2026-10-11) : désaccord du point forme (ligne 2) et écart
    au cœur répété sur les 2 dernières séances d'une même famille (Phase). */
 export function physioDecisionInputs(data: PhysioData | null, date: string): { verdictTitle: string | null; heartRepeated: string | null; sessionHeart: string | null } | null {
   if (!data) return null;

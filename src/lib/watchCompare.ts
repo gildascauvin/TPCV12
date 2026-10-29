@@ -4,7 +4,7 @@ import type { WellnessBaselineResult } from "@/lib/wellnessBaseline";
 
 /* Ressenti vs montre dans la carte Récupération (2026-10-23, maquettes validées par Gildas :
    https://claude.ai/artifact/GoiHozJU7mGYmyv49LJEMp). Pour chaque sujet, deux courbes sur la même
-   échelle : ce que le sportif déclare au check-in (trait plein) et ce que mesure sa montre (pointillé),
+   échelle : ce que le sportif déclare au point forme (trait plein) et ce que mesure sa montre (pointillé),
    chacune en ÉCART À SA NORME sur la fenêtre affichée (z : (valeur − moyenne) / écart-type), sinon
    une note sur 10 et des minutes ne se comparent pas. Toutes les séries sont orientées « plus haut =
    mieux » (stress et FC au repos inversés).

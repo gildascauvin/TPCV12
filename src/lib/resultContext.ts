@@ -7,7 +7,7 @@ import type { ResultSession, WeekSession } from "@/lib/sessionInsight";
 import { validDecision } from "@/lib/autoregDecisionRecord";
 import type { AutoregProposal } from "@/lib/autoregPersonal";
 
-/* Données des écrans de résultat (fin de check-in, fin de séance), lues une fois à la validation par
+/* Données des écrans de résultat (fin de point forme, fin de séance), lues une fois à la validation par
    le sportif lui-même (RLS : ses propres lignes). */
 
 const HISTORY_DAYS = CONSEILS_HISTORY_DAYS; // même fenêtre que l'onglet Récupération
@@ -30,7 +30,7 @@ export async function loadCheckinContext(userId: string, date: string): Promise<
     // Séance prévue ou faite ce jour-là : sans elle, le conseil ne parle pas de « ta séance du jour ».
     supabase.from("sessions").select("id").eq("user_id", userId).eq("date", date).limit(1),
   ]);
-  [w, s, t, d].forEach(r => { if (r.error) console.error("[résultat check-in] lecture:", r.error.message); });
+  [w, s, t, d].forEach(r => { if (r.error) console.error("[résultat point forme] lecture:", r.error.message); });
   const rows = (w.data ?? []) as CheckinRow[];
   const tomorrowDifficulty = ((t.data ?? []) as { target_difficulty: number | null }[]).reduce((m, x) => Math.max(m, x.target_difficulty ?? 0), 0) || null;
   const done = (s.data ?? []) as (DoneSession & { duration: number | null })[];
@@ -51,7 +51,7 @@ export async function loadSessionContext(userId: string, sessionId: string): Pro
   if (one.error) console.error("[résultat séance] lecture:", one.error.message);
   const row = one.data as ResultSession | null;
   if (!row) return { session: null, week: [] };
-  /* Séance sans reco enregistrée (faite avant le 2026-10-23, ou check-in fait après la séance) : le
+  /* Séance sans reco enregistrée (faite avant le 2026-10-23, ou point forme fait après la séance) : le
      calcul du matin rejoué ce jour-là côté serveur, avec les réglages personnels, pour que le verdict
      existe aussi en relecture. Rien n'est écrit en base. */
   if (row.rpe != null && !validDecision(row) && !(row.autoreg_proposal && row.autoreg_proposal.date === row.date)) {

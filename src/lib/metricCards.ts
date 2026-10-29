@@ -481,7 +481,7 @@ export function chartSpecFor(
    celui-ci aligné sur le mot du formulaire, "État physique"). Garder une seconde table ici serait
    exactement le point de divergence qu'on vient de supprimer. */
 export const DIMENSION_CHART_LABELS = DIMENSION_LABELS;
-/* `device` (2026-10-11) : même alignement que `baseline`. Sur le sommeil, un jour sans check-in mais
+/* `device` (2026-10-11) : même alignement que `baseline`. Sur le sommeil, un jour sans point forme mais
    avec une nuit mesurée prend son point "durée seule" (DeviceDay.sleepZ). */
 export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResult | null)[], dates: string[], device?: DeviceDay[]): ChartSpec {
   /* On trace le Z, pas la valeur brute (2026-09-28, Gildas : "comparer aux valeurs d'il y a 7 jours
@@ -525,7 +525,7 @@ export function dimensionSpec(dim: DimensionKey, baseline: (WellnessBaselineResu
       const only = deviceOnly(i);
       if (only?.sleepZ != null && only.sleepMin != null) {
         const m = Math.round(only.sleepMin);
-        return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")} mesuré · pas de check-in`;
+        return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")} mesuré · pas de point forme`;
       }
       const r = raws[i];
       if (r === null || r === undefined) return null;
@@ -576,7 +576,7 @@ export function rhrSpec(device: DeviceDay[], dates: string[]): ChartSpec {
 
 /* Stress mesuré par la montre (Garmin Daily Summaries, 2026-10-23) : moyenne de la journée, échelle
    Garmin 1-100 et ses 4 zones (repos ≤ 25, faible 26-50, moyen 51-75, élevé ≥ 76). Plus bas = mieux.
-   Distinct du stress DÉCLARÉ du check-in (sous-indicateur "Stress"). Affichage seulement. */
+   Distinct du stress DÉCLARÉ du point forme (sous-indicateur "Stress"). Affichage seulement. */
 export function stressSpec(device: DeviceDay[], dates: string[]): ChartSpec {
   const ramp = WELLNESS_RAMP;
   const c = [ramp[ramp.length - 1].hex, ramp[3]?.hex ?? ramp[2].hex, ramp[2].hex, ramp[0].hex];

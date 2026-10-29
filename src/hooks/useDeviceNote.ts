@@ -7,8 +7,8 @@ import { deviceSummary } from "@/lib/deviceWellness";
 import { HEALTH_SYNCED_EVENT } from "@/lib/healthDays";
 
 /* Résumé montre d'un jour ("Nuit 5h40 · FC 4 bpm au-dessus de ta norme"), pour la carte décision avant
-   le check-in (2026-09-30). Se relit après chaque synchro Apple Santé. null sans montre, et jamais
-   chargé quand `enabled` est faux (check-in déjà fait, sandbox). */
+   le point forme (2026-09-30). Se relit après chaque synchro Apple Santé. null sans montre, et jamais
+   chargé quand `enabled` est faux (point forme déjà fait, sandbox). */
 export function useDeviceNote(userId: string, date: string, enabled: boolean): string | null {
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => {

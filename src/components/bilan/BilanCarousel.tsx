@@ -172,9 +172,9 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
     case "regularite": {
       const scope = bilan.period.kind === "week" ? "cette semaine" : bilan.period.kind === "month" ? "ce mois-ci" : "depuis le début";
       return (<>
-        <h2 style={h2}>{s.sessions} séance{s.sessions > 1 ? "s" : ""}. {s.checkins} check-in{s.checkins > 1 ? "s" : ""}.{s.noGap && <><br /><span style={{ color: "#ff8a5c" }}>Zéro semaine sautée.</span></>}</h2>
+        <h2 style={h2}>{s.sessions} séance{s.sessions > 1 ? "s" : ""}. {s.checkins} point{s.checkins > 1 ? "s" : ""} forme.{s.noGap && <><br /><span style={{ color: "#ff8a5c" }}>Zéro semaine sautée.</span></>}</h2>
         <div style={card}><div style={small}>Charge d'entraînement {bilan.period.kind === "week" ? "par jour" : "par semaine"}</div><Bars bars={s.bars} height={120} /></div>
-        <p style={body}>{T("Ton", "Son")} check-in rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
+        <p style={body}>{T("Ton", "Son")} point forme rempli {s.checkins} matin{s.checkins > 1 ? "s" : ""} sur {s.days}, {scope}.</p>
       </>);
     }
     case "charge":
@@ -193,13 +193,13 @@ function SlideBody({ s, bilan, onShare, shared, recal, n }: { s: BilanSlide; bil
       return (<>
         <h2 style={h2}>{T("Ton", "Son")} ressenti <span style={{ color: "#8cc4f5" }}>vaut une montre.</span></h2>
         <div style={card}><div style={small}>Sommeil mesuré, selon {T("ta", "sa")} réponse au réveil</div><Bars bars={s.sleepBars} height={100} color="#6da7ec" dim="rgba(109,167,236,0.4)" showValues /></div>
-        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} check-in l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} check-in l'avait vu ${s.crashesSeen} fois.`}</div></div>}
+        {s.crashes >= 3 && <div style={card}><div style={{ fontSize: 14, lineHeight: 1.45, color: "rgba(255,255,255,0.85)" }}>{s.crashesSeen === s.crashes ? `Les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} point forme l'avait vu aussi.` : `Sur les ${s.crashes} matins où ${T("ta", "sa")} VFC s'est effondrée, ${T("ton", "son")} point forme l'avait vu ${s.crashesSeen} fois.`}</div></div>}
       </>);
     case "predit":
       return (<>
         <h2 style={h2}>Ce qui rend {T("tes", "ses")} séances <span style={{ color: "#ff8a5c" }}>plus dures que prévu.</span></h2>
         {s.blocks.map((b, i) => <div key={i} style={card}><div style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>{n ? b.title.replace(/\bton /g, "son ").replace(/\bta /g, "sa ") : b.title}</div><Rows rows={b.rows} color="#ff6a2b" /></div>)}
-        <p style={{ ...body, fontSize: 14 }}>{T("Séances ressenties plus dures que ce que tu avais prévu, selon ton check-in du matin.", "Séances ressenties plus dures que prévu, selon son check-in du matin.")}</p>
+        <p style={{ ...body, fontSize: 14 }}>{T("Séances ressenties plus dures que ce que tu avais prévu, selon ton point forme du matin.", "Séances ressenties plus dures que prévu, selon son point forme du matin.")}</p>
       </>);
     case "biais":
       return (<>
@@ -319,7 +319,7 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
       const flagged = s.rows.filter(r => r.flag);
       return (<>
         <h2 style={h2}>{flagged.length ? <>{names(flagged.map(r => r.name))} <span style={{ color: "#ff8a5c" }}>{flagged.length > 1 ? "sont" : "est"} à surveiller.</span></> : <>Tout le groupe <span style={{ color: "#7ee08f" }}>suit.</span></>}</h2>
-        <p style={body}>Les jours de séance : check-in fait, fait mais fatigué, ou manqué.</p>
+        <p style={body}>Les jours de séance : point forme fait, fait mais fatigué, ou manqué.</p>
         {s.rows.map((r, i) => (
           <div key={i} style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
@@ -327,7 +327,7 @@ function GroupSlideBody({ s, open }: { s: GroupSlide; open: OpenAthlete }) {
               {r.flag && <span style={{ fontSize: 13, fontWeight: 700, color: "#ffb38a" }}>{r.flag}</span>}
             </div>
             <Marks marks={r.marks} />
-            <div style={small}>{r.missed ? `${pl(r.missed, "check-in")} manqué${r.missed > 1 ? "s" : ""}` : "Aucun check-in manqué"} sur {pl(r.days, "séance")}{r.tired ? `, fatigué ${pl(r.tired, "jour")}` : ""}.</div>
+            <div style={small}>{r.missed ? `${pl(r.missed, "point")} forme manqué${r.missed > 1 ? "s" : ""}` : "Aucun point forme manqué"} sur {pl(r.days, "séance")}{r.tired ? `, fatigué ${pl(r.tired, "jour")}` : ""}.</div>
             <AthleteLink id={r.id} name={r.name} open={open} />
           </div>
         ))}
@@ -535,7 +535,7 @@ export default function BilanCarousel({ userId, kind, anchor, today, source, sub
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18, paddingTop: 12 }}>
           {!bilan && !failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "On rassemble les données du groupe…" : n ? "On rassemble ses données…" : "On rassemble tes données…"}</div>}
           {failed && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Impossible de charger le bilan du groupe." : n ? `Impossible de charger le bilan de ${n}.` : "Impossible de charger ton bilan."} Réessaie dans un instant.</div>}
-          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur check-in et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son check-in et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton check-in et note tes séances quelques jours : il se construit tout seul."}</div>}
+          {bilan && !slides.length && <div style={{ ...body, textAlign: "center", marginTop: 80 }}>{group ? "Pas encore assez de données pour ce bilan. Il se construit tout seul quand tes sportifs remplissent leur point forme et notent leurs séances." : n ? `Pas encore assez de données pour ce bilan. Il se construit tout seul quand ${n} remplit son point forme et note ses séances.` : "Pas encore assez de données pour ce bilan. Remplis ton point forme et note tes séances quelques jours : il se construit tout seul."}</div>}
           {bilan && slide && (slide.kind.startsWith("g_")
             ? <GroupSlideBody s={slide as GroupSlide} open={(id, name) => { posthog.capture("coach_bilan_opened", { from: "group_bilan", period: kind, slide: slide.kind }); setDrill({ athleteId: id, name }); }} />
             : <SlideBody s={slide as BilanSlide} bilan={bilan as Bilan} onShare={share} shared={shared} recal={recal} n={n} />)}

@@ -3,7 +3,7 @@
 /* Carte « Ton bilan est prêt » en haut de l'Accueil (2026-10-23) : le bilan du mois passé les 3
    premiers jours du mois, sinon celui de la semaine passée du lundi au mercredi. Elle disparaît une
    fois ouverte ou fermée ; ensuite le bilan se retrouve dans le sélecteur de date. Rien si la période
-   n'a pas au moins 3 check-ins (un bilan vide ne donne pas envie de revenir). */
+   n'a pas au moins 3 points forme (un bilan vide ne donne pas envie de revenir). */
 
 import { useEffect, useState } from "react";
 import posthog from "posthog-js";

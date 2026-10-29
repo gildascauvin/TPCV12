@@ -4,7 +4,7 @@ import { sleepMinutesScore, rhrComponent, hrvComponent, deviceInputsFor as _devi
    Deux comparaisons, toujours APRÈS la saisie (jamais affichées avant : ça orienterait la note) :
    1. Séance : RPE noté vs ce que la FC de la séance (TRIMP) laissait attendre, appris sur les
       séances précédentes du même type chez ce sportif.
-   2. Check-in : ressenti déclaré vs données physiologiques de la nuit (sommeil mesuré, FC au repos,
+   2. Point forme : ressenti déclaré vs données physiologiques de la nuit (sommeil mesuré, FC au repos,
       VFC vs la norme perso).
    Pur : aucun accès réseau, testable tel quel. */
 
@@ -104,7 +104,7 @@ export function heartResultFor(session: { date: string; duration: number; rpe: n
   return judge(prior, heartFamily(w.workout_type), intensity(w), session.rpe);
 }
 
-/* ── 2. Check-in vs données physiologiques ───────────────────────────────────────── */
+/* ── 2. Point forme vs données physiologiques ───────────────────────────────────────── */
 
 /* Comparer le ressenti et la physiologie en ABSOLU était faux (1re version, 2026-10-11) : une nuit
    de 8 h vaut 10/10 côté données alors que personne ne répond 10 partout, d'où « plus optimistes »
@@ -207,7 +207,7 @@ function nightDetail(d: DeviceInputs): string {
 
 const level = (z: number) => (z <= -0.5 ? "en dessous de" : z >= 0.5 ? "au-dessus de" : "dans");
 
-/* Verdict d'un jour : `answers` = réponses du jour (le check-in qu'on vient d'enregistrer si fourni),
+/* Verdict d'un jour : `answers` = réponses du jour (le point forme qu'on vient d'enregistrer si fourni),
    `checkins` et `health` = l'historique (les jours postérieurs sont ignorés). null tant qu'une des
    deux normes manque (moins de 5 jours avant) ou sans données de nuit. */
 export function physioVerdictAt(date: string, answers: PhysioCheckin, checkins: PhysioCheckinDay[], health: _HealthRow[], perspective: "athlete" | "coach" = "athlete"): PhysioVerdict | null {

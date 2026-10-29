@@ -1,14 +1,14 @@
 /* Bilan du groupe (2026-10-26) : le bilan vu par le coach pour tous ses sportifs inscrits, ouvert
    depuis les liens « Bilan › » du calendrier en vue Groupe. Quatre écrans, chacun avec son seuil de
    données (sous le seuil, l'écran saute, comme le bilan individuel) :
-   - qui décroche : check-ins manqués les jours de séance, jours fatigué ;
+   - qui décroche : points forme manqués les jours de séance, jours fatigué ;
    - tes séances : prévu vs ressenti par niveau de difficulté prévue (+ la même séance si elle existe) ;
    - appris sur chacun : l'enseignement le plus fort du bilan de chaque sportif ;
    - les conseils au groupe : conseils confirmés, sportif par sportif (juge d'adviceJudge.ts) ;
    - la charge hors zone : jours au-dessus / en dessous de la zone de charge (ACWR).
    Un seul sportif avec des données suffit (2026-10-26, Gildas) : un coach qui débute n'en a souvent
    qu'un actif. Jamais de moyenne du groupe : elle cache justement le sportif qui décroche. Sportifs sans compte
-   exclus (pas de check-in). Historique synthétique de l'onboarding exclu, comme partout. */
+   exclus (pas de point forme). Historique synthétique de l'onboarding exclu, comme partout. */
 
 import { acwrSeries, sessionLoad, type LoadPoint } from "@/lib/trainingLoad";
 import { qualitativeDifficulty, type DifficultyWord } from "@/lib/autoregulation";
@@ -22,7 +22,7 @@ export type GroupAthlete = {
   sessions: BilanSession[]; checkins: BilanCheckin[];
 };
 
-/* Jour de séance du sportif : check-in fait (frais/équilibré), fait mais fatigué, ou manqué. */
+/* Jour de séance du sportif : point forme fait (frais/équilibré), fait mais fatigué, ou manqué. */
 export type DayMark = "ok" | "tired" | "missed";
 export type GroupSlide =
   | { kind: "g_decroche"; rows: { id: string; name: string; flag: string | null; marks: DayMark[]; missed: number; tired: number; days: number }[]; regular: number }
@@ -64,8 +64,8 @@ function decroche(period: BilanPeriod, end: string, athletes: GroupAthlete[]): G
     });
     const missed = marks.filter(m => m === "missed").length, tired = marks.filter(m => m === "tired").length;
     const lastFour = marks.slice(-4);
-    const flag = lastFour.length === 4 && lastFour.every(m => m === "missed") ? "Plus de check-in"
-      : missed >= 3 && missed / days.length >= 0.4 ? "Check-ins manqués"
+    const flag = lastFour.length === 4 && lastFour.every(m => m === "missed") ? "Plus de point forme"
+      : missed >= 3 && missed / days.length >= 0.4 ? "Points forme manqués"
       : tired >= 3 && tired / (days.length - missed || 1) >= 0.4 ? "Souvent fatigué"
       : null;
     rows.push({ id: a.id, name: first(a.name), flag, marks: marks.slice(-12), missed, tired, days: days.length });

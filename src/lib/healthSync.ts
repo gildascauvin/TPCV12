@@ -94,7 +94,7 @@ export async function syncHealthData(supabase: SupabaseClient, userId: string): 
     const { error } = await supabase.from("health_daily").upsert(rows, { onConflict: "user_id,date" });
     if (error) throw new Error(`health_daily upsert: ${error.message}`);
   }
-  // Les check-ins déjà faits intègrent maintenant la montre (sommeil mesuré + FC au repos).
+  // Les points forme déjà faits intègrent maintenant la montre (sommeil mesuré + FC au repos).
   await reapplyDeviceToRecentWellness(supabase, userId);
   return days.length;
 }

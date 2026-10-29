@@ -113,7 +113,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   const dayRefs      = useRef<(HTMLDivElement | null)[]>([]);
   const [sessions, setSessions] = useState<Session[]>(initialSessions);
   const [wellnessList, setWellnessList] = useState<WellnessDaily[]>(initialWellness);
-  // Montre (Apple Santé) avant le check-in du jour : affichée dans la carte "Plan à confirmer" d'aujourd'hui.
+  // Montre (Apple Santé) avant le point forme du jour : affichée dans la carte "Plan à confirmer" d'aujourd'hui.
   const deviceNote = useDeviceNote(userId, todayStr, !sandboxMode && !wellnessList.some(w => w.date === todayStr && w.bedtime != null));
   // Historique glissant pour la baseline personnelle (Z-score) — ANCRÉ SUR LA SEMAINE AFFICHÉE, pas
   // sur "aujourd'hui" (même bug/fix que TodayClient.tsx : sans ça, naviguer vers une semaine passée
@@ -432,7 +432,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     const { data: saved, error } = await supabase.from("sessions").insert({ user_id: userId, ...data, done: false }).select().single();
     if (error) throw error;
     if (saved) setSessions(prev => [...prev, saved as Session]);
-    // Rattrapage (2026-10-24) : séance du jour ajoutée après le check-in → conseil figé tout de suite.
+    // Rattrapage (2026-10-24) : séance du jour ajoutée après le point forme → conseil figé tout de suite.
     if (saved && saved.date === format(new Date(), "yyyy-MM-dd")) {
       fetch("/api/sessions/proposal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: saved.date }) })
         .then(r => r.ok ? r.json() : null)
@@ -565,7 +565,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     }
   }, [supabase, userId, pendingCompleteSession, pendingStartSession]);
 
-  /* Séance en direct (2026-10-02) : Démarrer sans check-in du jour ouvre d'abord le check-in. */
+  /* Séance en direct (2026-10-02) : Démarrer sans point forme du jour ouvre d'abord le point forme. */
   async function handleStart(session: Session) {
     if (isLive(session)) { openLiveSession(session.id); return; }
     const wellnessTodayFilled = wellnessList.some(w => w.date === todayStr && w.bedtime != null);
@@ -590,7 +590,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
   }, [supabase, userId, todayStr]);
 
-  /* Modifier une séance faite ou le check-in du jour (2026-10-17) : écran de résultat d'abord quand
+  /* Modifier une séance faite ou le point forme du jour (2026-10-17) : écran de résultat d'abord quand
      une mesure existe, son bouton « Modifier » ouvre le formulaire (cf. TodayClient). */
   function openResult(session: Session) {
     if (session.done) {
@@ -660,7 +660,7 @@ export default function WeekClient({ userId, userName, userSport = null, initial
   function renderDay(date: Date, prevStr: string | null, nextStr: string | null) {
     /* Vues défilantes : `wellnessBaselineHistory` est ancré sur la semaine choisie au calendrier, alors
        que la liste couvre plusieurs semaines — chaque jour lit donc l'historique complet
-       (popupWellnessHistory) pour être comparé à SES 21 check-ins précédents. La décision du jour
+       (popupWellnessHistory) pour être comparé à SES 21 points forme précédents. La décision du jour
        garde la fenêtre de la vue semaine en cours (−42 j → dimanche), pour rester identique. */
     const curMonday = startOfWeek(new Date(todayStr + "T12:00:00"), { weekStartsOn: 1 });
     const curSince = format(subDays(curMonday, 42), "yyyy-MM-dd");

@@ -133,7 +133,7 @@ export interface DecisionCard {
        les onglets Charge/Récup (demoAnalytics). */
     insufficient?: boolean };
   /* Séance faite (2026-10-04) : zone proposée ce jour-là (décision enregistrée, sinon reco recalculée
-     depuis le check-in), pour que l'anneau "Faite" situe le RPE réel par rapport à elle. */
+     depuis le point forme), pour que l'anneau "Faite" situe le RPE réel par rapport à elle. */
   doneZone?: { low: number; high: number } | null;
   /* Titre affiché sous l'anneau de décision, à la place de la 1re ligne de `text` (2026-10-12,
      Gildas) — repos et séance faite seulement ; une séance à ajuster prend le texte vivant de
@@ -336,21 +336,21 @@ export function computeDecisionCard(params: {
   behaviorTip?: string | null;
   // Présent = carte avec ligne "Phase" (/today, Coach Control). Absent = comportement inchangé.
   day?: DecisionDay;
-  /* Ce que dit la montre avant le check-in (2026-09-30, deviceSummary) : ajouté à "Plan à confirmer"
-     et au jour de repos non renseigné, avec l'invitation à faire le check-in. Sportif seul (le coach ne
+  /* Ce que dit la montre avant le point forme (2026-09-30, deviceSummary) : ajouté à "Plan à confirmer"
+     et au jour de repos non renseigné, avec l'invitation à faire le point forme. Sportif seul (le coach ne
      lit pas health_daily). */
   deviceNote?: string | null;
   /* Ressenti vs physiologie (2026-10-11), sportif seul (le coach ne lit pas health_*).
-     `verdict` = check-in du jour vs données de la nuit : c'est du niveau de récup du jour, donc
+     `verdict` = point forme du jour vs données de la nuit : c'est du niveau de récup du jour, donc
      ligne 2 (jamais la Phase). `heartRepeated` = 2 dernières séances d'une même famille plus dures
      que ce que dit le cœur : une tendance, donc Phase. `sessionHeart` = la séance faite ce jour-là vs
-     son cœur : une fois la séance faite, c'est elle que commente la ligne 2, plus le check-in du matin. */
+     son cœur : une fois la séance faite, c'est elle que commente la ligne 2, plus le point forme du matin. */
   physio?: { verdictTitle?: string | null; heartRepeated?: string | null; sessionHeart?: string | null } | null;
-  /* Comportements cochés au check-in du jour (2026-10-12) : un comportement négatif est le 1er
+  /* Comportements cochés au point forme du jour (2026-10-12) : un comportement négatif est le 1er
      signal cité par le conseil après séance (doneAdvice). */
   behaviors?: string[] | null;
   /* Réglages personnels (2026-10-23, autoregPersonal.ts) : seuil recalé + signal appris. Sportif :
-     calculés en direct ; coach : relus dans la reco figée au check-in (autoreg_proposal), pour que
+     calculés en direct ; coach : relus dans la reco figée au point forme (autoreg_proposal), pour que
      les deux voient la même décision. */
   personal?: PersonalAdjust | null;
 }): DecisionCard {
@@ -394,10 +394,10 @@ export function computeDecisionCard(params: {
   return { suggestion: null, icon: "🟢", text: ctxLine ? `Plan cohérent\n${ctxLine}` : "Plan cohérent" };
 }
 
-/* Données physiologiques avant le check-in (2026-10-13) : on dit seulement qu'elles sont arrivées,
+/* Données physiologiques avant le point forme (2026-10-13) : on dit seulement qu'elles sont arrivées,
    jamais leurs valeurs, pour ne pas biaiser le ressenti (saisie à l'aveugle, cf. Ressenti vs physiologie). */
 function deviceNoteLine(note?: string | null): string {
-  return note ? " Tes données physiologiques de la nuit sont arrivées : fais ton check-in pour les comparer à ton ressenti." : "";
+  return note ? " Tes données physiologiques de la nuit sont arrivées : fais ton point forme pour les comparer à ton ressenti." : "";
 }
 
 /* Carte "avec phase" (2026-09-29) : titre + ligne 2 selon l'état de la journée, puis la ligne Phase.
@@ -482,7 +482,7 @@ function doneAdvice(a: {
       : outcome === "in" ? `${l}, séance bien dosée.`
       : `${l} : ça encaisse, mais pas deux jours de suite.`;
   }
-  if (a.feel === null) return coach ? "Sans check-in, difficile de juger cette séance." : "Fais ton check-in demain pour juger tes séances.";
+  if (a.feel === null) return coach ? "Sans point forme, difficile de juger cette séance." : "Fais ton point forme demain pour juger tes séances.";
   const ta = coach ? "sa" : "ta", Ta = coach ? "Sa" : "Ta";
   if (a.feel === "bad") {
     const R = a.relative ? `récup sous ${ta} norme` : "récup fragile";
@@ -577,7 +577,7 @@ function withPhase(
     const ta = v(voice, "ta", "sa"), Ta = v(voice, "Ta", "Sa");
     const feelLine = !params.wellnessFilledToday
       ? (params.deviceNote && !voice.coach
-          ? "Tes données physiologiques de la nuit sont arrivées : fais ton check-in pour les comparer à ton ressenti."
+          ? "Tes données physiologiques de la nuit sont arrivées : fais ton point forme pour les comparer à ton ressenti."
           : v(voice, "Renseigne ton ressenti pour savoir comment tu récupères.", "Ressenti du jour pas encore renseigné."))
       : feel === "bad"
       ? `${Ta} récupération est ${relative ? `sous ${ta} norme` : "basse"} : ce repos tombe bien.`
@@ -601,7 +601,7 @@ function withPhase(
   if (day.kind === "done") {
     /* Repère = la zone PROPOSÉE (2026-10-04, Gildas : "6 pour 5, plus dure que prévu" alors que la
        reco était 7-8), pas seulement le plan. Décision enregistrée d'abord ; sans elle (séance faite
-       sans passer par la carte), reco recalculée depuis le check-in du matin. */
+       sans passer par la carte), reco recalculée depuis le point forme du matin. */
     const rec = day.decision ?? null;
     let recoDir: AutoregSuggestion["dir"] | null = rec?.proposed ?? null;
     let zone: { low: number; high: number } | null = rec?.proposed && rec.zoneLow != null && rec.zoneHigh != null

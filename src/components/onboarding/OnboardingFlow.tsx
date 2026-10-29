@@ -30,7 +30,7 @@ import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/storeLinks";
 import { notificationSupport, enableNotifications } from "@/lib/notifications";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 import dynamic from "next/dynamic";
-// Chargés seulement sur leurs écrans (parcours Elite) : Stripe et le check-in n'alourdissent pas /register.
+// Chargés seulement sur leurs écrans (parcours Elite) : Stripe et le point forme n'alourdissent pas /register.
 const WellnessModal = dynamic(() => import("@/components/wellness/WellnessModal"));
 const PrimingJourneyModal = dynamic(() => import("@/components/paywall/PrimingJourneyModal"));
 const PaywallModal = dynamic(() => import("@/components/paywall/PaywallModal"));
@@ -412,7 +412,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
   const [obHealthError, setObHealthError] = useState<string | null>(null);
   const [obCheckinBusy, setObCheckinBusy] = useState(false);
   const [obCheckinOpen, setObCheckinOpen] = useState(true);
-  // ?dbgcheckin=1 (dev, avec ?dbgstep) : simule un check-in déjà fait, pour voir l'écran notifications avec la série.
+  // ?dbgcheckin=1 (dev, avec ?dbgstep) : simule un point forme déjà fait, pour voir l'écran notifications avec la série.
   const [obCheckinScore, setObCheckinScore] = useState<number | null>(() => {
     if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("dbgcheckin")) return 60;
     return null;
@@ -963,7 +963,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
      démo du coach), invitations, puis l'app. */
   /* Préparation (profil, programme créé puis assigné, invitations) séparée de l'entrée dans l'app
      (2026-10-17) : le parcours Elite la lance dès le 1er écran qui suit les questions de programme,
-     en arrière-plan, pour que la semaine et le check-in trouvent le programme déjà assigné. Une
+     en arrière-plan, pour que la semaine et le point forme trouvent le programme déjà assigné. Une
      seule exécution par session (promesse mémorisée), relancée seulement si elle a échoué.
      Renvoie l'id du programme créé (null : aucun). */
   const prepareRef = useRef<Promise<string | null> | null>(null);
@@ -1025,7 +1025,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ claimProgramId: claimForBrevo }),
       }).catch(() => null);
-      /* Parcours Elite : le compte est prêt (programme assigné) avant le check-in et le paywall.
+      /* Parcours Elite : le compte est prêt (programme assigné) avant le point forme et le paywall.
          onboarding_done posé ici pour qu'un départ en cours de route (ou un retour après un
          paiement) ouvre l'app au lieu de rejouer l'onboarding. */
       if (elite) {
@@ -1894,7 +1894,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     /* ───────── Parcours Elite (2026-10-17) ───────── */
     const eliteUid = userId || newUserId;
     const invitedAthlete = isInvitedAthlete({ role, invited: !!hasCoachInvite });
-    // Après le check-in (fait ou passé) : on attend le programme pour savoir si l'écran semaine existe.
+    // Après le point forme (fait ou passé) : on attend le programme pour savoir si l'écran semaine existe.
     const continueAfterCheckin = async () => {
       if (!eliteUid) return;
       setObCheckinBusy(true);
@@ -1986,7 +1986,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       return (
         <QuestionShell {...common} dark eyebrow="Coach Control · ce matin"
           title="Une séance, ajustée à la forme de chacun."
-          sub="Thomas vient de faire son check-in : nuit courte, jambes lourdes. À toi de décider."
+          sub="Thomas vient de faire son point forme : nuit courte, jambes lourdes. À toi de décider."
           onSkip={() => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current, skipped: true }); obAdvance(); }}
           cta={{ label: "Continuer", onClick: () => { posthog.capture("ob_control_continue", { decided: obControlPctRef.current != null, pct: obControlPctRef.current }); obAdvance(); }, busy: !ready }}>
           {ready ? <ControlStepBody hard={hard} easy={easy} onDecided={pct => { obControlPctRef.current = pct; }} /> : <div style={{ minHeight: 320 }} />}
@@ -2033,7 +2033,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       const saveCheckin = async (data: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string; base_score: number; score: number; plannedIntensity?: unknown }) => {
         if (!eliteUid) return;
         /* La préparation (completeProfile) refuse d'écrire si un ressenti existe déjà : elle doit
-           être finie avant ce 1er check-in. Presque toujours déjà le cas à ce stade. */
+           être finie avant ce 1er point forme. Presque toujours déjà le cas à ce stade. */
         await runPrepare(eliteUid).catch(() => null);
         // Même écriture que /today (saveWellness) : montre intégrée au score si elle a la nuit.
         const { plannedIntensity: _ignored, ...w } = data;
@@ -2054,7 +2054,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
             title="Comment tu te sens ce matin ?"
             sub="10 secondes, chaque matin : ta séance s'ajuste à ta réponse."
             onSkip={obCheckinBusy ? undefined : () => { posthog.capture("onboarding_checkin_skipped"); void continueAfterCheckin(); }} skipLabel="Plus tard" skipBottom
-            cta={{ label: "Faire mon check-in", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
+            cta={{ label: "Faire mon point forme", onClick: () => setObCheckinOpen(true), busy: obCheckinBusy }}>
             <div />
           </QuestionShell>
           {obCheckinOpen && !obCheckinBusy && (
@@ -2082,7 +2082,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
       );
     }
     if (currentStep === "ob_notif") {
-      // Il vient de faire son 1er check-in : les notifs servent à continuer sa série des 5 premiers matins.
+      // Il vient de faire son 1er point forme : les notifs servent à continuer sa série des 5 premiers matins.
       const streak = !coach && obCheckinScore != null;
       const snoozeKey = eliteUid ? `tpc_notif_prompt_${eliteUid}` : null;
       const snooze = () => { try { if (snoozeKey) localStorage.setItem(snoozeKey, String(Date.now())); } catch { /* ignore */ } };
@@ -2112,7 +2112,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         return (
           <QuestionShell {...common}
             title={coach ? "Sois alerté sur ton téléphone quand un sportif a besoin de toi." : streak ? <StreakTitle day={1} /> : `Reçois ta séance chaque matin sur ton ${webAndroid ? "téléphone" : PLAY_STORE_URL ? "téléphone" : "iPhone"}.`}
-            sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. Télécharge l'app pour être prévenu chaque matin." : invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton check-in.` : undefined}
+            sub={streak ? "En 5 matins, ThePerfClub apprend ta norme et tes conseils deviennent les tiens. Télécharge l'app pour être prévenu chaque matin." : invitedAthlete && coachInviteName ? `${coachInviteName} voit ta forme dès ton point forme.` : undefined}
             onSkip={() => { posthog.capture("onboarding_app_push_skipped"); obAdvance(); }} skipLabel="Plus tard" skipBottom
             cta={webIphone
               ? { label: "Télécharger dans l'App Store", store: "apple", onClick: () => { saveHour(); window.open(APP_STORE_URL, "_blank"); obAdvance(); } }

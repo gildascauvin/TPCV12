@@ -1,7 +1,7 @@
 import type { RpeInsight } from "@/lib/rpeInsight";
 
 /* Ligne d'insight sous la jauge RPE (fin de séance sportif et coach) : mêmes couleurs que celle du
-   check-in (orange = plus dur, bleu = plus facile). */
+   point forme (orange = plus dur, bleu = plus facile). */
 export default function RpeInsightLine({ insight }: { insight: RpeInsight | null }) {
   if (!insight) return null;
   return (

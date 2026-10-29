@@ -18,7 +18,7 @@ export default function PhaseLine({ phase, onUnlock, onEdit, example = false, co
      de l'eyebrow. Nécessaire depuis que le ring et la ligne "Ressenti du jour" ont disparu de
      /today : tous les autres déclencheurs (ouverture auto du matin, garde avant de terminer une
      séance, le CTA flouté ci-dessous) ne partent que tant que le ressenti n'est PAS rempli, donc
-     plus rien ne permettait de corriger un check-in après coup. Absent = rien de rendu (Coach
+     plus rien ne permettait de corriger un point forme après coup. Absent = rien de rendu (Coach
      Control : le coach ne remplit pas le ressenti à la place du sportif). */
   onEdit?: () => void;
   /* Perspective de la mention d'exemple ("Ta" / "Sa" vraie phase). */
@@ -27,7 +27,7 @@ export default function PhaseLine({ phase, onUnlock, onEdit, example = false, co
   return (
     <div style={{ position: "relative", borderTop: "1px dashed rgba(255,255,255,.2)", paddingTop: 10, textAlign: "center" }}>
       {/* Mention d'exemple posée PAR-DESSUS la phase, comme sur les charts Charge/Récup. */}
-      {example && <ExampleNote text={coach ? "Ses analyses arrivent après ~1 semaine de check-ins et de séances." : "Tes analyses arrivent après ~1 semaine de check-ins et de séances."} top="58%" />}
+      {example && <ExampleNote text={coach ? "Ses analyses arrivent après ~1 semaine de points forme et de séances." : "Tes analyses arrivent après ~1 semaine de points forme et de séances."} top="58%" />}
       {(phase.title || onEdit) && (
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginBottom: 5, fontFamily: "var(--font-mono), monospace", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "rgba(255,255,255,.6)" }}>
           {phase.title && <>

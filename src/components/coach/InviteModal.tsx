@@ -258,7 +258,7 @@ export default function InviteModal({ onClose, onLinked, onSent, inviteCode, san
 /* Contenu du formulaire d'invitation (lien + WhatsApp, prénom + email, « + Inviter un autre
    sportif ») — partagé par cette modale et l'étape d'invitation de l'onboarding (2026-10-05). */
 export function readyInviteText(name: string, inviteCode: string) {
-  return `Salut${name ? ` ${name}` : ""} ! J'utilise ThePerfClub pour adapter tes séances à ta forme du jour. Chaque matin tu fais ton check-in en 10 secondes, je vois comment tu vas et j'ajuste ta séance si besoin. Ton accès : https://go.theperfclub.com/join/${inviteCode}`;
+  return `Salut${name ? ` ${name}` : ""} ! J'utilise ThePerfClub pour adapter tes séances à ta forme du jour. Chaque matin tu fais ton point forme en 10 secondes, je vois comment tu vas et j'ajuste ta séance si besoin. Ton accès : https://go.theperfclub.com/join/${inviteCode}`;
 }
 
 export function InviteForm({ inviteCode, invites, setInvites, error, sandboxMode = false, onSubmit, readyMessage = false }: {

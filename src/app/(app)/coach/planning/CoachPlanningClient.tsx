@@ -850,7 +850,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     // avec le vrai wellness/la vraie difficulté du jour (attention()/decisionText() réels de
     // CoachAthleteCard.tsx). Le score doit venir de `wellness` (dayWellness() via wellnessMap,
     // déjà utilisé pour la ring affichée) et non de `athlete.wellness_score` (dénormalisé au
-    // chargement de la page, peut être périmé pour un vrai sportif dont le check-in est arrivé
+    // chargement de la page, peut être périmé pour un vrai sportif dont le point forme est arrivé
     // après coup — bug trouvé par Gildas en test réel : score 30 visible sur la ring mais
     // aucune alerte).
     const wellnessFilledToday = athlete.user_id ? wellnessMap[athlete.user_id]?.[dstr] !== undefined : true;
@@ -866,7 +866,7 @@ export default function CoachPlanningClient({ userId, coachName, athletes, initi
     const anchoredHistory = wellnessBaselineHistory[athlete.user_id ?? athlete.id] ?? [];
     /* Vues défilantes : l'historique ancré couvre la semaine choisie au calendrier, pas toute la liste
        — un vrai sportif lit son historique complet (popupWellnessHistory) pour que chaque jour soit
-       comparé à SES 21 check-ins précédents ; la décision du jour garde la fenêtre de la vue semaine
+       comparé à SES 21 points forme précédents ; la décision du jour garde la fenêtre de la vue semaine
        en cours (−42 j → dimanche). Sportif démo : historique synthétique, inchangé. */
     const fullHistory = planning.active && athlete.user_id ? popupWellnessHistory[athlete.user_id] : undefined;
     const curMonday = startOfWeek(new Date(todayStr + "T12:00:00"), { weekStartsOn: 1 });

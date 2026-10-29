@@ -235,7 +235,7 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
   page?: boolean;
   /* Pleine page : ouvrir une séance précise (sinon onDecide, qui ouvre la séance principale). */
   onEditSession?: (s: CoachViewSession) => void;
-  /* Pleine page, sportif inscrit (2026-10-26) : le coach fait le check-in du sportif et note sa
+  /* Pleine page, sportif inscrit (2026-10-26) : le coach fait le point forme du sportif et note sa
      séance (RPE + durée), mêmes boutons que l'Accueil du sportif. Absent = pas de bouton. */
   onCheckin?: () => void;
   onCompleteSession?: (s: CoachViewSession) => void;
@@ -526,12 +526,12 @@ export function CoachCard({ athlete, sessions, isPriority, isReviewed, onDecide,
         athlete.wellnessFilledToday === false ? (
           <button type="button" onClick={onCheckin}
             style={{ width: "100%", height: 46, borderRadius: 12, fontSize: 14, fontWeight: 800, cursor: "pointer", border: "none", marginTop: 12, background: "linear-gradient(180deg,#f04a08,#d44000)", color: "#fff", boxShadow: "0 8px 20px rgba(212,64,0,.22)" }}>
-            Faire le check-in de {firstName}
+            Faire le point forme de {firstName}
           </button>
         ) : (
           <div style={{ textAlign: "center", marginTop: 10 }}>
             <button type="button" onClick={onCheckin} style={{ border: "none", background: "none", color: "rgba(255,255,255,.6)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}>
-              Modifier son check-in
+              Modifier son point forme
             </button>
           </div>
         )

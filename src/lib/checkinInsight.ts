@@ -6,7 +6,7 @@ import { recupAggregatePos, bandFor, AGG_BANDS } from "@/lib/metricCards";
 import type { Session } from "@/types";
 import { BEHAVIOR_META } from "@/lib/behaviors";
 
-/* Résultat du check-in (2026-10-22, POC « Notes en un tap », section « Le check-in ») : le score du
+/* Résultat du point forme (2026-10-22, POC « Notes en un tap », section « Le point forme ») : le score du
    jour, sa zone, le numéro du matin tant que la norme se construit (1 à 5) et UN insight, le plus
    fort du jour, toujours en mots et en phrases naturelles (jamais « sommeil à 4 » ni un libellé
    d'échelle entre guillemets). Ordre :
@@ -91,8 +91,8 @@ function shiftDate(date: string, days: number) {
 // Valeur orientée « plus haut = mieux » (le stress est la seule question inversée).
 const oriented = (row: CheckinRow, k: DimensionKey) => (k === "stress" ? 11 - row.stress : row[k]);
 
-/* Même norme que l'onglet Récupération (conseilsData) : tous les check-ins des CONSEILS_HISTORY_DAYS
-   derniers jours, la moyenne portant sur les 21 derniers check-ins (pas les 21 derniers jours). */
+/* Même norme que l'onglet Récupération (conseilsData) : tous les points forme des CONSEILS_HISTORY_DAYS
+   derniers jours, la moyenne portant sur les 21 derniers points forme (pas les 21 derniers jours). */
 function baselineFor(row: CheckinRow, history: CheckinRow[]): WellnessBaselineResult {
   const from = shiftDate(row.date, -CONSEILS_HISTORY_DAYS);
   return computeWellnessBaselineAt(history.filter(h => h.date < row.date && h.date >= from), row)!;

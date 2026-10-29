@@ -41,8 +41,8 @@ export async function POST(req: Request) {
         .select().single();
       if (error) return Response.json({ error: error.message }, { status: 500 });
       await notifyAthlete(row?.date);
-      /* Rattrapage (2026-10-24) : séance envoyée après le check-in du sportif → conseil figé tout de
-         suite (sans check-in ce jour-là, rien à figer), coach prévenu s'il dit d'alléger. */
+      /* Rattrapage (2026-10-24) : séance envoyée après le point forme du sportif → conseil figé tout de
+         suite (sans point forme ce jour-là, rien à figer), coach prévenu s'il dit d'alléger. */
       let proposal = null;
       if (row?.date) {
         try {

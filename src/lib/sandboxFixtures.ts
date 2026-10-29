@@ -129,7 +129,7 @@ export function buildAthleteFixture(now: Date = new Date()): AthleteFixture {
       target_difficulty: archetype.baseDiff, created_at: new Date().toISOString(),
     });
 
-    // Wellness fictif pour les jours passés + aujourd'hui uniquement (jamais de check-in futur,
+    // Wellness fictif pour les jours passés + aujourd'hui uniquement (jamais de point forme futur,
     // même convention que le vrai produit).
     if (offset <= 0 && !wellnessByDate[dateStr]) {
       const score = wellnessScoreFor(offset);

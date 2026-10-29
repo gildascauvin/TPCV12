@@ -94,7 +94,7 @@ export default function CoachRadar({ points, onSelect }: { points: RadarPoint[];
     </div>
     {noData.length > 0 && (
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "12px 4px 0" }}>
-        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,.45)" }}>Sans séance ou sans check-in</span>
+        <span style={{ fontFamily: "var(--font-mono), monospace", fontSize: 9.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "rgba(255,255,255,.45)" }}>Sans séance ou sans point forme</span>
         {noData.map(p => (
           <button key={p.id} type="button" onClick={() => onSelect(p.id)} title={p.name} aria-label={p.name}
             style={{ width: 36, height: 36, borderRadius: "50%", border: "1px solid rgba(255,255,255,.14)", padding: 0, cursor: "pointer", background: "rgba(255,255,255,.06)", color: "#fff", fontFamily: "var(--font-mono), monospace", fontSize: 11, fontWeight: 700 }}>

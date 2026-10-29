@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withDeviceScore } from "@/lib/deviceWellnessDb";
 
-/* Check-in saisi par le coach pour un sportif inscrit (2026-10-26) : sportif en salle sans son
+/* Point forme saisi par le coach pour un sportif inscrit (2026-10-26) : sportif en salle sans son
    téléphone, ou tablette du coach tendue au groupe. Même ligne wellness_daily que si le sportif
    l'avait fait lui-même (le coach ne peut pas l'écrire : RLS), donc client admin après vérification
    du lien, comme /api/coach/session. Sportifs sans compte : pas de wellness_daily possible, refusé. */
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     behaviors: Array.isArray(data.behaviors) ? data.behaviors : [],
     bedtime: data.bedtime ?? null, base_score: data.base_score, score: data.score,
   };
-  // Montre du sportif (Apple Santé) intégrée au score comme dans son propre check-in.
+  // Montre du sportif (Apple Santé) intégrée au score comme dans son propre point forme.
   const payload = await withDeviceScore(admin, link.user_id, date, row);
   const { data: saved, error } = await admin
     .from("wellness_daily")

@@ -62,7 +62,7 @@ const PLAN_OPTIONS: { key: PlannedIntensity; emoji: string; label: string; sub: 
 
 
 
-/* Check-in augmenté (2026-10-20, POC "Notes en un tap", pistes 2 et 3) : seulement avec de l'historique.
+/* Point forme augmenté (2026-10-20, POC "Notes en un tap", pistes 2 et 3) : seulement avec de l'historique.
    Insight après la réponse, jamais avant (pas d'ancrage), et seulement si elle est rare : |z| ≥ 1,6
    sur les 28 derniers jours (≥ 12 réponses) ET plus extrême que tous les jours des 7 derniers au moins.
    Le stress est comparé sur le stress réel (10 = mauvais). */
@@ -74,7 +74,7 @@ const INSIGHT_WORDS: Record<ScaleKey, { bad: string; good: string }> = {
   recovery: { bad: "Ton état physique le plus bas", good: "Ton meilleur état physique" },
   motivation: { bad: "Ton envie la plus basse", good: "Ton envie la plus haute" },
 };
-// Check-in saisi par le coach (subject) : même insight à la 3e personne.
+// Point forme saisi par le coach (subject) : même insight à la 3e personne.
 const INSIGHT_WORDS_THIRD: Record<ScaleKey, { bad: string; good: string }> = {
   sleep: { bad: "Sa pire nuit", good: "Sa meilleure nuit" },
   stress: { bad: "Son stress le plus haut", good: "Son stress le plus bas" },
@@ -150,7 +150,7 @@ interface Props {
      tard" (même mécanisme que le "🔔 Plus tard" de célébration/InviteModal) — absent = "Annuler"
      inchangé (usage in-app). */
   cancelLabel?: string;
-  /** Pas d'écran de résultat après l'enregistrement (onboarding : l'écran suivant montre déjà l'effet du check-in). */
+  /** Pas d'écran de résultat après l'enregistrement (onboarding : l'écran suivant montre déjà l'effet du point forme). */
   skipResult?: boolean;
   /** Accueil mobile (2026-10-22) : rendu dans la feuille de l'Accueil, sans fond ni feuille propre ; le score
       qui se construit est porté dans `scoreSlot` (haut de la page), à la taille `scoreSize`. */
@@ -169,7 +169,7 @@ interface Props {
      saisie, au lieu du seul repli absolu. Absent = comportement inchangé (usage in-app, où ce
      composant ne connaît de toute façon aucune vraie baseline en dehors de son propre payload). */
   wellnessHistory?: { date: string; sleep: number; stress: number; recovery: number; motivation: number; score: number; base_score: number }[];
-  /** Check-in saisi par le coach pour un sportif inscrit (2026-10-26) : questions à la 3e personne,
+  /** Point forme saisi par le coach pour un sportif inscrit (2026-10-26) : questions à la 3e personne,
       historique lu via /api/coach/bilan (RLS), conseil figé pour ce sportif, pas d'écran de résultat
       (la carte Coach Control se met à jour). L'enregistrement reste à `onSave` (/api/coach/checkin). */
   subject?: { athleteId: string; userId: string; name: string };
@@ -229,7 +229,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   }, [date, subject?.athleteId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setInsight(null); }, [step]);
   /* Coût réel de chaque comportement, sur son historique (même calcul que la carte Comportements).
-     Rien tant qu'il n'y a pas au moins 12 check-ins : un compte neuf ne voit aucun chiffre. */
+     Rien tant qu'il n'y a pas au moins 12 points forme : un compte neuf ne voit aucun chiffre. */
   const behaviorCost: Record<string, number> = {};
   if (history.length >= INSIGHT_MIN_DAYS) {
     for (const c of computeBehaviorCorrelations(history as WellnessDaily[])) behaviorCost[c.key] = c.impact;
@@ -273,7 +273,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
   const partBase = answeredParts.length ? Math.round(answeredParts.reduce((a, b) => a + b, 0) / (answeredParts.length * 10) * 100) : null;
   const buildBaseline = (() => {
     if (partBase == null) return null;
-    // Même norme que l'onglet Récupération : tous les check-ins chargés (fenêtre CONSEILS_HISTORY_DAYS).
+    // Même norme que l'onglet Récupération : tous les points forme chargés (fenêtre CONSEILS_HISTORY_DAYS).
     const hist = (wellnessHistory ?? history).filter(h => h.date < date);
     return computeWellnessBaselineAt(hist, { ...pv, score: partBase, base_score: partBase });
   })();
@@ -433,7 +433,7 @@ export default function WellnessModal({ date, onSave, onClose, wizardHero, cance
         {((step === 0 && onBack) || who) && (
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 14 }}>
             {step === 0 && onBack && <button onClick={onBack} aria-label="Retour" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8f94", fontSize: 18, padding: "2px 4px", borderRadius: 8, flexShrink: 0, marginLeft: -4 }}>←</button>}
-            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>Check-in de {who}</div>}
+            {who && <div style={{ fontSize: 13, fontWeight: 700, color: "#172018" }}>Point forme de {who}</div>}
           </div>
         )}
 

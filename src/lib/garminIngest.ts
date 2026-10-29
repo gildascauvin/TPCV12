@@ -3,7 +3,7 @@ import { reapplyDeviceToRecentWellness } from "@/lib/deviceWellnessDb";
 
 /* Données poussées par Garmin (Health API 2.0 / Activity API 2.0, push JSON) → health_daily et
    health_workouts, les mêmes tables que la synchro Apple Santé : tout ce qui lit déjà la montre
-   (score du check-in, carte décision, onglet Récupération, ressenti vs cœur) en profite tel quel.
+   (score du point forme, carte décision, onglet Récupération, ressenti vs cœur) en profite tel quel.
    Garmin renvoie le même résumé plusieurs fois dans la journée (sommeil complété, journée mise à jour) :
    le plus récent fait foi, d'où des upserts. */
 
@@ -209,7 +209,7 @@ export async function ingestGarminPush(admin: SupabaseClient, userId: string, pa
 
   await upsertDays(admin, userId, days);
   await upsertWorkouts(admin, workouts);
-  // Les check-ins déjà faits intègrent la nouvelle nuit (même chemin qu'après une synchro Santé).
+  // Les points forme déjà faits intègrent la nouvelle nuit (même chemin qu'après une synchro Santé).
   if (days.size) await reapplyDeviceToRecentWellness(admin, userId);
   return count;
 }

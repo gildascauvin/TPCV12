@@ -1,5 +1,5 @@
 /* Insight après la note de fin de séance (2026-10-20, POC "Notes en un tap", même principe que le
-   check-in) : une ligne seulement si c'est notable, jamais avant la note (pas d'ancrage).
+   point forme) : une ligne seulement si c'est notable, jamais avant la note (pas d'ancrage).
    1. Écart au prévu d'au moins 2 points (dès la 1re séance, sans historique).
    2. Sinon, une note rare sur son historique : ≥ 12 séances notées sur 90 jours, |z| ≥ 1,6, et pas de
       note aussi extrême depuis au moins 7 jours.

@@ -165,7 +165,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
   // avance auto au sportif suivant) a été retiré (2026-09-26) : devenu redondant depuis que la jauge
   // de décision vit directement dans la carte séance (2026-09-24).
   const [reviewAthlete, setReviewAthlete] = useState<CoachAthlete | null>(null);
-  /* Check-in et résultat de séance saisis par le coach pour un sportif inscrit (2026-10-26). */
+  /* Point forme et résultat de séance saisis par le coach pour un sportif inscrit (2026-10-26). */
   const [checkinFor, setCheckinFor] = useState<CoachAthlete | null>(null);
   const [completingFor, setCompletingFor] = useState<{ athlete: CoachAthlete; session: CoachViewSession } | null>(null);
   const [reviewSession, setReviewSession] = useState<CoachViewSession | null>(null);
@@ -397,7 +397,7 @@ export default function CoachClient({ coachName, athletes: initialAthletes, toda
       body: JSON.stringify({ athleteId: a.id, date: selectedDate, data }),
     });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok || !j.ok) { console.error("[check-in coach]", j.error ?? res.status); alert("Check-in non enregistré, réessaie."); return; }
+    if (!res.ok || !j.ok) { console.error("[point forme coach]", j.error ?? res.status); alert("Point forme non enregistré, réessaie."); return; }
     setCheckinFor(null);
     await handleDateChange(selectedDate);
   }

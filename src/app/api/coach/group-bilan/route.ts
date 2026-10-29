@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BILAN_SESSION_COLS } from "@/lib/bilanCols";
 
-/* Supabase plafonne une lecture à 1000 lignes : un groupe les dépasse vite (séances, check-ins). */
+/* Supabase plafonne une lecture à 1000 lignes : un groupe les dépasse vite (séances, points forme). */
 async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<{ data: T[]; error: { message: string } | null }> {
   const out: T[] = [];
   for (let from = 0; ; from += 1000) {
@@ -15,7 +15,7 @@ async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data
 
 /* Données du bilan du groupe (2026-10-26) : tous les sportifs inscrits du coach, mêmes lectures que
    /api/coach/bilan (client admin après lecture des liens par le coach lui-même, RLS). Toutes les
-   séances, faites ou non : « qui décroche » compte les jours de séance sans check-in. */
+   séances, faites ou non : « qui décroche » compte les jours de séance sans point forme. */
 export async function GET(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

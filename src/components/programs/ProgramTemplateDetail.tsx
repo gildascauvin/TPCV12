@@ -120,7 +120,7 @@ export default function ProgramTemplateDetail({ program: p, role, onBack, onStar
             </div>
           ) : (
             <p style={{ fontSize: 14, color: "#4a5057", lineHeight: 1.55, margin: "10px 0 0" }}>
-              Chaque séance s'ajuste à {coach ? "la forme du sportif" : "ta forme"} du jour après le check-in.
+              Chaque séance s'ajuste à {coach ? "la forme du sportif" : "ta forme"} du jour après le point forme.
             </p>
           )}
 

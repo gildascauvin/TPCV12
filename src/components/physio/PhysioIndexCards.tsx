@@ -243,9 +243,9 @@ export function physioIndexCard(physio: PhysioData | null | undefined, reference
     return {
       key: "physio", label: "Ressenti vs physiologie", status: "En collecte", statusColor: MID, accent: null,
       trend: `${n}/${PHYSIO_MIN_DAYS} jours`,
-      impact: "Ton ressenti et tes données physiologiques sont chacun comparés à leur norme. Il faut quelques jours de check-ins et de nuits mesurées.",
+      impact: "Ton ressenti et tes données physiologiques sont chacun comparés à leur norme. Il faut quelques jours de points forme et de nuits mesurées.",
       preview: <GapBars values={[]} />,
-      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Le verdict arrive après {PHYSIO_MIN_DAYS} jours de check-ins avec une nuit mesurée.</div>,
+      body: <div style={{ fontSize: 13, color: "rgba(255,255,255,.7)", lineHeight: 1.5 }}>Le verdict arrive après {PHYSIO_MIN_DAYS} jours de points forme avec une nuit mesurée.</div>,
     };
   }
   const latest = verdicts.get(week[week.length - 1])!;

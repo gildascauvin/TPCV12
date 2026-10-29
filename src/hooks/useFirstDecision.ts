@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 /* Freemium (2026-09-30) : un compte gratuit voit sa 1re vraie décision en clair, puis les sorties
    se floutent dès le lendemain. Pas d'essai, pas de date de fin : juste ce jour-là.
-   `eligible` = une vraie décision est à l'écran (check-in fait + séance à ajuster). La date n'est
+   `eligible` = une vraie décision est à l'écran (point forme fait + séance à ajuster). La date n'est
    posée qu'à ce moment, pour qu'un jour sans décision ne "consomme" pas le jour 1.
    Renvoie true si les sorties sont lisibles (abonné, jour 1, ou pas encore de 1re décision). */
 export function useFirstDecision({ userId, isActive, initial, today, eligible, enabled = true }: {

@@ -29,8 +29,8 @@ export function zScore(value: number, stat: ZStat): number | null {
 
 export const WELLNESS_BASELINE_WINDOW_DAYS = 21;
 export const WELLNESS_BASELINE_MIN_DAYS = 12;
-/* Norme PROVISOIRE (2026-10-01) : dès 5 check-ins, la moyenne et l'écart-type perso sont mélangés à
-   une norme a priori, avec un poids qui passe à 100 % perso au 12e check-in (shrinkage classique,
+/* Norme PROVISOIRE (2026-10-01) : dès 5 points forme, la moyenne et l'écart-type perso sont mélangés à
+   une norme a priori, avec un poids qui passe à 100 % perso au 12e point forme (shrinkage classique,
    w = n / 12). Évite d'attendre 2 semaines pour lire la récup en relatif. A priori : moyenne et
    écart-type intra-sportif observés sur l'historique réel le plus long en base (composite ~70 ± 8,
    dimensions ± 1,25), dimensions centrées sur les valeurs par défaut du formulaire. */
@@ -95,7 +95,7 @@ export type HrvBaseline = { raw: number; z: number | null; ms: number; norm: num
 
 export type WellnessBaselineResult = {
   hasEnoughHistory: boolean;
-  // Norme encore provisoire (5 à 11 check-ins, mélangée à la norme a priori) — à étiqueter.
+  // Norme encore provisoire (5 à 11 points forme, mélangée à la norme a priori) — à étiqueter.
   provisional: boolean;
   historyDays: number;
   composite: DimensionBaseline;
@@ -256,10 +256,10 @@ export function computeWellnessBaselineAt(
   };
 }
 
-/* Sommeil d'une nuit mesurée par la montre SANS check-in ce jour-là (2026-10-11, Gildas : "si on n'a
-   que la durée issue de la montre, on l'affiche, on n'attend pas le check-in"). Même norme que la
+/* Sommeil d'une nuit mesurée par la montre SANS point forme ce jour-là (2026-10-11, Gildas : "si on n'a
+   que la durée issue de la montre, on l'affiche, on n'attend pas le point forme"). Même norme que la
    dimension sommeil des autres jours (mêmes jours d'historique, même a priori), seule la valeur du
-   jour vient de la durée seule. Ne sert qu'au chart : le score de récup, lui, attend le check-in.
+   jour vient de la durée seule. Ne sert qu'au chart : le score de récup, lui, attend le point forme.
    null tant que l'historique ne permet pas de situer le jour (mêmes seuils que le reste). */
 export function sleepZFromDeviceOnly(
   history: WellnessRow[],

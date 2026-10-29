@@ -16,13 +16,13 @@ import AggregateGauge from "@/components/conseils/AggregateGauge";
 import { DARK_CARD_BG } from "@/lib/theme";
 import { createClient } from "@/lib/supabase/client";
 
-/* Écran de résultat (2026-10-22) : après CHAQUE check-in et CHAQUE séance notée, pour tous, montre ou
-   pas. Check-in : score, zone, un insight (checkinInsight.ts) et les 5 premiers matins ; séance :
+/* Écran de résultat (2026-10-22) : après CHAQUE point forme et CHAQUE séance notée, pour tous, montre ou
+   pas. Point forme : score, zone, un insight (checkinInsight.ts) et les 5 premiers matins ; séance :
    ressentie vs prévu, la décision du matin, sa place dans la semaine (sessionInsight.ts). La
    comparaison au cœur / à la nuit (ci-dessous, déjà en prod) s'ajoute quand elle existe.
 
    Fin de formulaire "Ressenti vs physiologie" (2026-10-11). Le tiroir qui vient d'enregistrer
-   (Terminer la séance, check-in) se ferme ; cet écran prend le relais avec la comparaison, la note
+   (Terminer la séance, point forme) se ferme ; cet écran prend le relais avec la comparaison, la note
    étant déjà figée en base. Monté une fois dans le layout de l'app, côté sportif. */
 
 type Shown =
@@ -199,7 +199,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     if (nav.kind === "session") {
       const s = nav.data?.sessions.find(x => x.id === key);
       navTitle = s ? `${dateFr(s.date)}${s.name ? ` · ${s.name}` : ""}` : null;
-    } else navTitle = `${dateFr(key)} · check-in`;
+    } else navTitle = `${dateFr(key)} · point forme`;
   }
 
   let title = "", mean = "", gauge: React.ReactNode = null, extra: string | null = null;
@@ -247,7 +247,7 @@ export default function PhysioRevealHost({ userId: userIdProp }: { userId?: stri
     extra = shown.night;
   }
 
-  /* Check-in (2026-10-23, Gildas : « beaucoup trop d'info ») : score, une phrase, le conseil, et la
+  /* Point forme (2026-10-23, Gildas : « beaucoup trop d'info ») : score, une phrase, le conseil, et la
      nuit mesurée en une ligne. Le détail ressenti vs mesuré reste sur la carte Récupération. */
   const compact = (shown.kind === "wellness" && !!shown.checkin) || (shown.kind === "session" && !!shown.summary);
   // Séance : le cœur en une ligne, seulement s'il apporte quelque chose (calibrage = rien).
@@ -445,7 +445,7 @@ function NavArrow({ dir, disabled, onClick, label }: { dir: "prev" | "next"; dis
   );
 }
 
-/* Résultat du check-in : le score en gros au centre (la jauge ouverte de l'onglet Récupération),
+/* Résultat du point forme : le score en gros au centre (la jauge ouverte de l'onglet Récupération),
    l'insight, puis les 5 premiers matins en ronds cochés. */
 function CheckinBlock({ r }: { r: CheckinResult }) {
   const g = recoveryGauge(r.score);

@@ -33,7 +33,7 @@ async function readQueue(): Promise<OfflineAction[]> {
 }
 export const readOfflineQueue = readQueue;
 
-/* Ajoute une action à la file (vraie app hors ligne : séance en cours, Terminer, check-in). */
+/* Ajoute une action à la file (vraie app hors ligne : séance en cours, Terminer, point forme). */
 export async function enqueueOfflineAction(action: OfflineAction) {
   const queue = await readQueue();
   queue.push(action);

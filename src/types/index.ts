@@ -77,7 +77,7 @@ export interface Session {
   viewed_by_coach_at?: string | null;
   /* Décision d'autorégulation (migration 030), voir autoregDecisionRecord.ts. */
   autoreg_decision?: import("@/lib/autoregDecisionRecord").AutoregDecisionRecord | null;
-  /* Reco du matin figée au check-in (migration 042), voir autoregPersonal.ts. */
+  /* Reco du matin figée au point forme (migration 042), voir autoregPersonal.ts. */
   autoreg_proposal?: import("@/lib/autoregPersonal").AutoregProposal | null;
   /* « J'ai allégé / poussé sans le noter » (migration 043, écran de résultat) : corrige le réalisé
      quand le texte de la séance n'a pas bougé. null = rien dit. */

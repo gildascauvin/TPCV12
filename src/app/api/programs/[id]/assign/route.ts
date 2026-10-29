@@ -148,8 +148,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    /* Rattrapage (2026-10-24) : programme assigné après le check-in du jour → conseil figé tout de
-       suite sur la séance du jour (rien à figer sans check-in). Autour d'aujourd'hui seulement :
+    /* Rattrapage (2026-10-24) : programme assigné après le point forme du jour → conseil figé tout de
+       suite sur la séance du jour (rien à figer sans point forme). Autour d'aujourd'hui seulement :
        le fuseau du sportif n'est pas connu ici. */
     if (sessionsToInsert.length > 0) {
       const now = new Date();

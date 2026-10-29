@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import OnboardingFlow from "@/components/onboarding/OnboardingFlow";
 import PhysioRevealHost from "@/components/physio/PhysioRevealHost";
-// Écran de résultat du check-in de l'onboarding (2026-10-22) : même écran que dans l'app.
+// Écran de résultat du point forme de l'onboarding (2026-10-22) : même écran que dans l'app.
 
 export const dynamic = "force-dynamic";
 

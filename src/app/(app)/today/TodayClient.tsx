@@ -76,7 +76,7 @@ const DuplicateModal = dynamic(() => import("@/components/sessions/DuplicateModa
 
 /* ─── helpers ─── */
 /* Jauge de difficulté statique — mêmes paliers/couleurs que la constante de design du projet. */
-/* Check-in fait hors ligne, en attente d'envoi : reconstruit pour l'affichage (le serveur recalcule
+/* Point forme fait hors ligne, en attente d'envoi : reconstruit pour l'affichage (le serveur recalcule
    le score à l'envoi, montre comprise). */
 function localWellness(d: { sleep: number; stress: number; recovery: number; motivation: number; behaviors: string[]; bedtime: string }, date: string): WellnessDaily {
   const { base_score, score } = computeWellnessScore(d.sleep, d.stress, d.recovery, d.motivation, d.behaviors);
@@ -137,7 +137,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const realPaywall = usePaywall(subscriptionStatus, hasActiveCoach);
   const sandboxPaywall = useSandboxGate("athlete");
   const { paywallStep, setPaywallStep, billing, setBilling, allowDismiss, requireSubscription, handleDismiss, isActive } = sandboxMode ? sandboxPaywall : realPaywall;
-  /* Freemium (2026-09-30) : ce qui entre (check-in, séances) est libre, seule la sandbox (visiteur
+  /* Freemium (2026-09-30) : ce qui entre (point forme, séances) est libre, seule la sandbox (visiteur
      sans compte) garde sa porte d'inscription. Ce qui sort (décision, historique) passe par
      LockedBlur + canDecide plus bas. */
   const gateInput = sandboxMode ? requireSubscription : <T,>(fn: () => T | Promise<T>) => Promise.resolve(fn());
@@ -174,7 +174,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       .finally(() => setAnalyticsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [homeTab, selectedDate, sandboxMode, analyticsData, analyticsLoading]);
-  /* Relecture silencieuse après une saisie (check-in, RPE/durée, séance ajoutée/supprimée) : les
+  /* Relecture silencieuse après une saisie (point forme, RPE/durée, séance ajoutée/supprimée) : les
      graphes gardent leurs données actuelles pendant le fetch (pas de fantôme), puis se mettent à
      jour. Regroupé sur 400 ms : une saisie déclenche à la fois l'appel direct et l'event temps réel. */
   const analyticsRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -193,7 +193,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [wellness, setWellness] = useState<WellnessDaily | null>(initialWellness);
   const [allSessions, setAllSessions] = useState<Session[]>(initialSessions);
   /* Hors ligne (2026-10-02) : la page peut être servie depuis le cache, telle qu'à la dernière
-     ouverture. On y rejoue les actions encore en attente (séance démarrée / terminée, check-in). */
+     ouverture. On y rejoue les actions encore en attente (séance démarrée / terminée, point forme). */
   const applyOfflinePending = useCallback(async () => {
     const queue = await readOfflineQueue();
     if (!queue.length) return;
@@ -203,7 +203,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (w && w.type === "wellness") setWellness(prev => prev?.bedtime ? prev : localWellness(w, w.date));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { applyOfflinePending(); }, [applyOfflinePending]);
-  /* Avec réseau : précharge les écrans ouverts pendant une séance (check-in, Terminer, séance en
+  /* Avec réseau : précharge les écrans ouverts pendant une séance (point forme, Terminer, séance en
      cours), pour que le service worker les ait en cache — sinon l'Accueil rouvert hors ligne
      planterait au premier clic. */
   useEffect(() => {
@@ -261,7 +261,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [showWellness, setShowWellness] = useState(false);
-  /* Check-in dans la feuille de l'Accueil (mobile) : « Plus tard » le range jusqu'au prochain passage. */
+  /* Point forme dans la feuille de l'Accueil (mobile) : « Plus tard » le range jusqu'au prochain passage. */
   const [checkinDismissed, setCheckinDismissed] = useState(false);
   const [viewportH, setViewportH] = useState(() => (typeof window === "undefined" ? 800 : window.innerHeight));
   useEffect(() => {
@@ -273,18 +273,18 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [sheetH, setSheetH] = useState(0);
   const [liveScoreSlot, setLiveScoreSlot] = useState<HTMLDivElement | null>(null);
   const [pageArea, setPageArea] = useState<HTMLDivElement | null>(null);
-  /* Haut du score du check-in dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
+  /* Haut du score du point forme dans la page : la feuille s'ouvre juste en dessous de l'arc, pour que le
      score qui se construit reste visible (en-tête et onglets prennent déjà ~250 px). */
   const [liveSlotTop, setLiveSlotTop] = useState<number | null>(null);
   const [sheetVisibleH, setSheetVisibleH] = useState<number | null>(null);
-  // Un check-in demandé (séance à démarrer, ?checkin=1, Modifier mon ressenti…) remonte la feuille sur l'onglet Aujourd'hui.
+  // Un point forme demandé (séance à démarrer, ?checkin=1, Modifier mon ressenti…) remonte la feuille sur l'onglet Aujourd'hui.
   useEffect(() => {
     if (!showWellness || isMd) return;
     setHomeTab("today");
     setSheetH(9999);
   }, [showWellness, isMd]);
   const searchParams = useSearchParams();
-  /* Checklist d'onboarding : ?checkin=1 (Renseigne ta forme) ouvre le check-in, ?today=1 (Ajuste et
+  /* Checklist d'onboarding : ?checkin=1 (Renseigne ta forme) ouvre le point forme, ?today=1 (Ajuste et
      fais ta séance) ramène sur aujourd'hui — dans les deux cas, la page se recale sur aujourd'hui. */
   useEffect(() => {
     const checkin = searchParams.get("checkin") === "1";
@@ -299,7 +299,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   const [addSessionInitialName, setAddSessionInitialName] = useState<string | undefined>(undefined);
   const [completing, setCompleting] = useState<Session | null>(null);
   const [pendingCompleteSession, setPendingCompleteSession] = useState<Session | null>(null);
-  /* Séance en direct : Démarrer sans check-in du jour ouvre d'abord le check-in, puis démarre. */
+  /* Séance en direct : Démarrer sans point forme du jour ouvre d'abord le point forme, puis démarre. */
   const [pendingStartSession, setPendingStartSession] = useState<Session | null>(null);
   const [editing, setEditing] = useState<Session | null>(null);
   // Tiroir ouvert par la carte elle-même (lib/morph.ts) : il saute alors son animation d'entrée.
@@ -384,7 +384,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, initialDate, sandboxMode]);
-  // Montre (Apple Santé) avant le check-in : affichée dans "Plan à confirmer" pour inviter à le faire.
+  // Montre (Apple Santé) avant le point forme : affichée dans "Plan à confirmer" pour inviter à le faire.
   const deviceNote = useDeviceNote(userId, selectedDate, !sandboxMode && !wellnessFilledToday);
   /* Plus d'impact fatigue post-séance ici (retiré partout, pas seulement sur ce chart) : le garder
      sur une seule surface créait exactement le type de confusion inter-surfaces ("le score n'est pas
@@ -470,8 +470,8 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     physio: physioDecisionInputs(physio, selectedDate),
   });
   const decisionColor = decisionCardColor(decision.icon);
-  /* Reco du matin figée (piste 1) : le check-in l'a déjà demandée au serveur ; secours si la séance a
-     été ajoutée après le check-in, ou si l'appel a échoué. Calcul côté serveur, identique à cette carte. */
+  /* Reco du matin figée (piste 1) : le point forme l'a déjà demandée au serveur ; secours si la séance a
+     été ajoutée après le point forme, ou si l'appel a échoué. Calcul côté serveur, identique à cette carte. */
   const proposalKey = wellnessFilledToday && selectedDate === initialDate && autoregTargetTop
     && !(autoregTargetTop.autoreg_proposal && autoregTargetTop.autoreg_proposal.date === autoregTargetTop.date) ? autoregTargetTop.id : null;
   const proposalSent = useRef<string | null>(null);
@@ -487,7 +487,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalKey]);
-  /* Freemium (2026-09-30) : 1re vraie décision (check-in fait + séance à ajuster, sur le jour réel)
+  /* Freemium (2026-09-30) : 1re vraie décision (point forme fait + séance à ajuster, sur le jour réel)
      en clair, floutée dès le lendemain pour un compte gratuit. */
   const canDecide = useFirstDecision({
     userId, isActive, initial: profile.first_decision_on, today: initialDate,
@@ -580,10 +580,10 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   })();
 
   useEffect(() => {
-    // Par compte (2026-10-01) : une clé par date seule bloquait le check-in d'un nouveau compte
+    // Par compte (2026-10-01) : une clé par date seule bloquait le point forme d'un nouveau compte
     // ouvert dans le même onglet qu'un autre le même jour (tests, appareil partagé).
     const key = `wellness_prompted_${userId}_${initialDate}`;
-    // Freemium (2026-09-30) : le check-in est une entrée, il s'ouvre aussi pour un compte gratuit —
+    // Freemium (2026-09-30) : le point forme est une entrée, il s'ouvre aussi pour un compte gratuit —
     // c'est lui qui déclenche la 1re décision en clair. Seule la sandbox reste exclue.
     if (
       !sandboxMode &&
@@ -628,7 +628,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return () => window.removeEventListener(LIVE_SESSION_CHANGED, onChanged);
   }, [supabase, userId, initialDate, refreshAnalyticsSoon]);
 
-  /* Modifier une séance faite ou son check-in (2026-10-17) : l'écran de résultat s'ouvre
+  /* Modifier une séance faite ou son point forme (2026-10-17) : l'écran de résultat s'ouvre
      d'abord (depuis le 2026-10-22, pour tous, avec ou sans mesure), son bouton « Modifier » mène au
      formulaire. */
   function openResult(session: Session) {
@@ -669,7 +669,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     return saved ? { id: saved.id } : undefined;
   }, [supabase, userId]);
 
-  /* Check-in envoyé (2026-10-27) : l'anneau et la carte décision se rejouent (remontage par clé),
+  /* Point forme envoyé (2026-10-27) : l'anneau et la carte décision se rejouent (remontage par clé),
      pour qu'on voie que la décision vient de répondre. 0 = premier affichage, sans rejeu. */
   const [checkinReplay, setCheckinReplay] = useState(0);
   const saveWellness = useCallback(async (data: {
@@ -681,7 +681,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     haptic("success");
     const { plannedIntensity, ...wellnessData } = data;
     data = wellnessData;
-    /* Hors ligne : check-in mis en attente (score recalculé par le serveur à l'envoi, montre
+    /* Hors ligne : point forme mis en attente (score recalculé par le serveur à l'envoi, montre
        comprise), affiché tout de suite, et la suite (démarrer / terminer la séance) continue. */
     if (isOffline()) {
       await enqueueOfflineAction({
@@ -713,7 +713,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       setCheckinReplay(n => n + 1);
     }
     refreshAnalyticsSoon();
-    /* Séance prévue déclarée au check-in (2026-10-01) : une vraie séance, comme une autre, pour que
+    /* Séance prévue déclarée au point forme (2026-10-01) : une vraie séance, comme une autre, pour que
        la décision du jour existe même sans programme. Repos = rien. */
     if (plannedIntensity && plannedIntensity !== "rest") {
       try {
@@ -853,15 +853,15 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
   );
 
   /* Accueil mobile (2026-10-22, POC PgTQbMYpsUhqCounWHL28M) : séance du jour dans une feuille en bas ;
-     tant que le check-in du jour n'est pas fait, c'est lui qui est dans la feuille, et son score se
+     tant que le point forme du jour n'est pas fait, c'est lui qui est dans la feuille, et son score se
      construit en haut à la place de l'anneau de décision. Desktop et autres onglets : inchangés. */
   const sheetMode = !isMd && homeTab === "today";
   const embeddedCheckin = !isMd && !sandboxMode && selectedDate === initialDate
     && (showWellness || (!wellnessFilledToday && !checkinDismissed));
   const checkinTopSession = [...todaySessions].sort((a, b) => (b.target_difficulty ?? 0) - (a.target_difficulty ?? 0))[0] ?? null;
-  // Score du check-in : aussi grand que la place laissée au-dessus de la feuille.
+  // Score du point forme : aussi grand que la place laissée au-dessus de la feuille.
   const liveScoreSize = Math.max(110, Math.min(230, viewportH - (sheetVisibleH ?? sheetH) - (liveSlotTop ?? 250) - 75));
-  // Check-in fini (ou rangé) : la séance revient repliée.
+  // Point forme fini (ou rangé) : la séance revient repliée.
   const wasEmbedded = useRef(embeddedCheckin);
   useEffect(() => {
     if (wasEmbedded.current && !embeddedCheckin) setSheetH(0);
@@ -871,7 +871,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
     if (!embeddedCheckin || !sheetMode || !liveScoreSlot) return;
     const top = liveScoreSlot.getBoundingClientRect().top + window.scrollY;
     setLiveSlotTop(top);
-    // Check-in ouvert en grand par défaut (2026-10-23, Gildas) ; replier la feuille découvre le score.
+    // Point forme ouvert en grand par défaut (2026-10-23, Gildas) ; replier la feuille découvre le score.
     setSheetH(9999);
   }, [embeddedCheckin, sheetMode, liveScoreSlot, viewportH]);
 
@@ -977,7 +977,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
       {profileOpen && <ProfileDrawer onClose={() => setProfileOpen(false)} sandboxMode={sandboxMode} sandboxRole="athlete" />}
       <div style={{ padding: `14px ${pad}px 0`, maxWidth: isLg ? 1000 : isMd ? 720 : "100%", margin: "0 auto" }}>
 
-        {/* Pendant le check-in dans la feuille (mobile), les onglets laissent leur place au score. */}
+        {/* Pendant le point forme dans la feuille (mobile), les onglets laissent leur place au score. */}
         {!(sheetMode && embeddedCheckin) && <HomeTabs
           active={homeTab}
           onChange={setHomeTab}
@@ -995,7 +995,7 @@ export default function TodayClient({ userId, profile, initialDate, initialWelln
         {homeTab === "today" && (
         <>
         {!sandboxMode && userId && selectedDate === initialDate && <BilanCard userId={userId} today={initialDate} onOpen={(kind, anchor) => setBilanOpen({ kind, anchor, source: "home_card" })} />}
-        {/* Notifications (2026-10-14) : demandées juste après le check-in, avec la promesse du lendemain. */}
+        {/* Notifications (2026-10-14) : demandées juste après le point forme, avec la promesse du lendemain. */}
         {!sandboxMode && userId && <NotificationPrompt userId={userId} role="athlete" show={wellnessFilledToday && selectedDate === initialDate} />}
         {/* ── Welcome handled by overlay modal below ── */}
 

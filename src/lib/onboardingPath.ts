@@ -11,7 +11,7 @@
                        ob_pay (seulement si le coach ne paie pas).
      Coach (2026-10-19) : value_intro → decision_2b → account → ob_sport → ob_count → questions
                        programme → ob_when → ob_mirror → ob_control → ob_invite → ob_notif → ob_pay
-                       (claimé : ob_count seul avant ob_when). Ni Apple Santé, ni check-in, ni semaine. */
+                       (claimé : ob_count seul avant ob_when). Ni Apple Santé, ni point forme, ni semaine. */
 
 export type Role = "athlete" | "coach";
 export type ObHas = "import" | "generate" | "later" | null;

@@ -9,9 +9,9 @@ import { partialChargeReady } from "@/lib/trainingLoad";
 
 /* Même seuils que le moteur : ACWR calculable (14 j + 4 séances, voir acuteChronicAt) pour la charge,
    baseline personnelle suffisante (12 j) pour la récupération — sur N'IMPORTE QUEL jour de la
-   période, pas seulement le jour de référence : la baseline du jour n'existe qu'une fois le check-in
+   période, pas seulement le jour de référence : la baseline du jour n'existe qu'une fois le point forme
    du jour rempli, et un sportif avec des mois d'historique basculait en démo chaque matin avant son
-   check-in (bug du 2026-10-01). */
+   point forme (bug du 2026-10-01). */
 export function analyticsReady(data: ConseilsData, group: MetricGroup): boolean {
   return group === "charge"
     ? data.loadInfo.label !== "HISTORIQUE INSUFFISANT" || partialChargeReady(data.timeSeries)

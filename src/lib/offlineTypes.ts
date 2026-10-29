@@ -28,7 +28,7 @@ export type OfflineSnapshot = {
   role: "athlete" | "coach";
   name: string | null;
   today: string;
-  /** Sportif : check-in du jour déjà fait (le formulaire hors ligne est alors masqué). */
+  /** Sportif : point forme du jour déjà fait (le formulaire hors ligne est alors masqué). */
   checkinDone: boolean;
   days: { date: string; items: OfflineSessionItem[] }[];
 };

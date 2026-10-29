@@ -273,7 +273,7 @@ export function AhaGroupBilanPreview() {
   const k = useProgress(900);
   return (
     <BilanSynthesis title="Bilan du groupe · semaine" kicker="BILAN DU GROUPE" headline={<>Ce qui se passe <span style={{ color: "#ff8a5c" }}>dans ton groupe.</span></>} blocks={[
-      { kicker: "Qui décroche", color: "#ff8a5c", text: "Chloé ne fait plus son check-in. Hugo est souvent fatigué.", extra: <>
+      { kicker: "Qui décroche", color: "#ff8a5c", text: "Chloé ne fait plus son point forme. Hugo est souvent fatigué.", extra: <>
         <SynthMarks name="Chloé" marks={["ok", "ok", "ok", "missed", "missed", "missed", "missed"]} />
         <SynthMarks name="Hugo" marks={["tired", "ok", "tired", "tired", "ok", "tired", "ok"]} />
       </> },

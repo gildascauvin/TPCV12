@@ -1,5 +1,5 @@
-/* Libellés des 4 questions du check-in, un par note (partagés par le formulaire et par les insights
-   de fin de check-in, qui parlent en mots, jamais en chiffres). */
+/* Libellés des 4 questions du point forme, un par note (partagés par le formulaire et par les insights
+   de fin de point forme, qui parlent en mots, jamais en chiffres). */
 /* Échelles 1-10 (ScaleBars) : un libellé par note, extrémités reprises des anciens curseurs.
    Le stress est la seule question où 10 = mauvais : sa palette bleue est inversée. */
 const L = (...w: string[]) => Object.fromEntries(w.map((x, i) => [i + 1, x])) as Record<number, string>;

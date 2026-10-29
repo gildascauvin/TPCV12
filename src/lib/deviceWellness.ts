@@ -87,7 +87,7 @@ export function deviceInputsFor(date: string, days: HealthRow[]): DeviceInputs {
 }
 
 /* Résumé de ce que dit la montre pour un jour, 2e personne — pour la carte "Plan à confirmer" avant le
-   check-in (2026-09-30). null si la montre n'a rien ce jour-là. */
+   point forme (2026-09-30). null si la montre n'a rien ce jour-là. */
 export function deviceSummary(d: DeviceInputs): string | null {
   const parts: string[] = [];
   if (d.device_sleep_minutes != null) {
@@ -117,7 +117,7 @@ export function deviceSummary(d: DeviceInputs): string | null {
    `rhrNorm`/`hrvNorm` = norme perso de ce jour-là (moyenne des 28 jours précédents, au moins 5). */
 export type DeviceDay = {
   rhr: number | null; rhrNorm: number | null; hrv: number | null; hrvNorm: number | null;
-  /* Nuit mesurée (≥ 3 h, même filtre que le score). `sleepZ` n'est rempli que les jours SANS check-in :
+  /* Nuit mesurée (≥ 3 h, même filtre que le score). `sleepZ` n'est rempli que les jours SANS point forme :
      écart à la norme sommeil calculé sur la durée seule, pour que le chart Sommeil ait son point. */
   sleepMin: number | null; sleepZ: number | null;
   /* Garmin (2026-10-23) : stress moyen de la journée (1-100) et Body Battery rechargée / dépensée. */
@@ -127,8 +127,8 @@ export type DeviceDay = {
 type DeviceCols = { date: string } & DeviceInputs;
 
 /* Série jour par jour alignée sur `dates`. Source prioritaire : health_daily (la montre), pour qu'un
-   jour sans check-in ait quand même son point. Repli : les colonnes device_* de wellness_daily (côté
-   coach, qui ne peut pas lire health_daily, ou sandbox) — un point seulement les jours de check-in. */
+   jour sans point forme ait quand même son point. Repli : les colonnes device_* de wellness_daily (côté
+   coach, qui ne peut pas lire health_daily, ou sandbox) — un point seulement les jours de point forme. */
 export function buildDeviceSeries(dates: string[], health: HealthRow[] | null | undefined, wellness: DeviceCols[]): DeviceDay[] {
   const num = (v: unknown) => (v == null ? null : Number(v));
   if (health && health.length) {

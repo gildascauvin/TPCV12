@@ -200,16 +200,16 @@ export type ConseilsData = {
      en relatif plutôt qu'en absolu dès que l'historique de chaque jour est suffisant. */
   wellnessBaselineSeries: (WellnessBaselineResult | null)[];
   /* Montre jour par jour (même alignement que `timeSeries`) : FC repos / VFC brutes + norme, pour les
-     sous-charts FC repos et VFC. Lue dans health_daily quand on y a accès (jours sans check-in
-     compris), sinon dans les colonnes device_* des check-ins. */
+     sous-charts FC repos et VFC. Lue dans health_daily quand on y a accès (jours sans point forme
+     compris), sinon dans les colonnes device_* des points forme. */
   deviceSeries: DeviceDay[];
   /* Séances estimées depuis la montre (watchEstimates.ts) comptées dans la fenêtre : la charge les
      inclut, l'interface le dit (2026-10-23). */
   estimatedSessionCount: number;
   /* Récupération D'APRÈS LES MESURES SEULES (nuit, FC au repos, VFC face à leur norme de 28 jours,
      en percentile comme le score relatif), uniquement pour les jours AVANT l'inscription sans
-     check-in : l'historique importé remplit le chart dès le 1er jour. Après l'inscription, le score
-     du jour exige un check-in (Gildas, 2026-10-23) : null. Même alignement que `timeSeries`. */
+     point forme : l'historique importé remplit le chart dès le 1er jour. Après l'inscription, le score
+     du jour exige un point forme (Gildas, 2026-10-23) : null. Même alignement que `timeSeries`. */
   measuredRecovery: (number | null)[];
   done7Count: number;
   avgRpe: number | null;
@@ -395,7 +395,7 @@ export function computeConseilsData(
      les 42 points sur les 42 premières dates et s'arrêtait 48 jours avant aujourd'hui. */
   const wellnessBaselineSeries = computeWellnessBaselineSeries(allWellness, CONSEILS_HISTORY_DAYS, anchor);
   const deviceSeries = buildDeviceSeries(timeSeries.map(p => p.date), health, allWellness);
-  // Nuits mesurées sans check-in : point "durée seule" sur le chart Sommeil (voir sleepZFromDeviceOnly).
+  // Nuits mesurées sans point forme : point "durée seule" sur le chart Sommeil (voir sleepZFromDeviceOnly).
   const checkinDates = new Set(allWellness.filter(w => wellnessSignal(w) !== null).map(w => w.date));
   deviceSeries.forEach((d, i) => {
     const date = timeSeries[i].date;
@@ -407,7 +407,7 @@ export function computeConseilsData(
   const measuredRecovery = measuredRecoverySeries(timeSeries.map(p => p.date), health, checkinDates, signupDate);
   const windowStart = timeSeries[0]?.date ?? referenceDate;
   const estimatedSessionCount = allSessions.filter(s => isEstimated(s) && s.date >= windowStart && s.date <= referenceDate).length;
-  /* Sans check-in du jour mais avec un historique mesuré (2026-10-23) : le statut suit la dernière
+  /* Sans point forme du jour mais avec un historique mesuré (2026-10-23) : le statut suit la dernière
      valeur mesurée, sur les mêmes bandes que la jauge (42/58), au lieu du repli absolu par défaut qui
      affichait « Bonne récup » à côté d'une jauge « Équilibré ». */
   const lastMeasured = [...measuredRecovery].reverse().find(v => v !== null) ?? null;

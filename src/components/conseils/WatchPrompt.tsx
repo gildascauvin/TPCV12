@@ -11,7 +11,7 @@ import { invalidatePhysio, type PhysioData } from "@/lib/physioData";
 
 /* Encart « ta montre » de l'onglet analyses pendant la collecte (2026-10-23, POC
    https://claude.ai/artifact/8WtC2JiFrJUR4auL7nEQVq). Les mesures sont gratuites : ramener la montre
-   remplit les charts avec l'historique (Apple Santé : 30 jours relus) au lieu d'attendre les check-ins.
+   remplit les charts avec l'historique (Apple Santé : 30 jours relus) au lieu d'attendre les points forme.
    Un écran par cas :
    - mesures déjà là (FC au repos ou VFC sur 30 jours) : rien, les charts se remplissent ;
    - Garmin connecté sans mesure encore : « tes données arrivent après ta prochaine nuit » ;
@@ -96,7 +96,7 @@ export default function WatchPrompt({ userId, physio }: { userId: string; physio
   if (kase === "garmin_waiting") {
     return (
       <div style={{ borderRadius: 14, padding: "11px 13px", background: "rgba(125,211,252,.10)", border: "1px solid rgba(125,211,252,.30)", fontSize: 13, lineHeight: 1.45, color: "#fff", marginBottom: 12 }}>
-        <b>⌚ Garmin connecté.</b> Tes données arrivent après ta prochaine nuit. D&apos;ici là, ton check-in fait avancer ta norme.
+        <b>⌚ Garmin connecté.</b> Tes données arrivent après ta prochaine nuit. D&apos;ici là, ton point forme fait avancer ta norme.
       </div>
     );
   }

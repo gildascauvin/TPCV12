@@ -38,7 +38,7 @@ export function planFeatures(role: "athlete" | "coach", sportDe: string | null):
     free: [
       { title: "Programme tes sportifs", text: `Sur mesure, importé ou modèle${de}, assigné en un geste.` },
       { title: "Invite-les", text: "Ils renseignent leur forme et leurs séances." },
-      { title: "Suis leurs check-ins", text: "Les scores de chacun, sans relance." },
+      { title: "Suis leurs points forme", text: "Les scores de chacun, sans relance." },
     ],
     elite: [
       { title: "Sais chaque matin qui alléger, et de combien", text: "Une décision par sportif, sur sa forme et sa charge." },

@@ -57,7 +57,7 @@ function statusOf(metric: MetricKey, data: ConseilsData, series: DayPoint[], per
 }
 
 /* Sous-indicateurs montre de la carte Récupération (FC repos, VFC ; stress et Body Battery Garmin,
-   2026-10-23). "Stress mesuré" pour ne pas le confondre avec le stress déclaré du check-in. */
+   2026-10-23). "Stress mesuré" pour ne pas le confondre avec le stress déclaré du point forme. */
 type DeviceSub = "rhr" | "hrv" | "stressM" | "bb";
 const DEVICE_SUB_LABEL: Record<DeviceSub, string> = { rhr: "FC repos", hrv: "VFC", stressM: "Stress mesuré", bb: "Body Battery" };
 const isDeviceSub = (d: string): d is DeviceSub => d in DEVICE_SUB_LABEL;
@@ -105,7 +105,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      correspond (Charge : séances vs fréquence cardiaque, avec la lecture par type de séance) au lieu
      d'une carte de plus dans la liste. `body` = le chart de comparaison, rendu à la place du chart. */
   compare?: { metric: "load" | "recovery"; body: React.ReactNode } | null;
-  /* Verdict « Ressenti vs physiologie » de la récupération (nuit, FC repos, VFC face au check-in),
+  /* Verdict « Ressenti vs physiologie » de la récupération (nuit, FC repos, VFC face au point forme),
      affiché au-dessus du chart Score quand celui-ci n'a pas de courbe montre appariée (Apple Watch :
      pas de Body Battery). Remplace la puce « Ressenti vs physiologie » de la carte Récupération
      (2026-10-23, Gildas) : les charts appariés font cette comparaison dimension par dimension. */
@@ -122,7 +122,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
   const baselineWindow = data.wellnessBaselineSeries.slice(-days);
   /* Même règle que le chart de prod : on ne trace le relatif que si l'historique le permet, sinon
      rien — jamais un score absolu mélangé à une échelle de percentile. */
-  /* Jours avant l'inscription sans check-in : la récupération d'après les mesures importées
+  /* Jours avant l'inscription sans point forme : la récupération d'après les mesures importées
      (measuredRecovery, 2026-10-23). Jamais pour un jour après l'inscription (null côté calcul). */
   const measuredWindow = (data.measuredRecovery ?? []).slice(-days);
   const recoveryRelative = baselineWindow.map((b, i) => (b?.hasEnoughHistory ? b.relativeScore : measuredWindow[i] ?? null));
@@ -131,7 +131,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
      dans le score. Ligne de synthèse sous la carte + sous-jacent "FC repos" dès qu'une FC existe sur
      la période. Rien de tout ça sans montre : la carte reste 100 % subjective. */
   /* FC repos / VFC : lues dans la série montre (health_daily quand on y a accès), pas dans la
-     baseline — un jour sans check-in a donc quand même son point. */
+     baseline — un jour sans point forme a donc quand même son point. */
   const deviceWindow = (data.deviceSeries ?? []).slice(-days);
   const hasRhr = deviceWindow.some(d => d?.rhr != null);
   const hasHrv = deviceWindow.some(d => d?.hrv != null);
@@ -185,8 +185,8 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
     : { title: coachP ? "Son analyse de récupération est prête" : "Ton analyse de récupération est prête",
         sub: coachP ? "Elle croise son ressenti, sa forme et ses comportements." : "Elle croise ton ressenti, ta forme et tes comportements." };
   const exampleText = perspective === "coach"
-    ? "Ses analyses arrivent après ~1 semaine de check-ins et de séances."
-    : "Tes analyses arrivent après ~1 semaine de check-ins et de séances.";
+    ? "Ses analyses arrivent après ~1 semaine de points forme et de séances."
+    : "Tes analyses arrivent après ~1 semaine de points forme et de séances.";
   /* Freemium (2026-10-02) : « les mesures sont gratuites, les décisions payantes ». Statut et valeur
      d'un indice restent nets ; aperçu, tendance et séries des charts sont floutés comme en prod
      (sinon on donne tout). L'impact écrit (ce qu'il faut en
@@ -271,7 +271,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
             d'attendre ou de montrer l'exemple. */}
         {!example && group === "recup" && lastB?.provisional && (
           <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#7dd3fc" }}>
-            Norme provisoire · {lastB.historyDays}/12 check-ins
+            Norme provisoire · {lastB.historyDays}/12 points forme
           </div>
         )}
         {/* Données importées de la montre (2026-10-23) : on ne mélange jamais en silence un ressenti et
@@ -283,7 +283,7 @@ export default function IndexCards({ data, rangeMode, onRangeModeChange, group, 
         )}
         {!example && group === "recup" && (data.measuredRecovery ?? []).some(v => v !== null) && (
           <div style={{ maxWidth: 360, fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,.65)" }}>
-            Avant {perspective === "coach" ? "son" : "ton"} inscription : d&apos;après {perspective === "coach" ? "ses" : "tes"} mesures (nuit, FC au repos, VFC). Le score du jour attend {perspective === "coach" ? "son" : "ton"} check-in.
+            Avant {perspective === "coach" ? "son" : "ton"} inscription : d&apos;après {perspective === "coach" ? "ses" : "tes"} mesures (nuit, FC au repos, VFC). Le score du jour attend {perspective === "coach" ? "son" : "ton"} point forme.
           </div>
         )}
         {!example && group === "charge" && data.loadInfo.label === "HISTORIQUE INSUFFISANT" && (

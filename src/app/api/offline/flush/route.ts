@@ -9,8 +9,8 @@ import { OFFLINE_PATCH_FIELDS, type OfflineAction, type OfflineFlushResult } fro
    - "complete" : séance terminée (RPE + durée). Sportif : sa propre séance. Coach : séance d'un de
      ses sportifs, après vérification du lien (même règle que /api/coach/session). Si la séance a été
      supprimée entre-temps → "skipped".
-   - "wellness" : check-in du matin. Le score est calculé ici avec la même fonction que l'app
-     (computeWellnessScore + données montre). Un check-in déjà fait en ligne pour ce jour n'est
+   - "wellness" : point forme du matin. Le score est calculé ici avec la même fonction que l'app
+     (computeWellnessScore + données montre). Un point forme déjà fait en ligne pour ce jour n'est
      jamais écrasé → "skipped".
    Chaque action est traitée indépendamment ; le client retire de sa file les "ok" et "skipped". */
 
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(a.date)) { results.push({ id: a.id, status: "skipped", reason: "date invalide" }); continue; }
         const { data: existing } = await supabase.from("wellness_daily").select("bedtime")
           .eq("user_id", user.id).eq("date", a.date).maybeSingle();
-        if (existing?.bedtime) { results.push({ id: a.id, status: "skipped", reason: "check-in déjà fait" }); continue; }
+        if (existing?.bedtime) { results.push({ id: a.id, status: "skipped", reason: "point forme déjà fait" }); continue; }
         const input = {
           sleep: clamp10(a.sleep), stress: clamp10(a.stress), recovery: clamp10(a.recovery), motivation: clamp10(a.motivation),
           behaviors: Array.isArray(a.behaviors) ? a.behaviors.filter(b => typeof b === "string").slice(0, 20) : [],

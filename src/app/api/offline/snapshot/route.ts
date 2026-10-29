@@ -6,7 +6,7 @@ import { OFFLINE_SNAPSHOT_VERSION, type OfflineSessionItem, type OfflineSnapshot
 
 /* Instantané hors ligne (2026-10-02) : séances d'aujourd'hui et des 6 jours suivants, enregistrées
    sur l'appareil à chaque ouverture avec réseau (voir offlineStore.ts).
-   - Sportif : ses propres séances (table sessions) + check-in du jour fait ou non.
+   - Sportif : ses propres séances (table sessions) + point forme du jour fait ou non.
    - Coach : les séances de tous ses sportifs (vrais comptes → sessions ; sans compte → coach_sessions),
      lues via le client admin après vérification que chaque sportif est bien le sien (même règle que
      /coach/planning).

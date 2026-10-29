@@ -5,7 +5,7 @@ import posthog from "posthog-js";
 import { markPrimingSource, sourceFromSurface } from "@/lib/primingSource";
 
 /* Freemium "dispositif éteint" (2026-09-30, POC https://claude.ai/artifact/GBoj2wydy4kK8N8skjTAwW) :
-   ce qui entre (check-in, séances, programmes) est gratuit, ce qui sort (décision, analyses) est
+   ce qui entre (point forme, séances, programmes) est gratuit, ce qui sort (décision, analyses) est
    payant. Une sortie verrouillée garde son VRAI contenu, flouté, avec l'action par-dessus — jamais un
    cadenas sur la navigation (voir feedback flou plutôt que cadenas). `locked=false` = rendu brut. */
 export default function LockedBlur({ locked, surface, onUnlock, title, sub, cta = "Activer l'ajustement", compact = false, light = false, bare = false, top = false, radius = 16, children }: {
