@@ -50,6 +50,8 @@ export interface PrimingContext {
   sportDe: string | null;
   /** Coach : vrais sportifs (ni invitation en attente, ni sportif démo "soi-même"). */
   athleteNames: string[];
+  /** Ancien abonné (statut « expired ») : l'offre de sortie DEPART30 (1er abonnement seulement) ne lui est pas proposée. */
+  everPaid?: boolean;
 }
 
 const EMPTY: PrimingContext = { name: null, sportDe: null, athleteNames: [] };
@@ -70,7 +72,7 @@ export function loadPrimingContext(): Promise<PrimingContext> {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return EMPTY;
       const { data: profile, error } = await supabase
-        .from("profiles").select("name, sport, mode").eq("user_id", user.id).maybeSingle();
+        .from("profiles").select("name, sport, mode, subscription_status").eq("user_id", user.id).maybeSingle();
       if (error) console.error("[primingContext] profile error:", error);
       const first = (profile?.name ?? "").trim().split(/\s+/)[0] || null;
       let athleteNames: string[] = [];
@@ -85,7 +87,7 @@ export function loadPrimingContext(): Promise<PrimingContext> {
           .map(r => (r.name ?? "").trim().split(/\s+/)[0])
           .filter(Boolean);
       }
-      return { name: first, sportDe: sessionsComplement(profile?.sport), athleteNames };
+      return { name: first, sportDe: sessionsComplement(profile?.sport), athleteNames, everPaid: profile?.subscription_status === "expired" };
     } catch (e) {
       console.error("[primingContext]", e);
       return EMPTY;

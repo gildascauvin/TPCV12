@@ -91,7 +91,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   );
   /* Fermeture (croix, clic hors modale) : la 1re fois sur le web, l'offre de sortie passe avant (src/lib/exitOffer.ts). */
   const requestClose = () => {
-    if (exitOfferEligible()) {
+    if (exitOfferEligible() && !ctx.everPaid) {
       markExitOfferSeen();
       posthog.capture("exit_offer_viewed", { plan: mode, source });
       setExitOpen(true);

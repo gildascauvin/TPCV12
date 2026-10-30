@@ -1996,7 +1996,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
         .upsert({ user_id: eliteUid, date: today, ...payload }, { onConflict: "user_id,date" })
         .select().single();
       if (error) console.error("[ob_checkin] wellness upsert error:", error);
-      posthog.capture("onboarding_checkin_saved", { ok: !error });
+      posthog.capture("onboarding_checkin_saved", { ok: !error, role });
       setObAnswers({ sleep: data.sleep, stress: data.stress, recovery: data.recovery, motivation: data.motivation });
       setObExample(false); obRingRef.current = null;
       setObCheckinScore(error ? null : ((saved as { score?: number } | null)?.score ?? payload.score));
@@ -2008,7 +2008,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
     const checkinModal = obCheckinOpen && !obCheckinBusy ? (
       <WellnessModal date={today} onSave={saveCheckin} cancelLabel="Plus tard" skipResult
         onClose={() => {
-          setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped");
+          setObCheckinOpen(false); posthog.capture("onboarding_checkin_skipped", { role });
           // Pas de réponse : un matin de nuit courte en exemple, les écrans suivants le disent (« Imaginons »).
           setObExample(true); obRingRef.current = null;
           setObAnswers({ sleep: 3, stress: 4, recovery: 6, motivation: 6 }); setObCheckinScore(38);
@@ -2107,7 +2107,7 @@ export default function OnboardingFlow({ userId, pendingData, initialRole, resum
                 setObAnswers({ sleep: d.sleep, stress: d.stress, recovery: d.recovery, motivation: d.motivation });
                 setObExample(false); obRingRef.current = null;
                 setObCheckinScore(d.score); setObCheckinOpen(false);
-                posthog.capture("onboarding_coach_checkin_imagined");
+                posthog.capture("onboarding_coach_checkin_imagined", { role });
                 obAdvance();
               }} />
           )}
