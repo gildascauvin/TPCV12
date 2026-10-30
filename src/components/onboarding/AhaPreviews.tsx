@@ -86,15 +86,19 @@ export function AhaDecisionPreview({ name }: { name?: string }) {
       {name && (
         <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", textAlign: "center", marginBottom: 12 }}>{name}</div>
       )}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+      {/* Anneau en grand + conseil sans encart, comme /today et la carte coach (2026-10-30, voir
+          DecisionRing `fluid`) : le titre au centre est celui de l'app (position dans la zone, puis
+          le hint décidé d'AutoregButtons une fois appliqué). */}
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
         <DecisionRing
           readOnly onChange={noop} recoDir={sug.dir}
           zoneLow={zoneLow} zoneHigh={zoneHigh}
           value={step === 0 ? planned : target} plannedMarker={planned}
-          hint={applied ? "Difficulté ajustée appliquée" : undefined}
+          hideHint fluid glow={color}
+          hint={applied ? (sug.dir === "low" ? "Allègement appliqué" : "Surcharge appliquée") : undefined}
         />
       </div>
-      <AlertBox variant="darkColor" centered
+      <AlertBox variant="bare"
         alert={{ border: `${color}66`, glow: color, text: `${autoregHeadline(sug.dir)}\n${autoregAdvice(sug.dir, planned, name, baseline)}` }}
         actions={
           <div style={{ display: "flex", gap: 7, justifyContent: "center" }}>
