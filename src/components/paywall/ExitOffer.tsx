@@ -32,8 +32,8 @@ export default function ExitOffer({ mode, onAccept, onDecline }: { mode: "athlet
       </div>
       <div style={{ display: "grid", gap: 10, maxWidth: 460, margin: "18px auto 0", width: "100%" }}>
         <button onClick={onAccept} style={{ height: 56, borderRadius: 999, border: 0, background: "#d44000", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>Prendre l&apos;offre, 14 jours offerts</button>
-        <button onClick={onDecline} style={{ border: 0, background: "none", color: "rgba(255,255,255,.6)", fontSize: 13.5, fontWeight: 700, textDecoration: "underline", cursor: "pointer", padding: 6 }}>Non merci, rester en Gratuit</button>
-        <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.45)" }}>En Gratuit, ton programme, tes séances et ton point forme restent.</div>
+        {/* Refus formulé comme une perte et en retrait (Gildas 2026-10-30) ; la croix en haut reste l'autre sortie. */}
+        <button onClick={onDecline} style={{ border: 0, background: "none", color: "rgba(255,255,255,.4)", fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: 6 }}>Non merci, je laisse passer -30 %</button>
       </div>
     </div>,
     document.body,
