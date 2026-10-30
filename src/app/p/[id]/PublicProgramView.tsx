@@ -161,7 +161,11 @@ export default function PublicProgramView({ program, coachName }: Props) {
        Plus de ?role= : le choix du rôle se fait désormais sur l'écran dédié de l'onboarding
        (voir OnboardingFlow.tsx) — le pré-remplir depuis ce lien convertissait nettement moins bien
        que le demander explicitement, mesuré sur ce même canal (34,6% vs 65,0%). */
-    const dest = `/register?claim=${encodeURIComponent(program.id)}`;
+    /* UTM de la page /p/ (posés par l'iframe WordPress ou le lien d'origine) reportés vers l'inscription :
+       sans ça, une inscription venue d'un aperçu intégré au site n'a pas de source dans PostHog. */
+    const utm = new URLSearchParams();
+    new URLSearchParams(window.location.search).forEach((v, k) => { if (k.startsWith("utm_")) utm.set(k, v); });
+    const dest = `/register?claim=${encodeURIComponent(program.id)}${utm.toString() ? `&${utm.toString()}` : ""}`;
     if (isEmbedded) window.open(dest, "_blank");
     else window.location.href = dest;
   }
