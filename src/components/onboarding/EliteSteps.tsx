@@ -337,7 +337,7 @@ export function AppPushStepBody({ desktop, android = false, hour, setHour, sessi
       {/* Import de la montre (2026-10-23) : la vraie promesse de l'app pour un sportif équipé. */}
       {!coach && (
         <p style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.45, margin: "0 0 16px" }}>
-          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans {android ? "Health Connect" : "Apple Santé"} : tes analyses sont pleines dès l&apos;installation.
+          ⌚ Tu as une montre ? L&apos;app relit tes 30 derniers jours dans {android ? "Health Connect" : "Apple Santé"} : tes analyses sont prêtes dès l&apos;installation.
         </p>
       )}
       <NotifStepBody hour={hour} setHour={setHour} sessionName={sessionName} coachName={null} coach={coach} streak={streak} athleteName={athleteName} />
