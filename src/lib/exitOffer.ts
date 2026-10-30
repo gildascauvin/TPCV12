@@ -15,7 +15,11 @@ const SEEN_KEY = "tpc_exit_offer_seen";
 
 export function exitOfferEligible(): boolean {
   if (isNativeApp()) return false;
-  try { return !localStorage.getItem(SEEN_KEY); } catch { return false; }
+  try {
+    // Mode test (?dbgstep) : l'offre revient à chaque fermeture, pour pouvoir la revoir.
+    if (new URLSearchParams(window.location.search).has("dbgstep")) return true;
+    return !localStorage.getItem(SEEN_KEY);
+  } catch { return false; }
 }
 export function markExitOfferSeen() {
   try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* stockage bloqué */ }
