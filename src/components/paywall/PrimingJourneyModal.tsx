@@ -4,7 +4,8 @@ import { isNativeApp } from "@/lib/nativeGoogleAuth";
 import { NativePurchasePanel } from "./NativeCheckout";
 import { useEffect, useState } from "react";
 import posthog from "posthog-js";
-import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
+import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION, paywallSimIos } from "./PricingPriming";
+import LossSheet, { lossSheetDue, markLossSheetSeen } from "./LossSheet";
 import { RiskTimeline } from "./RiskTimeline";
 import ExitOffer from "./ExitOffer";
 import { acceptExitOffer, exitOfferEligible, markExitOfferSeen } from "@/lib/exitOffer";
@@ -46,6 +47,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const [{ source, athleteName }] = useState(peekPrimingSource);
   const [ctx, setCtx] = useState<PrimingContext | null>(getCachedPrimingContext);
   const [exitOpen, setExitOpen] = useState(false);
+  const [lossOpen, setLossOpen] = useState(false);
 
   useEffect(() => {
     clearPrimingSource();
@@ -91,7 +93,14 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   );
   /* Fermeture (croix, clic hors modale) : la 1re fois sur le web, l'offre de sortie passe avant (src/lib/exitOffer.ts). */
   const requestClose = () => {
-    if (exitOfferEligible() && !ctx.everPaid) {
+    // Là où l'offre de sortie n'existe pas (apps, ou déjà vue), feuille de perte, une fois par jour (LossSheet.tsx).
+    if (!lossOpen && (paywallSimIos() || !exitOfferEligible()) && lossSheetDue()) {
+      markLossSheetSeen();
+      posthog.capture("paywall_loss_sheet_viewed", { plan: mode, source });
+      setLossOpen(true);
+      return;
+    }
+    if (!paywallSimIos() && exitOfferEligible() && !ctx.everPaid) {
       markExitOfferSeen();
       posthog.capture("exit_offer_viewed", { plan: mode, source });
       setExitOpen(true);
@@ -103,6 +112,11 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     <ExitOffer mode={mode} billing={billing} setBilling={setBilling}
       onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source, billing }); acceptExitOffer(); onContinue(); }}
       onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
+  );
+  const lossSheet = lossOpen && (
+    <LossSheet mode={mode}
+      onStay={() => { posthog.capture("paywall_loss_sheet_stayed", { plan: mode, source }); setLossOpen(false); }}
+      onLeave={() => { posthog.capture("paywall_loss_sheet_left", { plan: mode, source }); close(); }} />
   );
   const sideLink = <PricingSideLink role={mode} athleteSelfId={athleteSelfId} name={displayName} />;
 
@@ -129,6 +143,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         <div style={{ position: "relative", width: "100%", height: "100dvh", background: DARK_CARD_BG, color: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
           {closeBtn}
           {exitOffer}
+          {lossSheet}
           <div style={{ flex: 1, overflowY: "auto" }}>
             <div style={{ padding: "44px 20px 4px" }}>{head}</div>
             <div style={{ padding: "18px 16px 6px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -155,6 +170,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       }}>
         {closeBtn}
         {exitOffer}
+        {lossSheet}
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ padding: "34px 32px 8px", display: "grid", gap: columns ? 36 : 22, gridTemplateColumns: columns ? "1fr 1.05fr" : "1fr", alignItems: "start" }}>
             <div style={{ paddingTop: columns ? 4 : 0 }}>{head}</div>

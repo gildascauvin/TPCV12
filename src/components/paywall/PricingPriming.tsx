@@ -16,6 +16,17 @@ import { isNativeApp } from "@/lib/nativeGoogleAuth";
    1 clic. */
 export const TRIAL_DAYS = 14;
 
+/* Test : `?pwios=1` dans l'URL simule l'affichage de l'app iOS sur le web (montant facturé en gros, feuille de
+   perte au lieu de l'offre de sortie) ; `?pwios=0` l'enlève. Mémorisé pour la session (survit aux navigations). */
+export function paywallSimIos(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const v = new URLSearchParams(window.location.search).get("pwios");
+    if (v !== null) sessionStorage.setItem("tpc_pwios", v);
+    return sessionStorage.getItem("tpc_pwios") === "1";
+  } catch { return false; }
+}
+
 export const PRICING_PRIMING_GUARANTEE_CAPTION = "✓ Annulation en 1 clic, sans engagement.";
 
 type Feature = { title: string; text: string };
@@ -84,37 +95,64 @@ function FeatureList({ items, elite, hitIndex, hitLabel }: { items: Feature[]; e
   );
 }
 
-/* Prix réel en gros, « 6,50€/mois (78€/an) » en annuel (2026-10-07, équivalent mensuel en tête à la demande de Gildas ; plus de « 0€ » en tête : à côté de la carte Gratuit, deux 0€
-   effaçaient le contraste entre les offres). Le 0€ d'aujourd'hui reste dit juste en dessous.
-   App iOS (refus App Store 3.1.2(c), 2026-10-09) : le montant facturé doit être l'élément de prix le plus
-   visible, donc « 78€/an » en gros et l'équivalent mensuel relégué dans la ligne du dessous. */
+/* Formules l'une sous l'autre (2026-10-30), partagées par le paywall et l'offre de sortie (ExitOffer). */
+export type OfferRow = { b: Billing; label: string; big: string; unit: string; small: React.ReactNode; badge?: string };
+export function OfferRows({ rows, billing, setBilling }: { rows: OfferRow[]; billing: Billing; setBilling: (b: Billing) => void }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }} role="radiogroup" aria-label="Formule">
+      {rows.map(r => {
+        const on = billing === r.b;
+        return (
+          <button key={r.b} type="button" role="radio" aria-checked={on} onClick={() => setBilling(r.b)} style={{
+            display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer",
+            padding: "13px 14px", borderRadius: 16, color: "#fff",
+            background: on ? "rgba(212,64,0,.16)" : "rgba(255,255,255,.04)",
+            border: on ? "1.5px solid #ff8a55" : "1.5px solid rgba(255,255,255,.12)",
+            transition: "background .15s, border-color .15s",
+          }}>
+            <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: "50%", border: on ? "6px solid #ff8a55" : "2px solid rgba(255,255,255,.35)", transition: "border .15s" }} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 800 }}>{r.label}</span>
+                {r.badge && <span style={{ fontFamily: mono, fontSize: 9.5, fontWeight: 700, padding: "3px 7px", borderRadius: 999, background: "rgba(47,158,68,.22)", color: "#7fdb8f" }}>{r.badge}</span>}
+              </span>
+              <span style={{ display: "block", fontSize: 12, color: "rgba(255,255,255,.58)", marginTop: 3 }}>{r.small}</span>
+            </span>
+            <span style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, letterSpacing: "-0.02em", whiteSpace: "nowrap" }}>
+              {r.big}<span style={{ fontSize: 12, color: "rgba(255,255,255,.55)", marginLeft: 2 }}>{r.unit}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* Paywall v2 (2026-10-30, remplace le toggle Annuel / Mensuel) : les deux formules l'une sous l'autre (l'annuel ne
+   paraît une affaire qu'à côté du mensuel), annuel présélectionné, puis une ligne d'ancrage (validée par Gildas).
+   App iOS (refus App Store 3.1.2(c), 2026-10-09) : le montant facturé doit être l'élément de prix le plus visible,
+   donc « 78 €/an » en gros et l'équivalent mensuel en petit. */
 function ElitePrice({ role, billing, setBilling }: { role: "athlete" | "coach"; billing: Billing; setBilling: (b: Billing) => void }) {
   const p = PRICING[role];
-  const isMonthly = billing === "monthly";
-  const billedFirst = isNativeApp() && !isMonthly;
-  const pct = Math.round(((p.monthly * 12 - p.annual) / (p.monthly * 12)) * 100);
-  const perMonth = `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois`;
-  const toggleBtn = (active: boolean): React.CSSProperties => ({
-    border: "none", background: active ? "rgba(255,255,255,.92)" : "transparent", color: active ? "#0b0f13" : "rgba(255,255,255,.58)",
-    fontSize: 12.5, fontWeight: 800, padding: "6px 13px", borderRadius: 999, cursor: "pointer",
-  });
+  const ios = isNativeApp() || paywallSimIos();
+  const fr = (n: number) => n.toFixed(2).replace(".", ",").replace(",00", "");
+  const saved = p.monthly * 12 - p.annual;
+  const rows: OfferRow[] = [
+    {
+      b: "annual", label: "Annuel", badge: `-${saved} €`,
+      big: ios ? `${p.annual} €` : `${fr(p.annualMonthly)} €`, unit: ios ? "/an" : "/mois",
+      small: ios ? <>soit {fr(p.annualMonthly)} €/mois</> : <><s style={{ opacity: .6 }}>{p.monthly * 12} €</s> {p.annual} € par an</>,
+    },
+    { b: "monthly", label: "Mensuel", big: `${p.monthly} €`, unit: "/mois", small: "Sans engagement" },
+  ];
+  const anchor = role === "athlete"
+    ? <>Le prix d&apos;<b style={{ color: "#fff" }}>une seule séance</b> avec un préparateur physique, pour toute l&apos;année.</>
+    : <>Avec 10 sportifs : <b style={{ color: "#fff" }}>{fr(p.annualMonthly / 10)} € par sportif</b> et par mois. Sportifs illimités.</>;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ fontFamily: mono, fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>
-        {isMonthly ? `${p.monthly}€` : billedFirst ? `${p.annual}€` : perMonth.replace("/mois", "")}
-        <span style={{ fontSize: 15, color: "rgba(255,255,255,.55)", marginLeft: 4 }}>
-          {isMonthly ? "/mois" : billedFirst ? "/an" : `/mois (${p.annual}€/an)`}
-        </span>
-      </div>
-      <div style={{ fontSize: 13, color: "rgba(255,255,255,.58)", lineHeight: 1.5 }}>
-        {isMonthly ? "Sans engagement. " : billedFirst ? `Soit ${perMonth}. ` : ""}0€ aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.
-      </div>
-      <div style={{ display: "inline-flex", alignSelf: "flex-start", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.16)", borderRadius: 999, padding: 3 }}>
-        <button type="button" onClick={() => setBilling("annual")} style={toggleBtn(!isMonthly)}>
-          Annuel<span style={{ fontFamily: mono, marginLeft: 5, fontSize: 8.5, fontWeight: 700, padding: "2px 5px", borderRadius: 999, background: "rgba(47,158,68,.22)", color: "#2f9e44" }}>-{pct}%</span>
-        </button>
-        <button type="button" onClick={() => setBilling("monthly")} style={toggleBtn(isMonthly)}>Mensuel</button>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <OfferRows rows={rows} billing={billing} setBilling={setBilling} />
+      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.62)", lineHeight: 1.5, marginTop: 4 }}>{anchor}</div>
+      <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.5)", lineHeight: 1.5 }}>0 € aujourd&apos;hui, 1er prélèvement après tes {TRIAL_DAYS} jours offerts.</div>
     </div>
   );
 }
