@@ -85,8 +85,11 @@ export default function AnalysisReveal({ kicker, title, steps, ready = true, min
             <circle cx={66} cy={66} r={R} fill="none" stroke="url(#tpcAnaGrad)" strokeWidth={8} strokeLinecap="round"
               strokeDasharray={C} strokeDashoffset={C * (1 - pct)} />
           </svg>
-          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontFamily: "var(--font-mono), monospace", fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-            {Math.round(pct * 100)}<span style={{ fontSize: 14, opacity: .6, marginLeft: 2 }}>%</span>
+          {/* Chiffre et % sur une seule ligne, centrés ensemble (en grille, le % passait sous le chiffre). */}
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ display: "inline-flex", alignItems: "baseline", fontFamily: "var(--font-mono), monospace", fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+              {Math.round(pct * 100)}<span style={{ fontSize: 15, opacity: .6, marginLeft: 2 }}>%</span>
+            </span>
           </div>
         </div>
         <div style={{ fontFamily: "var(--font-mono), monospace", fontSize: 10.5, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", color: "#ff8a55", marginBottom: 8 }}>{kicker}</div>
