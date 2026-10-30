@@ -252,7 +252,7 @@ export default function AddSessionModal({ date, session, initialName, hideDate, 
           {!hideDate && (
             <input
               type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-              style={{ fontSize: 14, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
+              style={{ fontSize: 16, color: "#62686e", background: "transparent", border: "none", outline: "none", padding: 0, fontFamily: "inherit", marginTop: 4, cursor: "pointer" }}
             />
           )}
           {!isEdit && (

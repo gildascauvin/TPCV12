@@ -320,7 +320,8 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 /* Voyant "actif" de la pilule d'activité (2026-10-03) : un point vert qui respire, comme la LED d'un objet connecté. */
 /* Bandeau d'activité : on voit qu'il est cliquable (2026-10-04). */
 .activity-strip-bar{transition:background .15s}
-.activity-strip-bar:hover{background:rgba(255,255,255,.06)}
+/* Survol réservé à la souris (2026-10-30) : au doigt, le fond restait allumé après le tap. */
+@media (hover: hover) and (pointer: fine) { .activity-strip-bar:hover{background:rgba(255,255,255,.06)} }
 .activity-strip-bar:active{background:rgba(255,255,255,.10)}
 @keyframes activityLed { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(61,220,132,.55); } 50% { opacity: .55; box-shadow: 0 0 0 4px rgba(61,220,132,0); } }
 
@@ -336,7 +337,9 @@ div:has(> .autoreg-slot:only-child:empty) { display: none; }
 
 /* App iOS (2026-10-03, NativeShell) : pas de sélection de texte ni de menu "copier / ouvrir le lien"
    à l'appui long, comme dans une app native. Les champs de saisie restent sélectionnables. */
-html.native body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+html.native body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* Plus de voile gris au tap (2026-10-30), aussi dans Safari et la PWA, pas seulement dans l'app. */
+html { -webkit-tap-highlight-color: transparent; }
 html.native input, html.native textarea, html.native [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 
 /* Page Programmes (2026-10-04) : cartes qui se soulèvent au survol, squelette de chargement. */

@@ -1157,7 +1157,7 @@ function ExerciseCard({ line, lineCtx, editing, onStartEdit, onCommitEdit, onLiv
               {!isDropJumpHeight && (
                 <select
                   value={resultDraftUnit} onChange={e => setResultDraftUnit(e.target.value)}
-                  style={{ fontSize: 13, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#5b5f62", flexShrink: 0 }}
+                  style={{ fontSize: 16, fontWeight: 700, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(0,0,0,.1)", outline: "none", background: "#f7f8f9", color: "#5b5f62", flexShrink: 0 }}
                 >
                   {TEST_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
