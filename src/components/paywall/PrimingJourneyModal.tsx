@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import posthog from "posthog-js";
 import { ElitePlanCard, PrimingExtras, PricingSideLink, PRICING_PRIMING_GUARANTEE_CAPTION } from "./PricingPriming";
 import { RiskTimeline } from "./RiskTimeline";
+import ExitOffer from "./ExitOffer";
+import { acceptExitOffer, exitOfferEligible, markExitOfferSeen } from "@/lib/exitOffer";
 import { PAYWALL_CTA_LABEL } from "./PaywallModal";
 import { useBreakpoint } from "@/hooks/useBreakpoint";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
@@ -43,6 +45,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
   const { close, exitClass } = useExitAnimation(onDismiss);
   const [{ source, athleteName }] = useState(peekPrimingSource);
   const [ctx, setCtx] = useState<PrimingContext | null>(getCachedPrimingContext);
+  const [exitOpen, setExitOpen] = useState(false);
 
   useEffect(() => {
     clearPrimingSource();
@@ -86,6 +89,21 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,.5)" }}>{PRICING_PRIMING_GUARANTEE_CAPTION}</div>
     </>
   );
+  /* Fermeture (croix, clic hors modale) : la 1re fois sur le web, l'offre de sortie passe avant (src/lib/exitOffer.ts). */
+  const requestClose = () => {
+    if (exitOfferEligible()) {
+      markExitOfferSeen();
+      posthog.capture("exit_offer_viewed", { plan: mode, source });
+      setExitOpen(true);
+      return;
+    }
+    close();
+  };
+  const exitOffer = exitOpen && (
+    <ExitOffer mode={mode}
+      onAccept={() => { posthog.capture("exit_offer_accepted", { plan: mode, source }); acceptExitOffer(); setBilling("annual"); onContinue(); }}
+      onDecline={() => { posthog.capture("exit_offer_declined", { plan: mode, source }); close(); }} />
+  );
   const sideLink = <PricingSideLink role={mode} athleteSelfId={athleteSelfId} name={displayName} />;
 
   /* Plus de carte Gratuit (2026-10-30, Gildas : un seul choix, Elite oui ou non ; la croix reste la sortie),
@@ -101,7 +119,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
     </div>
   );
   const closeBtn = allowDismiss && (
-    <button onClick={close} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
+    <button onClick={requestClose} aria-label="Fermer" style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", cursor: "pointer", fontSize: 19, color: "rgba(255,255,255,.75)", lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>×</button>
   );
 
   /* Mobile : plein écran, titre et frise puis Elite, achat dans le bas fixe. */
@@ -110,6 +128,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
       <div className={exitClass} style={backdrop}>
         <div style={{ position: "relative", width: "100%", height: "100dvh", background: DARK_CARD_BG, color: "#fff", display: "flex", flexDirection: "column", overflow: "hidden", animation: "modalIn 0.18s cubic-bezier(0.2,0,0,1)" }}>
           {closeBtn}
+          {exitOffer}
           <div style={{ flex: 1, overflowY: "auto" }}>
             <div style={{ padding: "44px 20px 4px" }}>{head}</div>
             <div style={{ padding: "18px 16px 6px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -127,7 +146,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
 
   /* Desktop : modale centrée, titre et frise à gauche, Elite à droite (empilés si la fenêtre est étroite). */
   return (
-    <div className={exitClass} style={backdrop} onClick={e => { if (allowDismiss && e.target === e.currentTarget) close(); }}>
+    <div className={exitClass} style={backdrop} onClick={e => { if (allowDismiss && e.target === e.currentTarget) requestClose(); }}>
       <div style={{
         position: "relative", width: "min(980px, 100%)", maxHeight: "calc(100dvh - 48px)",
         background: DARK_CARD_BG, color: "#fff", border: "1px solid rgba(255,255,255,.16)", borderRadius: 24,
@@ -135,6 +154,7 @@ export default function PrimingJourneyModal({ mode, billing, setBilling, allowDi
         animation: "modalIn 0.2s cubic-bezier(0.2,0,0,1)",
       }}>
         {closeBtn}
+        {exitOffer}
         <div style={{ flex: 1, overflowY: "auto" }}>
           <div style={{ padding: "34px 32px 8px", display: "grid", gap: columns ? 36 : 22, gridTemplateColumns: columns ? "1fr 1.05fr" : "1fr", alignItems: "start" }}>
             <div style={{ paddingTop: columns ? 4 : 0 }}>{head}</div>

@@ -20,6 +20,8 @@ export function getStripePromise() {
   return _stripePromise;
 }
 
+import { EXIT_PROMO, exitOfferAccepted, exitPrice, euros } from "@/lib/exitOffer";
+
 export type Billing = "monthly" | "annual";
 
 interface PaywallModalProps {
@@ -75,7 +77,7 @@ export const PAYWALL_TESTIMONIALS = {
 /* Exporté pour réutilisation par les 2 écrans plein-page de l'onboarding (paywall_priming/
    paywall_form dans OnboardingFlow.tsx) — même logique Stripe, pas de duplication. */
 export function CheckoutForm({
-  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel, showBillingLegal = true,
+  mode, billing, footerPortalNode, onSuccess, abVariant, ctaLabel, showBillingLegal = true, promo,
 }: {
   mode: "athlete" | "coach";
   billing: Billing;
@@ -87,6 +89,8 @@ export function CheckoutForm({
   /** Désactivé sur l'onboarding (2026-07-30) : le reçu "Dû aujourd'hui / Renouvellement..." rendu juste au-dessus
       (OnboardingFlow.tsx) dit déjà tout ça, plus précisément — répéter la phrase ici ferait doublon. */
   showBillingLegal?: boolean;
+  /** Code promo de l'offre de sortie (annuel seulement, voir src/lib/exitOffer.ts). */
+  promo?: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -99,7 +103,7 @@ export function CheckoutForm({
 
   useEffect(() => {
     if (!stripe) return;
-    const amount = billing === "annual" ? p.annual * 100 : p.monthly * 100;
+    const amount = promo ? Math.round(exitPrice(mode).now * 100) : billing === "annual" ? p.annual * 100 : p.monthly * 100;
     const pr = stripe.paymentRequest({
       country: "FR",
       currency: "eur",
@@ -114,7 +118,7 @@ export function CheckoutForm({
       const res = await fetch("/api/stripe/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paymentMethodId: ev.paymentMethod.id, plan: mode, billing }),
+        body: JSON.stringify({ paymentMethodId: ev.paymentMethod.id, plan: mode, billing, promo }),
       });
       if (!res.ok) {
         ev.complete("fail");
@@ -123,13 +127,13 @@ export function CheckoutForm({
         setLoading(false);
       } else {
         ev.complete("success");
-        posthog.capture("trial_started", { plan: mode, billing, method: "wallet", ...(abVariant ? { ab_variant: abVariant } : {}) });
+        posthog.capture("trial_started", { plan: mode, billing, method: "wallet", ...(promo ? { promo } : {}), ...(abVariant ? { ab_variant: abVariant } : {}) });
         onSuccess();
       }
     });
   }, [stripe, billing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const priceStr = billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
+  const priceStr = promo ? `${euros(exitPrice(mode).now)} la 1re année, puis ${p.annual}€/an` : billing === "annual" ? `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)` : `${p.monthly}€/mois`;
   const effectiveCtaLabel = ctaLabel ?? PAYWALL_CTA_LABEL[mode];
 
   async function handleSubmit(e: React.FormEvent) {
@@ -153,7 +157,7 @@ export function CheckoutForm({
       const res = await fetch("/api/stripe/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ setupIntentId: setupIntent?.id, plan: mode, billing }),
+        body: JSON.stringify({ setupIntentId: setupIntent?.id, plan: mode, billing, promo }),
       });
 
       if (!res.ok) {
@@ -163,7 +167,7 @@ export function CheckoutForm({
         return;
       }
 
-      posthog.capture("trial_started", { plan: mode, billing, ...(abVariant ? { ab_variant: abVariant } : {}) });
+      posthog.capture("trial_started", { plan: mode, billing, ...(promo ? { promo } : {}), ...(abVariant ? { ab_variant: abVariant } : {}) });
       onSuccess();
     } catch {
       setError("Le formulaire de paiement n'est pas encore prêt. Réessaie dans un instant.");
@@ -252,14 +256,15 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   /* Plus de setter (2026-09-16) — le bloc "Facturé annuellement/Modifier" qui l'utilisait a été
      retiré (voir plus bas) : le choix mensuel/annuel se fait sur l'écran priming, avant celui-ci,
      et ne change plus une fois ici. */
-  const [billing] = useState<Billing>(initialBilling ?? "annual");
+  // App iOS : achat Apple (NativeCheckout), jamais de Stripe ni de setup-intent.
+  const native = isNativeApp();
+  // Offre de sortie acceptée (web) : annuel imposé, code promo envoyé à /api/stripe/subscribe.
+  const [promo] = useState<string | undefined>(() => !native && exitOfferAccepted() ? EXIT_PROMO : undefined);
+  const [billing] = useState<Billing>(promo ? "annual" : initialBilling ?? "annual");
 
   useEffect(() => {
     posthog.capture("paywall_form_viewed", { plan: mode, ...(abVariant ? { ab_variant: abVariant } : {}) });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // App iOS : achat Apple (NativeCheckout), jamais de Stripe ni de setup-intent.
-  const native = isNativeApp();
 
   useEffect(() => {
     if (native) { setLoadingIntent(false); return; }
@@ -279,7 +284,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
   const testimonial = PAYWALL_TESTIMONIALS[mode];
   const p = PRICING[mode];
   // App iOS (refus App Store 3.1.2(c), 2026-10-09) : montant facturé seul, et le 0€ de l'essai pas plus en vue que lui.
-  const due = billing === "annual"
+  const due = promo ? `${euros(exitPrice(mode).now)} (1re année)` : billing === "annual"
     ? native ? `${p.annual}€/an` : `${p.annualMonthly.toFixed(2).replace(".", ",").replace(",00", "")}€/mois (${p.annual}€/an)`
     : `${p.monthly}€/mois`;
   const endDate = (() => { const d = new Date(); d.setDate(d.getDate() + TRIAL_DAYS); return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" }); })();
@@ -295,6 +300,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
       {[
         { l: "Aujourd'hui", v: "0€", big: !native },
         { l: `Le ${endDate}`, v: due },
+        ...(promo ? [{ l: `Code ${promo}`, v: "-30 % la 1re année" }] : []),
         { l: "Annulation", v: "1 clic" },
       ].map((r, i) => (
         <div key={r.l} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "11px 0", borderTop: i ? "1px solid rgba(255,255,255,.07)" : "none", fontSize: 13.5, color: "rgba(255,255,255,.85)" }}>
@@ -363,7 +369,7 @@ export default function PaywallModal({ mode, allowDismiss = true, onClose, onSuc
           stripe={getStripePromise()}
           options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#D44000", colorBackground: "#12171c", borderRadius: "12px" } } }}
         >
-          <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} showBillingLegal={false} />
+          <CheckoutForm mode={mode} billing={billing} footerPortalNode={footerPortalNode} onSuccess={onSuccess} abVariant={abVariant} showBillingLegal={false} promo={promo} />
         </Elements>
       )}
     </div>

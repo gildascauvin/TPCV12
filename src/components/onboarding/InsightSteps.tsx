@@ -180,41 +180,6 @@ export function InsightStepBody({ answers, name, sport = "" }: { answers: Answer
   );
 }
 
-/* ── Offre à la fermeture du paywall (POC 2026-10-28) : un 2e écran, une seule fois, avant le Gratuit.
-   -30 % sur la 1re année annuelle, essai inchangé. Même prix, un code promo appliqué d'office : coupon
-   Stripe sur le web ; sur iOS / Android, code d'offre du store (à saisir dans la fenêtre Apple / Google). ── */
-const EXIT_PRICE = { athlete: { was: 78, now: 55 }, coach: { was: 348, now: 244 } };
-export function ExitOffer({ coach, onAccept, onDecline }: { coach?: boolean; onAccept: () => void; onDecline: () => void }) {
-  const p = EXIT_PRICE[coach ? "coach" : "athlete"];
-  const perMonth = (p.now / 12).toFixed(2).replace(".", ",");
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 2147483600, background: "#070a0d", backgroundImage: "radial-gradient(ellipse 120% 55% at 50% -5%, rgba(240,74,8,.35) 0%, transparent 65%)", color: "#fff", display: "flex", flexDirection: "column", padding: "max(28px, env(safe-area-inset-top)) 20px 24px", overflowY: "auto" }}>
-      <button onClick={onDecline} aria-label="Fermer" style={{ alignSelf: "flex-end", width: 34, height: 34, borderRadius: "50%", background: "rgba(255,255,255,.08)", border: "1px solid rgba(255,255,255,.14)", color: "rgba(255,255,255,.75)", fontSize: 19, cursor: "pointer" }}>×</button>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: 16, maxWidth: 460, margin: "0 auto", width: "100%" }}>
-        <div style={{ ...MONO, color: "#ff8a55" }}>Avant de partir</div>
-        <div style={{ fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.15 }}>Ta 1re année à {p.now} €, au lieu de {p.was} €.</div>
-        <div style={{ fontSize: 14.5, lineHeight: 1.5, color: "rgba(255,255,255,.65)" }}>
-          {coach ? "Tes sportifs restent gratuits. " : ""}Tes 14 jours offerts sont toujours là, l&apos;annulation se fait en 1 clic. Cette offre n&apos;existe que sur cet écran.
-        </div>
-        <div style={{ ...BOX, borderRadius: 20, padding: "18px 18px", border: "1px solid rgba(255,138,85,.45)", background: "rgba(240,74,8,.10)" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 16, color: "rgba(255,255,255,.45)", textDecoration: "line-through" }}>{p.was} €</span>
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 36, fontWeight: 700 }}>{p.now} €</span>
-            <span style={{ fontSize: 13, color: "rgba(255,255,255,.6)" }}>la 1re année</span>
-            <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono), monospace", fontSize: 12, fontWeight: 700, color: "#0b0e11", background: "#ff8a55", padding: "4px 9px", borderRadius: 999 }}>-30 %</span>
-          </div>
-          <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginTop: 6 }}>Soit {perMonth} €/mois. 0 € aujourd&apos;hui.</div>
-          <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono), monospace", fontSize: 11.5, fontWeight: 700, color: "#7fdb8f", background: "rgba(47,158,68,.18)", padding: "5px 10px", borderRadius: 999 }}>✓ Code DEPART30 appliqué</div>
-        </div>
-      </div>
-      <div style={{ display: "grid", gap: 10, maxWidth: 460, margin: "18px auto 0", width: "100%" }}>
-        <button onClick={onAccept} style={{ height: 56, borderRadius: 999, border: 0, background: "#d44000", color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}>Prendre l&apos;offre, 14 jours offerts</button>
-        <button onClick={onDecline} style={{ border: 0, background: "none", color: "rgba(255,255,255,.6)", fontSize: 13.5, fontWeight: 700, textDecoration: "underline", cursor: "pointer", padding: 6 }}>Non merci, rester en Gratuit</button>
-      </div>
-    </div>
-  );
-}
-
 /* ── Demande de note (POC) : en prod, la fenêtre système iOS (SKStoreReviewController via un plugin
    Capacitor) ou Android (In-App Review), déclenchée juste après sa 1re décision. Imitation ici. ── */
 export function ReviewPromptMock({ onClose }: { onClose: () => void }) {

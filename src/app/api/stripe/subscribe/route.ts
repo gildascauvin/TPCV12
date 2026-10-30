@@ -11,13 +11,23 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { setupIntentId, paymentMethodId: walletPaymentMethodId, plan, billing } = await request.json();
+  const { setupIntentId, paymentMethodId: walletPaymentMethodId, plan, billing, promo } = await request.json();
 
   const priceId = billing === "annual"
     ? (plan === "coach" ? process.env.STRIPE_PRICE_COACH_ANNUAL : process.env.STRIPE_PRICE_ATHLETE_ANNUAL)
     : (plan === "coach" ? process.env.STRIPE_PRICE_COACH : process.env.STRIPE_PRICE_ATHLETE);
 
   if (!priceId) return NextResponse.json({ error: "Invalid plan or missing annual price" }, { status: 400 });
+
+  /* Offre de sortie (src/lib/exitOffer.ts) : code DEPART30, annuel seulement. Code introuvable ou inactif =
+     erreur plutôt qu'un abonnement au plein tarif alors que l'écran affichait le prix remisé. */
+  let promotionCodeId: string | null = null;
+  if (promo) {
+    if (promo !== "DEPART30" || billing !== "annual") return NextResponse.json({ error: "Cette offre n'est valable que sur l'abonnement annuel." }, { status: 400 });
+    const codes = await stripe.promotionCodes.list({ code: promo, active: true, limit: 1 });
+    promotionCodeId = codes.data[0]?.id ?? null;
+    if (!promotionCodeId) return NextResponse.json({ error: "Cette offre n'est plus disponible." }, { status: 400 });
+  }
 
   let paymentMethodId: string;
   const isWallet = !!walletPaymentMethodId;
@@ -47,13 +57,21 @@ export async function POST(request: Request) {
     invoice_settings: { default_payment_method: paymentMethodId },
   });
 
-  const subscription = await stripe.subscriptions.create({
-    customer: customerId,
-    items: [{ price: priceId }],
-    default_payment_method: paymentMethodId,
-    trial_period_days: TRIAL_DAYS,
-    metadata: { user_id: user.id, plan },
-  });
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{ price: priceId }],
+      default_payment_method: paymentMethodId,
+      trial_period_days: TRIAL_DAYS,
+      ...(promotionCodeId ? { discounts: [{ promotion_code: promotionCodeId }] } : {}),
+      metadata: { user_id: user.id, plan, ...(promo ? { promo } : {}) },
+    });
+  } catch (e) {
+    // Code réservé à un 1er abonnement : Stripe refuse un client qui a déjà payé.
+    if (promotionCodeId) return NextResponse.json({ error: "Cette offre est réservée à un premier abonnement." }, { status: 400 });
+    throw e;
+  }
 
   // 2026-09-13, retour de l'essai (14j, voir CLAUDE.md) : Stripe ne tente jamais de prélèvement à
   // la création avec trial_period_days posé, status="trialing" garanti — le check restait
